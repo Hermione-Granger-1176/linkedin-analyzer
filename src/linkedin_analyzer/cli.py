@@ -10,6 +10,12 @@ from typing import TYPE_CHECKING
 
 from linkedin_analyzer.cleaners.comments import clean_comments
 from linkedin_analyzer.cleaners.shares import clean_shares
+from linkedin_analyzer.core.paths import (
+    DEFAULT_COMMENTS_INPUT,
+    DEFAULT_COMMENTS_OUTPUT,
+    DEFAULT_SHARES_INPUT,
+    DEFAULT_SHARES_OUTPUT,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -28,6 +34,45 @@ def configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level, logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
+def _add_default_io_args(
+    parser: argparse.ArgumentParser,
+    default_input: Path,
+    default_output: Path,
+) -> None:
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=default_input,
+        help=f"Path to input CSV file (default: {default_input})",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=default_output,
+        help=f"Path to output Excel file (default: {default_output})",
+    )
+
+
+def _add_named_io_args(
+    parser: argparse.ArgumentParser,
+    name: str,
+    default_input: Path,
+    default_output: Path,
+) -> None:
+    parser.add_argument(
+        f"--{name}-input",
+        type=Path,
+        default=default_input,
+        help=f"Path to {name} input CSV file (default: {default_input})",
+    )
+    parser.add_argument(
+        f"--{name}-output",
+        type=Path,
+        default=default_output,
+        help=f"Path to {name} output Excel file (default: {default_output})",
     )
 
 
@@ -78,66 +123,22 @@ Examples:
         "shares",
         help="Clean LinkedIn Shares CSV export",
     )
-    shares_parser.add_argument(
-        "--input",
-        type=Path,
-        default=Path("data/input/Shares.csv"),
-        help="Path to input CSV file (default: data/input/Shares.csv)",
-    )
-    shares_parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("data/output/Shares.xlsx"),
-        help="Path to output Excel file (default: data/output/Shares.xlsx)",
-    )
+    _add_default_io_args(shares_parser, DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT)
 
     # Comments subcommand
     comments_parser = subparsers.add_parser(
         "comments",
         help="Clean LinkedIn Comments CSV export",
     )
-    comments_parser.add_argument(
-        "--input",
-        type=Path,
-        default=Path("data/input/Comments.csv"),
-        help="Path to input CSV file (default: data/input/Comments.csv)",
-    )
-    comments_parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("data/output/Comments.xlsx"),
-        help="Path to output Excel file (default: data/output/Comments.xlsx)",
-    )
+    _add_default_io_args(comments_parser, DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT)
 
     # All subcommand
     all_parser = subparsers.add_parser(
         "all",
         help="Clean all LinkedIn CSV exports (Shares and Comments)",
     )
-    all_parser.add_argument(
-        "--shares-input",
-        type=Path,
-        default=Path("data/input/Shares.csv"),
-        help="Path to Shares input CSV file (default: data/input/Shares.csv)",
-    )
-    all_parser.add_argument(
-        "--shares-output",
-        type=Path,
-        default=Path("data/output/Shares.xlsx"),
-        help="Path to Shares output Excel file (default: data/output/Shares.xlsx)",
-    )
-    all_parser.add_argument(
-        "--comments-input",
-        type=Path,
-        default=Path("data/input/Comments.csv"),
-        help="Path to Comments input CSV file (default: data/input/Comments.csv)",
-    )
-    all_parser.add_argument(
-        "--comments-output",
-        type=Path,
-        default=Path("data/output/Comments.xlsx"),
-        help="Path to Comments output Excel file (default: data/output/Comments.xlsx)",
-    )
+    _add_named_io_args(all_parser, "shares", DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT)
+    _add_named_io_args(all_parser, "comments", DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT)
 
     return parser.parse_args(argv)
 

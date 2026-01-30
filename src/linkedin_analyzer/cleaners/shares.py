@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
+from linkedin_analyzer.core.paths import DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT
 from linkedin_analyzer.core.text import clean_empty_field, clean_shares_commentary
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
-DEFAULT_INPUT = Path("data/input/Shares.csv")
-DEFAULT_OUTPUT = Path("data/output/Shares.xlsx")
+DEFAULT_INPUT = DEFAULT_SHARES_INPUT
+DEFAULT_OUTPUT = DEFAULT_SHARES_OUTPUT
 
 # Column configurations for Shares.csv
 SHARES_COLUMNS: tuple[ColumnConfig, ...] = (

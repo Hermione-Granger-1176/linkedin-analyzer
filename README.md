@@ -26,6 +26,7 @@ pip install -e ".[dev]"
 ### Command Line
 
 By default, the CLI reads CSV exports from `data/input` and writes Excel files to `data/output`.
+Defaults are defined in `src/linkedin_analyzer/core/paths.py`.
 
 ```bash
 # Clean Shares.csv and export to Shares.xlsx
@@ -139,7 +140,8 @@ linkedin-analyzer/
 │       │   ├── types.py         # Type definitions
 │       │   ├── text.py          # Text cleaning utilities
 │       │   ├── excel.py         # Excel formatting utilities
-│       │   └── cleaner.py       # Base cleaner functionality
+│       │   ├── cleaner.py       # Base cleaner functionality
+│       │   └── paths.py         # Default input/output paths
 │       └── cleaners/
 │           ├── __init__.py      # Cleaners module exports
 │           ├── shares.py        # Shares CSV cleaner

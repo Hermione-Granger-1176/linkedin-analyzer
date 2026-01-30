@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
+from linkedin_analyzer.core.paths import DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT
 from linkedin_analyzer.core.text import clean_comments_message
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
-DEFAULT_INPUT = Path("data/input/Comments.csv")
-DEFAULT_OUTPUT = Path("data/output/Comments.xlsx")
+DEFAULT_INPUT = DEFAULT_COMMENTS_INPUT
+DEFAULT_OUTPUT = DEFAULT_COMMENTS_OUTPUT
 
 # Column configurations for Comments.csv
 COMMENTS_COLUMNS: tuple[ColumnConfig, ...] = (

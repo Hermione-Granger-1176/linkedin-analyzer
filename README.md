@@ -1,17 +1,49 @@
 # LinkedIn Analyzer
 
-A production-ready Python tool to clean and export LinkedIn CSV data exports to Excel.
+Clean and analyze your LinkedIn data exports. Available as a **web app** (no installation) or **Python CLI**.
+
+## Web App
+
+Try the web-based Data Cleaner - no installation needed!
+
+- Drag & drop your LinkedIn CSV exports (Shares.csv or Comments.csv)
+- Instantly clean and download as formatted Excel
+- 100% client-side - your files never leave your browser
+- Works offline after first load
+- Light/dark theme with hand-drawn aesthetic
+
+### Deploy Your Own
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/aditya/linkedin-analyzer)
+
+Or run locally:
+
+```bash
+# Using Python
+python3 -m http.server 3000 --directory web
+
+# Or using npx
+npx serve web -l 3000
+```
+
+Then open http://localhost:3000
+
+---
 
 ## Features
 
+- **Web App** - Browser-based Data Cleaner with drag & drop, no installation required
 - **Clean LinkedIn Shares exports** - Handles the complex quote escaping in `Shares.csv`
 - **Clean LinkedIn Comments exports** - Handles backslash-escaped quotes in `Comments.csv`
 - **Export to Excel** - Produces well-formatted `.xlsx` files with proper column widths and text wrapping
-- **Type-safe** - Fully typed with strict mypy compliance
+- **Privacy-first** - Web app runs entirely in your browser, no data uploaded
+- **Type-safe** - Python code fully typed with strict mypy compliance
 - **Well-tested** - Comprehensive test suite with pytest
-- **CLI interface** - Easy-to-use command-line interface
+- **CLI interface** - Easy-to-use command-line interface for automation
 
-## Installation
+## Python CLI
+
+### Installation
 
 ```bash
 # From source
@@ -21,9 +53,7 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
-## Usage
-
-### Command Line
+### Command Line Usage
 
 By default, the CLI reads CSV exports from `data/input` and writes Excel files to `data/output`.
 Defaults are defined in `src/linkedin_analyzer/core/paths.py`.
@@ -130,7 +160,17 @@ ruff format src tests
 
 ```
 linkedin-analyzer/
-├── src/
+├── web/                         # Web App (static site)
+│   ├── index.html               # Main page
+│   ├── css/
+│   │   ├── variables.css        # Theme variables (light/dark)
+│   │   ├── style.css            # Main styles
+│   │   └── sketch.css           # Hand-drawn effects
+│   └── js/
+│       ├── app.js               # Main app logic
+│       ├── cleaner.js           # CSV cleaning (JS port)
+│       └── excel.js             # Excel generation
+├── src/                         # Python CLI
 │   └── linkedin_analyzer/
 │       ├── __init__.py          # Package exports
 │       ├── cli.py               # Command-line interface
@@ -149,13 +189,10 @@ linkedin-analyzer/
 ├── data/
 │   ├── input/                   # Place LinkedIn CSV exports here
 │   └── output/                  # Generated Excel outputs
-├── tests/
-│   ├── __init__.py
-│   ├── test_text.py             # Text utility tests
-│   ├── test_types.py            # Type tests
-│   ├── test_cleaner.py          # Cleaner tests
-│   └── test_cli.py              # CLI tests
-├── pyproject.toml               # Project configuration
+├── tests/                       # Python tests
+├── vercel.json                  # Vercel deployment config
+├── package.json                 # NPM config (for local dev server)
+├── pyproject.toml               # Python project configuration
 └── README.md                    # This file
 ```
 
@@ -206,3 +243,7 @@ LinkedIn's Comments export uses backslash-escaped quotes:
 ## License
 
 MIT
+
+---
+
+Made with care by **Aditya Kumar Darak (Hermione Granger)**

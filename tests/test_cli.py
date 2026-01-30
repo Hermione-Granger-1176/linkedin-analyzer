@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
+import linkedin_analyzer.cli as cli
 from linkedin_analyzer.cli import main, parse_args
+from linkedin_analyzer.core.types import CleanerResult
 
 
 class TestParseArgs:
@@ -96,3 +100,120 @@ class TestMain:
             ]
         )
         assert exit_code == 1
+
+    def test_no_command_returns_one_when_help_does_not_exit(self) -> None:
+        def fake_parse(argv: list[str] | None = None) -> SimpleNamespace:
+            if argv == ["--help"]:
+                return SimpleNamespace(command="shares", log_level="INFO")
+            return SimpleNamespace(command=None, log_level="INFO")
+
+        with patch("linkedin_analyzer.cli.parse_args", side_effect=fake_parse):
+            assert main([]) == 1
+
+    def test_unknown_command_returns_error(self) -> None:
+        args = SimpleNamespace(command="unknown", log_level="INFO")
+        with patch("linkedin_analyzer.cli.parse_args", return_value=args):
+            assert main([]) == 1
+
+    def test_main_handles_handler_exception(self) -> None:
+        args = SimpleNamespace(command="shares", log_level="INFO")
+        with (
+            patch("linkedin_analyzer.cli.parse_args", return_value=args),
+            patch("linkedin_analyzer.cli.run_shares", side_effect=RuntimeError("boom")),
+        ):
+            assert main([]) == 1
+
+
+class TestRunAll:
+    """Tests for running all cleaners."""
+
+    def test_run_all_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        args = argparse.Namespace(
+            shares_input=tmp_path / "Shares.csv",
+            shares_output=tmp_path / "Shares.xlsx",
+            comments_input=tmp_path / "Comments.csv",
+            comments_output=tmp_path / "Comments.xlsx",
+        )
+
+        def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        def fake_comments(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        monkeypatch.setattr(cli, "clean_shares", fake_shares)
+        monkeypatch.setattr(cli, "clean_comments", fake_comments)
+
+        assert cli.run_all(args) == 0
+
+    def test_run_all_failure(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        args = argparse.Namespace(
+            shares_input=tmp_path / "Shares.csv",
+            shares_output=tmp_path / "Shares.xlsx",
+            comments_input=tmp_path / "Comments.csv",
+            comments_output=tmp_path / "Comments.xlsx",
+        )
+
+        def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error="boom",
+            )
+
+        def fake_comments(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        monkeypatch.setattr(cli, "clean_shares", fake_shares)
+        monkeypatch.setattr(cli, "clean_comments", fake_comments)
+
+        assert cli.run_all(args) == 1
+
+    def test_run_all_failure_on_comments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = argparse.Namespace(
+            shares_input=tmp_path / "Shares.csv",
+            shares_output=tmp_path / "Shares.xlsx",
+            comments_input=tmp_path / "Comments.csv",
+            comments_output=tmp_path / "Comments.xlsx",
+        )
+
+        def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        def fake_comments(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error="boom",
+            )
+
+        monkeypatch.setattr(cli, "clean_shares", fake_shares)
+        monkeypatch.setattr(cli, "clean_comments", fake_comments)
+
+        assert cli.run_all(args) == 1

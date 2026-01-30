@@ -173,14 +173,23 @@
 
                 <!-- Download Button (hidden until file processed) -->
                 <div class="download-section" id="downloadSection" hidden>
-                    <button class="download-btn" id="downloadBtn">
-                        <svg class="download-icon" viewBox="0 0 24 24">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/>
-                            <polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
-                            <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        Download Clean Excel
-                    </button>
+                    <div class="action-buttons">
+                        <button class="download-btn" id="downloadBtn">
+                            <svg class="download-icon" viewBox="0 0 24 24">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Download Clean Excel
+                        </button>
+                        <button class="reset-btn" id="resetBtn" title="Start over">
+                            <svg class="reset-icon" viewBox="0 0 24 24">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M3 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Start Over
+                        </button>
+                    </div>
                     <!-- Decorative "click here" note -->
                     <div class="click-here-note" aria-hidden="true">
                         <svg viewBox="0 0 100 50">

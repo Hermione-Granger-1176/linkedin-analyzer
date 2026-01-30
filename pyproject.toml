@@ -124,6 +124,9 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",
+    "--cov=linkedin_analyzer",
+    "--cov-report=term-missing",
+    "--cov-fail-under=95",
 ]
 filterwarnings = [
     "error",
@@ -135,6 +138,7 @@ source = ["src/linkedin_analyzer"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 95
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

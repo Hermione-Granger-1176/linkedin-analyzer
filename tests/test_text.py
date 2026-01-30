@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+import linkedin_analyzer.core.text as text
 from linkedin_analyzer.core.text import (
     clean_comments_message,
     clean_empty_field,
@@ -35,6 +36,24 @@ class TestIsMissing:
 
     def test_whitespace_is_not_missing(self) -> None:
         assert is_missing("   ") is False
+
+    def test_non_bool_result_is_coerced(self, monkeypatch) -> None:
+        class DummyResult:
+            def __bool__(self) -> bool:
+                return True
+
+        def fake_isna(_value: object) -> DummyResult:
+            return DummyResult()
+
+        monkeypatch.setattr(text.pd, "isna", fake_isna)
+        assert is_missing("value") is True
+
+    def test_isna_error_returns_false(self, monkeypatch) -> None:
+        def fake_isna(_value: object) -> bool:
+            raise TypeError("boom")
+
+        monkeypatch.setattr(text.pd, "isna", fake_isna)
+        assert is_missing("value") is False
 
 
 class TestCleanSharesCommentary:

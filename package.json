@@ -1,0 +1,23 @@
+{
+  "name": "linkedin-analyzer-web",
+  "version": "1.0.0",
+  "description": "Web interface for LinkedIn CSV data cleaner and analyzer",
+  "author": "Aditya Kumar Darak",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve web -l 3000",
+    "preview": "npx serve web -l 3000"
+  },
+  "keywords": [
+    "linkedin",
+    "csv",
+    "excel",
+    "data-cleaning",
+    "web-app"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aditya/linkedin-analyzer"
+  }
+}

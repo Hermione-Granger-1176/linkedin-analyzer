@@ -9,7 +9,7 @@
     "dev": "npx serve web -l 3000",
     "preview": "npx serve web -l 3000",
     "lint": "npm run lint:web",
-    "test:web": "node --test web/tests/**/*.test.js",
+    "test:web": "node --test web/tests/*.test.js",
     "lint:web": "eslint \"web/js/**/*.js\" \"web/tests/**/*.js\"",
     "test": "npm run test:web",
     "ci:web": "npm run lint:web && npm run test:web"

@@ -1,284 +1,106 @@
-# LinkedIn Analyzer
+<h1 align="center">LinkedIn Analyzer</h1>
 
-Clean and analyze your LinkedIn data exports. Available as a **web app** (no installation) or **Python CLI**.
+<p align="center">
+  Clean and analyze your LinkedIn data exports.<br>
+  <sub>Web app or Python CLI. Your data never leaves your browser.</sub>
+</p>
 
-## Web App
+<p align="center">
+  <a href="https://github.com/Hermione-Granger-1176/linkedin-analyzer/actions/workflows/ci.yml"><img src="https://github.com/Hermione-Granger-1176/linkedin-analyzer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+</p>
 
-Try the web-based Data Cleaner - no installation needed!
+<br>
 
-- Drag & drop your LinkedIn CSV exports (Shares.csv or Comments.csv)
-- Instantly clean and download as formatted Excel
-- Explore analytics and insights dashboards (timeline, topics, heatmap)
-- Weekly timeline detail for 1-3 month ranges
-- 100% client-side - your files never leave your browser
-- Works offline after first load
-- Light/dark theme with hand-drawn aesthetic
-- Timestamps are converted from UTC to local time in the web app
+## What it does
 
-### Deploy Your Own
+LinkedIn's data exports are messy. This tool fixes that.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/aditya/linkedin-analyzer)
+- **Shares.csv** has weird nested quote escaping
+- **Comments.csv** has backslash-escaped quotes
 
-Or run locally:
+Upload your files, get clean Excel outputs. Plus analytics dashboards with timelines, topic breakdowns, and activity heatmaps.
 
+<br>
+
+## Quick start
+
+**Web** — Just open the app and drag your CSV files. No install needed.
+
+**CLI** — For automation:
 ```bash
-# Using Python
-python3 -m http.server 3000 --directory web
-
-# Or using npx
-npx serve web -l 3000
+pip install -e .
+linkedin-analyzer shares
+linkedin-analyzer comments
 ```
 
-Then open http://localhost:3000
+<br>
 
----
+## Tech stack
+
+<p>
+  <img src="https://img.shields.io/badge/HTML5-E34F26?style=flat&logo=html5&logoColor=white" alt="HTML5">
+  <img src="https://img.shields.io/badge/CSS3-1572B6?style=flat&logo=css3&logoColor=white" alt="CSS3">
+  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat&logo=javascript&logoColor=black" alt="JavaScript">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
+</p>
+
+**Web app**
+<p>
+  <img src="https://img.shields.io/badge/Rough.js-000000?style=flat" alt="Rough.js">
+  <img src="https://img.shields.io/badge/Canvas_API-FF6384?style=flat" alt="Canvas API">
+  <img src="https://img.shields.io/badge/IndexedDB-4285F4?style=flat" alt="IndexedDB">
+  <img src="https://img.shields.io/badge/Web_Workers-FF9800?style=flat" alt="Web Workers">
+  <img src="https://img.shields.io/badge/SheetJS-107C10?style=flat" alt="SheetJS">
+</p>
+
+**Python CLI**
+<p>
+  <img src="https://img.shields.io/badge/openpyxl-217346?style=flat" alt="openpyxl">
+  <img src="https://img.shields.io/badge/Click-4EAA25?style=flat" alt="Click">
+  <img src="https://img.shields.io/badge/mypy-strict-blue?style=flat" alt="mypy strict">
+</p>
+
+**Dev & CI**
+<p>
+  <img src="https://img.shields.io/badge/pytest-0A9EDC?style=flat&logo=pytest&logoColor=white" alt="pytest">
+  <img src="https://img.shields.io/badge/Ruff-D7FF64?style=flat&logo=ruff&logoColor=black" alt="Ruff">
+  <img src="https://img.shields.io/badge/ESLint-4B32C3?style=flat&logo=eslint&logoColor=white" alt="ESLint">
+  <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white" alt="GitHub Actions">
+</p>
+
+<br>
 
 ## Features
 
-- **Web App** - Cleaner + Analytics + Insights dashboards, fully client-side
-- **Clean LinkedIn Shares exports** - Handles the complex quote escaping in `Shares.csv`
-- **Clean LinkedIn Comments exports** - Handles backslash-escaped quotes in `Comments.csv`
-- **Export to Excel** - Produces well-formatted `.xlsx` files with proper column widths and text wrapping
-- **Privacy-first** - Web app runs entirely in your browser, no data uploaded
-- **Type-safe** - Python code fully typed with strict mypy compliance
-- **Well-tested** - Comprehensive test suite with pytest
-- **CLI interface** - Easy-to-use command-line interface for automation
+| | |
+|---|---|
+| **100% client-side** | Files never leave your browser |
+| **Offline support** | Works after first load |
+| **Light/dark theme** | Hand-drawn sketch aesthetic |
+| **Analytics** | Timeline, topics, heatmap |
+| **Excel export** | Formatted .xlsx with proper columns |
+| **Type-safe CLI** | Strict mypy, full test coverage |
 
-Note: LinkedIn exports timestamps in UTC. The web app converts them to local time during cleaning.
+<br>
 
-## Python CLI
+## Documentation
 
-### Installation
+See the [`docs/`](docs/) folder for:
 
-```bash
-# From source
-pip install -e .
+- [Web App Guide](docs/web-app.md)
+- [Python CLI Reference](docs/cli.md)
+- [Development Setup](docs/development.md)
+- [Project Structure](docs/structure.md)
 
-# With development dependencies
-pip install -e ".[dev]"
-```
-
-### Command Line Usage
-
-By default, the CLI reads CSV exports from `data/input` and writes Excel files to `data/output`.
-Defaults are defined in `src/linkedin_analyzer/core/paths.py`.
-
-```bash
-# Clean Shares.csv and export to Shares.xlsx
-linkedin-analyzer shares
-
-# Clean Comments.csv and export to Comments.xlsx
-linkedin-analyzer comments
-
-# Clean both files
-linkedin-analyzer all
-
-# Specify custom input/output paths
-linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
-
-# Set log level
-linkedin-analyzer --log-level DEBUG shares
-```
-
-### Python API
-
-```python
-from pathlib import Path
-from linkedin_analyzer import clean_shares, clean_comments
-
-# Clean shares
-result = clean_shares(
-    input_path=Path("Shares.csv"),
-    output_path=Path("Shares.xlsx"),
-)
-print(f"Processed {result.rows_processed} rows")
-
-# Clean comments
-result = clean_comments(
-    input_path=Path("Comments.csv"),
-    output_path=Path("Comments.xlsx"),
-)
-print(f"Processed {result.rows_processed} rows")
-```
-
-### Custom Configuration
-
-```python
-from pathlib import Path
-from linkedin_analyzer.core import CleanerConfig, ColumnConfig, run_cleaner
-
-def my_cleaner(value: object) -> str:
-    return str(value).upper()
-
-config = CleanerConfig(
-    input_path=Path("data.csv"),
-    output_path=Path("data.xlsx"),
-    columns=(
-        ColumnConfig(name="Name", width=30, cleaner=my_cleaner),
-        ColumnConfig(name="Description", width=100, wrap_text=True),
-    ),
-)
-
-result = run_cleaner(config)
-```
-
-## Development
-
-### Web Setup
-
-```bash
-npm install
-npm run dev
-```
-
-### Setup
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-
-# Install with dev dependencies
-pip install -e ".[dev]"
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run web tests
-npm run test:web
-
-# Run with coverage
-pytest --cov=linkedin_analyzer --cov-report=html
-
-# Run specific test file
-pytest tests/test_text.py -v
-```
-
-### Type Checking
-
-```bash
-mypy src/linkedin_analyzer
-```
-
-### Linting
-
-```bash
-ruff check src tests
-ruff format src tests
-
-# Lint web JS
-npm run lint:web
-```
-
-### CI
-
-GitHub Actions runs linting, type checks, and tests for both the web and Python code.
-
-## Project Structure
-
-```
-linkedin-analyzer/
-├── web/                         # Web App (static site)
-│   ├── index.html               # Home (upload hub)
-│   ├── clean.html               # Cleaner UI
-│   ├── analytics.html           # Analytics dashboard
-│   ├── insights.html            # Insights dashboard
-│   ├── css/
-│   │   ├── variables.css        # Theme variables (light/dark)
-│   │   ├── style.css            # Main styles
-│   │   └── sketch.css           # Hand-drawn effects
-│   └── js/
-│       ├── analytics-ui.js      # Analytics page UI
-│       ├── analytics-worker.js  # Analytics web worker
-│       ├── analytics.js         # Analytics engine
-│       ├── charts.js            # Canvas chart rendering
-│       ├── clean.js             # Cleaner page UI
-│       ├── cleaner.js           # CSV cleaning (JS port)
-│       ├── decorations.js       # Background doodles
-│       ├── excel.js             # Excel generation
-│       ├── insights-ui.js       # Insights page UI
-│       ├── runtime.js           # Global runtime error guard
-│       ├── storage.js           # IndexedDB helpers
-│       ├── theme.js             # Theme toggle logic
-│       └── upload.js            # Upload flow
-├── src/                         # Python CLI
-│   └── linkedin_analyzer/
-│       ├── __init__.py          # Package exports
-│       ├── cli.py               # Command-line interface
-│       ├── py.typed             # PEP 561 marker
-│       ├── core/
-│       │   ├── __init__.py      # Core module exports
-│       │   ├── types.py         # Type definitions
-│       │   ├── text.py          # Text cleaning utilities
-│       │   ├── excel.py         # Excel formatting utilities
-│       │   ├── cleaner.py       # Base cleaner functionality
-│       │   └── paths.py         # Default input/output paths
-│       └── cleaners/
-│           ├── __init__.py      # Cleaners module exports
-│           ├── shares.py        # Shares CSV cleaner
-│           └── comments.py      # Comments CSV cleaner
-├── data/
-│   ├── input/                   # Place LinkedIn CSV exports here
-│   └── output/                  # Generated Excel outputs
-├── tests/                       # Python tests
-├── vercel.json                  # Vercel deployment config
-├── package.json                 # NPM config (for local dev server)
-├── pyproject.toml               # Python project configuration
-└── README.md                    # This file
-```
-
-## What Gets Cleaned
-
-### Shares.csv
-
-LinkedIn's Shares export uses a complex quote escaping pattern:
-
-**Before:**
-```
-"The next phase of AI isn't about IQ.""
-""""
-""AI companies have been obsessed with which model is ""smarter"" for the past few months."
-```
-
-**After:**
-```
-The next phase of AI isn't about IQ.
-
-AI companies have been obsessed with which model is "smarter" for the past few months.
-```
-
-### Comments.csv
-
-LinkedIn's Comments export uses backslash-escaped quotes:
-
-**Before:**
-```
-"#CopilotInExcel
-
-=COPILOT(
-  \"Extract and clean the data\",
-  A2:A40
-)"
-```
-
-**After:**
-```
-#CopilotInExcel
-
-=COPILOT(
-  "Extract and clean the data",
-  A2:A40
-)
-```
+<br>
 
 ## License
 
-MIT
+[MIT](LICENSE)
 
 ---
 
-Made with care by **Aditya Kumar Darak (Hermione Granger)**
+<p align="center">
+  <sub>Created by <a href="https://github.com/Hermione-Granger-1176">Aditya Kumar Darak</a></sub>
+</p>

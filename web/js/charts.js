@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Hand-drawn Charts */
+/* LinkedIn Analyzer - Hand-drawn Charts (Optimized) */
 
 const SketchCharts = (() => {
     'use strict';
@@ -6,6 +6,7 @@ const SketchCharts = (() => {
     const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     const registry = new Map();
+    let animationId = 0;
 
     function getColors() {
         const styles = getComputedStyle(document.documentElement);
@@ -23,9 +24,7 @@ const SketchCharts = (() => {
 
     function resizeCanvas(canvas) {
         const rect = canvas.getBoundingClientRect();
-        if (!rect.width || !rect.height) {
-            return null;
-        }
+        if (!rect.width || !rect.height) return null;
         const ratio = window.devicePixelRatio || 1;
         canvas.width = rect.width * ratio;
         canvas.height = rect.height * ratio;
@@ -37,10 +36,11 @@ const SketchCharts = (() => {
     function hexToRgb(hex) {
         const cleaned = hex.replace('#', '').trim();
         if (cleaned.length !== 6) return { r: 90, g: 150, b: 213 };
-        const r = parseInt(cleaned.slice(0, 2), 16);
-        const g = parseInt(cleaned.slice(2, 4), 16);
-        const b = parseInt(cleaned.slice(4, 6), 16);
-        return { r, g, b };
+        return {
+            r: parseInt(cleaned.slice(0, 2), 16),
+            g: parseInt(cleaned.slice(2, 4), 16),
+            b: parseInt(cleaned.slice(4, 6), 16)
+        };
     }
 
     function register(canvas, items) {
@@ -55,11 +55,8 @@ const SketchCharts = (() => {
     function getItemAt(canvas, x, y) {
         const items = registry.get(canvas);
         if (!items) return null;
-        for (let i = 0; i < items.length; i += 1) {
-            const item = items[i];
-            if (item.hitTest && item.hitTest(x, y)) {
-                return item;
-            }
+        for (const item of items) {
+            if (item.hitTest && item.hitTest(x, y)) return item;
             if (typeof item.x === 'number') {
                 if (x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height) {
                     return item;
@@ -69,7 +66,24 @@ const SketchCharts = (() => {
         return null;
     }
 
-    function drawTimeline(canvas, data, progress = 1) {
+    /**
+     * Draw a sketchy rectangle border (cheaper than RoughJS for many items)
+     */
+    function sketchyRect(ctx, x, y, w, h, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        // Add slight wobble for hand-drawn effect
+        const jitter = () => (Math.random() - 0.5) * 1.5;
+        ctx.moveTo(x + jitter(), y + jitter());
+        ctx.lineTo(x + w + jitter(), y + jitter());
+        ctx.lineTo(x + w + jitter(), y + h + jitter());
+        ctx.lineTo(x + jitter(), y + h + jitter());
+        ctx.closePath();
+        ctx.stroke();
+    }
+
+    function drawTimeline(canvas, data, timeRange, progress = 1) {
         const size = resizeCanvas(canvas);
         if (!size) return;
         const { ctx, width, height } = size;
@@ -77,14 +91,22 @@ const SketchCharts = (() => {
         clear(canvas, ctx, width, height);
         if (!data || !data.length) return;
 
+        // For "all time" with many months, group by year
+        let displayData = data;
+        let isYearGrouped = false;
+        if (timeRange === 'all' && data.length > 24) {
+            displayData = groupByYear(data);
+            isYearGrouped = true;
+        }
+
         const padding = { top: 24, right: 10, bottom: 42, left: 36 };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        const maxValue = Math.max(...data.map(point => point.value), 1);
-        const slotWidth = chartWidth / data.length;
+        const maxValue = Math.max(...displayData.map(p => p.value), 1);
+        const slotWidth = chartWidth / displayData.length;
         const barWidth = Math.max(8, slotWidth * 0.55);
-        const rc = rough.canvas(canvas);
 
+        // Draw axis line
         ctx.strokeStyle = colors.border;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -93,30 +115,30 @@ const SketchCharts = (() => {
         ctx.stroke();
 
         ctx.font = '12px Patrick Hand, sans-serif';
-        ctx.fillStyle = colors.textSecondary;
-
         const items = [];
 
-        data.forEach((point, index) => {
-            const value = point.value;
-            const barHeight = (value / maxValue) * chartHeight * progress;
+        // Draw all bars with simple fill first (batched)
+        ctx.fillStyle = colors.blue;
+        ctx.globalAlpha = 0.6;
+        
+        const barData = displayData.map((point, index) => {
+            const barHeight = (point.value / maxValue) * chartHeight * progress;
             const x = padding.left + index * slotWidth + (slotWidth - barWidth) / 2;
             const y = padding.top + (chartHeight - barHeight);
             const fillHeight = Math.max(2, barHeight);
-
-            ctx.fillStyle = colors.blue;
-            ctx.globalAlpha = 0.6;
             ctx.fillRect(x, y, barWidth, fillHeight);
-            ctx.globalAlpha = 1;
+            return { point, x, y, fillHeight };
+        });
+        
+        ctx.globalAlpha = 1;
 
-            rc.rectangle(x, y, barWidth, fillHeight, {
-                stroke: colors.blue,
-                strokeWidth: 1.2,
-                roughness: 1.4
-            });
+        // Draw sketchy borders (simpler than RoughJS)
+        barData.forEach(({ point, x, y, fillHeight }) => {
+            sketchyRect(ctx, x, y, barWidth, fillHeight, colors.blue);
 
-            const label = point.label.split(' ');
-            const labelText = label[0];
+            // Labels - use year for grouped data, month abbreviation otherwise
+            ctx.fillStyle = colors.textSecondary;
+            const labelText = isYearGrouped ? point.label : point.label.split(' ')[0];
             ctx.save();
             ctx.translate(x + barWidth / 2, padding.top + chartHeight + 18);
             ctx.rotate(-0.35);
@@ -125,19 +147,42 @@ const SketchCharts = (() => {
             ctx.restore();
 
             items.push({
-                type: 'month',
+                type: isYearGrouped ? 'year' : 'month',
                 key: point.key,
                 label: point.label,
-                value,
-                x,
-                y,
+                value: point.value,
+                x, y,
                 width: barWidth,
                 height: fillHeight,
-                tooltip: `${point.label}: ${value}`
+                tooltip: `${point.label}: ${point.value}`,
+                months: point.months || null  // For year groups, store contributing month keys
             });
         });
 
         register(canvas, items);
+    }
+
+    /**
+     * Group monthly data by year for cleaner display of long timelines
+     */
+    function groupByYear(data) {
+        const yearMap = new Map();
+        data.forEach(point => {
+            // point.key is "YYYY-MM"
+            const year = point.key.split('-')[0];
+            if (!yearMap.has(year)) {
+                yearMap.set(year, { value: 0, months: [] });
+            }
+            const entry = yearMap.get(year);
+            entry.value += point.value;
+            entry.months.push(point.key);
+        });
+        return Array.from(yearMap.entries()).map(([year, entry]) => ({
+            key: year,
+            label: year,
+            value: entry.value,
+            months: entry.months
+        }));
     }
 
     function drawTopics(canvas, data, progress = 1) {
@@ -151,30 +196,28 @@ const SketchCharts = (() => {
         const padding = { top: 10, right: 10, bottom: 10, left: 80 };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        const maxValue = Math.max(...data.map(point => point.count), 1);
+        const maxValue = Math.max(...data.map(p => p.count), 1);
         const barHeight = Math.min(24, chartHeight / data.length - 6);
-        const rc = rough.canvas(canvas);
 
         ctx.font = '13px Patrick Hand, sans-serif';
-        ctx.fillStyle = colors.textSecondary;
-
         const items = [];
 
-        data.forEach((point, index) => {
+        // Batch fill
+        ctx.fillStyle = colors.purple;
+        ctx.globalAlpha = 0.6;
+        
+        const barData = data.map((point, index) => {
             const y = padding.top + index * (barHeight + 10);
-            const barWidth = (point.count / maxValue) * chartWidth * progress;
-            const x = padding.left;
+            const bw = (point.count / maxValue) * chartWidth * progress;
+            ctx.fillRect(padding.left, y, bw, barHeight);
+            return { point, y, bw };
+        });
+        
+        ctx.globalAlpha = 1;
 
-            ctx.fillStyle = colors.purple;
-            ctx.globalAlpha = 0.6;
-            ctx.fillRect(x, y, barWidth, barHeight);
-            ctx.globalAlpha = 1;
-
-            rc.rectangle(x, y, barWidth, barHeight, {
-                stroke: colors.purple,
-                strokeWidth: 1.2,
-                roughness: 1.3
-            });
+        // Borders and labels
+        barData.forEach(({ point, y, bw }) => {
+            sketchyRect(ctx, padding.left, y, bw, barHeight, colors.purple);
 
             ctx.fillStyle = colors.text;
             ctx.textAlign = 'right';
@@ -185,9 +228,9 @@ const SketchCharts = (() => {
                 key: point.topic,
                 label: point.topic,
                 value: point.count,
-                x,
+                x: padding.left,
                 y,
-                width: barWidth,
+                width: bw,
                 height: barHeight,
                 tooltip: `${point.topic}: ${point.count}`
             });
@@ -216,20 +259,21 @@ const SketchCharts = (() => {
         ctx.font = '11px Patrick Hand, sans-serif';
         ctx.fillStyle = colors.textSecondary;
 
-        for (let day = 0; day < 7; day += 1) {
-            const label = DAY_LABELS[day];
-            ctx.fillText(label, 6, padding.top + day * cellHeight + cellHeight * 0.7);
+        // Day labels
+        for (let day = 0; day < 7; day++) {
+            ctx.fillText(DAY_LABELS[day], 6, padding.top + day * cellHeight + cellHeight * 0.7);
         }
 
+        // Hour labels
         for (let hour = 0; hour < 24; hour += 3) {
-            const label = String(hour).padStart(2, '0');
-            ctx.fillText(label, padding.left + hour * cellWidth + 2, height - 6);
+            ctx.fillText(String(hour).padStart(2, '0'), padding.left + hour * cellWidth + 2, height - 6);
         }
 
         const items = [];
 
-        for (let day = 0; day < 7; day += 1) {
-            for (let hour = 0; hour < 24; hour += 1) {
+        // Draw cells (no RoughJS - just fills)
+        for (let day = 0; day < 7; day++) {
+            for (let hour = 0; hour < 24; hour++) {
                 const value = grid[day][hour];
                 const intensity = Math.max(0.08, value / maxValue);
                 const x = padding.left + hour * cellWidth;
@@ -239,10 +283,7 @@ const SketchCharts = (() => {
 
                 items.push({
                     type: 'heatmap',
-                    day,
-                    hour,
-                    x,
-                    y,
+                    day, hour, x, y,
                     width: cellWidth,
                     height: cellHeight,
                     tooltip: `${DAY_LABELS[day]} ${String(hour).padStart(2, '0')}:00 - ${value}`
@@ -250,16 +291,17 @@ const SketchCharts = (() => {
             }
         }
 
+        // Grid lines
         ctx.strokeStyle = colors.border;
         ctx.lineWidth = 0.6;
-        for (let hour = 0; hour <= 24; hour += 1) {
+        for (let hour = 0; hour <= 24; hour++) {
             const x = padding.left + hour * cellWidth;
             ctx.beginPath();
             ctx.moveTo(x, padding.top);
             ctx.lineTo(x, padding.top + chartHeight);
             ctx.stroke();
         }
-        for (let day = 0; day <= 7; day += 1) {
+        for (let day = 0; day <= 7; day++) {
             const y = padding.top + day * cellHeight;
             ctx.beginPath();
             ctx.moveTo(padding.left, y);
@@ -267,6 +309,7 @@ const SketchCharts = (() => {
             ctx.stroke();
         }
 
+        // Single sketchy border (only 1 RoughJS call for entire heatmap)
         if (typeof rough !== 'undefined') {
             const rc = rough.canvas(canvas);
             rc.rectangle(padding.left, padding.top, chartWidth, chartHeight, {
@@ -305,16 +348,17 @@ const SketchCharts = (() => {
         const radius = Math.min(width, height) * 0.32;
         const innerRadius = radius * 0.55;
         let startAngle = -Math.PI / 2;
-        const rc = rough.canvas(canvas);
 
         const items = [];
 
+        // Draw segments with simple canvas (no RoughJS per segment)
         values.forEach(item => {
             if (item.value === 0) return;
             const angle = (item.value / total) * Math.PI * 2 * progress;
             const segmentStart = startAngle;
             const segmentEnd = startAngle + angle;
 
+            // Fill
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
             ctx.fillStyle = item.color;
@@ -324,11 +368,12 @@ const SketchCharts = (() => {
             ctx.fill();
             ctx.globalAlpha = 1;
 
-            rc.arc(centerX, centerY, radius * 2, radius * 2, segmentStart, segmentEnd, {
-                stroke: item.color,
-                strokeWidth: 1.4,
-                roughness: 1.1
-            });
+            // Simple stroke border
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, segmentStart, segmentEnd);
+            ctx.stroke();
 
             items.push({
                 type: 'mix',
@@ -342,33 +387,45 @@ const SketchCharts = (() => {
                     if (dist < innerRadius || dist > radius) return false;
                     let anglePoint = Math.atan2(dy, dx);
                     if (anglePoint < -Math.PI / 2) anglePoint += Math.PI * 2;
-                    const normalizedStart = segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
-                    const normalizedEnd = segmentEnd < -Math.PI / 2 ? segmentEnd + Math.PI * 2 : segmentEnd;
-                    return anglePoint >= normalizedStart && anglePoint <= normalizedEnd;
+                    const ns = segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
+                    const ne = segmentEnd < -Math.PI / 2 ? segmentEnd + Math.PI * 2 : segmentEnd;
+                    return anglePoint >= ns && anglePoint <= ne;
                 }
             });
 
             startAngle = segmentEnd;
         });
 
+        // Cut out center
         ctx.globalCompositeOperation = 'destination-out';
         ctx.beginPath();
         ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
 
-        rc.circle(centerX, centerY, radius * 2, {
-            stroke: colors.border,
-            strokeWidth: 1.2,
-            roughness: 1.5
-        });
+        // Single RoughJS call for outer circle
+        if (typeof rough !== 'undefined') {
+            const rc = rough.canvas(canvas);
+            rc.circle(centerX, centerY, radius * 2, {
+                stroke: colors.border,
+                strokeWidth: 1.2,
+                roughness: 1.5
+            });
+        }
 
         register(canvas, items);
     }
 
+    function cancelAnimations() {
+        animationId++;
+    }
+
     function animateDraw(drawFn, duration = 600) {
+        const myId = ++animationId;
         let start = null;
+        
         function step(timestamp) {
+            if (myId !== animationId) return; // Cancelled
             if (!start) start = timestamp;
             const elapsed = timestamp - start;
             const progress = Math.min(elapsed / duration, 1);
@@ -386,6 +443,7 @@ const SketchCharts = (() => {
         drawHeatmap,
         drawDonut,
         animateDraw,
+        cancelAnimations,
         getItemAt
     };
 })();

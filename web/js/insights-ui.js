@@ -14,7 +14,6 @@
 
     const elements = {
         timeRangeButtons: document.querySelectorAll('#timeRangeButtons .filter-btn'),
-        topicSelect: document.getElementById('topicSelect'),
         resetFiltersBtn: document.getElementById('resetFiltersBtn'),
         insightsEmpty: document.getElementById('insightsEmpty'),
         insightsGrid: document.getElementById('insightsGrid'),
@@ -26,11 +25,10 @@
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
         hasData: false,
-        topics: [],
         currentInsights: null
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-1';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260131-3';
 
     let worker = null;
     let requestId = 0;
@@ -46,7 +44,6 @@
         elements.timeRangeButtons.forEach(button => {
             button.addEventListener('click', () => handleTimeRangeChange(button));
         });
-        elements.topicSelect.addEventListener('change', handleTopicChange);
         elements.resetFiltersBtn.addEventListener('click', resetFilters);
     }
 
@@ -64,7 +61,7 @@
 
     async function loadBase() {
         const analyticsBase = await Storage.getAnalytics();
-        if (!analyticsBase || !Array.isArray(analyticsBase.events)) {
+        if (!analyticsBase || !analyticsBase.months) {
             setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
             return;
         }
@@ -84,8 +81,6 @@
         if (message.type === 'init') {
             state.analyticsReady = true;
             state.hasData = Boolean(message.payload && message.payload.hasData);
-            state.topics = (message.payload && message.payload.topics) ? message.payload.topics : [];
-            updateTopicSelect();
             updateVisibility();
             requestView();
             return;
@@ -123,13 +118,8 @@
         const range = button.getAttribute('data-range');
         if (!range) return;
         state.filters.timeRange = range;
-        resetFilterState(true);
+        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
         elements.timeRangeButtons.forEach(btn => btn.classList.toggle('active', btn === button));
-        requestView();
-    }
-
-    function handleTopicChange() {
-        state.filters.topic = elements.topicSelect.value || 'all';
         requestView();
     }
 
@@ -138,26 +128,7 @@
         elements.timeRangeButtons.forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-range') === '12m');
         });
-        elements.topicSelect.value = 'all';
         requestView();
-    }
-
-    function resetFilterState(preserveTimeRange) {
-        const timeRange = preserveTimeRange ? state.filters.timeRange : FILTER_DEFAULTS.timeRange;
-        state.filters = { ...FILTER_DEFAULTS, timeRange };
-        elements.topicSelect.value = 'all';
-    }
-
-    function updateTopicSelect() {
-        const current = state.filters.topic || 'all';
-        elements.topicSelect.innerHTML = '<option value="all">All topics</option>';
-        state.topics.slice(0, 40).forEach(topic => {
-            const option = document.createElement('option');
-            option.value = topic.topic;
-            option.textContent = `${topic.topic} (${topic.count})`;
-            elements.topicSelect.appendChild(option);
-        });
-        elements.topicSelect.value = current;
     }
 
     function updateVisibility() {

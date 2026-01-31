@@ -19,7 +19,6 @@ body {
     letter-spacing: 0.01em;
     color: var(--text-primary);
     background-color: var(--bg-primary);
-    min-height: 100vh;
     transition: background-color var(--transition-normal), color var(--transition-normal);
 
     /* Grid paper background */
@@ -27,6 +26,17 @@ body {
         linear-gradient(var(--grid-color) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
     background-size: 25px 25px;
+}
+
+/* Background decoration canvas */
+#roughCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
 }
 
 h1, h2, h3 {
@@ -101,7 +111,7 @@ button {
 .screen-inner {
     width: min(100%, var(--container-max-width));
     margin: 0 auto;
-    padding: var(--space-2xl) var(--space-lg) var(--space-3xl);
+    padding: var(--space-2xl) var(--space-lg) var(--space-xl);
 }
 
 .screen-inner--wide {
@@ -109,11 +119,11 @@ button {
 }
 
 .screen-inner--hero {
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2xl);
-    justify-content: center;
+    gap: var(--space-xl);
+    padding-top: var(--space-xl);
+    padding-bottom: var(--space-xl);
 }
 
 /* Header and Titles */

@@ -1,6 +1,6 @@
 /* LinkedIn Analyzer - Analytics Web Worker */
 
-const WORKER_VERSION = '20260131-3';
+const WORKER_VERSION = '20260131-4';
 importScripts(`cleaner.js?v=${WORKER_VERSION}`, `analytics.js?v=${WORKER_VERSION}`);
 
 let sharesData = null;

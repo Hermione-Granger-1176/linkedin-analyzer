@@ -14,7 +14,7 @@ const LinkedInCleaner = (() => {
     const CONFIGS = Object.freeze({
         shares: freezeConfig({
             columns: [
-                { name: 'Date', width: 20 },
+                { name: 'Date', width: 20, cleaner: 'cleanDate' },
                 { name: 'ShareLink', width: 60 },
                 { name: 'ShareCommentary', width: 100, wrapText: true, cleaner: 'cleanSharesCommentary' },
                 { name: 'SharedUrl', width: 30, cleaner: 'cleanEmptyField' },
@@ -26,7 +26,7 @@ const LinkedInCleaner = (() => {
         }),
         comments: freezeConfig({
             columns: [
-                { name: 'Date', width: 20 },
+                { name: 'Date', width: 20, cleaner: 'cleanDate' },
                 { name: 'Link', width: 60 },
                 { name: 'Message', width: 100, wrapText: true, cleaner: 'cleanCommentsMessage' }
             ],
@@ -145,10 +145,49 @@ const LinkedInCleaner = (() => {
         return (text === '""' || text === '"' || text === '') ? '' : text;
     }
 
+    /**
+     * Convert UTC date from LinkedIn export to local timezone.
+     * LinkedIn exports dates in UTC format: "YYYY-MM-DD HH:MM:SS"
+     * This converts to local time and returns in the same format.
+     *
+     * @param {*} value - Raw date value from CSV (UTC)
+     * @returns {string} Date string in local timezone (YYYY-MM-DD HH:MM:SS)
+     */
+    function cleanDate(value) {
+        if (isMissing(value)) {
+            return '';
+        }
+        const text = String(value).trim();
+        // Parse UTC date: "YYYY-MM-DD HH:MM:SS"
+        const [datePart, timePart] = text.split(' ');
+        if (!datePart || !timePart) {
+            return text; // Return as-is if format is unexpected
+        }
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, minute, second] = timePart.split(':').map(Number);
+        if (!year || !month || !day) {
+            return text; // Return as-is if format is unexpected
+        }
+
+        // Create UTC date and convert to local
+        const utcDate = new Date(Date.UTC(year, month - 1, day, hour || 0, minute || 0, second || 0));
+
+        // Format in local time
+        const localYear = utcDate.getFullYear();
+        const localMonth = String(utcDate.getMonth() + 1).padStart(2, '0');
+        const localDay = String(utcDate.getDate()).padStart(2, '0');
+        const localHour = String(utcDate.getHours()).padStart(2, '0');
+        const localMinute = String(utcDate.getMinutes()).padStart(2, '0');
+        const localSecond = String(utcDate.getSeconds()).padStart(2, '0');
+
+        return `${localYear}-${localMonth}-${localDay} ${localHour}:${localMinute}:${localSecond}`;
+    }
+
     const CLEANERS = Object.freeze({
         cleanSharesCommentary,
         cleanCommentsMessage,
-        cleanEmptyField
+        cleanEmptyField,
+        cleanDate
     });
 
     function normalizeHeader(header) {

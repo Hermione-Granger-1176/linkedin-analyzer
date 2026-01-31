@@ -25,15 +25,28 @@ const AnalyticsEngine = (() => {
         const [datePart, timePart] = trimmed.split(' ');
         if (!datePart || !timePart) return null;
         const [year, month, day] = datePart.split('-').map(Number);
-        const [hour] = timePart.split(':').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
         if (!year || !month || !day) return null;
-        const date = new Date(Date.UTC(year, month - 1, day, hour || 0, 0, 0));
+        
+        // LinkedIn exports data in UTC - create UTC date then convert to local
+        const utcDate = new Date(Date.UTC(year, month - 1, day, hour || 0, minute || 0, 0));
+        
+        // Get local day and hour for the user's timezone
+        const localHour = utcDate.getHours();
+        const localDay = utcDate.getDay(); // 0 = Sunday
+        const localDayIndex = (localDay + 6) % 7; // Convert to 0 = Monday
+        
+        // Get local date components for keys
+        const localYear = utcDate.getFullYear();
+        const localMonth = utcDate.getMonth() + 1;
+        const localDayOfMonth = utcDate.getDate();
+        
         return {
-            timestamp: date.getTime(),
-            dayIndex: (date.getUTCDay() + 6) % 7,
-            hour: hour || 0,
-            dateKey: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-            monthKey: `${year}-${String(month).padStart(2, '0')}`
+            timestamp: utcDate.getTime(),
+            dayIndex: localDayIndex,
+            hour: localHour,
+            dateKey: `${localYear}-${String(localMonth).padStart(2, '0')}-${String(localDayOfMonth).padStart(2, '0')}`,
+            monthKey: `${localYear}-${String(localMonth).padStart(2, '0')}`
         };
     }
 

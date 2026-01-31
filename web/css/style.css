@@ -1023,6 +1023,9 @@ button {
 .chart-note {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
+    text-align: left;
+    margin-top: auto;
+    align-self: flex-start;
 }
 
 .analytics-empty,

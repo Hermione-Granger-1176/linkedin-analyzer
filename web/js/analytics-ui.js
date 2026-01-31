@@ -41,7 +41,7 @@
         currentView: null
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-4';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260131-5';
 
     let worker = null;
     let requestId = 0;
@@ -138,9 +138,11 @@
             const payload = message.payload || {};
             state.currentView = payload.view || null;
             if (state.currentView) {
-                // Use requestAnimationFrame to ensure DOM is ready for canvas sizing
+                // Use double requestAnimationFrame to ensure layout is computed after unhiding
                 requestAnimationFrame(() => {
-                    renderAnalyticsView(state.currentView);
+                    requestAnimationFrame(() => {
+                        renderAnalyticsView(state.currentView);
+                    });
                 });
             }
             return;
@@ -193,23 +195,69 @@
         showAnalyticsLoading(true);
     }
 
+    let renderRetryCount = 0;
+    const MAX_RENDER_RETRIES = 5;
+    let resizeObserver = null;
+    let renderRetryTimer = null;
+
+    function areChartsSized() {
+        return [elements.timelineChart, elements.topicsChart, elements.heatmapChart].every(canvas => {
+            if (!canvas) return false;
+            const rect = canvas.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        });
+    }
+
+    function scheduleRenderWhenSized(view) {
+        pendingRender = view;
+        if (resizeObserver) return;
+        const wrappers = [elements.timelineChart, elements.topicsChart, elements.heatmapChart]
+            .map(canvas => canvas && canvas.parentElement)
+            .filter(Boolean);
+        if (typeof ResizeObserver !== 'undefined' && wrappers.length) {
+            resizeObserver = new ResizeObserver(() => {
+                if (!pendingRender || !areChartsSized()) return;
+                const next = pendingRender;
+                pendingRender = null;
+                resizeObserver.disconnect();
+                resizeObserver = null;
+                renderRetryCount = 0;
+                renderAnalyticsView(next);
+            });
+            wrappers.forEach(wrapper => resizeObserver.observe(wrapper));
+            return;
+        }
+        if (renderRetryCount < MAX_RENDER_RETRIES) {
+            renderRetryCount++;
+            clearTimeout(renderRetryTimer);
+            renderRetryTimer = setTimeout(() => {
+                renderRetryTimer = null;
+                if (!pendingRender) return;
+                const next = pendingRender;
+                pendingRender = null;
+                renderAnalyticsView(next);
+            }, 80);
+        }
+    }
+
     function renderAnalyticsView(view) {
         if (isRendering) {
             pendingRender = view;
             return;
         }
-        isRendering = true;
-        showAnalyticsLoading(true);
         try {
             if (!view) {
                 setEmptyState('No analytics data', 'Try resetting filters.');
+                showAnalyticsLoading(false);
                 return;
             }
             if (typeof rough === 'undefined' || typeof SketchCharts === 'undefined') {
                 setEmptyState('Charts unavailable', 'Required libraries failed to load. Please refresh the page.');
+                showAnalyticsLoading(false);
                 return;
             }
             hideEmptyState();
+
             state.currentView = view;
 
             elements.statPosts.textContent = view.totals.posts;
@@ -224,31 +272,41 @@
 
             renderActiveFilters();
 
-            const animate = lastViewKey === null && shouldAnimate(view);
+            if (!areChartsSized()) {
+                scheduleRenderWhenSized(view);
+                return;
+            }
+            renderRetryCount = 0;
+
+            isRendering = true;
+            showAnalyticsLoading(true);
+            SketchCharts.cancelAnimations();
+
+            const animateTimeline = shouldAnimate(view);
             lastViewKey = view.key;
 
-            if (animate) {
+            SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
+            SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
+
+            if (animateTimeline) {
+                const duration = Math.min(1200, Math.max(380, view.timeline.length * 45));
                 SketchCharts.animateDraw((progress) => {
-                    SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, progress);
-                }, 420);
-                SketchCharts.animateDraw((progress) => {
-                    SketchCharts.drawTopics(elements.topicsChart, view.topics, progress);
-                }, 420);
-                SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
+                    SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, progress, view.timelineMax);
+                }, duration);
             } else {
-                SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, 1);
-                SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
-                SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
+                SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, 1, view.timelineMax);
             }
         } catch (renderError) {
             setEmptyState('Render error', 'Failed to draw charts. Please refresh the page.');
         } finally {
-            showAnalyticsLoading(false);
-            isRendering = false;
-            if (pendingRender) {
-                const next = pendingRender;
-                pendingRender = null;
-                renderAnalyticsView(next);
+            if (isRendering) {
+                showAnalyticsLoading(false);
+                isRendering = false;
+                if (pendingRender) {
+                    const next = pendingRender;
+                    pendingRender = null;
+                    renderAnalyticsView(next);
+                }
             }
         }
     }
@@ -343,7 +401,7 @@
         } else {
             hideTooltip();
         }
-        if (item && (item.type === 'month' || item.type === 'heatmap' || item.type === 'topic')) {
+        if (item && (item.type === 'month' || item.type === 'week' || item.type === 'heatmap' || item.type === 'topic')) {
             canvas.style.cursor = 'pointer';
         } else {
             canvas.style.cursor = 'default';
@@ -359,6 +417,11 @@
         if (!item) return;
         if (item.type === 'month') {
             state.filters.monthFocus = state.filters.monthFocus === item.key ? null : item.key;
+            scheduleViewRequest(false);
+        }
+        if (item.type === 'week') {
+            const targetMonth = item.monthKey || item.key;
+            state.filters.monthFocus = state.filters.monthFocus === targetMonth ? null : targetMonth;
             scheduleViewRequest(false);
         }
         if (item.type === 'topic') {
@@ -422,8 +485,20 @@
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             return false;
         }
+        if (document.visibilityState && document.visibilityState !== 'visible') {
+            return false;
+        }
+        if (!view || !Array.isArray(view.timeline) || view.timeline.length > 48) {
+            return false;
+        }
         return view.totals.total < 4000;
     }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && state.currentView) {
+            renderAnalyticsView(state.currentView);
+        }
+    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

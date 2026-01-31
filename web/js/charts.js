@@ -3,6 +3,8 @@
 const SketchCharts = (() => {
     'use strict';
 
+    const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
     const registry = new Map();
 
     function getColors() {
@@ -215,7 +217,7 @@ const SketchCharts = (() => {
         ctx.fillStyle = colors.textSecondary;
 
         for (let day = 0; day < 7; day += 1) {
-            const label = AnalyticsEngine.DAY_LABELS[day];
+            const label = DAY_LABELS[day];
             ctx.fillText(label, 6, padding.top + day * cellHeight + cellHeight * 0.7);
         }
 
@@ -243,7 +245,7 @@ const SketchCharts = (() => {
                     y,
                     width: cellWidth,
                     height: cellHeight,
-                    tooltip: `${AnalyticsEngine.DAY_LABELS[day]} ${String(hour).padStart(2, '0')}:00 - ${value}`
+                    tooltip: `${DAY_LABELS[day]} ${String(hour).padStart(2, '0')}:00 - ${value}`
                 });
             }
         }

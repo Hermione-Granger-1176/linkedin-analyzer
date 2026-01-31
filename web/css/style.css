@@ -142,6 +142,38 @@ button {
     text-align: center;
 }
 
+/* Top Navigation */
+.top-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    margin: var(--space-lg) 0 var(--space-xl);
+    flex-wrap: wrap;
+}
+
+.top-link {
+    font-size: var(--font-size-lg);
+    padding: var(--space-xs) var(--space-md);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.top-link:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.top-link.is-active {
+    border-color: var(--accent-blue);
+    background: var(--accent-blue-bg);
+    color: var(--accent-blue);
+}
+
 .hero-header {
     text-align: center;
     display: flex;
@@ -207,6 +239,10 @@ button {
     cursor: pointer;
     transition: all var(--transition-fast);
     box-shadow: var(--shadow-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
 }
 
 .primary-btn:disabled {
@@ -426,6 +462,10 @@ button {
     margin-bottom: var(--space-lg);
 }
 
+.hub-section {
+    margin-top: var(--space-xl);
+}
+
 .hub-card {
     text-align: left;
     padding: var(--space-lg);
@@ -438,6 +478,8 @@ button {
     gap: var(--space-sm);
     box-shadow: var(--shadow-sm);
     transition: all var(--transition-fast);
+    text-decoration: none;
+    color: inherit;
 }
 
 .hub-card:hover {
@@ -479,9 +521,22 @@ button {
     text-align: center;
 }
 
+.no-underline {
+    background-image: none !important;
+    padding-bottom: 0;
+}
+
 /* File Type Selection */
 .file-type-section {
     margin-bottom: var(--space-xl);
+}
+
+.clean-layout {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
 }
 
 .file-type-label {
@@ -735,6 +790,7 @@ button {
     align-items: center;
     gap: var(--space-sm);
     transition: all var(--transition-fast);
+    text-decoration: none;
 }
 
 .reset-btn:hover {

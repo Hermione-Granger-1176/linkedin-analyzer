@@ -83,7 +83,7 @@ const SketchCharts = (() => {
         ctx.stroke();
     }
 
-    function drawTimeline(canvas, data, timeRange, progress = 1) {
+    function drawTimeline(canvas, data, timeRange, progress = 1, maxOverride = 0) {
         const size = resizeCanvas(canvas);
         if (!size) return;
         const { ctx, width, height } = size;
@@ -91,98 +91,152 @@ const SketchCharts = (() => {
         clear(canvas, ctx, width, height);
         if (!data || !data.length) return;
 
-        // For "all time" with many months, group by year
-        let displayData = data;
-        let isYearGrouped = false;
-        if (timeRange === 'all' && data.length > 24) {
-            displayData = groupByYear(data);
-            isYearGrouped = true;
-        }
-
-        const padding = { top: 24, right: 10, bottom: 42, left: 36 };
+        const padding = { top: 22, right: 12, bottom: 42, left: 40 };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        const maxValue = Math.max(...displayData.map(p => p.value), 1);
-        const slotWidth = chartWidth / displayData.length;
-        const barWidth = Math.max(8, slotWidth * 0.55);
+        const maxValue = Math.max(maxOverride || 0, ...data.map(p => p.value), 1);
+        const sliceWidth = chartWidth / data.length;
+        const baseY = padding.top + chartHeight;
 
-        // Draw axis line
+        const points = data.map((point, index) => {
+            const value = point.value;
+            const x = padding.left + sliceWidth * index + sliceWidth / 2;
+            const y = baseY - (value / maxValue) * chartHeight;
+            return { point, x, y, index };
+        });
+
+        let visiblePoints = points;
+        if (progress < 1 && points.length > 1) {
+            const capped = Math.max(0, Math.min(progress, 1));
+            const visibleCount = Math.max(1, Math.floor(capped * (points.length - 1)) + 1);
+            visiblePoints = points.slice(0, visibleCount);
+        }
+
+        // Axis line
         ctx.strokeStyle = colors.border;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(padding.left, padding.top + chartHeight + 2);
-        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight + 2);
+        ctx.moveTo(padding.left, baseY + 2);
+        ctx.lineTo(padding.left + chartWidth, baseY + 2);
         ctx.stroke();
 
-        ctx.font = '12px Patrick Hand, sans-serif';
-        const items = [];
-
-        // Draw all bars with simple fill first (batched)
+        // Area fill
         ctx.fillStyle = colors.blue;
-        ctx.globalAlpha = 0.6;
-        
-        const barData = displayData.map((point, index) => {
-            const barHeight = (point.value / maxValue) * chartHeight * progress;
-            const x = padding.left + index * slotWidth + (slotWidth - barWidth) / 2;
-            const y = padding.top + (chartHeight - barHeight);
-            const fillHeight = Math.max(2, barHeight);
-            ctx.fillRect(x, y, barWidth, fillHeight);
-            return { point, x, y, fillHeight };
-        });
-        
+        ctx.globalAlpha = 0.16;
+        if (visiblePoints.length) {
+            ctx.beginPath();
+            ctx.moveTo(visiblePoints[0].x, baseY);
+            visiblePoints.forEach(({ x, y }) => ctx.lineTo(x, y));
+            ctx.lineTo(visiblePoints[visiblePoints.length - 1].x, baseY);
+            ctx.closePath();
+            ctx.fill();
+        }
         ctx.globalAlpha = 1;
 
-        // Draw sketchy borders (simpler than RoughJS)
-        barData.forEach(({ point, x, y, fillHeight }) => {
-            sketchyRect(ctx, x, y, barWidth, fillHeight, colors.blue);
+        // Primary line
+        ctx.strokeStyle = colors.blue;
+        ctx.lineWidth = 2.1;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        if (visiblePoints.length) {
+            ctx.beginPath();
+            ctx.moveTo(visiblePoints[0].x, visiblePoints[0].y);
+            for (let i = 1; i < visiblePoints.length; i++) {
+                ctx.lineTo(visiblePoints[i].x, visiblePoints[i].y);
+            }
+            ctx.stroke();
+        }
 
-            // Labels - use year for grouped data, month abbreviation otherwise
-            ctx.fillStyle = colors.textSecondary;
-            const labelText = isYearGrouped ? point.label : point.label.split(' ')[0];
-            ctx.save();
-            ctx.translate(x + barWidth / 2, padding.top + chartHeight + 18);
-            ctx.rotate(-0.35);
-            ctx.textAlign = 'center';
-            ctx.fillText(labelText, 0, 0);
-            ctx.restore();
-
-            items.push({
-                type: isYearGrouped ? 'year' : 'month',
-                key: point.key,
-                label: point.label,
-                value: point.value,
-                x, y,
-                width: barWidth,
-                height: fillHeight,
-                tooltip: `${point.label}: ${point.value}`,
-                months: point.months || null  // For year groups, store contributing month keys
+        // Secondary jitter line for sketch feel
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 1.2;
+        if (visiblePoints.length) {
+            ctx.beginPath();
+            visiblePoints.forEach(({ x, y }, index) => {
+                const jitter = (Math.random() - 0.5) * 1.4;
+                const px = x + jitter;
+                const py = y + jitter;
+                if (index === 0) {
+                    ctx.moveTo(px, py);
+                } else {
+                    ctx.lineTo(px, py);
+                }
             });
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        // Points
+        ctx.fillStyle = colors.blue;
+        visiblePoints.forEach(({ x, y }) => {
+            ctx.beginPath();
+            ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+            ctx.fill();
         });
+
+        // Value labels
+        const showAllValues = data.length <= 24;
+        const valueEvery = showAllValues ? 1 : Math.ceil(data.length / 10);
+        ctx.font = '11px Patrick Hand, sans-serif';
+        ctx.fillStyle = colors.text;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        visiblePoints.forEach(({ point, x, y, index }) => {
+            if (!showAllValues && index % valueEvery !== 0 && index !== points.length - 1) return;
+            const labelY = Math.max(padding.top + 10, y - 6);
+            ctx.fillText(String(point.value), x, labelY);
+        });
+
+        // Labels
+        ctx.font = '12px Patrick Hand, sans-serif';
+        ctx.fillStyle = colors.textSecondary;
+        const isWeekly = timeRange === '1m' || timeRange === '3m';
+        if (timeRange === 'all' && data.length > 18) {
+            let lastYear = null;
+            points.forEach(({ point, x }, index) => {
+                const [year, month] = point.key.split('-').map(Number);
+                if (!year || !month) return;
+                const isStart = index === 0;
+                const isJan = month === 1;
+                const isLast = index === points.length - 1;
+                if (!isStart && !isJan && !isLast) return;
+                if (year === lastYear && !isLast) return;
+                lastYear = year;
+                ctx.save();
+                ctx.translate(x, baseY + 20);
+                ctx.rotate(-0.18);
+                ctx.textAlign = 'center';
+                ctx.fillText(String(year), 0, 0);
+                ctx.restore();
+            });
+        } else {
+            const labelEvery = data.length <= 10 ? 1 : Math.ceil(data.length / 8);
+            points.forEach(({ point, x }, index) => {
+                if (index % labelEvery !== 0 && index !== points.length - 1) return;
+                const labelText = isWeekly ? point.label : point.label.split(' ')[0];
+                ctx.save();
+                ctx.translate(x, baseY + 18);
+                ctx.rotate(-0.35);
+                ctx.textAlign = 'center';
+                ctx.fillText(labelText, 0, 0);
+                ctx.restore();
+            });
+        }
+
+        const items = points.map(({ point, x }) => ({
+            type: isWeekly ? 'week' : 'month',
+            key: point.key,
+            monthKey: point.monthKey || point.key,
+            label: point.label,
+            value: point.value,
+            x: x - sliceWidth / 2,
+            y: padding.top,
+            width: sliceWidth,
+            height: chartHeight,
+            tooltip: `${point.label}: ${point.value}`
+        }));
 
         register(canvas, items);
-    }
-
-    /**
-     * Group monthly data by year for cleaner display of long timelines
-     */
-    function groupByYear(data) {
-        const yearMap = new Map();
-        data.forEach(point => {
-            // point.key is "YYYY-MM"
-            const year = point.key.split('-')[0];
-            if (!yearMap.has(year)) {
-                yearMap.set(year, { value: 0, months: [] });
-            }
-            const entry = yearMap.get(year);
-            entry.value += point.value;
-            entry.months.push(point.key);
-        });
-        return Array.from(yearMap.entries()).map(([year, entry]) => ({
-            key: year,
-            label: year,
-            value: entry.value,
-            months: entry.months
-        }));
     }
 
     function drawTopics(canvas, data, progress = 1) {

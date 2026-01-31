@@ -20,7 +20,7 @@
         progressPercent: document.getElementById('progressPercent')
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-3';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260131-5';
 
     let worker = null;
     const pendingFiles = new Map();

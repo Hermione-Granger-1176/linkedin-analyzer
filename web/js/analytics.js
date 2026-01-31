@@ -84,6 +84,7 @@ const AnalyticsEngine = (() => {
         const globalHeatmap = Array.from({ length: 7 }, () => Array(24).fill(0));
         const globalContentMix = { textOnly: 0, links: 0, media: 0 };
         const activeDays = new Set();
+        const dayIndex = new Map();        // dateKey -> { posts, comments, total, shareTypes }
         
         let latestTimestamp = 0;
         let earliestTimestamp = Infinity;
@@ -106,6 +107,18 @@ const AnalyticsEngine = (() => {
                 });
             }
             return monthIndex.get(monthKey);
+        }
+
+        function getDayBucket(dateKey) {
+            if (!dayIndex.has(dateKey)) {
+                dayIndex.set(dateKey, {
+                    posts: 0,
+                    comments: 0,
+                    total: 0,
+                    shareTypes: { textOnly: 0, links: 0, media: 0 }
+                });
+            }
+            return dayIndex.get(dateKey);
         }
 
         // Process shares
@@ -150,12 +163,19 @@ const AnalyticsEngine = (() => {
                 bucket.heatmap[dayIndex][hour]++;
                 bucket.activeDays.add(dateKey);
 
+                const dayBucket = getDayBucket(dateKey);
+                dayBucket.posts++;
+                dayBucket.total++;
+
                 if (hasMedia) {
                     bucket.shareTypes.media++;
+                    dayBucket.shareTypes.media++;
                 } else if (hasLink) {
                     bucket.shareTypes.links++;
+                    dayBucket.shareTypes.links++;
                 } else {
                     bucket.shareTypes.textOnly++;
+                    dayBucket.shareTypes.textOnly++;
                 }
 
                 for (const topic of topics) {
@@ -192,6 +212,10 @@ const AnalyticsEngine = (() => {
                 bucket.heatmap[dayIndex][hour]++;
                 bucket.activeDays.add(dateKey);
 
+                const dayBucket = getDayBucket(dateKey);
+                dayBucket.comments++;
+                dayBucket.total++;
+
                 for (const topic of topics) {
                     bucket.topics.set(topic, (bucket.topics.get(topic) || 0) + 1);
                 }
@@ -219,8 +243,14 @@ const AnalyticsEngine = (() => {
             };
         }
 
+        const dayIndexData = {};
+        for (const [key, bucket] of dayIndex) {
+            dayIndexData[key] = bucket;
+        }
+
         return {
             months,
+            dayIndex: dayIndexData,
             topics: sortedTopics,
             globalHeatmap,
             contentMix: globalContentMix,
@@ -239,11 +269,41 @@ const AnalyticsEngine = (() => {
         return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
     }
 
+    function addDays(date, days) {
+        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+    }
+
     function startOfMonth(date) {
         return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
     }
 
-    function getMonthKeysInRange(latestTimestamp, rangeKey, monthFocus) {
+    function endOfMonth(date) {
+        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+    }
+
+    function parseDateKey(key) {
+        const [year, month, day] = key.split('-').map(Number);
+        return new Date(Date.UTC(year, month - 1, day));
+    }
+
+    function formatDateKey(date) {
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function startOfWeek(date) {
+        const day = date.getUTCDay();
+        const diff = (day + 6) % 7;
+        return addDays(date, -diff);
+    }
+
+    function formatWeekLabel(date) {
+        return `${MONTH_LABELS[date.getUTCMonth()]} ${String(date.getUTCDate()).padStart(2, '0')}`;
+    }
+
+    function getMonthKeysInRange(earliestTimestamp, latestTimestamp, rangeKey, monthFocus) {
         if (!latestTimestamp) return [];
         
         if (monthFocus) {
@@ -254,11 +314,18 @@ const AnalyticsEngine = (() => {
         const latestMonth = startOfMonth(latestDate);
 
         if (rangeKey === 'all') {
-            return null; // Signal to use all months
+            const startDate = earliestTimestamp ? startOfMonth(new Date(earliestTimestamp)) : latestMonth;
+            const keys = [];
+            let cursor = startDate;
+            while (cursor <= latestMonth) {
+                keys.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`);
+                cursor = addMonths(cursor, 1);
+            }
+            return keys;
         }
 
         const monthCount = Number(rangeKey.replace('m', ''));
-        if (!monthCount || Number.isNaN(monthCount)) return null;
+        if (!monthCount || Number.isNaN(monthCount)) return [];
 
         const keys = [];
         for (let i = 0; i < monthCount; i++) {
@@ -275,16 +342,11 @@ const AnalyticsEngine = (() => {
     function buildView(analytics, filters) {
         if (!analytics || !analytics.months) return null;
 
-        const { months, latestTimestamp } = analytics;
-        const monthKeys = getMonthKeysInRange(latestTimestamp, filters.timeRange, filters.monthFocus);
+        const { months, latestTimestamp, earliestTimestamp, dayIndex } = analytics;
+        const monthKeys = getMonthKeysInRange(earliestTimestamp, latestTimestamp, filters.timeRange, filters.monthFocus);
         
         // Determine which months to include
-        let targetMonths;
-        if (monthKeys === null) {
-            targetMonths = Object.keys(months).sort();
-        } else {
-            targetMonths = monthKeys.filter(k => months[k]);
-        }
+        const targetMonths = monthKeys;
 
         if (!targetMonths.length) {
             return createEmptyView();
@@ -299,11 +361,42 @@ const AnalyticsEngine = (() => {
         const dayCounts = Array(7).fill(0);
         const activeDaysSet = new Set();
         const timeline = [];
+        let timelineMax = 1;
+        const monthMeta = {};
+        const useWeeklyTimeline = Boolean(dayIndex) && (filters.timeRange === '1m' || filters.timeRange === '3m');
+        const hasDay = filters.day !== null && filters.day !== undefined;
+        const hasHour = filters.hour !== null && filters.hour !== undefined;
 
         for (const monthKey of targetMonths) {
             const bucket = months[monthKey];
+            const baselineValue = bucket ? bucket.total : 0;
+            if (!useWeeklyTimeline) {
+                timelineMax = Math.max(timelineMax, baselineValue);
+            }
+            if (bucket) {
+                const topicRatio = (filters.topic && filters.topic !== 'all')
+                    ? (bucket.total > 0 ? (bucket.topics[filters.topic] || 0) / bucket.total : 0)
+                    : 1;
+                let hourRatio = 1;
+                if (hasHour) {
+                    if (hasDay) {
+                        const dayTotal = bucket.days[filters.day] || 0;
+                        const dayHour = bucket.heatmap[filters.day][filters.hour] || 0;
+                        hourRatio = dayTotal > 0 ? dayHour / dayTotal : 0;
+                    } else {
+                        const hourTotal = bucket.hours[filters.hour] || 0;
+                        hourRatio = bucket.total > 0 ? hourTotal / bucket.total : 0;
+                    }
+                }
+                monthMeta[monthKey] = {
+                    topicRatio,
+                    hourRatio
+                };
+            }
             if (!bucket) {
-                timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
+                if (!useWeeklyTimeline) {
+                    timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
+                }
                 continue;
             }
 
@@ -341,9 +434,6 @@ const AnalyticsEngine = (() => {
             }
 
             // Day and Hour filters - use heatmap for intersection when both specified
-            const hasDay = filters.day !== null && filters.day !== undefined;
-            const hasHour = filters.hour !== null && filters.hour !== undefined;
-            
             if (hasDay && hasHour && useMonth) {
                 // Use heatmap for exact intersection
                 const heatmapCount = bucket.heatmap[filters.day][filters.hour];
@@ -366,7 +456,9 @@ const AnalyticsEngine = (() => {
             }
 
             if (!useMonth || monthTotal === 0) {
-                timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
+                if (!useWeeklyTimeline) {
+                    timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
+                }
                 continue;
             }
 
@@ -399,7 +491,16 @@ const AnalyticsEngine = (() => {
                 activeDaysSet.add(day);
             }
 
-            timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: monthTotal });
+            if (!useWeeklyTimeline) {
+                timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: monthTotal });
+            }
+
+        }
+
+        if (useWeeklyTimeline) {
+            const weekly = buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta);
+            timeline.push(...weekly.timeline);
+            timelineMax = weekly.timelineMax;
         }
 
         // Sort and limit topics
@@ -420,6 +521,7 @@ const AnalyticsEngine = (() => {
 
         return {
             timeline,
+            timelineMax,
             heatmap,
             topics: topicsArray,
             contentMix,
@@ -435,9 +537,96 @@ const AnalyticsEngine = (() => {
         };
     }
 
+    function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
+        if (!dayIndex || !targetMonths.length) {
+            return { timeline: [], timelineMax: 1 };
+        }
+
+        const [startYear, startMonth] = targetMonths[0].split('-').map(Number);
+        const [endYear, endMonth] = targetMonths[targetMonths.length - 1].split('-').map(Number);
+        const rangeStart = new Date(Date.UTC(startYear, startMonth - 1, 1));
+        const rangeEnd = endOfMonth(new Date(Date.UTC(endYear, endMonth - 1, 1)));
+        const startWeek = startOfWeek(rangeStart);
+        const endWeek = startOfWeek(rangeEnd);
+
+        const weeks = [];
+        const weekIndex = new Map();
+        for (let cursor = startWeek; cursor <= endWeek; cursor = addDays(cursor, 7)) {
+            const key = formatDateKey(cursor);
+            weekIndex.set(key, weeks.length);
+            weeks.push({
+                key,
+                monthKey: key.slice(0, 7),
+                label: formatWeekLabel(cursor),
+                value: 0
+            });
+        }
+
+        const baselineTotals = new Array(weeks.length).fill(0);
+        const startKey = formatDateKey(rangeStart);
+        const endKey = formatDateKey(rangeEnd);
+        const hasDay = filters.day !== null && filters.day !== undefined;
+        const hasHour = filters.hour !== null && filters.hour !== undefined;
+
+        for (const [dateKey, entry] of Object.entries(dayIndex)) {
+            if (dateKey < startKey || dateKey > endKey) continue;
+            const date = parseDateKey(dateKey);
+            const weekKey = formatDateKey(startOfWeek(date));
+            const index = weekIndex.get(weekKey);
+            if (index === undefined) continue;
+
+            const dayTotal = entry.total || 0;
+            baselineTotals[index] += dayTotal;
+
+            let value = dayTotal;
+            if (filters.shareType === 'text') {
+                value = entry.shareTypes ? entry.shareTypes.textOnly : 0;
+            } else if (filters.shareType === 'links') {
+                value = entry.shareTypes ? entry.shareTypes.links : 0;
+            } else if (filters.shareType === 'media') {
+                value = entry.shareTypes ? entry.shareTypes.media : 0;
+            }
+
+            if (hasDay) {
+                const dayIndexValue = (date.getUTCDay() + 6) % 7;
+                if (dayIndexValue !== filters.day) {
+                    value = 0;
+                }
+            }
+
+            if (filters.topic && filters.topic !== 'all') {
+                const monthKey = dateKey.slice(0, 7);
+                const meta = monthMeta[monthKey];
+                const ratio = meta ? meta.topicRatio : 0;
+                value *= ratio;
+            }
+
+            if (hasHour) {
+                const monthKey = dateKey.slice(0, 7);
+                const meta = monthMeta[monthKey];
+                const ratio = meta ? meta.hourRatio : 0;
+                value *= ratio;
+            }
+
+            weeks[index].value += value;
+        }
+
+        weeks.forEach(week => {
+            week.value = Math.round(week.value);
+        });
+
+        let timelineMax = 1;
+        for (const total of baselineTotals) {
+            if (total > timelineMax) timelineMax = total;
+        }
+
+        return { timeline: weeks, timelineMax };
+    }
+
     function createEmptyView() {
         return {
             timeline: [],
+            timelineMax: 1,
             heatmap: Array.from({ length: 7 }, () => Array(24).fill(0)),
             topics: [],
             contentMix: { textOnly: 0, links: 0, media: 0 },

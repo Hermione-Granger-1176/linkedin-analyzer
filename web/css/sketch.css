@@ -4,12 +4,10 @@
 .drop-zone,
 .upload-status-card,
 .hub-card,
-.chart-card,
 .preview-section,
 .download-btn,
 .error-message,
 .privacy-notice,
-.filters-bar,
 .insight-card,
 .progress-card {
     transform: rotate(calc(var(--sketch-rotate, 0) * 0.1deg));
@@ -21,8 +19,6 @@
 .hub-card:nth-child(1) { --sketch-rotate: -0.2; }
 .hub-card:nth-child(2) { --sketch-rotate: 0.4; }
 .hub-card:nth-child(3) { --sketch-rotate: -0.3; }
-.chart-card:nth-child(odd) { --sketch-rotate: 0.2; }
-.chart-card:nth-child(even) { --sketch-rotate: -0.2; }
 
 /* Sketch-style focus ring */
 *:focus-visible {

@@ -41,7 +41,7 @@
         currentView: null
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-3';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260131-4';
 
     let worker = null;
     let requestId = 0;
@@ -138,7 +138,10 @@
             const payload = message.payload || {};
             state.currentView = payload.view || null;
             if (state.currentView) {
-                renderAnalyticsView(state.currentView);
+                // Use requestAnimationFrame to ensure DOM is ready for canvas sizing
+                requestAnimationFrame(() => {
+                    renderAnalyticsView(state.currentView);
+                });
             }
             return;
         }
@@ -284,6 +287,9 @@
         const button = event.target.closest('button[data-filter]');
         if (!button) return;
         const filter = button.getAttribute('data-filter');
+        if (filter === 'topic') {
+            state.filters.topic = 'all';
+        }
         if (filter === 'month') {
             state.filters.monthFocus = null;
         }
@@ -298,6 +304,9 @@
 
     function renderActiveFilters() {
         const filters = [];
+        if (state.filters.topic && state.filters.topic !== 'all') {
+            filters.push({ key: 'topic', label: `Topic: ${state.filters.topic}` });
+        }
         if (state.filters.monthFocus) {
             const [year, month] = state.filters.monthFocus.split('-').map(Number);
             const label = (year && month)
@@ -334,7 +343,7 @@
         } else {
             hideTooltip();
         }
-        if (item && (item.type === 'month' || item.type === 'heatmap')) {
+        if (item && (item.type === 'month' || item.type === 'heatmap' || item.type === 'topic')) {
             canvas.style.cursor = 'pointer';
         } else {
             canvas.style.cursor = 'default';
@@ -350,6 +359,10 @@
         if (!item) return;
         if (item.type === 'month') {
             state.filters.monthFocus = state.filters.monthFocus === item.key ? null : item.key;
+            scheduleViewRequest(false);
+        }
+        if (item.type === 'topic') {
+            state.filters.topic = state.filters.topic === item.key ? 'all' : item.key;
             scheduleViewRequest(false);
         }
         if (item.type === 'heatmap') {

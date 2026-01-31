@@ -476,7 +476,7 @@ const AnalyticsEngine = (() => {
     }
 
     function generateInsights(view) {
-        if (!view || !view.events.length) {
+        if (!view || !view.totals || view.totals.total === 0) {
             return { insights: [], tip: null };
         }
 
@@ -551,7 +551,7 @@ const AnalyticsEngine = (() => {
             });
         }
 
-        if (view.topics.length) {
+        if (Array.isArray(view.topics) && view.topics.length) {
             const topTopic = view.topics[0];
             insights.push({
                 id: 'topic-master',

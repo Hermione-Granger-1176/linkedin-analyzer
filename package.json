@@ -7,7 +7,9 @@
   "private": true,
   "scripts": {
     "dev": "npx serve web -l 3000",
-    "preview": "npx serve web -l 3000"
+    "preview": "npx serve web -l 3000",
+    "test:web": "node --test web/tests/**/*.test.js",
+    "lint:web": "eslint \"web/js/**/*.js\" \"web/tests/**/*.js\""
   },
   "keywords": [
     "linkedin",
@@ -19,5 +21,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/aditya/linkedin-analyzer"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
   }
 }

@@ -14,6 +14,7 @@ def test_format_excel_output_raises_without_active_sheet(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Raise an error when no worksheet is available."""
+
     class DummyWorkbook:
         active = None
 

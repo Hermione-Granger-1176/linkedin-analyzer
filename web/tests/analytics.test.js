@@ -48,7 +48,7 @@ function sampleData() {
     return { shares, comments };
 }
 
-test('compute aggregates totals and content mix', () => {
+test('compute aggregates totals and base indices', () => {
     const { shares, comments } = sampleData();
     const analytics = AnalyticsEngine.compute(shares, comments);
 
@@ -56,12 +56,8 @@ test('compute aggregates totals and content mix', () => {
     assert.equal(analytics.totals.comments, 2);
     assert.equal(analytics.totals.total, 5);
 
-    assert.equal(analytics.contentMix.textOnly, 1);
-    assert.equal(analytics.contentMix.links, 1);
-    assert.equal(analytics.contentMix.media, 1);
-
-    const topTopics = analytics.topics.map(item => item.topic);
-    assert.ok(topTopics.includes('excel'));
+    assert.ok(Object.keys(analytics.months).length > 0);
+    assert.ok(Object.keys(analytics.dayIndex).length > 0);
 });
 
 test('buildView respects topic and shareType filters', () => {
@@ -79,6 +75,9 @@ test('buildView respects topic and shareType filters', () => {
 
     assert.equal(viewAll.totals.total, 5);
     assert.equal(viewAll.contentMix.media, 1);
+
+    const topTopics = viewAll.topics.map(item => item.topic);
+    assert.ok(topTopics.includes('excel'));
 
     const viewTopic = AnalyticsEngine.buildView(analytics, {
         timeRange: 'all',

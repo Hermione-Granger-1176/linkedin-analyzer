@@ -29,7 +29,7 @@ const AnalyticsEngine = (() => {
         const [hour, minute] = timePart.split(':').map(Number);
         if (!year || !month || !day) return null;
 
-        // Treat LinkedIn export timestamps as local time.
+        // Timestamps are already converted to local time by the cleaner.
         const localDate = new Date(year, month - 1, day, hour || 0, minute || 0, 0);
 
         const localHour = localDate.getHours();

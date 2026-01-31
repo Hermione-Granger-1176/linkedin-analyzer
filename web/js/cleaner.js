@@ -146,18 +146,19 @@ const LinkedInCleaner = (() => {
     }
 
     /**
-     * Normalize LinkedIn export timestamps (YYYY-MM-DD HH:MM:SS).
-     * Timestamps are treated as local time and returned in the same format.
+     * Convert UTC date from LinkedIn export to local timezone.
+     * LinkedIn exports dates in UTC format: "YYYY-MM-DD HH:MM:SS"
+     * This converts to local time and returns in the same format.
      *
-     * @param {*} value - Raw date value from CSV (local)
-     * @returns {string} Date string in local time (YYYY-MM-DD HH:MM:SS)
+     * @param {*} value - Raw date value from CSV (UTC)
+     * @returns {string} Date string in local timezone (YYYY-MM-DD HH:MM:SS)
      */
     function cleanDate(value) {
         if (isMissing(value)) {
             return '';
         }
         const text = String(value).trim();
-        // Parse local date: "YYYY-MM-DD HH:MM:SS"
+        // Parse UTC date: "YYYY-MM-DD HH:MM:SS"
         const [datePart, timePart] = text.split(' ');
         if (!datePart || !timePart) {
             return text; // Return as-is if format is unexpected
@@ -168,12 +169,16 @@ const LinkedInCleaner = (() => {
             return text; // Return as-is if format is unexpected
         }
 
-        const localYear = String(year).padStart(4, '0');
-        const localMonth = String(month).padStart(2, '0');
-        const localDay = String(day).padStart(2, '0');
-        const localHour = String(hour || 0).padStart(2, '0');
-        const localMinute = String(minute || 0).padStart(2, '0');
-        const localSecond = String(second || 0).padStart(2, '0');
+        // Create UTC date and convert to local
+        const utcDate = new Date(Date.UTC(year, month - 1, day, hour || 0, minute || 0, second || 0));
+
+        // Format in local time
+        const localYear = utcDate.getFullYear();
+        const localMonth = String(utcDate.getMonth() + 1).padStart(2, '0');
+        const localDay = String(utcDate.getDate()).padStart(2, '0');
+        const localHour = String(utcDate.getHours()).padStart(2, '0');
+        const localMinute = String(utcDate.getMinutes()).padStart(2, '0');
+        const localSecond = String(utcDate.getSeconds()).padStart(2, '0');
 
         return `${localYear}-${localMonth}-${localDay} ${localHour}:${localMinute}:${localSecond}`;
     }

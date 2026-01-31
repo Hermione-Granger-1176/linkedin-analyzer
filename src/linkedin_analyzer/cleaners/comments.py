@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -44,7 +44,7 @@ class CommentsCleanerConfig(CleanerConfig):
     input_path: Path = DEFAULT_INPUT
     output_path: Path = DEFAULT_OUTPUT
     columns: tuple[ColumnConfig, ...] = COMMENTS_COLUMNS
-    csv_kwargs: Mapping[str, object] = COMMENTS_CSV_KWARGS
+    csv_kwargs: Mapping[str, object] = field(default_factory=lambda: COMMENTS_CSV_KWARGS)
 
 
 def clean_comments(

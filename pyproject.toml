@@ -43,8 +43,8 @@ dev = [
 linkedin-analyzer = "linkedin_analyzer.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/aditya/linkedin-analyzer"
-Repository = "https://github.com/aditya/linkedin-analyzer"
+Homepage = "https://github.com/Hermione-Granger-1176/linkedin-analyzer"
+Repository = "https://github.com/Hermione-Granger-1176/linkedin-analyzer"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linkedin_analyzer"]

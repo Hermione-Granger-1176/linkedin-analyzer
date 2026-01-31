@@ -13,7 +13,7 @@ Try the web-based Data Cleaner - no installation needed!
 - 100% client-side - your files never leave your browser
 - Works offline after first load
 - Light/dark theme with hand-drawn aesthetic
-- Timestamps are treated as local time (matches the CSV values)
+- Timestamps are converted from UTC to local time in the web app
 
 ### Deploy Your Own
 
@@ -44,7 +44,7 @@ Then open http://localhost:3000
 - **Well-tested** - Comprehensive test suite with pytest
 - **CLI interface** - Easy-to-use command-line interface for automation
 
-Note: The web analytics uses the timestamps exactly as provided in the CSV. If your export is UTC, convert it before upload to see local times.
+Note: LinkedIn exports timestamps in UTC. The web app converts them to local time during cleaning.
 
 ## Python CLI
 

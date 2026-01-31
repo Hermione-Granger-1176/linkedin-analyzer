@@ -20,7 +20,7 @@
         progressPercent: document.getElementById('progressPercent')
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-1';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260131-3';
 
     let worker = null;
     const pendingFiles = new Map();
@@ -85,7 +85,7 @@
         const analyticsBase = await Storage.getAnalytics();
         const shares = files.find(file => file.type === 'shares');
         const comments = files.find(file => file.type === 'comments');
-        const analyticsReady = Boolean(analyticsBase && analyticsBase.events && analyticsBase.events.length);
+        const analyticsReady = Boolean(analyticsBase && analyticsBase.months && Object.keys(analyticsBase.months).length);
         updateStatus({ shares, comments, analyticsReady });
     }
 

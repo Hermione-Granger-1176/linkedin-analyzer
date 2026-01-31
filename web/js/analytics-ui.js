@@ -17,7 +17,6 @@
 
     const elements = {
         timeRangeButtons: document.querySelectorAll('#timeRangeButtons .filter-btn'),
-        topicSelect: document.getElementById('topicSelect'),
         resetFiltersBtn: document.getElementById('resetFiltersBtn'),
         activeFilters: document.getElementById('activeFilters'),
         activeFiltersList: document.getElementById('activeFiltersList'),
@@ -27,7 +26,6 @@
         timelineChart: document.getElementById('timelineChart'),
         topicsChart: document.getElementById('topicsChart'),
         heatmapChart: document.getElementById('heatmapChart'),
-        mixChart: document.getElementById('mixChart'),
         statPosts: document.getElementById('statPosts'),
         statComments: document.getElementById('statComments'),
         statTotal: document.getElementById('statTotal'),
@@ -40,11 +38,10 @@
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
         hasData: false,
-        topics: [],
         currentView: null
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-1';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260131-3';
 
     let worker = null;
     let requestId = 0;
@@ -65,7 +62,6 @@
         elements.timeRangeButtons.forEach(button => {
             button.addEventListener('click', () => handleTimeRangeChange(button));
         });
-        elements.topicSelect.addEventListener('change', handleTopicChange);
         elements.resetFiltersBtn.addEventListener('click', resetFilters);
         elements.activeFiltersList.addEventListener('click', handleFilterChipClick);
 
@@ -76,7 +72,7 @@
             }
         });
 
-        [elements.timelineChart, elements.topicsChart, elements.heatmapChart, elements.mixChart].forEach(canvas => {
+        [elements.timelineChart, elements.topicsChart, elements.heatmapChart].forEach(canvas => {
             if (!canvas) return;
             canvas.addEventListener('mousemove', handleChartHover);
             canvas.addEventListener('mouseleave', hideTooltip);
@@ -96,21 +92,36 @@
         }
     }
 
+    function terminateWorker() {
+        if (worker) {
+            worker.terminate();
+            worker = null;
+        }
+    }
+
+    window.addEventListener('beforeunload', terminateWorker);
+    window.addEventListener('pagehide', terminateWorker);
+
     async function loadBase() {
-        const analyticsBase = await Storage.getAnalytics();
-        if (!analyticsBase || !Array.isArray(analyticsBase.events)) {
-            setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
-            return;
+        try {
+            const analyticsBase = await Storage.getAnalytics();
+            if (!analyticsBase || !analyticsBase.months) {
+                setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
+                return;
+            }
+            if (!worker) {
+                setEmptyState('Analytics not supported', 'Your browser does not support analytics workers.');
+                return;
+            }
+            // Show loading state but keep grid visible for canvas sizing
+            showAnalyticsLoading(true);
+            worker.postMessage({
+                type: 'initBase',
+                payload: analyticsBase
+            });
+        } catch (error) {
+            setEmptyState('Storage error', 'Unable to load saved data. Try clearing browser data and re-uploading.');
         }
-        if (!worker) {
-            setEmptyState('Analytics not supported', 'Your browser does not support analytics workers.');
-            return;
-        }
-        setEmptyState('Preparing analytics', 'Crunching your data in the background.');
-        worker.postMessage({
-            type: 'initBase',
-            payload: analyticsBase
-        });
     }
 
     function handleWorkerMessage(event) {
@@ -118,8 +129,6 @@
         if (message.type === 'init') {
             state.analyticsReady = true;
             state.hasData = Boolean(message.payload && message.payload.hasData);
-            state.topics = (message.payload && message.payload.topics) ? message.payload.topics : [];
-            updateTopicSelect();
             updateVisibility();
             scheduleViewRequest(true);
             return;
@@ -193,6 +202,10 @@
                 setEmptyState('No analytics data', 'Try resetting filters.');
                 return;
             }
+            if (typeof rough === 'undefined' || typeof SketchCharts === 'undefined') {
+                setEmptyState('Charts unavailable', 'Required libraries failed to load. Please refresh the page.');
+                return;
+            }
             hideEmptyState();
             state.currentView = view;
 
@@ -213,29 +226,19 @@
 
             if (animate) {
                 SketchCharts.animateDraw((progress) => {
-                    SketchCharts.drawTimeline(elements.timelineChart, view.timeline, progress);
+                    SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, progress);
                 }, 420);
-            } else {
-                SketchCharts.drawTimeline(elements.timelineChart, view.timeline, 1);
-            }
-
-            if (animate) {
                 SketchCharts.animateDraw((progress) => {
                     SketchCharts.drawTopics(elements.topicsChart, view.topics, progress);
                 }, 420);
+                SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
             } else {
+                SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, 1);
                 SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
+                SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
             }
-
-            SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
-
-            if (animate) {
-                SketchCharts.animateDraw((progress) => {
-                    SketchCharts.drawDonut(elements.mixChart, view.contentMix, progress);
-                }, 420);
-            } else {
-                SketchCharts.drawDonut(elements.mixChart, view.contentMix, 1);
-            }
+        } catch (renderError) {
+            setEmptyState('Render error', 'Failed to draw charts. Please refresh the page.');
         } finally {
             showAnalyticsLoading(false);
             isRendering = false;
@@ -245,18 +248,6 @@
                 renderAnalyticsView(next);
             }
         }
-    }
-
-    function updateTopicSelect() {
-        const current = state.filters.topic || 'all';
-        elements.topicSelect.innerHTML = '<option value="all">All topics</option>';
-        state.topics.slice(0, 40).forEach(topic => {
-            const option = document.createElement('option');
-            option.value = topic.topic;
-            option.textContent = `${topic.topic} (${topic.count})`;
-            elements.topicSelect.appendChild(option);
-        });
-        elements.topicSelect.value = current;
     }
 
     function updateVisibility() {
@@ -276,34 +267,23 @@
         scheduleViewRequest(true);
     }
 
-    function handleTopicChange() {
-        state.filters.topic = elements.topicSelect.value || 'all';
-        scheduleViewRequest(false);
-    }
-
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
         elements.timeRangeButtons.forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-range') === '12m');
         });
-        elements.topicSelect.value = 'all';
         scheduleViewRequest(true);
     }
 
     function resetFilterState(preserveTimeRange) {
         const timeRange = preserveTimeRange ? state.filters.timeRange : FILTER_DEFAULTS.timeRange;
         state.filters = { ...FILTER_DEFAULTS, timeRange };
-        elements.topicSelect.value = 'all';
     }
 
     function handleFilterChipClick(event) {
         const button = event.target.closest('button[data-filter]');
         if (!button) return;
         const filter = button.getAttribute('data-filter');
-        if (filter === 'topic') {
-            state.filters.topic = 'all';
-            elements.topicSelect.value = 'all';
-        }
         if (filter === 'month') {
             state.filters.monthFocus = null;
         }
@@ -313,17 +293,11 @@
         if (filter === 'hour') {
             state.filters.hour = null;
         }
-        if (filter === 'shareType') {
-            state.filters.shareType = 'all';
-        }
         scheduleViewRequest(false);
     }
 
     function renderActiveFilters() {
         const filters = [];
-        if (state.filters.topic && state.filters.topic !== 'all') {
-            filters.push({ key: 'topic', label: `Topic: ${state.filters.topic}` });
-        }
         if (state.filters.monthFocus) {
             const [year, month] = state.filters.monthFocus.split('-').map(Number);
             const label = (year && month)
@@ -337,10 +311,6 @@
         }
         if (state.filters.hour !== null && state.filters.hour !== undefined) {
             filters.push({ key: 'hour', label: `Hour: ${String(state.filters.hour).padStart(2, '0')}:00` });
-        }
-        if (state.filters.shareType && state.filters.shareType !== 'all') {
-            const map = { text: 'Text posts', links: 'Link posts', media: 'Media posts' };
-            filters.push({ key: 'shareType', label: `Content: ${map[state.filters.shareType] || state.filters.shareType}` });
         }
         if (!filters.length) {
             elements.activeFilters.hidden = true;
@@ -364,7 +334,7 @@
         } else {
             hideTooltip();
         }
-        if (item && (item.type === 'month' || item.type === 'topic' || item.type === 'heatmap' || item.type === 'mix')) {
+        if (item && (item.type === 'month' || item.type === 'heatmap')) {
             canvas.style.cursor = 'pointer';
         } else {
             canvas.style.cursor = 'default';
@@ -382,21 +352,10 @@
             state.filters.monthFocus = state.filters.monthFocus === item.key ? null : item.key;
             scheduleViewRequest(false);
         }
-        if (item.type === 'topic') {
-            state.filters.topic = item.key;
-            elements.topicSelect.value = item.key;
-            scheduleViewRequest(false);
-        }
         if (item.type === 'heatmap') {
             const isSame = state.filters.day === item.day && state.filters.hour === item.hour;
             state.filters.day = isSame ? null : item.day;
             state.filters.hour = isSame ? null : item.hour;
-            scheduleViewRequest(false);
-        }
-        if (item.type === 'mix') {
-            const map = { Text: 'text', Links: 'links', Media: 'media' };
-            const value = map[item.label] || 'all';
-            state.filters.shareType = state.filters.shareType === value ? 'all' : value;
             scheduleViewRequest(false);
         }
     }

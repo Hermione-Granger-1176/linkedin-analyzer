@@ -1,50 +1,33 @@
 /* Sketch Effects CSS - Hand-drawn aesthetic */
 
-/* Apply sketch effect to elements using SVG filter */
-.sketch-border {
-    position: relative;
-}
-
-/* Wobbly border effect using box-shadow technique */
-.main-content,
-.tab,
-.option-box,
+/* Wobbly border effect using subtle rotation */
+.drop-zone,
+.upload-status-card,
+.hub-card,
+.chart-card,
 .preview-section,
 .download-btn,
 .error-message,
-.privacy-notice {
-    /* Slight rotation variations for hand-drawn feel */
+.privacy-notice,
+.filters-bar,
+.insight-card,
+.progress-card {
     transform: rotate(calc(var(--sketch-rotate, 0) * 0.1deg));
 }
 
 /* Randomize rotation for different elements */
-.main-content { --sketch-rotate: 0.3; }
-.tab:nth-child(1) { --sketch-rotate: -0.2; }
-.tab:nth-child(2) { --sketch-rotate: 0.4; }
-.tab:nth-child(3) { --sketch-rotate: -0.3; }
-
-/* Hand-drawn underline effect */
-.hand-underline {
-    position: relative;
-    display: inline-block;
-}
-
-.hand-underline::after {
-    content: '';
-    position: absolute;
-    bottom: -4px;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background: currentColor;
-    border-radius: 2px;
-    transform: rotate(-0.5deg) scaleX(1.02);
-}
+.drop-zone { --sketch-rotate: 0.3; }
+.upload-status-card { --sketch-rotate: -0.4; }
+.hub-card:nth-child(1) { --sketch-rotate: -0.2; }
+.hub-card:nth-child(2) { --sketch-rotate: 0.4; }
+.hub-card:nth-child(3) { --sketch-rotate: -0.3; }
+.chart-card:nth-child(odd) { --sketch-rotate: 0.2; }
+.chart-card:nth-child(even) { --sketch-rotate: -0.2; }
 
 /* Sketch-style focus ring */
 *:focus-visible {
     outline: none;
-    box-shadow: 
+    box-shadow:
         0 0 0 2px var(--bg-secondary),
         0 0 0 4px var(--accent-blue);
 }
@@ -59,21 +42,21 @@
     border-radius: 12px 14px 13px 15px / 14px 12px 15px 13px;
 }
 
-.main-content {
+.hub-card,
+.chart-card,
+.upload-status-card,
+.insight-card {
     border-radius: 14px 12px 15px 13px / 12px 15px 13px 14px;
 }
 
-.tab {
-    border-radius: 8px 10px 9px 11px / 10px 8px 11px 9px;
-}
-
-.download-btn {
+.download-btn,
+.primary-btn {
     border-radius: 14px 16px 15px 17px / 16px 14px 17px 15px;
 }
 
 /* Dashed border that looks hand-drawn */
 .drop-zone {
-    background-image: 
+    background-image:
         repeating-linear-gradient(
             0deg,
             var(--border-color),
@@ -124,19 +107,10 @@
     75% { transform: rotate(-0.5deg); }
 }
 
-.download-btn:hover {
+.hub-card:hover,
+.download-btn:hover,
+.primary-btn:hover {
     animation: wobble 0.3s ease-in-out;
-}
-
-/* Sketch-style shadows */
-.main-content::before {
-    content: '';
-    position: absolute;
-    inset: 4px -4px -4px 4px;
-    background: var(--border-color);
-    opacity: 0.1;
-    border-radius: inherit;
-    z-index: -1;
 }
 
 /* Pencil stroke effect for titles */
@@ -162,8 +136,6 @@
     border-radius: 2px;
     opacity: 0.5;
 }
-
-/* Strikethrough effect for "coming soon" - removed as it affects text readability */
 
 /* Paper fold effect */
 .privacy-notice::before {
@@ -230,25 +202,11 @@ a {
     transform: rotate(3deg);
 }
 
-/* Coffee stain decoration (optional, adds whimsy) */
-.main-content::after {
-    content: '';
-    position: absolute;
-    bottom: -30px;
-    right: -30px;
-    width: 80px;
-    height: 80px;
-    border: 3px solid var(--accent-yellow);
-    border-radius: 50%;
-    opacity: 0.1;
-    pointer-events: none;
-}
-
 /* Animated doodle entrance */
 @keyframes sketch-in {
     from {
         opacity: 0;
-        transform: scale(0.95) rotate(-1deg);
+        transform: scale(0.97) rotate(-1deg);
     }
     to {
         opacity: 1;
@@ -256,7 +214,10 @@ a {
     }
 }
 
-.main-content {
+.upload-layout,
+.hub-grid,
+.analytics-grid,
+.insights-grid {
     animation: sketch-in 0.5s ease-out;
 }
 
@@ -280,30 +241,6 @@ a {
     border-radius: 0 0 4px 4px;
 }
 
-/* Notebook holes decoration */
-.main-content {
-    position: relative;
-}
-
-@media (min-width: 900px) {
-    .main-content::before {
-        content: '';
-        position: absolute;
-        left: -40px;
-        top: 20px;
-        width: 20px;
-        height: calc(100% - 40px);
-        background-image: radial-gradient(
-            circle,
-            var(--border-color) 6px,
-            transparent 6px
-        );
-        background-size: 20px 40px;
-        background-position: 0 0;
-        opacity: 0.3;
-    }
-}
-
 /* Selection styling */
 ::selection {
     background: var(--accent-yellow);
@@ -312,18 +249,21 @@ a {
 
 /* Cursor customization for interactive elements */
 .drop-zone,
-.tab:not(.disabled),
+.hub-card,
 .file-type-option,
 .download-btn,
-.theme-toggle {
+.primary-btn,
+.theme-toggle,
+.filter-btn {
     cursor: pointer;
 }
 
 /* Transition all color changes smoothly */
 *, *::before, *::after {
-    transition: 
+    transition:
         background-color var(--transition-normal),
         border-color var(--transition-normal),
         color var(--transition-normal),
-        box-shadow var(--transition-normal);
+        box-shadow var(--transition-normal),
+        transform var(--transition-normal);
 }

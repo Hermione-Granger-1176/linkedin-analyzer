@@ -5,20 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Clean and analyze your LinkedIn data exports. Free, private, runs entirely in your browser.">
     <title>LinkedIn Analyzer</title>
-    
+
     <!-- Google Fonts - Patrick Hand for hand-drawn look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
-    
+
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/screens.css">
     <link rel="stylesheet" href="css/sketch.css">
-    
+
     <!-- RoughJS for hand-drawn borders -->
     <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
-    
+
     <!-- SheetJS for Excel generation -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -43,199 +44,407 @@
         </svg>
     </button>
 
-    <!-- Main Container -->
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <h1 class="title">
-                <span class="title-icon">
-                    <svg viewBox="0 0 40 40" class="pencil-icon">
-                        <path d="M8 32 L28 12 L32 16 L12 36 Z" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <path d="M28 12 L30 10 C31 9 33 9 34 10 L34 10 C35 11 35 13 34 14 L32 16" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <path d="M8 32 L6 38 L12 36" fill="none" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                </span>
-                LinkedIn Analyzer
-            </h1>
-            <p class="subtitle">Your data, your browser, your privacy</p>
-        </header>
-
-        <!-- Navigation Tabs -->
-        <nav class="tabs" role="tablist">
-            <button class="tab active" role="tab" aria-selected="true" data-tab="cleaner">
-                <svg class="tab-icon" viewBox="0 0 24 24">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
-                    <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
-                    <path d="M9 15 L11 17 L15 13" fill="none" stroke="currentColor" stroke-width="2"/>
-                </svg>
-                Data Cleaner
-            </button>
-            <button class="tab disabled" role="tab" aria-selected="false" data-tab="analytics" disabled title="Coming soon">
-                <svg class="tab-icon" viewBox="0 0 24 24">
-                    <path d="M18 20V10M12 20V4M6 20v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                Analytics
-                <span class="coming-soon">soon</span>
-            </button>
-            <button class="tab disabled" role="tab" aria-selected="false" data-tab="insights" disabled title="Coming soon">
-                <svg class="tab-icon" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-                    <path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                Insights
-                <span class="coming-soon">soon</span>
-            </button>
-        </nav>
-
-        <!-- Main Content Area -->
-        <main class="main-content">
-            <!-- Data Cleaner Tab Content -->
-            <section class="tab-content active" id="cleaner-content">
-                <div class="section-header">
-                    <h2>Clean your LinkedIn export files</h2>
-                    <svg class="doodle-underline" viewBox="0 0 200 10" preserveAspectRatio="none">
-                        <path d="M0 5 Q50 0, 100 5 T200 5" fill="none" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                </div>
-
-                <!-- File Drop Zone -->
-                <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Upload CSV file">
-                    <input type="file" id="fileInput" accept=".csv" hidden>
-                    <div class="drop-zone-content">
-                        <svg class="upload-icon" viewBox="0 0 64 64">
-                            <path d="M32 44 L32 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                            <path d="M22 30 L32 18 L42 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M10 40 Q10 52, 22 52 L42 52 Q54 52, 54 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                        </svg>
-                        <p class="drop-zone-text">Drop your CSV file here</p>
-                        <p class="drop-zone-subtext">or click to browse</p>
-                    </div>
-                    <!-- Show when file is uploaded -->
-                    <div class="drop-zone-success" hidden>
-                        <svg class="success-icon" viewBox="0 0 64 64">
-                            <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3"/>
-                            <path d="M20 32 L28 40 L44 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <p class="drop-zone-text file-name-display"></p>
-                        <p class="drop-zone-subtext">Click to upload a different file</p>
-                    </div>
-                    <div class="drop-zone-hover">
-                        <p>Release to upload!</p>
-                    </div>
-                </div>
-
-                <!-- File Type Selection -->
-                <div class="file-type-section">
-                    <p class="file-type-label">What are you cleaning?</p>
-                    <div class="file-type-options">
-                        <label class="file-type-option option-blue">
-                            <input type="radio" name="fileType" value="shares">
-                            <span class="option-box">
-                                <span class="option-radio"></span>
-                                <span class="option-text">Shares</span>
-                            </span>
-                        </label>
-                        <label class="file-type-option option-purple">
-                            <input type="radio" name="fileType" value="comments">
-                            <span class="option-box">
-                                <span class="option-radio"></span>
-                                <span class="option-text">Comments</span>
-                            </span>
-                        </label>
-                        <label class="file-type-option option-green">
-                            <input type="radio" name="fileType" value="auto" checked>
-                            <span class="option-box">
-                                <span class="option-radio"></span>
-                                <span class="option-text">Auto-detect</span>
-                            </span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Preview Section (hidden until file uploaded) -->
-                <div class="preview-section" id="previewSection" hidden>
-                    <div class="preview-header">
-                        <svg class="preview-icon" viewBox="0 0 24 24">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
-                            <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <h3>Preview</h3>
-                        <span class="file-info" id="fileInfo"></span>
-                    </div>
-                    <div class="preview-table-wrapper">
-                        <table class="preview-table" id="previewTable">
-                            <thead></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                    <p class="preview-note" id="previewNote"></p>
-                </div>
-
-                <!-- Download Button (hidden until file processed) -->
-                <div class="download-section" id="downloadSection" hidden>
-                    <div class="action-buttons">
-                        <button class="download-btn" id="downloadBtn">
-                            <svg class="download-icon" viewBox="0 0 24 24">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/>
-                                <polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
-                                <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+    <div class="screens-container" id="screensContainer">
+        <!-- Upload Screen -->
+        <section class="screen active" id="upload-screen" data-screen="upload">
+            <div class="screen-inner screen-inner--hero">
+                <header class="hero-header">
+                    <h1 class="title">
+                        <span class="title-icon">
+                            <svg viewBox="0 0 40 40" class="pencil-icon" aria-hidden="true">
+                                <path d="M8 32 L28 12 L32 16 L12 36 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M28 12 L30 10 C31 9 33 9 34 10 L34 10 C35 11 35 13 34 14 L32 16" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M8 32 L6 38 L12 36" fill="none" stroke="currentColor" stroke-width="2"/>
                             </svg>
-                            Download Clean Excel
-                        </button>
-                        <button class="reset-btn" id="resetBtn" title="Start over">
-                            <svg class="reset-icon" viewBox="0 0 24 24">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M3 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </span>
+                        LinkedIn Analyzer
+                    </h1>
+                    <p class="subtitle">Your data, your browser, your privacy</p>
+                </header>
+
+                <div class="upload-layout">
+                    <div class="drop-zone" id="multiDropZone" tabindex="0" role="button" aria-label="Upload CSV files">
+                        <input type="file" id="multiFileInput" accept=".csv" multiple hidden>
+                        <div class="drop-zone-content">
+                            <svg class="upload-icon" viewBox="0 0 64 64" aria-hidden="true">
+                                <path d="M32 44 L32 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                                <path d="M22 30 L32 18 L42 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M10 40 Q10 52, 22 52 L42 52 Q54 52, 54 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
                             </svg>
-                            Start Over
-                        </button>
+                            <p class="drop-zone-text">Drop your CSV files here</p>
+                            <p class="drop-zone-subtext">Upload Shares.csv and Comments.csv</p>
+                        </div>
+                        <div class="drop-zone-hover">
+                            <p>Release to upload</p>
+                        </div>
                     </div>
-                    <!-- Decorative "click here" note -->
-                    <div class="click-here-note" aria-hidden="true">
-                        <svg viewBox="0 0 100 50">
-                            <path d="M80 10 Q60 5, 50 20 Q45 30, 30 35" fill="none" stroke="currentColor" stroke-width="2"/>
-                            <path d="M35 28 L28 38 L40 35" fill="none" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span>click here!</span>
+
+                    <div class="upload-status-card">
+                        <div class="status-header">
+                            <h2>Files</h2>
+                            <p>We use Shares.csv and Comments.csv for analytics</p>
+                        </div>
+                        <div class="file-status-list" id="fileStatusList">
+                            <div class="file-status-item" data-file="shares">
+                                <span class="status-indicator" aria-hidden="true"></span>
+                                <div class="status-text">
+                                    <p class="status-title">Shares.csv</p>
+                                    <p class="status-meta" id="sharesStatus">Not uploaded</p>
+                                </div>
+                            </div>
+                            <div class="file-status-item" data-file="comments">
+                                <span class="status-indicator" aria-hidden="true"></span>
+                                <div class="status-text">
+                                    <p class="status-title">Comments.csv</p>
+                                    <p class="status-meta" id="commentsStatus">Not uploaded</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="upload-hint" id="uploadHint">Upload at least one file to continue.</p>
+                        <button class="primary-btn" id="continueBtn" disabled>Continue</button>
                     </div>
                 </div>
 
-                <!-- Error Message (hidden by default) -->
-                <div class="error-message" id="errorMessage" hidden>
-                    <svg class="error-icon" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2"/>
-                        <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                    <p id="errorText"></p>
-                </div>
-
-                <!-- Privacy Notice -->
                 <div class="privacy-notice">
-                    <svg class="lock-icon" viewBox="0 0 24 24">
+                    <svg class="lock-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>
                         <path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="currentColor" stroke-width="2"/>
                     </svg>
                     <div class="privacy-text">
                         <p><strong>Your files stay in your browser.</strong></p>
-                        <p>Nothing is uploaded anywhere!</p>
+                        <p>Nothing is uploaded anywhere.</p>
                     </div>
                 </div>
-            </section>
-        </main>
+            </div>
+        </section>
 
-        <!-- Footer -->
-        <footer class="footer">
-            <div class="footer-line"></div>
-            <p>made with care by <span class="author">Aditya Kumar Darak (Hermione Granger)</span></p>
-        </footer>
+        <!-- Hub Screen -->
+        <section class="screen" id="hub-screen" data-screen="hub">
+            <div class="screen-inner">
+                <header class="screen-header screen-header--center">
+                    <h1 class="title">LinkedIn Analyzer</h1>
+                    <p class="subtitle">What would you like to do?</p>
+                </header>
+
+                <div class="hub-grid" role="list">
+                    <button class="hub-card" data-target="clean" role="listitem">
+                        <span class="hub-icon" aria-hidden="true">
+                            <svg viewBox="0 0 48 48">
+                                <path d="M10 34 L28 16 L34 22 L16 40" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M28 16 L36 8 L40 12 L32 20" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M12 42 L6 46 L10 40" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </span>
+                        <h3>Clean</h3>
+                        <p>Clean and export your data as formatted Excel files.</p>
+                    </button>
+                    <button class="hub-card" data-target="analytics" role="listitem">
+                        <span class="hub-icon" aria-hidden="true">
+                            <svg viewBox="0 0 48 48">
+                                <path d="M10 38V26M20 38V14M30 38V20M40 38V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M8 40H42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <h3>Analytics</h3>
+                        <p>Charts and stats about your LinkedIn activity.</p>
+                    </button>
+                    <button class="hub-card" data-target="insights" role="listitem">
+                        <span class="hub-icon" aria-hidden="true">
+                            <svg viewBox="0 0 48 48">
+                                <path d="M24 6 C14 6 10 14 10 20 C10 28 16 32 18 34 L18 38 H30 L30 34 C32 32 38 28 38 20 C38 14 34 6 24 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M18 42H30" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M20 34H28" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </span>
+                        <h3>Insights</h3>
+                        <p>Personalized takeaways based on your latest activity.</p>
+                    </button>
+                </div>
+
+                <p class="hub-hint" id="hubHint"></p>
+
+                <div class="file-summary">
+                    <span id="hubFileSummary">No files loaded.</span>
+                    <button class="link-btn" id="uploadDifferentBtn">Upload different files</button>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+            </div>
+        </section>
+
+        <!-- Clean Screen -->
+        <section class="screen" id="clean-screen" data-screen="clean">
+            <div class="screen-inner">
+                <header class="screen-header">
+                    <button class="back-btn" data-target="hub" aria-label="Back to hub">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 18 L9 12 L15 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Back
+                    </button>
+                    <div class="header-text">
+                        <h1 class="title">Clean Data</h1>
+                        <p class="subtitle">Prepare Shares and Comments for export.</p>
+                    </div>
+                </header>
+
+                <div class="clean-layout">
+                    <div class="clean-panel">
+                        <div class="file-type-section">
+                            <p class="file-type-label">Select a file to clean</p>
+                            <div class="file-type-options">
+                                <label class="file-type-option option-blue">
+                                    <input type="radio" name="cleanFileType" value="shares" checked>
+                                    <span class="option-box">
+                                        <span class="option-radio"></span>
+                                        <span class="option-text">Shares</span>
+                                    </span>
+                                </label>
+                                <label class="file-type-option option-purple">
+                                    <input type="radio" name="cleanFileType" value="comments">
+                                    <span class="option-box">
+                                        <span class="option-radio"></span>
+                                        <span class="option-text">Comments</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <p class="cleaner-hint" id="cleanerHint">Upload both files for full features.</p>
+                        </div>
+
+                        <div class="preview-section" id="cleanPreviewSection" hidden>
+                            <div class="preview-header">
+                                <svg class="preview-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                                <h3>Preview</h3>
+                                <span class="file-info" id="cleanFileInfo"></span>
+                            </div>
+                            <div class="preview-table-wrapper">
+                                <table class="preview-table" id="cleanPreviewTable">
+                                    <thead></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <p class="preview-note" id="cleanPreviewNote"></p>
+                        </div>
+
+                        <div class="download-section" id="cleanDownloadSection" hidden>
+                            <div class="action-buttons">
+                                <button class="download-btn" id="cleanDownloadBtn">
+                                    <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
+                                        <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+                                    </svg>
+                                    Download Clean Excel
+                                </button>
+                                <button class="reset-btn" id="cleanResetBtn" title="Start over">
+                                    <svg class="reset-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M3 3v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    Start Over
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="error-message" id="cleanErrorMessage" hidden>
+                            <svg class="error-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2"/>
+                                <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <p id="cleanErrorText"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+            </div>
+        </section>
+
+        <!-- Analytics Screen -->
+        <section class="screen" id="analytics-screen" data-screen="analytics">
+            <div class="screen-inner screen-inner--wide">
+                <header class="screen-header">
+                    <button class="back-btn" data-target="hub" aria-label="Back to hub">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 18 L9 12 L15 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Back
+                    </button>
+                    <div class="header-text">
+                        <h1 class="title">Analytics</h1>
+                        <p class="subtitle">Latest activity, combined posts and comments.</p>
+                    </div>
+                </header>
+
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <span class="filter-label">Time range</span>
+                        <div class="filter-buttons" id="timeRangeButtons">
+                            <button class="filter-btn" data-range="1m">1 month</button>
+                            <button class="filter-btn" data-range="3m">3 months</button>
+                            <button class="filter-btn" data-range="6m">6 months</button>
+                            <button class="filter-btn active" data-range="12m">12 months</button>
+                            <button class="filter-btn" data-range="all">All time</button>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label" for="topicSelect">Topic</label>
+                        <select id="topicSelect" class="filter-select">
+                            <option value="all">All topics</option>
+                        </select>
+                    </div>
+                    <button class="ghost-btn" id="resetFiltersBtn">Reset filters</button>
+                </div>
+
+                <div class="active-filters" id="activeFilters" hidden>
+                    <span class="active-filters-label">Active filters:</span>
+                    <div class="active-filters-list" id="activeFiltersList"></div>
+                </div>
+
+                <div class="analytics-empty" id="analyticsEmpty" hidden>
+                    <h2>No data available yet</h2>
+                    <p>Upload Shares.csv or Comments.csv to see analytics.</p>
+                </div>
+
+                <div class="analytics-grid" id="analyticsGrid">
+                    <div class="chart-card chart-card--wide" id="timelineCard">
+                        <div class="chart-header">
+                            <h3>Activity timeline</h3>
+                            <p>Combined posts and comments</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a month to focus on that period.</p>
+                    </div>
+
+                    <div class="chart-card" id="topicsCard">
+                        <div class="chart-header">
+                            <h3>Top topics</h3>
+                            <p>Words and hashtags you use most</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="topicsChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a topic to filter the dashboard.</p>
+                    </div>
+
+                    <div class="chart-card chart-card--wide" id="heatmapCard">
+                        <div class="chart-header">
+                            <h3>When you are active</h3>
+                            <p>Day of week by hour</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="heatmapChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a cell to filter by day and hour.</p>
+                    </div>
+
+                    <div class="chart-card" id="mixCard">
+                        <div class="chart-header">
+                            <h3>Content mix</h3>
+                            <p>From Shares.csv</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="mixChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a slice to focus on that content type.</p>
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <p class="stat-value" id="statPosts">0</p>
+                        <p class="stat-label">Posts</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statComments">0</p>
+                        <p class="stat-label">Comments</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statTotal">0</p>
+                        <p class="stat-label">Total activity</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statPeak">-</p>
+                        <p class="stat-label">Peak hour</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statStreak">0</p>
+                        <p class="stat-label">Current streak</p>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+            </div>
+        </section>
+
+        <!-- Insights Screen -->
+        <section class="screen" id="insights-screen" data-screen="insights">
+            <div class="screen-inner">
+                <header class="screen-header">
+                    <button class="back-btn" data-target="hub" aria-label="Back to hub">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 18 L9 12 L15 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Back
+                    </button>
+                    <div class="header-text">
+                        <h1 class="title">Insights</h1>
+                        <p class="subtitle">Personalized takeaways from your latest activity.</p>
+                    </div>
+                </header>
+
+                <div class="insights-empty" id="insightsEmpty" hidden>
+                    <h2>No data available yet</h2>
+                    <p>Upload Shares.csv or Comments.csv to generate insights.</p>
+                </div>
+
+                <div class="insights-grid" id="insightsGrid"></div>
+
+                <div class="insight-tip" id="insightTip" hidden>
+                    <div class="insight-tip-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48">
+                            <path d="M24 6 C14 6 10 14 10 20 C10 28 16 32 18 34 L18 38 H30 L30 34 C32 32 38 28 38 20 C38 14 34 6 24 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M18 42H30" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M20 34H28" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Pro tip</h3>
+                        <p id="insightTipText"></p>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+            </div>
+        </section>
     </div>
+
+    <div class="progress-overlay" id="progressOverlay" hidden>
+        <div class="progress-card">
+            <h2>Processing your data</h2>
+            <p>Everything stays in your browser.</p>
+            <div class="progress-canvas-wrap">
+                <canvas id="progressCanvas"></canvas>
+            </div>
+            <p class="progress-percent" id="progressPercent">0%</p>
+        </div>
+    </div>
+
+    <div class="chart-tooltip" id="chartTooltip" hidden></div>
 
     <!-- Decorative elements drawn by RoughJS -->
     <canvas id="roughCanvas" aria-hidden="true"></canvas>
 
     <!-- Scripts -->
     <script src="js/cleaner.js"></script>
+    <script src="js/analytics.js"></script>
+    <script src="js/charts.js"></script>
     <script src="js/excel.js"></script>
     <script src="js/app.js"></script>
 </body>

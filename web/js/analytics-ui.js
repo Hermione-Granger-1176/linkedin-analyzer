@@ -34,6 +34,13 @@
         chartTooltip: document.getElementById('chartTooltip')
     };
 
+    const CHART_CANVASES = [elements.timelineChart, elements.topicsChart, elements.heatmapChart].filter(Boolean);
+    const TIMELINE_ANIMATION = {
+        minDuration: 380,
+        maxDuration: 1200,
+        msPerPoint: 45
+    };
+
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
@@ -46,7 +53,6 @@
     let worker = null;
     let requestId = 0;
     let pendingViewId = 0;
-    let lastViewKey = null;
     let lastRequestedKey = null;
     let debounceTimer = null;
     let isRendering = false;
@@ -65,15 +71,22 @@
         elements.resetFiltersBtn.addEventListener('click', resetFilters);
         elements.activeFiltersList.addEventListener('click', handleFilterChipClick);
 
+        window.addEventListener('beforeunload', terminateWorker);
+        window.addEventListener('pagehide', terminateWorker);
+
         document.addEventListener('themechange', () => {
             if (state.currentView) {
-                lastViewKey = state.currentView.key;
                 renderAnalyticsView(state.currentView);
             }
         });
 
-        [elements.timelineChart, elements.topicsChart, elements.heatmapChart].forEach(canvas => {
-            if (!canvas) return;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && state.currentView) {
+                renderAnalyticsView(state.currentView);
+            }
+        });
+
+        CHART_CANVASES.forEach(canvas => {
             canvas.addEventListener('mousemove', handleChartHover);
             canvas.addEventListener('mouseleave', hideTooltip);
             canvas.addEventListener('click', handleChartClick);
@@ -99,8 +112,6 @@
         }
     }
 
-    window.addEventListener('beforeunload', terminateWorker);
-    window.addEventListener('pagehide', terminateWorker);
 
     async function loadBase() {
         try {
@@ -201,8 +212,7 @@
     let renderRetryTimer = null;
 
     function areChartsSized() {
-        return [elements.timelineChart, elements.topicsChart, elements.heatmapChart].every(canvas => {
-            if (!canvas) return false;
+        return CHART_CANVASES.every(canvas => {
             const rect = canvas.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
         });
@@ -211,9 +221,7 @@
     function scheduleRenderWhenSized(view) {
         pendingRender = view;
         if (resizeObserver) return;
-        const wrappers = [elements.timelineChart, elements.topicsChart, elements.heatmapChart]
-            .map(canvas => canvas && canvas.parentElement)
-            .filter(Boolean);
+        const wrappers = CHART_CANVASES.map(canvas => canvas.parentElement).filter(Boolean);
         if (typeof ResizeObserver !== 'undefined' && wrappers.length) {
             resizeObserver = new ResizeObserver(() => {
                 if (!pendingRender || !areChartsSized()) return;
@@ -240,6 +248,40 @@
         }
     }
 
+    function updateStats(view) {
+        elements.statPosts.textContent = view.totals.posts;
+        elements.statComments.textContent = view.totals.comments;
+        elements.statTotal.textContent = view.totals.total;
+        elements.statPeak.textContent = view.totals.total
+            ? `${String(view.peakHour.hour).padStart(2, '0')}:00`
+            : '-';
+        elements.statStreak.textContent = view.totals.total
+            ? `${view.streaks.current} days`
+            : '0 days';
+    }
+
+    function getTimelineAnimationDuration(pointCount) {
+        return Math.min(
+            TIMELINE_ANIMATION.maxDuration,
+            Math.max(TIMELINE_ANIMATION.minDuration, pointCount * TIMELINE_ANIMATION.msPerPoint)
+        );
+    }
+
+    function renderCharts(view) {
+        SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
+        SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
+
+        if (shouldAnimate(view)) {
+            const duration = getTimelineAnimationDuration(view.timeline.length);
+            SketchCharts.animateDraw((progress) => {
+                SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, progress, view.timelineMax);
+            }, duration);
+            return;
+        }
+
+        SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, 1, view.timelineMax);
+    }
+
     function renderAnalyticsView(view) {
         if (isRendering) {
             pendingRender = view;
@@ -259,16 +301,7 @@
             hideEmptyState();
 
             state.currentView = view;
-
-            elements.statPosts.textContent = view.totals.posts;
-            elements.statComments.textContent = view.totals.comments;
-            elements.statTotal.textContent = view.totals.total;
-            elements.statPeak.textContent = view.totals.total
-                ? `${String(view.peakHour.hour).padStart(2, '0')}:00`
-                : '-';
-            elements.statStreak.textContent = view.totals.total
-                ? `${view.streaks.current} days`
-                : '0 days';
+            updateStats(view);
 
             renderActiveFilters();
 
@@ -281,21 +314,7 @@
             isRendering = true;
             showAnalyticsLoading(true);
             SketchCharts.cancelAnimations();
-
-            const animateTimeline = shouldAnimate(view);
-            lastViewKey = view.key;
-
-            SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
-            SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
-
-            if (animateTimeline) {
-                const duration = Math.min(1200, Math.max(380, view.timeline.length * 45));
-                SketchCharts.animateDraw((progress) => {
-                    SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, progress, view.timelineMax);
-                }, duration);
-            } else {
-                SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, 1, view.timelineMax);
-            }
+            renderCharts(view);
         } catch (renderError) {
             setEmptyState('Render error', 'Failed to draw charts. Please refresh the page.');
         } finally {
@@ -322,23 +341,31 @@
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
         if (!range) return;
-        state.filters.timeRange = range;
-        resetFilterState(true);
-        elements.timeRangeButtons.forEach(btn => btn.classList.toggle('active', btn === button));
-        scheduleViewRequest(true);
+        applyTimeRange(range);
     }
 
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
-        elements.timeRangeButtons.forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-range') === '12m');
-        });
+        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
         scheduleViewRequest(true);
     }
 
     function resetFilterState(preserveTimeRange) {
         const timeRange = preserveTimeRange ? state.filters.timeRange : FILTER_DEFAULTS.timeRange;
         state.filters = { ...FILTER_DEFAULTS, timeRange };
+    }
+
+    function applyTimeRange(range) {
+        state.filters.timeRange = range;
+        resetFilterState(true);
+        setActiveTimeRange(range);
+        scheduleViewRequest(true);
+    }
+
+    function setActiveTimeRange(range) {
+        elements.timeRangeButtons.forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-range') === range);
+        });
     }
 
     function handleFilterChipClick(event) {
@@ -488,17 +515,11 @@
         if (document.visibilityState && document.visibilityState !== 'visible') {
             return false;
         }
-        if (!view || !Array.isArray(view.timeline) || view.timeline.length > 48) {
+        if (!view || !Array.isArray(view.timeline) || view.timeline.length < 2 || view.timeline.length > 48) {
             return false;
         }
         return view.totals.total < 4000;
     }
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && state.currentView) {
-            renderAnalyticsView(state.currentView);
-        }
-    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

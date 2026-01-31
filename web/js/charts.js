@@ -4,6 +4,7 @@ const SketchCharts = (() => {
     'use strict';
 
     const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const WEEKLY_TIME_RANGES = new Set(['1m', '3m']);
 
     const registry = new Map();
     let animationId = 0;
@@ -190,7 +191,7 @@ const SketchCharts = (() => {
         // Labels
         ctx.font = '12px Patrick Hand, sans-serif';
         ctx.fillStyle = colors.textSecondary;
-        const isWeekly = timeRange === '1m' || timeRange === '3m';
+        const isWeekly = WEEKLY_TIME_RANGES.has(timeRange);
         if (timeRange === 'all' && data.length > 18) {
             let lastYear = null;
             points.forEach(({ point, x }, index) => {

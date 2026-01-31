@@ -8,9 +8,12 @@ Try the web-based Data Cleaner - no installation needed!
 
 - Drag & drop your LinkedIn CSV exports (Shares.csv or Comments.csv)
 - Instantly clean and download as formatted Excel
+- Explore analytics and insights dashboards (timeline, topics, heatmap)
+- Weekly timeline detail for 1-3 month ranges
 - 100% client-side - your files never leave your browser
 - Works offline after first load
 - Light/dark theme with hand-drawn aesthetic
+- Timestamps are treated as local time (matches the CSV values)
 
 ### Deploy Your Own
 
@@ -32,7 +35,7 @@ Then open http://localhost:3000
 
 ## Features
 
-- **Web App** - Browser-based Data Cleaner with drag & drop, no installation required
+- **Web App** - Cleaner + Analytics + Insights dashboards, fully client-side
 - **Clean LinkedIn Shares exports** - Handles the complex quote escaping in `Shares.csv`
 - **Clean LinkedIn Comments exports** - Handles backslash-escaped quotes in `Comments.csv`
 - **Export to Excel** - Produces well-formatted `.xlsx` files with proper column widths and text wrapping
@@ -40,6 +43,8 @@ Then open http://localhost:3000
 - **Type-safe** - Python code fully typed with strict mypy compliance
 - **Well-tested** - Comprehensive test suite with pytest
 - **CLI interface** - Easy-to-use command-line interface for automation
+
+Note: The web analytics uses the timestamps exactly as provided in the CSV. If your export is UTC, convert it before upload to see local times.
 
 ## Python CLI
 
@@ -119,6 +124,13 @@ result = run_cleaner(config)
 
 ## Development
 
+### Web Setup
+
+```bash
+npm install
+npm run dev
+```
+
 ### Setup
 
 ```bash
@@ -135,6 +147,9 @@ pip install -e ".[dev]"
 ```bash
 # Run all tests
 pytest
+
+# Run web tests
+npm run test:web
 
 # Run with coverage
 pytest --cov=linkedin_analyzer --cov-report=html
@@ -154,22 +169,42 @@ mypy src/linkedin_analyzer
 ```bash
 ruff check src tests
 ruff format src tests
+
+# Lint web JS
+npm run lint:web
 ```
+
+### CI
+
+GitHub Actions runs linting, type checks, and tests for both the web and Python code.
 
 ## Project Structure
 
 ```
 linkedin-analyzer/
 ├── web/                         # Web App (static site)
-│   ├── index.html               # Main page
+│   ├── index.html               # Home (upload hub)
+│   ├── clean.html               # Cleaner UI
+│   ├── analytics.html           # Analytics dashboard
+│   ├── insights.html            # Insights dashboard
 │   ├── css/
 │   │   ├── variables.css        # Theme variables (light/dark)
 │   │   ├── style.css            # Main styles
 │   │   └── sketch.css           # Hand-drawn effects
 │   └── js/
-│       ├── app.js               # Main app logic
+│       ├── analytics-ui.js      # Analytics page UI
+│       ├── analytics-worker.js  # Analytics web worker
+│       ├── analytics.js         # Analytics engine
+│       ├── charts.js            # Canvas chart rendering
+│       ├── clean.js             # Cleaner page UI
 │       ├── cleaner.js           # CSV cleaning (JS port)
-│       └── excel.js             # Excel generation
+│       ├── decorations.js       # Background doodles
+│       ├── excel.js             # Excel generation
+│       ├── insights-ui.js       # Insights page UI
+│       ├── runtime.js           # Global runtime error guard
+│       ├── storage.js           # IndexedDB helpers
+│       ├── theme.js             # Theme toggle logic
+│       └── upload.js            # Upload flow
 ├── src/                         # Python CLI
 │   └── linkedin_analyzer/
 │       ├── __init__.py          # Package exports

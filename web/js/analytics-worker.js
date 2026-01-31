@@ -8,6 +8,8 @@ let commentsData = null;
 let analytics = null;
 let viewCache = new Map();
 let currentRequestId = 0;
+const VIEW_CACHE_LIMIT = 50;
+const VIEW_CACHE_TRIM = 20;
 
 function normalizeFilters(filters) {
     const safe = filters || {};
@@ -69,134 +71,137 @@ function hydrateAnalytics(base) {
     };
 }
 
-self.addEventListener('message', (event) => {
-    const message = event.data || {};
+function postError(requestId, message) {
+    self.postMessage({
+        type: 'error',
+        requestId,
+        payload: { message }
+    });
+}
 
-    if (message.type === 'addFile') {
-        const payload = message.payload || {};
-        const csvText = payload.csvText || '';
-        const fileName = payload.fileName || '';
-        
-        // Process CSV
-        const processed = LinkedInCleaner.process(csvText, 'auto');
-        if (!processed.success) {
-            self.postMessage({
-                type: 'fileProcessed',
-                payload: { error: processed.error || 'Unable to process file.' }
-            });
-            return;
-        }
-        
-        const fileType = processed.fileType;
-        if (fileType === 'shares') {
-            sharesData = processed.cleanedData;
-        }
-        if (fileType === 'comments') {
-            commentsData = processed.cleanedData;
-        }
-        
-        // Compute pre-aggregated analytics
-        computeAnalytics();
-        
-        const base = serializeAnalytics(analytics);
+function cacheView(key, payload) {
+    viewCache.set(key, payload);
+    if (viewCache.size > VIEW_CACHE_LIMIT) {
+        const keysToDelete = Array.from(viewCache.keys()).slice(0, VIEW_CACHE_TRIM);
+        keysToDelete.forEach(k => viewCache.delete(k));
+    }
+}
+
+function handleAddFile(payload) {
+    const csvText = payload && payload.csvText ? payload.csvText : '';
+    const fileName = payload && payload.fileName ? payload.fileName : '';
+
+    const processed = LinkedInCleaner.process(csvText, 'auto');
+    if (!processed.success) {
         self.postMessage({
             type: 'fileProcessed',
-            payload: {
-                fileType,
-                fileName,
-                rowCount: processed.rowCount,
-                analyticsBase: base,
-                topics: analytics ? analytics.topics : [],
-                hasData: Boolean(analytics && analytics.totals && analytics.totals.total > 0)
-            }
+            payload: { error: processed.error || 'Unable to process file.' }
         });
         return;
     }
 
-    if (message.type === 'initBase') {
-        analytics = hydrateAnalytics(message.payload);
-        viewCache = new Map();
-        const hasData = Boolean(analytics && analytics.totals && analytics.totals.total > 0);
-        const topics = analytics && analytics.topics ? analytics.topics.slice(0, 60) : [];
-        self.postMessage({
-            type: 'init',
-            payload: { hasData, topics }
-        });
+    const fileType = processed.fileType;
+    if (fileType === 'shares') {
+        sharesData = processed.cleanedData;
+    }
+    if (fileType === 'comments') {
+        commentsData = processed.cleanedData;
+    }
+
+    computeAnalytics();
+
+    const base = serializeAnalytics(analytics);
+    self.postMessage({
+        type: 'fileProcessed',
+        payload: {
+            fileType,
+            fileName,
+            rowCount: processed.rowCount,
+            analyticsBase: base,
+            hasData: Boolean(analytics && analytics.totals && analytics.totals.total > 0)
+        }
+    });
+}
+
+function handleInitBase(payload) {
+    analytics = hydrateAnalytics(payload);
+    viewCache = new Map();
+    const hasData = Boolean(analytics && analytics.totals && analytics.totals.total > 0);
+    self.postMessage({
+        type: 'init',
+        payload: { hasData }
+    });
+}
+
+function handleView(requestId, filters) {
+    currentRequestId = requestId;
+
+    if (!analytics) {
+        postError(requestId, 'Analytics not ready.');
         return;
     }
 
-    if (message.type === 'view') {
-        const requestId = message.requestId;
-        currentRequestId = requestId;
-        
-        if (!analytics) {
-            self.postMessage({
-                type: 'error',
-                requestId,
-                payload: { message: 'Analytics not ready.' }
-            });
-            return;
-        }
-        
-        const filters = normalizeFilters(message.filters || {});
-        const key = getViewKey(filters);
-        
-        // Check cache first
-        if (viewCache.has(key)) {
-            // Verify this request is still current
-            if (currentRequestId !== requestId) return;
-            
-            self.postMessage({
-                type: 'view',
-                requestId,
-                payload: viewCache.get(key)
-            });
-            return;
-        }
-        
-        // Build view from pre-aggregated data - now O(months) not O(events)
-        const view = AnalyticsEngine.buildView(analytics, filters);
-        
-        // Check if request is still current before sending
+    const safeFilters = normalizeFilters(filters || {});
+    const key = getViewKey(safeFilters);
+
+    if (viewCache.has(key)) {
         if (currentRequestId !== requestId) return;
-        
-        if (!view) {
-            self.postMessage({
-                type: 'error',
-                requestId,
-                payload: { message: 'Unable to build analytics view.' }
-            });
-            return;
-        }
-        
-        const insights = AnalyticsEngine.generateInsights(view);
-        const payload = {
-            view: { ...view, key },
-            insights
-        };
-        
-        // Cache with size limit
-        viewCache.set(key, payload);
-        if (viewCache.size > 50) {
-            // Remove oldest entries
-            const keysToDelete = Array.from(viewCache.keys()).slice(0, 20);
-            keysToDelete.forEach(k => viewCache.delete(k));
-        }
-        
         self.postMessage({
             type: 'view',
             requestId,
-            payload
+            payload: viewCache.get(key)
         });
         return;
     }
 
-    if (message.type === 'clear') {
-        sharesData = null;
-        commentsData = null;
-        analytics = null;
-        viewCache = new Map();
-        currentRequestId = 0;
-        self.postMessage({ type: 'cleared' });
+    const view = AnalyticsEngine.buildView(analytics, safeFilters);
+
+    if (currentRequestId !== requestId) return;
+
+    if (!view) {
+        postError(requestId, 'Unable to build analytics view.');
+        return;
+    }
+
+    const insights = AnalyticsEngine.generateInsights(view);
+    const payload = {
+        view: { ...view, key },
+        insights
+    };
+
+    cacheView(key, payload);
+    self.postMessage({
+        type: 'view',
+        requestId,
+        payload
+    });
+}
+
+function handleClear() {
+    sharesData = null;
+    commentsData = null;
+    analytics = null;
+    viewCache = new Map();
+    currentRequestId = 0;
+    self.postMessage({ type: 'cleared' });
+}
+
+self.addEventListener('message', (event) => {
+    const message = event.data || {};
+    switch (message.type) {
+        case 'addFile':
+            handleAddFile(message.payload || {});
+            break;
+        case 'initBase':
+            handleInitBase(message.payload || null);
+            break;
+        case 'view':
+            handleView(message.requestId, message.filters || {});
+            break;
+        case 'clear':
+            handleClear();
+            break;
+        default:
+            break;
     }
 });

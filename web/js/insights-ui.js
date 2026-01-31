@@ -117,18 +117,25 @@
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
         if (!range) return;
-        state.filters.timeRange = range;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
-        elements.timeRangeButtons.forEach(btn => btn.classList.toggle('active', btn === button));
-        requestView();
+        applyTimeRange(range);
     }
 
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
-        elements.timeRangeButtons.forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-range') === '12m');
-        });
+        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
         requestView();
+    }
+
+    function applyTimeRange(range) {
+        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+        setActiveTimeRange(range);
+        requestView();
+    }
+
+    function setActiveTimeRange(range) {
+        elements.timeRangeButtons.forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-range') === range);
+        });
     }
 
     function updateVisibility() {

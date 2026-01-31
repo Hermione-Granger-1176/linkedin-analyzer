@@ -18,6 +18,7 @@ const AnalyticsEngine = (() => {
 
     const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const WEEKLY_TIME_RANGES = new Set(['1m', '3m']);
 
     function parseLinkedInDate(value) {
         if (!value || typeof value !== 'string') return null;
@@ -27,22 +28,20 @@ const AnalyticsEngine = (() => {
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute] = timePart.split(':').map(Number);
         if (!year || !month || !day) return null;
-        
-        // LinkedIn exports data in UTC - create UTC date then convert to local
-        const utcDate = new Date(Date.UTC(year, month - 1, day, hour || 0, minute || 0, 0));
-        
-        // Get local day and hour for the user's timezone
-        const localHour = utcDate.getHours();
-        const localDay = utcDate.getDay(); // 0 = Sunday
+
+        // Treat LinkedIn export timestamps as local time.
+        const localDate = new Date(year, month - 1, day, hour || 0, minute || 0, 0);
+
+        const localHour = localDate.getHours();
+        const localDay = localDate.getDay(); // 0 = Sunday
         const localDayIndex = (localDay + 6) % 7; // Convert to 0 = Monday
-        
-        // Get local date components for keys
-        const localYear = utcDate.getFullYear();
-        const localMonth = utcDate.getMonth() + 1;
-        const localDayOfMonth = utcDate.getDate();
-        
+
+        const localYear = localDate.getFullYear();
+        const localMonth = localDate.getMonth() + 1;
+        const localDayOfMonth = localDate.getDate();
+
         return {
-            timestamp: utcDate.getTime(),
+            timestamp: localDate.getTime(),
             dayIndex: localDayIndex,
             hour: localHour,
             dateKey: `${localYear}-${String(localMonth).padStart(2, '0')}-${String(localDayOfMonth).padStart(2, '0')}`,
@@ -74,15 +73,12 @@ const AnalyticsEngine = (() => {
     }
 
     /**
-     * FAANG-style: Pre-compute ALL aggregates during initial load.
-     * This creates an indexed structure that allows O(1) filter lookups.
+     * Pre-compute aggregates during initial load.
+     * This creates an indexed structure that allows fast filter lookups.
      */
     function compute(sharesData, commentsData) {
         // Pre-aggregated indices
         const monthIndex = new Map();      // monthKey -> { posts, comments, topics: Map, days: Map, hours: Map, shareTypes: Map }
-        const topicCounts = new Map();     // topic -> count
-        const globalHeatmap = Array.from({ length: 7 }, () => Array(24).fill(0));
-        const globalContentMix = { textOnly: 0, links: 0, media: 0 };
         const activeDays = new Set();
         const dayIndex = new Map();        // dateKey -> { posts, comments, total, shareTypes }
         
@@ -137,22 +133,8 @@ const AnalyticsEngine = (() => {
                 totalPosts++;
                 latestTimestamp = Math.max(latestTimestamp, timestamp);
                 earliestTimestamp = Math.min(earliestTimestamp, timestamp);
-                globalHeatmap[dayIndex][hour]++;
                 activeDays.add(dateKey);
 
-                // Content mix
-                if (hasMedia) {
-                    globalContentMix.media++;
-                } else if (hasLink) {
-                    globalContentMix.links++;
-                } else {
-                    globalContentMix.textOnly++;
-                }
-
-                // Topics
-                for (const topic of topics) {
-                    topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
-                }
 
                 // Month bucket
                 const bucket = getMonthBucket(monthKey);
@@ -197,12 +179,8 @@ const AnalyticsEngine = (() => {
                 totalComments++;
                 latestTimestamp = Math.max(latestTimestamp, timestamp);
                 earliestTimestamp = Math.min(earliestTimestamp, timestamp);
-                globalHeatmap[dayIndex][hour]++;
                 activeDays.add(dateKey);
 
-                for (const topic of topics) {
-                    topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
-                }
 
                 const bucket = getMonthBucket(monthKey);
                 bucket.comments++;
@@ -221,11 +199,6 @@ const AnalyticsEngine = (() => {
                 }
             }
         }
-
-        // Sort topics by count
-        const sortedTopics = Array.from(topicCounts.entries())
-            .sort((a, b) => b[1] - a[1])
-            .map(([topic, count]) => ({ topic, count }));
 
         // Convert month index to serializable format
         const months = {};
@@ -251,9 +224,6 @@ const AnalyticsEngine = (() => {
         return {
             months,
             dayIndex: dayIndexData,
-            topics: sortedTopics,
-            globalHeatmap,
-            contentMix: globalContentMix,
             activeDays: Array.from(activeDays),
             latestTimestamp: latestTimestamp || null,
             earliestTimestamp: earliestTimestamp === Infinity ? null : earliestTimestamp,
@@ -266,41 +236,111 @@ const AnalyticsEngine = (() => {
     }
 
     function addMonths(date, months) {
-        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+        return new Date(date.getFullYear(), date.getMonth() + months, 1);
     }
 
     function addDays(date, days) {
-        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
     }
 
     function startOfMonth(date) {
-        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+        return new Date(date.getFullYear(), date.getMonth(), 1);
     }
 
     function endOfMonth(date) {
-        return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+        return new Date(date.getFullYear(), date.getMonth() + 1, 0);
     }
 
     function parseDateKey(key) {
         const [year, month, day] = key.split('-').map(Number);
-        return new Date(Date.UTC(year, month - 1, day));
+        return new Date(year, month - 1, day);
     }
 
     function formatDateKey(date) {
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
 
     function startOfWeek(date) {
-        const day = date.getUTCDay();
+        const day = date.getDay();
         const diff = (day + 6) % 7;
         return addDays(date, -diff);
     }
 
     function formatWeekLabel(date) {
-        return `${MONTH_LABELS[date.getUTCMonth()]} ${String(date.getUTCDate()).padStart(2, '0')}`;
+        return `${MONTH_LABELS[date.getMonth()]} ${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function getTopicRatio(bucket, filters) {
+        if (!filters.topic || filters.topic === 'all') return 1;
+        if (!bucket.total) return 0;
+        const topicCount = bucket.topics[filters.topic] || 0;
+        return topicCount / bucket.total;
+    }
+
+    function getHourRatio(bucket, filters) {
+        if (filters.hour === null || filters.hour === undefined) return 1;
+        if (filters.day !== null && filters.day !== undefined) {
+            const dayTotal = bucket.days[filters.day] || 0;
+            const dayHour = bucket.heatmap[filters.day][filters.hour] || 0;
+            return dayTotal > 0 ? dayHour / dayTotal : 0;
+        }
+        const hourTotal = bucket.hours[filters.hour] || 0;
+        return bucket.total > 0 ? hourTotal / bucket.total : 0;
+    }
+
+    function applyMonthFilters(bucket, filters, topicRatio, hasDay, hasHour) {
+        let monthPosts = bucket.posts;
+        let monthComments = bucket.comments;
+        let monthTotal = bucket.total;
+        let useMonth = true;
+
+        if (filters.topic && filters.topic !== 'all') {
+            const topicCount = bucket.topics[filters.topic] || 0;
+            if (topicCount === 0) {
+                useMonth = false;
+            } else {
+                monthPosts = Math.round(bucket.posts * topicRatio);
+                monthComments = Math.round(bucket.comments * topicRatio);
+                monthTotal = topicCount;
+            }
+        }
+
+        if (filters.shareType && filters.shareType !== 'all' && useMonth) {
+            if (filters.shareType === 'text') {
+                monthPosts = bucket.shareTypes.textOnly;
+            } else if (filters.shareType === 'links') {
+                monthPosts = bucket.shareTypes.links;
+            } else if (filters.shareType === 'media') {
+                monthPosts = bucket.shareTypes.media;
+            }
+            monthComments = 0;
+            monthTotal = monthPosts;
+        }
+
+        if (hasDay && hasHour && useMonth) {
+            const heatmapCount = bucket.heatmap[filters.day][filters.hour];
+            const ratio = monthTotal > 0 ? heatmapCount / monthTotal : 0;
+            monthPosts = Math.round(monthPosts * ratio);
+            monthComments = Math.round(monthComments * ratio);
+            monthTotal = heatmapCount;
+        } else if (hasDay && useMonth) {
+            const dayTotal = bucket.days[filters.day];
+            const ratio = monthTotal > 0 ? dayTotal / monthTotal : 0;
+            monthPosts = Math.round(monthPosts * ratio);
+            monthComments = Math.round(monthComments * ratio);
+            monthTotal = dayTotal;
+        } else if (hasHour && useMonth) {
+            const hourTotal = bucket.hours[filters.hour];
+            const ratio = monthTotal > 0 ? hourTotal / monthTotal : 0;
+            monthPosts = Math.round(monthPosts * ratio);
+            monthComments = Math.round(monthComments * ratio);
+            monthTotal = hourTotal;
+        }
+
+        return { monthPosts, monthComments, monthTotal, useMonth };
     }
 
     function getMonthKeysInRange(earliestTimestamp, latestTimestamp, rangeKey, monthFocus) {
@@ -318,7 +358,7 @@ const AnalyticsEngine = (() => {
             const keys = [];
             let cursor = startDate;
             while (cursor <= latestMonth) {
-                keys.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`);
+                keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
                 cursor = addMonths(cursor, 1);
             }
             return keys;
@@ -330,7 +370,7 @@ const AnalyticsEngine = (() => {
         const keys = [];
         for (let i = 0; i < monthCount; i++) {
             const d = addMonths(latestMonth, -i);
-            const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             keys.push(key);
         }
         return keys.reverse();
@@ -363,31 +403,20 @@ const AnalyticsEngine = (() => {
         const timeline = [];
         let timelineMax = 1;
         const monthMeta = {};
-        const useWeeklyTimeline = Boolean(dayIndex) && (filters.timeRange === '1m' || filters.timeRange === '3m');
+        const useWeeklyTimeline = Boolean(dayIndex) && WEEKLY_TIME_RANGES.has(filters.timeRange);
         const hasDay = filters.day !== null && filters.day !== undefined;
         const hasHour = filters.hour !== null && filters.hour !== undefined;
 
         for (const monthKey of targetMonths) {
             const bucket = months[monthKey];
             const baselineValue = bucket ? bucket.total : 0;
+            let topicRatio = 1;
             if (!useWeeklyTimeline) {
                 timelineMax = Math.max(timelineMax, baselineValue);
             }
             if (bucket) {
-                const topicRatio = (filters.topic && filters.topic !== 'all')
-                    ? (bucket.total > 0 ? (bucket.topics[filters.topic] || 0) / bucket.total : 0)
-                    : 1;
-                let hourRatio = 1;
-                if (hasHour) {
-                    if (hasDay) {
-                        const dayTotal = bucket.days[filters.day] || 0;
-                        const dayHour = bucket.heatmap[filters.day][filters.hour] || 0;
-                        hourRatio = dayTotal > 0 ? dayHour / dayTotal : 0;
-                    } else {
-                        const hourTotal = bucket.hours[filters.hour] || 0;
-                        hourRatio = bucket.total > 0 ? hourTotal / bucket.total : 0;
-                    }
-                }
+                topicRatio = getTopicRatio(bucket, filters);
+                const hourRatio = getHourRatio(bucket, filters);
                 monthMeta[monthKey] = {
                     topicRatio,
                     hourRatio
@@ -400,60 +429,13 @@ const AnalyticsEngine = (() => {
                 continue;
             }
 
-            // Apply filters
-            let monthPosts = bucket.posts;
-            let monthComments = bucket.comments;
-            let monthTotal = bucket.total;
-            let useMonth = true;
-
-            // Topic filter - if topic specified, we need to check if month has that topic
-            if (filters.topic && filters.topic !== 'all') {
-                const topicCount = bucket.topics[filters.topic] || 0;
-                if (topicCount === 0) {
-                    useMonth = false;
-                } else {
-                    // Approximate: scale by topic prevalence in this month
-                    const ratio = topicCount / monthTotal;
-                    monthPosts = Math.round(bucket.posts * ratio);
-                    monthComments = Math.round(bucket.comments * ratio);
-                    monthTotal = topicCount;
-                }
-            }
-
-            // ShareType filter
-            if (filters.shareType && filters.shareType !== 'all' && useMonth) {
-                if (filters.shareType === 'text') {
-                    monthPosts = bucket.shareTypes.textOnly;
-                } else if (filters.shareType === 'links') {
-                    monthPosts = bucket.shareTypes.links;
-                } else if (filters.shareType === 'media') {
-                    monthPosts = bucket.shareTypes.media;
-                }
-                monthComments = 0; // shareType only applies to posts
-                monthTotal = monthPosts;
-            }
-
-            // Day and Hour filters - use heatmap for intersection when both specified
-            if (hasDay && hasHour && useMonth) {
-                // Use heatmap for exact intersection
-                const heatmapCount = bucket.heatmap[filters.day][filters.hour];
-                const ratio = monthTotal > 0 ? heatmapCount / monthTotal : 0;
-                monthPosts = Math.round(monthPosts * ratio);
-                monthComments = Math.round(monthComments * ratio);
-                monthTotal = heatmapCount;
-            } else if (hasDay && useMonth) {
-                const dayTotal = bucket.days[filters.day];
-                const ratio = monthTotal > 0 ? dayTotal / monthTotal : 0;
-                monthPosts = Math.round(monthPosts * ratio);
-                monthComments = Math.round(monthComments * ratio);
-                monthTotal = dayTotal;
-            } else if (hasHour && useMonth) {
-                const hourTotal = bucket.hours[filters.hour];
-                const ratio = monthTotal > 0 ? hourTotal / monthTotal : 0;
-                monthPosts = Math.round(monthPosts * ratio);
-                monthComments = Math.round(monthComments * ratio);
-                monthTotal = hourTotal;
-            }
+            const { monthPosts, monthComments, monthTotal, useMonth } = applyMonthFilters(
+                bucket,
+                filters,
+                topicRatio,
+                hasDay,
+                hasHour
+            );
 
             if (!useMonth || monthTotal === 0) {
                 if (!useWeeklyTimeline) {
@@ -544,8 +526,8 @@ const AnalyticsEngine = (() => {
 
         const [startYear, startMonth] = targetMonths[0].split('-').map(Number);
         const [endYear, endMonth] = targetMonths[targetMonths.length - 1].split('-').map(Number);
-        const rangeStart = new Date(Date.UTC(startYear, startMonth - 1, 1));
-        const rangeEnd = endOfMonth(new Date(Date.UTC(endYear, endMonth - 1, 1)));
+        const rangeStart = new Date(startYear, startMonth - 1, 1);
+        const rangeEnd = endOfMonth(new Date(endYear, endMonth - 1, 1));
         const startWeek = startOfWeek(rangeStart);
         const endWeek = startOfWeek(rangeEnd);
 
@@ -588,7 +570,7 @@ const AnalyticsEngine = (() => {
             }
 
             if (hasDay) {
-                const dayIndexValue = (date.getUTCDay() + 6) % 7;
+                const dayIndexValue = (date.getDay() + 6) % 7;
                 if (dayIndexValue !== filters.day) {
                     value = 0;
                 }
@@ -661,7 +643,7 @@ const AnalyticsEngine = (() => {
         const days = Array.from(daySet).sort();
         const parseDay = (key) => {
             const [year, month, day] = key.split('-').map(Number);
-            return new Date(Date.UTC(year, month - 1, day));
+            return new Date(year, month - 1, day);
         };
         let longest = 1;
         let streak = 1;
@@ -683,8 +665,8 @@ const AnalyticsEngine = (() => {
         let cursor = parseDay(latestDay);
         let current = 1;
         while (true) {
-            const prev = new Date(cursor.getTime() - 24 * 60 * 60 * 1000);
-            const key = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, '0')}-${String(prev.getUTCDate()).padStart(2, '0')}`;
+            const prev = addDays(cursor, -1);
+            const key = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
             if (daySet.has(key)) {
                 current++;
                 cursor = prev;

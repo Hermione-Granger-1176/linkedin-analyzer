@@ -1028,6 +1028,38 @@ button {
     align-self: flex-start;
 }
 
+.global-error-banner {
+    position: fixed;
+    left: var(--space-lg);
+    right: var(--space-lg);
+    bottom: var(--space-lg);
+    z-index: 1000;
+    background: var(--accent-red-light);
+    border: 2px solid var(--accent-red);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-md) var(--space-lg);
+    color: var(--text-primary);
+}
+
+.global-error-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
+.global-error-text {
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+.global-error-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
 .analytics-empty,
 .insights-empty {
     text-align: center;

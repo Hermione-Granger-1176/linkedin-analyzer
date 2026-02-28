@@ -33,6 +33,7 @@
     let activeJobs = 0;
     let progressValue = 0;
     let progressAnimationId = null;
+    let progressSessionId = 0;
 
     /** Initialize the upload page. */
     function init() {
@@ -157,7 +158,9 @@
             return;
         }
 
-        showProgressOverlay();
+        if (activeJobs <= 0) {
+            showProgressOverlay();
+        }
         csvFiles.forEach(file => {
             activeJobs += 1;
             const jobId = createJobId(file);
@@ -444,17 +447,31 @@
 
     /** Show the progress overlay and start animation. */
     function showProgressOverlay() {
+        progressSessionId += 1;
+        const sessionId = progressSessionId;
         elements.progressOverlay.hidden = false;
         progressValue = 0;
         drawProgressBar(progressValue);
-        animateProgressTo(0.85, 900);
+        animateProgressTo(0.72, 650, () => {
+            if (sessionId !== progressSessionId || activeJobs <= 0) {
+                return;
+            }
+            startProgressCrawl(sessionId);
+        }, sessionId);
     }
 
     /** Animate progress to 100% then hide the overlay. */
     function hideProgressOverlay() {
-        animateProgressTo(1, 300, () => {
+        if (elements.progressOverlay.hidden) {
+            return;
+        }
+        const sessionId = progressSessionId;
+        animateProgressTo(1, 320, () => {
+            if (sessionId !== progressSessionId) {
+                return;
+            }
             elements.progressOverlay.hidden = true;
-        });
+        }, sessionId);
     }
 
     /**
@@ -462,15 +479,19 @@
      * @param {number} target - Target progress value (0-1)
      * @param {number} duration - Animation duration in ms
      * @param {Function} [callback] - Optional callback when animation completes
+     * @param {number} [sessionId] - Progress animation session token
      */
-    function animateProgressTo(target, duration, callback) {
-        if (progressAnimationId) {
-            cancelAnimationFrame(progressAnimationId);
-        }
+    function animateProgressTo(target, duration, callback, sessionId) {
+        stopProgressAnimation();
         const start = performance.now();
         const startValue = progressValue;
+        const animationSession = sessionId || progressSessionId;
 
         function step(now) {
+            if (animationSession !== progressSessionId) {
+                progressAnimationId = null;
+                return;
+            }
             const elapsed = now - start;
             const t = Math.min(elapsed / duration, 1);
             const eased = 1 - Math.pow(1 - t, 3);
@@ -478,12 +499,62 @@
             drawProgressBar(progressValue);
             if (t < 1) {
                 progressAnimationId = requestAnimationFrame(step);
-            } else if (callback) {
+                return;
+            }
+
+            progressAnimationId = null;
+            if (callback) {
                 callback();
             }
         }
 
         progressAnimationId = requestAnimationFrame(step);
+    }
+
+    /** Stop any in-flight progress animation frame loop. */
+    function stopProgressAnimation() {
+        if (!progressAnimationId) {
+            return;
+        }
+        cancelAnimationFrame(progressAnimationId);
+        progressAnimationId = null;
+    }
+
+    /**
+     * Slowly crawl progress toward completion while jobs are active.
+     * @param {number} sessionId - Progress animation session token
+     */
+    function startProgressCrawl(sessionId) {
+        stopProgressAnimation();
+        const crawlCap = 0.985;
+        let previousTime = 0;
+
+        function crawl(now) {
+            if (sessionId !== progressSessionId) {
+                progressAnimationId = null;
+                return;
+            }
+
+            if (!previousTime) {
+                previousTime = now;
+            }
+
+            const deltaMs = Math.max(0, now - previousTime);
+            previousTime = now;
+            const remaining = Math.max(0, crawlCap - progressValue);
+
+            if (remaining > 0.0005) {
+                const normalizedRemaining = Math.min(1, remaining / 0.265);
+                const unitsPerSecond = 0.007 + (0.06 * normalizedRemaining);
+                const increment = (unitsPerSecond * deltaMs) / 1000;
+                progressValue = Math.min(crawlCap, progressValue + increment);
+                drawProgressBar(progressValue);
+            }
+
+            progressAnimationId = requestAnimationFrame(crawl);
+        }
+
+        progressAnimationId = requestAnimationFrame(crawl);
     }
 
     /**
@@ -507,9 +578,9 @@
         const fill = styles.getPropertyValue('--accent-purple').trim();
 
         const trackX = 8;
-        const trackY = rect.height / 2 - 10;
+        const trackY = rect.height / 2 - 14;
         const trackWidth = rect.width - 16;
-        const trackHeight = 20;
+        const trackHeight = 28;
 
         if (typeof rough !== 'undefined') {
             const rc = rough.canvas(canvas);

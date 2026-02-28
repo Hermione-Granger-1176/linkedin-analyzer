@@ -23,6 +23,9 @@
     const elements = {
         timeRangeButtons: document.querySelectorAll('#messagesTimeRangeButtons .filter-btn'),
         resetFiltersBtn: document.getElementById('messagesResetFiltersBtn'),
+        topContactsExportBtn: document.getElementById('topContactsExportBtn'),
+        silentConnectionsExportBtn: document.getElementById('silentConnectionsExportBtn'),
+        fadingConversationsExportBtn: document.getElementById('fadingConversationsExportBtn'),
         messagesEmpty: document.getElementById('messagesEmpty'),
         messagesLayout: document.getElementById('messagesLayout'),
         topContactsList: document.getElementById('topContactsList'),
@@ -41,7 +44,12 @@
         messageState: null,
         connectionState: null,
         hasConnectionsFile: false,
-        connectionLoadError: null
+        connectionLoadError: null,
+        currentLists: {
+            topContacts: [],
+            silentConnections: [],
+            fadingConversations: []
+        }
     };
 
     /** Initialize messages page. */
@@ -56,6 +64,16 @@
             button.addEventListener('click', () => handleTimeRangeChange(button));
         });
         elements.resetFiltersBtn.addEventListener('click', resetFilters);
+        if (elements.topContactsExportBtn) {
+            elements.topContactsExportBtn.addEventListener('click', exportTopContacts);
+        }
+        if (elements.silentConnectionsExportBtn) {
+            elements.silentConnectionsExportBtn.addEventListener('click', exportSilentConnections);
+        }
+        if (elements.fadingConversationsExportBtn) {
+            elements.fadingConversationsExportBtn.addEventListener('click', exportFadingConversations);
+        }
+        updateExportButtonStates();
     }
 
     /** Load messages and connections files from IndexedDB. */
@@ -582,6 +600,7 @@
             return {
                 key: contactKey,
                 name: base ? base.name : 'Unknown',
+                url: base ? base.url : '',
                 count: metric.count,
                 lastTimestamp: metric.lastTimestamp
             };
@@ -619,10 +638,10 @@
         });
 
         silent.sort((left, right) => {
-            const leftTs = left.connectedOnTimestamp || 0;
-            const rightTs = right.connectedOnTimestamp || 0;
-            if (rightTs !== leftTs) {
-                return rightTs - leftTs;
+            const leftTs = left.connectedOnTimestamp === null ? Number.POSITIVE_INFINITY : left.connectedOnTimestamp;
+            const rightTs = right.connectedOnTimestamp === null ? Number.POSITIVE_INFINITY : right.connectedOnTimestamp;
+            if (leftTs !== rightTs) {
+                return leftTs - rightTs;
             }
             return left.name.localeCompare(right.name);
         });
@@ -653,6 +672,7 @@
 
             fading.push({
                 name: contact.name,
+                url: contact.url || connection.url || '',
                 daysSince,
                 lastTimestamp: contact.lastTimestamp,
                 company: connection.company
@@ -660,10 +680,10 @@
         });
 
         fading.sort((left, right) => {
-            if (right.daysSince !== left.daysSince) {
-                return right.daysSince - left.daysSince;
+            if (right.lastTimestamp !== left.lastTimestamp) {
+                return right.lastTimestamp - left.lastTimestamp;
             }
-            return right.lastTimestamp - left.lastTimestamp;
+            return left.name.localeCompare(right.name);
         });
 
         return fading;
@@ -705,9 +725,14 @@
             ? getFadingConversations(state.messageState, state.connectionState)
             : [];
 
+        state.currentLists.topContacts = topSummary.items;
+        state.currentLists.silentConnections = silentConnections;
+        state.currentLists.fadingConversations = fadingConversations;
+
         renderTopContacts(topSummary.items.slice(0, 10));
         renderSilentConnections(silentConnections.slice(0, 10));
         renderFadingConversations(fadingConversations.slice(0, 10));
+        updateExportButtonStates();
 
         updateStats(topSummary, hasConnections ? state.connectionState.list.length : 0, fadingConversations.length);
         updateTip(topSummary.items, silentConnections, fadingConversations);
@@ -726,7 +751,7 @@
         elements.topContactsList.innerHTML = items.map(item => `
             <li class="message-item">
                 <div class="message-item-main">
-                    <p class="message-item-title">${escapeHtml(item.name)}</p>
+                    <p class="message-item-title">${renderContactName(item.name, item.url)}</p>
                     <p class="message-item-meta">Last message: ${escapeHtml(formatShortDate(item.lastTimestamp))}</p>
                 </div>
                 <span class="message-item-value">${item.count} msgs</span>
@@ -758,7 +783,7 @@
             return `
                 <li class="message-item">
                     <div class="message-item-main">
-                        <p class="message-item-title">${escapeHtml(item.name)}</p>
+                        <p class="message-item-title">${renderContactName(item.name, item.url)}</p>
                         <p class="message-item-meta">${escapeHtml(roleMeta || 'No role info')}</p>
                     </div>
                     <span class="message-item-value">${escapeHtml(connectedOn)}</span>
@@ -786,7 +811,7 @@
         elements.fadingConversationsList.innerHTML = items.map(item => `
             <li class="message-item">
                 <div class="message-item-main">
-                    <p class="message-item-title">${escapeHtml(item.name)}</p>
+                    <p class="message-item-title">${renderContactName(item.name, item.url)}</p>
                     <p class="message-item-meta">Last message: ${escapeHtml(formatShortDate(item.lastTimestamp))}</p>
                 </div>
                 <span class="message-item-value">${item.daysSince} days</span>
@@ -882,6 +907,113 @@
      */
     function renderEmptyList(listElement, message) {
         listElement.innerHTML = `<li class="message-empty">${escapeHtml(message)}</li>`;
+    }
+
+    /**
+     * Render a contact name as link if URL exists.
+     * @param {string} name - Contact name
+     * @param {string} url - LinkedIn URL
+     * @returns {string}
+     */
+    function renderContactName(name, url) {
+        const safeName = escapeHtml(name || 'Unknown');
+        const safeUrl = cleanText(url);
+        if (!safeUrl) {
+            return safeName;
+        }
+        return `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${safeName}</a>`;
+    }
+
+    /** Export top contacts panel data. */
+    function exportTopContacts() {
+        const rows = state.currentLists.topContacts.map(item => ({
+            Name: item.name,
+            'LinkedIn URL': toLinkedInCell(item.url),
+            Messages: item.count,
+            'Last Message': formatShortDate(item.lastTimestamp)
+        }));
+        downloadExport('top-contacts', 'Top Contacts', rows);
+    }
+
+    /** Export silent connections panel data. */
+    function exportSilentConnections() {
+        const rows = state.currentLists.silentConnections.map(item => ({
+            Name: item.name,
+            'LinkedIn URL': toLinkedInCell(item.url),
+            'Connected On': item.connectedOnTimestamp ? formatShortDate(item.connectedOnTimestamp) : '',
+            Position: item.position || '',
+            Company: item.company || ''
+        }));
+        downloadExport('silent-connections', 'Silent Connections', rows);
+    }
+
+    /** Export fading conversations panel data. */
+    function exportFadingConversations() {
+        const rows = state.currentLists.fadingConversations.map(item => ({
+            Name: item.name,
+            'LinkedIn URL': toLinkedInCell(item.url),
+            'Days Since Last Message': item.daysSince,
+            'Last Message': formatShortDate(item.lastTimestamp),
+            Company: item.company || ''
+        }));
+        downloadExport('fading-conversations', 'Fading Conversations', rows);
+    }
+
+    /**
+     * Convert a URL string to an export cell with hyperlink metadata.
+     * @param {string} url - LinkedIn profile URL
+     * @returns {string|{value: string, hyperlink: string}}
+     */
+    function toLinkedInCell(url) {
+        const value = cleanText(url);
+        if (!value) {
+            return '';
+        }
+        return {
+            value,
+            hyperlink: value
+        };
+    }
+
+    /**
+     * Download rows as Excel file using export spec.
+     * @param {string} filePrefix - File prefix
+     * @param {string} sheetName - Worksheet name
+     * @param {object[]} rows - Export rows
+     */
+    function downloadExport(filePrefix, sheetName, rows) {
+        if (!rows.length) {
+            return;
+        }
+        if (typeof ExcelGenerator === 'undefined' || typeof ExcelGenerator.downloadFromSpec !== 'function') {
+            return;
+        }
+
+        const headers = Object.keys(rows[0]);
+        const orderedRows = rows.map(row => headers.map(header => row[header] ?? ''));
+        ExcelGenerator.downloadFromSpec(
+            {
+                sheetName,
+                headers,
+                rows: orderedRows
+            },
+            `messages-${filePrefix}.xlsx`
+        );
+    }
+
+    /** Enable/disable export buttons based on availability and list content. */
+    function updateExportButtonStates() {
+        const exportReady = typeof ExcelGenerator !== 'undefined' && typeof ExcelGenerator.downloadFromSpec === 'function';
+
+        if (elements.topContactsExportBtn) {
+            elements.topContactsExportBtn.disabled = !(exportReady && state.currentLists.topContacts.length);
+        }
+        if (elements.silentConnectionsExportBtn) {
+            elements.silentConnectionsExportBtn.disabled = !(exportReady && state.currentLists.silentConnections.length);
+        }
+        if (elements.fadingConversationsExportBtn) {
+            elements.fadingConversationsExportBtn.disabled = !(exportReady && state.currentLists.fadingConversations.length);
+        }
     }
 
     /**
@@ -1094,6 +1226,7 @@
         elements.messagesEmpty.hidden = false;
         elements.messagesLayout.hidden = true;
         elements.messagesTip.hidden = true;
+        updateExportButtonStates();
     }
 
     /** Hide empty state and show layout. */

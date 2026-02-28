@@ -1234,6 +1234,28 @@ button {
     color: var(--text-secondary);
 }
 
+.message-panel-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+}
+
+.export-panel-btn {
+    margin-top: var(--space-xs);
+    font-size: var(--font-size-xs);
+    padding: 0.35rem 0.6rem;
+}
+
+.message-item-title a {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.message-item-title a:hover {
+    color: var(--accent-blue);
+}
+
 .message-list {
     display: flex;
     flex-direction: column;
@@ -1297,7 +1319,7 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.2);
+    background: color-mix(in srgb, var(--bg-primary) 58%, transparent);
     backdrop-filter: blur(4px);
     z-index: 300;
 }
@@ -1314,6 +1336,28 @@ button {
     text-align: center;
     box-shadow: var(--shadow-lg);
     min-width: min(420px, 90vw);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.progress-gear-wrap {
+    width: 88px;
+    height: 88px;
+    border: 2px dashed var(--border-light);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--bg-tertiary);
+    animation: gear-float 2.4s ease-in-out infinite;
+}
+
+.progress-gear {
+    width: 62px;
+    height: 62px;
+    color: var(--accent-blue);
+    animation: gear-spin 3.2s linear infinite;
 }
 
 .progress-card h2 {
@@ -1321,8 +1365,12 @@ button {
     color: var(--text-primary);
 }
 
+.progress-card > p {
+    max-width: 34ch;
+}
+
 .progress-canvas-wrap {
-    height: 60px;
+    height: 76px;
     margin: var(--space-md) 0;
 }
 
@@ -1334,6 +1382,33 @@ button {
 .progress-percent {
     font-size: var(--font-size-lg);
     color: var(--text-primary);
+    font-weight: 600;
+    min-height: 1.4em;
+}
+
+@keyframes gear-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes gear-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .progress-gear-wrap,
+    .progress-gear {
+        animation: none;
+    }
 }
 
 /* Tooltip */

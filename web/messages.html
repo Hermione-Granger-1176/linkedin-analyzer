@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="css/sketch.css">
 
     <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
@@ -100,6 +101,7 @@
                     <div class="message-panel-header">
                         <h3>Top Contacts</h3>
                         <p>People you talk to most in the selected period.</p>
+                        <button class="ghost-btn export-panel-btn" id="topContactsExportBtn" type="button">Export</button>
                     </div>
                     <ol class="message-list" id="topContactsList"></ol>
                 </section>
@@ -108,6 +110,7 @@
                     <div class="message-panel-header">
                         <h3>Silent Connections</h3>
                         <p>Connections you have not messaged yet.</p>
+                        <button class="ghost-btn export-panel-btn" id="silentConnectionsExportBtn" type="button">Export</button>
                     </div>
                     <ol class="message-list" id="silentConnectionsList"></ol>
                 </section>
@@ -116,6 +119,7 @@
                     <div class="message-panel-header">
                         <h3>Fading Conversations</h3>
                         <p>People you used to message but have not contacted in 30+ days.</p>
+                        <button class="ghost-btn export-panel-btn" id="fadingConversationsExportBtn" type="button">Export</button>
                     </div>
                     <ol class="message-list" id="fadingConversationsList"></ol>
                 </section>
@@ -146,6 +150,7 @@
     <script src="js/decorations.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/cleaner.js"></script>
+    <script src="js/excel.js"></script>
     <script src="js/messages-insights.js"></script>
 </body>
 </html>

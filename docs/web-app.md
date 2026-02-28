@@ -108,3 +108,35 @@ Then open `http://localhost:3000`.
 ## Deployment
 
 Deploy `web/` to any static host (Vercel, Netlify, GitHub Pages).
+
+## Icons and Meta
+
+The app ships with a hand-drawn favicon set and production meta tags.
+
+### Favicon
+
+Browsers pick the best format automatically:
+
+| File                          | Size  | Used by                         |
+| ----------------------------- | ----- | ------------------------------- |
+| `assets/icon.svg`             | any   | Modern browsers (Chrome, FF)    |
+| `assets/favicon.ico`          | 32px  | Legacy browsers (older IE/Edge) |
+| `assets/apple-touch-icon.png` | 180px | iOS home screen bookmark        |
+| `assets/icon-192.png`         | 192px | Android home screen, PWA        |
+| `assets/icon-512.png`         | 512px | PWA splash screen, OG cards     |
+
+### PWA Manifest
+
+`assets/manifest.webmanifest` declares the app name, icons, theme color, and standalone display mode. All paths use relative URLs so the app works under any base path. This enables "Add to Home Screen" on mobile devices.
+
+### Open Graph and Twitter Cards
+
+`index.html` includes `og:*` and `twitter:*` meta tags so that link previews show the app title, description, and icon when shared on social platforms. Image URLs are relative so they resolve correctly on any deploy target.
+
+### Theme Color
+
+Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the browser chrome to match the light (`#FDF6E3`) or dark (`#1A1A2E`) theme.
+
+### robots.txt
+
+`web/robots.txt` allows all crawlers.

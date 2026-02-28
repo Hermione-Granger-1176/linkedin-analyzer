@@ -99,6 +99,7 @@ const MessagesPage = (() => {
     function bindEvents() {
         elements.timeRangeButtons.forEach(button => {
             button.addEventListener('click', () => handleTimeRangeChange(button));
+            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
         });
         elements.resetFiltersBtn.addEventListener('click', resetFilters);
         if (elements.topContactsExportBtn) {
@@ -110,9 +111,6 @@ const MessagesPage = (() => {
         if (elements.fadingConversationsExportBtn) {
             elements.fadingConversationsExportBtn.addEventListener('click', exportFadingConversations);
         }
-        elements.timeRangeButtons.forEach(button => {
-            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
-        });
 
         window.addEventListener('beforeunload', terminateWorker);
         window.addEventListener('pagehide', terminateWorker);
@@ -445,7 +443,7 @@ const MessagesPage = (() => {
      */
     function parseRangeParam(value) {
         const range = String(value || '').toLowerCase();
-        return RANGE_MONTHS[range] || range === 'all' ? range : FILTER_DEFAULTS.timeRange;
+        return (RANGE_MONTHS[range] || range === 'all') ? range : FILTER_DEFAULTS.timeRange;
     }
 
     /**

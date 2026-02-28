@@ -9,6 +9,10 @@ const SketchCharts = (() => {
     const registry = new Map();
     let animationId = 0;
 
+    /**
+     * Read CSS custom properties and return a color palette object.
+     * @returns {{text: string, textSecondary: string, border: string, blue: string, yellow: string, green: string, purple: string, red: string}}
+     */
     function getColors() {
         const styles = getComputedStyle(document.documentElement);
         return {
@@ -23,6 +27,11 @@ const SketchCharts = (() => {
         };
     }
 
+    /**
+     * Resize canvas to match its CSS dimensions at device pixel ratio.
+     * @param {HTMLCanvasElement} canvas - The canvas element to resize.
+     * @returns {{ctx: CanvasRenderingContext2D, width: number, height: number}|null}
+     */
     function resizeCanvas(canvas) {
         const rect = canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) return null;
@@ -34,6 +43,11 @@ const SketchCharts = (() => {
         return { ctx, width: rect.width, height: rect.height };
     }
 
+    /**
+     * Convert hex color string to RGB object.
+     * @param {string} hex - The hex color string (e.g. '#5a9bd5').
+     * @returns {{r: number, g: number, b: number}}
+     */
     function hexToRgb(hex) {
         const cleaned = hex.replace('#', '').trim();
         if (cleaned.length !== 6) return { r: 90, g: 150, b: 213 };
@@ -44,15 +58,34 @@ const SketchCharts = (() => {
         };
     }
 
+    /**
+     * Register hit-test items for a canvas in the global registry.
+     * @param {HTMLCanvasElement} canvas - The canvas element to register items for.
+     * @param {Array<Object>} items - The hit-test items to register.
+     */
     function register(canvas, items) {
         registry.set(canvas, items);
     }
 
+    /**
+     * Clear canvas and remove its hit-test registry.
+     * @param {HTMLCanvasElement} canvas - The canvas element.
+     * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+     * @param {number} width - The canvas CSS width.
+     * @param {number} height - The canvas CSS height.
+     */
     function clear(canvas, ctx, width, height) {
         ctx.clearRect(0, 0, width, height);
         registry.delete(canvas);
     }
 
+    /**
+     * Get the hit-test item at the given coordinates on a canvas.
+     * @param {HTMLCanvasElement} canvas - The canvas element to query.
+     * @param {number} x - The x coordinate.
+     * @param {number} y - The y coordinate.
+     * @returns {Object|null} The matching item, or null if none found.
+     */
     function getItemAt(canvas, x, y) {
         const items = registry.get(canvas);
         if (!items) return null;
@@ -68,7 +101,13 @@ const SketchCharts = (() => {
     }
 
     /**
-     * Draw a sketchy rectangle border (cheaper than RoughJS for many items)
+     * Draw a sketchy rectangle border (cheaper than RoughJS for many items).
+     * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+     * @param {number} x - The x coordinate of the rectangle.
+     * @param {number} y - The y coordinate of the rectangle.
+     * @param {number} w - The width of the rectangle.
+     * @param {number} h - The height of the rectangle.
+     * @param {string} color - The stroke color.
      */
     function sketchyRect(ctx, x, y, w, h, color) {
         ctx.strokeStyle = color;
@@ -84,6 +123,14 @@ const SketchCharts = (() => {
         ctx.stroke();
     }
 
+    /**
+     * Draw the timeline line/area chart with labels.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {Array<Object>} data - Timeline points array.
+     * @param {string} timeRange - Filter key (e.g. '1m', '3m', '12m', 'all').
+     * @param {number} [progress=1] - Animation progress from 0 to 1.
+     * @param {number} [maxOverride=0] - Optional max Y value override.
+     */
     function drawTimeline(canvas, data, timeRange, progress = 1, maxOverride = 0) {
         const size = resizeCanvas(canvas);
         if (!size) return;
@@ -240,6 +287,12 @@ const SketchCharts = (() => {
         register(canvas, items);
     }
 
+    /**
+     * Draw horizontal bar chart of topic counts.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {Array<Object>} data - Array of topic objects with topic and count properties.
+     * @param {number} [progress=1] - Animation progress from 0 to 1.
+     */
     function drawTopics(canvas, data, progress = 1) {
         const size = resizeCanvas(canvas);
         if (!size) return;
@@ -294,6 +347,11 @@ const SketchCharts = (() => {
         register(canvas, items);
     }
 
+    /**
+     * Draw 7x24 activity heatmap grid.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {Array<Array<number>>} grid - 7x24 grid of activity counts (days x hours).
+     */
     function drawHeatmap(canvas, grid) {
         const size = resizeCanvas(canvas);
         if (!size) return;
@@ -377,6 +435,12 @@ const SketchCharts = (() => {
         register(canvas, items);
     }
 
+    /**
+     * Draw donut chart of content type mix.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {Object} mix - Content type mix with textOnly, links, and media counts.
+     * @param {number} [progress=1] - Animation progress from 0 to 1.
+     */
     function drawDonut(canvas, mix, progress = 1) {
         const size = resizeCanvas(canvas);
         if (!size) return;
@@ -471,10 +535,18 @@ const SketchCharts = (() => {
         register(canvas, items);
     }
 
+    /**
+     * Cancel any in-progress chart animations.
+     */
     function cancelAnimations() {
         animationId++;
     }
 
+    /**
+     * Animate a draw function over the given duration.
+     * @param {function(number): void} drawFn - Draw function called with progress (0-1).
+     * @param {number} [duration=600] - Animation duration in milliseconds.
+     */
     function animateDraw(drawFn, duration = 600) {
         const myId = ++animationId;
         let start = null;

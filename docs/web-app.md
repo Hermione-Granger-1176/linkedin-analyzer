@@ -34,7 +34,7 @@ Time range options: 1 month, 3 months, 6 months, 12 months, All time
 
 ### Insights
 
-AI-generated takeaways based on your activity patterns.
+Rule-based takeaways derived from your activity patterns.
 
 ## Features
 

@@ -6,6 +6,10 @@
     const BANNER_ID = 'globalErrorBanner';
     const MESSAGE = 'Something went wrong. Refresh the page or re-upload your files.';
 
+    /**
+     * Create the global error banner element and append it to the document body.
+     * @returns {HTMLDivElement} The newly created banner element
+     */
     function createBanner() {
         const banner = document.createElement('div');
         banner.id = BANNER_ID;
@@ -49,15 +53,26 @@
         return banner;
     }
 
+    /**
+     * Retrieve the existing error banner or create one if it doesn't exist.
+     * @returns {HTMLDivElement} The error banner element
+     */
     function getBanner() {
         return document.getElementById(BANNER_ID) || createBanner();
     }
 
+    /**
+     * Show the global error banner to the user.
+     */
     function showBanner() {
         const banner = getBanner();
         banner.hidden = false;
     }
 
+    /**
+     * Handle uncaught errors by logging and showing the error banner.
+     * @param {ErrorEvent} event - The error event from window.onerror
+     */
     function handleError(event) {
         const error = event && event.error ? event.error : event;
         if (error) {
@@ -66,6 +81,10 @@
         showBanner();
     }
 
+    /**
+     * Handle unhandled promise rejections by logging and showing the error banner.
+     * @param {PromiseRejectionEvent} event - The rejection event
+     */
     function handleRejection(event) {
         if (event && event.reason) {
             console.error('Unhandled rejection', event.reason);

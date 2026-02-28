@@ -5,6 +5,10 @@ const Theme = (() => {
 
     const STORAGE_KEY = 'linkedin-analyzer-theme';
 
+    /**
+     * Initialize theme toggle and system preference listeners.
+     * @description Reads saved or system theme, applies it, and binds the toggle button.
+     */
     function init() {
         const toggle = document.getElementById('themeToggle');
         if (!toggle) return;
@@ -29,10 +33,18 @@ const Theme = (() => {
         });
     }
 
+    /**
+     * Apply a theme to the document root element.
+     * @param {string} theme - Theme name ('light' or 'dark')
+     */
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
     }
 
+    /**
+     * Dispatch a custom 'themechange' event on the document.
+     * @description Used to notify chart and decoration modules to re-render with updated colors.
+     */
     function notifyThemeChange() {
         document.dispatchEvent(new CustomEvent('themechange'));
     }

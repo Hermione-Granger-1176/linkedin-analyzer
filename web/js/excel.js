@@ -25,6 +25,12 @@ const ExcelGenerator = (() => {
     const HEADER_ROW_HEIGHT = 25;
     const DATA_ROW_HEIGHT = 20;
 
+    /**
+     * Get the cleaner config for a file type, throwing on unknown types.
+     * @param {string} fileType - 'shares' or 'comments'
+     * @returns {object} Frozen config with columns, requiredColumns, and outputName
+     * @throws {Error} If fileType is not recognized
+     */
     function getConfig(fileType) {
         const config = LinkedInCleaner.configs[fileType];
         if (!config) {
@@ -33,24 +39,50 @@ const ExcelGenerator = (() => {
         return config;
     }
 
+    /**
+     * Throw if the XLSX library is not loaded.
+     * @throws {Error} If XLSX global is undefined
+     */
     function ensureXlsxAvailable() {
         if (typeof XLSX === 'undefined') {
             throw new Error('Excel export library failed to load. Please refresh and try again.');
         }
     }
 
+    /**
+     * Convert row objects into a 2D array ordered by headers.
+     * @param {object[]} data - Array of row objects
+     * @param {string[]} headers - Column names in display order
+     * @returns {string[][]} 2D array of cell values
+     */
     function buildRows(data, headers) {
         return data.map(row => headers.map(header => row[header] || ''));
     }
 
+    /**
+     * Create a SheetJS worksheet from headers and row data.
+     * @param {string[]} headers - Column header names
+     * @param {string[][]} rows - 2D array of row data
+     * @returns {object} SheetJS worksheet object
+     */
     function createWorksheet(headers, rows) {
         return XLSX.utils.aoa_to_sheet([headers, ...rows]);
     }
 
+    /**
+     * Set column widths on the worksheet from config.
+     * @param {object} ws - SheetJS worksheet
+     * @param {object} config - Cleaner config with column width definitions
+     */
     function applyColumnWidths(ws, config) {
         ws['!cols'] = config.columns.map(column => ({ wch: column.width }));
     }
 
+    /**
+     * Apply bold/centered styling to the header row.
+     * @param {object} ws - SheetJS worksheet
+     * @param {{s: {c: number}, e: {c: number}}} range - Decoded sheet range
+     */
     function applyHeaderStyles(ws, range) {
         for (let col = range.s.c; col <= range.e.c; col++) {
             const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
@@ -59,6 +91,13 @@ const ExcelGenerator = (() => {
         }
     }
 
+    /**
+     * Apply alignment and border styles to data rows.
+     * @param {object} ws - SheetJS worksheet
+     * @param {object} config - Cleaner config with wrapText flags per column
+     * @param {number} rowCount - Number of data rows
+     * @param {{s: {c: number}, e: {c: number}}} range - Decoded sheet range
+     */
     function applyBodyStyles(ws, config, rowCount, range) {
         for (let row = 1; row <= rowCount; row++) {
             for (let col = range.s.c; col <= range.e.c; col++) {
@@ -77,12 +116,23 @@ const ExcelGenerator = (() => {
         }
     }
 
+    /**
+     * Set row heights for header and data rows.
+     * @param {object} ws - SheetJS worksheet
+     * @param {number} rowCount - Number of data rows
+     */
     function applyRowHeights(ws, rowCount) {
         ws['!rows'] = Array.from({ length: rowCount + 1 }, (_, row) => ({
             hpt: row === 0 ? HEADER_ROW_HEIGHT : DATA_ROW_HEIGHT
         }));
     }
 
+    /**
+     * Apply all formatting (headers, body, row heights) to a worksheet.
+     * @param {object} ws - SheetJS worksheet
+     * @param {object} config - Cleaner config
+     * @param {number} rowCount - Number of data rows
+     */
     function applyStyles(ws, config, rowCount) {
         const range = XLSX.utils.decode_range(ws['!ref']);
         applyHeaderStyles(ws, range);

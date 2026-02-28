@@ -1,5 +1,7 @@
 """Cleaners module for LinkedIn data exports."""
 
+from __future__ import annotations
+
 from linkedin_analyzer.cleaners.comments import (
     COMMENTS_COLUMNS,
     COMMENTS_CSV_KWARGS,

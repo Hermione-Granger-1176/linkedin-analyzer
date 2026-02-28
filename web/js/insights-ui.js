@@ -34,12 +34,18 @@
     let requestId = 0;
     let pendingViewId = 0;
 
+    /**
+     * Initialize insights page: bind events, start worker, load data.
+     */
     function init() {
         bindEvents();
         initWorker();
         loadBase();
     }
 
+    /**
+     * Attach event listeners for time range buttons and reset.
+     */
     function bindEvents() {
         elements.timeRangeButtons.forEach(button => {
             button.addEventListener('click', () => handleTimeRangeChange(button));
@@ -47,6 +53,9 @@
         elements.resetFiltersBtn.addEventListener('click', resetFilters);
     }
 
+    /**
+     * Create the analytics Web Worker.
+     */
     function initWorker() {
         if (typeof Worker === 'undefined') return;
         try {
@@ -59,6 +68,9 @@
         }
     }
 
+    /**
+     * Load analytics base from IndexedDB and send to worker.
+     */
     async function loadBase() {
         const analyticsBase = await Storage.getAnalytics();
         if (!analyticsBase || !analyticsBase.months) {
@@ -76,6 +88,10 @@
         });
     }
 
+    /**
+     * Handle messages from the analytics worker.
+     * @param {MessageEvent} event - The message event from the worker.
+     */
     function handleWorkerMessage(event) {
         const message = event.data || {};
         if (message.type === 'init') {
@@ -99,10 +115,16 @@
         }
     }
 
+    /**
+     * Handle worker-level errors.
+     */
     function handleWorkerError() {
         setEmptyState('Insights worker error', 'Refresh the page and try again.');
     }
 
+    /**
+     * Send a view request to the worker with current filters.
+     */
     function requestView() {
         if (!worker || !state.analyticsReady || !state.hasData) return;
         const id = ++requestId;
@@ -114,30 +136,48 @@
         });
     }
 
+    /**
+     * Handle click on a time range button.
+     * @param {HTMLElement} button - The clicked time range button.
+     */
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
         if (!range) return;
         applyTimeRange(range);
     }
 
+    /**
+     * Reset all filters to defaults and request a fresh view.
+     */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
         setActiveTimeRange(FILTER_DEFAULTS.timeRange);
         requestView();
     }
 
+    /**
+     * Apply a new time range and request view.
+     * @param {string} range - The time range key to apply.
+     */
     function applyTimeRange(range) {
         state.filters = { ...FILTER_DEFAULTS, timeRange: range };
         setActiveTimeRange(range);
         requestView();
     }
 
+    /**
+     * Update the active class on time range buttons.
+     * @param {string} range - The active time range key.
+     */
     function setActiveTimeRange(range) {
         elements.timeRangeButtons.forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-range') === range);
         });
     }
 
+    /**
+     * Toggle empty state vs insights grid based on data availability.
+     */
     function updateVisibility() {
         if (!state.hasData) {
             setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
@@ -146,6 +186,10 @@
         hideEmptyState();
     }
 
+    /**
+     * Render insight cards and tip from the worker response.
+     * @param {Object} payload - The insights payload from the worker.
+     */
     function renderInsights(payload) {
         const insights = payload.insights || [];
         const tip = payload.tip || null;
@@ -172,6 +216,11 @@
         }
     }
 
+    /**
+     * Show empty state with title and message.
+     * @param {string} title - The heading text for the empty state.
+     * @param {string} message - The descriptive message for the empty state.
+     */
     function setEmptyState(title, message) {
         const heading = elements.insightsEmpty.querySelector('h2');
         const text = elements.insightsEmpty.querySelector('p');
@@ -182,17 +231,30 @@
         elements.insightTip.hidden = true;
     }
 
+    /**
+     * Hide empty state and show insights grid.
+     */
     function hideEmptyState() {
         elements.insightsEmpty.hidden = true;
         elements.insightsGrid.hidden = false;
     }
 
+    /**
+     * Escape a string for safe HTML insertion.
+     * @param {string} value - The string to escape.
+     * @returns {string} The HTML-escaped string.
+     */
     function escapeHtml(value) {
         const div = document.createElement('div');
         div.textContent = value;
         return div.innerHTML;
     }
 
+    /**
+     * Return SVG markup for a named insight icon.
+     * @param {string} name - The icon name.
+     * @returns {string} The SVG markup string.
+     */
     function getInsightIcon(name) {
         const icons = {
             rooster: `<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="16" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 20 Q28 12 32 18 Q36 12 40 20" fill="none" stroke="currentColor" stroke-width="2"/><path d="M40 32 L50 28" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 44 Q32 52 42 44" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,

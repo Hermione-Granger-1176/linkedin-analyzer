@@ -1,5 +1,7 @@
 """Core module for LinkedIn analyzer."""
 
+from __future__ import annotations
+
 from linkedin_analyzer.core.cleaner import run_cleaner, validate_columns
 from linkedin_analyzer.core.excel import format_excel_output
 from linkedin_analyzer.core.text import (

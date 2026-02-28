@@ -3,6 +3,11 @@
 (function() {
     'use strict';
 
+    /**
+     * Draw decorative background circles on the rough canvas.
+     * @description Renders three semi-transparent RoughJS circles at fixed viewport
+     *   positions to create a hand-drawn aesthetic. Re-invoked on resize and theme change.
+     */
     function init() {
         const canvas = document.getElementById('roughCanvas');
         if (!canvas || typeof rough === 'undefined') return;

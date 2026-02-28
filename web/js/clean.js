@@ -31,12 +31,18 @@
         comments: null
     };
 
+    /**
+     * Initialize the clean page: load files, bind events, update view.
+     */
     async function init() {
         await loadFiles();
         bindEvents();
         updateView();
     }
 
+    /**
+     * Attach event listeners for file type radio buttons and download.
+     */
     function bindEvents() {
         elements.cleanFileTypeInputs.forEach(input => {
             input.addEventListener('change', renderPreview);
@@ -44,12 +50,18 @@
         elements.cleanDownloadBtn.addEventListener('click', handleDownload);
     }
 
+    /**
+     * Load stored files from IndexedDB into local state.
+     */
     async function loadFiles() {
         const files = await Storage.getAllFiles();
         storedFiles.shares = files.find(file => file.type === 'shares') || null;
         storedFiles.comments = files.find(file => file.type === 'comments') || null;
     }
 
+    /**
+     * Update the clean page UI based on available files.
+     */
     function updateView() {
         const hasShares = Boolean(storedFiles.shares);
         const hasComments = Boolean(storedFiles.comments);
@@ -73,11 +85,18 @@
         renderPreview();
     }
 
+    /**
+     * Get the currently selected file type from radio buttons.
+     * @returns {'shares'|'comments'} The selected file type.
+     */
     function getSelectedType() {
         const selected = document.querySelector('input[name="cleanFileType"]:checked');
         return selected ? selected.value : 'shares';
     }
 
+    /**
+     * Process the selected file and render the preview table.
+     */
     function renderPreview() {
         const type = getSelectedType();
         const file = storedFiles[type];
@@ -105,6 +124,11 @@
         showDownload();
     }
 
+    /**
+     * Populate the preview table with cleaned data.
+     * @param {Object} result - The processed result from LinkedInCleaner.
+     * @param {string} fileType - The file type ('shares' or 'comments').
+     */
     function showPreview(result, fileType) {
         const config = LinkedInCleaner.configs[fileType];
         if (!config) return;
@@ -130,18 +154,30 @@
         elements.cleanPreviewSection.hidden = false;
     }
 
+    /**
+     * Hide the preview section.
+     */
     function hidePreview() {
         elements.cleanPreviewSection.hidden = true;
     }
 
+    /**
+     * Show the download section.
+     */
     function showDownload() {
         elements.cleanDownloadSection.hidden = false;
     }
 
+    /**
+     * Hide the download section.
+     */
     function hideDownload() {
         elements.cleanDownloadSection.hidden = true;
     }
 
+    /**
+     * Generate and trigger download of the cleaned Excel file.
+     */
     function handleDownload() {
         const type = getSelectedType();
         const result = cache[type];
@@ -155,21 +191,39 @@
         }
     }
 
+    /**
+     * Show an error message in the error banner.
+     * @param {string} message - The error message to display.
+     */
     function showError(message) {
         elements.cleanErrorText.textContent = message;
         elements.cleanErrorMessage.hidden = false;
     }
 
+    /**
+     * Hide the error banner.
+     */
     function hideError() {
         elements.cleanErrorMessage.hidden = true;
     }
 
+    /**
+     * Escape a string for safe HTML insertion.
+     * @param {string} value - The string to escape.
+     * @returns {string} The HTML-escaped string.
+     */
     function escapeHtml(value) {
         const div = document.createElement('div');
         div.textContent = value;
         return div.innerHTML;
     }
 
+    /**
+     * Truncate a string to maxLength, appending '...' if needed.
+     * @param {string} value - The string to truncate.
+     * @param {number} maxLength - The maximum allowed length.
+     * @returns {string} The truncated string.
+     */
     function truncate(value, maxLength) {
         if (!value) return '';
         if (value.length <= maxLength) return value;

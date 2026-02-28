@@ -58,12 +58,14 @@
     let isRendering = false;
     let pendingRender = null;
 
+    /** Initialize analytics page: bind events, start worker, load data. */
     function init() {
         bindEvents();
         initWorker();
         loadBase();
     }
 
+    /** Attach event listeners for filters, charts, theme, and visibility. */
     function bindEvents() {
         elements.timeRangeButtons.forEach(button => {
             button.addEventListener('click', () => handleTimeRangeChange(button));
@@ -93,6 +95,7 @@
         });
     }
 
+    /** Create the analytics Web Worker. */
     function initWorker() {
         if (typeof Worker === 'undefined') return;
         try {
@@ -105,6 +108,7 @@
         }
     }
 
+    /** Terminate the analytics Web Worker to free resources. */
     function terminateWorker() {
         if (worker) {
             worker.terminate();
@@ -113,6 +117,7 @@
     }
 
 
+    /** Load analytics base data from IndexedDB and send to worker. */
     async function loadBase() {
         try {
             const analyticsBase = await Storage.getAnalytics();
@@ -135,6 +140,10 @@
         }
     }
 
+    /**
+     * Handle messages received from the analytics worker.
+     * @param {MessageEvent} event - The message event from the worker.
+     */
     function handleWorkerMessage(event) {
         const message = event.data || {};
         if (message.type === 'init') {
@@ -163,10 +172,16 @@
         }
     }
 
+    /** Handle worker-level errors. */
     function handleWorkerError() {
         setEmptyState('Analytics worker error', 'Refresh the page and try again.');
     }
 
+    /**
+     * Build a unique string key from the current filter state.
+     * @param {Object} filters - The current filter state.
+     * @returns {string} A pipe-delimited key representing the filters.
+     */
     function getFilterKey(filters) {
         return [
             filters.timeRange,
@@ -178,6 +193,10 @@
         ].join('|');
     }
 
+    /**
+     * Debounce and schedule a view request to the worker.
+     * @param {boolean} force - Whether to bypass the debounce delay.
+     */
     function scheduleViewRequest(force) {
         if (debounceTimer) {
             clearTimeout(debounceTimer);
@@ -189,6 +208,10 @@
         }, delay);
     }
 
+    /**
+     * Send a view request to the worker with current filters.
+     * @param {boolean} force - Whether to send even if the filter key hasn't changed.
+     */
     function requestView(force) {
         if (!worker || !state.analyticsReady || !state.hasData) return;
         const key = getFilterKey(state.filters);
@@ -211,6 +234,10 @@
     let resizeObserver = null;
     let renderRetryTimer = null;
 
+    /**
+     * Check whether all chart canvases have non-zero dimensions.
+     * @returns {boolean} True if all canvases are sized.
+     */
     function areChartsSized() {
         return CHART_CANVASES.every(canvas => {
             const rect = canvas.getBoundingClientRect();
@@ -218,6 +245,10 @@
         });
     }
 
+    /**
+     * Defer rendering until chart containers have layout dimensions.
+     * @param {Object} view - The analytics view data to render once sized.
+     */
     function scheduleRenderWhenSized(view) {
         pendingRender = view;
         if (resizeObserver) return;
@@ -248,6 +279,10 @@
         }
     }
 
+    /**
+     * Update the stats bar with totals from the current view.
+     * @param {Object} view - The analytics view containing totals, peakHour, and streaks.
+     */
     function updateStats(view) {
         elements.statPosts.textContent = view.totals.posts;
         elements.statComments.textContent = view.totals.comments;
@@ -260,6 +295,11 @@
             : '0 days';
     }
 
+    /**
+     * Calculate animation duration based on timeline length.
+     * @param {number} pointCount - The number of data points in the timeline.
+     * @returns {number} Animation duration in milliseconds.
+     */
     function getTimelineAnimationDuration(pointCount) {
         return Math.min(
             TIMELINE_ANIMATION.maxDuration,
@@ -267,6 +307,10 @@
         );
     }
 
+    /**
+     * Draw all three chart canvases from the view data.
+     * @param {Object} view - The analytics view containing timeline, topics, and heatmap data.
+     */
     function renderCharts(view) {
         SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
         SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
@@ -282,6 +326,10 @@
         SketchCharts.drawTimeline(elements.timelineChart, view.timeline, state.filters.timeRange, 1, view.timelineMax);
     }
 
+    /**
+     * Main render entry point: update stats, filters, and charts.
+     * @param {Object} view - The analytics view data to render.
+     */
     function renderAnalyticsView(view) {
         if (isRendering) {
             pendingRender = view;
@@ -330,6 +378,7 @@
         }
     }
 
+    /** Toggle empty state vs analytics grid based on data availability. */
     function updateVisibility() {
         if (!state.hasData) {
             setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
@@ -338,23 +387,36 @@
         hideEmptyState();
     }
 
+    /**
+     * Handle click on a time range button.
+     * @param {HTMLElement} button - The clicked time range button element.
+     */
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
         if (!range) return;
         applyTimeRange(range);
     }
 
+    /** Reset all filters to defaults and request a fresh view. */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
         setActiveTimeRange(FILTER_DEFAULTS.timeRange);
         scheduleViewRequest(true);
     }
 
+    /**
+     * Reset filter state, optionally keeping the current time range.
+     * @param {boolean} preserveTimeRange - Whether to keep the current time range.
+     */
     function resetFilterState(preserveTimeRange) {
         const timeRange = preserveTimeRange ? state.filters.timeRange : FILTER_DEFAULTS.timeRange;
         state.filters = { ...FILTER_DEFAULTS, timeRange };
     }
 
+    /**
+     * Apply a new time range, reset other filters, and request view.
+     * @param {string} range - The time range identifier (e.g. '12m', '6m').
+     */
     function applyTimeRange(range) {
         state.filters.timeRange = range;
         resetFilterState(true);
@@ -362,35 +424,36 @@
         scheduleViewRequest(true);
     }
 
+    /**
+     * Update the active class on time range buttons.
+     * @param {string} range - The active time range identifier.
+     */
     function setActiveTimeRange(range) {
         elements.timeRangeButtons.forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-range') === range);
         });
     }
 
+    /**
+     * Handle click on an active filter chip to remove it.
+     * @param {Event} event - The click event.
+     */
     function handleFilterChipClick(event) {
         const button = event.target.closest('button[data-filter]');
         if (!button) return;
         const filter = button.getAttribute('data-filter');
-        switch (filter) {
-            case 'topic':
-                state.filters.topic = 'all';
-                break;
-            case 'month':
-                state.filters.monthFocus = null;
-                break;
-            case 'day':
-                state.filters.day = null;
-                break;
-            case 'hour':
-                state.filters.hour = null;
-                break;
-            default:
-                break;
-        }
+        const FILTER_RESET_MAP = {
+            topic: () => { state.filters.topic = 'all'; },
+            month: () => { state.filters.monthFocus = null; },
+            day: () => { state.filters.day = null; },
+            hour: () => { state.filters.hour = null; }
+        };
+        const resetFn = FILTER_RESET_MAP[filter];
+        if (resetFn) resetFn();
         scheduleViewRequest(false);
     }
 
+    /** Render the list of active filter chips. */
     function renderActiveFilters() {
         const filters = [];
         if (state.filters.topic && state.filters.topic !== 'all') {
@@ -421,6 +484,10 @@
         ).join('');
     }
 
+    /**
+     * Handle mousemove on chart canvas for tooltip and cursor.
+     * @param {MouseEvent} event - The mousemove event.
+     */
     function handleChartHover(event) {
         const canvas = event.currentTarget;
         const rect = canvas.getBoundingClientRect();
@@ -432,13 +499,18 @@
         } else {
             hideTooltip();
         }
-        if (item && (item.type === 'month' || item.type === 'week' || item.type === 'heatmap' || item.type === 'topic')) {
+        const CLICKABLE_TYPES = new Set(['month', 'week', 'heatmap', 'topic']);
+        if (item && CLICKABLE_TYPES.has(item.type)) {
             canvas.style.cursor = 'pointer';
         } else {
             canvas.style.cursor = 'default';
         }
     }
 
+    /**
+     * Handle click on chart canvas to toggle filters.
+     * @param {MouseEvent} event - The click event.
+     */
     function handleChartClick(event) {
         const canvas = event.currentTarget;
         const rect = canvas.getBoundingClientRect();
@@ -473,6 +545,12 @@
         }
     }
 
+    /**
+     * Position and show the chart tooltip.
+     * @param {number} clientX - The client X coordinate.
+     * @param {number} clientY - The client Y coordinate.
+     * @param {string} text - The tooltip text to display.
+     */
     function showTooltip(clientX, clientY, text) {
         elements.chartTooltip.textContent = text;
         elements.chartTooltip.hidden = false;
@@ -489,16 +567,26 @@
         elements.chartTooltip.style.top = `${top}px`;
     }
 
+    /** Hide the chart tooltip. */
     function hideTooltip() {
         elements.chartTooltip.hidden = true;
     }
 
+    /**
+     * Toggle loading opacity on the analytics grid.
+     * @param {boolean} isLoading - Whether the analytics is currently loading.
+     */
     function showAnalyticsLoading(isLoading) {
         elements.analyticsGrid.style.opacity = isLoading ? '0.5' : '1';
         elements.statsGrid.style.opacity = isLoading ? '0.5' : '1';
         elements.analyticsGrid.style.pointerEvents = isLoading ? 'none' : 'auto';
     }
 
+    /**
+     * Show the empty state with a title and message.
+     * @param {string} title - The heading text for the empty state.
+     * @param {string} message - The description text for the empty state.
+     */
     function setEmptyState(title, message) {
         const heading = elements.analyticsEmpty.querySelector('h2');
         const text = elements.analyticsEmpty.querySelector('p');
@@ -512,12 +600,18 @@
         showAnalyticsLoading(false);
     }
 
+    /** Hide the empty state and show the analytics grid. */
     function hideEmptyState() {
         elements.analyticsEmpty.hidden = true;
         elements.analyticsGrid.hidden = false;
         elements.statsGrid.hidden = false;
     }
 
+    /**
+     * Determine whether timeline animation should play.
+     * @param {Object} view - The analytics view to check.
+     * @returns {boolean} True if the timeline should animate.
+     */
     function shouldAnimate(view) {
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             return false;

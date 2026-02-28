@@ -62,6 +62,11 @@ const LinkedInCleaner = (() => {
         'NAN'
     ]);
 
+    /**
+     * Deep-freeze a cleaner configuration object.
+     * @param {object} config - Configuration with columns, requiredColumns, and outputName
+     * @returns {object} Frozen configuration object
+     */
     function freezeConfig(config) {
         const frozenColumns = config.columns.map(column => Object.freeze({ ...column }));
         return Object.freeze({
@@ -171,6 +176,43 @@ const LinkedInCleaner = (() => {
     }
 
     /**
+     * Check whether date/time components are within valid ranges.
+     * @param {number} month - Month (1-12)
+     * @param {number} day - Day (1-31)
+     * @param {number} hour - Hour (0-23)
+     * @param {number} minute - Minute (0-59)
+     * @param {number} second - Second (0-59)
+     * @returns {boolean}
+     */
+    function isValidDateRange(month, day, hour, minute, second) {
+        return month >= 1 && month <= 12
+            && day >= 1 && day <= 31
+            && hour >= 0 && hour <= 23
+            && minute >= 0 && minute <= 59
+            && second >= 0 && second <= 59;
+    }
+
+    /**
+     * Verify a UTC Date object matches the intended components (guards against rollover).
+     * @param {Date} utcDate - Date constructed from UTC components
+     * @param {number} year
+     * @param {number} month - 1-indexed month
+     * @param {number} day
+     * @param {number} hour
+     * @param {number} minute
+     * @param {number} second
+     * @returns {boolean}
+     */
+    function dateMatchesComponents(utcDate, year, month, day, hour, minute, second) {
+        return utcDate.getUTCFullYear() === year
+            && utcDate.getUTCMonth() === month - 1
+            && utcDate.getUTCDate() === day
+            && utcDate.getUTCHours() === hour
+            && utcDate.getUTCMinutes() === minute
+            && utcDate.getUTCSeconds() === second;
+    }
+
+    /**
      * Convert UTC date from LinkedIn export to local timezone.
      * LinkedIn exports dates in UTC format: "YYYY-MM-DD HH:MM:SS"
      * This converts to local time and returns in the same format.
@@ -193,31 +235,13 @@ const LinkedInCleaner = (() => {
         if ([year, month, day, hour, minute, second].some(Number.isNaN)) {
             return text; // Return as-is if any component is invalid
         }
-        if (
-            month < 1
-            || month > 12
-            || day < 1
-            || day > 31
-            || hour < 0
-            || hour > 23
-            || minute < 0
-            || minute > 59
-            || second < 0
-            || second > 59
-        ) {
-            return text; // Return as-is if month/day out of range
+        if (!isValidDateRange(month, day, hour, minute, second)) {
+            return text; // Return as-is if components out of range
         }
 
         // Create UTC date and convert to local
         const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-        if (
-            utcDate.getUTCFullYear() !== year
-            || utcDate.getUTCMonth() !== month - 1
-            || utcDate.getUTCDate() !== day
-            || utcDate.getUTCHours() !== hour
-            || utcDate.getUTCMinutes() !== minute
-            || utcDate.getUTCSeconds() !== second
-        ) {
+        if (!dateMatchesComponents(utcDate, year, month, day, hour, minute, second)) {
             return text;
         }
 
@@ -239,6 +263,11 @@ const LinkedInCleaner = (() => {
         cleanDate
     });
 
+    /**
+     * Strip BOM and whitespace from a single header string.
+     * @param {string} header - Raw header value
+     * @returns {string} Normalized header
+     */
     function normalizeHeader(header) {
         if (typeof header !== 'string') {
             return '';
@@ -246,10 +275,20 @@ const LinkedInCleaner = (() => {
         return header.replace(/^\uFEFF/, '').trim();
     }
 
+    /**
+     * Normalize an array of header strings.
+     * @param {string[]} headers - Raw header values
+     * @returns {string[]} Normalized headers
+     */
     function normalizeHeaders(headers) {
         return headers.map(normalizeHeader);
     }
 
+    /**
+     * Check if every cell in a row is missing.
+     * @param {Array<*>} row - Array of cell values
+     * @returns {boolean} True if all cells are missing
+     */
     function isRowEmpty(row) {
         return row.every(cell => isMissing(cell));
     }
@@ -405,9 +444,8 @@ const LinkedInCleaner = (() => {
         const isShares = sharesRequired.every(column => headerSet.has(column));
         const isComments = commentsRequired.every(column => headerSet.has(column));
 
-        if (isShares && !isComments) return 'shares';
-        if (isComments && !isShares) return 'comments';
         if (isShares) return 'shares';
+        if (isComments) return 'comments';
 
         return null;
     }
@@ -457,6 +495,11 @@ const LinkedInCleaner = (() => {
         });
     }
 
+    /**
+     * Clean a generic cell value, escaping Excel formula injection.
+     * @param {*} value - Raw cell value
+     * @returns {string} Cleaned value with leading '=' prefixed by a quote
+     */
     function cleanValue(value) {
         if (isMissing(value)) {
             return '';
@@ -465,6 +508,13 @@ const LinkedInCleaner = (() => {
         return cleaned.startsWith('=') ? `'${cleaned}` : cleaned;
     }
 
+    /**
+     * Build a user-friendly error message for column validation failures.
+     * @param {string} selectedType - The file type selected by the user ('shares', 'comments', or 'auto')
+     * @param {string|null} detectedType - The auto-detected file type, or null
+     * @param {string[]} missing - List of missing required column names
+     * @returns {string} Descriptive error message
+     */
     function buildColumnErrorMessage(selectedType, detectedType, missing) {
         if (selectedType !== 'auto' && detectedType && detectedType !== selectedType) {
             const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;

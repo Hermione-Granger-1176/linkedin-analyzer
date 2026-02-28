@@ -1,5 +1,7 @@
 """LinkedIn data export analyzer - Clean and export LinkedIn CSV data to Excel."""
 
+from __future__ import annotations
+
 from linkedin_analyzer.cleaners.comments import CommentsCleanerConfig, clean_comments
 from linkedin_analyzer.cleaners.shares import SharesCleanerConfig, clean_shares
 from linkedin_analyzer.core.types import CleanerConfig, ColumnConfig

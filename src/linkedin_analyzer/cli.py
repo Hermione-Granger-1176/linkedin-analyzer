@@ -42,6 +42,13 @@ def _add_default_io_args(
     default_input: Path,
     default_output: Path,
 ) -> None:
+    """Add --input and --output arguments with the given defaults.
+
+    Args:
+        parser: Subcommand parser to add arguments to
+        default_input: Default path for the input CSV file
+        default_output: Default path for the output Excel file
+    """
     parser.add_argument(
         "--input",
         type=Path,
@@ -62,6 +69,14 @@ def _add_named_io_args(
     default_input: Path,
     default_output: Path,
 ) -> None:
+    """Add --{name}-input and --{name}-output arguments with the given defaults.
+
+    Args:
+        parser: Subcommand parser to add arguments to
+        name: Prefix for the argument names (e.g. 'shares', 'comments')
+        default_input: Default path for the input CSV file
+        default_output: Default path for the output Excel file
+    """
     parser.add_argument(
         f"--{name}-input",
         type=Path,
@@ -77,6 +92,11 @@ def _add_named_io_args(
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser with all subcommands.
+
+    Returns:
+        Configured argument parser with shares, comments, and all subcommands
+    """
     parser = argparse.ArgumentParser(
         prog="linkedin-analyzer",
         description="Clean and export LinkedIn CSV data to Excel",

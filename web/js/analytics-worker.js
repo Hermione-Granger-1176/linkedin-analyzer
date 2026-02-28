@@ -11,6 +11,11 @@ let currentRequestId = 0;
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
 
+/**
+ * Normalize raw filter values into a safe, complete filter object.
+ * @param {object} filters - Raw filter values from the UI
+ * @returns {{timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string}}
+ */
 function normalizeFilters(filters) {
     const safe = filters || {};
     return {
@@ -23,6 +28,11 @@ function normalizeFilters(filters) {
     };
 }
 
+/**
+ * Build a cache key string from normalized filters.
+ * @param {object} filters - Raw or normalized filter object
+ * @returns {string} Pipe-delimited cache key
+ */
 function getViewKey(filters) {
     const safe = normalizeFilters(filters);
     return [
@@ -35,6 +45,10 @@ function getViewKey(filters) {
     ].join('|');
 }
 
+/**
+ * Recompute analytics aggregates from current shares and comments data.
+ * @description Clears the view cache since aggregates have changed.
+ */
 function computeAnalytics() {
     analytics = AnalyticsEngine.compute(sharesData, commentsData);
     viewCache = new Map();
@@ -71,6 +85,11 @@ function hydrateAnalytics(base) {
     };
 }
 
+/**
+ * Post an error message back to the main thread.
+ * @param {number} requestId - ID of the originating request
+ * @param {string} message - Human-readable error description
+ */
 function postError(requestId, message) {
     self.postMessage({
         type: 'error',
@@ -79,6 +98,11 @@ function postError(requestId, message) {
     });
 }
 
+/**
+ * Store a view payload in the LRU cache, trimming old entries when full.
+ * @param {string} key - Cache key from getViewKey
+ * @param {object} payload - The view and insights payload to cache
+ */
 function cacheView(key, payload) {
     viewCache.set(key, payload);
     if (viewCache.size > VIEW_CACHE_LIMIT) {
@@ -87,6 +111,10 @@ function cacheView(key, payload) {
     }
 }
 
+/**
+ * Process an uploaded CSV file: parse, clean, recompute analytics, and reply.
+ * @param {{csvText: string, fileName: string}} payload - File content and name
+ */
 function handleAddFile(payload) {
     const csvText = payload && payload.csvText ? payload.csvText : '';
     const fileName = payload && payload.fileName ? payload.fileName : '';
@@ -103,8 +131,7 @@ function handleAddFile(payload) {
     const fileType = processed.fileType;
     if (fileType === 'shares') {
         sharesData = processed.cleanedData;
-    }
-    if (fileType === 'comments') {
+    } else if (fileType === 'comments') {
         commentsData = processed.cleanedData;
     }
 
@@ -123,6 +150,10 @@ function handleAddFile(payload) {
     });
 }
 
+/**
+ * Hydrate analytics from stored data and notify the main thread.
+ * @param {object|null} payload - Serialized analytics base from IndexedDB
+ */
 function handleInitBase(payload) {
     analytics = hydrateAnalytics(payload);
     viewCache = new Map();
@@ -133,6 +164,11 @@ function handleInitBase(payload) {
     });
 }
 
+/**
+ * Build a filtered analytics view and post it back, using cache when available.
+ * @param {number} requestId - Caller-assigned request identifier for deduplication
+ * @param {object} filters - Filter parameters from the UI
+ */
 function handleView(requestId, filters) {
     currentRequestId = requestId;
 
@@ -177,6 +213,9 @@ function handleView(requestId, filters) {
     });
 }
 
+/**
+ * Reset all worker state, clearing stored data and caches.
+ */
 function handleClear() {
     sharesData = null;
     commentsData = null;

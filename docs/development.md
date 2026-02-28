@@ -25,8 +25,8 @@ npm run lint:web
 
 ```bash
 # Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install with dev dependencies
 pip install -e ".[dev]"

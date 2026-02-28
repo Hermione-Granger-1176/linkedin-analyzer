@@ -5,9 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import linkedin_analyzer.cli as cli
+
+if TYPE_CHECKING:
+    import pytest
 from linkedin_analyzer.cli import main, parse_args
 from linkedin_analyzer.core.types import CleanerResult
 
@@ -127,7 +131,7 @@ class TestMain:
 class TestRunAll:
     """Tests for running all cleaners."""
 
-    def test_run_all_success(self, tmp_path: Path, monkeypatch) -> None:
+    def test_run_all_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         args = argparse.Namespace(
             shares_input=tmp_path / "Shares.csv",
             shares_output=tmp_path / "Shares.xlsx",
@@ -156,7 +160,7 @@ class TestRunAll:
 
         assert cli.run_all(args) == 0
 
-    def test_run_all_failure(self, tmp_path: Path, monkeypatch) -> None:
+    def test_run_all_failure(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         args = argparse.Namespace(
             shares_input=tmp_path / "Shares.csv",
             shares_output=tmp_path / "Shares.xlsx",
@@ -186,7 +190,9 @@ class TestRunAll:
 
         assert cli.run_all(args) == 1
 
-    def test_run_all_failure_on_comments(self, tmp_path: Path, monkeypatch) -> None:
+    def test_run_all_failure_on_comments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         args = argparse.Namespace(
             shares_input=tmp_path / "Shares.csv",
             shares_output=tmp_path / "Shares.xlsx",

@@ -28,6 +28,7 @@
     let progressValue = 0;
     let progressAnimationId = null;
 
+    /** Initialize the upload page. */
     function init() {
         if (!elements.dropZone || !elements.fileInput) return;
         initWorker();
@@ -35,6 +36,7 @@
         restoreState();
     }
 
+    /** Create the analytics Web Worker. */
     function initWorker() {
         if (typeof Worker === 'undefined') return;
         try {
@@ -47,6 +49,7 @@
         }
     }
 
+    /** Attach event listeners for drag/drop, file input, and buttons. */
     function bindEvents() {
         elements.dropZone.addEventListener('click', () => elements.fileInput.click());
         elements.dropZone.addEventListener('keydown', (event) => {
@@ -80,6 +83,7 @@
         window.addEventListener('resize', () => drawProgressBar(progressValue));
     }
 
+    /** Restore upload status from IndexedDB on page load. */
     async function restoreState() {
         const files = await Storage.getAllFiles();
         const analyticsBase = await Storage.getAnalytics();
@@ -89,16 +93,28 @@
         updateStatus({ shares, comments, analyticsReady });
     }
 
+    /**
+     * Handle dragover to show drop zone highlight.
+     * @param {DragEvent} event
+     */
     function handleDragOver(event) {
         event.preventDefault();
         elements.dropZone.classList.add('drag-over');
     }
 
+    /**
+     * Handle dragleave to remove drop zone highlight.
+     * @param {DragEvent} event
+     */
     function handleDragLeave(event) {
         event.preventDefault();
         elements.dropZone.classList.remove('drag-over');
     }
 
+    /**
+     * Handle file drop event.
+     * @param {DragEvent} event
+     */
     function handleDrop(event) {
         event.preventDefault();
         elements.dropZone.classList.remove('drag-over');
@@ -108,6 +124,10 @@
         }
     }
 
+    /**
+     * Handle file input change event.
+     * @param {Event} event
+     */
     function handleFileInput(event) {
         const files = Array.from(event.target.files || []);
         if (files.length) {
@@ -116,6 +136,10 @@
         event.target.value = '';
     }
 
+    /**
+     * Read CSV files and send them to the worker for processing.
+     * @param {File[]} files
+     */
     function processFiles(files) {
         const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
         if (!csvFiles.length) {
@@ -146,6 +170,11 @@
         });
     }
 
+    /**
+     * Read a File object as UTF-8 text.
+     * @param {File} file
+     * @returns {Promise<string>}
+     */
     function readFileAsText(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -155,6 +184,10 @@
         });
     }
 
+    /**
+     * Handle messages from the analytics worker.
+     * @param {MessageEvent} event
+     */
     async function handleWorkerMessage(event) {
         const message = event.data || {};
         if (message.type === 'fileProcessed') {
@@ -199,28 +232,36 @@
         }
     }
 
+    /** Handle worker-level errors. */
     function handleWorkerError() {
         setHint('Analytics worker error. Try refreshing.', true);
         activeJobs = 0;
         hideProgressOverlay();
     }
 
-    function updateStatus({ shares, comments, analyticsReady }) {
-        if (shares) {
-            elements.fileStatusItems.shares.classList.add('is-ready');
-            elements.sharesStatus.textContent = `${shares.rowCount} rows loaded`;
+    /**
+     * Update a single file type's status indicator and label.
+     * @param {HTMLElement} statusItem - The .file-status-item element
+     * @param {HTMLElement} statusLabel - The status text element
+     * @param {object|null} fileData - Stored file record, or null if not uploaded
+     */
+    function updateFileStatus(statusItem, statusLabel, fileData) {
+        if (fileData) {
+            statusItem.classList.add('is-ready');
+            statusLabel.textContent = `${fileData.rowCount} rows loaded`;
         } else {
-            elements.fileStatusItems.shares.classList.remove('is-ready');
-            elements.sharesStatus.textContent = 'Not uploaded';
+            statusItem.classList.remove('is-ready');
+            statusLabel.textContent = 'Not uploaded';
         }
+    }
 
-        if (comments) {
-            elements.fileStatusItems.comments.classList.add('is-ready');
-            elements.commentsStatus.textContent = `${comments.rowCount} rows loaded`;
-        } else {
-            elements.fileStatusItems.comments.classList.remove('is-ready');
-            elements.commentsStatus.textContent = 'Not uploaded';
-        }
+    /**
+     * Update the upload page UI to reflect current file and analytics state.
+     * @param {{shares: object|null, comments: object|null, analyticsReady: boolean}} status
+     */
+    function updateStatus({ shares, comments, analyticsReady }) {
+        updateFileStatus(elements.fileStatusItems.shares, elements.sharesStatus, shares);
+        updateFileStatus(elements.fileStatusItems.comments, elements.commentsStatus, comments);
 
         const hasAny = Boolean(shares || comments);
         elements.openAnalyticsBtn.disabled = !hasAny || !analyticsReady;
@@ -233,17 +274,24 @@
         }
     }
 
+    /**
+     * Update the upload hint text and error state.
+     * @param {string} message
+     * @param {boolean} isError
+     */
     function setHint(message, isError) {
         elements.uploadHint.textContent = message;
         elements.uploadHint.classList.toggle('is-error', Boolean(isError));
     }
 
+    /** Hide progress overlay when all active jobs complete. */
     function checkJobs() {
         if (activeJobs <= 0) {
             hideProgressOverlay();
         }
     }
 
+    /** Show the progress overlay and start animation. */
     function showProgressOverlay() {
         elements.progressOverlay.hidden = false;
         progressValue = 0;
@@ -251,12 +299,19 @@
         animateProgressTo(0.85, 900);
     }
 
+    /** Animate progress to 100% then hide the overlay. */
     function hideProgressOverlay() {
         animateProgressTo(1, 300, () => {
             elements.progressOverlay.hidden = true;
         });
     }
 
+    /**
+     * Smoothly animate progress bar to target value.
+     * @param {number} target - Target progress value (0-1)
+     * @param {number} duration - Animation duration in ms
+     * @param {Function} [callback] - Optional callback when animation completes
+     */
     function animateProgressTo(target, duration, callback) {
         if (progressAnimationId) {
             cancelAnimationFrame(progressAnimationId);
@@ -280,6 +335,10 @@
         progressAnimationId = requestAnimationFrame(step);
     }
 
+    /**
+     * Draw the progress bar on canvas at the given value (0-1).
+     * @param {number} value - Progress value between 0 and 1
+     */
     function drawProgressBar(value) {
         const canvas = elements.progressCanvas;
         if (!canvas) return;

@@ -20,6 +20,11 @@ const AnalyticsEngine = (() => {
     const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const WEEKLY_TIME_RANGES = new Set(['1m', '3m']);
 
+    /**
+     * @description Parse a LinkedIn date string into date components.
+     * @param {string} value - Date string in "YYYY-MM-DD HH:MM" format.
+     * @returns {{ timestamp: number, dayIndex: number, hour: number, dateKey: string, monthKey: string } | null} Parsed date components, or null if invalid.
+     */
     function parseLinkedInDate(value) {
         if (!value || typeof value !== 'string') return null;
         const trimmed = value.trim();
@@ -49,11 +54,21 @@ const AnalyticsEngine = (() => {
         };
     }
 
+    /**
+     * @description Strip URLs and normalize whitespace in a text string.
+     * @param {string} text - Raw text to normalize.
+     * @returns {string} Cleaned text with URLs removed and whitespace collapsed.
+     */
     function normalizeText(text) {
         if (!text) return '';
         return String(text).replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim();
     }
 
+    /**
+     * @description Extract hashtags and significant words from text, filtering out stop words.
+     * @param {string} text - Raw text to extract topics from.
+     * @returns {string[]} Array of unique lowercase topic tokens.
+     */
     function extractTopics(text) {
         const normalized = normalizeText(text);
         if (!normalized) return [];
@@ -72,6 +87,8 @@ const AnalyticsEngine = (() => {
         return Array.from(tokenSet);
     }
 
+    // Compute pre-aggregated analytics indices from raw event data.
+    // Indexes by month and day for O(months) view building instead of O(events).
     /**
      * Pre-compute aggregates during initial load.
      * This creates an indexed structure that allows fast filter lookups.
@@ -235,27 +252,59 @@ const AnalyticsEngine = (() => {
         };
     }
 
+    /**
+     * @description Return a new Date offset by the given number of months, set to the 1st.
+     * @param {Date} date - Starting date.
+     * @param {number} months - Number of months to add (can be negative).
+     * @returns {Date} New date offset by months.
+     */
     function addMonths(date, months) {
         return new Date(date.getFullYear(), date.getMonth() + months, 1);
     }
 
+    /**
+     * @description Return a new Date offset by the given number of days.
+     * @param {Date} date - Starting date.
+     * @param {number} days - Number of days to add (can be negative).
+     * @returns {Date} New date offset by days.
+     */
     function addDays(date, days) {
         return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
     }
 
+    /**
+     * @description Get the first day of the month for the given date.
+     * @param {Date} date - Input date.
+     * @returns {Date} New date set to the 1st of the same month.
+     */
     function startOfMonth(date) {
         return new Date(date.getFullYear(), date.getMonth(), 1);
     }
 
+    /**
+     * @description Get the last day of the month for the given date.
+     * @param {Date} date - Input date.
+     * @returns {Date} New date set to the last day of the same month.
+     */
     function endOfMonth(date) {
         return new Date(date.getFullYear(), date.getMonth() + 1, 0);
     }
 
+    /**
+     * @description Parse a "YYYY-MM-DD" date key string into a Date object.
+     * @param {string} key - Date key in "YYYY-MM-DD" format.
+     * @returns {Date} Parsed date.
+     */
     function parseDateKey(key) {
         const [year, month, day] = key.split('-').map(Number);
         return new Date(year, month - 1, day);
     }
 
+    /**
+     * @description Format a Date object as a "YYYY-MM-DD" string.
+     * @param {Date} date - Date to format.
+     * @returns {string} Formatted date key.
+     */
     function formatDateKey(date) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -263,16 +312,32 @@ const AnalyticsEngine = (() => {
         return `${year}-${month}-${day}`;
     }
 
+    /**
+     * @description Get the Monday of the week containing the given date.
+     * @param {Date} date - Input date.
+     * @returns {Date} Monday of that week.
+     */
     function startOfWeek(date) {
         const day = date.getDay();
         const diff = (day + 6) % 7;
         return addDays(date, -diff);
     }
 
+    /**
+     * @description Format a date as a "Mon DD" label string.
+     * @param {Date} date - Date to format.
+     * @returns {string} Formatted label, e.g. "Jan 05".
+     */
     function formatWeekLabel(date) {
         return `${MONTH_LABELS[date.getMonth()]} ${String(date.getDate()).padStart(2, '0')}`;
     }
 
+    /**
+     * @description Get the topic filter ratio for a month bucket. Returns the fraction of activity matching the selected topic.
+     * @param {Object} bucket - Month bucket with topics and total count.
+     * @param {Object} filters - Active filters including topic.
+     * @returns {number} Ratio between 0 and 1.
+     */
     function getTopicRatio(bucket, filters) {
         if (!filters.topic || filters.topic === 'all') return 1;
         if (!bucket.total) return 0;
@@ -280,6 +345,12 @@ const AnalyticsEngine = (() => {
         return topicCount / bucket.total;
     }
 
+    /**
+     * @description Get the hour/day filter ratio for a month bucket. Returns the fraction of activity matching the selected hour and/or day.
+     * @param {Object} bucket - Month bucket with hours, days, and heatmap arrays.
+     * @param {Object} filters - Active filters including hour and day.
+     * @returns {number} Ratio between 0 and 1.
+     */
     function getHourRatio(bucket, filters) {
         if (filters.hour === null || filters.hour === undefined) return 1;
         if (filters.day !== null && filters.day !== undefined) {
@@ -291,6 +362,15 @@ const AnalyticsEngine = (() => {
         return bucket.total > 0 ? hourTotal / bucket.total : 0;
     }
 
+    /**
+     * @description Apply all active filters (topic, share type, day, hour) to a month bucket and return adjusted counts.
+     * @param {Object} bucket - Month bucket with posts, comments, total, and sub-indices.
+     * @param {Object} filters - Active filters to apply.
+     * @param {number} topicRatio - Pre-computed topic ratio for this bucket.
+     * @param {boolean} hasDay - Whether a day filter is active.
+     * @param {boolean} hasHour - Whether an hour filter is active.
+     * @returns {{ monthPosts: number, monthComments: number, monthTotal: number, useMonth: boolean }} Filtered counts.
+     */
     function applyMonthFilters(bucket, filters, topicRatio, hasDay, hasHour) {
         let monthPosts = bucket.posts;
         let monthComments = bucket.comments;
@@ -309,40 +389,42 @@ const AnalyticsEngine = (() => {
         }
 
         if (filters.shareType && filters.shareType !== 'all' && useMonth) {
-            if (filters.shareType === 'text') {
-                monthPosts = bucket.shareTypes.textOnly;
-            } else if (filters.shareType === 'links') {
-                monthPosts = bucket.shareTypes.links;
-            } else if (filters.shareType === 'media') {
-                monthPosts = bucket.shareTypes.media;
+            const SHARE_TYPE_MAP = { text: 'textOnly', links: 'links', media: 'media' };
+            const typeKey = SHARE_TYPE_MAP[filters.shareType];
+            if (typeKey) {
+                monthPosts = bucket.shareTypes[typeKey];
             }
             monthComments = 0;
             monthTotal = monthPosts;
         }
 
-        if (hasDay && hasHour && useMonth) {
-            const heatmapCount = bucket.heatmap[filters.day][filters.hour];
-            const ratio = monthTotal > 0 ? heatmapCount / monthTotal : 0;
+        // Apply day/hour dimensional filter using the appropriate count
+        if (useMonth && (hasDay || hasHour)) {
+            let filterCount;
+            if (hasDay && hasHour) {
+                filterCount = bucket.heatmap[filters.day][filters.hour];
+            } else if (hasDay) {
+                filterCount = bucket.days[filters.day];
+            } else {
+                filterCount = bucket.hours[filters.hour];
+            }
+            const ratio = monthTotal > 0 ? filterCount / monthTotal : 0;
             monthPosts = Math.round(monthPosts * ratio);
             monthComments = Math.round(monthComments * ratio);
-            monthTotal = heatmapCount;
-        } else if (hasDay && useMonth) {
-            const dayTotal = bucket.days[filters.day];
-            const ratio = monthTotal > 0 ? dayTotal / monthTotal : 0;
-            monthPosts = Math.round(monthPosts * ratio);
-            monthComments = Math.round(monthComments * ratio);
-            monthTotal = dayTotal;
-        } else if (hasHour && useMonth) {
-            const hourTotal = bucket.hours[filters.hour];
-            const ratio = monthTotal > 0 ? hourTotal / monthTotal : 0;
-            monthPosts = Math.round(monthPosts * ratio);
-            monthComments = Math.round(monthComments * ratio);
-            monthTotal = hourTotal;
+            monthTotal = filterCount;
         }
 
         return { monthPosts, monthComments, monthTotal, useMonth };
     }
 
+    /**
+     * @description Get the list of "YYYY-MM" month keys that fall within the specified time range.
+     * @param {number|null} earliestTimestamp - Earliest event timestamp in ms.
+     * @param {number|null} latestTimestamp - Latest event timestamp in ms.
+     * @param {string} rangeKey - Time range key, e.g. "1m", "3m", "12m", or "all".
+     * @param {string|null} monthFocus - If set, return only this single month key.
+     * @returns {string[]} Array of month keys in chronological order.
+     */
     function getMonthKeysInRange(earliestTimestamp, latestTimestamp, rangeKey, monthFocus) {
         if (!latestTimestamp) return [];
         
@@ -412,20 +494,19 @@ const AnalyticsEngine = (() => {
             if (!useWeeklyTimeline) {
                 timelineMax = Math.max(timelineMax, baselineValue);
             }
-            if (bucket) {
-                topicRatio = getTopicRatio(bucket, filters);
-                const hourRatio = getHourRatio(bucket, filters);
-                monthMeta[monthKey] = {
-                    topicRatio,
-                    hourRatio
-                };
-            }
             if (!bucket) {
                 if (!useWeeklyTimeline) {
                     timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
                 }
                 continue;
             }
+
+            topicRatio = getTopicRatio(bucket, filters);
+            const hourRatio = getHourRatio(bucket, filters);
+            monthMeta[monthKey] = {
+                topicRatio,
+                hourRatio
+            };
 
             const { monthPosts, monthComments, monthTotal, useMonth } = applyMonthFilters(
                 bucket,
@@ -517,6 +598,14 @@ const AnalyticsEngine = (() => {
         };
     }
 
+    /**
+     * @description Build a weekly timeline from the day-level index for the given target months, applying all active filters.
+     * @param {Object} dayIndex - Day-level index mapping dateKey to daily counts.
+     * @param {string[]} targetMonths - Array of "YYYY-MM" month keys to include.
+     * @param {Object} filters - Active filters (shareType, day, topic, hour).
+     * @param {Object} monthMeta - Per-month metadata with topicRatio and hourRatio.
+     * @returns {{ timeline: Array, timelineMax: number }} Weekly timeline entries and max baseline value.
+     */
     function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
         if (!dayIndex || !targetMonths.length) {
             return { timeline: [], timelineMax: 1 };
@@ -559,12 +648,10 @@ const AnalyticsEngine = (() => {
             baselineTotals[index] += dayTotal;
 
             let value = dayTotal;
-            if (filters.shareType === 'text') {
-                value = entry.shareTypes ? entry.shareTypes.textOnly : 0;
-            } else if (filters.shareType === 'links') {
-                value = entry.shareTypes ? entry.shareTypes.links : 0;
-            } else if (filters.shareType === 'media') {
-                value = entry.shareTypes ? entry.shareTypes.media : 0;
+            const SHARE_TYPE_MAP = { text: 'textOnly', links: 'links', media: 'media' };
+            const typeKey = SHARE_TYPE_MAP[filters.shareType];
+            if (typeKey) {
+                value = entry.shareTypes ? entry.shareTypes[typeKey] : 0;
             }
 
             if (hasDay) {
@@ -603,6 +690,10 @@ const AnalyticsEngine = (() => {
         return { timeline: weeks, timelineMax };
     }
 
+    /**
+     * @description Create an empty analytics view with zeroed-out values for all fields.
+     * @returns {Object} Empty view object.
+     */
     function createEmptyView() {
         return {
             timeline: [],
@@ -618,11 +709,21 @@ const AnalyticsEngine = (() => {
         };
     }
 
+    /**
+     * @description Format a "YYYY-MM" month key as a human-readable "Mon YYYY" label.
+     * @param {string} monthKey - Month key in "YYYY-MM" format.
+     * @returns {string} Formatted label, e.g. "Jan 2025".
+     */
     function formatMonthLabel(monthKey) {
         const [year, month] = monthKey.split('-').map(Number);
         return `${MONTH_LABELS[month - 1]} ${year}`;
     }
 
+    /**
+     * @description Find the index and value of the maximum element in a numeric array.
+     * @param {number[]} arr - Array of numbers.
+     * @returns {{ index: number, value: number }} Index and value of the peak element.
+     */
     function getPeakFromArray(arr) {
         let maxVal = 0, maxIdx = 0;
         for (let i = 0; i < arr.length; i++) {
@@ -634,6 +735,11 @@ const AnalyticsEngine = (() => {
         return { index: maxIdx, value: maxVal };
     }
 
+    /**
+     * @description Calculate the current and longest activity streaks from a set of active day keys.
+     * @param {Set<string>} daySet - Set of "YYYY-MM-DD" date keys representing active days.
+     * @returns {{ current: number, longest: number }} Current streak length and longest streak length.
+     */
     function calculateStreaksFromDays(daySet) {
         if (!daySet || daySet.size === 0) {
             return { current: 0, longest: 0 };
@@ -674,6 +780,11 @@ const AnalyticsEngine = (() => {
         return { current, longest };
     }
 
+    /**
+     * @description Compute trend direction by comparing the sum of the recent half of the timeline to the older half.
+     * @param {Array<{ value: number }>} timeline - Array of timeline entries with numeric values.
+     * @returns {{ percent: number, direction: string, currentCount: number, previousCount: number } | null} Trend info, or null if insufficient data.
+     */
     function computeTrendFromTimeline(timeline) {
         if (timeline.length < 2) return null;
         
@@ -689,13 +800,14 @@ const AnalyticsEngine = (() => {
         }
 
         if (older === 0) {
-            return { percent: recent > 0 ? 100 : 0, direction: recent > 0 ? 'up' : 'flat', currentCount: recent, previousCount: older };
+            const hasRecent = recent > 0;
+            return { percent: hasRecent ? 100 : 0, direction: hasRecent ? 'up' : 'flat', currentCount: recent, previousCount: older };
         }
 
         const percent = ((recent - older) / older) * 100;
-        let direction = 'flat';
-        if (percent > 8) direction = 'up';
-        if (percent < -12) direction = 'down';
+        // Asymmetric thresholds: growth is notable at 8%, decline at -12% to avoid
+        // flagging minor dips as meaningful slowdowns.
+        const direction = percent > 8 ? 'up' : percent < -12 ? 'down' : 'flat';
 
         return { percent, direction, currentCount: recent, previousCount: older };
     }
@@ -709,48 +821,34 @@ const AnalyticsEngine = (() => {
         const peakHour = view.peakHour.hour;
         const peakDayLabel = DAY_LABELS[view.peakDay.dayIndex];
 
-        if (peakHour <= 5) {
-            insights.push({
-                id: 'early-bird',
-                title: 'Early Bird',
-                body: `Your peak hour is ${String(peakHour).padStart(2, '0')}:00. Mornings are your power time.`,
-                icon: 'rooster',
-                accent: 'accent-yellow'
-            });
-        } else if (peakHour >= 21) {
-            insights.push({
-                id: 'night-owl',
-                title: 'Night Owl',
-                body: `Your peak hour is ${String(peakHour).padStart(2, '0')}:00. Late hours work best for you.`,
-                icon: 'owl',
-                accent: 'accent-purple'
-            });
-        } else {
-            insights.push({
-                id: 'steady-pace',
-                title: 'Steady Rhythm',
-                body: `Most activity happens around ${String(peakHour).padStart(2, '0')}:00. You keep a consistent rhythm.`,
-                icon: 'calendar',
-                accent: 'accent-blue'
-            });
-        }
+        const TIME_OF_DAY_INSIGHTS = [
+            { max: 5, id: 'early-bird', title: 'Early Bird', template: 'Your peak hour is {hour}. Mornings are your power time.', icon: 'rooster', accent: 'accent-yellow' },
+            { min: 21, id: 'night-owl', title: 'Night Owl', template: 'Your peak hour is {hour}. Late hours work best for you.', icon: 'owl', accent: 'accent-purple' }
+        ];
+        const hourLabel = String(peakHour).padStart(2, '0') + ':00';
+        const timeInsight = TIME_OF_DAY_INSIGHTS.find(i => (i.max !== undefined && peakHour <= i.max) || (i.min !== undefined && peakHour >= i.min))
+            || { id: 'steady-pace', title: 'Steady Rhythm', template: 'Most activity happens around {hour}. You keep a consistent rhythm.', icon: 'calendar', accent: 'accent-blue' };
+        insights.push({
+            id: timeInsight.id,
+            title: timeInsight.title,
+            body: timeInsight.template.replace('{hour}', hourLabel),
+            icon: timeInsight.icon,
+            accent: timeInsight.accent
+        });
 
+        const TREND_INSIGHTS = {
+            up: { id: 'trending-up', title: 'Trending Up', template: 'Activity is up {pct}% compared to the previous period.', icon: 'rocket', accent: 'accent-blue' },
+            down: { id: 'slowing', title: 'Taking a Breather', template: 'Activity is down {pct}% compared to the previous period.', icon: 'sloth', accent: 'accent-purple' }
+        };
         if (view.trend) {
-            if (view.trend.direction === 'up') {
+            const trendDef = TREND_INSIGHTS[view.trend.direction];
+            if (trendDef) {
                 insights.push({
-                    id: 'trending-up',
-                    title: 'Trending Up',
-                    body: `Activity is up ${Math.round(view.trend.percent)}% compared to the previous period.`,
-                    icon: 'rocket',
-                    accent: 'accent-blue'
-                });
-            } else if (view.trend.direction === 'down') {
-                insights.push({
-                    id: 'slowing',
-                    title: 'Taking a Breather',
-                    body: `Activity is down ${Math.abs(Math.round(view.trend.percent))}% compared to the previous period.`,
-                    icon: 'sloth',
-                    accent: 'accent-purple'
+                    id: trendDef.id,
+                    title: trendDef.title,
+                    body: trendDef.template.replace('{pct}', String(Math.abs(Math.round(view.trend.percent)))),
+                    icon: trendDef.icon,
+                    accent: trendDef.accent
                 });
             }
         }

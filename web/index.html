@@ -16,8 +16,11 @@
     <link rel="stylesheet" href="css/sketch.css">
 
     <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
+    <a class="skip-link" href="#appMain">Skip to main content</a>
+
     <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
         <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -37,141 +40,540 @@
         </svg>
     </button>
 
-    <main class="screen-inner screen-inner--hero">
-        <header class="hero-header">
-            <h1 class="title">
-                <span class="title-icon">
-                    <svg viewBox="0 0 40 40" class="pencil-icon" aria-hidden="true">
-                        <path d="M8 32 L28 12 L32 16 L12 36 Z" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <path d="M28 12 L30 10 C31 9 33 9 34 10 L34 10 C35 11 35 13 34 14 L32 16" fill="none" stroke="currentColor" stroke-width="2"/>
-                        <path d="M8 32 L6 38 L12 36" fill="none" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                </span>
-                LinkedIn Analyzer
-            </h1>
-            <p class="subtitle">Clean and analyze your LinkedIn data exports</p>
-        </header>
+    <main class="screens-container" id="appMain">
+        <section class="screen active" id="screen-home">
+            <div class="screen-inner screen-inner--hero">
+                <header class="hero-header">
+                    <h1 class="title">
+                        <span class="title-icon">
+                            <svg viewBox="0 0 40 40" class="pencil-icon" aria-hidden="true">
+                                <path d="M8 32 L28 12 L32 16 L12 36 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M28 12 L30 10 C31 9 33 9 34 10 L34 10 C35 11 35 13 34 14 L32 16" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <path d="M8 32 L6 38 L12 36" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </span>
+                        LinkedIn Analyzer
+                    </h1>
+                    <p class="subtitle">Clean and analyze your LinkedIn data exports</p>
+                </header>
 
-        <nav class="top-nav">
-            <a class="top-link is-active no-underline" href="index.html">Home</a>
-            <a class="top-link no-underline" href="clean.html">Clean</a>
-            <a class="top-link no-underline" href="analytics.html">Analytics</a>
-            <a class="top-link no-underline" href="messages.html">Messages</a>
-            <a class="top-link no-underline" href="insights.html">Insights</a>
-        </nav>
+                <nav class="top-nav" aria-label="Primary">
+                    <a class="top-link no-underline" data-route="home" href="#home">Home</a>
+                    <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
+                    <a class="top-link no-underline" data-route="analytics" href="#analytics">Analytics</a>
+                    <a class="top-link no-underline" data-route="messages" href="#messages">Messages</a>
+                    <a class="top-link no-underline" data-route="insights" href="#insights">Insights</a>
+                </nav>
 
-        <section class="upload-layout">
-            <div class="drop-zone" id="multiDropZone" tabindex="0" role="button" aria-label="Upload CSV files">
-                <input type="file" id="multiFileInput" accept=".csv" multiple hidden>
-                <div class="drop-zone-content">
-                    <svg class="upload-icon" viewBox="0 0 64 64" aria-hidden="true">
-                        <path d="M32 44 L32 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                        <path d="M22 30 L32 18 L42 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M10 40 Q10 52, 22 52 L42 52 Q54 52, 54 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-                    </svg>
-                    <p class="drop-zone-text">Drop your CSV files here</p>
-                    <p class="drop-zone-subtext">Upload Shares.csv, Comments.csv, messages.csv, and Connections.csv</p>
-                </div>
-                <div class="drop-zone-hover">
-                    <p>Release to upload</p>
-                </div>
-            </div>
+                <section class="upload-layout">
+                    <div class="drop-zone" id="multiDropZone" tabindex="0" role="button" aria-label="Upload CSV files">
+                        <input type="file" id="multiFileInput" accept=".csv" multiple hidden>
+                        <div class="drop-zone-content">
+                            <svg class="upload-icon" viewBox="0 0 64 64" aria-hidden="true">
+                                <path d="M32 44 L32 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                                <path d="M22 30 L32 18 L42 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M10 40 Q10 52, 22 52 L42 52 Q54 52, 54 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            </svg>
+                            <p class="drop-zone-text">Drop your CSV files here</p>
+                            <p class="drop-zone-subtext">Upload Shares.csv, Comments.csv, messages.csv, and Connections.csv</p>
+                        </div>
+                        <div class="drop-zone-hover">
+                            <p>Release to upload</p>
+                        </div>
+                    </div>
 
-            <div class="upload-status-card">
-                <div class="status-header">
-                    <h2>Files</h2>
-                    <p>Upload all four exports for complete cleaning and relationship insights</p>
-                </div>
-                <div class="file-status-list" id="fileStatusList">
-                    <div class="file-status-item" data-file="shares">
-                        <span class="status-indicator" aria-hidden="true"></span>
-                        <div class="status-text">
-                            <p class="status-title">Shares.csv</p>
-                            <p class="status-meta" id="sharesStatus">Not uploaded</p>
+                    <div class="upload-status-card">
+                        <div class="status-header">
+                            <h2>Files</h2>
+                            <p>Upload all four exports for complete cleaning and relationship insights</p>
+                        </div>
+                        <div class="file-status-list" id="fileStatusList">
+                            <div class="file-status-item" data-file="shares">
+                                <span class="status-indicator" aria-hidden="true"></span>
+                                <div class="status-text">
+                                    <p class="status-title">Shares.csv</p>
+                                    <p class="status-meta" id="sharesStatus">Not uploaded</p>
+                                </div>
+                            </div>
+                            <div class="file-status-item" data-file="comments">
+                                <span class="status-indicator" aria-hidden="true"></span>
+                                <div class="status-text">
+                                    <p class="status-title">Comments.csv</p>
+                                    <p class="status-meta" id="commentsStatus">Not uploaded</p>
+                                </div>
+                            </div>
+                            <div class="file-status-item" data-file="messages">
+                                <span class="status-indicator" aria-hidden="true"></span>
+                                <div class="status-text">
+                                    <p class="status-title">messages.csv</p>
+                                    <p class="status-meta" id="messagesStatus">Not uploaded</p>
+                                </div>
+                            </div>
+                            <div class="file-status-item" data-file="connections">
+                                <span class="status-indicator" aria-hidden="true"></span>
+                                <div class="status-text">
+                                    <p class="status-title">Connections.csv</p>
+                                    <p class="status-meta" id="connectionsStatus">Not uploaded</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="upload-hint" id="uploadHint">Upload at least one file to start.</p>
+                        <div class="action-buttons">
+                            <button class="primary-btn" id="openAnalyticsBtn" disabled>Open Analytics</button>
+                            <button class="reset-btn" id="clearAllBtn">Clear data</button>
                         </div>
                     </div>
-                    <div class="file-status-item" data-file="comments">
-                        <span class="status-indicator" aria-hidden="true"></span>
-                        <div class="status-text">
-                            <p class="status-title">Comments.csv</p>
-                            <p class="status-meta" id="commentsStatus">Not uploaded</p>
-                        </div>
+                </section>
+
+                <section class="hub-section">
+                    <div class="section-header">
+                        <h2>Choose what to do next</h2>
                     </div>
-                    <div class="file-status-item" data-file="messages">
-                        <span class="status-indicator" aria-hidden="true"></span>
-                        <div class="status-text">
-                            <p class="status-title">messages.csv</p>
-                            <p class="status-meta" id="messagesStatus">Not uploaded</p>
-                        </div>
+                    <div class="hub-grid" role="list">
+                        <a class="hub-card no-underline" data-route="clean" href="#clean" role="listitem">
+                            <span class="hub-icon" aria-hidden="true">
+                                <svg viewBox="0 0 48 48">
+                                    <path d="M10 34 L28 16 L34 22 L16 40" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M28 16 L36 8 L40 12 L32 20" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M12 42 L6 46 L10 40" fill="none" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </span>
+                            <h3>Clean</h3>
+                            <p>Clean and export your data as formatted Excel files.</p>
+                        </a>
+                        <a class="hub-card no-underline" data-route="analytics" href="#analytics" role="listitem">
+                            <span class="hub-icon" aria-hidden="true">
+                                <svg viewBox="0 0 48 48">
+                                    <path d="M10 38V26M20 38V14M30 38V20M40 38V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M8 40H42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <h3>Analytics</h3>
+                            <p>Charts and stats about your LinkedIn activity.</p>
+                        </a>
+                        <a class="hub-card no-underline" data-route="messages" href="#messages" role="listitem">
+                            <span class="hub-icon" aria-hidden="true">
+                                <svg viewBox="0 0 48 48">
+                                    <path d="M8 12 H40 V30 H20 L12 38 V30 H8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                                    <path d="M14 18 H34 M14 24 H30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                            <h3>Messages</h3>
+                            <p>See who you talk to most, silent connections, and fading conversations.</p>
+                        </a>
+                        <a class="hub-card no-underline" data-route="insights" href="#insights" role="listitem">
+                            <span class="hub-icon" aria-hidden="true">
+                                <svg viewBox="0 0 48 48">
+                                    <path d="M24 6 C14 6 10 14 10 20 C10 28 16 32 18 34 L18 38 H30 L30 34 C32 32 38 28 38 20 C38 14 34 6 24 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M18 42H30" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M20 34H28" fill="none" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                            </span>
+                            <h3>Insights</h3>
+                            <p>Personalized takeaways based on your latest activity.</p>
+                        </a>
                     </div>
-                    <div class="file-status-item" data-file="connections">
-                        <span class="status-indicator" aria-hidden="true"></span>
-                        <div class="status-text">
-                            <p class="status-title">Connections.csv</p>
-                            <p class="status-meta" id="connectionsStatus">Not uploaded</p>
-                        </div>
-                    </div>
-                </div>
-                <p class="upload-hint" id="uploadHint">Upload at least one file to start.</p>
-                <div class="action-buttons">
-                    <button class="primary-btn" id="openAnalyticsBtn" disabled>Open Analytics</button>
-                    <button class="reset-btn" id="clearAllBtn">Clear data</button>
-                </div>
+                </section>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
             </div>
         </section>
 
-        <section class="hub-section">
-            <div class="section-header">
-                <h2>Choose what to do next</h2>
+        <section class="screen" id="screen-clean">
+            <div class="screen-inner screen-inner--wide">
+                <header class="screen-header">
+                    <div class="header-text">
+                        <h1 class="title">Clean Data</h1>
+                        <p class="subtitle">Prepare Shares, Comments, Messages, and Connections for export.</p>
+                    </div>
+                </header>
+
+                <nav class="top-nav" aria-label="Primary">
+                    <a class="top-link no-underline" data-route="home" href="#home">Home</a>
+                    <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
+                    <a class="top-link no-underline" data-route="analytics" href="#analytics">Analytics</a>
+                    <a class="top-link no-underline" data-route="messages" href="#messages">Messages</a>
+                    <a class="top-link no-underline" data-route="insights" href="#insights">Insights</a>
+                </nav>
+
+                <div class="analytics-empty" id="cleanEmpty" hidden>
+                    <h2>No files loaded</h2>
+                    <p>Upload LinkedIn CSV files on the Home page.</p>
+                    <div class="action-buttons">
+                        <a class="primary-btn no-underline" data-route="home" href="#home">Go to Home</a>
+                    </div>
+                </div>
+
+                <div class="clean-layout" id="cleanPanel" hidden>
+                    <div class="file-type-section">
+                        <p class="file-type-label">Select a file to clean</p>
+                        <div class="file-type-options">
+                            <label class="file-type-option option-blue">
+                                <input type="radio" name="cleanFileType" value="shares" checked>
+                                <span class="option-box">
+                                    <span class="option-radio"></span>
+                                    <span class="option-text">Shares</span>
+                                </span>
+                            </label>
+                            <label class="file-type-option option-purple">
+                                <input type="radio" name="cleanFileType" value="comments">
+                                <span class="option-box">
+                                    <span class="option-radio"></span>
+                                    <span class="option-text">Comments</span>
+                                </span>
+                            </label>
+                            <label class="file-type-option option-green">
+                                <input type="radio" name="cleanFileType" value="messages">
+                                <span class="option-box">
+                                    <span class="option-radio"></span>
+                                    <span class="option-text">Messages</span>
+                                </span>
+                            </label>
+                            <label class="file-type-option option-yellow">
+                                <input type="radio" name="cleanFileType" value="connections">
+                                <span class="option-box">
+                                    <span class="option-radio"></span>
+                                    <span class="option-text">Connections</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p class="cleaner-hint" id="cleanerHint">Upload files to unlock cleaner options.</p>
+                    </div>
+
+                    <div class="preview-section" id="cleanPreviewSection" hidden>
+                        <div class="preview-header">
+                            <svg class="preview-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            <h3>Preview</h3>
+                            <span class="file-info" id="cleanFileInfo"></span>
+                        </div>
+                        <div class="preview-table-wrapper">
+                            <table class="preview-table" id="cleanPreviewTable">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <p class="preview-note" id="cleanPreviewNote"></p>
+                    </div>
+
+                    <div class="download-section" id="cleanDownloadSection" hidden>
+                        <div class="action-buttons">
+                            <button class="download-btn" id="cleanDownloadBtn">
+                                <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
+                                    <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                                Download Clean Excel
+                            </button>
+                            <a class="reset-btn no-underline" data-route="home" href="#home">Back to Home</a>
+                        </div>
+                    </div>
+
+                    <div class="error-message" id="cleanErrorMessage" hidden>
+                        <svg class="error-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2"/>
+                            <line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <p id="cleanErrorText"></p>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
             </div>
-            <div class="hub-grid" role="list">
-                <a class="hub-card no-underline" href="clean.html" role="listitem">
-                    <span class="hub-icon" aria-hidden="true">
-                        <svg viewBox="0 0 48 48">
-                            <path d="M10 34 L28 16 L34 22 L16 40" fill="none" stroke="currentColor" stroke-width="2"/>
-                            <path d="M28 16 L36 8 L40 12 L32 20" fill="none" stroke="currentColor" stroke-width="2"/>
-                            <path d="M12 42 L6 46 L10 40" fill="none" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                    </span>
-                    <h3>Clean</h3>
-                    <p>Clean and export your data as formatted Excel files.</p>
-                </a>
-                <a class="hub-card no-underline" href="analytics.html" role="listitem">
-                    <span class="hub-icon" aria-hidden="true">
-                        <svg viewBox="0 0 48 48">
-                            <path d="M10 38V26M20 38V14M30 38V20M40 38V10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M8 40H42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
-                    </span>
-                    <h3>Analytics</h3>
-                    <p>Charts and stats about your LinkedIn activity.</p>
-                </a>
-                <a class="hub-card no-underline" href="messages.html" role="listitem">
-                    <span class="hub-icon" aria-hidden="true">
-                        <svg viewBox="0 0 48 48">
-                            <path d="M8 12 H40 V30 H20 L12 38 V30 H8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                            <path d="M14 18 H34 M14 24 H30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
-                    </span>
-                    <h3>Messages</h3>
-                    <p>See who you talk to most, silent connections, and fading conversations.</p>
-                </a>
-                <a class="hub-card no-underline" href="insights.html" role="listitem">
-                    <span class="hub-icon" aria-hidden="true">
+        </section>
+
+        <section class="screen" id="screen-analytics">
+            <div class="screen-inner screen-inner--wide">
+                <header class="screen-header">
+                    <div class="header-text">
+                        <h1 class="title">Analytics</h1>
+                        <p class="subtitle">Fast, focused view of your latest activity.</p>
+                    </div>
+                </header>
+
+                <nav class="top-nav" aria-label="Primary">
+                    <a class="top-link no-underline" data-route="home" href="#home">Home</a>
+                    <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
+                    <a class="top-link no-underline" data-route="analytics" href="#analytics">Analytics</a>
+                    <a class="top-link no-underline" data-route="messages" href="#messages">Messages</a>
+                    <a class="top-link no-underline" data-route="insights" href="#insights">Insights</a>
+                </nav>
+
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <span class="filter-label">Time range</span>
+                        <div class="filter-buttons" id="analyticsTimeRangeButtons">
+                            <button class="filter-btn" data-range="1m">1 month</button>
+                            <button class="filter-btn" data-range="3m">3 months</button>
+                            <button class="filter-btn" data-range="6m">6 months</button>
+                            <button class="filter-btn active" data-range="12m">12 months</button>
+                            <button class="filter-btn" data-range="all">All time</button>
+                        </div>
+                    </div>
+                    <button class="ghost-btn" id="analyticsResetFiltersBtn">Reset filters</button>
+                </div>
+
+                <div class="active-filters" id="activeFilters" hidden>
+                    <span class="active-filters-label">Active filters:</span>
+                    <div class="active-filters-list" id="activeFiltersList"></div>
+                </div>
+
+                <div class="analytics-empty" id="analyticsEmpty" hidden>
+                    <h2>No data available yet</h2>
+                    <p>Upload Shares.csv or Comments.csv on the Home page.</p>
+                    <div class="action-buttons">
+                        <a class="primary-btn no-underline" data-route="home" href="#home">Go to Home</a>
+                    </div>
+                </div>
+
+                <div class="analytics-grid" id="analyticsGrid">
+                    <div class="chart-card chart-card--wide" id="timelineCard">
+                        <div class="chart-header">
+                            <h3>Activity timeline</h3>
+                            <p>Combined posts and comments</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a point to focus that month.</p>
+                    </div>
+
+                    <div class="chart-card" id="topicsCard">
+                        <div class="chart-header">
+                            <h3>Top topics</h3>
+                            <p>Words and hashtags you use most</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="topicsChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a topic to filter the dashboard.</p>
+                    </div>
+
+                    <div class="chart-card chart-card--wide" id="heatmapCard">
+                        <div class="chart-header">
+                            <h3>When you are active</h3>
+                            <p>Day of week by hour</p>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="heatmapChart"></canvas>
+                        </div>
+                        <p class="chart-note">Click a cell to filter by day and hour.</p>
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <p class="stat-value" id="statPosts">0</p>
+                        <p class="stat-label">Posts</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statComments">0</p>
+                        <p class="stat-label">Comments</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statTotal">0</p>
+                        <p class="stat-label">Total activity</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statPeak">-</p>
+                        <p class="stat-label">Peak hour</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-value" id="statStreak">0</p>
+                        <p class="stat-label">Current streak</p>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+            </div>
+        </section>
+
+        <section class="screen" id="screen-messages">
+            <div class="screen-inner screen-inner--wide">
+                <header class="screen-header">
+                    <div class="header-text">
+                        <h1 class="title">Messages</h1>
+                        <p class="subtitle">Conversation patterns from your messages and connection network.</p>
+                    </div>
+                </header>
+
+                <nav class="top-nav" aria-label="Primary">
+                    <a class="top-link no-underline" data-route="home" href="#home">Home</a>
+                    <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
+                    <a class="top-link no-underline" data-route="analytics" href="#analytics">Analytics</a>
+                    <a class="top-link no-underline" data-route="messages" href="#messages">Messages</a>
+                    <a class="top-link no-underline" data-route="insights" href="#insights">Insights</a>
+                </nav>
+
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <span class="filter-label">Time range</span>
+                        <div class="filter-buttons" id="messagesTimeRangeButtons">
+                            <button class="filter-btn" data-range="1m">1 month</button>
+                            <button class="filter-btn" data-range="3m">3 months</button>
+                            <button class="filter-btn" data-range="6m">6 months</button>
+                            <button class="filter-btn active" data-range="12m">12 months</button>
+                            <button class="filter-btn" data-range="all">All time</button>
+                        </div>
+                    </div>
+                    <button class="ghost-btn" id="messagesResetFiltersBtn">Reset filters</button>
+                </div>
+
+                <div class="analytics-empty" id="messagesEmpty" hidden>
+                    <h2>No messages data available yet</h2>
+                    <p>Upload messages.csv on the Home page to unlock messaging insights.</p>
+                    <div class="action-buttons">
+                        <a class="primary-btn no-underline" data-route="home" href="#home">Go to Home</a>
+                    </div>
+                </div>
+
+                <div class="messages-layout" id="messagesLayout" hidden>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <p class="stat-value" id="msgStatMessages">0</p>
+                            <p class="stat-label">Messages in range</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-value" id="msgStatContacts">0</p>
+                            <p class="stat-label">People in range</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-value" id="msgStatConnected">0</p>
+                            <p class="stat-label">Total connections</p>
+                        </div>
+                        <div class="stat-card">
+                            <p class="stat-value" id="msgStatFading">0</p>
+                            <p class="stat-label">Fading conversations</p>
+                        </div>
+                    </div>
+
+                    <div class="message-panels">
+                        <section class="message-panel" data-accent="blue">
+                            <div class="message-panel-header">
+                                <h3>Top Contacts</h3>
+                                <p>People you talk to most in the selected period.</p>
+                                <button class="ghost-btn export-panel-btn" id="topContactsExportBtn" type="button">Export</button>
+                            </div>
+                            <ol class="message-list" id="topContactsList"></ol>
+                        </section>
+
+                        <section class="message-panel" data-accent="yellow">
+                            <div class="message-panel-header">
+                                <h3>Silent Connections</h3>
+                                <p>Connections you have not messaged yet.</p>
+                                <button class="ghost-btn export-panel-btn" id="silentConnectionsExportBtn" type="button">Export</button>
+                            </div>
+                            <ol class="message-list" id="silentConnectionsList"></ol>
+                        </section>
+
+                        <section class="message-panel" data-accent="purple">
+                            <div class="message-panel-header">
+                                <h3>Fading Conversations</h3>
+                                <p>People you used to message but have not contacted in 30+ days.</p>
+                                <button class="ghost-btn export-panel-btn" id="fadingConversationsExportBtn" type="button">Export</button>
+                            </div>
+                            <ol class="message-list" id="fadingConversationsList"></ol>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="insight-tip" id="messagesTip" hidden>
+                    <div class="insight-tip-icon" aria-hidden="true">
                         <svg viewBox="0 0 48 48">
                             <path d="M24 6 C14 6 10 14 10 20 C10 28 16 32 18 34 L18 38 H30 L30 34 C32 32 38 28 38 20 C38 14 34 6 24 6" fill="none" stroke="currentColor" stroke-width="2"/>
                             <path d="M18 42H30" fill="none" stroke="currentColor" stroke-width="2"/>
                             <path d="M20 34H28" fill="none" stroke="currentColor" stroke-width="2"/>
                         </svg>
-                    </span>
-                    <h3>Insights</h3>
-                    <p>Personalized takeaways based on your latest activity.</p>
-                </a>
+                    </div>
+                    <div>
+                        <h3>Pro tip</h3>
+                        <p id="messagesTipText"></p>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
             </div>
         </section>
 
-        <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+        <section class="screen" id="screen-insights">
+            <div class="screen-inner screen-inner--wide">
+                <header class="screen-header">
+                    <div class="header-text">
+                        <h1 class="title">Insights</h1>
+                        <p class="subtitle">Personalized takeaways from your latest activity.</p>
+                    </div>
+                </header>
+
+                <nav class="top-nav" aria-label="Primary">
+                    <a class="top-link no-underline" data-route="home" href="#home">Home</a>
+                    <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
+                    <a class="top-link no-underline" data-route="analytics" href="#analytics">Analytics</a>
+                    <a class="top-link no-underline" data-route="messages" href="#messages">Messages</a>
+                    <a class="top-link no-underline" data-route="insights" href="#insights">Insights</a>
+                </nav>
+
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <span class="filter-label">Time range</span>
+                        <div class="filter-buttons" id="insightsTimeRangeButtons">
+                            <button class="filter-btn" data-range="1m">1 month</button>
+                            <button class="filter-btn" data-range="3m">3 months</button>
+                            <button class="filter-btn" data-range="6m">6 months</button>
+                            <button class="filter-btn active" data-range="12m">12 months</button>
+                            <button class="filter-btn" data-range="all">All time</button>
+                        </div>
+                    </div>
+                    <button class="ghost-btn" id="insightsResetFiltersBtn">Reset filters</button>
+                </div>
+
+                <div class="insights-empty" id="insightsEmpty" hidden>
+                    <h2>No data available yet</h2>
+                    <p>Upload Shares.csv or Comments.csv on the Home page.</p>
+                    <div class="action-buttons">
+                        <a class="primary-btn no-underline" data-route="home" href="#home">Go to Home</a>
+                    </div>
+                </div>
+
+                <div class="insights-grid" id="insightsGrid"></div>
+
+                <div class="insight-tip" id="insightTip" hidden>
+                    <div class="insight-tip-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48">
+                            <path d="M24 6 C14 6 10 14 10 20 C10 28 16 32 18 34 L18 38 H30 L30 34 C32 32 38 28 38 20 C38 14 34 6 24 6" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M18 42H30" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M20 34H28" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Pro tip</h3>
+                        <p id="insightTipText"></p>
+                    </div>
+                </div>
+
+                <p class="privacy-footnote">Your files stay in your browser. Nothing is uploaded anywhere.</p>
+            </div>
+        </section>
     </main>
+
+    <div class="progress-overlay" id="contentLoadingOverlay" hidden>
+        <div class="progress-card content-loading-card">
+            <div class="progress-gear-wrap" aria-hidden="true">
+                <svg class="progress-gear" viewBox="0 0 80 80">
+                    <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M40 10 L46 14 L54 12 L58 20 L66 22 L66 30 L72 36 L68 44 L72 52 L66 58 L66 66 L58 68 L54 76 L46 74 L40 78 L34 74 L26 76 L22 68 L14 66 L14 58 L8 52 L12 44 L8 36 L14 30 L14 22 L22 20 L26 12 L34 14 Z"/>
+                        <circle cx="40" cy="44" r="12"/>
+                        <path d="M40 26 V34 M28 44 H36 M44 44 H52 M40 54 V62"/>
+                    </g>
+                </svg>
+            </div>
+            <h2 id="contentLoadingTitle">Loading content</h2>
+            <p id="contentLoadingText">Preparing your data view.</p>
+        </div>
+    </div>
 
     <div class="progress-overlay" id="progressOverlay" hidden>
         <div class="progress-card">
@@ -193,12 +595,27 @@
         </div>
     </div>
 
+    <div class="chart-tooltip" id="chartTooltip" hidden></div>
+    <p id="routeAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+
     <canvas id="roughCanvas" aria-hidden="true"></canvas>
 
     <script src="js/runtime.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/decorations.js"></script>
     <script src="js/storage.js"></script>
+    <script src="js/data-cache.js"></script>
+    <script src="js/router.js"></script>
+    <script src="js/loading-overlay.js"></script>
+    <script src="js/cleaner.js"></script>
+    <script src="js/excel.js"></script>
+    <script src="js/charts.js"></script>
     <script src="js/upload.js"></script>
+    <script src="js/clean.js"></script>
+    <script src="js/analytics-ui.js"></script>
+    <script src="js/messages-insights.js"></script>
+    <script src="js/insights-ui.js"></script>
+    <script src="js/screen-manager.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

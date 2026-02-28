@@ -7,7 +7,6 @@
 .preview-section,
 .download-btn,
 .error-message,
-.privacy-notice,
 .insight-card,
 .progress-card,
 .message-panel {
@@ -136,47 +135,6 @@
     opacity: 0.5;
 }
 
-/* Paper fold effect */
-.privacy-notice::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 20px;
-    height: 20px;
-    background: linear-gradient(
-        135deg,
-        transparent 50%,
-        var(--bg-tertiary) 50%
-    );
-    border-bottom-left-radius: 4px;
-}
-
-/* Highlight marker effect */
-.highlight {
-    background: linear-gradient(
-        180deg,
-        transparent 60%,
-        var(--accent-yellow-light) 60%
-    );
-    padding: 0 4px;
-}
-
-/* Squiggly underline for text links */
-.text-link {
-    text-decoration: none;
-    color: var(--accent-blue);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 4'%3E%3Cpath d='M0 3 Q5 0 10 3 T20 3' fill='none' stroke='%235B9BD5' stroke-width='1'/%3E%3C/svg%3E");
-    background-position: 0 100%;
-    background-repeat: repeat-x;
-    background-size: 20px 4px;
-    padding-bottom: 4px;
-}
-
-[data-theme="dark"] .text-link {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 4'%3E%3Cpath d='M0 3 Q5 0 10 3 T20 3' fill='none' stroke='%237FB3D5' stroke-width='1'/%3E%3C/svg%3E");
-}
-
 /* Tape effect for preview section - only show when visible */
 .preview-section:not([hidden])::before,
 .preview-section:not([hidden])::after {
@@ -259,8 +217,23 @@
     cursor: pointer;
 }
 
-/* Transition all color changes smoothly */
-*, *::before, *::after {
+/* Transition key interactive elements smoothly */
+.theme-toggle,
+.top-link,
+.primary-btn,
+.ghost-btn,
+.reset-btn,
+.filter-btn,
+.drop-zone,
+.hub-card,
+.option-box,
+.message-item,
+.message-item-title a,
+.chart-card,
+.insight-card,
+.message-panel,
+.stat-card,
+.file-status-item {
     transition:
         background-color var(--transition-normal),
         border-color var(--transition-normal),

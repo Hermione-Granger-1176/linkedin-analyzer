@@ -1,6 +1,7 @@
 /* Clean page logic */
+/* exported CleanPage */
 
-(function() {
+const CleanPage = (() => {
     'use strict';
 
     const PREVIEW_ROW_LIMIT = 5;
@@ -42,12 +43,32 @@
         connections: null
     };
 
+    let initialized = false;
+
     /**
      * Initialize the clean page: load files, bind events, update view.
      */
     async function init() {
-        await loadFiles();
+        if (initialized) {
+            return;
+        }
+        initialized = true;
         bindEvents();
+        await refresh();
+    }
+
+    /** Refresh file list and UI when route becomes active. */
+    async function onRouteChange() {
+        if (!initialized) {
+            await init();
+            return;
+        }
+        await refresh();
+    }
+
+    /** Reload files from storage and redraw the panel. */
+    async function refresh() {
+        await loadFiles();
         updateView();
     }
 
@@ -65,7 +86,17 @@
      * Load stored files from IndexedDB into local state.
      */
     async function loadFiles() {
-        const files = await Storage.getAllFiles();
+        let files = null;
+        if (typeof DataCache !== 'undefined') {
+            files = DataCache.get('storage:files') || null;
+        }
+        if (!files) {
+            files = await Storage.getAllFiles();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.set('storage:files', files);
+            }
+        }
+
         FILE_TYPE_ORDER.forEach(type => {
             storedFiles[type] = files.find(file => file.type === type) || null;
         });
@@ -138,7 +169,10 @@
 
         hideError();
 
-        if (!cache[type]) {
+        const cached = cache[type];
+        const fileUpdatedAt = file.updatedAt || 0;
+
+        if (!cached || cached.updatedAt !== fileUpdatedAt) {
             const processed = LinkedInCleaner.process(file.text, type);
             if (!processed.success) {
                 showError(processed.error || 'Unable to parse file.');
@@ -146,10 +180,13 @@
                 hideDownload();
                 return;
             }
-            cache[type] = processed;
+            cache[type] = {
+                updatedAt: fileUpdatedAt,
+                result: processed
+            };
         }
 
-        showPreview(cache[type], type);
+        showPreview(cache[type].result, type);
         showDownload();
     }
 
@@ -210,12 +247,12 @@
      */
     function handleDownload() {
         const type = getSelectedType();
-        const result = cache[type];
-        if (!result) {
+        const cached = cache[type];
+        if (!cached || !cached.result) {
             showError('No data to download.');
             return;
         }
-        const downloadResult = ExcelGenerator.generateAndDownload(result.cleanedData, type);
+        const downloadResult = ExcelGenerator.generateAndDownload(cached.result.cleanedData, type);
         if (!downloadResult.success) {
             showError(`Error generating Excel: ${downloadResult.error}`);
         }
@@ -260,9 +297,8 @@
         return value.slice(0, maxLength) + '...';
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    return {
+        init,
+        onRouteChange
+    };
 })();

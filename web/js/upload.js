@@ -1,6 +1,7 @@
 /* Upload page logic */
+/* exported UploadPage */
 
-(function() {
+const UploadPage = (() => {
     'use strict';
 
     const TRACKED_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
@@ -34,12 +35,26 @@
     let progressValue = 0;
     let progressAnimationId = null;
     let progressSessionId = 0;
+    let initialized = false;
 
     /** Initialize the upload page. */
     function init() {
+        if (initialized) {
+            return;
+        }
         if (!elements.dropZone || !elements.fileInput) return;
+        initialized = true;
         initWorker();
         bindEvents();
+        restoreState();
+    }
+
+    /** Refresh upload state when route becomes active. */
+    function onRouteChange() {
+        if (!initialized) {
+            init();
+            return;
+        }
         restoreState();
     }
 
@@ -75,7 +90,11 @@
 
         elements.openAnalyticsBtn.addEventListener('click', () => {
             if (!elements.openAnalyticsBtn.disabled) {
-                window.location.href = 'analytics.html';
+                if (typeof AppRouter !== 'undefined') {
+                    AppRouter.navigate('analytics', {}, { replaceHistory: false });
+                    return;
+                }
+                window.location.hash = '#analytics';
             }
         });
 
@@ -83,6 +102,10 @@
             await Storage.clearAll();
             if (worker) {
                 worker.postMessage({ type: 'clear' });
+            }
+            if (typeof DataCache !== 'undefined') {
+                DataCache.clear();
+                DataCache.notify({ type: 'storageCleared' });
             }
             resetProcessingState();
             updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
@@ -94,6 +117,9 @@
     /** Restore upload status from IndexedDB on page load. */
     async function restoreState() {
         const files = await Storage.getAllFiles();
+        if (typeof DataCache !== 'undefined') {
+            DataCache.set('storage:files', files);
+        }
         const fileMap = getFileMap(files);
         primeAnalyticsWorker(fileMap);
         const analyticsReady = await hasAnalyticsData();
@@ -248,7 +274,23 @@
                 await Storage.saveAnalytics(payload.analyticsBase);
             }
 
-            const files = await Storage.getAllFiles();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.invalidate('storage:');
+                DataCache.invalidate('clean:');
+                DataCache.invalidate('messages:');
+                DataCache.set('storage:files', await Storage.getAllFiles());
+                if (payload.analyticsBase) {
+                    DataCache.set('storage:analyticsBase', payload.analyticsBase);
+                }
+                DataCache.notify({ type: 'filesChanged', fileType });
+                if (payload.analyticsBase) {
+                    DataCache.notify({ type: 'analyticsChanged' });
+                }
+            }
+
+            const files = typeof DataCache !== 'undefined'
+                ? (DataCache.get('storage:files') || await Storage.getAllFiles())
+                : await Storage.getAllFiles();
             const fileMap = getFileMap(files);
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
@@ -390,7 +432,16 @@
      * @returns {Promise<boolean>}
      */
     async function hasAnalyticsData() {
-        const analyticsBase = await Storage.getAnalytics();
+        let analyticsBase = null;
+        if (typeof DataCache !== 'undefined') {
+            analyticsBase = DataCache.get('storage:analyticsBase') || null;
+        }
+        if (!analyticsBase) {
+            analyticsBase = await Storage.getAnalytics();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.set('storage:analyticsBase', analyticsBase);
+            }
+        }
         return Boolean(
             analyticsBase
             && analyticsBase.months
@@ -604,9 +655,8 @@
         elements.progressPercent.textContent = `${Math.round(value * 100)}%`;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    return {
+        init,
+        onRouteChange
+    };
 })();

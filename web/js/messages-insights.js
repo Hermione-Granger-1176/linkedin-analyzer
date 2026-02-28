@@ -1,6 +1,7 @@
 /* Messages insights page logic */
+/* exported MessagesPage */
 
-(function() {
+const MessagesPage = (() => {
     'use strict';
 
     const FILTER_DEFAULTS = Object.freeze({
@@ -45,6 +46,7 @@
         connectionState: null,
         hasConnectionsFile: false,
         connectionLoadError: null,
+        loadedSignature: null,
         currentLists: {
             topContacts: [],
             silentConnections: [],
@@ -52,10 +54,41 @@
         }
     };
 
+    let initialized = false;
+    let isApplyingRouteParams = false;
+
     /** Initialize messages page. */
     function init() {
+        if (initialized) {
+            return;
+        }
+        if (!elements.messagesLayout || !elements.messagesEmpty) {
+            return;
+        }
+        initialized = true;
         bindEvents();
+    }
+
+    /**
+     * Handle route activation and query param changes.
+     * @param {object} params - Route query params
+     */
+    function onRouteChange(params) {
+        if (!initialized) {
+            init();
+            if (!initialized) {
+                return;
+            }
+        }
+
+        const nextRange = parseRangeParam(params && params.range);
+        applyRangeFromRoute(nextRange);
         loadData();
+    }
+
+    /** Cleanup when leaving messages route. */
+    function onRouteLeave() {
+        showMessagesLoading(false);
     }
 
     /** Attach event listeners for filters. */
@@ -73,39 +106,82 @@
         if (elements.fadingConversationsExportBtn) {
             elements.fadingConversationsExportBtn.addEventListener('click', exportFadingConversations);
         }
+        elements.timeRangeButtons.forEach(button => {
+            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
+        });
         updateExportButtonStates();
     }
 
     /** Load messages and connections files from IndexedDB. */
     async function loadData() {
-        const files = await Storage.getAllFiles();
+        showMessagesLoading(true);
+
+        let files = null;
+        if (typeof DataCache !== 'undefined') {
+            files = DataCache.get('storage:files') || null;
+        }
+
+        if (!files) {
+            files = await Storage.getAllFiles();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.set('storage:files', files);
+            }
+        }
+
         const messagesFile = files.find(file => file.type === 'messages') || null;
         const connectionsFile = files.find(file => file.type === 'connections') || null;
         state.hasConnectionsFile = Boolean(connectionsFile);
 
+        const signature = buildDataSignature(messagesFile, connectionsFile);
+        if (signature === state.loadedSignature && state.messageState) {
+            renderView();
+            showMessagesLoading(false);
+            return;
+        }
+
         if (!messagesFile) {
+            state.loadedSignature = signature;
             setEmptyState(
                 'No messages data available yet',
                 'Upload messages.csv on the Home page to unlock messaging insights.'
             );
+            showMessagesLoading(false);
             return;
         }
 
+        const cachedState = getCachedState(signature);
+        if (cachedState) {
+            state.messageState = cachedState.messageState;
+            state.connectionState = cachedState.connectionState;
+            state.connectionLoadError = cachedState.connectionLoadError;
+            state.hasConnectionsFile = cachedState.hasConnectionsFile;
+            state.loadedSignature = signature;
+            renderView();
+            showMessagesLoading(false);
+            return;
+        }
+
+        await nextFrame();
+
         const messagesResult = LinkedInCleaner.process(messagesFile.text, 'messages');
         if (!messagesResult.success) {
+            state.loadedSignature = signature;
             setEmptyState(
                 'Messages parsing error',
                 messagesResult.error || 'Unable to parse messages.csv. Re-upload the file and try again.'
             );
+            showMessagesLoading(false);
             return;
         }
 
         state.messageState = buildMessageState(messagesResult.cleanedData);
         if (!state.messageState.events.length) {
+            state.loadedSignature = signature;
             setEmptyState(
                 'No usable message rows',
                 'The file loaded, but no valid message rows were found for analysis.'
             );
+            showMessagesLoading(false);
             return;
         }
 
@@ -123,7 +199,68 @@
             state.connectionLoadError = null;
         }
 
+        state.loadedSignature = signature;
+        cacheComputedState(signature);
         renderView();
+        showMessagesLoading(false);
+    }
+
+    /**
+     * Build a cache signature from uploaded file metadata.
+     * @param {object|null} messagesFile - Stored messages file
+     * @param {object|null} connectionsFile - Stored connections file
+     * @returns {string}
+     */
+    function buildDataSignature(messagesFile, connectionsFile) {
+        const toPart = (file, type) => {
+            if (!file) {
+                return `${type}:none`;
+            }
+            const updatedAt = file.updatedAt || 0;
+            const rowCount = file.rowCount || 0;
+            const name = file.name || 'unknown';
+            return `${type}:${name}:${updatedAt}:${rowCount}`;
+        };
+
+        return [toPart(messagesFile, 'messages'), toPart(connectionsFile, 'connections')].join('|');
+    }
+
+    /**
+     * Read computed analytics state from in-memory cache.
+     * @param {string} signature - Dataset signature
+     * @returns {object|null}
+     */
+    function getCachedState(signature) {
+        if (typeof DataCache === 'undefined') {
+            return null;
+        }
+        return DataCache.get(`messages:state:${signature}`) || null;
+    }
+
+    /**
+     * Persist computed analytics state in in-memory cache.
+     * @param {string} signature - Dataset signature
+     */
+    function cacheComputedState(signature) {
+        if (typeof DataCache === 'undefined') {
+            return;
+        }
+        DataCache.set(`messages:state:${signature}`, {
+            messageState: state.messageState,
+            connectionState: state.connectionState,
+            hasConnectionsFile: state.hasConnectionsFile,
+            connectionLoadError: state.connectionLoadError
+        });
+    }
+
+    /**
+     * Yield one frame so loading overlay can paint before heavy parsing.
+     * @returns {Promise<void>}
+     */
+    function nextFrame() {
+        return new Promise(resolve => {
+            requestAnimationFrame(() => resolve());
+        });
     }
 
     /**
@@ -142,6 +279,7 @@
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
         setActiveTimeRange(FILTER_DEFAULTS.timeRange);
+        syncRouteRange();
         renderView();
     }
 
@@ -152,6 +290,7 @@
     function applyTimeRange(range) {
         state.filters = { ...FILTER_DEFAULTS, timeRange: range };
         setActiveTimeRange(range);
+        syncRouteRange();
         renderView();
     }
 
@@ -161,8 +300,43 @@
      */
     function setActiveTimeRange(range) {
         elements.timeRangeButtons.forEach(button => {
-            button.classList.toggle('active', button.getAttribute('data-range') === range);
+            const isActive = button.getAttribute('data-range') === range;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
+    }
+
+    /**
+     * Parse route range query value.
+     * @param {string} value - Raw route value
+     * @returns {string}
+     */
+    function parseRangeParam(value) {
+        const range = String(value || '').toLowerCase();
+        return RANGE_MONTHS[range] || range === 'all' ? range : FILTER_DEFAULTS.timeRange;
+    }
+
+    /**
+     * Apply route-provided range without rewriting route.
+     * @param {string} range - Normalized range
+     */
+    function applyRangeFromRoute(range) {
+        isApplyingRouteParams = true;
+        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+        setActiveTimeRange(range);
+        isApplyingRouteParams = false;
+    }
+
+    /** Sync current range filter into route query params. */
+    function syncRouteRange() {
+        if (isApplyingRouteParams || typeof AppRouter === 'undefined') {
+            return;
+        }
+        const currentRoute = AppRouter.getCurrentRoute();
+        if (!currentRoute || currentRoute.name !== 'messages') {
+            return;
+        }
+        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
     }
 
     /** Build message analytics state from cleaned rows. */
@@ -1235,9 +1409,49 @@
         elements.messagesLayout.hidden = false;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+    /**
+     * Toggle loading overlay for messages screen.
+     * @param {boolean} isLoading - Whether loading is active
+     */
+    function showMessagesLoading(isLoading) {
+        if (isLoading) {
+            renderLoadingSkeleton();
+        }
+
+        if (typeof LoadingOverlay === 'undefined') {
+            return;
+        }
+        if (isLoading) {
+            LoadingOverlay.show('messages');
+            return;
+        }
+        LoadingOverlay.hide('messages');
     }
+
+    /** Render temporary skeleton rows while loading data. */
+    function renderLoadingSkeleton() {
+        elements.messagesEmpty.hidden = true;
+        elements.messagesLayout.hidden = false;
+        elements.messagesTip.hidden = true;
+
+        const skeletonItem = `
+            <li class="message-item skeleton-row">
+                <div class="message-item-main">
+                    <div class="skeleton-block skeleton-title"></div>
+                    <div class="skeleton-block skeleton-meta"></div>
+                </div>
+                <div class="skeleton-block skeleton-value"></div>
+            </li>
+        `;
+
+        elements.topContactsList.innerHTML = skeletonItem.repeat(3);
+        elements.silentConnectionsList.innerHTML = skeletonItem.repeat(3);
+        elements.fadingConversationsList.innerHTML = skeletonItem.repeat(3);
+    }
+
+    return {
+        init,
+        onRouteChange,
+        onRouteLeave
+    };
 })();

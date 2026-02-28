@@ -6,6 +6,8 @@ const AppRouter = (() => {
 
     const routes = new Map();
     const listeners = new Set();
+    const rememberedParams = new Map();
+    const sharedParamValues = new Map();
 
     let defaultRoute = 'home';
     let started = false;
@@ -51,7 +53,7 @@ const AppRouter = (() => {
     /**
      * Navigate to a route and params.
      * @param {string} name - Route name
-     * @param {object} [params] - Query params
+     * @param {object|undefined} [params] - Query params; undefined reuses last known params for route
      * @param {{replaceHistory?: boolean}} [options] - Navigation options
      */
     function navigate(name, params, options) {
@@ -59,7 +61,16 @@ const AppRouter = (() => {
         if (!normalized || !routes.has(normalized)) {
             return;
         }
-        setHash(normalized, params || {}, Boolean(options && options.replaceHistory));
+
+        const routeOptions = routes.get(normalized) || {};
+        const nextParams = params === undefined
+            ? (rememberedParams.get(normalized) || {})
+            : (params || {});
+
+        const merged = { ...nextParams };
+        applySharedParams(merged, routeOptions, params);
+
+        setHash(normalized, merged, Boolean(options && options.replaceHistory));
     }
 
     /**
@@ -186,6 +197,8 @@ const AppRouter = (() => {
             ? { name: currentState.name, params: { ...currentState.params } }
             : null;
         currentState = { name: next.name, params: { ...next.params } };
+        rememberedParams.set(currentState.name, { ...currentState.params });
+        rememberSharedParams(currentState);
 
         listeners.forEach(listener => {
             listener({
@@ -233,6 +246,89 @@ const AppRouter = (() => {
             .replace(/^#/, '')
             .replace(/^\//, '');
         return normalized;
+    }
+
+    /**
+     * Apply shared param values (e.g. time range) for routes that opt in.
+     * Explicit params always win.
+     * @param {object} nextParams - Params object that will be navigated to
+     * @param {object} routeOptions - Registered route options
+     * @param {object|undefined} providedParams - Original navigate() params argument
+     */
+    function applySharedParams(nextParams, routeOptions, providedParams) {
+        const keys = Array.isArray(routeOptions.sharedParams) ? routeOptions.sharedParams : [];
+        if (!keys.length) {
+            return;
+        }
+
+        keys.forEach(key => {
+            const hasExplicitValue = providedParams !== undefined
+                && Object.prototype.hasOwnProperty.call(providedParams, key);
+
+            if (hasExplicitValue) {
+                const explicitValue = providedParams[key];
+                if (explicitValue === null || explicitValue === undefined || explicitValue === '') {
+                    delete nextParams[key];
+                    return;
+                }
+                nextParams[key] = String(explicitValue);
+                return;
+            }
+
+            if (sharedParamValues.has(key)) {
+                nextParams[key] = sharedParamValues.get(key);
+                return;
+            }
+
+            const defaultValue = getDefaultParamValue(routeOptions, key);
+            if (defaultValue !== null) {
+                nextParams[key] = defaultValue;
+            }
+        });
+    }
+
+    /**
+     * Remember shared params from the current route for cross-tab reuse.
+     * @param {{name: string, params: object}} state - Current route state
+     */
+    function rememberSharedParams(state) {
+        const routeOptions = routes.get(state.name) || {};
+        const keys = Array.isArray(routeOptions.sharedParams) ? routeOptions.sharedParams : [];
+        if (!keys.length) {
+            return;
+        }
+
+        keys.forEach(key => {
+            const value = Object.prototype.hasOwnProperty.call(state.params, key)
+                ? state.params[key]
+                : getDefaultParamValue(routeOptions, key);
+            if (value === null || value === undefined || value === '') {
+                sharedParamValues.delete(key);
+                return;
+            }
+            sharedParamValues.set(key, String(value));
+        });
+    }
+
+    /**
+     * Get normalized default param value for a route key.
+     * @param {object} routeOptions - Registered route options
+     * @param {string} key - Param key
+     * @returns {string|null}
+     */
+    function getDefaultParamValue(routeOptions, key) {
+        const defaults = routeOptions && routeOptions.defaultParams
+            ? routeOptions.defaultParams
+            : null;
+        if (!defaults || !Object.prototype.hasOwnProperty.call(defaults, key)) {
+            return null;
+        }
+
+        const value = defaults[key];
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+        return String(value);
     }
 
     /**

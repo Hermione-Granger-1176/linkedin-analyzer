@@ -17,17 +17,29 @@
         {
             name: 'analytics',
             screenId: 'screen-analytics',
-            controller: () => (typeof AnalyticsPage !== 'undefined' ? AnalyticsPage : null)
+            controller: () => (typeof AnalyticsPage !== 'undefined' ? AnalyticsPage : null),
+            routerOptions: {
+                sharedParams: ['range'],
+                defaultParams: { range: '12m' }
+            }
         },
         {
             name: 'messages',
             screenId: 'screen-messages',
-            controller: () => (typeof MessagesPage !== 'undefined' ? MessagesPage : null)
+            controller: () => (typeof MessagesPage !== 'undefined' ? MessagesPage : null),
+            routerOptions: {
+                sharedParams: ['range'],
+                defaultParams: { range: '12m' }
+            }
         },
         {
             name: 'insights',
             screenId: 'screen-insights',
-            controller: () => (typeof InsightsPage !== 'undefined' ? InsightsPage : null)
+            controller: () => (typeof InsightsPage !== 'undefined' ? InsightsPage : null),
+            routerOptions: {
+                sharedParams: ['range'],
+                defaultParams: { range: '12m' }
+            }
         }
     ]);
 
@@ -50,7 +62,7 @@
     /** Register route names in router + screen manager. */
     function registerRoutes() {
         ROUTES.forEach(route => {
-            AppRouter.registerRoute(route.name, {});
+            AppRouter.registerRoute(route.name, route.routerOptions || {});
             ScreenManager.register(route.name, {
                 screenId: route.screenId,
                 controller: route.controller()
@@ -79,7 +91,7 @@
             }
 
             event.preventDefault();
-            AppRouter.navigate(routeName, {}, { replaceHistory: false });
+            AppRouter.navigate(routeName, undefined, { replaceHistory: false });
         });
     }
 

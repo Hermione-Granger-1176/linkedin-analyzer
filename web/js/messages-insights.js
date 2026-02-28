@@ -14,6 +14,7 @@ const MessagesPage = (() => {
         '12m': 12
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const MESSAGES_WORKER_URL = 'js/messages-worker.js?v=20260228-1';
 
     const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
         month: 'short',
@@ -56,6 +57,8 @@ const MessagesPage = (() => {
 
     let initialized = false;
     let isApplyingRouteParams = false;
+    let parseWorker = null;
+    let parseWorkerRequestId = 0;
 
     /** Initialize messages page. */
     function init() {
@@ -66,6 +69,7 @@ const MessagesPage = (() => {
             return;
         }
         initialized = true;
+        initWorker();
         bindEvents();
     }
 
@@ -109,7 +113,142 @@ const MessagesPage = (() => {
         elements.timeRangeButtons.forEach(button => {
             button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
         });
+
+        window.addEventListener('beforeunload', terminateWorker);
+        window.addEventListener('pagehide', terminateWorker);
+
         updateExportButtonStates();
+    }
+
+    /** Initialize background worker for messages/connections parsing. */
+    function initWorker() {
+        if (parseWorker || typeof Worker === 'undefined') {
+            return;
+        }
+
+        try {
+            parseWorker = new Worker(MESSAGES_WORKER_URL);
+        } catch {
+            parseWorker = null;
+        }
+    }
+
+    /** Terminate messages parsing worker. */
+    function terminateWorker() {
+        if (!parseWorker) {
+            return;
+        }
+        parseWorker.terminate();
+        parseWorker = null;
+    }
+
+    /**
+     * Parse messages/connections in a worker when available.
+     * Falls back to main-thread parsing if worker is unavailable or fails.
+     * @param {string} messagesCsv - Raw messages CSV text
+     * @param {string} connectionsCsv - Raw connections CSV text
+     * @returns {Promise<object>}
+     */
+    async function processFiles(messagesCsv, connectionsCsv) {
+        if (!parseWorker) {
+            initWorker();
+        }
+        const workerResult = await processFilesInWorker(messagesCsv, connectionsCsv);
+        if (workerResult) {
+            return workerResult;
+        }
+        return processFilesOnMainThread(messagesCsv, connectionsCsv);
+    }
+
+    /**
+     * Parse files using a dedicated Web Worker.
+     * @param {string} messagesCsv - Raw messages CSV text
+     * @param {string} connectionsCsv - Raw connections CSV text
+     * @returns {Promise<object|null>} Parsed payload or null on worker failure
+     */
+    function processFilesInWorker(messagesCsv, connectionsCsv) {
+        if (!parseWorker) {
+            return Promise.resolve(null);
+        }
+
+        const requestId = ++parseWorkerRequestId;
+
+        return new Promise(resolve => {
+            const handleMessage = (event) => {
+                const message = event.data || {};
+                if (message.type !== 'processed' || message.requestId !== requestId) {
+                    return;
+                }
+                cleanup();
+                resolve(message.payload || null);
+            };
+
+            const handleError = () => {
+                cleanup();
+                terminateWorker();
+                resolve(null);
+            };
+
+            const cleanup = () => {
+                if (!parseWorker) {
+                    return;
+                }
+                parseWorker.removeEventListener('message', handleMessage);
+                parseWorker.removeEventListener('error', handleError);
+            };
+
+            try {
+                parseWorker.addEventListener('message', handleMessage);
+                parseWorker.addEventListener('error', handleError);
+                parseWorker.postMessage({
+                    type: 'process',
+                    requestId,
+                    payload: {
+                        messagesCsv,
+                        connectionsCsv
+                    }
+                });
+            } catch {
+                cleanup();
+                terminateWorker();
+                resolve(null);
+            }
+        });
+    }
+
+    /**
+     * Parse files directly on main thread as fallback.
+     * @param {string} messagesCsv - Raw messages CSV text
+     * @param {string} connectionsCsv - Raw connections CSV text
+     * @returns {object}
+     */
+    function processFilesOnMainThread(messagesCsv, connectionsCsv) {
+        const messagesResult = LinkedInCleaner.process(messagesCsv, 'messages');
+        if (!messagesResult.success) {
+            return {
+                success: false,
+                error: messagesResult.error || 'Unable to parse messages.csv.'
+            };
+        }
+
+        let connectionsData = [];
+        let connectionError = null;
+
+        if (connectionsCsv) {
+            const connectionsResult = LinkedInCleaner.process(connectionsCsv, 'connections');
+            if (connectionsResult.success) {
+                connectionsData = connectionsResult.cleanedData;
+            } else {
+                connectionError = connectionsResult.error || 'Unable to parse Connections.csv.';
+            }
+        }
+
+        return {
+            success: true,
+            messagesData: messagesResult.cleanedData,
+            connectionsData,
+            connectionError
+        };
     }
 
     /** Load messages and connections files from IndexedDB. */
@@ -163,18 +302,22 @@ const MessagesPage = (() => {
 
         await nextFrame();
 
-        const messagesResult = LinkedInCleaner.process(messagesFile.text, 'messages');
-        if (!messagesResult.success) {
+        const processed = await processFiles(
+            messagesFile.text,
+            connectionsFile ? connectionsFile.text : ''
+        );
+
+        if (!processed.success) {
             state.loadedSignature = signature;
             setEmptyState(
                 'Messages parsing error',
-                messagesResult.error || 'Unable to parse messages.csv. Re-upload the file and try again.'
+                processed.error || 'Unable to parse messages.csv. Re-upload the file and try again.'
             );
             showMessagesLoading(false);
             return;
         }
 
-        state.messageState = buildMessageState(messagesResult.cleanedData);
+        state.messageState = buildMessageState(processed.messagesData || []);
         if (!state.messageState.events.length) {
             state.loadedSignature = signature;
             setEmptyState(
@@ -185,19 +328,8 @@ const MessagesPage = (() => {
             return;
         }
 
-        if (connectionsFile) {
-            const connectionsResult = LinkedInCleaner.process(connectionsFile.text, 'connections');
-            if (connectionsResult.success) {
-                state.connectionState = buildConnectionState(connectionsResult.cleanedData);
-                state.connectionLoadError = null;
-            } else {
-                state.connectionState = buildConnectionState([]);
-                state.connectionLoadError = connectionsResult.error || 'Unable to parse Connections.csv.';
-            }
-        } else {
-            state.connectionState = buildConnectionState([]);
-            state.connectionLoadError = null;
-        }
+        state.connectionState = buildConnectionState(processed.connectionsData || []);
+        state.connectionLoadError = processed.connectionError || null;
 
         state.loadedSignature = signature;
         cacheComputedState(signature);

@@ -255,40 +255,53 @@ const AnalyticsPage = (() => {
     function handleWorkerMessage(event) {
         const message = event.data || {};
 
-        if (message.type === 'init') {
-            state.analyticsReady = true;
-            state.hasData = Boolean(message.payload && message.payload.hasData);
-            updateVisibility();
-            scheduleViewRequest(true);
-            return;
-        }
-
-        if (message.type === 'view') {
-            if (message.requestId !== pendingViewId) {
+        switch (message.type) {
+            case 'init':
+                state.analyticsReady = true;
+                state.hasData = Boolean(message.payload && message.payload.hasData);
+                updateVisibility();
+                scheduleViewRequest(true);
                 return;
-            }
-            const payload = message.payload || {};
-            state.currentView = payload.view || null;
-            if (state.currentView) {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        renderAnalyticsView(state.currentView);
-                    });
-                });
-            } else {
-                showAnalyticsLoading(false);
-            }
+            case 'view':
+                if (message.requestId !== pendingViewId) {
+                    return;
+                }
+                applyWorkerViewPayload(message.payload || {});
+                return;
+            case 'error':
+                setEmptyState('Analytics error', getWorkerMessage(message.payload, 'Analytics worker error.'));
+                return;
+            default:
+                return;
+        }
+    }
+
+    /**
+     * Apply worker view payload to analytics state and trigger rendering.
+     * @param {object} payload - Worker payload
+     */
+    function applyWorkerViewPayload(payload) {
+        state.currentView = payload.view || null;
+        if (!state.currentView) {
+            showAnalyticsLoading(false);
             return;
         }
 
-        if (message.type === 'error') {
-            setEmptyState(
-                'Analytics error',
-                message.payload && message.payload.message
-                    ? message.payload.message
-                    : 'Analytics worker error.'
-            );
-        }
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                renderAnalyticsView(state.currentView);
+            });
+        });
+    }
+
+    /**
+     * Resolve a worker message text with fallback.
+     * @param {object} payload - Worker payload
+     * @param {string} fallback - Fallback message
+     * @returns {string}
+     */
+    function getWorkerMessage(payload, fallback) {
+        return payload && payload.message ? payload.message : fallback;
     }
 
     /** Handle worker-level errors. */

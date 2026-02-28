@@ -105,7 +105,6 @@
     75% { transform: rotate(-0.5deg); }
 }
 
-.hub-card:hover,
 .download-btn:hover,
 .primary-btn:hover {
     animation: wobble 0.3s ease-in-out;
@@ -172,7 +171,6 @@
 }
 
 .upload-layout,
-.hub-grid,
 .analytics-grid,
 .insights-grid,
 .messages-layout,

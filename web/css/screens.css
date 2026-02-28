@@ -52,7 +52,6 @@
 }
 
 .chart-card,
-.hub-card,
 .upload-status-card,
 .insight-card,
 .message-panel,
@@ -62,7 +61,6 @@
     animation-fill-mode: both;
 }
 
-.hub-grid .hub-card:nth-child(1),
 .message-panels .message-panel:nth-child(1),
 .insights-grid .insight-card:nth-child(1),
 .analytics-grid .chart-card:nth-child(1),
@@ -70,7 +68,6 @@
     animation-delay: 40ms;
 }
 
-.hub-grid .hub-card:nth-child(2),
 .message-panels .message-panel:nth-child(2),
 .insights-grid .insight-card:nth-child(2),
 .analytics-grid .chart-card:nth-child(2),
@@ -78,7 +75,6 @@
     animation-delay: 90ms;
 }
 
-.hub-grid .hub-card:nth-child(3),
 .message-panels .message-panel:nth-child(3),
 .insights-grid .insight-card:nth-child(3),
 .analytics-grid .chart-card:nth-child(3),
@@ -86,7 +82,6 @@
     animation-delay: 140ms;
 }
 
-.hub-grid .hub-card:nth-child(4),
 .insights-grid .insight-card:nth-child(4),
 .stats-grid .stat-card:nth-child(4) {
     animation-delay: 190ms;
@@ -112,7 +107,6 @@
     .screen.enter,
     .screen.exit,
     .chart-card,
-    .hub-card,
     .upload-status-card,
     .insight-card,
     .message-panel,

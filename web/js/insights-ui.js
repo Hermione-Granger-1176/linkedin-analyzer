@@ -184,36 +184,48 @@ const InsightsPage = (() => {
     function handleWorkerMessage(event) {
         const message = event.data || {};
 
-        if (message.type === 'init') {
-            state.analyticsReady = true;
-            state.hasData = Boolean(message.payload && message.payload.hasData);
-            updateVisibility();
-            requestView();
-            return;
-        }
-
-        if (message.type === 'view') {
-            if (message.requestId !== pendingViewId) {
+        switch (message.type) {
+            case 'init':
+                state.analyticsReady = true;
+                state.hasData = Boolean(message.payload && message.payload.hasData);
+                updateVisibility();
+                requestView();
                 return;
-            }
-            const payload = message.payload || {};
-            state.currentInsights = payload.insights || null;
-            if (state.currentInsights) {
-                renderInsights(state.currentInsights);
-            }
-            showInsightsLoading(false);
-            return;
+            case 'view':
+                if (message.requestId !== pendingViewId) {
+                    return;
+                }
+                applyWorkerInsightsPayload(message.payload || {});
+                return;
+            case 'error':
+                setEmptyState('Insights error', getWorkerMessage(message.payload, 'Analytics worker error.'));
+                showInsightsLoading(false);
+                return;
+            default:
+                return;
         }
+    }
 
-        if (message.type === 'error') {
-            setEmptyState(
-                'Insights error',
-                message.payload && message.payload.message
-                    ? message.payload.message
-                    : 'Analytics worker error.'
-            );
-            showInsightsLoading(false);
+    /**
+     * Apply worker insights payload and render current cards.
+     * @param {object} payload - Worker payload
+     */
+    function applyWorkerInsightsPayload(payload) {
+        state.currentInsights = payload.insights || null;
+        if (state.currentInsights) {
+            renderInsights(state.currentInsights);
         }
+        showInsightsLoading(false);
+    }
+
+    /**
+     * Resolve a worker message text with fallback.
+     * @param {object} payload - Worker payload
+     * @param {string} fallback - Fallback message
+     * @returns {string}
+     */
+    function getWorkerMessage(payload, fallback) {
+        return payload && payload.message ? payload.message : fallback;
     }
 
     /** Handle worker-level errors. */

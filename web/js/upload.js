@@ -42,7 +42,9 @@ const UploadPage = (() => {
         if (initialized) {
             return;
         }
-        if (!elements.dropZone || !elements.fileInput) return;
+        if (!elements.dropZone || !elements.fileInput) {
+            return;
+        }
         initialized = true;
         initWorker();
         bindEvents();
@@ -60,7 +62,9 @@ const UploadPage = (() => {
 
     /** Create the analytics Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined') return;
+        if (typeof Worker === 'undefined') {
+            return;
+        }
         try {
             worker = new Worker(WORKER_URL);
             worker.addEventListener('message', handleWorkerMessage);
@@ -89,13 +93,16 @@ const UploadPage = (() => {
         window.addEventListener('drop', (event) => event.preventDefault());
 
         elements.openAnalyticsBtn.addEventListener('click', () => {
-            if (!elements.openAnalyticsBtn.disabled) {
-                if (typeof AppRouter !== 'undefined') {
-                    AppRouter.navigate('analytics', {}, { replaceHistory: false });
-                    return;
-                }
-                window.location.hash = '#analytics';
+            if (elements.openAnalyticsBtn.disabled) {
+                return;
             }
+
+            if (typeof AppRouter !== 'undefined') {
+                AppRouter.navigate('analytics', undefined, { replaceHistory: false });
+                return;
+            }
+
+            window.location.hash = '#analytics';
         });
 
         elements.clearAllBtn.addEventListener('click', async () => {
@@ -319,15 +326,16 @@ const UploadPage = (() => {
             return null;
         }
 
-        for (const [key, pending] of pendingFiles.entries()) {
-            if (pending.fileName !== fileName) {
-                continue;
-            }
-            pendingFiles.delete(key);
-            return pending;
+        const match = Array.from(pendingFiles.entries()).find(([, pending]) => {
+            return pending.fileName === fileName;
+        });
+        if (!match) {
+            return null;
         }
 
-        return null;
+        const [key, pending] = match;
+        pendingFiles.delete(key);
+        return pending;
     }
 
     /** Handle worker-level errors. */

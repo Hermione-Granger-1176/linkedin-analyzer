@@ -59,6 +59,8 @@ class TestCleanerConfig:
             ),
         )
         assert config.required_columns == ["Date", "Link", "Message"]
+        assert config.skiprows == 0
+        assert config.drop_if_all_missing == ()
 
     def test_column_widths(self) -> None:
         config = CleanerConfig(
@@ -96,6 +98,24 @@ class TestCleanerConfig:
             ),
         )
         assert config.wrap_text_columns == [1, 3]
+
+    def test_skiprows(self) -> None:
+        config = CleanerConfig(
+            input_path=Path("input.csv"),
+            output_path=Path("output.xlsx"),
+            columns=(ColumnConfig(name="A"),),
+            skiprows=3,
+        )
+        assert config.skiprows == 3
+
+    def test_drop_if_all_missing(self) -> None:
+        config = CleanerConfig(
+            input_path=Path("input.csv"),
+            output_path=Path("output.xlsx"),
+            columns=(ColumnConfig(name="A"),),
+            drop_if_all_missing=("A", "B"),
+        )
+        assert config.drop_if_all_missing == ("A", "B")
 
 
 class TestCleanerResult:

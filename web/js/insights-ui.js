@@ -1,6 +1,7 @@
 /* Insights page logic */
+/* exported InsightsPage */
 
-(function() {
+const InsightsPage = (() => {
     'use strict';
 
     const FILTER_DEFAULTS = Object.freeze({
@@ -12,14 +13,8 @@
         shareType: 'all'
     });
 
-    const elements = {
-        timeRangeButtons: document.querySelectorAll('#timeRangeButtons .filter-btn'),
-        resetFiltersBtn: document.getElementById('resetFiltersBtn'),
-        insightsEmpty: document.getElementById('insightsEmpty'),
-        insightsGrid: document.getElementById('insightsGrid'),
-        insightTip: document.getElementById('insightTip'),
-        insightTipText: document.getElementById('insightTipText')
-    };
+    const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
+    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
 
     const state = {
         filters: { ...FILTER_DEFAULTS },
@@ -28,36 +23,108 @@
         currentInsights: null
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-5';
-
+    let elements = null;
     let worker = null;
     let requestId = 0;
     let pendingViewId = 0;
+    let initialized = false;
+    let needsBaseReload = true;
+    let isApplyingRouteParams = false;
 
-    /**
-     * Initialize insights page: bind events, start worker, load data.
-     */
+    /** Initialize insights page dependencies. */
     function init() {
+        if (initialized) {
+            return;
+        }
+
+        elements = resolveElements();
+        if (!elements.insightsGrid || !elements.insightsEmpty) {
+            return;
+        }
+
+        initialized = true;
         bindEvents();
         initWorker();
-        loadBase();
+
+        if (typeof DataCache !== 'undefined') {
+            DataCache.subscribe(handleCacheChange);
+        }
     }
 
     /**
-     * Attach event listeners for time range buttons and reset.
+     * Handle route activation and query param changes.
+     * @param {object} params - Route query params
      */
+    function onRouteChange(params) {
+        if (!initialized) {
+            init();
+            if (!initialized) {
+                return;
+            }
+        }
+
+        const range = parseRangeParam(params && params.range);
+        applyRangeFromRoute(range);
+
+        if (needsBaseReload || !state.analyticsReady) {
+            loadBase();
+            return;
+        }
+
+        if (!state.hasData) {
+            updateVisibility();
+            return;
+        }
+
+        requestView();
+    }
+
+    /** Cleanup when leaving route. */
+    function onRouteLeave() {
+        showInsightsLoading(false);
+    }
+
+    /** Resolve insights DOM references. */
+    function resolveElements() {
+        return {
+            timeRangeButtons: document.querySelectorAll('#insightsTimeRangeButtons .filter-btn'),
+            resetFiltersBtn: document.getElementById('insightsResetFiltersBtn'),
+            insightsEmpty: document.getElementById('insightsEmpty'),
+            insightsGrid: document.getElementById('insightsGrid'),
+            insightTip: document.getElementById('insightTip'),
+            insightTipText: document.getElementById('insightTipText')
+        };
+    }
+
+    /** Attach event listeners for time range buttons and reset. */
     function bindEvents() {
         elements.timeRangeButtons.forEach(button => {
             button.addEventListener('click', () => handleTimeRangeChange(button));
+            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
         });
-        elements.resetFiltersBtn.addEventListener('click', resetFilters);
+        if (elements.resetFiltersBtn) {
+            elements.resetFiltersBtn.addEventListener('click', resetFilters);
+        }
     }
 
-    /**
-     * Create the analytics Web Worker.
-     */
+    /** Handle cache notifications from uploads/clear operations. */
+    function handleCacheChange(event) {
+        const type = event && event.type;
+        if (type !== 'analyticsChanged' && type !== 'storageCleared' && type !== 'filesChanged') {
+            return;
+        }
+        needsBaseReload = true;
+        state.analyticsReady = false;
+        state.hasData = false;
+        state.currentInsights = null;
+    }
+
+    /** Create the analytics Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined') return;
+        if (typeof Worker === 'undefined' || worker) {
+            return;
+        }
+
         try {
             worker = new Worker(WORKER_URL);
             worker.addEventListener('message', handleWorkerMessage);
@@ -68,24 +135,46 @@
         }
     }
 
-    /**
-     * Load analytics base from IndexedDB and send to worker.
-     */
+    /** Load analytics base from IndexedDB and send to worker. */
     async function loadBase() {
-        const analyticsBase = await Storage.getAnalytics();
-        if (!analyticsBase || !analyticsBase.months) {
-            setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
-            return;
+        showInsightsLoading(true);
+
+        try {
+            initWorker();
+            if (!worker) {
+                setEmptyState('Insights not supported', 'Your browser does not support analytics workers.');
+                showInsightsLoading(false);
+                return;
+            }
+
+            let analyticsBase = null;
+            if (typeof DataCache !== 'undefined') {
+                analyticsBase = DataCache.get('storage:analyticsBase') || null;
+            }
+
+            if (!analyticsBase) {
+                analyticsBase = await Storage.getAnalytics();
+                if (typeof DataCache !== 'undefined') {
+                    DataCache.set('storage:analyticsBase', analyticsBase);
+                }
+            }
+
+            if (!analyticsBase || !analyticsBase.months) {
+                setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
+                needsBaseReload = false;
+                showInsightsLoading(false);
+                return;
+            }
+
+            worker.postMessage({
+                type: 'initBase',
+                payload: analyticsBase
+            });
+            needsBaseReload = false;
+        } catch {
+            setEmptyState('Storage error', 'Unable to load saved analytics. Please re-upload your files.');
+            showInsightsLoading(false);
         }
-        if (!worker) {
-            setEmptyState('Insights not supported', 'Your browser does not support analytics workers.');
-            return;
-        }
-        setEmptyState('Preparing insights', 'Crunching your data in the background.');
-        worker.postMessage({
-            type: 'initBase',
-            payload: analyticsBase
-        });
     }
 
     /**
@@ -94,39 +183,64 @@
      */
     function handleWorkerMessage(event) {
         const message = event.data || {};
-        if (message.type === 'init') {
-            state.analyticsReady = true;
-            state.hasData = Boolean(message.payload && message.payload.hasData);
-            updateVisibility();
-            requestView();
-            return;
-        }
-        if (message.type === 'view') {
-            if (message.requestId !== pendingViewId) return;
-            const payload = message.payload || {};
-            state.currentInsights = payload.insights || null;
-            if (state.currentInsights) {
-                renderInsights(state.currentInsights);
-            }
-            return;
-        }
-        if (message.type === 'error') {
-            setEmptyState('Insights error', message.payload && message.payload.message ? message.payload.message : 'Analytics worker error.');
+
+        switch (message.type) {
+            case 'init':
+                state.analyticsReady = true;
+                state.hasData = Boolean(message.payload && message.payload.hasData);
+                updateVisibility();
+                requestView();
+                return;
+            case 'view':
+                if (message.requestId !== pendingViewId) {
+                    return;
+                }
+                applyWorkerInsightsPayload(message.payload || {});
+                return;
+            case 'error':
+                setEmptyState('Insights error', getWorkerMessage(message.payload, 'Analytics worker error.'));
+                showInsightsLoading(false);
+                return;
+            default:
+                return;
         }
     }
 
     /**
-     * Handle worker-level errors.
+     * Apply worker insights payload and render current cards.
+     * @param {object} payload - Worker payload
      */
+    function applyWorkerInsightsPayload(payload) {
+        state.currentInsights = payload.insights || null;
+        if (state.currentInsights) {
+            renderInsights(state.currentInsights);
+        }
+        showInsightsLoading(false);
+    }
+
+    /**
+     * Resolve a worker message text with fallback.
+     * @param {object} payload - Worker payload
+     * @param {string} fallback - Fallback message
+     * @returns {string}
+     */
+    function getWorkerMessage(payload, fallback) {
+        return payload && payload.message ? payload.message : fallback;
+    }
+
+    /** Handle worker-level errors. */
     function handleWorkerError() {
         setEmptyState('Insights worker error', 'Refresh the page and try again.');
+        showInsightsLoading(false);
     }
 
-    /**
-     * Send a view request to the worker with current filters.
-     */
+    /** Send a view request to the worker with current filters. */
     function requestView() {
-        if (!worker || !state.analyticsReady || !state.hasData) return;
+        if (!worker || !state.analyticsReady || !state.hasData) {
+            return;
+        }
+
+        showInsightsLoading(true);
         const id = ++requestId;
         pendingViewId = id;
         worker.postMessage({
@@ -142,16 +256,17 @@
      */
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
-        if (!range) return;
+        if (!range) {
+            return;
+        }
         applyTimeRange(range);
     }
 
-    /**
-     * Reset all filters to defaults and request a fresh view.
-     */
+    /** Reset all filters to defaults and request a fresh view. */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
         setActiveTimeRange(FILTER_DEFAULTS.timeRange);
+        syncRouteRange();
         requestView();
     }
 
@@ -160,8 +275,10 @@
      * @param {string} range - The time range key to apply.
      */
     function applyTimeRange(range) {
-        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
-        setActiveTimeRange(range);
+        const nextRange = parseRangeParam(range);
+        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
+        setActiveTimeRange(nextRange);
+        syncRouteRange();
         requestView();
     }
 
@@ -171,13 +288,13 @@
      */
     function setActiveTimeRange(range) {
         elements.timeRangeButtons.forEach(btn => {
-            btn.classList.toggle('active', btn.getAttribute('data-range') === range);
+            const isActive = btn.getAttribute('data-range') === range;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
     }
 
-    /**
-     * Toggle empty state vs insights grid based on data availability.
-     */
+    /** Toggle empty state vs insights grid based on data availability. */
     function updateVisibility() {
         if (!state.hasData) {
             setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
@@ -193,6 +310,7 @@
     function renderInsights(payload) {
         const insights = payload.insights || [];
         const tip = payload.tip || null;
+
         elements.insightsGrid.innerHTML = '';
         insights.slice(0, 6).forEach(insight => {
             const card = document.createElement('div');
@@ -224,19 +342,91 @@
     function setEmptyState(title, message) {
         const heading = elements.insightsEmpty.querySelector('h2');
         const text = elements.insightsEmpty.querySelector('p');
-        if (heading) heading.textContent = title;
-        if (text) text.textContent = message;
+        if (heading) {
+            heading.textContent = title;
+        }
+        if (text) {
+            text.textContent = message;
+        }
         elements.insightsEmpty.hidden = false;
         elements.insightsGrid.hidden = true;
         elements.insightTip.hidden = true;
     }
 
-    /**
-     * Hide empty state and show insights grid.
-     */
+    /** Hide empty state and show insights grid. */
     function hideEmptyState() {
         elements.insightsEmpty.hidden = true;
         elements.insightsGrid.hidden = false;
+    }
+
+    /**
+     * Parse route range query value.
+     * @param {string} value - Raw route value
+     * @returns {string}
+     */
+    function parseRangeParam(value) {
+        const range = String(value || '').toLowerCase();
+        return RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
+    }
+
+    /**
+     * Apply route-provided range without rewriting route.
+     * @param {string} range - Normalized range
+     */
+    function applyRangeFromRoute(range) {
+        isApplyingRouteParams = true;
+        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+        setActiveTimeRange(range);
+        isApplyingRouteParams = false;
+    }
+
+    /** Sync current range filter into route query params. */
+    function syncRouteRange() {
+        if (isApplyingRouteParams || typeof AppRouter === 'undefined') {
+            return;
+        }
+        const currentRoute = AppRouter.getCurrentRoute();
+        if (!currentRoute || currentRoute.name !== 'insights') {
+            return;
+        }
+        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
+    }
+
+    /**
+     * Toggle loading overlay for insights screen.
+     * @param {boolean} isLoading - Whether loading is active
+     */
+    function showInsightsLoading(isLoading) {
+        if (isLoading && !state.currentInsights) {
+            renderInsightsSkeleton();
+        }
+
+        if (typeof LoadingOverlay === 'undefined') {
+            return;
+        }
+        if (isLoading) {
+            LoadingOverlay.show('insights');
+            return;
+        }
+        LoadingOverlay.hide('insights');
+    }
+
+    /** Render temporary skeleton cards while insights are loading. */
+    function renderInsightsSkeleton() {
+        elements.insightsEmpty.hidden = true;
+        elements.insightsGrid.hidden = false;
+        elements.insightTip.hidden = true;
+
+        elements.insightsGrid.innerHTML = `
+            <div class="insight-card skeleton-insight">
+                <div class="skeleton-block skeleton-icon"></div>
+                <div class="skeleton-body">
+                    <div class="skeleton-block skeleton-title"></div>
+                    <div class="skeleton-block skeleton-meta skeleton-meta--wide"></div>
+                    <div class="skeleton-block skeleton-meta skeleton-meta--mid"></div>
+                </div>
+            </div>
+        `.repeat(3);
     }
 
     /**
@@ -270,9 +460,9 @@
         return icons[name] || icons.calendar;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    return {
+        init,
+        onRouteChange,
+        onRouteLeave
+    };
 })();

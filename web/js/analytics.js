@@ -768,13 +768,10 @@ const AnalyticsEngine = (() => {
         const latestDay = days[days.length - 1];
         let cursor = parseDay(latestDay);
         let current = 1;
-        let prev = addDays(cursor, -1);
-        let key = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
-        while (daySet.has(key)) {
+
+        for (let prev = addDays(cursor, -1); daySet.has(formatDateKey(prev)); prev = addDays(prev, -1)) {
             current++;
             cursor = prev;
-            prev = addDays(cursor, -1);
-            key = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
         }
 
         return { current, longest };

@@ -7,9 +7,9 @@
 .preview-section,
 .download-btn,
 .error-message,
-.privacy-notice,
 .insight-card,
-.progress-card {
+.progress-card,
+.message-panel {
     transform: rotate(calc(var(--sketch-rotate, 0) * 0.1deg));
 }
 
@@ -41,7 +41,9 @@
 .hub-card,
 .chart-card,
 .upload-status-card,
-.insight-card {
+.insight-card,
+.message-panel,
+.message-item {
     border-radius: 14px 12px 15px 13px / 12px 15px 13px 14px;
 }
 
@@ -103,7 +105,6 @@
     75% { transform: rotate(-0.5deg); }
 }
 
-.hub-card:hover,
 .download-btn:hover,
 .primary-btn:hover {
     animation: wobble 0.3s ease-in-out;
@@ -131,47 +132,6 @@
     );
     border-radius: 2px;
     opacity: 0.5;
-}
-
-/* Paper fold effect */
-.privacy-notice::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 20px;
-    height: 20px;
-    background: linear-gradient(
-        135deg,
-        transparent 50%,
-        var(--bg-tertiary) 50%
-    );
-    border-bottom-left-radius: 4px;
-}
-
-/* Highlight marker effect */
-.highlight {
-    background: linear-gradient(
-        180deg,
-        transparent 60%,
-        var(--accent-yellow-light) 60%
-    );
-    padding: 0 4px;
-}
-
-/* Squiggly underline for text links */
-.text-link {
-    text-decoration: none;
-    color: var(--accent-blue);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 4'%3E%3Cpath d='M0 3 Q5 0 10 3 T20 3' fill='none' stroke='%235B9BD5' stroke-width='1'/%3E%3C/svg%3E");
-    background-position: 0 100%;
-    background-repeat: repeat-x;
-    background-size: 20px 4px;
-    padding-bottom: 4px;
-}
-
-[data-theme="dark"] .text-link {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 4'%3E%3Cpath d='M0 3 Q5 0 10 3 T20 3' fill='none' stroke='%237FB3D5' stroke-width='1'/%3E%3C/svg%3E");
 }
 
 /* Tape effect for preview section - only show when visible */
@@ -211,9 +171,10 @@
 }
 
 .upload-layout,
-.hub-grid,
 .analytics-grid,
-.insights-grid {
+.insights-grid,
+.messages-layout,
+.message-panels {
     animation: sketch-in 0.5s ease-out;
 }
 
@@ -254,8 +215,23 @@
     cursor: pointer;
 }
 
-/* Transition all color changes smoothly */
-*, *::before, *::after {
+/* Transition key interactive elements smoothly */
+.theme-toggle,
+.top-link,
+.primary-btn,
+.ghost-btn,
+.reset-btn,
+.filter-btn,
+.drop-zone,
+.hub-card,
+.option-box,
+.message-item,
+.message-item-title a,
+.chart-card,
+.insight-card,
+.message-panel,
+.stat-card,
+.file-status-item {
     transition:
         background-color var(--transition-normal),
         border-color var(--transition-normal),

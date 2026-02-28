@@ -1,44 +1,70 @@
 /* Upload page logic */
+/* exported UploadPage */
 
-(function() {
+const UploadPage = (() => {
     'use strict';
+
+    const TRACKED_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
 
     const elements = {
         dropZone: document.getElementById('multiDropZone'),
         fileInput: document.getElementById('multiFileInput'),
         sharesStatus: document.getElementById('sharesStatus'),
         commentsStatus: document.getElementById('commentsStatus'),
+        messagesStatus: document.getElementById('messagesStatus'),
+        connectionsStatus: document.getElementById('connectionsStatus'),
         uploadHint: document.getElementById('uploadHint'),
         openAnalyticsBtn: document.getElementById('openAnalyticsBtn'),
         clearAllBtn: document.getElementById('clearAllBtn'),
         fileStatusItems: {
             shares: document.querySelector('.file-status-item[data-file="shares"]'),
-            comments: document.querySelector('.file-status-item[data-file="comments"]')
+            comments: document.querySelector('.file-status-item[data-file="comments"]'),
+            messages: document.querySelector('.file-status-item[data-file="messages"]'),
+            connections: document.querySelector('.file-status-item[data-file="connections"]')
         },
         progressOverlay: document.getElementById('progressOverlay'),
         progressCanvas: document.getElementById('progressCanvas'),
         progressPercent: document.getElementById('progressPercent')
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-5';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
 
     let worker = null;
     const pendingFiles = new Map();
     let activeJobs = 0;
     let progressValue = 0;
     let progressAnimationId = null;
+    let progressSessionId = 0;
+    let initialized = false;
 
     /** Initialize the upload page. */
     function init() {
-        if (!elements.dropZone || !elements.fileInput) return;
+        if (initialized) {
+            return;
+        }
+        if (!elements.dropZone || !elements.fileInput) {
+            return;
+        }
+        initialized = true;
         initWorker();
         bindEvents();
         restoreState();
     }
 
+    /** Refresh upload state when route becomes active. */
+    function onRouteChange() {
+        if (!initialized) {
+            init();
+            return;
+        }
+        restoreState();
+    }
+
     /** Create the analytics Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined') return;
+        if (typeof Worker === 'undefined') {
+            return;
+        }
         try {
             worker = new Worker(WORKER_URL);
             worker.addEventListener('message', handleWorkerMessage);
@@ -67,9 +93,16 @@
         window.addEventListener('drop', (event) => event.preventDefault());
 
         elements.openAnalyticsBtn.addEventListener('click', () => {
-            if (!elements.openAnalyticsBtn.disabled) {
-                window.location.href = 'analytics.html';
+            if (elements.openAnalyticsBtn.disabled) {
+                return;
             }
+
+            if (typeof AppRouter !== 'undefined') {
+                AppRouter.navigate('analytics', undefined, { replaceHistory: false });
+                return;
+            }
+
+            window.location.hash = '#analytics';
         });
 
         elements.clearAllBtn.addEventListener('click', async () => {
@@ -77,7 +110,12 @@
             if (worker) {
                 worker.postMessage({ type: 'clear' });
             }
-            updateStatus({ shares: null, comments: null, analyticsReady: false });
+            if (typeof DataCache !== 'undefined') {
+                DataCache.clear();
+                DataCache.notify({ type: 'storageCleared' });
+            }
+            resetProcessingState();
+            updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
         });
 
         window.addEventListener('resize', () => drawProgressBar(progressValue));
@@ -86,11 +124,13 @@
     /** Restore upload status from IndexedDB on page load. */
     async function restoreState() {
         const files = await Storage.getAllFiles();
-        const analyticsBase = await Storage.getAnalytics();
-        const shares = files.find(file => file.type === 'shares');
-        const comments = files.find(file => file.type === 'comments');
-        const analyticsReady = Boolean(analyticsBase && analyticsBase.months && Object.keys(analyticsBase.months).length);
-        updateStatus({ shares, comments, analyticsReady });
+        if (typeof DataCache !== 'undefined') {
+            DataCache.set('storage:files', files);
+        }
+        const fileMap = getFileMap(files);
+        primeAnalyticsWorker(fileMap);
+        const analyticsReady = await hasAnalyticsData();
+        updateStatus({ fileMap, analyticsReady });
     }
 
     /**
@@ -151,23 +191,34 @@
             return;
         }
 
-        showProgressOverlay();
+        if (activeJobs <= 0) {
+            showProgressOverlay();
+        }
         csvFiles.forEach(file => {
             activeJobs += 1;
+            const jobId = createJobId(file);
             readFileAsText(file)
                 .then(text => {
-                    pendingFiles.set(file.name, text);
+                    pendingFiles.set(jobId, { text, fileName: file.name });
                     worker.postMessage({
                         type: 'addFile',
-                        payload: { csvText: text, fileName: file.name }
+                        payload: { csvText: text, fileName: file.name, jobId }
                     });
                 })
                 .catch(() => {
-                    activeJobs -= 1;
+                    completeJob();
                     setHint('Error reading file. Please try again.', true);
-                    checkJobs();
                 });
         });
+    }
+
+    /**
+     * Build a unique job ID for pending file processing.
+     * @param {File} file - Uploaded file
+     * @returns {string}
+     */
+    function createJobId(file) {
+        return `${file.name}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
     }
 
     /**
@@ -190,53 +241,115 @@
      */
     async function handleWorkerMessage(event) {
         const message = event.data || {};
-        if (message.type === 'fileProcessed') {
-            const payload = message.payload || {};
-            const fileType = payload.fileType;
-            const fileName = payload.fileName;
-            const rowCount = payload.rowCount || 0;
-
-            if (!fileType) {
-                setHint(payload.error || 'File could not be processed.', true);
-                activeJobs -= 1;
-                checkJobs();
+        switch (message.type) {
+            case 'restored':
                 return;
-            }
+            case 'fileProcessed':
+                await handleFileProcessedMessage(message.payload || {});
+                return;
+            case 'error':
+                setHint(message.payload && message.payload.message ? message.payload.message : 'Worker error.', true);
+                completeJob();
+                return;
+            default:
+                return;
+        }
+    }
 
-            const text = pendingFiles.get(fileName) || '';
-            pendingFiles.delete(fileName);
+    /**
+     * Persist processed worker payload and refresh upload status.
+     * @param {object} payload - Worker payload for fileProcessed
+     */
+    async function handleFileProcessedMessage(payload) {
+        const fileType = payload.fileType;
+        const fileName = payload.fileName;
+        const jobId = payload.jobId || null;
+        const rowCount = payload.rowCount || 0;
+        const pending = consumePendingFile(jobId, fileName);
+
+        if (!fileType) {
+            setHint(payload.error || 'File could not be processed.', true);
+            completeJob();
+            return;
+        }
+
+        try {
+            const text = pending ? pending.text : '';
+
             await Storage.saveFile(fileType, { name: fileName, text, rowCount });
-
             if (payload.analyticsBase) {
                 await Storage.saveAnalytics(payload.analyticsBase);
             }
 
-            const files = await Storage.getAllFiles();
-            const shares = files.find(file => file.type === 'shares');
-            const comments = files.find(file => file.type === 'comments');
-            updateStatus({
-                shares,
-                comments,
-                analyticsReady: Boolean(payload.hasData)
-            });
+            if (typeof DataCache !== 'undefined') {
+                DataCache.invalidate('storage:');
+                DataCache.invalidate('clean:');
+                DataCache.invalidate('messages:');
+                DataCache.set('storage:files', await Storage.getAllFiles());
+                if (payload.analyticsBase) {
+                    DataCache.set('storage:analyticsBase', payload.analyticsBase);
+                }
+                DataCache.notify({ type: 'filesChanged', fileType });
+                if (payload.analyticsBase) {
+                    DataCache.notify({ type: 'analyticsChanged' });
+                }
+            }
 
+            const files = typeof DataCache !== 'undefined'
+                ? (DataCache.get('storage:files') || await Storage.getAllFiles())
+                : await Storage.getAllFiles();
+            const fileMap = getFileMap(files);
+            const analyticsReady = await hasAnalyticsData();
+            updateStatus({ fileMap, analyticsReady });
             setHint('File loaded successfully.', false);
-            activeJobs -= 1;
-            checkJobs();
+        } catch {
+            setHint('Error saving file data. Please try again.', true);
+        } finally {
+            completeJob();
+        }
+    }
+
+    /**
+     * Consume a pending upload entry for a processed worker job.
+     * @param {string|null} jobId - Worker job ID
+     * @param {string} fileName - Original file name
+     * @returns {{text: string, fileName: string}|null}
+     */
+    function consumePendingFile(jobId, fileName) {
+        if (jobId && pendingFiles.has(jobId)) {
+            const pending = pendingFiles.get(jobId) || null;
+            pendingFiles.delete(jobId);
+            return pending;
         }
 
-        if (message.type === 'error') {
-            setHint(message.payload && message.payload.message ? message.payload.message : 'Worker error.', true);
-            activeJobs -= 1;
-            checkJobs();
+        if (!fileName) {
+            return null;
         }
+
+        const match = Array.from(pendingFiles.entries()).find(([, pending]) => {
+            return pending.fileName === fileName;
+        });
+        if (!match) {
+            return null;
+        }
+
+        const [key, pending] = match;
+        pendingFiles.delete(key);
+        return pending;
     }
 
     /** Handle worker-level errors. */
     function handleWorkerError() {
         setHint('Analytics worker error. Try refreshing.', true);
-        activeJobs = 0;
-        hideProgressOverlay();
+        resetProcessingState();
+    }
+
+    /**
+     * Decrement active jobs and hide overlay when complete.
+     */
+    function completeJob() {
+        activeJobs = Math.max(0, activeJobs - 1);
+        checkJobs();
     }
 
     /**
@@ -246,6 +359,9 @@
      * @param {object|null} fileData - Stored file record, or null if not uploaded
      */
     function updateFileStatus(statusItem, statusLabel, fileData) {
+        if (!statusItem || !statusLabel) {
+            return;
+        }
         if (fileData) {
             statusItem.classList.add('is-ready');
             statusLabel.textContent = `${fileData.rowCount} rows loaded`;
@@ -257,21 +373,109 @@
 
     /**
      * Update the upload page UI to reflect current file and analytics state.
-     * @param {{shares: object|null, comments: object|null, analyticsReady: boolean}} status
+     * @param {{fileMap: Object<string, object|null>, analyticsReady: boolean}} status
      */
-    function updateStatus({ shares, comments, analyticsReady }) {
-        updateFileStatus(elements.fileStatusItems.shares, elements.sharesStatus, shares);
-        updateFileStatus(elements.fileStatusItems.comments, elements.commentsStatus, comments);
+    function updateStatus({ fileMap, analyticsReady }) {
+        updateFileStatus(elements.fileStatusItems.shares, elements.sharesStatus, fileMap.shares);
+        updateFileStatus(elements.fileStatusItems.comments, elements.commentsStatus, fileMap.comments);
+        updateFileStatus(elements.fileStatusItems.messages, elements.messagesStatus, fileMap.messages);
+        updateFileStatus(elements.fileStatusItems.connections, elements.connectionsStatus, fileMap.connections);
 
-        const hasAny = Boolean(shares || comments);
-        elements.openAnalyticsBtn.disabled = !hasAny || !analyticsReady;
+        const hasAny = TRACKED_TYPES.some(type => Boolean(fileMap[type]));
+        const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
+        elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
+        setHint(getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady), false);
+    }
+
+    /**
+     * Resolve current upload hint message.
+     * @param {boolean} hasAny - Whether any tracked file exists
+     * @param {boolean} hasAnalyticsFiles - Whether shares/comments exist
+     * @param {boolean} analyticsReady - Whether analytics base is available
+     * @returns {string}
+     */
+    function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
         if (!hasAny) {
-            setHint('Upload at least one file to start.', false);
-        } else if (!analyticsReady) {
-            setHint('Processing analytics in the background.', false);
-        } else {
-            setHint('Analytics are ready. Open the dashboard.', false);
+            return 'Upload at least one file to start.';
         }
+        if (hasAnalyticsFiles && !analyticsReady) {
+            return 'Processing analytics in the background.';
+        }
+        if (analyticsReady) {
+            return 'Analytics are ready. Open the dashboard.';
+        }
+        return 'Files loaded. Open Messages tab for conversation insights.';
+    }
+
+    /**
+     * Build a fixed file map for all tracked types.
+     * @param {object[]} files - Stored file records
+     * @returns {{shares: object|null, comments: object|null, messages: object|null, connections: object|null}}
+     */
+    function getFileMap(files) {
+        const map = createEmptyFileMap();
+        files.forEach(file => {
+            if (TRACKED_TYPES.includes(file.type)) {
+                map[file.type] = file;
+            }
+        });
+        return map;
+    }
+
+    /**
+     * Create an empty file map.
+     * @returns {{shares: null, comments: null, messages: null, connections: null}}
+     */
+    function createEmptyFileMap() {
+        return {
+            shares: null,
+            comments: null,
+            messages: null,
+            connections: null
+        };
+    }
+
+    /**
+     * Check whether analytics aggregates are available in storage.
+     * @returns {Promise<boolean>}
+     */
+    async function hasAnalyticsData() {
+        let analyticsBase = null;
+        if (typeof DataCache !== 'undefined') {
+            analyticsBase = DataCache.get('storage:analyticsBase') || null;
+        }
+        if (!analyticsBase) {
+            analyticsBase = await Storage.getAnalytics();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.set('storage:analyticsBase', analyticsBase);
+            }
+        }
+        return Boolean(
+            analyticsBase
+            && analyticsBase.months
+            && Object.keys(analyticsBase.months).length
+        );
+    }
+
+    /**
+     * Seed worker with existing shares/comments datasets for accurate recompute.
+     * @param {{shares: object|null, comments: object|null}} fileMap - Stored files map
+     */
+    function primeAnalyticsWorker(fileMap) {
+        if (!worker) {
+            return;
+        }
+
+        const sharesCsv = fileMap.shares ? fileMap.shares.text : '';
+        const commentsCsv = fileMap.comments ? fileMap.comments.text : '';
+        if (!sharesCsv && !commentsCsv) {
+            return;
+        }
+
+        worker.postMessage({
+            type: 'restoreFiles',
+            payload: { sharesCsv, commentsCsv }
+        });
     }
 
     /**
@@ -291,19 +495,42 @@
         }
     }
 
+    /**
+     * Clear queued processing state and hide the overlay.
+     */
+    function resetProcessingState() {
+        pendingFiles.clear();
+        activeJobs = 0;
+        hideProgressOverlay();
+    }
+
     /** Show the progress overlay and start animation. */
     function showProgressOverlay() {
+        progressSessionId += 1;
+        const sessionId = progressSessionId;
         elements.progressOverlay.hidden = false;
         progressValue = 0;
         drawProgressBar(progressValue);
-        animateProgressTo(0.85, 900);
+        animateProgressTo(0.72, 650, () => {
+            if (sessionId !== progressSessionId || activeJobs <= 0) {
+                return;
+            }
+            startProgressCrawl(sessionId);
+        }, sessionId);
     }
 
     /** Animate progress to 100% then hide the overlay. */
     function hideProgressOverlay() {
-        animateProgressTo(1, 300, () => {
+        if (elements.progressOverlay.hidden) {
+            return;
+        }
+        const sessionId = progressSessionId;
+        animateProgressTo(1, 320, () => {
+            if (sessionId !== progressSessionId) {
+                return;
+            }
             elements.progressOverlay.hidden = true;
-        });
+        }, sessionId);
     }
 
     /**
@@ -311,15 +538,19 @@
      * @param {number} target - Target progress value (0-1)
      * @param {number} duration - Animation duration in ms
      * @param {Function} [callback] - Optional callback when animation completes
+     * @param {number} [sessionId] - Progress animation session token
      */
-    function animateProgressTo(target, duration, callback) {
-        if (progressAnimationId) {
-            cancelAnimationFrame(progressAnimationId);
-        }
+    function animateProgressTo(target, duration, callback, sessionId) {
+        stopProgressAnimation();
         const start = performance.now();
         const startValue = progressValue;
+        const animationSession = sessionId || progressSessionId;
 
         function step(now) {
+            if (animationSession !== progressSessionId) {
+                progressAnimationId = null;
+                return;
+            }
             const elapsed = now - start;
             const t = Math.min(elapsed / duration, 1);
             const eased = 1 - Math.pow(1 - t, 3);
@@ -327,12 +558,62 @@
             drawProgressBar(progressValue);
             if (t < 1) {
                 progressAnimationId = requestAnimationFrame(step);
-            } else if (callback) {
+                return;
+            }
+
+            progressAnimationId = null;
+            if (callback) {
                 callback();
             }
         }
 
         progressAnimationId = requestAnimationFrame(step);
+    }
+
+    /** Stop any in-flight progress animation frame loop. */
+    function stopProgressAnimation() {
+        if (!progressAnimationId) {
+            return;
+        }
+        cancelAnimationFrame(progressAnimationId);
+        progressAnimationId = null;
+    }
+
+    /**
+     * Slowly crawl progress toward completion while jobs are active.
+     * @param {number} sessionId - Progress animation session token
+     */
+    function startProgressCrawl(sessionId) {
+        stopProgressAnimation();
+        const crawlCap = 0.985;
+        let previousTime = 0;
+
+        function crawl(now) {
+            if (sessionId !== progressSessionId) {
+                progressAnimationId = null;
+                return;
+            }
+
+            if (!previousTime) {
+                previousTime = now;
+            }
+
+            const deltaMs = Math.max(0, now - previousTime);
+            previousTime = now;
+            const remaining = Math.max(0, crawlCap - progressValue);
+
+            if (remaining > 0.0005) {
+                const normalizedRemaining = Math.min(1, remaining / 0.265);
+                const unitsPerSecond = 0.007 + (0.06 * normalizedRemaining);
+                const increment = (unitsPerSecond * deltaMs) / 1000;
+                progressValue = Math.min(crawlCap, progressValue + increment);
+                drawProgressBar(progressValue);
+            }
+
+            progressAnimationId = requestAnimationFrame(crawl);
+        }
+
+        progressAnimationId = requestAnimationFrame(crawl);
     }
 
     /**
@@ -356,9 +637,9 @@
         const fill = styles.getPropertyValue('--accent-purple').trim();
 
         const trackX = 8;
-        const trackY = rect.height / 2 - 10;
+        const trackY = rect.height / 2 - 14;
         const trackWidth = rect.width - 16;
-        const trackHeight = 20;
+        const trackHeight = 28;
 
         if (typeof rough !== 'undefined') {
             const rc = rough.canvas(canvas);
@@ -382,9 +663,8 @@
         elements.progressPercent.textContent = `${Math.round(value * 100)}%`;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    return {
+        init,
+        onRouteChange
+    };
 })();

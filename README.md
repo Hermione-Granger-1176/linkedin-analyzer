@@ -18,8 +18,10 @@ LinkedIn's data exports are messy. This tool fixes that.
 
 - **Shares.csv** has weird nested quote escaping
 - **Comments.csv** has backslash-escaped quotes
+- **messages.csv** has mixed participant/profile fields that need normalization
+- **Connections.csv** often includes preamble rows and noisy identity fields
 
-Upload your files, get clean Excel outputs. Plus analytics dashboards with timelines, topic breakdowns, and activity heatmaps.
+Upload your files, get clean Excel outputs. Plus analytics dashboards, relationship views from messages/connections, and rule-based insights.
 
 <br>
 
@@ -32,6 +34,9 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards with timel
 pip install -e .
 linkedin-analyzer shares
 linkedin-analyzer comments
+linkedin-analyzer messages
+linkedin-analyzer connections
+linkedin-analyzer all
 ```
 
 <br>
@@ -79,6 +84,8 @@ linkedin-analyzer comments
 | **Offline support**  | Works after first load                          |
 | **Light/dark theme** | Hand-drawn sketch aesthetic                     |
 | **Analytics**        | Timeline, topics, heatmap                       |
+| **Messages view**    | Top contacts, silent connections, fading chats  |
+| **SPA routing**      | Hash routes with URL-synced filters             |
 | **Excel export**     | Formatted .xlsx with proper columns             |
 | **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold) |
 

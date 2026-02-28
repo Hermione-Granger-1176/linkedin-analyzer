@@ -19,6 +19,16 @@
     animation: screen-out 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.screen .screen-inner {
+    transition: filter var(--transition-fast), opacity var(--transition-fast);
+}
+
+.screen.is-loading .screen-inner {
+    filter: blur(4px);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
 @keyframes screen-in {
     from {
         opacity: 0;
@@ -42,10 +52,44 @@
 }
 
 .chart-card,
-.hub-card,
 .upload-status-card,
-.insight-card {
+.insight-card,
+.message-panel,
+.stat-card,
+.file-status-item {
     animation: card-in 0.5s ease-out;
+    animation-fill-mode: both;
+}
+
+.message-panels .message-panel:nth-child(1),
+.insights-grid .insight-card:nth-child(1),
+.analytics-grid .chart-card:nth-child(1),
+.stats-grid .stat-card:nth-child(1) {
+    animation-delay: 40ms;
+}
+
+.message-panels .message-panel:nth-child(2),
+.insights-grid .insight-card:nth-child(2),
+.analytics-grid .chart-card:nth-child(2),
+.stats-grid .stat-card:nth-child(2) {
+    animation-delay: 90ms;
+}
+
+.message-panels .message-panel:nth-child(3),
+.insights-grid .insight-card:nth-child(3),
+.analytics-grid .chart-card:nth-child(3),
+.stats-grid .stat-card:nth-child(3) {
+    animation-delay: 140ms;
+}
+
+.insights-grid .insight-card:nth-child(4),
+.stats-grid .stat-card:nth-child(4) {
+    animation-delay: 190ms;
+}
+
+.insights-grid .insight-card:nth-child(5),
+.stats-grid .stat-card:nth-child(5) {
+    animation-delay: 240ms;
 }
 
 @keyframes card-in {
@@ -56,5 +100,22 @@
     to {
         opacity: 1;
         transform: translateY(0) rotate(0deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .screen.enter,
+    .screen.exit,
+    .chart-card,
+    .upload-status-card,
+    .insight-card,
+    .message-panel,
+    .stat-card,
+    .file-status-item {
+        animation: none;
+    }
+
+    .screen .screen-inner {
+        transition: none;
     }
 }

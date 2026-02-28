@@ -9,20 +9,55 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from linkedin_analyzer.cleaners.comments import clean_comments
+from linkedin_analyzer.cleaners.connections import clean_connections
+from linkedin_analyzer.cleaners.messages import clean_messages
 from linkedin_analyzer.cleaners.shares import clean_shares
 from linkedin_analyzer.core.paths import (
     DEFAULT_COMMENTS_INPUT,
     DEFAULT_COMMENTS_OUTPUT,
+    DEFAULT_CONNECTIONS_INPUT,
+    DEFAULT_CONNECTIONS_OUTPUT,
+    DEFAULT_MESSAGES_INPUT,
+    DEFAULT_MESSAGES_OUTPUT,
     DEFAULT_SHARES_INPUT,
     DEFAULT_SHARES_OUTPUT,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from linkedin_analyzer.core.types import CleanerResult
 
 LOG = logging.getLogger("linkedin_analyzer")
+
+SINGLE_COMMAND_SPECS = (
+    (
+        "shares",
+        "Clean LinkedIn Shares CSV export",
+        DEFAULT_SHARES_INPUT,
+        DEFAULT_SHARES_OUTPUT,
+    ),
+    (
+        "comments",
+        "Clean LinkedIn Comments CSV export",
+        DEFAULT_COMMENTS_INPUT,
+        DEFAULT_COMMENTS_OUTPUT,
+    ),
+    (
+        "messages",
+        "Clean LinkedIn Messages CSV export",
+        DEFAULT_MESSAGES_INPUT,
+        DEFAULT_MESSAGES_OUTPUT,
+    ),
+    (
+        "connections",
+        "Clean LinkedIn Connections CSV export",
+        DEFAULT_CONNECTIONS_INPUT,
+        DEFAULT_CONNECTIONS_OUTPUT,
+    ),
+)
+
+ALL_COMMAND_NAMES = tuple(spec[0] for spec in SINGLE_COMMAND_SPECS)
 
 
 def configure_logging(level: str) -> None:
@@ -95,7 +130,7 @@ def _build_parser() -> argparse.ArgumentParser:
     """Build the argument parser with all subcommands.
 
     Returns:
-        Configured argument parser with shares, comments, and all subcommands
+        Configured argument parser with all supported subcommands
     """
     parser = argparse.ArgumentParser(
         prog="linkedin-analyzer",
@@ -109,8 +144,12 @@ Examples:
   # Clean Comments.csv and export to Comments.xlsx
   linkedin-analyzer comments
 
-  # Clean both files
+  # Clean all exports
   linkedin-analyzer all
+
+  # Clean messages and connections
+  linkedin-analyzer messages
+  linkedin-analyzer connections
 
   # Specify custom input/output paths
   linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
@@ -130,27 +169,17 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Shares subcommand
-    shares_parser = subparsers.add_parser(
-        "shares",
-        help="Clean LinkedIn Shares CSV export",
-    )
-    _add_default_io_args(shares_parser, DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT)
-
-    # Comments subcommand
-    comments_parser = subparsers.add_parser(
-        "comments",
-        help="Clean LinkedIn Comments CSV export",
-    )
-    _add_default_io_args(comments_parser, DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT)
+    for name, help_text, default_input, default_output in SINGLE_COMMAND_SPECS:
+        command_parser = subparsers.add_parser(name, help=help_text)
+        _add_default_io_args(command_parser, default_input, default_output)
 
     # All subcommand
     all_parser = subparsers.add_parser(
         "all",
-        help="Clean all LinkedIn CSV exports (Shares and Comments)",
+        help="Clean all LinkedIn CSV exports",
     )
-    _add_named_io_args(all_parser, "shares", DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT)
-    _add_named_io_args(all_parser, "comments", DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT)
+    for name, _help_text, default_input, default_output in SINGLE_COMMAND_SPECS:
+        _add_named_io_args(all_parser, name, default_input, default_output)
 
     return parser
 
@@ -168,29 +197,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def run_shares(args: argparse.Namespace) -> int:
-    """Run the shares cleaner.
-
-    Args:
-        args: Parsed command-line arguments
-
-    Returns:
-        Exit code (0 for success, non-zero for failure)
-    """
-    result = clean_shares(input_path=args.input, output_path=args.output)
-    return _handle_result(result)
+    """Run the shares cleaner."""
+    return _run_single_cleaner(args, clean_shares)
 
 
 def run_comments(args: argparse.Namespace) -> int:
-    """Run the comments cleaner.
+    """Run the comments cleaner."""
+    return _run_single_cleaner(args, clean_comments)
 
-    Args:
-        args: Parsed command-line arguments
 
-    Returns:
-        Exit code (0 for success, non-zero for failure)
-    """
-    result = clean_comments(input_path=args.input, output_path=args.output)
-    return _handle_result(result)
+def run_messages(args: argparse.Namespace) -> int:
+    """Run the messages cleaner."""
+    return _run_single_cleaner(args, clean_messages)
+
+
+def run_connections(args: argparse.Namespace) -> int:
+    """Run the connections cleaner."""
+    return _run_single_cleaner(args, clean_connections)
 
 
 def run_all(args: argparse.Namespace) -> int:
@@ -202,19 +225,14 @@ def run_all(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, non-zero for failure)
     """
-    tasks = (
+    tasks = tuple(
         (
-            "Shares",
-            clean_shares,
-            args.shares_input,
-            args.shares_output,
-        ),
-        (
-            "Comments",
-            clean_comments,
-            args.comments_input,
-            args.comments_output,
-        ),
+            command_name.capitalize(),
+            _get_cleaner(command_name),
+            getattr(args, f"{command_name}_input"),
+            getattr(args, f"{command_name}_output"),
+        )
+        for command_name in ALL_COMMAND_NAMES
     )
     exit_code = 0
     for label, cleaner, input_path, output_path in tasks:
@@ -243,6 +261,26 @@ def _handle_result(result: CleanerResult) -> int:
     return 0
 
 
+def _run_single_cleaner(
+    args: argparse.Namespace,
+    cleaner: Callable[..., CleanerResult],
+) -> int:
+    """Run one cleaner function with standard CLI arguments."""
+    result = cleaner(input_path=args.input, output_path=args.output)
+    return _handle_result(result)
+
+
+def _get_cleaner(command_name: str) -> Callable[..., CleanerResult]:
+    """Resolve cleaner by command name using live module bindings."""
+    mapping: dict[str, Callable[..., CleanerResult]] = {
+        "shares": clean_shares,
+        "comments": clean_comments,
+        "messages": clean_messages,
+        "connections": clean_connections,
+    }
+    return mapping[command_name]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -263,6 +301,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     command_handlers = {
         "shares": run_shares,
         "comments": run_comments,
+        "messages": run_messages,
+        "connections": run_connections,
         "all": run_all,
     }
 

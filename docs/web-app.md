@@ -1,59 +1,97 @@
 # Web App Guide
 
-The LinkedIn Analyzer web app runs entirely in your browser. No data is uploaded anywhere.
+The LinkedIn Analyzer web app runs entirely in your browser. No data is uploaded to a server.
 
 ## Getting Started
 
-1. Open the app in your browser
-2. Drag and drop your LinkedIn CSV exports (Shares.csv, Comments.csv)
-3. Choose what to do: Clean, Analytics, or Insights
+1. Open the app in your browser.
+2. Upload one or more LinkedIn CSV exports:
+   - `Shares.csv`
+   - `Comments.csv`
+   - `messages.csv`
+   - `Connections.csv`
+3. Navigate to the screen you need: Clean, Analytics, Messages, or Insights.
 
-## Pages
+## Routing (SPA)
+
+The app is a single-page app (SPA) with hash routes.
+
+- Home: `#home`
+- Clean: `#clean`
+- Analytics: `#analytics`
+- Messages: `#messages`
+- Insights: `#insights`
+
+Examples:
+
+- `#analytics?range=3m`
+- `#messages?range=6m`
+- `#insights?range=all`
+
+Legacy HTML pages (`clean.html`, `analytics.html`, `messages.html`, `insights.html`) now redirect to these routes.
+
+## Shared Time Range Behavior
+
+Time range is shared across Analytics, Messages, and Insights.
+
+- If you set `3 months` in Analytics, then move to Messages or Insights, that same range is applied.
+- Clean and Home do not use this shared range state.
+
+Supported range values:
+
+- `1m`, `3m`, `6m`, `12m`, `all`
+
+## Screens
 
 ### Home
 
-Upload hub where you drop your CSV files. Shows upload status for each file type.
+Upload hub for all supported CSV types. Shows file readiness and processing status.
 
 ### Clean
 
-Convert messy LinkedIn CSVs to formatted Excel files.
+Converts uploaded CSV data into formatted `.xlsx` files.
 
-- Fixes quote escaping issues in Shares.csv
-- Fixes backslash escaping in Comments.csv
-- Downloads as `.xlsx` with proper column widths and text wrapping
+- Shares and comments escaping fixes
+- Messages and connections cleaning parity with Python cleaner
+- Excel export with column widths and wrapped text
 
 ### Analytics
 
-Visual dashboards for your LinkedIn activity:
+Interactive activity dashboard:
 
-- **Timeline** — Posts and comments over time (line/area chart)
-- **Topics** — Most common words in your posts (bar chart)
-- **Heatmap** — Activity by day of week and hour
+- Timeline chart
+- Top topics chart
+- Day/hour heatmap
 
-Time range options: 1 month, 3 months, 6 months, 12 months, All time
+### Messages
+
+Relationship-focused view derived from messages and connections:
+
+- Top Contacts
+- Silent Connections
+- Fading Conversations
+
+Each panel includes a full-list Excel export button.
 
 ### Insights
 
-Rule-based takeaways derived from your activity patterns.
+Rule-based recommendations and summaries generated from analytics aggregates.
 
-## Features
+## Loading and Performance
 
-### Offline Support
+- A shared loading overlay (gear animation) is used for analytics/messages/insights data loading.
+- Active content is blurred while loading to keep the loading state clear.
+- Analytics computation runs in `analytics-worker.js`.
+- Messages/connections parsing runs in `messages-worker.js` with safe fallback.
+- IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
 
-After the first load, the app works offline. All processing happens locally.
+## Privacy
 
-### Theme Toggle
+Your files never leave your browser.
 
-Click the sun/moon icon to switch between light and dark mode. Your preference is saved.
-
-### Privacy
-
-Your files never leave your browser:
-
-- All processing uses JavaScript in the browser
-- IndexedDB stores data locally
-- Web Workers handle heavy computation
-- No server, no uploads, no tracking
+- Processing is local JavaScript only.
+- Data persistence uses browser IndexedDB.
+- No backend API calls for file content.
 
 ## Running Locally
 
@@ -65,15 +103,8 @@ python3 -m http.server 3000 --directory web
 npx serve web -l 3000
 ```
 
-Then open http://localhost:3000
+Then open `http://localhost:3000`.
 
 ## Deployment
 
-Deploy to Vercel, Netlify, or any static hosting. The `web/` folder contains everything needed.
-
-```bash
-# Vercel
-vercel --prod
-
-# Or just push to GitHub and import in Vercel dashboard
-```
+Deploy `web/` to any static host (Vercel, Netlify, GitHub Pages).

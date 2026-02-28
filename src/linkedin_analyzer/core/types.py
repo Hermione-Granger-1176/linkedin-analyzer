@@ -42,12 +42,16 @@ class CleanerConfig:
         output_path: Path to output Excel file
         columns: List of column configurations
         csv_kwargs: Additional arguments to pass to pd.read_csv
+        skiprows: Number of rows to skip before reading headers
+        drop_if_all_missing: Drop rows when all these columns are missing
     """
 
     input_path: Path
     output_path: Path
     columns: tuple[ColumnConfig, ...]
     csv_kwargs: Mapping[str, object] = field(default_factory=dict)
+    skiprows: int = 0
+    drop_if_all_missing: tuple[str, ...] = ()
 
     @property
     def required_columns(self) -> list[str]:

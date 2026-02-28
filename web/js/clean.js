@@ -1,10 +1,18 @@
 /* Clean page logic */
+/* exported CleanPage */
 
-(function() {
+const CleanPage = (() => {
     'use strict';
 
     const PREVIEW_ROW_LIMIT = 5;
     const PREVIEW_CELL_LIMIT = 50;
+    const FILE_TYPE_ORDER = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+    const FILE_TYPE_LABELS = Object.freeze({
+        shares: 'Shares',
+        comments: 'Comments',
+        messages: 'Messages',
+        connections: 'Connections'
+    });
 
     const elements = {
         cleanEmpty: document.getElementById('cleanEmpty'),
@@ -23,20 +31,44 @@
 
     const cache = {
         shares: null,
-        comments: null
+        comments: null,
+        messages: null,
+        connections: null
     };
 
     const storedFiles = {
         shares: null,
-        comments: null
+        comments: null,
+        messages: null,
+        connections: null
     };
+
+    let initialized = false;
 
     /**
      * Initialize the clean page: load files, bind events, update view.
      */
     async function init() {
-        await loadFiles();
+        if (initialized) {
+            return;
+        }
+        initialized = true;
         bindEvents();
+        await refresh();
+    }
+
+    /** Refresh file list and UI when route becomes active. */
+    async function onRouteChange() {
+        if (!initialized) {
+            await init();
+            return;
+        }
+        await refresh();
+    }
+
+    /** Reload files from storage and redraw the panel. */
+    async function refresh() {
+        await loadFiles();
         updateView();
     }
 
@@ -54,32 +86,56 @@
      * Load stored files from IndexedDB into local state.
      */
     async function loadFiles() {
-        const files = await Storage.getAllFiles();
-        storedFiles.shares = files.find(file => file.type === 'shares') || null;
-        storedFiles.comments = files.find(file => file.type === 'comments') || null;
+        let files = null;
+        if (typeof DataCache !== 'undefined') {
+            files = DataCache.get('storage:files') || null;
+        }
+        if (!files) {
+            files = await Storage.getAllFiles();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.set('storage:files', files);
+            }
+        }
+
+        FILE_TYPE_ORDER.forEach(type => {
+            storedFiles[type] = files.find(file => file.type === type) || null;
+        });
     }
 
     /**
      * Update the clean page UI based on available files.
      */
     function updateView() {
-        const hasShares = Boolean(storedFiles.shares);
-        const hasComments = Boolean(storedFiles.comments);
+        const loadedTypes = FILE_TYPE_ORDER.filter(type => Boolean(storedFiles[type]));
+        const loadedCount = loadedTypes.length;
+        const hasFiles = loadedCount > 0;
 
-        elements.cleanEmpty.hidden = hasShares || hasComments;
-        elements.cleanPanel.hidden = !(hasShares || hasComments);
+        elements.cleanEmpty.hidden = hasFiles;
+        elements.cleanPanel.hidden = !hasFiles;
 
         elements.cleanFileTypeInputs.forEach(input => {
-            if (input.value === 'shares') input.disabled = !hasShares;
-            if (input.value === 'comments') input.disabled = !hasComments;
+            input.disabled = !storedFiles[input.value];
         });
 
-        if (hasShares && hasComments) {
-            elements.cleanerHint.textContent = 'Both files loaded. Choose which one to clean.';
-        } else if (hasShares || hasComments) {
-            elements.cleanerHint.textContent = 'Only one file is loaded. Upload the other for full features.';
+        const selectedType = getSelectedType();
+        if (!storedFiles[selectedType] && loadedCount > 0) {
+            const fallbackType = loadedTypes[0];
+            const fallbackInput = document.querySelector(
+                `input[name="cleanFileType"][value="${fallbackType}"]`
+            );
+            if (fallbackInput) {
+                fallbackInput.checked = true;
+            }
+        }
+
+        if (loadedCount === FILE_TYPE_ORDER.length) {
+            elements.cleanerHint.textContent = 'All files loaded. Choose one to clean and export.';
+        } else if (loadedCount > 1) {
+            elements.cleanerHint.textContent = `${loadedCount} files loaded. Choose one to clean.`;
+        } else if (loadedCount === 1) {
+            elements.cleanerHint.textContent = 'Only one file is loaded. Upload more files for full features.';
         } else {
-            elements.cleanerHint.textContent = 'Upload Shares.csv or Comments.csv to start cleaning.';
+            elements.cleanerHint.textContent = 'Upload LinkedIn CSV files to start cleaning.';
         }
 
         renderPreview();
@@ -87,11 +143,15 @@
 
     /**
      * Get the currently selected file type from radio buttons.
-     * @returns {'shares'|'comments'} The selected file type.
+     * @returns {string} The selected file type.
      */
     function getSelectedType() {
         const selected = document.querySelector('input[name="cleanFileType"]:checked');
-        return selected ? selected.value : 'shares';
+        if (selected && storedFiles[selected.value]) {
+            return selected.value;
+        }
+        const fallback = FILE_TYPE_ORDER.find(type => Boolean(storedFiles[type]));
+        return fallback || 'shares';
     }
 
     /**
@@ -109,7 +169,10 @@
 
         hideError();
 
-        if (!cache[type]) {
+        const cached = cache[type];
+        const fileUpdatedAt = file.updatedAt || 0;
+
+        if (!cached || cached.updatedAt !== fileUpdatedAt) {
             const processed = LinkedInCleaner.process(file.text, type);
             if (!processed.success) {
                 showError(processed.error || 'Unable to parse file.');
@@ -117,10 +180,13 @@
                 hideDownload();
                 return;
             }
-            cache[type] = processed;
+            cache[type] = {
+                updatedAt: fileUpdatedAt,
+                result: processed
+            };
         }
 
-        showPreview(cache[type], type);
+        showPreview(cache[type].result, type);
         showDownload();
     }
 
@@ -133,7 +199,8 @@
         const config = LinkedInCleaner.configs[fileType];
         if (!config) return;
         const headers = config.columns.map(column => column.name);
-        elements.cleanFileInfo.textContent = `${fileType.charAt(0).toUpperCase() + fileType.slice(1)} - ${result.rowCount} rows`;
+        const label = FILE_TYPE_LABELS[fileType] || fileType;
+        elements.cleanFileInfo.textContent = `${label} - ${result.rowCount} rows`;
 
         const thead = elements.cleanPreviewTable.querySelector('thead');
         thead.innerHTML = `<tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join('')}</tr>`;
@@ -180,12 +247,12 @@
      */
     function handleDownload() {
         const type = getSelectedType();
-        const result = cache[type];
-        if (!result) {
+        const cached = cache[type];
+        if (!cached || !cached.result) {
             showError('No data to download.');
             return;
         }
-        const downloadResult = ExcelGenerator.generateAndDownload(result.cleanedData, type);
+        const downloadResult = ExcelGenerator.generateAndDownload(cached.result.cleanedData, type);
         if (!downloadResult.success) {
             showError(`Error generating Excel: ${downloadResult.error}`);
         }
@@ -230,9 +297,8 @@
         return value.slice(0, maxLength) + '...';
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+    return {
+        init,
+        onRouteChange
+    };
 })();

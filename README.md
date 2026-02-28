@@ -81,12 +81,13 @@ linkedin-analyzer all
 | Feature              | Detail                                          |
 | -------------------- | ----------------------------------------------- |
 | **100% client-side** | Files never leave your browser                  |
-| **Offline support**  | Works after first load                          |
 | **Light/dark theme** | Hand-drawn sketch aesthetic                     |
 | **Analytics**        | Timeline, topics, heatmap                       |
 | **Messages view**    | Top contacts, silent connections, fading chats  |
 | **SPA routing**      | Hash routes with URL-synced filters             |
 | **Excel export**     | Formatted .xlsx with proper columns             |
+| **PWA-ready**        | Manifest, icons, and add-to-home-screen support |
+| **Social previews**  | Open Graph and Twitter Card meta tags           |
 | **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold) |
 
 <br>

@@ -4,10 +4,18 @@
 linkedin-analyzer/
 ├── web/                                # Web app (SPA + static redirect stubs)
 │   ├── index.html                      # SPA shell containing all screens
+│   ├── robots.txt                      # Search engine directives
 │   ├── clean.html                      # Redirects to index.html#clean
 │   ├── analytics.html                  # Redirects to index.html#analytics
 │   ├── messages.html                   # Redirects to index.html#messages
 │   ├── insights.html                   # Redirects to index.html#insights
+│   ├── assets/
+│   │   ├── icon.svg                    # SVG favicon (modern browsers)
+│   │   ├── favicon.ico                 # ICO favicon (legacy browsers)
+│   │   ├── apple-touch-icon.png        # 180px icon (iOS home screen)
+│   │   ├── icon-192.png                # 192px icon (Android/PWA)
+│   │   ├── icon-512.png                # 512px icon (PWA splash/OG cards)
+│   │   └── manifest.webmanifest        # PWA web app manifest
 │   ├── css/
 │   │   ├── variables.css               # Theme variables (light/dark)
 │   │   ├── style.css                   # Main styles
@@ -79,6 +87,19 @@ linkedin-analyzer/
 | `web/js/app.js`             | Route registration and bootstrapping                           |
 | `web/js/loading-overlay.js` | Global content loading overlay + blur handling                 |
 | `web/js/data-cache.js`      | In-memory cache and cache notifications                        |
+
+### Assets & Meta
+
+| File                              | Purpose                                        |
+| --------------------------------- | ---------------------------------------------- |
+| `web/assets/icon.svg`             | SVG favicon served to modern browsers          |
+| `web/assets/favicon.ico`          | 32px ICO fallback for legacy browsers          |
+| `web/assets/apple-touch-icon.png` | 180px PNG for iOS home screen bookmark         |
+| `web/assets/icon-192.png`         | 192px PNG for Android and PWA icon             |
+| `web/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards   |
+| `web/assets/manifest.webmanifest` | PWA manifest (name, icons, theme, display)     |
+| `web/robots.txt`                  | Allows all crawlers, points to sitemap         |
+| `web/index.html` `<head>`         | OG, Twitter Card, theme-color, and icon `link` |
 
 ### Processing
 

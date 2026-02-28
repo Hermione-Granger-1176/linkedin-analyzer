@@ -63,6 +63,8 @@ const LinkedInCleaner = (() => {
                 { name: 'Connected On', width: 20, cleaner: 'cleanConnectionsDate' }
             ],
             requiredColumns: ['First Name', 'Last Name', 'Connected On'],
+            requiredRowColumns: ['Connected On'],
+            dropIfAllMissing: ['First Name', 'Last Name', 'URL'],
             outputName: 'Connections.xlsx',
             skipRows: 3
         })
@@ -92,7 +94,9 @@ const LinkedInCleaner = (() => {
         'N/A',
         'NA',
         'NULL',
-        'NAN'
+        'NAN',
+        'NONE',
+        '<NA>'
     ]);
 
     /**
@@ -320,28 +324,54 @@ const LinkedInCleaner = (() => {
         }
 
         const monthMap = {
-            Jan: '01',
-            Feb: '02',
-            Mar: '03',
-            Apr: '04',
-            May: '05',
-            Jun: '06',
-            Jul: '07',
-            Aug: '08',
-            Sep: '09',
-            Oct: '10',
-            Nov: '11',
-            Dec: '12'
+            jan: '01',
+            feb: '02',
+            mar: '03',
+            apr: '04',
+            may: '05',
+            jun: '06',
+            jul: '07',
+            aug: '08',
+            sep: '09',
+            oct: '10',
+            nov: '11',
+            dec: '12'
         };
 
         const day = monthMatch[1].padStart(2, '0');
-        const monthToken = monthMatch[2].slice(0, 3);
+        const monthToken = monthMatch[2].slice(0, 3).toLowerCase();
         const month = monthMap[monthToken];
         const year = monthMatch[3];
         if (!month) {
             return text;
         }
         return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * Check if all required columns in a row have non-missing values.
+     * @param {object} row - Row object
+     * @param {string[]} requiredColumns - Columns that must be present
+     * @returns {boolean}
+     */
+    function hasRequiredRowValues(row, requiredColumns) {
+        if (!requiredColumns.length) {
+            return true;
+        }
+        return requiredColumns.every(column => !isMissing(row[column]));
+    }
+
+    /**
+     * Check if at least one column has a non-missing value.
+     * @param {object} row - Row object
+     * @param {string[]} columns - Columns to scan
+     * @returns {boolean}
+     */
+    function hasAnyRowValue(row, columns) {
+        if (!columns.length) {
+            return true;
+        }
+        return columns.some(column => !isMissing(row[column]));
     }
 
     const CLEANERS = Object.freeze({
@@ -616,16 +646,21 @@ const LinkedInCleaner = (() => {
             return cleanedRow;
         });
 
-        if (fileType === 'connections') {
-            return cleanedRows.filter(row => {
-                const firstName = cleanEmptyField(row['First Name']);
-                const lastName = cleanEmptyField(row['Last Name']);
-                const url = cleanEmptyField(row.URL);
-                return Boolean(firstName || lastName || url);
-            });
+        const requiredRowColumns = Array.isArray(config.requiredRowColumns)
+            ? config.requiredRowColumns
+            : config.requiredColumns;
+        const rowsWithRequiredValues = cleanedRows.filter(
+            row => hasRequiredRowValues(row, requiredRowColumns)
+        );
+
+        const dropIfAllMissing = Array.isArray(config.dropIfAllMissing)
+            ? config.dropIfAllMissing
+            : [];
+        if (dropIfAllMissing.length) {
+            return rowsWithRequiredValues.filter(row => hasAnyRowValue(row, dropIfAllMissing));
         }
 
-        return cleanedRows;
+        return rowsWithRequiredValues;
     }
 
     /**

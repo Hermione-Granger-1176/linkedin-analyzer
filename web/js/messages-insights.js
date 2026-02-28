@@ -253,51 +253,195 @@
         return { list, byUrl, byName };
     }
 
-    /** Detect likely self identity using sender URL/name frequencies. */
+    /** Detect likely self identity using cross-conversation participation. */
     function detectSelfContext(rows) {
-        const senderUrlCounts = new Map();
-        const fromNameCounts = new Map();
+        const urlStats = new Map();
+        const nameStats = new Map();
 
-        rows.forEach(row => {
+        rows.forEach((row, index) => {
+            const conversationKey = buildConversationKey(row, index);
             const senderUrl = normalizeUrl(row['SENDER PROFILE URL']);
-            if (senderUrl) {
-                senderUrlCounts.set(senderUrl, (senderUrlCounts.get(senderUrl) || 0) + 1);
+            const recipientUrls = normalizeUrlList(row['RECIPIENT PROFILE URLS']);
+            const senderName = normalizeName(row.FROM);
+
+            recordParticipantStat(urlStats, senderUrl, conversationKey, 'sender');
+            recipientUrls.forEach(url => {
+                recordParticipantStat(urlStats, url, conversationKey, 'recipient');
+            });
+            recordParticipantStat(nameStats, senderName, conversationKey, 'sender');
+
+            const recipientNames = parseRecipientNames(row.TO, recipientUrls.length);
+            if (recipientUrls.length) {
+                recipientUrls.forEach((_, recipientIndex) => {
+                    const recipientName = normalizeName(
+                        recipientNames[recipientIndex] || recipientNames[0] || ''
+                    );
+                    recordParticipantStat(nameStats, recipientName, conversationKey, 'recipient');
+                });
+                return;
             }
 
-            const fromName = normalizeName(row.FROM);
-            if (fromName) {
-                fromNameCounts.set(fromName, (fromNameCounts.get(fromName) || 0) + 1);
-            }
+            recipientNames.forEach(name => {
+                recordParticipantStat(nameStats, normalizeName(name), conversationKey, 'recipient');
+            });
         });
 
-        const selfUrl = pickMostFrequentKey(senderUrlCounts);
+        const selfUrl = pickSelfKey(urlStats);
         const selfUrls = new Set();
         if (selfUrl) {
             selfUrls.add(selfUrl);
         }
 
-        const selfNameCounts = new Map();
+        const selfNames = new Set();
         if (selfUrl) {
-            rows.forEach(row => {
-                const senderUrl = normalizeUrl(row['SENDER PROFILE URL']);
-                if (senderUrl !== selfUrl) {
-                    return;
-                }
-                const fromName = normalizeName(row.FROM);
-                if (!fromName) {
-                    return;
-                }
-                selfNameCounts.set(fromName, (selfNameCounts.get(fromName) || 0) + 1);
-            });
+            const nameCounts = collectNamesForUrl(rows, selfUrl);
+            const primaryName = pickMostFrequentKey(nameCounts);
+            if (primaryName) {
+                selfNames.add(primaryName);
+            }
+            return { selfUrls, selfNames };
         }
 
-        const selfNames = new Set();
-        const primaryName = pickMostFrequentKey(selfNameCounts) || pickMostFrequentKey(fromNameCounts);
-        if (primaryName) {
-            selfNames.add(primaryName);
+        const selfName = pickSelfKey(nameStats);
+        if (selfName) {
+            selfNames.add(selfName);
         }
 
         return { selfUrls, selfNames };
+    }
+
+    /**
+     * Build a stable conversation key for participation scoring.
+     * @param {object} row - Message row
+     * @param {number} rowIndex - Row index fallback
+     * @returns {string}
+     */
+    function buildConversationKey(row, rowIndex) {
+        const conversationId = cleanText(row['CONVERSATION ID']);
+        return conversationId || `row-${rowIndex}`;
+    }
+
+    /**
+     * Record sender/recipient participation metrics for a candidate key.
+     * @param {Map<string, object>} statsMap - Aggregated stats map
+     * @param {string} key - Candidate key (URL or normalized name)
+     * @param {string} conversationKey - Conversation identifier
+     * @param {'sender'|'recipient'} role - Message-side role
+     */
+    function recordParticipantStat(statsMap, key, conversationKey, role) {
+        if (!key) {
+            return;
+        }
+
+        const existing = statsMap.get(key);
+        if (existing) {
+            existing.totalCount += 1;
+            existing.conversations.add(conversationKey);
+            if (role === 'sender') {
+                existing.senderCount += 1;
+            } else {
+                existing.recipientCount += 1;
+            }
+            return;
+        }
+
+        statsMap.set(key, {
+            totalCount: 1,
+            senderCount: role === 'sender' ? 1 : 0,
+            recipientCount: role === 'recipient' ? 1 : 0,
+            conversations: new Set([conversationKey])
+        });
+    }
+
+    /**
+     * Select likely self key from participation stats.
+     * Candidate must appear on both sender and recipient sides.
+     * @param {Map<string, object>} statsMap - URL or name stats
+     * @returns {string|null}
+     */
+    function pickSelfKey(statsMap) {
+        let bestBalancedKey = null;
+        let bestBalancedConversationCount = -1;
+        let bestBalancedTotalCount = -1;
+
+        let bestCoverageKey = null;
+        let bestCoverageConversationCount = -1;
+        let bestCoverageTotalCount = -1;
+
+        statsMap.forEach((stats, key) => {
+            const conversationCount = stats.conversations.size;
+            if (conversationCount > bestCoverageConversationCount
+                || (conversationCount === bestCoverageConversationCount
+                    && stats.totalCount > bestCoverageTotalCount)) {
+                bestCoverageKey = key;
+                bestCoverageConversationCount = conversationCount;
+                bestCoverageTotalCount = stats.totalCount;
+            }
+
+            if (!stats.senderCount || !stats.recipientCount) {
+                return;
+            }
+
+            if (conversationCount > bestBalancedConversationCount) {
+                bestBalancedKey = key;
+                bestBalancedConversationCount = conversationCount;
+                bestBalancedTotalCount = stats.totalCount;
+                return;
+            }
+
+            if (conversationCount === bestBalancedConversationCount
+                && stats.totalCount > bestBalancedTotalCount) {
+                bestBalancedKey = key;
+                bestBalancedTotalCount = stats.totalCount;
+            }
+        });
+
+        return bestBalancedKey || bestCoverageKey;
+    }
+
+    /**
+     * Collect normalized names associated with a selected self URL.
+     * @param {object[]} rows - Message rows
+     * @param {string} selfUrl - Selected self URL
+     * @returns {Map<string, number>}
+     */
+    function collectNamesForUrl(rows, selfUrl) {
+        const nameCounts = new Map();
+
+        rows.forEach(row => {
+            const senderUrl = normalizeUrl(row['SENDER PROFILE URL']);
+            if (senderUrl === selfUrl) {
+                incrementCount(nameCounts, normalizeName(row.FROM));
+            }
+
+            const recipientUrls = normalizeUrlList(row['RECIPIENT PROFILE URLS']);
+            if (!recipientUrls.length) {
+                return;
+            }
+
+            const recipientNames = parseRecipientNames(row.TO, recipientUrls.length);
+            recipientUrls.forEach((url, recipientIndex) => {
+                if (url !== selfUrl) {
+                    return;
+                }
+                const name = normalizeName(recipientNames[recipientIndex] || recipientNames[0] || '');
+                incrementCount(nameCounts, name);
+            });
+        });
+
+        return nameCounts;
+    }
+
+    /**
+     * Increment a simple string->count map.
+     * @param {Map<string, number>} counts - Count map
+     * @param {string} key - Key to increment
+     */
+    function incrementCount(counts, key) {
+        if (!key) {
+            return;
+        }
+        counts.set(key, (counts.get(key) || 0) + 1);
     }
 
     /**

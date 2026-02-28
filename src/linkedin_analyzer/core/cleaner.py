@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from linkedin_analyzer.core.excel import format_excel_output
-from linkedin_analyzer.core.text import clean_value, escape_excel_formula
+from linkedin_analyzer.core.text import clean_value, escape_excel_formula, is_missing
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 
 LOG = logging.getLogger(__name__)
@@ -35,12 +35,11 @@ def normalize_required_columns(df: pd.DataFrame, required: list[str]) -> None:
     if not required:
         return
 
-    missing_tokens = {"", "NA", "N/A", "NAN", "NULL", "NONE", "<NA>"}
     for column in required:
         if column not in df.columns:
             continue
         normalized = df[column].astype("string").str.strip()
-        normalized = normalized.mask(normalized.str.upper().isin(missing_tokens), pd.NA)
+        normalized = normalized.mask(normalized.map(is_missing), pd.NA)
         df[column] = normalized
 
 

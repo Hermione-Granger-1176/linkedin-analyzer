@@ -44,6 +44,8 @@ def is_missing(value: object) -> bool:
             "NA",
             "NULL",
             "NAN",
+            "NONE",
+            "<NA>",
         }
         return upper in missing_values
     try:

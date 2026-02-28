@@ -57,7 +57,7 @@ class TestIsMissing:
         assert is_missing(pd.NaT) is True
 
     def test_na_like_strings_are_missing(self) -> None:
-        for value in ["N/A", "NULL", "#N/A", "-1.#IND"]:
+        for value in ["N/A", "NULL", "#N/A", "-1.#IND", "NONE", "<NA>"]:
             assert is_missing(value) is True
 
 

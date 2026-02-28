@@ -229,6 +229,7 @@
         const fileName = payload.fileName;
         const jobId = payload.jobId || null;
         const rowCount = payload.rowCount || 0;
+        const pending = consumePendingFile(jobId, fileName);
 
         if (!fileType) {
             setHint(payload.error || 'File could not be processed.', true);
@@ -237,11 +238,6 @@
         }
 
         try {
-            const pendingKey = jobId || fileName;
-            const pending = pendingFiles.get(pendingKey) || null;
-            if (pendingKey) {
-                pendingFiles.delete(pendingKey);
-            }
             const text = pending ? pending.text : '';
 
             await Storage.saveFile(fileType, { name: fileName, text, rowCount });
@@ -259,6 +255,34 @@
         } finally {
             completeJob();
         }
+    }
+
+    /**
+     * Consume a pending upload entry for a processed worker job.
+     * @param {string|null} jobId - Worker job ID
+     * @param {string} fileName - Original file name
+     * @returns {{text: string, fileName: string}|null}
+     */
+    function consumePendingFile(jobId, fileName) {
+        if (jobId && pendingFiles.has(jobId)) {
+            const pending = pendingFiles.get(jobId) || null;
+            pendingFiles.delete(jobId);
+            return pending;
+        }
+
+        if (!fileName) {
+            return null;
+        }
+
+        for (const [key, pending] of pendingFiles.entries()) {
+            if (pending.fileName !== fileName) {
+                continue;
+            }
+            pendingFiles.delete(key);
+            return pending;
+        }
+
+        return null;
     }
 
     /** Handle worker-level errors. */

@@ -161,3 +161,54 @@ class TestRunCleaner:
         assert result.success is True
         df = pd.read_excel(output_path)
         assert 'hello "world"' in df["Name"].iloc[0]
+
+    def test_skiprows_passed(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "connections.csv"
+        output_path = tmp_path / "connections.xlsx"
+        input_path.write_text(
+            "Notes:\n"
+            "LinkedIn export metadata\n"
+            "\n"
+            "First Name,Last Name,Connected On\n"
+            "Ada,Lovelace,30 Jan 2026\n"
+        )
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(
+                ColumnConfig(name="First Name", required=True),
+                ColumnConfig(name="Last Name", required=True),
+                ColumnConfig(name="Connected On", required=True),
+            ),
+            skiprows=3,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["First Name"]) == ["Ada"]
+
+    def test_drop_if_all_missing(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "connections.csv"
+        output_path = tmp_path / "connections.xlsx"
+        input_path.write_text(
+            "First Name,Last Name,URL,Connected On\n,,,2026-01-30\nAda,Lovelace,,2026-01-30\n"
+        )
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(
+                ColumnConfig(name="First Name"),
+                ColumnConfig(name="Last Name"),
+                ColumnConfig(name="URL"),
+                ColumnConfig(name="Connected On", required=True),
+            ),
+            drop_if_all_missing=("First Name", "Last Name", "URL"),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["First Name"].fillna("")) == ["Ada"]

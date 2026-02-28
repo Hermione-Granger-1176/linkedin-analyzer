@@ -123,6 +123,29 @@ def clean_comments_message(value: object) -> str:
     return text.strip()
 
 
+def clean_messages_content(value: object) -> str:
+    r"""Clean CONTENT field from LinkedIn messages export.
+
+    Handles common quote escaping patterns:
+    - Converts backslash-escaped quotes (\\") to regular quotes (")
+    - Converts double-double quotes ("") to regular quotes (")
+    - Preserves line breaks and unicode characters
+
+    Args:
+        value: Raw value from CSV
+
+    Returns:
+        Cleaned string
+    """
+    if is_missing(value):
+        return ""
+
+    text = str(value)
+    text = text.replace('\\"', '"')
+    text = text.replace('""', '"')
+    return text.strip()
+
+
 def clean_empty_field(value: object) -> str:
     """Clean empty or quoted-empty fields.
 
@@ -155,6 +178,8 @@ def clean_date(value: object) -> str:
         return ""
 
     text = str(value).strip()
+    if text.upper().endswith(" UTC"):
+        text = text[:-4].strip()
 
     try:
         fmt = "%Y-%m-%d %H:%M:%S"
@@ -165,6 +190,58 @@ def clean_date(value: object) -> str:
         return local_dt.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, OverflowError):
         return text
+
+
+def clean_connections_date(value: object) -> str:
+    """Convert LinkedIn Connections date to ISO format.
+
+    Parses dates in "DD Mon YYYY" or "DD Month YYYY" format and returns
+    "YYYY-MM-DD". Month parsing is locale-independent and expects English
+    month names from LinkedIn exports.
+
+    Args:
+        value: Raw connection date value
+
+    Returns:
+        Date string in ISO format, empty string if missing, or original value
+        if parsing fails
+    """
+    if is_missing(value):
+        return ""
+
+    text = str(value).strip()
+    parts = text.split()
+    if len(parts) != 3:
+        return text
+
+    day_str, month_str, year_str = parts
+    if not day_str.isdigit() or not year_str.isdigit():
+        return text
+
+    month_lookup = {
+        "jan": 1,
+        "feb": 2,
+        "mar": 3,
+        "apr": 4,
+        "may": 5,
+        "jun": 6,
+        "jul": 7,
+        "aug": 8,
+        "sep": 9,
+        "oct": 10,
+        "nov": 11,
+        "dec": 12,
+    }
+    month = month_lookup.get(month_str[:3].lower())
+    if month is None:
+        return text
+
+    try:
+        parsed = datetime(int(year_str), month, int(day_str))
+    except ValueError:
+        return text
+
+    return parsed.strftime("%Y-%m-%d")
 
 
 def clean_value(value: object) -> str:

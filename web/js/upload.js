@@ -3,24 +3,30 @@
 (function() {
     'use strict';
 
+    const TRACKED_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+
     const elements = {
         dropZone: document.getElementById('multiDropZone'),
         fileInput: document.getElementById('multiFileInput'),
         sharesStatus: document.getElementById('sharesStatus'),
         commentsStatus: document.getElementById('commentsStatus'),
+        messagesStatus: document.getElementById('messagesStatus'),
+        connectionsStatus: document.getElementById('connectionsStatus'),
         uploadHint: document.getElementById('uploadHint'),
         openAnalyticsBtn: document.getElementById('openAnalyticsBtn'),
         clearAllBtn: document.getElementById('clearAllBtn'),
         fileStatusItems: {
             shares: document.querySelector('.file-status-item[data-file="shares"]'),
-            comments: document.querySelector('.file-status-item[data-file="comments"]')
+            comments: document.querySelector('.file-status-item[data-file="comments"]'),
+            messages: document.querySelector('.file-status-item[data-file="messages"]'),
+            connections: document.querySelector('.file-status-item[data-file="connections"]')
         },
         progressOverlay: document.getElementById('progressOverlay'),
         progressCanvas: document.getElementById('progressCanvas'),
         progressPercent: document.getElementById('progressPercent')
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-5';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
 
     let worker = null;
     const pendingFiles = new Map();
@@ -77,7 +83,8 @@
             if (worker) {
                 worker.postMessage({ type: 'clear' });
             }
-            updateStatus({ shares: null, comments: null, analyticsReady: false });
+            resetProcessingState();
+            updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
         });
 
         window.addEventListener('resize', () => drawProgressBar(progressValue));
@@ -86,11 +93,10 @@
     /** Restore upload status from IndexedDB on page load. */
     async function restoreState() {
         const files = await Storage.getAllFiles();
-        const analyticsBase = await Storage.getAnalytics();
-        const shares = files.find(file => file.type === 'shares');
-        const comments = files.find(file => file.type === 'comments');
-        const analyticsReady = Boolean(analyticsBase && analyticsBase.months && Object.keys(analyticsBase.months).length);
-        updateStatus({ shares, comments, analyticsReady });
+        const fileMap = getFileMap(files);
+        primeAnalyticsWorker(fileMap);
+        const analyticsReady = await hasAnalyticsData();
+        updateStatus({ fileMap, analyticsReady });
     }
 
     /**
@@ -154,20 +160,29 @@
         showProgressOverlay();
         csvFiles.forEach(file => {
             activeJobs += 1;
+            const jobId = createJobId(file);
             readFileAsText(file)
                 .then(text => {
-                    pendingFiles.set(file.name, text);
+                    pendingFiles.set(jobId, { text, fileName: file.name });
                     worker.postMessage({
                         type: 'addFile',
-                        payload: { csvText: text, fileName: file.name }
+                        payload: { csvText: text, fileName: file.name, jobId }
                     });
                 })
                 .catch(() => {
-                    activeJobs -= 1;
+                    completeJob();
                     setHint('Error reading file. Please try again.', true);
-                    checkJobs();
                 });
         });
+    }
+
+    /**
+     * Build a unique job ID for pending file processing.
+     * @param {File} file - Uploaded file
+     * @returns {string}
+     */
+    function createJobId(file) {
+        return `${file.name}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
     }
 
     /**
@@ -190,53 +205,74 @@
      */
     async function handleWorkerMessage(event) {
         const message = event.data || {};
-        if (message.type === 'fileProcessed') {
-            const payload = message.payload || {};
-            const fileType = payload.fileType;
-            const fileName = payload.fileName;
-            const rowCount = payload.rowCount || 0;
-
-            if (!fileType) {
-                setHint(payload.error || 'File could not be processed.', true);
-                activeJobs -= 1;
-                checkJobs();
+        switch (message.type) {
+            case 'restored':
                 return;
+            case 'fileProcessed':
+                await handleFileProcessedMessage(message.payload || {});
+                return;
+            case 'error':
+                setHint(message.payload && message.payload.message ? message.payload.message : 'Worker error.', true);
+                completeJob();
+                return;
+            default:
+                return;
+        }
+    }
+
+    /**
+     * Persist processed worker payload and refresh upload status.
+     * @param {object} payload - Worker payload for fileProcessed
+     */
+    async function handleFileProcessedMessage(payload) {
+        const fileType = payload.fileType;
+        const fileName = payload.fileName;
+        const jobId = payload.jobId || null;
+        const rowCount = payload.rowCount || 0;
+
+        if (!fileType) {
+            setHint(payload.error || 'File could not be processed.', true);
+            completeJob();
+            return;
+        }
+
+        try {
+            const pendingKey = jobId || fileName;
+            const pending = pendingFiles.get(pendingKey) || null;
+            if (pendingKey) {
+                pendingFiles.delete(pendingKey);
             }
+            const text = pending ? pending.text : '';
 
-            const text = pendingFiles.get(fileName) || '';
-            pendingFiles.delete(fileName);
             await Storage.saveFile(fileType, { name: fileName, text, rowCount });
-
             if (payload.analyticsBase) {
                 await Storage.saveAnalytics(payload.analyticsBase);
             }
 
             const files = await Storage.getAllFiles();
-            const shares = files.find(file => file.type === 'shares');
-            const comments = files.find(file => file.type === 'comments');
-            updateStatus({
-                shares,
-                comments,
-                analyticsReady: Boolean(payload.hasData)
-            });
-
+            const fileMap = getFileMap(files);
+            const analyticsReady = await hasAnalyticsData();
+            updateStatus({ fileMap, analyticsReady });
             setHint('File loaded successfully.', false);
-            activeJobs -= 1;
-            checkJobs();
-        }
-
-        if (message.type === 'error') {
-            setHint(message.payload && message.payload.message ? message.payload.message : 'Worker error.', true);
-            activeJobs -= 1;
-            checkJobs();
+        } catch {
+            setHint('Error saving file data. Please try again.', true);
+        } finally {
+            completeJob();
         }
     }
 
     /** Handle worker-level errors. */
     function handleWorkerError() {
         setHint('Analytics worker error. Try refreshing.', true);
-        activeJobs = 0;
-        hideProgressOverlay();
+        resetProcessingState();
+    }
+
+    /**
+     * Decrement active jobs and hide overlay when complete.
+     */
+    function completeJob() {
+        activeJobs = Math.max(0, activeJobs - 1);
+        checkJobs();
     }
 
     /**
@@ -246,6 +282,9 @@
      * @param {object|null} fileData - Stored file record, or null if not uploaded
      */
     function updateFileStatus(statusItem, statusLabel, fileData) {
+        if (!statusItem || !statusLabel) {
+            return;
+        }
         if (fileData) {
             statusItem.classList.add('is-ready');
             statusLabel.textContent = `${fileData.rowCount} rows loaded`;
@@ -257,21 +296,100 @@
 
     /**
      * Update the upload page UI to reflect current file and analytics state.
-     * @param {{shares: object|null, comments: object|null, analyticsReady: boolean}} status
+     * @param {{fileMap: Object<string, object|null>, analyticsReady: boolean}} status
      */
-    function updateStatus({ shares, comments, analyticsReady }) {
-        updateFileStatus(elements.fileStatusItems.shares, elements.sharesStatus, shares);
-        updateFileStatus(elements.fileStatusItems.comments, elements.commentsStatus, comments);
+    function updateStatus({ fileMap, analyticsReady }) {
+        updateFileStatus(elements.fileStatusItems.shares, elements.sharesStatus, fileMap.shares);
+        updateFileStatus(elements.fileStatusItems.comments, elements.commentsStatus, fileMap.comments);
+        updateFileStatus(elements.fileStatusItems.messages, elements.messagesStatus, fileMap.messages);
+        updateFileStatus(elements.fileStatusItems.connections, elements.connectionsStatus, fileMap.connections);
 
-        const hasAny = Boolean(shares || comments);
-        elements.openAnalyticsBtn.disabled = !hasAny || !analyticsReady;
+        const hasAny = TRACKED_TYPES.some(type => Boolean(fileMap[type]));
+        const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
+        elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
+        setHint(getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady), false);
+    }
+
+    /**
+     * Resolve current upload hint message.
+     * @param {boolean} hasAny - Whether any tracked file exists
+     * @param {boolean} hasAnalyticsFiles - Whether shares/comments exist
+     * @param {boolean} analyticsReady - Whether analytics base is available
+     * @returns {string}
+     */
+    function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
         if (!hasAny) {
-            setHint('Upload at least one file to start.', false);
-        } else if (!analyticsReady) {
-            setHint('Processing analytics in the background.', false);
-        } else {
-            setHint('Analytics are ready. Open the dashboard.', false);
+            return 'Upload at least one file to start.';
         }
+        if (hasAnalyticsFiles && !analyticsReady) {
+            return 'Processing analytics in the background.';
+        }
+        if (analyticsReady) {
+            return 'Analytics are ready. Open the dashboard.';
+        }
+        return 'Files loaded. Open Messages tab for conversation insights.';
+    }
+
+    /**
+     * Build a fixed file map for all tracked types.
+     * @param {object[]} files - Stored file records
+     * @returns {{shares: object|null, comments: object|null, messages: object|null, connections: object|null}}
+     */
+    function getFileMap(files) {
+        const map = createEmptyFileMap();
+        files.forEach(file => {
+            if (TRACKED_TYPES.includes(file.type)) {
+                map[file.type] = file;
+            }
+        });
+        return map;
+    }
+
+    /**
+     * Create an empty file map.
+     * @returns {{shares: null, comments: null, messages: null, connections: null}}
+     */
+    function createEmptyFileMap() {
+        return {
+            shares: null,
+            comments: null,
+            messages: null,
+            connections: null
+        };
+    }
+
+    /**
+     * Check whether analytics aggregates are available in storage.
+     * @returns {Promise<boolean>}
+     */
+    async function hasAnalyticsData() {
+        const analyticsBase = await Storage.getAnalytics();
+        return Boolean(
+            analyticsBase
+            && analyticsBase.months
+            && Object.keys(analyticsBase.months).length
+        );
+    }
+
+    /**
+     * Seed worker with existing shares/comments datasets for accurate recompute.
+     * @param {{shares: object|null, comments: object|null}} fileMap - Stored files map
+     */
+    function primeAnalyticsWorker(fileMap) {
+        if (!worker) {
+            return;
+        }
+
+        const sharesCsv = fileMap.shares ? fileMap.shares.text : '';
+        const commentsCsv = fileMap.comments ? fileMap.comments.text : '';
+        if (!sharesCsv && !commentsCsv) {
+            return;
+        }
+
+        worker.postMessage({
+            type: 'restoreFiles',
+            payload: { sharesCsv, commentsCsv }
+        });
     }
 
     /**
@@ -289,6 +407,15 @@
         if (activeJobs <= 0) {
             hideProgressOverlay();
         }
+    }
+
+    /**
+     * Clear queued processing state and hide the overlay.
+     */
+    function resetProcessingState() {
+        pendingFiles.clear();
+        activeJobs = 0;
+        hideProgressOverlay();
     }
 
     /** Show the progress overlay and start animation. */

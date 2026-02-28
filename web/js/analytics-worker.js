@@ -1,6 +1,6 @@
 /* LinkedIn Analyzer - Analytics Web Worker */
 
-const WORKER_VERSION = '20260131-5';
+const WORKER_VERSION = '20260228-2';
 importScripts(`cleaner.js?v=${WORKER_VERSION}`, `analytics.js?v=${WORKER_VERSION}`);
 
 let sharesData = null;
@@ -10,6 +10,7 @@ let viewCache = new Map();
 let currentRequestId = 0;
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
+const ANALYTICS_SOURCE_TYPES = Object.freeze(['shares', 'comments']);
 
 /**
  * Normalize raw filter values into a safe, complete filter object.
@@ -52,6 +53,22 @@ function getViewKey(filters) {
 function computeAnalytics() {
     analytics = AnalyticsEngine.compute(sharesData, commentsData);
     viewCache = new Map();
+}
+
+/**
+ * Reset analytics and cache when no source datasets are loaded.
+ */
+function resetAnalyticsState() {
+    analytics = null;
+    viewCache = new Map();
+}
+
+/**
+ * Check whether analytics currently contains any activity.
+ * @returns {boolean}
+ */
+function hasAnalyticsData() {
+    return Boolean(analytics && analytics.totals && analytics.totals.total > 0);
 }
 
 /**
@@ -113,39 +130,102 @@ function cacheView(key, payload) {
 
 /**
  * Process an uploaded CSV file: parse, clean, recompute analytics, and reply.
- * @param {{csvText: string, fileName: string}} payload - File content and name
+ * @param {{csvText: string, fileName: string, jobId?: string}} payload - File content and name
  */
 function handleAddFile(payload) {
-    const csvText = payload && payload.csvText ? payload.csvText : '';
-    const fileName = payload && payload.fileName ? payload.fileName : '';
+    const {
+        csvText = '',
+        fileName = '',
+        jobId = null
+    } = payload || {};
 
     const processed = LinkedInCleaner.process(csvText, 'auto');
     if (!processed.success) {
         self.postMessage({
             type: 'fileProcessed',
-            payload: { error: processed.error || 'Unable to process file.' }
+            payload: { error: processed.error || 'Unable to process file.', jobId, fileName }
         });
         return;
     }
 
     const fileType = processed.fileType;
-    if (fileType === 'shares') {
-        sharesData = processed.cleanedData;
-    } else if (fileType === 'comments') {
-        commentsData = processed.cleanedData;
+    let analyticsBase = null;
+    const updateSourceByType = {
+        shares: () => {
+            sharesData = processed.cleanedData;
+        },
+        comments: () => {
+            commentsData = processed.cleanedData;
+        }
+    };
+    const updateSource = updateSourceByType[fileType];
+    if (updateSource) {
+        updateSource();
+        computeAnalytics();
+        analyticsBase = serializeAnalytics(analytics);
     }
-
-    computeAnalytics();
-
-    const base = serializeAnalytics(analytics);
     self.postMessage({
         type: 'fileProcessed',
         payload: {
             fileType,
             fileName,
+            jobId,
             rowCount: processed.rowCount,
-            analyticsBase: base,
-            hasData: Boolean(analytics && analytics.totals && analytics.totals.total > 0)
+            analyticsBase,
+            hasData: hasAnalyticsData()
+        }
+    });
+}
+
+/**
+ * Restore worker source datasets from persisted CSV texts.
+ * @param {{sharesCsv?: string, commentsCsv?: string}} payload - Persisted analytics inputs
+ */
+function handleRestoreFiles(payload) {
+    const {
+        sharesCsv = '',
+        commentsCsv = ''
+    } = payload || {};
+
+    const sourceCsvByType = {
+        shares: sharesCsv,
+        comments: commentsCsv
+    };
+    const assignSourceByType = {
+        shares: (cleanedData) => {
+            sharesData = cleanedData;
+        },
+        comments: (cleanedData) => {
+            commentsData = cleanedData;
+        }
+    };
+
+    sharesData = null;
+    commentsData = null;
+
+    ANALYTICS_SOURCE_TYPES.forEach(type => {
+        const csvText = sourceCsvByType[type];
+        if (!csvText) {
+            return;
+        }
+
+        const parsed = LinkedInCleaner.process(csvText, type);
+        if (!parsed.success) {
+            return;
+        }
+        assignSourceByType[type](parsed.cleanedData);
+    });
+
+    if (sharesData || commentsData) {
+        computeAnalytics();
+    } else {
+        resetAnalyticsState();
+    }
+
+    self.postMessage({
+        type: 'restored',
+        payload: {
+            hasData: hasAnalyticsData()
         }
     });
 }
@@ -157,7 +237,7 @@ function handleAddFile(payload) {
 function handleInitBase(payload) {
     analytics = hydrateAnalytics(payload);
     viewCache = new Map();
-    const hasData = Boolean(analytics && analytics.totals && analytics.totals.total > 0);
+    const hasData = hasAnalyticsData();
     self.postMessage({
         type: 'init',
         payload: { hasData }
@@ -219,8 +299,7 @@ function handleView(requestId, filters) {
 function handleClear() {
     sharesData = null;
     commentsData = null;
-    analytics = null;
-    viewCache = new Map();
+    resetAnalyticsState();
     currentRequestId = 0;
     self.postMessage({ type: 'cleared' });
 }
@@ -229,6 +308,7 @@ self.addEventListener('message', (event) => {
     const message = event.data || {};
     const handlers = {
         addFile: () => handleAddFile(message.payload || {}),
+        restoreFiles: () => handleRestoreFiles(message.payload || {}),
         initBase: () => handleInitBase(message.payload || null),
         view: () => handleView(message.requestId, message.filters || {}),
         clear: () => handleClear()

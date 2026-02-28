@@ -8,8 +8,13 @@ const LinkedInCleaner = (() => {
 
     const FILE_TYPE_LABELS = Object.freeze({
         shares: 'Shares',
-        comments: 'Comments'
+        comments: 'Comments',
+        messages: 'Messages',
+        connections: 'Connections'
     });
+
+    const FILE_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+    const EMPTY_CSV_ERROR = 'CSV file is empty or has no data rows';
 
     const CONFIGS = Object.freeze({
         shares: freezeConfig({
@@ -32,6 +37,34 @@ const LinkedInCleaner = (() => {
             ],
             requiredColumns: ['Date', 'Link', 'Message'],
             outputName: 'Comments.xlsx'
+        }),
+        messages: freezeConfig({
+            columns: [
+                { name: 'FROM', width: 24 },
+                { name: 'TO', width: 24 },
+                { name: 'DATE', width: 20, cleaner: 'cleanDate' },
+                { name: 'CONTENT', width: 100, wrapText: true, cleaner: 'cleanMessagesContent' },
+                { name: 'FOLDER', width: 16 },
+                { name: 'CONVERSATION ID', width: 40 },
+                { name: 'SENDER PROFILE URL', width: 48, cleaner: 'cleanEmptyField' },
+                { name: 'RECIPIENT PROFILE URLS', width: 48, cleaner: 'cleanEmptyField' }
+            ],
+            requiredColumns: ['FROM', 'TO', 'DATE', 'CONTENT'],
+            outputName: 'Messages.xlsx'
+        }),
+        connections: freezeConfig({
+            columns: [
+                { name: 'First Name', width: 20 },
+                { name: 'Last Name', width: 20 },
+                { name: 'URL', width: 50, cleaner: 'cleanEmptyField' },
+                { name: 'Email Address', width: 32, cleaner: 'cleanEmptyField' },
+                { name: 'Company', width: 30 },
+                { name: 'Position', width: 30 },
+                { name: 'Connected On', width: 20, cleaner: 'cleanConnectionsDate' }
+            ],
+            requiredColumns: ['First Name', 'Last Name', 'Connected On'],
+            outputName: 'Connections.xlsx',
+            skipRows: 3
         })
     });
 
@@ -144,20 +177,30 @@ const LinkedInCleaner = (() => {
      * @param {*} value - Raw value from CSV
      * @returns {string} Cleaned string
      */
-    function cleanCommentsMessage(value) {
+    function cleanEscapedQuotesText(value) {
         if (isMissing(value)) {
             return '';
         }
 
         let text = String(value);
-
-        // Replace backslash-escaped quotes with regular quotes
         text = text.replace(/\\"/g, '"');
-
-        // Also handle any double-double quote escaping (fallback)
         text = text.replace(/""/g, '"');
-
         return text.trim();
+    }
+
+    function cleanCommentsMessage(value) {
+        return cleanEscapedQuotesText(value);
+    }
+
+    /**
+     * Clean CONTENT field from LinkedIn Messages export.
+     * Handles quote escaping while preserving line breaks.
+     *
+     * @param {*} value - Raw value from CSV
+     * @returns {string} Cleaned string
+     */
+    function cleanMessagesContent(value) {
+        return cleanEscapedQuotesText(value);
     }
 
     /**
@@ -224,7 +267,10 @@ const LinkedInCleaner = (() => {
         if (isMissing(value)) {
             return '';
         }
-        const text = String(value).trim();
+        let text = String(value).trim();
+        if (text.toUpperCase().endsWith(' UTC')) {
+            text = text.slice(0, -4).trim();
+        }
         // Parse UTC date: "YYYY-MM-DD HH:MM:SS"
         const [datePart, timePart] = text.split(' ');
         if (!datePart || !timePart) {
@@ -256,11 +302,55 @@ const LinkedInCleaner = (() => {
         return `${localYear}-${localMonth}-${localDay} ${localHour}:${localMinute}:${localSecond}`;
     }
 
+    /**
+     * Convert LinkedIn Connections date to ISO format.
+     *
+     * @param {*} value - Raw date value (e.g. "30 Jan 2026")
+     * @returns {string} Date string in YYYY-MM-DD format
+     */
+    function cleanConnectionsDate(value) {
+        if (isMissing(value)) {
+            return '';
+        }
+
+        const text = String(value).trim();
+        const monthMatch = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+        if (!monthMatch) {
+            return text;
+        }
+
+        const monthMap = {
+            Jan: '01',
+            Feb: '02',
+            Mar: '03',
+            Apr: '04',
+            May: '05',
+            Jun: '06',
+            Jul: '07',
+            Aug: '08',
+            Sep: '09',
+            Oct: '10',
+            Nov: '11',
+            Dec: '12'
+        };
+
+        const day = monthMatch[1].padStart(2, '0');
+        const monthToken = monthMatch[2].slice(0, 3);
+        const month = monthMap[monthToken];
+        const year = monthMatch[3];
+        if (!month) {
+            return text;
+        }
+        return `${year}-${month}-${day}`;
+    }
+
     const CLEANERS = Object.freeze({
         cleanSharesCommentary,
         cleanCommentsMessage,
+        cleanMessagesContent,
         cleanEmptyField,
-        cleanDate
+        cleanDate,
+        cleanConnectionsDate
     });
 
     /**
@@ -396,11 +486,12 @@ const LinkedInCleaner = (() => {
     /**
      * Parse CSV text into array of objects
      * @param {string} csvText - Raw CSV text
+     * @param {string} [fileType='auto'] - Target file type for CSV options and skip rows
      * @returns {{headers: string[], data: object[], error: string|null}}
      */
-    function parseCSV(csvText, fileType) {
+    function parseCSV(csvText, fileType = 'auto') {
         if (typeof csvText !== 'string' || !csvText.trim()) {
-            return { headers: [], data: [], error: 'CSV file is empty or has no data rows' };
+            return { headers: [], data: [], error: EMPTY_CSV_ERROR };
         }
 
         const csvOptions = fileType === 'comments' ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
@@ -413,15 +504,22 @@ const LinkedInCleaner = (() => {
         }
 
         if (!rows.length) {
-            return { headers: [], data: [], error: 'CSV file is empty or has no data rows' };
+            return { headers: [], data: [], error: EMPTY_CSV_ERROR };
         }
 
-        const headers = normalizeHeaders(rows[0]);
+        const config = CONFIGS[fileType] || null;
+        const skipRows = config && Number.isInteger(config.skipRows) ? config.skipRows : 0;
+        const rowsAfterSkip = skipRows > 0 ? rows.slice(skipRows) : rows;
+        if (!rowsAfterSkip.length) {
+            return { headers: [], data: [], error: 'CSV file has no header rows after skip.' };
+        }
+
+        const headers = normalizeHeaders(rowsAfterSkip[0]);
         if (!headers.length || headers.every(header => header === '')) {
             return { headers: [], data: [], error: 'Could not parse CSV headers' };
         }
 
-        const dataRows = rows.slice(1).filter(row => !isRowEmpty(row));
+        const dataRows = rowsAfterSkip.slice(1).filter(row => !isRowEmpty(row));
         const data = dataRows.map(row => Object.fromEntries(
             headers.map((header, index) => [header, row[index] !== undefined ? row[index] : ''])
         ));
@@ -432,28 +530,52 @@ const LinkedInCleaner = (() => {
     /**
      * Auto-detect file type based on column headers
      * @param {string[]} headers - Array of column headers
-     * @returns {string|null} 'shares', 'comments', or null if unknown
+     * @returns {string|null} File type or null if unknown
      */
     function detectFileType(headers) {
         const normalizedHeaders = normalizeHeaders(headers);
         const headerSet = new Set(normalizedHeaders);
 
-        const sharesRequired = CONFIGS.shares.requiredColumns;
-        const commentsRequired = CONFIGS.comments.requiredColumns;
-
-        const isShares = sharesRequired.every(column => headerSet.has(column));
-        const isComments = commentsRequired.every(column => headerSet.has(column));
-
-        if (isShares) return 'shares';
-        if (isComments) return 'comments';
+        for (const type of FILE_TYPES) {
+            const requiredColumns = CONFIGS[type].requiredColumns;
+            const isMatch = requiredColumns.every(column => headerSet.has(column));
+            if (isMatch) {
+                return type;
+            }
+        }
 
         return null;
     }
 
     /**
+     * Find all supported file types that can parse and validate the given CSV text.
+     * @param {string} csvText - Raw CSV text
+     * @returns {Array<{type: string, headers: string[], data: object[]}>}
+     */
+    function detectMatchingFileTypes(csvText) {
+        const matches = [];
+        for (const type of FILE_TYPES) {
+            const parsed = parseCSV(csvText, type);
+            if (parsed.error) {
+                continue;
+            }
+            const validation = validateColumns(parsed.headers, type);
+            if (!validation.valid) {
+                continue;
+            }
+            matches.push({
+                type,
+                headers: parsed.headers,
+                data: parsed.data
+            });
+        }
+        return matches;
+    }
+
+    /**
      * Validate that required columns exist in the data
      * @param {string[]} headers - Array of column headers
-     * @param {string} fileType - 'shares' or 'comments'
+     * @param {string} fileType - Supported file type
      * @returns {{valid: boolean, missing: string[]}}
      */
     function validateColumns(headers, fileType) {
@@ -475,14 +597,14 @@ const LinkedInCleaner = (() => {
     /**
      * Clean the parsed data based on file type
      * @param {object[]} data - Parsed CSV data as array of objects
-     * @param {string} fileType - 'shares' or 'comments'
+     * @param {string} fileType - Supported file type
      * @returns {object[]} Cleaned data
      */
     function cleanData(data, fileType) {
         const config = CONFIGS[fileType];
         if (!config) return data;
 
-        return data.map(row => {
+        const cleanedRows = data.map(row => {
             const cleanedRow = {};
 
             config.columns.forEach(column => {
@@ -493,6 +615,17 @@ const LinkedInCleaner = (() => {
 
             return cleanedRow;
         });
+
+        if (fileType === 'connections') {
+            return cleanedRows.filter(row => {
+                const firstName = cleanEmptyField(row['First Name']);
+                const lastName = cleanEmptyField(row['Last Name']);
+                const url = cleanEmptyField(row.URL);
+                return Boolean(firstName || lastName || url);
+            });
+        }
+
+        return cleanedRows;
     }
 
     /**
@@ -533,7 +666,7 @@ const LinkedInCleaner = (() => {
     /**
      * Process a CSV file completely
      * @param {string} csvText - Raw CSV text
-     * @param {string} fileType - 'shares', 'comments', or 'auto'
+     * @param {string} fileType - Supported file type or 'auto'
      * @returns {{
      *   success: boolean,
      *   fileType: string|null,
@@ -546,12 +679,50 @@ const LinkedInCleaner = (() => {
      * }}
      */
     function process(csvText, fileType = 'auto') {
-        const initialParse = fileType === 'auto'
-            ? parseCSV(csvText)
-            : parseCSV(csvText, fileType);
-        const { headers, data, error: parseError } = initialParse;
+        if (fileType === 'auto') {
+            const matches = detectMatchingFileTypes(csvText);
+            if (!matches.length) {
+                const initialParse = parseCSV(csvText, 'auto');
+                if (initialParse.error) {
+                    return {
+                        success: false,
+                        fileType: null,
+                        detectedType: null,
+                        headers: [],
+                        originalData: [],
+                        cleanedData: [],
+                        rowCount: 0,
+                        error: initialParse.error
+                    };
+                }
+                return {
+                    success: false,
+                    fileType: null,
+                    detectedType: null,
+                    headers: initialParse.headers,
+                    originalData: initialParse.data,
+                    cleanedData: [],
+                    rowCount: initialParse.data.length,
+                    error: 'Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.'
+                };
+            }
 
-        if (parseError) {
+            const selected = matches[0];
+            const cleanedData = cleanData(selected.data, selected.type);
+            return {
+                success: true,
+                fileType: selected.type,
+                detectedType: selected.type,
+                headers: selected.headers,
+                originalData: selected.data,
+                cleanedData,
+                rowCount: cleanedData.length,
+                error: null
+            };
+        }
+
+        const parsed = parseCSV(csvText, fileType);
+        if (parsed.error) {
             return {
                 success: false,
                 fileType: null,
@@ -560,62 +731,39 @@ const LinkedInCleaner = (() => {
                 originalData: [],
                 cleanedData: [],
                 rowCount: 0,
-                error: parseError
+                error: parsed.error
             };
         }
 
-        const detectedType = detectFileType(headers);
-
-        let processingType = fileType;
-        if (fileType === 'auto') {
-            processingType = detectedType;
-            if (!processingType) {
-                return {
-                    success: false,
-                    fileType: null,
-                    detectedType: null,
-                    headers,
-                    originalData: data,
-                    cleanedData: [],
-                    rowCount: data.length,
-                    error: 'Could not auto-detect file type. This file does not appear to be a LinkedIn Shares or Comments export. Please check that you uploaded the correct file.'
-                };
-            }
-        }
-
-        // Re-parse with correct CSV options if needed for comments
-        let finalHeaders = headers;
-        let finalData = data;
-        if (processingType === 'comments' && fileType === 'auto') {
-            const reParsed = parseCSV(csvText, 'comments');
-            if (!reParsed.error) {
-                finalHeaders = reParsed.headers;
-                finalData = reParsed.data;
-            }
-        }
-
-        const validation = validateColumns(finalHeaders, processingType);
+        const { headers, data } = parsed;
+        let detectedType = detectFileType(headers);
+        const validation = validateColumns(headers, fileType);
         if (!validation.valid) {
+            if (!detectedType) {
+                const matches = detectMatchingFileTypes(csvText);
+                const alternateMatch = matches.find(match => match.type !== fileType);
+                detectedType = alternateMatch ? alternateMatch.type : null;
+            }
             return {
                 success: false,
-                fileType: processingType,
+                fileType,
                 detectedType,
-                headers: finalHeaders,
-                originalData: finalData,
+                headers,
+                originalData: data,
                 cleanedData: [],
-                rowCount: finalData.length,
+                rowCount: data.length,
                 error: buildColumnErrorMessage(fileType, detectedType, validation.missing)
             };
         }
 
-        const cleanedData = cleanData(finalData, processingType);
+        const cleanedData = cleanData(data, fileType);
 
         return {
             success: true,
-            fileType: processingType,
+            fileType,
             detectedType,
-            headers: finalHeaders,
-            originalData: finalData,
+            headers,
+            originalData: data,
             cleanedData,
             rowCount: cleanedData.length,
             error: null

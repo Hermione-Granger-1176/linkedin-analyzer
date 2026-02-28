@@ -9,7 +9,8 @@
 .error-message,
 .privacy-notice,
 .insight-card,
-.progress-card {
+.progress-card,
+.message-panel {
     transform: rotate(calc(var(--sketch-rotate, 0) * 0.1deg));
 }
 
@@ -41,7 +42,9 @@
 .hub-card,
 .chart-card,
 .upload-status-card,
-.insight-card {
+.insight-card,
+.message-panel,
+.message-item {
     border-radius: 14px 12px 15px 13px / 12px 15px 13px 14px;
 }
 
@@ -213,7 +216,9 @@
 .upload-layout,
 .hub-grid,
 .analytics-grid,
-.insights-grid {
+.insights-grid,
+.messages-layout,
+.message-panels {
     animation: sketch-in 0.5s ease-out;
 }
 

@@ -6,8 +6,10 @@ import pandas as pd
 
 from linkedin_analyzer.core.text import (
     clean_comments_message,
+    clean_connections_date,
     clean_date,
     clean_empty_field,
+    clean_messages_content,
     clean_shares_commentary,
     clean_value,
     escape_excel_formula,
@@ -185,6 +187,26 @@ class TestCleanEmptyField:
         assert result == ""
 
 
+class TestCleanMessagesContent:
+    """Tests for clean_messages_content function."""
+
+    def test_removes_backslash_escaped_quotes(self) -> None:
+        result = clean_messages_content('He said \\"hello\\"')
+        assert result == 'He said "hello"'
+
+    def test_handles_double_double_quotes(self) -> None:
+        result = clean_messages_content('He said ""hello""')
+        assert result == 'He said "hello"'
+
+    def test_preserves_line_breaks(self) -> None:
+        result = clean_messages_content("Line 1\nLine 2")
+        assert result == "Line 1\nLine 2"
+
+    def test_returns_empty_for_missing(self) -> None:
+        assert clean_messages_content(None) == ""
+        assert clean_messages_content(float("nan")) == ""
+
+
 class TestCleanDate:
     """Tests for clean_date function."""
 
@@ -222,6 +244,29 @@ class TestCleanDate:
     def test_returns_empty_for_na_string(self) -> None:
         result = clean_date("NA")
         assert result == ""
+
+    def test_strips_utc_suffix(self) -> None:
+        result = clean_date("2024-01-15 14:30:00 UTC")
+        assert len(result) == 19
+        assert result[4] == "-"
+        assert result[13] == ":"
+
+
+class TestCleanConnectionsDate:
+    """Tests for clean_connections_date function."""
+
+    def test_returns_empty_for_missing(self) -> None:
+        assert clean_connections_date(None) == ""
+        assert clean_connections_date(float("nan")) == ""
+
+    def test_converts_short_month_name(self) -> None:
+        assert clean_connections_date("30 Jan 2026") == "2026-01-30"
+
+    def test_converts_long_month_name(self) -> None:
+        assert clean_connections_date("30 January 2026") == "2026-01-30"
+
+    def test_returns_as_is_for_invalid_format(self) -> None:
+        assert clean_connections_date("2026/01/30") == "2026/01/30"
 
 
 class TestCleanValue:

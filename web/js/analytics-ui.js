@@ -48,7 +48,7 @@
         currentView: null
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260131-5';
+    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
 
     let worker = null;
     let requestId = 0;

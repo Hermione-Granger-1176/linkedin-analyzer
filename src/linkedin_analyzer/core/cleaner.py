@@ -30,6 +30,20 @@ def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
 
 
+def normalize_required_columns(df: pd.DataFrame, required: list[str]) -> None:
+    """Normalize required columns so blank-like values become missing."""
+    if not required:
+        return
+
+    missing_tokens = {"", "NA", "N/A", "NAN", "NULL", "NONE", "<NA>"}
+    for column in required:
+        if column not in df.columns:
+            continue
+        normalized = df[column].astype("string").str.strip()
+        normalized = normalized.mask(normalized.str.upper().isin(missing_tokens), pd.NA)
+        df[column] = normalized
+
+
 def run_cleaner(config: CleanerConfig) -> CleanerResult:
     """Execute a cleaning operation.
 
@@ -55,6 +69,8 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         LOG.info("Reading %s", input_path)
         csv_kwargs: dict[str, Any] = dict(config.csv_kwargs)
+        if config.skiprows:
+            csv_kwargs.setdefault("skiprows", config.skiprows)
         df = pd.read_csv(input_path, **csv_kwargs)
         LOG.info("Found %d rows", len(df))
 
@@ -64,6 +80,14 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
 
         LOG.info("Validating columns")
         validate_columns(df, config.required_columns)
+        normalize_required_columns(df, config.required_columns)
+        if config.required_columns:
+            df = df.dropna(subset=config.required_columns)
+        if config.drop_if_all_missing:
+            drop_columns = [col for col in config.drop_if_all_missing if col in df.columns]
+            if drop_columns:
+                normalize_required_columns(df, drop_columns)
+                df = df.dropna(subset=drop_columns, how="all")
 
         # Apply cleaners to columns
         # (use clean_value as default for columns without a specific cleaner)

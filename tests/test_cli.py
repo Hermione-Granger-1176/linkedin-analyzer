@@ -37,6 +37,18 @@ class TestParseArgs:
         assert args.input == Path("data/input/Comments.csv")
         assert args.output == Path("data/output/Comments.xlsx")
 
+    def test_messages_command(self) -> None:
+        args = parse_args(["messages"])
+        assert args.command == "messages"
+        assert args.input == Path("data/input/messages.csv")
+        assert args.output == Path("data/output/Messages.xlsx")
+
+    def test_connections_command(self) -> None:
+        args = parse_args(["connections"])
+        assert args.command == "connections"
+        assert args.input == Path("data/input/Connections.csv")
+        assert args.output == Path("data/output/Connections.xlsx")
+
     def test_all_command(self) -> None:
         args = parse_args(["all"])
         assert args.command == "all"
@@ -44,6 +56,10 @@ class TestParseArgs:
         assert args.shares_output == Path("data/output/Shares.xlsx")
         assert args.comments_input == Path("data/input/Comments.csv")
         assert args.comments_output == Path("data/output/Comments.xlsx")
+        assert args.messages_input == Path("data/input/messages.csv")
+        assert args.messages_output == Path("data/output/Messages.xlsx")
+        assert args.connections_input == Path("data/input/Connections.csv")
+        assert args.connections_output == Path("data/output/Connections.xlsx")
 
     def test_log_level(self) -> None:
         args = parse_args(["--log-level", "DEBUG", "shares"])
@@ -85,6 +101,33 @@ class TestMain:
         input_file.write_text("Date,Link,Message\n2025-01-01,http://link,Hello\n")
 
         exit_code = main(["comments", "--input", str(input_file), "--output", str(output_file)])
+        assert exit_code == 0
+        assert output_file.exists()
+
+    def test_messages_command_success(self, tmp_path: Path) -> None:
+        input_file = tmp_path / "messages.csv"
+        output_file = tmp_path / "Messages.xlsx"
+        input_file.write_text(
+            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER\n"
+            "abc,Ada,Bob,2025-01-01 10:00:00 UTC,Hello there,INBOX\n"
+        )
+
+        exit_code = main(["messages", "--input", str(input_file), "--output", str(output_file)])
+        assert exit_code == 0
+        assert output_file.exists()
+
+    def test_connections_command_success(self, tmp_path: Path) -> None:
+        input_file = tmp_path / "Connections.csv"
+        output_file = tmp_path / "Connections.xlsx"
+        input_file.write_text(
+            "Notes:\n"
+            "Export metadata\n"
+            "\n"
+            "First Name,Last Name,Connected On\n"
+            "Ada,Lovelace,30 Jan 2026\n"
+        )
+
+        exit_code = main(["connections", "--input", str(input_file), "--output", str(output_file)])
         assert exit_code == 0
         assert output_file.exists()
 
@@ -137,6 +180,10 @@ class TestRunAll:
             shares_output=tmp_path / "Shares.xlsx",
             comments_input=tmp_path / "Comments.csv",
             comments_output=tmp_path / "Comments.xlsx",
+            messages_input=tmp_path / "messages.csv",
+            messages_output=tmp_path / "Messages.xlsx",
+            connections_input=tmp_path / "Connections.csv",
+            connections_output=tmp_path / "Connections.xlsx",
         )
 
         def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
@@ -155,8 +202,26 @@ class TestRunAll:
                 output_path=output_path,
             )
 
+        def fake_messages(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        def fake_connections(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
         monkeypatch.setattr(cli, "clean_shares", fake_shares)
         monkeypatch.setattr(cli, "clean_comments", fake_comments)
+        monkeypatch.setattr(cli, "clean_messages", fake_messages)
+        monkeypatch.setattr(cli, "clean_connections", fake_connections)
 
         assert cli.run_all(args) == 0
 
@@ -166,6 +231,10 @@ class TestRunAll:
             shares_output=tmp_path / "Shares.xlsx",
             comments_input=tmp_path / "Comments.csv",
             comments_output=tmp_path / "Comments.xlsx",
+            messages_input=tmp_path / "messages.csv",
+            messages_output=tmp_path / "Messages.xlsx",
+            connections_input=tmp_path / "Connections.csv",
+            connections_output=tmp_path / "Connections.xlsx",
         )
 
         def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
@@ -185,8 +254,26 @@ class TestRunAll:
                 output_path=output_path,
             )
 
+        def fake_messages(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        def fake_connections(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
         monkeypatch.setattr(cli, "clean_shares", fake_shares)
         monkeypatch.setattr(cli, "clean_comments", fake_comments)
+        monkeypatch.setattr(cli, "clean_messages", fake_messages)
+        monkeypatch.setattr(cli, "clean_connections", fake_connections)
 
         assert cli.run_all(args) == 1
 
@@ -198,6 +285,10 @@ class TestRunAll:
             shares_output=tmp_path / "Shares.xlsx",
             comments_input=tmp_path / "Comments.csv",
             comments_output=tmp_path / "Comments.xlsx",
+            messages_input=tmp_path / "messages.csv",
+            messages_output=tmp_path / "Messages.xlsx",
+            connections_input=tmp_path / "Connections.csv",
+            connections_output=tmp_path / "Connections.xlsx",
         )
 
         def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
@@ -217,7 +308,25 @@ class TestRunAll:
                 error="boom",
             )
 
+        def fake_messages(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        def fake_connections(*, input_path: Path, output_path: Path) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
         monkeypatch.setattr(cli, "clean_shares", fake_shares)
         monkeypatch.setattr(cli, "clean_comments", fake_comments)
+        monkeypatch.setattr(cli, "clean_messages", fake_messages)
+        monkeypatch.setattr(cli, "clean_connections", fake_connections)
 
         assert cli.run_all(args) == 1

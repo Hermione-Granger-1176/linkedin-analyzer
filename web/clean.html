@@ -42,7 +42,7 @@
         <header class="screen-header">
             <div class="header-text">
                 <h1 class="title">Clean Data</h1>
-                <p class="subtitle">Prepare Shares and Comments for export.</p>
+                <p class="subtitle">Prepare Shares, Comments, Messages, and Connections for export.</p>
             </div>
         </header>
 
@@ -50,12 +50,13 @@
             <a class="top-link no-underline" href="index.html">Home</a>
             <a class="top-link is-active no-underline" href="clean.html">Clean</a>
             <a class="top-link no-underline" href="analytics.html">Analytics</a>
+            <a class="top-link no-underline" href="messages.html">Messages</a>
             <a class="top-link no-underline" href="insights.html">Insights</a>
         </nav>
 
         <div class="analytics-empty" id="cleanEmpty" hidden>
             <h2>No files loaded</h2>
-            <p>Upload Shares.csv or Comments.csv on the Home page.</p>
+            <p>Upload LinkedIn CSV files on the Home page.</p>
             <div class="action-buttons">
                 <a class="primary-btn no-underline" href="index.html">Go to Home</a>
             </div>
@@ -79,8 +80,22 @@
                             <span class="option-text">Comments</span>
                         </span>
                     </label>
+                    <label class="file-type-option option-green">
+                        <input type="radio" name="cleanFileType" value="messages">
+                        <span class="option-box">
+                            <span class="option-radio"></span>
+                            <span class="option-text">Messages</span>
+                        </span>
+                    </label>
+                    <label class="file-type-option option-yellow">
+                        <input type="radio" name="cleanFileType" value="connections">
+                        <span class="option-box">
+                            <span class="option-radio"></span>
+                            <span class="option-text">Connections</span>
+                        </span>
+                    </label>
                 </div>
-                <p class="cleaner-hint" id="cleanerHint">Upload both files for full features.</p>
+                <p class="cleaner-hint" id="cleanerHint">Upload files to unlock cleaner options.</p>
             </div>
 
             <div class="preview-section" id="cleanPreviewSection" hidden>

@@ -56,6 +56,7 @@
             <a class="top-link is-active no-underline" href="index.html">Home</a>
             <a class="top-link no-underline" href="clean.html">Clean</a>
             <a class="top-link no-underline" href="analytics.html">Analytics</a>
+            <a class="top-link no-underline" href="messages.html">Messages</a>
             <a class="top-link no-underline" href="insights.html">Insights</a>
         </nav>
 
@@ -69,7 +70,7 @@
                         <path d="M10 40 Q10 52, 22 52 L42 52 Q54 52, 54 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
                     </svg>
                     <p class="drop-zone-text">Drop your CSV files here</p>
-                    <p class="drop-zone-subtext">Upload Shares.csv and Comments.csv</p>
+                    <p class="drop-zone-subtext">Upload Shares.csv, Comments.csv, messages.csv, and Connections.csv</p>
                 </div>
                 <div class="drop-zone-hover">
                     <p>Release to upload</p>
@@ -79,7 +80,7 @@
             <div class="upload-status-card">
                 <div class="status-header">
                     <h2>Files</h2>
-                    <p>We use Shares.csv and Comments.csv for analytics</p>
+                    <p>Upload all four exports for complete cleaning and relationship insights</p>
                 </div>
                 <div class="file-status-list" id="fileStatusList">
                     <div class="file-status-item" data-file="shares">
@@ -94,6 +95,20 @@
                         <div class="status-text">
                             <p class="status-title">Comments.csv</p>
                             <p class="status-meta" id="commentsStatus">Not uploaded</p>
+                        </div>
+                    </div>
+                    <div class="file-status-item" data-file="messages">
+                        <span class="status-indicator" aria-hidden="true"></span>
+                        <div class="status-text">
+                            <p class="status-title">messages.csv</p>
+                            <p class="status-meta" id="messagesStatus">Not uploaded</p>
+                        </div>
+                    </div>
+                    <div class="file-status-item" data-file="connections">
+                        <span class="status-indicator" aria-hidden="true"></span>
+                        <div class="status-text">
+                            <p class="status-title">Connections.csv</p>
+                            <p class="status-meta" id="connectionsStatus">Not uploaded</p>
                         </div>
                     </div>
                 </div>
@@ -130,6 +145,16 @@
                     </span>
                     <h3>Analytics</h3>
                     <p>Charts and stats about your LinkedIn activity.</p>
+                </a>
+                <a class="hub-card no-underline" href="messages.html" role="listitem">
+                    <span class="hub-icon" aria-hidden="true">
+                        <svg viewBox="0 0 48 48">
+                            <path d="M8 12 H40 V30 H20 L12 38 V30 H8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                            <path d="M14 18 H34 M14 24 H30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <h3>Messages</h3>
+                    <p>See who you talk to most, silent connections, and fading conversations.</p>
                 </a>
                 <a class="hub-card no-underline" href="insights.html" role="listitem">
                     <span class="hub-icon" aria-hidden="true">

@@ -50,7 +50,7 @@ const Storage = (() => {
 
     /**
      * Save an uploaded CSV file record to IndexedDB.
-     * @param {string} type - File type key ('shares' or 'comments')
+     * @param {string} type - File type key
      * @param {{name: string, text: string, rowCount: number}} data - File data to persist
      * @returns {Promise<void>}
      */
@@ -67,7 +67,7 @@ const Storage = (() => {
 
     /**
      * Retrieve a single file record by type.
-     * @param {string} type - File type key ('shares' or 'comments')
+     * @param {string} type - File type key
      * @returns {Promise<object|null>} The stored file record, or null if not found
      */
     async function getFile(type) {

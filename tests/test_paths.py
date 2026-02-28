@@ -16,3 +16,7 @@ def test_default_paths() -> None:
     assert Path("data/output/Shares.xlsx") == paths.DEFAULT_SHARES_OUTPUT
     assert Path("data/input/Comments.csv") == paths.DEFAULT_COMMENTS_INPUT
     assert Path("data/output/Comments.xlsx") == paths.DEFAULT_COMMENTS_OUTPUT
+    assert Path("data/input/messages.csv") == paths.DEFAULT_MESSAGES_INPUT
+    assert Path("data/output/Messages.xlsx") == paths.DEFAULT_MESSAGES_OUTPUT
+    assert Path("data/input/Connections.csv") == paths.DEFAULT_CONNECTIONS_INPUT
+    assert Path("data/output/Connections.xlsx") == paths.DEFAULT_CONNECTIONS_OUTPUT

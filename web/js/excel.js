@@ -27,7 +27,7 @@ const ExcelGenerator = (() => {
 
     /**
      * Get the cleaner config for a file type, throwing on unknown types.
-     * @param {string} fileType - 'shares' or 'comments'
+     * @param {string} fileType - Supported file type
      * @returns {object} Frozen config with columns, requiredColumns, and outputName
      * @throws {Error} If fileType is not recognized
      */
@@ -143,7 +143,7 @@ const ExcelGenerator = (() => {
     /**
      * Generate an Excel file from cleaned data
      * @param {object[]} data - Array of row objects
-     * @param {string} fileType - 'shares' or 'comments'
+     * @param {string} fileType - Supported file type
      * @returns {Blob} Excel file as Blob
      */
     function generate(data, fileType) {
@@ -158,7 +158,13 @@ const ExcelGenerator = (() => {
         applyColumnWidths(worksheet, config);
         applyStyles(worksheet, config, data.length);
 
-        const sheetName = fileType === 'shares' ? 'Shares' : 'Comments';
+        const SHEET_NAMES = {
+            shares: 'Shares',
+            comments: 'Comments',
+            messages: 'Messages',
+            connections: 'Connections'
+        };
+        const sheetName = SHEET_NAMES[fileType] || 'Sheet1';
         XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
         const workbookOutput = XLSX.write(workbook, {
@@ -191,7 +197,7 @@ const ExcelGenerator = (() => {
     /**
      * Generate and download Excel file
      * @param {object[]} data - Cleaned data array
-     * @param {string} fileType - 'shares' or 'comments'
+     * @param {string} fileType - Supported file type
      * @param {string} [customFilename] - Optional custom filename
      */
     function generateAndDownload(data, fileType, customFilename = null) {

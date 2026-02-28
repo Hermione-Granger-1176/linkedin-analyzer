@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from linkedin_analyzer.core.excel import format_excel_output
+from linkedin_analyzer.core.text import clean_value, escape_excel_formula
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 
 LOG = logging.getLogger(__name__)
@@ -23,7 +24,8 @@ def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
     Raises:
         ValueError: If any required columns are missing
     """
-    missing = [col for col in required if col not in df.columns]
+    normalized_columns = {str(col).strip().lstrip("\ufeff") for col in df.columns}
+    missing = [col for col in required if col not in normalized_columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
 
@@ -56,14 +58,26 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         df = pd.read_csv(input_path, **csv_kwargs)
         LOG.info("Found %d rows", len(df))
 
+        df = df.rename(columns=lambda name: str(name).strip().lstrip("\ufeff"))
+        df = df.replace(r"^\s*$", pd.NA, regex=True)
+        df = df.dropna(how="all")
+
         LOG.info("Validating columns")
         validate_columns(df, config.required_columns)
 
         # Apply cleaners to columns
+        # (use clean_value as default for columns without a specific cleaner)
         for col_config in config.columns:
-            if col_config.cleaner is not None:
-                LOG.info("Cleaning column: %s", col_config.name)
-                df[col_config.name] = df[col_config.name].apply(col_config.cleaner)
+            if col_config.name not in df.columns:
+                continue
+            cleaner = col_config.cleaner if col_config.cleaner is not None else clean_value
+            LOG.info("Cleaning column: %s", col_config.name)
+            df[col_config.name] = df[col_config.name].apply(cleaner)
+
+        df = df.map(escape_excel_formula)
+
+        configured_columns = [col.name for col in config.columns]
+        df = df.reindex(columns=configured_columns, fill_value="")
 
         LOG.info("Exporting to %s", output_path)
         df.to_excel(output_path, index=False, engine="openpyxl")

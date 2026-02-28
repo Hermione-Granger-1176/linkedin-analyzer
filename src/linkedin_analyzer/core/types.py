@@ -23,12 +23,14 @@ class ColumnConfig:
         width: Excel column width
         wrap_text: Whether to enable text wrapping in Excel
         cleaner: Optional function to clean the column values
+        required: Whether the column is required for validation
     """
 
     name: str
     width: int = 20
     wrap_text: bool = False
     cleaner: TextCleaner | None = None
+    required: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,8 +51,8 @@ class CleanerConfig:
 
     @property
     def required_columns(self) -> list[str]:
-        """Return list of required column names."""
-        return [col.name for col in self.columns]
+        """Return list of column names marked as required."""
+        return [col.name for col in self.columns if col.required]
 
     @property
     def column_widths(self) -> dict[str, int]:

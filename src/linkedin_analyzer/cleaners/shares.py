@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
 from linkedin_analyzer.core.paths import DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT
-from linkedin_analyzer.core.text import clean_empty_field, clean_shares_commentary
+from linkedin_analyzer.core.text import clean_date, clean_empty_field, clean_shares_commentary
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
 
 if TYPE_CHECKING:
@@ -19,12 +19,13 @@ DEFAULT_OUTPUT = DEFAULT_SHARES_OUTPUT
 
 # Column configurations for Shares.csv
 SHARES_COLUMNS: tuple[ColumnConfig, ...] = (
-    ColumnConfig(name="Date", width=20),
-    ColumnConfig(name="ShareLink", width=60),
+    ColumnConfig(name="Date", width=20, required=True, cleaner=clean_date),
+    ColumnConfig(name="ShareLink", width=60, required=True),
     ColumnConfig(
         name="ShareCommentary",
         width=100,
         wrap_text=True,
+        required=True,
         cleaner=clean_shares_commentary,
     ),
     ColumnConfig(name="SharedUrl", width=30, cleaner=clean_empty_field),

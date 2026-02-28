@@ -99,7 +99,7 @@
             worker = new Worker(WORKER_URL);
             worker.addEventListener('message', handleWorkerMessage);
             worker.addEventListener('error', handleWorkerError);
-        } catch (error) {
+        } catch {
             worker = null;
             setEmptyState('Worker blocked', 'Open this page from a local server (not file://).');
         }
@@ -130,7 +130,7 @@
                 type: 'initBase',
                 payload: analyticsBase
             });
-        } catch (error) {
+        } catch {
             setEmptyState('Storage error', 'Unable to load saved data. Try clearing browser data and re-uploading.');
         }
     }
@@ -315,7 +315,7 @@
             showAnalyticsLoading(true);
             SketchCharts.cancelAnimations();
             renderCharts(view);
-        } catch (renderError) {
+        } catch {
             setEmptyState('Render error', 'Failed to draw charts. Please refresh the page.');
         } finally {
             if (isRendering) {
@@ -372,17 +372,21 @@
         const button = event.target.closest('button[data-filter]');
         if (!button) return;
         const filter = button.getAttribute('data-filter');
-        if (filter === 'topic') {
-            state.filters.topic = 'all';
-        }
-        if (filter === 'month') {
-            state.filters.monthFocus = null;
-        }
-        if (filter === 'day') {
-            state.filters.day = null;
-        }
-        if (filter === 'hour') {
-            state.filters.hour = null;
+        switch (filter) {
+            case 'topic':
+                state.filters.topic = 'all';
+                break;
+            case 'month':
+                state.filters.monthFocus = null;
+                break;
+            case 'day':
+                state.filters.day = null;
+                break;
+            case 'hour':
+                state.filters.hour = null;
+                break;
+            default:
+                break;
         }
         scheduleViewRequest(false);
     }
@@ -442,24 +446,30 @@
         const y = event.clientY - rect.top;
         const item = SketchCharts.getItemAt(canvas, x, y);
         if (!item) return;
-        if (item.type === 'month') {
-            state.filters.monthFocus = state.filters.monthFocus === item.key ? null : item.key;
-            scheduleViewRequest(false);
-        }
-        if (item.type === 'week') {
-            const targetMonth = item.monthKey || item.key;
-            state.filters.monthFocus = state.filters.monthFocus === targetMonth ? null : targetMonth;
-            scheduleViewRequest(false);
-        }
-        if (item.type === 'topic') {
-            state.filters.topic = state.filters.topic === item.key ? 'all' : item.key;
-            scheduleViewRequest(false);
-        }
-        if (item.type === 'heatmap') {
-            const isSame = state.filters.day === item.day && state.filters.hour === item.hour;
-            state.filters.day = isSame ? null : item.day;
-            state.filters.hour = isSame ? null : item.hour;
-            scheduleViewRequest(false);
+        switch (item.type) {
+            case 'month':
+                state.filters.monthFocus = state.filters.monthFocus === item.key ? null : item.key;
+                scheduleViewRequest(false);
+                break;
+            case 'week': {
+                const targetMonth = item.monthKey || item.key;
+                state.filters.monthFocus = state.filters.monthFocus === targetMonth ? null : targetMonth;
+                scheduleViewRequest(false);
+                break;
+            }
+            case 'topic':
+                state.filters.topic = state.filters.topic === item.key ? 'all' : item.key;
+                scheduleViewRequest(false);
+                break;
+            case 'heatmap': {
+                const isSame = state.filters.day === item.day && state.filters.hour === item.hour;
+                state.filters.day = isSame ? null : item.day;
+                state.filters.hour = isSame ? null : item.hour;
+                scheduleViewRequest(false);
+                break;
+            }
+            default:
+                break;
         }
     }
 

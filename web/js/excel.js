@@ -78,10 +78,9 @@ const ExcelGenerator = (() => {
     }
 
     function applyRowHeights(ws, rowCount) {
-        ws['!rows'] = [];
-        for (let row = 0; row <= rowCount; row++) {
-            ws['!rows'][row] = { hpt: row === 0 ? HEADER_ROW_HEIGHT : DATA_ROW_HEIGHT };
-        }
+        ws['!rows'] = Array.from({ length: rowCount + 1 }, (_, row) => ({
+            hpt: row === 0 ? HEADER_ROW_HEIGHT : DATA_ROW_HEIGHT
+        }));
     }
 
     function applyStyles(ws, config, rowCount) {

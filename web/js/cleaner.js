@@ -22,7 +22,7 @@ const LinkedInCleaner = (() => {
                 { name: 'Visibility', width: 18 }
             ],
             requiredColumns: ['Date', 'ShareLink', 'ShareCommentary'],
-            outputName: 'Shares_Cleaned.xlsx'
+            outputName: 'Shares.xlsx'
         }),
         comments: freezeConfig({
             columns: [
@@ -31,15 +31,36 @@ const LinkedInCleaner = (() => {
                 { name: 'Message', width: 100, wrapText: true, cleaner: 'cleanCommentsMessage' }
             ],
             requiredColumns: ['Date', 'Link', 'Message'],
-            outputName: 'Comments_Cleaned.xlsx'
+            outputName: 'Comments.xlsx'
         })
     });
 
-    const CSV_OPTIONS = Object.freeze({
+    const CSV_OPTIONS_DEFAULT = Object.freeze({
+        delimiter: ',',
+        quote: '"',
+        escape: null
+    });
+
+    const CSV_OPTIONS_COMMENTS = Object.freeze({
         delimiter: ',',
         quote: '"',
         escape: '\\'
     });
+
+    const MISSING_STRINGS = new Set([
+        '#N/A',
+        '#N/A N/A',
+        '#NA',
+        '-1.#IND',
+        '-1.#QNAN',
+        '-NAN',
+        '1.#IND',
+        '1.#QNAN',
+        'N/A',
+        'NA',
+        'NULL',
+        'NAN'
+    ]);
 
     function freezeConfig(config) {
         const frozenColumns = config.columns.map(column => Object.freeze({ ...column }));
@@ -57,9 +78,13 @@ const LinkedInCleaner = (() => {
      */
     function isMissing(value) {
         if (value === null || value === undefined) return true;
+        if (typeof value === 'number') {
+            return Number.isNaN(value);
+        }
         if (typeof value === 'string') {
             const trimmed = value.trim();
-            return trimmed === '' || trimmed.toUpperCase() === 'NA' || trimmed === 'NaN';
+            if (trimmed === '') return true;
+            return MISSING_STRINGS.has(trimmed.toUpperCase());
         }
         return false;
     }
@@ -165,12 +190,36 @@ const LinkedInCleaner = (() => {
         }
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute, second] = timePart.split(':').map(Number);
-        if (!year || !month || !day) {
-            return text; // Return as-is if format is unexpected
+        if ([year, month, day, hour, minute, second].some(Number.isNaN)) {
+            return text; // Return as-is if any component is invalid
+        }
+        if (
+            month < 1
+            || month > 12
+            || day < 1
+            || day > 31
+            || hour < 0
+            || hour > 23
+            || minute < 0
+            || minute > 59
+            || second < 0
+            || second > 59
+        ) {
+            return text; // Return as-is if month/day out of range
         }
 
         // Create UTC date and convert to local
-        const utcDate = new Date(Date.UTC(year, month - 1, day, hour || 0, minute || 0, second || 0));
+        const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+        if (
+            utcDate.getUTCFullYear() !== year
+            || utcDate.getUTCMonth() !== month - 1
+            || utcDate.getUTCDate() !== day
+            || utcDate.getUTCHours() !== hour
+            || utcDate.getUTCMinutes() !== minute
+            || utcDate.getUTCSeconds() !== second
+        ) {
+            return text;
+        }
 
         // Format in local time
         const localYear = utcDate.getFullYear();
@@ -202,7 +251,7 @@ const LinkedInCleaner = (() => {
     }
 
     function isRowEmpty(row) {
-        return row.every(cell => String(cell ?? '').trim() === '');
+        return row.every(cell => isMissing(cell));
     }
 
     /**
@@ -211,7 +260,7 @@ const LinkedInCleaner = (() => {
      * @param {{delimiter: string, quote: string, escape: string}} options
      * @returns {{rows: string[][], error: string|null}}
      */
-    function parseCsvRows(csvText, options = CSV_OPTIONS) {
+    function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         const { delimiter, quote, escape } = options;
         const rows = [];
         let row = [];
@@ -233,7 +282,7 @@ const LinkedInCleaner = (() => {
             const nextChar = csvText[i + 1];
 
             if (inQuotes) {
-                if (char === escape && nextChar === quote) {
+                if (escape && char === escape && nextChar === quote) {
                     field += quote;
                     i += 1;
                     continue;
@@ -290,12 +339,17 @@ const LinkedInCleaner = (() => {
         pushField();
         pushRow();
 
-        while (rows.length && isRowEmpty(rows[rows.length - 1])) {
-            rows.pop();
+        let lastNonEmptyIndex = -1;
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+            if (!isRowEmpty(rows[i])) {
+                lastNonEmptyIndex = i;
+                break;
+            }
         }
+        const trimmedRows = lastNonEmptyIndex === -1 ? [] : rows.slice(0, lastNonEmptyIndex + 1);
 
         return {
-            rows,
+            rows: trimmedRows,
             error: inQuotes ? 'CSV parsing error: unmatched quote' : null
         };
     }
@@ -305,12 +359,16 @@ const LinkedInCleaner = (() => {
      * @param {string} csvText - Raw CSV text
      * @returns {{headers: string[], data: object[], error: string|null}}
      */
-    function parseCSV(csvText) {
+    function parseCSV(csvText, fileType) {
         if (typeof csvText !== 'string' || !csvText.trim()) {
             return { headers: [], data: [], error: 'CSV file is empty or has no data rows' };
         }
 
-        const { rows, error } = parseCsvRows(csvText, CSV_OPTIONS);
+        const csvOptions = fileType === 'comments' ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+        let { rows, error } = parseCsvRows(csvText, csvOptions);
+        if (error && error.includes('unmatched quote')) {
+            ({ rows, error } = parseCsvRows(`${csvText}"`, csvOptions));
+        }
         if (error) {
             return { headers: [], data: [], error };
         }
@@ -325,17 +383,9 @@ const LinkedInCleaner = (() => {
         }
 
         const dataRows = rows.slice(1).filter(row => !isRowEmpty(row));
-        if (!dataRows.length) {
-            return { headers, data: [], error: 'CSV file is empty or has no data rows' };
-        }
-
-        const data = dataRows.map(row => {
-            const record = {};
-            headers.forEach((header, index) => {
-                record[header] = row[index] !== undefined ? row[index] : '';
-            });
-            return record;
-        });
+        const data = dataRows.map(row => Object.fromEntries(
+            headers.map((header, index) => [header, row[index] !== undefined ? row[index] : ''])
+        ));
 
         return { headers, data, error: null };
     }
@@ -411,7 +461,8 @@ const LinkedInCleaner = (() => {
         if (isMissing(value)) {
             return '';
         }
-        return String(value).trim();
+        const cleaned = String(value).trim();
+        return cleaned.startsWith('=') ? `'${cleaned}` : cleaned;
     }
 
     function buildColumnErrorMessage(selectedType, detectedType, missing) {
@@ -445,7 +496,10 @@ const LinkedInCleaner = (() => {
      * }}
      */
     function process(csvText, fileType = 'auto') {
-        const { headers, data, error: parseError } = parseCSV(csvText);
+        const initialParse = fileType === 'auto'
+            ? parseCSV(csvText)
+            : parseCSV(csvText, fileType);
+        const { headers, data, error: parseError } = initialParse;
 
         if (parseError) {
             return {
@@ -479,28 +533,39 @@ const LinkedInCleaner = (() => {
             }
         }
 
-        const validation = validateColumns(headers, processingType);
+        // Re-parse with correct CSV options if needed for comments
+        let finalHeaders = headers;
+        let finalData = data;
+        if (processingType === 'comments' && fileType === 'auto') {
+            const reParsed = parseCSV(csvText, 'comments');
+            if (!reParsed.error) {
+                finalHeaders = reParsed.headers;
+                finalData = reParsed.data;
+            }
+        }
+
+        const validation = validateColumns(finalHeaders, processingType);
         if (!validation.valid) {
             return {
                 success: false,
                 fileType: processingType,
                 detectedType,
-                headers,
-                originalData: data,
+                headers: finalHeaders,
+                originalData: finalData,
                 cleanedData: [],
-                rowCount: data.length,
+                rowCount: finalData.length,
                 error: buildColumnErrorMessage(fileType, detectedType, validation.missing)
             };
         }
 
-        const cleanedData = cleanData(data, processingType);
+        const cleanedData = cleanData(finalData, processingType);
 
         return {
             success: true,
             fileType: processingType,
             detectedType,
-            headers,
-            originalData: data,
+            headers: finalHeaders,
+            originalData: finalData,
             cleanedData,
             rowCount: cleanedData.length,
             error: null

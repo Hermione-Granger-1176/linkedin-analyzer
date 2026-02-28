@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import pandas as pd
 
-import linkedin_analyzer.core.text as text
 from linkedin_analyzer.core.text import (
     clean_comments_message,
+    clean_date,
     clean_empty_field,
     clean_shares_commentary,
+    clean_value,
+    escape_excel_formula,
     is_missing,
 )
 
@@ -25,8 +27,8 @@ class TestIsMissing:
     def test_nan_is_missing(self) -> None:
         assert is_missing(float("nan")) is True
 
-    def test_empty_string_is_not_missing(self) -> None:
-        assert is_missing("") is False
+    def test_empty_string_is_missing(self) -> None:
+        assert is_missing("") is True
 
     def test_zero_is_not_missing(self) -> None:
         assert is_missing(0) is False
@@ -34,26 +36,27 @@ class TestIsMissing:
     def test_regular_string_is_not_missing(self) -> None:
         assert is_missing("hello") is False
 
-    def test_whitespace_is_not_missing(self) -> None:
-        assert is_missing("   ") is False
+    def test_whitespace_is_missing(self) -> None:
+        assert is_missing("   ") is True
 
-    def test_non_bool_result_is_coerced(self, monkeypatch) -> None:
-        class DummyResult:
-            def __bool__(self) -> bool:
-                return True
+    def test_na_string_is_missing(self) -> None:
+        assert is_missing("NA") is True
 
-        def fake_isna(_value: object) -> DummyResult:
-            return DummyResult()
+    def test_na_lowercase_is_missing(self) -> None:
+        assert is_missing("na") is True
 
-        monkeypatch.setattr(text.pd, "isna", fake_isna)
-        assert is_missing("value") is True
+    def test_nan_string_is_missing(self) -> None:
+        assert is_missing("NaN") is True
 
-    def test_isna_error_returns_false(self, monkeypatch) -> None:
-        def fake_isna(_value: object) -> bool:
-            raise TypeError("boom")
+    def test_padded_na_string_is_missing(self) -> None:
+        assert is_missing("  NA  ") is True
 
-        monkeypatch.setattr(text.pd, "isna", fake_isna)
-        assert is_missing("value") is False
+    def test_nat_is_missing(self) -> None:
+        assert is_missing(pd.NaT) is True
+
+    def test_na_like_strings_are_missing(self) -> None:
+        for value in ["N/A", "NULL", "#N/A", "-1.#IND"]:
+            assert is_missing(value) is True
 
 
 class TestCleanSharesCommentary:
@@ -180,3 +183,87 @@ class TestCleanEmptyField:
         # Whitespace strips to empty string, which is in the empty set
         result = clean_empty_field("   ")
         assert result == ""
+
+
+class TestCleanDate:
+    """Tests for clean_date function."""
+
+    def test_returns_empty_for_none(self) -> None:
+        result = clean_date(None)
+        assert result == ""
+
+    def test_returns_empty_for_nan(self) -> None:
+        result = clean_date(float("nan"))
+        assert result == ""
+
+    def test_returns_as_is_for_invalid_format(self) -> None:
+        result = clean_date("not a date")
+        assert result == "not a date"
+
+    def test_returns_as_is_for_date_only(self) -> None:
+        result = clean_date("2024-01-15")
+        assert result == "2024-01-15"
+
+    def test_converts_valid_datetime(self) -> None:
+        # We can't test exact local time conversion since it depends on timezone,
+        # but we can verify format is preserved
+        result = clean_date("2024-01-15 14:30:00")
+        assert len(result) == 19  # YYYY-MM-DD HH:MM:SS
+        assert result[4] == "-"
+        assert result[7] == "-"
+        assert result[10] == " "
+        assert result[13] == ":"
+        assert result[16] == ":"
+
+    def test_returns_empty_for_empty_string(self) -> None:
+        result = clean_date("")
+        assert result == ""
+
+    def test_returns_empty_for_na_string(self) -> None:
+        result = clean_date("NA")
+        assert result == ""
+
+
+class TestCleanValue:
+    """Tests for clean_value function."""
+
+    def test_returns_empty_for_none(self) -> None:
+        result = clean_value(None)
+        assert result == ""
+
+    def test_returns_empty_for_nan(self) -> None:
+        result = clean_value(float("nan"))
+        assert result == ""
+
+    def test_returns_empty_for_empty_string(self) -> None:
+        result = clean_value("")
+        assert result == ""
+
+    def test_returns_empty_for_na_string(self) -> None:
+        result = clean_value("NA")
+        assert result == ""
+
+    def test_strips_whitespace(self) -> None:
+        result = clean_value("  hello  ")
+        assert result == "hello"
+
+    def test_returns_value_for_non_empty(self) -> None:
+        result = clean_value("hello")
+        assert result == "hello"
+
+    def test_converts_non_string(self) -> None:
+        result = clean_value(12345)
+        assert result == "12345"
+
+
+class TestEscapeExcelFormula:
+    """Tests for escape_excel_formula function."""
+
+    def test_prefixes_formula(self) -> None:
+        assert escape_excel_formula("=SUM(A1:A2)") == "'=SUM(A1:A2)"
+
+    def test_leaves_plain_text(self) -> None:
+        assert escape_excel_formula("hello") == "hello"
+
+    def test_leaves_non_string(self) -> None:
+        assert escape_excel_formula(123) == 123

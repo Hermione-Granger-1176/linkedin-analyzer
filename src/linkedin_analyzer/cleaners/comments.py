@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
 from linkedin_analyzer.core.paths import DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT
-from linkedin_analyzer.core.text import clean_comments_message
+from linkedin_analyzer.core.text import clean_comments_message, clean_date
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
 
 if TYPE_CHECKING:
@@ -20,12 +20,13 @@ DEFAULT_OUTPUT = DEFAULT_COMMENTS_OUTPUT
 
 # Column configurations for Comments.csv
 COMMENTS_COLUMNS: tuple[ColumnConfig, ...] = (
-    ColumnConfig(name="Date", width=20),
-    ColumnConfig(name="Link", width=60),
+    ColumnConfig(name="Date", width=20, required=True, cleaner=clean_date),
+    ColumnConfig(name="Link", width=60, required=True),
     ColumnConfig(
         name="Message",
         width=100,
         wrap_text=True,
+        required=True,
         cleaner=clean_comments_message,
     ),
 )

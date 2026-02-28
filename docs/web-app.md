@@ -30,7 +30,7 @@ Visual dashboards for your LinkedIn activity:
 - **Topics** — Most common words in your posts (bar chart)
 - **Heatmap** — Activity by day of week and hour
 
-Time range options: 1 month, 3 months, 6 months, 1 year, All time
+Time range options: 1 month, 3 months, 6 months, 12 months, All time
 
 ### Insights
 

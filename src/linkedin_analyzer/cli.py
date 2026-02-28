@@ -76,15 +76,7 @@ def _add_named_io_args(
     )
 
 
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse command-line arguments.
-
-    Args:
-        argv: Command-line arguments (defaults to sys.argv[1:])
-
-    Returns:
-        Parsed arguments namespace
-    """
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="linkedin-analyzer",
         description="Clean and export LinkedIn CSV data to Excel",
@@ -140,7 +132,19 @@ Examples:
     _add_named_io_args(all_parser, "shares", DEFAULT_SHARES_INPUT, DEFAULT_SHARES_OUTPUT)
     _add_named_io_args(all_parser, "comments", DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT)
 
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments.
+
+    Args:
+        argv: Command-line arguments (defaults to sys.argv[1:])
+
+    Returns:
+        Parser and parsed arguments namespace
+    """
+    return _build_parser().parse_args(argv)
 
 
 def run_shares(args: argparse.Namespace) -> int:
@@ -178,23 +182,26 @@ def run_all(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, non-zero for failure)
     """
+    tasks = (
+        (
+            "Shares",
+            clean_shares,
+            args.shares_input,
+            args.shares_output,
+        ),
+        (
+            "Comments",
+            clean_comments,
+            args.comments_input,
+            args.comments_output,
+        ),
+    )
     exit_code = 0
-
-    LOG.info("Processing Shares...")
-    shares_result = clean_shares(
-        input_path=args.shares_input,
-        output_path=args.shares_output,
-    )
-    if _handle_result(shares_result) != 0:
-        exit_code = 1
-
-    LOG.info("Processing Comments...")
-    comments_result = clean_comments(
-        input_path=args.comments_input,
-        output_path=args.comments_output,
-    )
-    if _handle_result(comments_result) != 0:
-        exit_code = 1
+    for label, cleaner, input_path, output_path in tasks:
+        LOG.info("Processing %s...", label)
+        result = cleaner(input_path=input_path, output_path=output_path)
+        if _handle_result(result) != 0:
+            exit_code = 1
 
     return exit_code
 
@@ -208,12 +215,12 @@ def _handle_result(result: CleanerResult) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    if result.success:
-        LOG.info(str(result))
-        return 0
-    else:
+    if not result.success:
         LOG.error(str(result))
         return 1
+
+    LOG.info(str(result))
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -225,12 +232,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Exit code (0 for success, non-zero for failure)
     """
-    args = parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
     configure_logging(args.log_level)
 
     if args.command is None:
-        # No command specified, print help
-        parse_args(["--help"])
+        parser.print_help()
         return 1
 
     command_handlers = {

@@ -188,20 +188,14 @@ function handleClear() {
 
 self.addEventListener('message', (event) => {
     const message = event.data || {};
-    switch (message.type) {
-        case 'addFile':
-            handleAddFile(message.payload || {});
-            break;
-        case 'initBase':
-            handleInitBase(message.payload || null);
-            break;
-        case 'view':
-            handleView(message.requestId, message.filters || {});
-            break;
-        case 'clear':
-            handleClear();
-            break;
-        default:
-            break;
+    const handlers = {
+        addFile: () => handleAddFile(message.payload || {}),
+        initBase: () => handleInitBase(message.payload || null),
+        view: () => handleView(message.requestId, message.filters || {}),
+        clear: () => handleClear()
+    };
+    const handler = handlers[message.type];
+    if (handler) {
+        handler();
     }
 });

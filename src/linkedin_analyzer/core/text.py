@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import pandas as pd
 
 
 def is_missing(value: object) -> bool:
-    """Check if a value is missing (None or pandas NA).
+    """Check if a value is missing (None, pandas NA, empty, or NA-like string).
+
+    Treats the following as missing:
+    - None
+    - Empty strings or whitespace-only strings
+    - Literal "NA" or "NaN" strings (case-insensitive for "NA")
+    - Pandas NA/NaT/NaN types
 
     Args:
         value: Value to check
@@ -18,6 +25,27 @@ def is_missing(value: object) -> bool:
     """
     if value is None:
         return True
+    # Check string values for empty, whitespace-only, or NA-like literals
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if trimmed == "":
+            return True
+        upper = trimmed.upper()
+        missing_values = {
+            "#N/A",
+            "#N/A N/A",
+            "#NA",
+            "-1.#IND",
+            "-1.#QNAN",
+            "-NAN",
+            "1.#IND",
+            "1.#QNAN",
+            "N/A",
+            "NA",
+            "NULL",
+            "NAN",
+        }
+        return upper in missing_values
     try:
         # Use cast to Any since pd.isna accepts more types than stubs indicate
         result = pd.isna(cast("Any", value))
@@ -108,3 +136,62 @@ def clean_empty_field(value: object) -> str:
         return ""
     text = str(value).strip()
     return "" if text in {'""', '"', ""} else text
+
+
+def clean_date(value: object) -> str:
+    """Convert a UTC datetime string to local timezone.
+
+    Parses a datetime string in "YYYY-MM-DD HH:MM:SS" format, treats it as
+    UTC, converts it to the local timezone, and returns it in the same format.
+
+    Args:
+        value: Raw UTC datetime string from CSV
+
+    Returns:
+        Datetime string converted to local timezone, empty string if missing,
+        or the original value as-is if the format is unexpected
+    """
+    if is_missing(value):
+        return ""
+
+    text = str(value).strip()
+
+    try:
+        fmt = "%Y-%m-%d %H:%M:%S"
+        utc_dt = datetime.strptime(text, fmt).replace(
+            tzinfo=UTC,
+        )
+        local_dt = utc_dt.astimezone()
+        return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, OverflowError):
+        return text
+
+
+def clean_value(value: object) -> str:
+    """Clean a generic field value by trimming whitespace.
+
+    Basic cleaner for columns that don't need specific cleaning logic.
+
+    Args:
+        value: Raw value from CSV
+
+    Returns:
+        Trimmed string, or empty string if missing
+    """
+    if is_missing(value):
+        return ""
+    return str(value).strip()
+
+
+def escape_excel_formula(value: object) -> object:
+    """Escape Excel formula-like strings to prevent repair warnings.
+
+    Args:
+        value: Cleaned cell value
+
+    Returns:
+        Original value, or prefixed string if it starts with "="
+    """
+    if isinstance(value, str) and value.startswith("="):
+        return f"'{value}"
+    return value

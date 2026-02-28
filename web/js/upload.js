@@ -41,7 +41,7 @@
             worker = new Worker(WORKER_URL);
             worker.addEventListener('message', handleWorkerMessage);
             worker.addEventListener('error', handleWorkerError);
-        } catch (error) {
+        } catch {
             worker = null;
             setHint('This page must be opened from a local server (not file://). Start a server and reload.', true);
         }

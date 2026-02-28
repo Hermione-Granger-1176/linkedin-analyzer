@@ -7,8 +7,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pytest
-
 import linkedin_analyzer.cli as cli
 from linkedin_analyzer.cli import main, parse_args
 from linkedin_analyzer.core.types import CleanerResult
@@ -56,15 +54,12 @@ class TestMain:
     """Tests for main function."""
 
     def test_no_command_returns_error(self) -> None:
-        with patch("linkedin_analyzer.cli.parse_args") as mock_parse:
-            # First call returns args with no command
-            mock_parse.side_effect = [
-                type("Args", (), {"command": None, "log_level": "INFO"})(),
-                SystemExit(0),  # Second call for help
-            ]
-            # Will raise SystemExit from the help call
-            with pytest.raises(SystemExit):
-                main([])
+        parser = SimpleNamespace(
+            parse_args=lambda _argv=None: SimpleNamespace(command=None, log_level="INFO"),
+            print_help=lambda: None,
+        )
+        with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
+            assert main([]) == 1
 
     def test_shares_command_success(self, tmp_path: Path) -> None:
         # Create test file
@@ -102,23 +97,28 @@ class TestMain:
         assert exit_code == 1
 
     def test_no_command_returns_one_when_help_does_not_exit(self) -> None:
-        def fake_parse(argv: list[str] | None = None) -> SimpleNamespace:
-            if argv == ["--help"]:
-                return SimpleNamespace(command="shares", log_level="INFO")
-            return SimpleNamespace(command=None, log_level="INFO")
-
-        with patch("linkedin_analyzer.cli.parse_args", side_effect=fake_parse):
+        parser = SimpleNamespace(
+            parse_args=lambda _argv=None: SimpleNamespace(command=None, log_level="INFO"),
+            print_help=lambda: None,
+        )
+        with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
             assert main([]) == 1
 
     def test_unknown_command_returns_error(self) -> None:
-        args = SimpleNamespace(command="unknown", log_level="INFO")
-        with patch("linkedin_analyzer.cli.parse_args", return_value=args):
+        parser = SimpleNamespace(
+            parse_args=lambda _argv=None: SimpleNamespace(command="unknown", log_level="INFO"),
+            print_help=lambda: None,
+        )
+        with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
             assert main([]) == 1
 
     def test_main_handles_handler_exception(self) -> None:
-        args = SimpleNamespace(command="shares", log_level="INFO")
+        parser = SimpleNamespace(
+            parse_args=lambda _argv=None: SimpleNamespace(command="shares", log_level="INFO"),
+            print_help=lambda: None,
+        )
         with (
-            patch("linkedin_analyzer.cli.parse_args", return_value=args),
+            patch("linkedin_analyzer.cli._build_parser", return_value=parser),
             patch("linkedin_analyzer.cli.run_shares", side_effect=RuntimeError("boom")),
         ):
             assert main([]) == 1
@@ -127,7 +127,7 @@ class TestMain:
 class TestRunAll:
     """Tests for running all cleaners."""
 
-    def test_run_all_success(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_run_all_success(self, tmp_path: Path, monkeypatch) -> None:
         args = argparse.Namespace(
             shares_input=tmp_path / "Shares.csv",
             shares_output=tmp_path / "Shares.xlsx",
@@ -156,7 +156,7 @@ class TestRunAll:
 
         assert cli.run_all(args) == 0
 
-    def test_run_all_failure(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_run_all_failure(self, tmp_path: Path, monkeypatch) -> None:
         args = argparse.Namespace(
             shares_input=tmp_path / "Shares.csv",
             shares_output=tmp_path / "Shares.xlsx",
@@ -186,9 +186,7 @@ class TestRunAll:
 
         assert cli.run_all(args) == 1
 
-    def test_run_all_failure_on_comments(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_all_failure_on_comments(self, tmp_path: Path, monkeypatch) -> None:
         args = argparse.Namespace(
             shares_input=tmp_path / "Shares.csv",
             shares_output=tmp_path / "Shares.xlsx",

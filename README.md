@@ -2,7 +2,7 @@
 
 <p align="center">
   Clean and analyze your LinkedIn data exports.<br>
-  <sub>Web app or Python CLI. Your data never leaves your browser.</sub>
+  <sub>Web app or Python CLI. In the web app, your data never leaves your browser.</sub>
 </p>
 
 <p align="center">
@@ -57,7 +57,7 @@ linkedin-analyzer comments
 **Python CLI**
 <p>
   <img src="https://img.shields.io/badge/openpyxl-217346?style=flat" alt="openpyxl">
-  <img src="https://img.shields.io/badge/Click-4EAA25?style=flat" alt="Click">
+  <img src="https://img.shields.io/badge/argparse-4EAA25?style=flat" alt="argparse">
   <img src="https://img.shields.io/badge/mypy-strict-blue?style=flat" alt="mypy strict">
 </p>
 
@@ -73,14 +73,14 @@ linkedin-analyzer comments
 
 ## Features
 
-| | |
-|---|---|
-| **100% client-side** | Files never leave your browser |
-| **Offline support** | Works after first load |
-| **Light/dark theme** | Hand-drawn sketch aesthetic |
-| **Analytics** | Timeline, topics, heatmap |
-| **Excel export** | Formatted .xlsx with proper columns |
-| **Type-safe CLI** | Strict mypy, full test coverage |
+| Feature              | Detail                                          |
+| -------------------- | ----------------------------------------------- |
+| **100% client-side** | Files never leave your browser                  |
+| **Offline support**  | Works after first load                          |
+| **Light/dark theme** | Hand-drawn sketch aesthetic                     |
+| **Analytics**        | Timeline, topics, heatmap                       |
+| **Excel export**     | Formatted .xlsx with proper columns             |
+| **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold) |
 
 <br>
 
@@ -92,6 +92,7 @@ See the [`docs/`](docs/) folder for:
 - [Python CLI Reference](docs/cli.md)
 - [Development Setup](docs/development.md)
 - [Project Structure](docs/structure.md)
+- [Style Guide](docs/style-guide.md)
 
 <br>
 

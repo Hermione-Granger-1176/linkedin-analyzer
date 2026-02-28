@@ -29,6 +29,10 @@ class TestValidateColumns:
         # Should not raise
         validate_columns(df, [])
 
+    def test_bom_and_whitespace_headers(self) -> None:
+        df = pd.DataFrame({"\ufeffDate ": ["2025-01-01"], " Message": ["Hello"]})
+        validate_columns(df, ["Date", "Message"])
+
 
 class TestRunCleaner:
     """Tests for run_cleaner function."""
@@ -85,8 +89,7 @@ class TestRunCleaner:
         df = pd.read_excel(output_path)
         assert list(df["Name"]) == ["HELLO", "WORLD"]
 
-    def test_missing_column_error(self, tmp_path: Path) -> None:
-        # Create test CSV with different columns
+    def test_missing_required_column_error(self, tmp_path: Path) -> None:
         input_path = tmp_path / "test.csv"
         output_path = tmp_path / "test.xlsx"
         input_path.write_text("A,B\n1,2\n")
@@ -95,14 +98,51 @@ class TestRunCleaner:
             input_path=input_path,
             output_path=output_path,
             columns=(
-                ColumnConfig(name="X"),
-                ColumnConfig(name="Y"),
+                ColumnConfig(name="X", required=True),
+                ColumnConfig(name="Y", required=True),
             ),
         )
         result = run_cleaner(config)
 
         assert result.success is False
         assert "Missing required columns" in (result.error or "")
+
+    def test_optional_columns_not_required(self, tmp_path: Path) -> None:
+        """Optional columns should not cause validation failure."""
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("A,B\n1,2\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(
+                ColumnConfig(name="A", required=True),
+                ColumnConfig(name="B", required=True),
+                ColumnConfig(name="C"),  # optional, not in CSV
+            ),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        assert result.rows_processed == 1
+
+    def test_default_clean_value_applied(self, tmp_path: Path) -> None:
+        """Columns without a specific cleaner should get clean_value applied."""
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\n  hello  \n  world  \n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name"),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["Name"]) == ["hello", "world"]
 
     def test_csv_kwargs_passed(self, tmp_path: Path) -> None:
         # Create test CSV with backslash escaping

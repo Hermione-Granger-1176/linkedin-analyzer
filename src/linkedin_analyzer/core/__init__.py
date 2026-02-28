@@ -4,8 +4,11 @@ from linkedin_analyzer.core.cleaner import run_cleaner, validate_columns
 from linkedin_analyzer.core.excel import format_excel_output
 from linkedin_analyzer.core.text import (
     clean_comments_message,
+    clean_date,
     clean_empty_field,
     clean_shares_commentary,
+    clean_value,
+    escape_excel_formula,
     is_missing,
 )
 from linkedin_analyzer.core.types import (
@@ -23,8 +26,11 @@ __all__ = [
     "ColumnWidths",
     "TextCleaner",
     "clean_comments_message",
+    "clean_date",
     "clean_empty_field",
     "clean_shares_commentary",
+    "clean_value",
+    "escape_excel_formula",
     "format_excel_output",
     "is_missing",
     "run_cleaner",

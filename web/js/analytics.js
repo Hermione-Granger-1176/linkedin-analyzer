@@ -356,10 +356,8 @@ const AnalyticsEngine = (() => {
         if (rangeKey === 'all') {
             const startDate = earliestTimestamp ? startOfMonth(new Date(earliestTimestamp)) : latestMonth;
             const keys = [];
-            let cursor = startDate;
-            while (cursor <= latestMonth) {
+            for (let cursor = startDate; cursor <= latestMonth; cursor = addMonths(cursor, 1)) {
                 keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
-                cursor = addMonths(cursor, 1);
             }
             return keys;
         }
@@ -664,15 +662,13 @@ const AnalyticsEngine = (() => {
         const latestDay = days[days.length - 1];
         let cursor = parseDay(latestDay);
         let current = 1;
-        while (true) {
-            const prev = addDays(cursor, -1);
-            const key = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
-            if (daySet.has(key)) {
-                current++;
-                cursor = prev;
-            } else {
-                break;
-            }
+        let prev = addDays(cursor, -1);
+        let key = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
+        while (daySet.has(key)) {
+            current++;
+            cursor = prev;
+            prev = addDays(cursor, -1);
+            key = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`;
         }
 
         return { current, longest };

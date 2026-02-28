@@ -2,6 +2,13 @@
 
 Command-line tool for cleaning LinkedIn CSV exports.
 
+## Notes
+
+- Required columns: Shares.csv needs `Date`, `ShareLink`, `ShareCommentary`; Comments.csv needs `Date`, `Link`, `Message`.
+- Date cleaning converts UTC timestamps to local time.
+- Comments parsing handles backslash-escaped quotes (\\").
+- Empty rows are dropped during cleaning. NA-like tokens (e.g., N/A, NULL, NaN) are treated as missing and can cause a row to be dropped if all fields are missing.
+
 ## Installation
 
 ```bash
@@ -102,7 +109,7 @@ result = run_cleaner(config)
 
 LinkedIn uses nested quote escaping:
 
-```
+```text
 "The next phase of AI isn't about IQ.""
 """"
 ""AI companies have been obsessed with which model is ""smarter"" for the past few months."
@@ -110,7 +117,7 @@ LinkedIn uses nested quote escaping:
 
 Becomes:
 
-```
+```text
 The next phase of AI isn't about IQ.
 
 AI companies have been obsessed with which model is "smarter" for the past few months.
@@ -120,13 +127,13 @@ AI companies have been obsessed with which model is "smarter" for the past few m
 
 LinkedIn uses backslash-escaped quotes:
 
-```
+```text
 "=COPILOT(\"Extract data\", A2:A40)"
 ```
 
 Becomes:
 
-```
+```text
 =COPILOT("Extract data", A2:A40)
 ```
 

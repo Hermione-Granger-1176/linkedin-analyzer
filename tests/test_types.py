@@ -18,6 +18,7 @@ class TestColumnConfig:
         assert config.width == 20
         assert config.wrap_text is False
         assert config.cleaner is None
+        assert config.required is False
 
     def test_custom_values(self) -> None:
         def my_cleaner(x: object) -> str:
@@ -28,12 +29,14 @@ class TestColumnConfig:
             width=100,
             wrap_text=True,
             cleaner=my_cleaner,
+            required=True,
         )
         assert config.name == "Message"
         assert config.width == 100
         assert config.wrap_text is True
         assert config.cleaner is not None
         assert config.cleaner("hello") == "HELLO"
+        assert config.required is True
 
     def test_is_frozen(self) -> None:
         config = ColumnConfig(name="Test")
@@ -49,11 +52,13 @@ class TestCleanerConfig:
             input_path=Path("input.csv"),
             output_path=Path("output.xlsx"),
             columns=(
-                ColumnConfig(name="Date"),
-                ColumnConfig(name="Message"),
+                ColumnConfig(name="Date", required=True),
+                ColumnConfig(name="Link", required=True),
+                ColumnConfig(name="Message", required=True),
+                ColumnConfig(name="Optional"),
             ),
         )
-        assert config.required_columns == ["Date", "Message"]
+        assert config.required_columns == ["Date", "Link", "Message"]
 
     def test_column_widths(self) -> None:
         config = CleanerConfig(

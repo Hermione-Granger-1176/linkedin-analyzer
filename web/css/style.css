@@ -1147,7 +1147,7 @@ button {
     border: 2px solid var(--border-color);
     border-radius: var(--radius-md);
     background: var(--bg-secondary);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
     font-size: var(--font-size-sm);
     color: var(--text-primary);
     white-space: nowrap;
@@ -1157,6 +1157,11 @@ button {
 
 .stat-popup.visible {
     display: block;
+}
+
+.stat-card.popup-active {
+    position: relative;
+    z-index: 10;
 }
 
 /* Insights */

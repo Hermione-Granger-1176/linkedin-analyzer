@@ -596,12 +596,22 @@ const SketchCharts = (() => {
         const redraw = drawRegistry.get(canvas);
         if (!redraw) return;
 
+        // Render at high DPR, copy pixels to a temp canvas, restore immediately
         cancelAnimations();
         exportDpr = EXPORT_DPR;
         redraw();
         exportDpr = 0;
 
-        canvas.toBlob(blob => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+        // Restore on-screen canvas synchronously — no async gap
+        redraw();
+
+        // Export from the detached temp canvas (immune to further redraws)
+        tempCanvas.toBlob(blob => {
             if (!blob) return;
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -611,9 +621,6 @@ const SketchCharts = (() => {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            // Re-read current draw function to avoid restoring stale data
-            const restore = drawRegistry.get(canvas);
-            if (restore) restore();
         }, 'image/png');
     }
 

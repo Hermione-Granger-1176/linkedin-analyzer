@@ -889,7 +889,7 @@ const MessagesPage = (() => {
      * Aggregate top contacts for the selected range.
      * @param {object} messageState - Message analytics state
      * @param {number|null} rangeStart - Start timestamp for selected range
-     * @returns {{items: object[], totalMessages: number, totalPeople: number}}
+     * @returns {{items: object[], totalMessages: number, totalRows: number, totalPeople: number}}
      */
     function getTopContactsInRange(messageState, rangeStart) {
         const rangeCounts = new Map();
@@ -1156,7 +1156,7 @@ const MessagesPage = (() => {
             const popupId = 'msgSkippedPopup';
             const msg = `${skipped} of ${state.totalInputRows} cleaned rows were excluded from analysis (self-messages, anonymous contacts, or unparseable dates)`;
             elements.msgStatMessages.innerHTML =
-                `${topSummary.totalRows}<span class="stat-asterisk" tabindex="0" aria-describedby="${popupId}">*</span>` +
+                `${topSummary.totalRows}<span class="stat-asterisk" role="button" tabindex="0" aria-label="Show excluded row details" aria-describedby="${popupId}">*</span>` +
                 `<span class="stat-popup" role="tooltip" id="${popupId}" aria-hidden="true">${msg}</span>`;
             const asterisk = elements.msgStatMessages.querySelector('.stat-asterisk');
             const popup = elements.msgStatMessages.querySelector('.stat-popup');
@@ -1172,6 +1172,7 @@ const MessagesPage = (() => {
                 if (e.key === 'Escape') { hidePopup(); }
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePopup(); }
             });
+            asterisk.addEventListener('focusout', hidePopup);
         } else {
             elements.msgStatMessages.textContent = String(topSummary.totalRows);
         }

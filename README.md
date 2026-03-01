@@ -86,7 +86,9 @@ linkedin-analyzer all
 | **Messages view**    | Top contacts, silent connections, fading chats   |
 | **SPA routing**      | Hash routes with URL-synced filters              |
 | **Excel export**     | Formatted .xlsx with proper columns              |
-| **PWA-ready**        | Installable with manifest and icons (no offline) |
+| **Connections**      | Network growth, top companies, top positions     |
+| **Chart export**     | Download any chart as PNG                        |
+| **PWA-ready**        | Installable, offline-capable via service worker  |
 | **Social previews**  | Open Graph and Twitter Card meta tags            |
 | **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold)  |
 

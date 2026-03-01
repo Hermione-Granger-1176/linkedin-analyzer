@@ -5,8 +5,6 @@ importScripts(`cleaner.js?v=${WORKER_VERSION}`);
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
 
-const TOP_N = 15;
-const RECENT_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -71,42 +69,6 @@ function monthKeyToLabel(key) {
     return `${MONTH_LABELS[monthIndex]} ${yearStr}`;
 }
 
-/* ── Aggregation helpers ───────────────────────────────────────────────────── */
-
-/**
- * Count occurrences of each non-empty value in a given field.
- * Returns a Map so callers can sort/slice without re-iterating.
- *
- * @param {object[]} rows - Cleaned connection rows
- * @param {string} field - Column name to tally (e.g. "Company")
- * @returns {Map<string, number>} Value -> count
- */
-function countByField(rows, field) {
-    const counts = new Map();
-    for (const row of rows) {
-        const value = (row[field] || '').trim();
-        if (!value) continue;
-        counts.set(value, (counts.get(value) || 0) + 1);
-    }
-    return counts;
-}
-
-/**
- * Extract the top N entries from a frequency map, sorted descending.
- * Separated from countByField so the counting pass stays reusable for
- * stats that need the full map (e.g. finding the single top company).
- *
- * @param {Map<string, number>} countMap - Value -> count
- * @param {number} limit - Maximum entries to return
- * @returns {Array<{name: string, count: number}>}
- */
-function topEntries(countMap, limit) {
-    return Array.from(countMap.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limit)
-        .map(([name, count]) => ({ name, count }));
-}
-
 /* ── Growth timeline ───────────────────────────────────────────────────────── */
 
 /**
@@ -160,18 +122,16 @@ function buildGrowthTimeline(rows) {
 
 /**
  * Compute high-level stats that feed the dashboard stat cards.
- * Kept as a pure function so it's easy to unit-test without worker plumbing.
+ * Only total and networkAgeMonths are used by the UI — the UI recomputes
+ * filtered stats (recent adds, top company) client-side.
  *
  * @param {object[]} rows - Cleaned connection rows
- * @param {Map<string, number>} companyCounts - Pre-computed company frequencies
- * @returns {{total: number, recentAdds: number, topCompany: string, networkAgeMonths: number}}
+ * @returns {{total: number, networkAgeMonths: number}}
  */
-function computeStats(rows, companyCounts) {
+function computeStats(rows) {
     const total = rows.length;
     const now = Date.now();
-    const recentCutoff = now - RECENT_DAYS * MS_PER_DAY;
 
-    let recentAdds = 0;
     let earliestMs = Infinity;
 
     for (const row of rows) {
@@ -179,18 +139,7 @@ function computeStats(rows, companyCounts) {
         if (!date) continue;
 
         const ms = date.getTime();
-        if (ms >= recentCutoff) recentAdds += 1;
         if (ms < earliestMs) earliestMs = ms;
-    }
-
-    /* Top company by count; fall back to empty string when no data */
-    let topCompany = '';
-    let topCount = 0;
-    for (const [name, count] of companyCounts) {
-        if (count > topCount) {
-            topCompany = name;
-            topCount = count;
-        }
     }
 
     /* Network age in whole months from earliest connection to now */
@@ -198,7 +147,7 @@ function computeStats(rows, companyCounts) {
         ? 0
         : Math.max(0, Math.round((now - earliestMs) / (MS_PER_DAY * 30.44)));
 
-    return Object.freeze({ total, recentAdds, topCompany, networkAgeMonths });
+    return Object.freeze({ total, networkAgeMonths });
 }
 
 /* ── Main processing pipeline ──────────────────────────────────────────────── */
@@ -226,14 +175,9 @@ function processConnections(connectionsCsv) {
         return { success: false, error: 'Connections file contained no valid rows.' };
     }
 
-    const companyCounts = countByField(rows, 'Company');
-    const positionCounts = countByField(rows, 'Position');
-
     const analytics = Object.freeze({
         growthTimeline: buildGrowthTimeline(rows),
-        companyBreakdown: topEntries(companyCounts, TOP_N),
-        positionDistribution: topEntries(positionCounts, TOP_N),
-        stats: computeStats(rows, companyCounts)
+        stats: computeStats(rows)
     });
 
     return { success: true, analytics, rows };

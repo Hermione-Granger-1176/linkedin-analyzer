@@ -5,10 +5,6 @@ linkedin-analyzer/
 ├── web/                                # Web app (SPA + static redirect stubs)
 │   ├── index.html                      # SPA shell containing all screens
 │   ├── robots.txt                      # Search engine directives
-│   ├── clean.html                      # Redirects to index.html#clean
-│   ├── analytics.html                  # Redirects to index.html#analytics
-│   ├── messages.html                   # Redirects to index.html#messages
-│   ├── insights.html                   # Redirects to index.html#insights
 │   ├── assets/
 │   │   ├── icon.svg                    # SVG favicon (modern browsers)
 │   │   ├── favicon.ico                 # ICO favicon (legacy browsers)
@@ -104,18 +100,18 @@ linkedin-analyzer/
 | `web/assets/icon-192.png`         | 192px PNG for Android and PWA icon             |
 | `web/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards   |
 | `web/assets/manifest.webmanifest` | PWA manifest (name, icons, theme, display)     |
-| `web/robots.txt`                  | Allows all crawlers, points to sitemap         |
+| `web/robots.txt`                  | Allows all crawlers                            |
 | `web/index.html` `<head>`         | OG, Twitter Card, theme-color, and icon `link` |
 
 ### Processing
 
-| File                         | Purpose                                               |
-| ---------------------------- | ----------------------------------------------------- |
-| `web/js/cleaner.js`          | CSV parsing/cleaning logic used by web workers and UI |
+| File                           | Purpose                                               |
+| ------------------------------ | ----------------------------------------------------- |
+| `web/js/cleaner.js`            | CSV parsing/cleaning logic used by web workers and UI |
 | `web/js/analytics-worker.js`   | Builds analytics views off main thread                |
 | `web/js/connections-worker.js` | Parses connections and computes network analytics     |
 | `web/js/messages-worker.js`    | Parses messages/connections off main thread           |
-| `web/js/excel.js`            | `.xlsx` generation and download helpers               |
+| `web/js/excel.js`              | `.xlsx` generation and download helpers               |
 
 ### Python CLI
 

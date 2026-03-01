@@ -2,6 +2,7 @@
  * Excel Generation Module
  * Uses SheetJS (xlsx) library for Excel file creation with formatting
  */
+/* exported ExcelGenerator */
 
 const ExcelGenerator = (() => {
     'use strict';

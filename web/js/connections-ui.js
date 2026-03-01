@@ -290,6 +290,16 @@ const ConnectionsPage = (() => {
         }
 
         const payload = message.payload || {};
+
+        if (!payload.success) {
+            setEmptyState(
+                'Connections error',
+                payload.error || 'Unable to parse Connections.csv.'
+            );
+            showConnectionsLoading(false);
+            return;
+        }
+
         const analytics = payload.analytics || {};
         const rawRows = payload.rows || [];
 
@@ -623,10 +633,6 @@ const ConnectionsPage = (() => {
      * @param {MouseEvent} event - The mousemove event
      */
     function handleChartHover(event) {
-        if (typeof SketchCharts === 'undefined') {
-            return;
-        }
-
         const canvas = event.currentTarget;
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
@@ -681,7 +687,7 @@ const ConnectionsPage = (() => {
      * @param {boolean} isLoading - Whether connections data is loading
      */
     function showConnectionsLoading(isLoading) {
-        if (!elements || !elements.connectionsGrid) {
+        if (!elements.connectionsGrid) {
             return;
         }
 
@@ -693,7 +699,11 @@ const ConnectionsPage = (() => {
         }
 
         if (typeof LoadingOverlay !== 'undefined') {
-            LoadingOverlay[isLoading ? 'show' : 'hide']('connections');
+            if (isLoading) {
+                LoadingOverlay.show('connections');
+            } else {
+                LoadingOverlay.hide('connections');
+            }
         }
     }
 

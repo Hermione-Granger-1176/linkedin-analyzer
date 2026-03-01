@@ -2,7 +2,7 @@ import globals from "globals";
 
 export default [
     {
-        files: ["web/js/**/*.js", "web/tests/**/*.js"],
+        files: ["web/js/**/*.js", "web/sw.js", "web/tests/**/*.js"],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: "script",
@@ -38,11 +38,11 @@ export default [
             "no-unused-vars": ["error", { args: "none", varsIgnorePattern: "^(Storage)$" }],
             "no-undef": "error",
             eqeqeq: ["error", "always"],
-            "no-console": "off",
+            "no-console": ["error", { allow: ["error"] }],
         },
     },
     {
-        files: ["web/js/analytics-worker.js", "web/js/connections-worker.js"],
+        files: ["web/js/analytics-worker.js", "web/js/connections-worker.js", "web/js/messages-worker.js"],
         languageOptions: {
             globals: {
                 ...globals.worker,

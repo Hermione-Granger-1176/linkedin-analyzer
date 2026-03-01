@@ -30,8 +30,6 @@ Examples:
 - `#messages?range=6m`
 - `#insights?range=all`
 
-Legacy HTML pages (`clean.html`, `analytics.html`, `messages.html`, `insights.html`) now redirect to these routes.
-
 ## Shared Time Range Behavior
 
 Time range is shared across Analytics, Connections, Messages, and Insights.
@@ -94,7 +92,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 
 ## Loading and Performance
 
-- A shared loading overlay (gear animation) is used for analytics/messages/insights data loading.
+- A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
 - Active content is blurred while loading to keep the loading state clear.
 - Analytics computation runs in `analytics-worker.js`.
 - Connections parsing runs in `connections-worker.js` with client-side filtering.

@@ -1,4 +1,5 @@
 /* LinkedIn Analyzer - Analytics Engine (Optimized) */
+/* exported AnalyticsEngine */
 
 const AnalyticsEngine = (() => {
     'use strict';

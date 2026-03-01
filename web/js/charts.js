@@ -1,4 +1,5 @@
 /* LinkedIn Analyzer - Hand-drawn Charts (Optimized) */
+/* exported SketchCharts */
 
 const SketchCharts = (() => {
     'use strict';

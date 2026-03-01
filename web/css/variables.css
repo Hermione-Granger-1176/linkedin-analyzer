@@ -58,6 +58,9 @@
     /* Grid background */
     --grid-color: rgba(0, 0, 0, 0.03);
     
+    /* Selection */
+    --selection-text: #1A1A2E;
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;

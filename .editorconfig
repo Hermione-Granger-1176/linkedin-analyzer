@@ -14,11 +14,11 @@ max_line_length = 100
 
 [*.{js,mjs,cjs}]
 indent_style = space
-indent_size = 2
+indent_size = 4
 
 [*.{css,html}]
 indent_style = space
-indent_size = 2
+indent_size = 4
 
 [*.{json,yaml,yml}]
 indent_style = space

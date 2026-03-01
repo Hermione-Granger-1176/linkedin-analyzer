@@ -1,4 +1,5 @@
 /* Theme handling */
+/* exported Theme */
 
 const Theme = (() => {
     'use strict';

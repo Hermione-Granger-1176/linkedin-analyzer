@@ -10,7 +10,7 @@ The LinkedIn Analyzer web app runs entirely in your browser. No data is uploaded
    - `Comments.csv`
    - `messages.csv`
    - `Connections.csv`
-3. Navigate to the screen you need: Clean, Analytics, Messages, or Insights.
+3. Navigate to the screen you need: Clean, Analytics, Connections, Messages, or Insights.
 
 ## Routing (SPA)
 
@@ -19,22 +19,22 @@ The app is a single-page app (SPA) with hash routes.
 - Home: `#home`
 - Clean: `#clean`
 - Analytics: `#analytics`
+- Connections: `#connections`
 - Messages: `#messages`
 - Insights: `#insights`
 
 Examples:
 
 - `#analytics?range=3m`
+- `#connections?range=12m`
 - `#messages?range=6m`
 - `#insights?range=all`
 
-Legacy HTML pages (`clean.html`, `analytics.html`, `messages.html`, `insights.html`) now redirect to these routes.
-
 ## Shared Time Range Behavior
 
-Time range is shared across Analytics, Messages, and Insights.
+Time range is shared across Analytics, Connections, Messages, and Insights.
 
-- If you set `3 months` in Analytics, then move to Messages or Insights, that same range is applied.
+- If you set `3 months` in Analytics, then move to Connections, Messages, or Insights, that same range is applied.
 - Clean and Home do not use this shared range state.
 
 Supported range values:
@@ -63,6 +63,19 @@ Interactive activity dashboard:
 - Top topics chart
 - Day/hour heatmap
 
+Charts support PNG export via download button on hover.
+
+### Connections
+
+Network analytics dashboard:
+
+- Connection growth timeline
+- Top companies in network (bar chart)
+- Top positions/roles (bar chart)
+- Stats: total connections, recent adds, top company, network age
+
+Charts support PNG export via download button on hover.
+
 ### Messages
 
 Relationship-focused view derived from messages and connections:
@@ -79,11 +92,14 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 
 ## Loading and Performance
 
-- A shared loading overlay (gear animation) is used for analytics/messages/insights data loading.
+- A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
 - Active content is blurred while loading to keep the loading state clear.
 - Analytics computation runs in `analytics-worker.js`.
+- Connections parsing runs in `connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `messages-worker.js` with safe fallback.
 - IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
+- A service worker (`sw.js`) caches all static assets for offline use.
+- Fonts are self-hosted (no external Google Fonts dependency).
 
 ## Privacy
 

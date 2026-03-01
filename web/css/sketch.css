@@ -198,10 +198,10 @@
     border-radius: 0 0 4px 4px;
 }
 
-/* Selection styling */
+/* Selection styling — dark text keeps contrast on the yellow highlight */
 ::selection {
     background: var(--accent-yellow);
-    color: var(--text-primary);
+    color: var(--selection-text);
 }
 
 /* Cursor customization for interactive elements */

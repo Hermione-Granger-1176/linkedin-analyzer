@@ -152,6 +152,7 @@ const ScreenManager = (() => {
             home: 'Home',
             clean: 'Clean',
             analytics: 'Analytics',
+            connections: 'Connections',
             messages: 'Messages',
             insights: 'Insights'
         };

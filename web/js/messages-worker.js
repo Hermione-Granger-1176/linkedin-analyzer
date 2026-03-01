@@ -1,7 +1,9 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 
 const WORKER_VERSION = '20260228-1';
-importScripts(`cleaner.js?v=${WORKER_VERSION}`);
+if (typeof importScripts === 'function') {
+    importScripts(`cleaner.js?v=${WORKER_VERSION}`);
+}
 
 /**
  * Parse messages and connections CSV payload.
@@ -40,17 +42,23 @@ function processPayload(payload) {
     };
 }
 
-self.addEventListener('message', (event) => {
-    const message = event.data || {};
-    if (message.type !== 'process') {
-        return;
-    }
+if (typeof self !== 'undefined') {
+    self.addEventListener('message', (event) => {
+        const message = event.data || {};
+        if (message.type !== 'process') {
+            return;
+        }
 
-    const requestId = message.requestId;
-    const payload = processPayload(message.payload || {});
-    self.postMessage({
-        type: 'processed',
-        requestId,
-        payload
+        const requestId = message.requestId;
+        const payload = processPayload(message.payload || {});
+        self.postMessage({
+            type: 'processed',
+            requestId,
+            payload
+        });
     });
-});
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { processPayload };
+}

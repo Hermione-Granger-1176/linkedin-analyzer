@@ -94,4 +94,25 @@
 
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleRejection);
+
+    /* Chart PNG export — delegated handler for .chart-export-btn buttons */
+    document.addEventListener('click', event => {
+        const btn = event.target.closest('.chart-export-btn');
+        if (!btn) return;
+        const canvasId = btn.dataset.exportCanvas;
+        const filename = btn.dataset.exportName || 'chart.png';
+        const canvas = document.getElementById(canvasId);
+        if (canvas && typeof SketchCharts !== 'undefined') {
+            SketchCharts.exportPng(canvas, filename);
+        }
+    });
+
+    /* Service Worker registration */
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(() => {
+                // SW registration failure is non-critical
+            });
+        });
+    }
 })();

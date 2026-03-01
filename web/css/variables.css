@@ -1,5 +1,23 @@
 /* CSS Custom Properties for Theming */
 
+/* Self-hosted fonts (eliminates Google Fonts DNS lookup) */
+
+@font-face {
+    font-family: 'Patrick Hand';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/PatrickHand-Regular.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Caveat';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/Caveat-Regular.woff2') format('woff2');
+}
+
 :root {
     /* Light Theme (Default) */
     --bg-primary: #FDF6E3;
@@ -40,6 +58,9 @@
     /* Grid background */
     --grid-color: rgba(0, 0, 0, 0.03);
     
+    /* Selection */
+    --selection-text: #1A1A2E;
+
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
@@ -84,6 +105,9 @@
     
     /* Grid background */
     --grid-color: rgba(255, 255, 255, 0.03);
+
+    /* Selection */
+    --selection-text: #000000;
 }
 
 /* Typography Variables */

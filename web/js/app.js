@@ -24,6 +24,15 @@
             }
         },
         {
+            name: 'connections',
+            screenId: 'screen-connections',
+            controller: () => (typeof ConnectionsPage !== 'undefined' ? ConnectionsPage : null),
+            routerOptions: {
+                sharedParams: ['range'],
+                defaultParams: { range: '12m' }
+            }
+        },
+        {
             name: 'messages',
             screenId: 'screen-messages',
             controller: () => (typeof MessagesPage !== 'undefined' ? MessagesPage : null),

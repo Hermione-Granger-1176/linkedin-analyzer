@@ -16,6 +16,7 @@ const ConnectionsPage = (() => {
     });
 
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
+    const CACHE_EVENTS = new Set(['filesChanged', 'storageCleared']);
     const WORKER_URL = 'js/connections-worker.js?v=20260301-2';
     const TOP_N = 10;
 
@@ -182,9 +183,7 @@ const ConnectionsPage = (() => {
      */
     function handleCacheChange(event) {
         const type = event && event.type;
-        if (type !== 'filesChanged' && type !== 'storageCleared') {
-            return;
-        }
+        if (!CACHE_EVENTS.has(type)) return;
 
         if (type === 'filesChanged' && event.fileType && event.fileType !== 'connections') {
             return;

@@ -1,6 +1,13 @@
 /* LinkedIn Analyzer - Service Worker */
 
-const CACHE_NAME = 'li-analyzer-v1';
+/* Bump CACHE_VERSION on each deploy to invalidate stale caches. */
+const CACHE_VERSION = '20260301-2';
+const CACHE_NAME = `li-analyzer-${CACHE_VERSION}`;
+
+const CDN_ASSETS = [
+    'https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.min.js',
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+];
 
 const STATIC_ASSETS = [
     './',
@@ -44,7 +51,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(STATIC_ASSETS))
+            .then(cache => cache.addAll([...STATIC_ASSETS, ...CDN_ASSETS]))
             .then(() => self.skipWaiting())
     );
 });
@@ -70,8 +77,8 @@ self.addEventListener('fetch', event => {
             if (cached) return cached;
 
             return fetch(event.request).then(response => {
-                // Only cache same-origin successful responses
-                if (!response || response.status !== 200 || response.type !== 'basic') {
+                /* Cache same-origin and CDN (cors) responses */
+                if (!response || response.status !== 200) {
                     return response;
                 }
                 const clone = response.clone();

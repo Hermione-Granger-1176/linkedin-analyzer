@@ -25,6 +25,7 @@ const ConnectionsPage = (() => {
         hasData: false,
         allRows: null,
         allTimeline: null,
+        workerStats: null,
         currentView: null
     };
 
@@ -193,6 +194,7 @@ const ConnectionsPage = (() => {
         state.hasData = false;
         state.allRows = null;
         state.allTimeline = null;
+        state.workerStats = null;
         state.currentView = null;
     }
 
@@ -225,9 +227,9 @@ const ConnectionsPage = (() => {
             const id = ++requestId;
             pendingRequestId = id;
             worker.postMessage({
-                type: 'parse',
+                type: 'process',
                 requestId: id,
-                payload: { csv: file.text }
+                payload: { connectionsCsv: file.text }
             });
         } catch {
             setEmptyState(
@@ -267,7 +269,7 @@ const ConnectionsPage = (() => {
         const message = event.data || {};
 
         const HANDLERS = {
-            parsed: handleParsedPayload,
+            processed: handleParsedPayload,
             error: handleWorkerErrorPayload
         };
 
@@ -288,12 +290,21 @@ const ConnectionsPage = (() => {
         }
 
         const payload = message.payload || {};
-        const rows = payload.rows || [];
+        const analytics = payload.analytics || {};
+        const rawRows = payload.rows || [];
+
+        /* Normalize field names for client-side filtering (worker returns title-case keys) */
+        const rows = rawRows.map(row => ({
+            connectedOn: parseConnectedOn(row['Connected On']),
+            company: (row['Company'] || '').trim(),
+            position: (row['Position'] || '').trim()
+        }));
 
         state.dataReady = true;
         state.hasData = rows.length > 0;
         state.allRows = rows;
-        state.allTimeline = payload.timeline || [];
+        state.allTimeline = analytics.growthTimeline || [];
+        state.workerStats = analytics.stats || {};
 
         updateVisibility();
 
@@ -336,7 +347,13 @@ const ConnectionsPage = (() => {
         const filtered = filterRowsByRange(state.allRows, state.filters.timeRange);
         const companies = aggregateField(filtered, 'company');
         const positions = aggregateField(filtered, 'position');
-        const stats = computeStats(state.allRows, filtered);
+        const ws = state.workerStats;
+        const stats = {
+            total: (ws && ws.total) || state.allRows.length,
+            recent: filtered.length,
+            topCompany: findTopValue(filtered, 'company'),
+            networkAge: formatNetworkAge((ws && ws.networkAgeMonths) || 0)
+        };
 
         const view = {
             timeline: state.allTimeline,
@@ -347,6 +364,22 @@ const ConnectionsPage = (() => {
 
         state.currentView = view;
         renderView(view);
+    }
+
+    /**
+     * Parse a cleaned "Connected On" date string into a timestamp.
+     * @param {string} dateStr - ISO-style date string (YYYY-MM-DD)
+     * @returns {number} Epoch milliseconds, or 0 if unparseable
+     */
+    function parseConnectedOn(dateStr) {
+        if (!dateStr || typeof dateStr !== 'string') return 0;
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return 0;
+        const y = Number(parts[0]);
+        const m = Number(parts[1]);
+        const d = Number(parts[2]);
+        if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return 0;
+        return new Date(y, m - 1, d).getTime();
     }
 
     /**
@@ -393,23 +426,6 @@ const ConnectionsPage = (() => {
     }
 
     /**
-     * Compute summary statistics for the stats bar.
-     * @param {Array<object>} allRows - All connection rows (unfiltered)
-     * @param {Array<object>} filteredRows - Rows matching the current range
-     * @returns {{total: number, recent: number, topCompany: string, networkAge: string}}
-     */
-    function computeStats(allRows, filteredRows) {
-        const total = allRows.length;
-        const recent = filteredRows.length;
-
-        const topCompany = findTopValue(filteredRows, 'company');
-
-        const networkAge = computeNetworkAge(allRows);
-
-        return { total, recent, topCompany, networkAge };
-    }
-
-    /**
      * Find the most frequent value for a given field.
      * @param {Array<object>} rows - Connection rows
      * @param {string} field - Field name
@@ -441,37 +457,14 @@ const ConnectionsPage = (() => {
     }
 
     /**
-     * Compute the network age as a human-readable string.
-     * @param {Array<object>} rows - All connection rows with connectedOn timestamps
-     * @returns {string} Human-readable network age (e.g. '3.2 years')
+     * Format a network age in months as a human-readable string.
+     * @param {number} months - Network age from worker stats
+     * @returns {string} Human-readable network age (e.g. '3.2 yr')
      */
-    function computeNetworkAge(rows) {
-        if (!rows.length) {
-            return '-';
-        }
-
-        let earliest = Infinity;
-        for (let i = 0; i < rows.length; i++) {
-            if (rows[i].connectedOn < earliest) {
-                earliest = rows[i].connectedOn;
-            }
-        }
-
-        if (!isFinite(earliest)) {
-            return '-';
-        }
-
-        const days = Math.floor((Date.now() - earliest) / (24 * 60 * 60 * 1000));
-        if (days < 30) {
-            return `${days} days`;
-        }
-        if (days < 365) {
-            const months = Math.round(days / 30.44);
-            return `${months} mo`;
-        }
-
-        const years = (days / 365.25).toFixed(1);
-        return `${years} yr`;
+    function formatNetworkAge(months) {
+        if (!months) return '-';
+        if (months < 12) return `${months} mo`;
+        return `${(months / 12).toFixed(1)} yr`;
     }
 
     /**

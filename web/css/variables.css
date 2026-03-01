@@ -105,6 +105,9 @@
     
     /* Grid background */
     --grid-color: rgba(255, 255, 255, 0.03);
+
+    /* Selection */
+    --selection-text: #FFFFFF;
 }
 
 /* Typography Variables */

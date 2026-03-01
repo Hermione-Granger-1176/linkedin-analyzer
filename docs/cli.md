@@ -56,6 +56,12 @@ Processes all four exports in one run.
 
 ## Options
 
+### Version
+
+```bash
+linkedin-analyzer --version
+```
+
 ### Global log level
 
 ```bash
@@ -89,10 +95,13 @@ linkedin-analyzer all \
 ## Cleaning Notes
 
 - Shares commentary escaping is normalized.
+- Comments CSV uses backslash escaping for special characters.
 - Comments and messages escaped quotes are normalized.
 - UTC timestamps are converted to local time where applicable.
 - NA-like values are treated as missing.
 - Rows missing required fields are dropped.
+- Connections CSV skips the first 3 header rows before parsing.
+- Connections rows missing all of First Name, Last Name, and URL are dropped.
 
 ## Required Columns
 

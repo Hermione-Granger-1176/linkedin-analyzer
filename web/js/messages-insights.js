@@ -1143,7 +1143,7 @@ const MessagesPage = (() => {
 
     /**
      * Update summary stats.
-     * @param {{totalMessages: number, totalPeople: number}} topSummary - Top summary
+     * @param {{totalMessages: number, totalRows: number, totalPeople: number}} topSummary - Top summary
      * @param {number} totalConnections - Total number of connections
      * @param {number} fadingCount - Number of fading conversations
      */

@@ -16,7 +16,11 @@
 }
 
 .screen.exit {
-    animation: screen-out 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: screen-out 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .screen .screen-inner {

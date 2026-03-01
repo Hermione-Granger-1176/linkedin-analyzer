@@ -90,13 +90,13 @@ const ScreenManager = (() => {
 
         if (previousScreen && previousScreen !== nextScreen) {
             previousScreen.classList.remove('enter');
+            previousScreen.classList.remove('active');
             previousScreen.classList.add('exit');
             setTimeout(() => {
                 if (token !== transitionToken) {
                     return;
                 }
                 previousScreen.classList.remove('exit');
-                previousScreen.classList.remove('active');
                 previousScreen.classList.remove('is-loading');
             }, TRANSITION_DURATION_MS);
         }

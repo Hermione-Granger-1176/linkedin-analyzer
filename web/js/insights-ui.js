@@ -14,6 +14,7 @@ const InsightsPage = (() => {
     });
 
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
+    const CACHE_EVENTS = new Set(['analyticsChanged', 'storageCleared', 'filesChanged']);
     const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
 
     const state = {
@@ -110,9 +111,7 @@ const InsightsPage = (() => {
     /** Handle cache notifications from uploads/clear operations. */
     function handleCacheChange(event) {
         const type = event && event.type;
-        if (type !== 'analyticsChanged' && type !== 'storageCleared' && type !== 'filesChanged') {
-            return;
-        }
+        if (!CACHE_EVENTS.has(type)) return;
         needsBaseReload = true;
         state.analyticsReady = false;
         state.hasData = false;

@@ -477,6 +477,7 @@ const MessagesPage = (() => {
         const context = detectSelfContext(rows);
         const contacts = new Map();
         const events = [];
+        const rowTimestamps = [];
         const talkedNameKeys = new Set();
         const talkedUrlKeys = new Set();
 
@@ -494,6 +495,8 @@ const MessagesPage = (() => {
                 skippedRows += 1;
                 return;
             }
+
+            rowTimestamps.push(timestamp);
 
             participants.forEach(contact => {
                 const contactKey = buildContactKey(contact);
@@ -534,8 +537,8 @@ const MessagesPage = (() => {
         return {
             contacts,
             events,
+            rowTimestamps,
             skippedRows,
-            usableRows: rows.length - skippedRows,
             talkedNameKeys,
             talkedUrlKeys,
             latestTimestamp
@@ -886,7 +889,7 @@ const MessagesPage = (() => {
      * Aggregate top contacts for the selected range.
      * @param {object} messageState - Message analytics state
      * @param {number|null} rangeStart - Start timestamp for selected range
-     * @returns {{items: object[], totalMessages: number, totalPeople: number}}
+     * @returns {{items: object[], totalMessages: number, totalRows: number, totalPeople: number}}
      */
     function getTopContactsInRange(messageState, rangeStart) {
         const rangeCounts = new Map();
@@ -929,9 +932,16 @@ const MessagesPage = (() => {
         });
 
         const totalMessages = items.reduce((sum, item) => sum + item.count, 0);
+        let totalRows = messageState.rowTimestamps.length;
+        if (rangeStart) {
+            totalRows = messageState.rowTimestamps.reduce(
+                (sum, ts) => sum + (ts >= rangeStart ? 1 : 0), 0
+            );
+        }
         return {
             items,
             totalMessages,
+            totalRows,
             totalPeople: items.length
         };
     }
@@ -1133,25 +1143,38 @@ const MessagesPage = (() => {
 
     /**
      * Update summary stats.
-     * @param {{totalMessages: number, totalPeople: number}} topSummary - Top summary
+     * @param {{totalMessages: number, totalRows: number, totalPeople: number}} topSummary - Top summary
      * @param {number} totalConnections - Total number of connections
      * @param {number} fadingCount - Number of fading conversations
      */
     function updateStats(topSummary, totalConnections, fadingCount) {
+        const card = elements.msgStatMessages.closest('.stat-card');
+        if (card) card.classList.remove('popup-active');
+
         const skipped = state.messageState ? state.messageState.skippedRows : 0;
-        const usable = state.messageState ? state.messageState.usableRows : 0;
         if (skipped > 0) {
-            const msg = `${skipped} of ${state.totalInputRows} rows excluded (self-messages, anonymous contacts, or unparseable dates)`;
+            const popupId = 'msgSkippedPopup';
+            const msg = `${skipped} of ${state.totalInputRows} cleaned rows were excluded from analysis (self-messages, anonymous contacts, or unparseable dates)`;
             elements.msgStatMessages.innerHTML =
-                `${usable}<span class="stat-asterisk" tabindex="0">*</span>` +
-                `<span class="stat-popup" role="tooltip">${msg}</span>`;
+                `${topSummary.totalRows}<span class="stat-asterisk" role="button" tabindex="0" aria-label="Show excluded row details" aria-describedby="${popupId}">*</span>` +
+                `<span class="stat-popup" role="tooltip" id="${popupId}" aria-hidden="true">${msg}</span>`;
             const asterisk = elements.msgStatMessages.querySelector('.stat-asterisk');
             const popup = elements.msgStatMessages.querySelector('.stat-popup');
-            asterisk.addEventListener('mouseenter', () => popup.classList.add('visible'));
-            asterisk.addEventListener('mouseleave', () => popup.classList.remove('visible'));
-            asterisk.addEventListener('click', () => popup.classList.toggle('visible'));
+
+            function showPopup() { popup.classList.add('visible'); popup.setAttribute('aria-hidden', 'false'); if (card) card.classList.add('popup-active'); }
+            function hidePopup() { popup.classList.remove('visible'); popup.setAttribute('aria-hidden', 'true'); if (card) card.classList.remove('popup-active'); }
+            function togglePopup() { if (popup.classList.contains('visible')) { hidePopup(); } else { showPopup(); } }
+
+            asterisk.addEventListener('mouseenter', showPopup);
+            asterisk.addEventListener('mouseleave', hidePopup);
+            asterisk.addEventListener('click', togglePopup);
+            asterisk.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { hidePopup(); }
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePopup(); }
+            });
+            asterisk.addEventListener('focusout', hidePopup);
         } else {
-            elements.msgStatMessages.textContent = String(usable || topSummary.totalMessages);
+            elements.msgStatMessages.textContent = String(topSummary.totalRows);
         }
         elements.msgStatContacts.textContent = String(topSummary.totalPeople);
         elements.msgStatConnected.textContent = String(totalConnections);

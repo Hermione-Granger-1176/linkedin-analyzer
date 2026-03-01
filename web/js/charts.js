@@ -8,7 +8,11 @@ const SketchCharts = (() => {
     const WEEKLY_TIME_RANGES = new Set(['1m', '3m']);
 
     const registry = new Map();
+    const drawRegistry = new Map();
     let animationId = 0;
+    let exportDpr = 0;
+
+    const EXPORT_DPR = 3;
 
     /**
      * Read CSS custom properties and return a color palette object.
@@ -31,12 +35,13 @@ const SketchCharts = (() => {
     /**
      * Resize canvas to match its CSS dimensions at device pixel ratio.
      * @param {HTMLCanvasElement} canvas - The canvas element to resize.
+     * @param {number} [dprOverride] - Optional DPR override for high-res export.
      * @returns {{ctx: CanvasRenderingContext2D, width: number, height: number}|null}
      */
-    function resizeCanvas(canvas) {
+    function resizeCanvas(canvas, dprOverride) {
         const rect = canvas.getBoundingClientRect();
         if (!rect.width || !rect.height) return null;
-        const ratio = window.devicePixelRatio || 1;
+        const ratio = exportDpr || dprOverride || window.devicePixelRatio || 1;
         canvas.width = rect.width * ratio;
         canvas.height = rect.height * ratio;
         const ctx = canvas.getContext('2d');
@@ -76,8 +81,9 @@ const SketchCharts = (() => {
      * @param {number} height - The canvas CSS height.
      */
     function clear(canvas, ctx, width, height) {
-        ctx.clearRect(0, 0, width, height);
         registry.delete(canvas);
+        drawRegistry.delete(canvas);
+        ctx.clearRect(0, 0, width, height);
     }
 
     /**
@@ -138,6 +144,7 @@ const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
+        drawRegistry.set(canvas, () => drawTimeline(canvas, data, timeRange, 1, maxOverride));
         if (!data || !data.length) return;
 
         const padding = { top: 22, right: 12, bottom: 42, left: 40 };
@@ -300,28 +307,33 @@ const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
+        drawRegistry.set(canvas, () => drawTopics(canvas, data, 1));
         if (!data || !data.length) return;
 
-        const padding = { top: 10, right: 10, bottom: 10, left: 80 };
+        ctx.font = '13px Patrick Hand, sans-serif';
+        const maxLabelWidth = Math.max(
+            ...data.map(p => ctx.measureText(p.topic).width),
+            60
+        );
+        const leftPad = Math.min(Math.ceil(maxLabelWidth) + 16, Math.floor(width * 0.4));
+        const padding = { top: 10, right: 10, bottom: 10, left: leftPad };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
         const maxValue = Math.max(...data.map(p => p.count), 1);
         const barHeight = Math.min(24, chartHeight / data.length - 6);
-
-        ctx.font = '13px Patrick Hand, sans-serif';
         const items = [];
 
         // Batch fill
         ctx.fillStyle = colors.purple;
         ctx.globalAlpha = 0.6;
-        
+
         const barData = data.map((point, index) => {
             const y = padding.top + index * (barHeight + 10);
             const bw = (point.count / maxValue) * chartWidth * progress;
             ctx.fillRect(padding.left, y, bw, barHeight);
             return { point, y, bw };
         });
-        
+
         ctx.globalAlpha = 1;
 
         // Borders and labels
@@ -330,7 +342,13 @@ const SketchCharts = (() => {
 
             ctx.fillStyle = colors.text;
             ctx.textAlign = 'right';
-            ctx.fillText(point.topic, padding.left - 8, y + barHeight - 6);
+            let label = point.topic;
+            const maxLabelSpace = padding.left - 12;
+            while (label.length > 1 && ctx.measureText(label).width > maxLabelSpace) {
+                label = label.slice(0, -1);
+            }
+            if (label !== point.topic) label += '\u2026';
+            ctx.fillText(label, padding.left - 8, y + barHeight - 6);
 
             items.push({
                 type: 'topic',
@@ -359,6 +377,7 @@ const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
+        drawRegistry.set(canvas, () => drawHeatmap(canvas, grid));
         if (!grid || !grid.length) return;
 
         const padding = { top: 20, right: 20, bottom: 26, left: 44 };
@@ -448,6 +467,7 @@ const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
+        drawRegistry.set(canvas, () => drawDonut(canvas, mix, 1));
         if (!mix) return;
 
         const values = [
@@ -551,7 +571,7 @@ const SketchCharts = (() => {
     function animateDraw(drawFn, duration = 600) {
         const myId = ++animationId;
         let start = null;
-        
+
         function step(timestamp) {
             if (myId !== animationId) return; // Cancelled
             if (!start) start = timestamp;
@@ -566,13 +586,32 @@ const SketchCharts = (() => {
     }
 
     /**
-     * Export a chart canvas as a PNG file download.
+     * Export a chart canvas as a high-resolution PNG file download.
+     * Redraws the chart at EXPORT_DPR, exports, then restores normal DPR.
      * @param {HTMLCanvasElement} canvas - The canvas to export.
      * @param {string} [filename='chart.png'] - Download file name.
      */
     function exportPng(canvas, filename) {
         if (!canvas) return;
-        canvas.toBlob(blob => {
+        const redraw = drawRegistry.get(canvas);
+        if (!redraw) return;
+
+        // Render at high DPR, copy pixels to a temp canvas, restore immediately
+        cancelAnimations();
+        exportDpr = EXPORT_DPR;
+        redraw();
+        exportDpr = 0;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+        // Restore on-screen canvas synchronously — no async gap
+        redraw();
+
+        // Export from the detached temp canvas (immune to further redraws)
+        tempCanvas.toBlob(blob => {
             if (!blob) return;
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');

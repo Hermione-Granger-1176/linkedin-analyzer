@@ -699,6 +699,26 @@ const LinkedInCleaner = (() => {
     }
 
     /**
+     * Build a standardised process() result object.
+     * @param {boolean} success - Whether processing succeeded
+     * @param {string|null} error - Error message, or null on success
+     * @param {object} [overrides] - Fields that differ from the empty defaults
+     */
+    function makeResult(success, error, overrides = {}) {
+        return {
+            success,
+            fileType: null,
+            detectedType: null,
+            headers: [],
+            originalData: [],
+            cleanedData: [],
+            rowCount: 0,
+            error,
+            ...overrides
+        };
+    }
+
+    /**
      * Process a CSV file completely
      * @param {string} csvText - Raw CSV text
      * @param {string} fileType - Supported file type or 'auto'
@@ -719,55 +739,30 @@ const LinkedInCleaner = (() => {
             if (!matches.length) {
                 const initialParse = parseCSV(csvText, 'auto');
                 if (initialParse.error) {
-                    return {
-                        success: false,
-                        fileType: null,
-                        detectedType: null,
-                        headers: [],
-                        originalData: [],
-                        cleanedData: [],
-                        rowCount: 0,
-                        error: initialParse.error
-                    };
+                    return makeResult(false, initialParse.error);
                 }
-                return {
-                    success: false,
-                    fileType: null,
-                    detectedType: null,
+                return makeResult(false, 'Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.', {
                     headers: initialParse.headers,
                     originalData: initialParse.data,
-                    cleanedData: [],
-                    rowCount: initialParse.data.length,
-                    error: 'Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.'
-                };
+                    rowCount: initialParse.data.length
+                });
             }
 
             const selected = matches[0];
             const cleanedData = cleanData(selected.data, selected.type);
-            return {
-                success: true,
+            return makeResult(true, null, {
                 fileType: selected.type,
                 detectedType: selected.type,
                 headers: selected.headers,
                 originalData: selected.data,
                 cleanedData,
-                rowCount: cleanedData.length,
-                error: null
-            };
+                rowCount: cleanedData.length
+            });
         }
 
         const parsed = parseCSV(csvText, fileType);
         if (parsed.error) {
-            return {
-                success: false,
-                fileType: null,
-                detectedType: null,
-                headers: [],
-                originalData: [],
-                cleanedData: [],
-                rowCount: 0,
-                error: parsed.error
-            };
+            return makeResult(false, parsed.error);
         }
 
         const { headers, data } = parsed;
@@ -779,30 +774,21 @@ const LinkedInCleaner = (() => {
                 const alternateMatch = matches.find(match => match.type !== fileType);
                 detectedType = alternateMatch ? alternateMatch.type : null;
             }
-            return {
-                success: false,
-                fileType,
-                detectedType,
-                headers,
+            return makeResult(false, buildColumnErrorMessage(fileType, detectedType, validation.missing), {
+                fileType, detectedType, headers,
                 originalData: data,
-                cleanedData: [],
-                rowCount: data.length,
-                error: buildColumnErrorMessage(fileType, detectedType, validation.missing)
-            };
+                rowCount: data.length
+            });
         }
 
         const cleanedData = cleanData(data, fileType);
 
-        return {
-            success: true,
-            fileType,
-            detectedType,
-            headers,
+        return makeResult(true, null, {
+            fileType, detectedType, headers,
             originalData: data,
             cleanedData,
-            rowCount: cleanedData.length,
-            error: null
-        };
+            rowCount: cleanedData.length
+        });
     }
 
     return {

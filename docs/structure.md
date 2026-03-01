@@ -14,7 +14,7 @@ linkedin-analyzer/
 │   │   └── manifest.webmanifest        # PWA web app manifest
 │   ├── fonts/
 │   │   ├── PatrickHand-Regular.woff2   # Self-hosted Patrick Hand font
-│   │   ├── Caveat-Regular.woff2        # Self-hosted Caveat font (400-600)
+│   │   └── Caveat-Regular.woff2        # Self-hosted Caveat font
 │   ├── css/
 │   │   ├── variables.css               # Theme variables + @font-face (light/dark)
 │   │   ├── style.css                   # Main styles

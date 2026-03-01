@@ -16,7 +16,7 @@ const ConnectionsPage = (() => {
     });
 
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
-    const WORKER_URL = 'js/connections-worker.js?v=20260301-1';
+    const WORKER_URL = 'js/connections-worker.js?v=20260301-2';
     const TOP_N = 10;
 
     const state = {

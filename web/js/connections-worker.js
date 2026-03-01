@@ -1,7 +1,9 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
-const WORKER_VERSION = '20260301-1';
-importScripts(`cleaner.js?v=${WORKER_VERSION}`);
+const WORKER_VERSION = '20260301-2';
+if (typeof importScripts === 'function') {
+    importScripts(`cleaner.js?v=${WORKER_VERSION}`);
+}
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
 
@@ -185,22 +187,35 @@ function processConnections(connectionsCsv) {
 
 /* ── Worker message handler ────────────────────────────────────────────────── */
 
-self.addEventListener('message', (event) => {
-    const message = event.data || {};
-    if (message.type !== 'process') return;
+if (typeof self !== 'undefined') {
+    self.addEventListener('message', (event) => {
+        const message = event.data || {};
+        if (message.type !== 'process') return;
 
-    const requestId = message.requestId;
-    const payload = message.payload || {};
-    const result = processConnections(payload.connectionsCsv);
+        const requestId = message.requestId;
+        const payload = message.payload || {};
+        const result = processConnections(payload.connectionsCsv);
 
-    self.postMessage({
-        type: 'processed',
-        requestId,
-        payload: {
-            success: result.success,
-            analytics: result.analytics || null,
-            rows: result.rows || null,
-            error: result.error || null
-        }
+        self.postMessage({
+            type: 'processed',
+            requestId,
+            payload: {
+                success: result.success,
+                analytics: result.analytics || null,
+                rows: result.rows || null,
+                error: result.error || null
+            }
+        });
     });
-});
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        parseConnectionDate,
+        toMonthKey,
+        monthKeyToLabel,
+        buildGrowthTimeline,
+        computeStats,
+        processConnections
+    };
+}

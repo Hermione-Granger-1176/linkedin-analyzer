@@ -48,6 +48,7 @@ const MessagesPage = (() => {
         hasConnectionsFile: false,
         connectionLoadError: null,
         loadedSignature: null,
+        totalInputRows: 0,
         currentLists: {
             topContacts: [],
             silentConnections: [],
@@ -315,7 +316,9 @@ const MessagesPage = (() => {
             return;
         }
 
-        state.messageState = buildMessageState(processed.messagesData || []);
+        const messagesData = processed.messagesData || [];
+        state.totalInputRows = messagesData.length;
+        state.messageState = buildMessageState(messagesData);
         if (!state.messageState.events.length) {
             state.loadedSignature = signature;
             setEmptyState(
@@ -478,14 +481,17 @@ const MessagesPage = (() => {
         const talkedUrlKeys = new Set();
 
         let latestTimestamp = 0;
+        let skippedRows = 0;
         rows.forEach(row => {
             const date = parseDateTime(row.DATE);
             if (!date) {
+                skippedRows += 1;
                 return;
             }
             const timestamp = date.getTime();
             const participants = extractParticipantsFromRow(row, context);
             if (!participants.length) {
+                skippedRows += 1;
                 return;
             }
 
@@ -528,6 +534,7 @@ const MessagesPage = (() => {
         return {
             contacts,
             events,
+            skippedRows,
             talkedNameKeys,
             talkedUrlKeys,
             latestTimestamp
@@ -1130,7 +1137,15 @@ const MessagesPage = (() => {
      * @param {number} fadingCount - Number of fading conversations
      */
     function updateStats(topSummary, totalConnections, fadingCount) {
-        elements.msgStatMessages.textContent = String(topSummary.totalMessages);
+        const skipped = state.messageState ? state.messageState.skippedRows : 0;
+        if (skipped > 0) {
+            elements.msgStatMessages.textContent = topSummary.totalMessages + '*';
+            elements.msgStatMessages.title =
+                `${skipped} of ${state.totalInputRows} rows excluded (self-messages, anonymous contacts, or unparseable dates)`;
+        } else {
+            elements.msgStatMessages.textContent = String(topSummary.totalMessages);
+            elements.msgStatMessages.title = '';
+        }
         elements.msgStatContacts.textContent = String(topSummary.totalPeople);
         elements.msgStatConnected.textContent = String(totalConnections);
         elements.msgStatFading.textContent = String(fadingCount);

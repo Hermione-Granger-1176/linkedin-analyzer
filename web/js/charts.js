@@ -594,11 +594,13 @@ const SketchCharts = (() => {
     function exportPng(canvas, filename) {
         if (!canvas) return;
         const redraw = drawRegistry.get(canvas);
-        if (redraw) {
-            exportDpr = EXPORT_DPR;
-            redraw();
-            exportDpr = 0;
-        }
+        if (!redraw) return;
+
+        cancelAnimations();
+        exportDpr = EXPORT_DPR;
+        redraw();
+        exportDpr = 0;
+
         canvas.toBlob(blob => {
             if (!blob) return;
             const url = URL.createObjectURL(blob);
@@ -609,7 +611,9 @@ const SketchCharts = (() => {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            if (redraw) redraw();
+            // Re-read current draw function to avoid restoring stale data
+            const restore = drawRegistry.get(canvas);
+            if (restore) restore();
         }, 'image/png');
     }
 

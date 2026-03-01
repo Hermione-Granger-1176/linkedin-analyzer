@@ -1001,9 +1001,40 @@ button {
     color: var(--text-primary);
 }
 
+.chart-header {
+    position: relative;
+}
+
 .chart-header p {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
+}
+
+.chart-export-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: var(--bg-tertiary);
+    border: 1.5px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    padding: var(--space-xs) var(--space-sm);
+    cursor: pointer;
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chart-card:hover .chart-export-btn,
+.chart-card:focus-within .chart-export-btn {
+    opacity: 1;
+}
+
+.chart-export-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-color);
 }
 
 .chart-canvas-wrap {

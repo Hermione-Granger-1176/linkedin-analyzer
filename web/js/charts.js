@@ -564,6 +564,26 @@ const SketchCharts = (() => {
         requestAnimationFrame(step);
     }
 
+    /**
+     * Export a chart canvas as a PNG file download.
+     * @param {HTMLCanvasElement} canvas - The canvas to export.
+     * @param {string} [filename='chart.png'] - Download file name.
+     */
+    function exportPng(canvas, filename) {
+        if (!canvas) return;
+        canvas.toBlob(blob => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename || 'chart.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 'image/png');
+    }
+
     return {
         drawTimeline,
         drawTopics,
@@ -571,7 +591,8 @@ const SketchCharts = (() => {
         drawDonut,
         animateDraw,
         cancelAnimations,
-        getItemAt
+        getItemAt,
+        exportPng
     };
 })();
 

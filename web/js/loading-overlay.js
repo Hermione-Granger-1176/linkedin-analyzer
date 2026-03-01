@@ -9,6 +9,10 @@ const LoadingOverlay = (() => {
             title: 'Loading analytics',
             message: 'Crunching your activity view.'
         },
+        connections: {
+            title: 'Loading connections',
+            message: 'Analyzing your professional network.'
+        },
         messages: {
             title: 'Loading messages',
             message: 'Reading conversations and building relationship insights.'

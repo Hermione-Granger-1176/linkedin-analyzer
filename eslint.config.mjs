@@ -24,6 +24,7 @@ export default [
                 AnalyticsPage: "readonly",
                 MessagesPage: "readonly",
                 InsightsPage: "readonly",
+                ConnectionsPage: "readonly",
                 XLSX: "readonly",
                 rough: "readonly",
                 CustomEvent: "readonly",
@@ -41,10 +42,18 @@ export default [
         },
     },
     {
-        files: ["web/js/analytics-worker.js"],
+        files: ["web/js/analytics-worker.js", "web/js/connections-worker.js"],
         languageOptions: {
             globals: {
                 ...globals.worker,
+            },
+        },
+    },
+    {
+        files: ["web/sw.js"],
+        languageOptions: {
+            globals: {
+                ...globals.serviceworker,
             },
         },
     },

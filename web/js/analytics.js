@@ -20,6 +20,12 @@ const AnalyticsEngine = (() => {
     const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const WEEKLY_TIME_RANGES = new Set(['1m', '3m']);
+    const SHARE_TYPE_MAP = Object.freeze({ text: 'textOnly', links: 'links', media: 'media' });
+    const DIMENSION_COUNT_BY_KEY = Object.freeze({
+        both: (bucket, filters) => (bucket.heatmap[filters.day] && bucket.heatmap[filters.day][filters.hour]) || 0,
+        day: (bucket, filters) => bucket.days[filters.day] || 0,
+        hour: (bucket, filters) => bucket.hours[filters.hour] || 0
+    });
 
     /**
      * @description Parse a LinkedIn date string into date components.
@@ -99,7 +105,7 @@ const AnalyticsEngine = (() => {
         const monthIndex = new Map();      // monthKey -> { posts, comments, topics: Map, days: Map, hours: Map, shareTypes: Map }
         const activeDays = new Set();
         const dayIndex = new Map();        // dateKey -> { posts, comments, total, shareTypes }
-        
+
         let latestTimestamp = 0;
         let earliestTimestamp = Infinity;
         let totalPosts = 0;
@@ -390,7 +396,6 @@ const AnalyticsEngine = (() => {
         }
 
         if (filters.shareType && filters.shareType !== 'all' && useMonth) {
-            const SHARE_TYPE_MAP = { text: 'textOnly', links: 'links', media: 'media' };
             const typeKey = SHARE_TYPE_MAP[filters.shareType];
             if (typeKey) {
                 monthPosts = bucket.shareTypes[typeKey];
@@ -400,15 +405,9 @@ const AnalyticsEngine = (() => {
         }
 
         // Apply day/hour dimensional filter using the appropriate count
-        if (useMonth && (hasDay || hasHour)) {
-            let filterCount;
-            if (hasDay && hasHour) {
-                filterCount = bucket.heatmap[filters.day][filters.hour];
-            } else if (hasDay) {
-                filterCount = bucket.days[filters.day];
-            } else {
-                filterCount = bucket.hours[filters.hour];
-            }
+        const dimensionKey = hasDay && hasHour ? 'both' : (hasDay ? 'day' : (hasHour ? 'hour' : null));
+        if (useMonth && dimensionKey) {
+            const filterCount = DIMENSION_COUNT_BY_KEY[dimensionKey](bucket, filters);
             const ratio = monthTotal > 0 ? filterCount / monthTotal : 0;
             monthPosts = Math.round(monthPosts * ratio);
             monthComments = Math.round(monthComments * ratio);
@@ -428,7 +427,7 @@ const AnalyticsEngine = (() => {
      */
     function getMonthKeysInRange(earliestTimestamp, latestTimestamp, rangeKey, monthFocus) {
         if (!latestTimestamp) return [];
-        
+
         if (monthFocus) {
             return [monthFocus];
         }
@@ -465,7 +464,7 @@ const AnalyticsEngine = (() => {
 
         const { months, latestTimestamp, earliestTimestamp, dayIndex } = analytics;
         const monthKeys = getMonthKeysInRange(earliestTimestamp, latestTimestamp, filters.timeRange, filters.monthFocus);
-        
+
         // Determine which months to include
         const targetMonths = monthKeys;
 
@@ -785,10 +784,10 @@ const AnalyticsEngine = (() => {
      */
     function computeTrendFromTimeline(timeline) {
         if (timeline.length < 2) return null;
-        
+
         const half = Math.floor(timeline.length / 2);
         let recent = 0, older = 0;
-        
+
         for (let i = 0; i < timeline.length; i++) {
             if (i >= half) {
                 recent += timeline[i].value;

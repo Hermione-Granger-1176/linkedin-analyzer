@@ -82,6 +82,11 @@ const LinkedInCleaner = (() => {
         escape: '\\'
     });
 
+    const CSV_PARSE_STATE = Object.freeze({
+        OUTSIDE_QUOTES: 0,
+        INSIDE_QUOTES: 1
+    });
+
     const MISSING_STRINGS = new Set([
         '#N/A',
         '#N/A N/A',
@@ -150,20 +155,16 @@ const LinkedInCleaner = (() => {
 
         let text = String(value);
 
-        // Remove leading quote if present
         if (text.startsWith('"')) {
             text = text.slice(1);
         }
 
-        // Remove trailing quote if present
         if (text.endsWith('"')) {
             text = text.slice(0, -1);
         }
 
-        // Replace CSV line break pattern: "\n" (quote-newline-quote) with actual newline
         text = text.replace(/"\n"/g, '\n');
 
-        // Replace escaped double quotes with single quotes
         text = text.replace(/""/g, '"');
 
         return text.trim();
@@ -424,7 +425,7 @@ const LinkedInCleaner = (() => {
         const rows = [];
         let row = [];
         let field = '';
-        let inQuotes = false;
+        let state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
 
         const pushField = () => {
             row.push(field);
@@ -440,59 +441,58 @@ const LinkedInCleaner = (() => {
             const char = csvText[i];
             const nextChar = csvText[i + 1];
 
-            if (inQuotes) {
-                if (escape && char === escape && nextChar === quote) {
-                    field += quote;
-                    i += 1;
-                    continue;
+            if (state === CSV_PARSE_STATE.INSIDE_QUOTES) {
+                switch (char) {
+                    case '\r':
+                        if (nextChar === '\n') {
+                            field += '\n';
+                            i += 1;
+                        } else {
+                            field += char;
+                        }
+                        break;
+                    case quote:
+                        if (nextChar === quote) {
+                            field += quote;
+                            i += 1;
+                        } else {
+                            state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
+                        }
+                        break;
+                    default:
+                        if (escape && char === escape && nextChar === quote) {
+                            field += quote;
+                            i += 1;
+                        } else {
+                            field += char;
+                        }
+                        break;
                 }
+                continue;
+            }
 
-                if (char === quote) {
-                    if (nextChar === quote) {
-                        field += quote;
+            switch (char) {
+                case quote:
+                    state = CSV_PARSE_STATE.INSIDE_QUOTES;
+                    break;
+                case delimiter:
+                    pushField();
+                    break;
+                case '\n':
+                    pushField();
+                    pushRow();
+                    break;
+                case '\r':
+                    pushField();
+                    pushRow();
+                    if (nextChar === '\n') {
                         i += 1;
-                        continue;
                     }
-                    inQuotes = false;
-                    continue;
-                }
-
-                if (char === '\r' && nextChar === '\n') {
-                    field += '\n';
-                    i += 1;
-                    continue;
-                }
-
-                field += char;
-                continue;
+                    break;
+                default:
+                    field += char;
+                    break;
             }
-
-            if (char === quote) {
-                inQuotes = true;
-                continue;
-            }
-
-            if (char === delimiter) {
-                pushField();
-                continue;
-            }
-
-            if (char === '\n') {
-                pushField();
-                pushRow();
-                continue;
-            }
-
-            if (char === '\r') {
-                pushField();
-                pushRow();
-                if (nextChar === '\n') {
-                    i += 1;
-                }
-                continue;
-            }
-
-            field += char;
         }
 
         pushField();
@@ -509,7 +509,7 @@ const LinkedInCleaner = (() => {
 
         return {
             rows: trimmedRows,
-            error: inQuotes ? 'CSV parsing error: unmatched quote' : null
+            error: state === CSV_PARSE_STATE.INSIDE_QUOTES ? 'CSV parsing error: unmatched quote' : null
         };
     }
 
@@ -565,16 +565,11 @@ const LinkedInCleaner = (() => {
     function detectFileType(headers) {
         const normalizedHeaders = normalizeHeaders(headers);
         const headerSet = new Set(normalizedHeaders);
-
-        for (const type of FILE_TYPES) {
+        const detectedType = FILE_TYPES.find(type => {
             const requiredColumns = CONFIGS[type].requiredColumns;
-            const isMatch = requiredColumns.every(column => headerSet.has(column));
-            if (isMatch) {
-                return type;
-            }
-        }
-
-        return null;
+            return requiredColumns.every(column => headerSet.has(column));
+        });
+        return detectedType || null;
     }
 
     /**

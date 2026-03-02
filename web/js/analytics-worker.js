@@ -85,7 +85,7 @@ function serializeAnalytics(analyticsData) {
  */
 function hydrateAnalytics(base) {
     if (!base || !base.months) return null;
-    
+
     // Convert activeDays arrays back to Sets for streak calculation
     const months = {};
     for (const [key, bucket] of Object.entries(base.months)) {
@@ -94,7 +94,7 @@ function hydrateAnalytics(base) {
             activeDays: new Set(bucket.activeDays || [])
         };
     }
-    
+
     return {
         ...base,
         months,

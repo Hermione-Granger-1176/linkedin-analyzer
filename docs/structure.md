@@ -2,7 +2,7 @@
 
 ```text
 linkedin-analyzer/
-├── web/                                # Web app (SPA + static redirect stubs)
+├── web/                                # Web app (SPA)
 │   ├── index.html                      # SPA shell containing all screens
 │   ├── robots.txt                      # Search engine directives
 │   ├── assets/

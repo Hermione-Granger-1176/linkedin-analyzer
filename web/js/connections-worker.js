@@ -99,22 +99,20 @@ function buildGrowthTimeline(rows) {
     const lastKey = sortedKeys[sortedKeys.length - 1];
 
     const timeline = [];
-    let [curYear, curMonth] = firstKey.split('-').map(Number);
+    const [startYear, startMonth] = firstKey.split('-').map(Number);
     const [endYear, endMonth] = lastKey.split('-').map(Number);
+    const monthSpan = (endYear - startYear) * 12 + (endMonth - startMonth);
 
-    while (curYear < endYear || (curYear === endYear && curMonth <= endMonth)) {
-        const key = `${curYear}-${String(curMonth).padStart(2, '0')}`;
+    for (let offset = 0; offset <= monthSpan; offset += 1) {
+        const absoluteMonth = (startMonth - 1) + offset;
+        const year = startYear + Math.floor(absoluteMonth / 12);
+        const month = (absoluteMonth % 12) + 1;
+        const key = `${year}-${String(month).padStart(2, '0')}`;
         timeline.push({
             key,
             label: monthKeyToLabel(key),
             value: buckets.get(key) || 0
         });
-
-        curMonth += 1;
-        if (curMonth > 12) {
-            curMonth = 1;
-            curYear += 1;
-        }
     }
 
     return timeline;

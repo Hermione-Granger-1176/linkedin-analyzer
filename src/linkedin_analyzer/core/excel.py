@@ -29,11 +29,9 @@ def format_excel_output(output_path: Path, config: CleanerConfig) -> None:
     if ws is None:
         raise RuntimeError("Failed to load active worksheet")
 
-    # Set column widths
     for col_letter, width in config.column_widths.items():
         ws.column_dimensions[col_letter].width = width
 
-    # Enable text wrapping for specified columns
     wrap_columns = config.wrap_text_columns
     if wrap_columns:
         for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
@@ -41,7 +39,6 @@ def format_excel_output(output_path: Path, config: CleanerConfig) -> None:
                 if cell.column in wrap_columns:
                     cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-    # Set header row alignment
     for cell in ws[1]:
         cell.alignment = Alignment(horizontal="center", vertical="center")
 

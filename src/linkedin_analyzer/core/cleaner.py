@@ -88,8 +88,6 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
                 normalize_required_columns(df, drop_columns)
                 df = df.dropna(subset=drop_columns, how="all")
 
-        # Apply cleaners to columns
-        # (use clean_value as default for columns without a specific cleaner)
         for col_config in config.columns:
             if col_config.name not in df.columns:
                 continue

@@ -78,18 +78,14 @@ def clean_shares_commentary(value: object) -> str:
 
     text = str(value)
 
-    # Remove leading quote if present
     if text.startswith('"'):
         text = text[1:]
 
-    # Remove trailing quote if present
     if text.endswith('"'):
         text = text[:-1]
 
-    # Replace CSV line break pattern: "\n" (quote-newline-quote) with actual newline
     text = text.replace('"\n"', "\n")
 
-    # Replace escaped double quotes with single quotes
     text = text.replace('""', '"')
 
     return text.strip()
@@ -114,12 +110,8 @@ def clean_comments_message(value: object) -> str:
 
     text = str(value)
 
-    # Replace backslash-escaped quotes with regular quotes
-    # Note: The CSV parser with escapechar handles most of this,
-    # but we do it anyway for safety
     text = text.replace('\\"', '"')
 
-    # Also handle any double-double quote escaping (fallback)
     text = text.replace('""', '"')
 
     return text.strip()

@@ -13,6 +13,12 @@ const CleanPage = (() => {
         messages: 'Messages',
         connections: 'Connections'
     });
+    const CLEAN_HINT_BY_CATEGORY = Object.freeze({
+        all: () => 'All files loaded. Choose one to clean and export.',
+        many: loadedCount => `${loadedCount} files loaded. Choose one to clean.`,
+        single: () => 'Only one file is loaded. Upload more files for full features.',
+        none: () => 'Upload LinkedIn CSV files to start cleaning.'
+    });
 
     const elements = {
         cleanEmpty: document.getElementById('cleanEmpty'),
@@ -103,6 +109,18 @@ const CleanPage = (() => {
     }
 
     /**
+     * Resolve cleaner hint text based on number of uploaded file types.
+     * @param {number} loadedCount - Number of loaded file types
+     * @returns {string}
+     */
+    function getCleanerHint(loadedCount) {
+        const category = loadedCount === FILE_TYPE_ORDER.length
+            ? 'all'
+            : (loadedCount > 1 ? 'many' : (loadedCount === 1 ? 'single' : 'none'));
+        return CLEAN_HINT_BY_CATEGORY[category](loadedCount);
+    }
+
+    /**
      * Update the clean page UI based on available files.
      */
     function updateView() {
@@ -128,15 +146,7 @@ const CleanPage = (() => {
             }
         }
 
-        if (loadedCount === FILE_TYPE_ORDER.length) {
-            elements.cleanerHint.textContent = 'All files loaded. Choose one to clean and export.';
-        } else if (loadedCount > 1) {
-            elements.cleanerHint.textContent = `${loadedCount} files loaded. Choose one to clean.`;
-        } else if (loadedCount === 1) {
-            elements.cleanerHint.textContent = 'Only one file is loaded. Upload more files for full features.';
-        } else {
-            elements.cleanerHint.textContent = 'Upload LinkedIn CSV files to start cleaning.';
-        }
+        elements.cleanerHint.textContent = getCleanerHint(loadedCount);
 
         renderPreview();
     }

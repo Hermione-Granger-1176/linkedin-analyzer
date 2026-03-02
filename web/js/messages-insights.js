@@ -666,24 +666,31 @@ const MessagesPage = (() => {
             return;
         }
 
+        const roleField = {
+            sender: 'senderCount',
+            recipient: 'recipientCount'
+        }[role] || null;
+
         const existing = statsMap.get(key);
         if (existing) {
             existing.totalCount += 1;
             existing.conversations.add(conversationKey);
-            if (role === 'sender') {
-                existing.senderCount += 1;
-            } else {
-                existing.recipientCount += 1;
+            if (roleField) {
+                existing[roleField] += 1;
             }
             return;
         }
 
-        statsMap.set(key, {
+        const next = {
             totalCount: 1,
-            senderCount: role === 'sender' ? 1 : 0,
-            recipientCount: role === 'recipient' ? 1 : 0,
+            senderCount: 0,
+            recipientCount: 0,
             conversations: new Set([conversationKey])
-        });
+        };
+        if (roleField) {
+            next[roleField] = 1;
+        }
+        statsMap.set(key, next);
     }
 
     /**

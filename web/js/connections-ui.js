@@ -418,18 +418,17 @@ const ConnectionsPage = (() => {
      * @returns {Array<{topic: string, count: number}>} Top N aggregated entries
      */
     function aggregateField(rows, field) {
-        const counts = Object.create(null);
-
-        for (let i = 0; i < rows.length; i++) {
-            const value = rows[i][field];
+        const counts = rows.reduce((acc, row) => {
+            const value = row[field];
             if (!value) {
-                continue;
+                return acc;
             }
-            counts[value] = (counts[value] || 0) + 1;
-        }
+            acc[value] = (acc[value] || 0) + 1;
+            return acc;
+        }, Object.create(null));
 
-        return Object.keys(counts)
-            .map(key => ({ topic: key, count: counts[key] }))
+        return Object.entries(counts)
+            .map(([topic, count]) => ({ topic, count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, TOP_N);
     }
@@ -445,24 +444,25 @@ const ConnectionsPage = (() => {
             return '-';
         }
 
-        const counts = Object.create(null);
-        let maxKey = '';
-        let maxCount = 0;
-
-        for (let i = 0; i < rows.length; i++) {
-            const value = rows[i][field];
+        const summary = rows.reduce((acc, row) => {
+            const value = row[field];
             if (!value) {
-                continue;
+                return acc;
             }
-            const next = (counts[value] || 0) + 1;
-            counts[value] = next;
-            if (next > maxCount) {
-                maxCount = next;
-                maxKey = value;
+            const next = (acc.counts[value] || 0) + 1;
+            acc.counts[value] = next;
+            if (next > acc.maxCount) {
+                acc.maxCount = next;
+                acc.maxKey = value;
             }
-        }
+            return acc;
+        }, {
+            counts: Object.create(null),
+            maxKey: '',
+            maxCount: 0
+        });
 
-        return maxKey || '-';
+        return summary.maxKey || '-';
     }
 
     /**

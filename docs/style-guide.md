@@ -3,7 +3,7 @@
 ## Naming Conventions
 - Use descriptive nouns for data, verbs for actions.
 - Python: snake_case for functions, variables, modules.
-- JavaScript: camelCase for functions, variables; PascalCase for classes.
+- JavaScript: camelCase for functions and local variables; PascalCase for classes and exported module namespaces (for example `AppRouter`).
 - Constants: UPPER_SNAKE_CASE.
 - File names: lowercase; Python uses underscores. Docs prefer hyphens for new files, but existing underscores are acceptable.
 

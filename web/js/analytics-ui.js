@@ -16,6 +16,53 @@ const AnalyticsPage = (() => {
     const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
+    const CACHE_EVENTS = new Set(['analyticsChanged', 'storageCleared', 'filesChanged']);
+    const CLICKABLE_TYPES = new Set(['month', 'week', 'heatmap', 'topic']);
+
+    const ROUTE_FILTER_PARSERS = Object.freeze({
+        range: (value, normalized) => {
+            const range = String(value || '').toLowerCase();
+            normalized.timeRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
+        },
+        topic: (value, normalized) => {
+            const topic = String(value || '').trim();
+            if (topic) {
+                normalized.topic = topic;
+            }
+        },
+        month: (value, normalized) => {
+            const month = String(value || '').trim();
+            if (/^\d{4}-\d{2}$/.test(month)) {
+                normalized.monthFocus = month;
+            }
+        },
+        day: (value, normalized) => {
+            const day = Number(value);
+            if (Number.isInteger(day) && day >= 0 && day <= 6) {
+                normalized.day = day;
+            }
+        },
+        hour: (value, normalized) => {
+            const hour = Number(value);
+            if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+                normalized.hour = hour;
+            }
+        },
+        shareType: (value, normalized) => {
+            const shareType = String(value || '').trim();
+            if (shareType) {
+                normalized.shareType = shareType;
+            }
+        }
+    });
+
+    const ROUTE_FILTER_SERIALIZERS = Object.freeze({
+        topic: filters => (filters.topic && filters.topic !== 'all' ? filters.topic : null),
+        month: filters => (filters.monthFocus || null),
+        day: filters => (filters.day !== null && filters.day !== undefined ? String(filters.day) : null),
+        hour: filters => (filters.hour !== null && filters.hour !== undefined ? String(filters.hour) : null),
+        shareType: filters => (filters.shareType && filters.shareType !== 'all' ? filters.shareType : null)
+    });
 
     const TIMELINE_ANIMATION = {
         minDuration: 380,
@@ -198,7 +245,7 @@ const AnalyticsPage = (() => {
      */
     function handleCacheChange(event) {
         const type = event && event.type;
-        if (type !== 'analyticsChanged' && type !== 'storageCleared' && type !== 'filesChanged') {
+        if (!CACHE_EVENTS.has(type)) {
             return;
         }
 
@@ -669,7 +716,6 @@ const AnalyticsPage = (() => {
             hideTooltip();
         }
 
-        const CLICKABLE_TYPES = new Set(['month', 'week', 'heatmap', 'topic']);
         canvas.style.cursor = item && CLICKABLE_TYPES.has(item.type) ? 'pointer' : 'default';
     }
 
@@ -824,33 +870,9 @@ const AnalyticsPage = (() => {
     function parseRouteFilters(params) {
         const normalized = { ...FILTER_DEFAULTS };
 
-        const range = String(params.range || '').toLowerCase();
-        normalized.timeRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-
-        const topic = String(params.topic || '').trim();
-        if (topic) {
-            normalized.topic = topic;
-        }
-
-        const month = String(params.month || '').trim();
-        if (/^\d{4}-\d{2}$/.test(month)) {
-            normalized.monthFocus = month;
-        }
-
-        const day = Number(params.day);
-        if (Number.isInteger(day) && day >= 0 && day <= 6) {
-            normalized.day = day;
-        }
-
-        const hour = Number(params.hour);
-        if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
-            normalized.hour = hour;
-        }
-
-        const shareType = String(params.shareType || '').trim();
-        if (shareType) {
-            normalized.shareType = shareType;
-        }
+        Object.entries(ROUTE_FILTER_PARSERS).forEach(([paramKey, parser]) => {
+            parser(params[paramKey], normalized);
+        });
 
         return normalized;
     }
@@ -885,21 +907,12 @@ const AnalyticsPage = (() => {
             range: state.filters.timeRange
         };
 
-        if (state.filters.topic && state.filters.topic !== 'all') {
-            params.topic = state.filters.topic;
-        }
-        if (state.filters.monthFocus) {
-            params.month = state.filters.monthFocus;
-        }
-        if (state.filters.day !== null && state.filters.day !== undefined) {
-            params.day = String(state.filters.day);
-        }
-        if (state.filters.hour !== null && state.filters.hour !== undefined) {
-            params.hour = String(state.filters.hour);
-        }
-        if (state.filters.shareType && state.filters.shareType !== 'all') {
-            params.shareType = state.filters.shareType;
-        }
+        Object.entries(ROUTE_FILTER_SERIALIZERS).forEach(([paramKey, serializer]) => {
+            const value = serializer(state.filters);
+            if (value !== null && value !== undefined && value !== '') {
+                params[paramKey] = value;
+            }
+        });
 
         AppRouter.setParams(params, { replaceHistory: false });
     }

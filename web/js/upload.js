@@ -5,6 +5,16 @@ const UploadPage = (() => {
     'use strict';
 
     const TRACKED_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+    const UPLOAD_HINT_BY_STATE = Object.freeze({
+        '0-0-0': 'Upload at least one file to start.',
+        '0-0-1': 'Upload at least one file to start.',
+        '0-1-0': 'Upload at least one file to start.',
+        '0-1-1': 'Upload at least one file to start.',
+        '1-1-0': 'Processing analytics in the background.',
+        '1-1-1': 'Analytics are ready. Open the dashboard.',
+        '1-0-0': 'Files loaded. Open Messages tab for conversation insights.',
+        '1-0-1': 'Analytics are ready. Open the dashboard.'
+    });
 
     const elements = {
         dropZone: document.getElementById('multiDropZone'),
@@ -395,16 +405,8 @@ const UploadPage = (() => {
      * @returns {string}
      */
     function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
-        if (!hasAny) {
-            return 'Upload at least one file to start.';
-        }
-        if (hasAnalyticsFiles && !analyticsReady) {
-            return 'Processing analytics in the background.';
-        }
-        if (analyticsReady) {
-            return 'Analytics are ready. Open the dashboard.';
-        }
-        return 'Files loaded. Open Messages tab for conversation insights.';
+        const stateKey = `${hasAny ? 1 : 0}-${hasAnalyticsFiles ? 1 : 0}-${analyticsReady ? 1 : 0}`;
+        return UPLOAD_HINT_BY_STATE[stateKey] || 'Files loaded. Open Messages tab for conversation insights.';
     }
 
     /**

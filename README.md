@@ -78,19 +78,21 @@ linkedin-analyzer all
 
 ## Features
 
-| Feature              | Detail                                           |
-| -------------------- | ------------------------------------------------ |
-| **100% client-side** | Files never leave your browser                   |
-| **Light/dark theme** | Hand-drawn sketch aesthetic                      |
-| **Analytics**        | Timeline, topics, heatmap                        |
-| **Messages view**    | Top contacts, silent connections, fading chats   |
-| **SPA routing**      | Hash routes with URL-synced filters              |
-| **Excel export**     | Formatted .xlsx with proper columns              |
-| **Connections**      | Network growth, top companies, top positions     |
-| **Chart export**     | Download any chart as PNG                        |
-| **PWA-ready**        | Installable, offline-capable via service worker  |
-| **Social previews**  | Open Graph and Twitter Card meta tags            |
-| **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold)  |
+| Feature              | Detail                                                    |
+| -------------------- | --------------------------------------------------------- |
+| **100% client-side** | Files never leave your browser                            |
+| **Light/dark theme** | Hand-drawn sketch aesthetic                               |
+| **Guided tutorials** | Per-page tutorials with skip/back/next and restart        |
+| **Analytics**        | Timeline, topics, heatmap                                 |
+| **Messages view**    | Top contacts, silent connections, fading chats            |
+| **SPA routing**      | Hash routes with URL-synced filters                       |
+| **Excel export**     | Formatted .xlsx with proper columns                       |
+| **Connections**      | Network growth, top companies, top positions              |
+| **Chart export**     | Download any chart as PNG                                 |
+| **PWA-ready**        | Installable with auto-refreshing service worker caching   |
+| **Session cleanup**  | Stale uploads and cached analytics cleared on startup     |
+| **Social previews**  | Open Graph and Twitter Card meta tags                     |
+| **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold)           |
 
 <br>
 

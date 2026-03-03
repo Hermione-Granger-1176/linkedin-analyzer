@@ -1,4 +1,5 @@
 /* SPA bootstrap */
+/* global Tutorial, Session */
 
 (function() {
     'use strict';
@@ -53,19 +54,50 @@
     ]);
 
     /** Initialize router and screen lifecycle wiring. */
-    function init() {
+    async function init() {
         if (typeof AppRouter === 'undefined' || typeof ScreenManager === 'undefined') {
             return;
         }
 
+        initTutorial();
         registerRoutes();
         bindRouteLinks();
 
+        if (typeof Session !== 'undefined' && Session.cleanIfStale) {
+            try {
+                await Session.cleanIfStale();
+            } catch {
+                // Ignore session cleanup failures to avoid blocking startup.
+            }
+        }
+
         AppRouter.subscribe(({ to }) => {
             ScreenManager.activate(to.name, to.params);
+            notifyTutorialRouteChange(to.name);
+            if (typeof Session !== 'undefined' && Session.touch) {
+                Session.touch();
+            }
         });
 
         AppRouter.start('home');
+    }
+
+    /** Initialize tutorial module when available. */
+    function initTutorial() {
+        if (typeof Tutorial === 'undefined' || typeof Tutorial.init !== 'function') {
+            return;
+        }
+
+        Tutorial.init();
+    }
+
+    /** Notify tutorial module of route changes when available. */
+    function notifyTutorialRouteChange(routeName) {
+        if (typeof Tutorial === 'undefined' || typeof Tutorial.onRouteChange !== 'function') {
+            return;
+        }
+
+        Tutorial.onRouteChange(routeName);
     }
 
     /** Register route names in router + screen manager. */

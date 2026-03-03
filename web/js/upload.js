@@ -38,14 +38,17 @@ const UploadPage = (() => {
     };
 
     const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
+    const JOB_TIMEOUT_MS = 45000;
 
     let worker = null;
     const pendingFiles = new Map();
-    let activeJobs = 0;
+    const activeJobs = new Set();
+    const jobTimeouts = new Map();
     let progressValue = 0;
     let progressAnimationId = null;
     let progressSessionId = 0;
     let initialized = false;
+    let lastPrimedSignature = null;
 
     /** Initialize the upload page. */
     function init() {
@@ -124,6 +127,7 @@ const UploadPage = (() => {
                 DataCache.clear();
                 DataCache.notify({ type: 'storageCleared' });
             }
+            lastPrimedSignature = null;
             resetProcessingState();
             updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
         });
@@ -201,12 +205,13 @@ const UploadPage = (() => {
             return;
         }
 
-        if (activeJobs <= 0) {
+        if (activeJobs.size <= 0) {
             showProgressOverlay();
         }
         csvFiles.forEach(file => {
-            activeJobs += 1;
             const jobId = createJobId(file);
+            activeJobs.add(jobId);
+            scheduleJobTimeout(jobId, file.name);
             readFileAsText(file)
                 .then(text => {
                     pendingFiles.set(jobId, { text, fileName: file.name });
@@ -216,7 +221,7 @@ const UploadPage = (() => {
                     });
                 })
                 .catch(() => {
-                    completeJob();
+                    completeJob(jobId, file.name);
                     setHint('Error reading file. Please try again.', true);
                 });
         });
@@ -259,7 +264,14 @@ const UploadPage = (() => {
                 return;
             case 'error':
                 setHint(message.payload && message.payload.message ? message.payload.message : 'Worker error.', true);
-                completeJob();
+                if (!message.payload || (!message.payload.jobId && !message.payload.fileName)) {
+                    resetProcessingState();
+                    return;
+                }
+                completeJob(
+                    message.payload && message.payload.jobId ? message.payload.jobId : null,
+                    message.payload && message.payload.fileName ? message.payload.fileName : ''
+                );
                 return;
             default:
                 return;
@@ -279,7 +291,7 @@ const UploadPage = (() => {
 
         if (!fileType) {
             setHint(payload.error || 'File could not be processed.', true);
-            completeJob();
+            completeJob(jobId, fileName);
             return;
         }
 
@@ -295,7 +307,17 @@ const UploadPage = (() => {
                 DataCache.invalidate('storage:');
                 DataCache.invalidate('clean:');
                 DataCache.invalidate('messages:');
-                DataCache.set('storage:files', await Storage.getAllFiles());
+                const files = await Storage.getAllFiles();
+                DataCache.set('storage:files', files);
+                if (fileType === 'messages' || fileType === 'connections') {
+                    const key = fileType === 'messages'
+                        ? 'storage:file:messages'
+                        : 'storage:file:connections';
+                    const match = files.find(file => file.type === fileType) || null;
+                    if (match) {
+                        DataCache.set(key, match);
+                    }
+                }
                 if (payload.analyticsBase) {
                     DataCache.set('storage:analyticsBase', payload.analyticsBase);
                 }
@@ -312,10 +334,13 @@ const UploadPage = (() => {
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
             setHint('File loaded successfully.', false);
+            if (fileType === 'shares' || fileType === 'comments') {
+                primeAnalyticsWorker(fileMap);
+            }
         } catch {
             setHint('Error saving file data. Please try again.', true);
         } finally {
-            completeJob();
+            completeJob(jobId, fileName);
         }
     }
 
@@ -355,10 +380,36 @@ const UploadPage = (() => {
     }
 
     /**
-     * Decrement active jobs and hide overlay when complete.
+     * Mark a processing job complete and hide overlay when done.
+     * @param {string|null} jobId - Worker job id
+     * @param {string} fileName - Uploaded file name fallback
      */
-    function completeJob() {
-        activeJobs = Math.max(0, activeJobs - 1);
+    function completeJob(jobId, fileName) {
+        const normalizedFileName = String(fileName || '');
+        let resolvedJobId = typeof jobId === 'string' && jobId ? jobId : null;
+
+        if (!resolvedJobId && normalizedFileName) {
+            const match = Array.from(pendingFiles.entries()).find(([, pending]) => {
+                return pending && pending.fileName === normalizedFileName;
+            });
+            if (match) {
+                resolvedJobId = match[0];
+            }
+        }
+
+        if (!resolvedJobId) {
+            const iterator = activeJobs.values().next();
+            resolvedJobId = iterator.done ? null : iterator.value;
+        }
+
+        if (!resolvedJobId) {
+            checkJobs();
+            return;
+        }
+
+        pendingFiles.delete(resolvedJobId);
+        clearJobTimeout(resolvedJobId);
+        activeJobs.delete(resolvedJobId);
         checkJobs();
     }
 
@@ -471,8 +522,15 @@ const UploadPage = (() => {
         const sharesCsv = fileMap.shares ? fileMap.shares.text : '';
         const commentsCsv = fileMap.comments ? fileMap.comments.text : '';
         if (!sharesCsv && !commentsCsv) {
+            lastPrimedSignature = null;
             return;
         }
+
+        const signature = `${sharesCsv.length}:${commentsCsv.length}`;
+        if (signature === lastPrimedSignature) {
+            return;
+        }
+        lastPrimedSignature = signature;
 
         worker.postMessage({
             type: 'restoreFiles',
@@ -492,7 +550,7 @@ const UploadPage = (() => {
 
     /** Hide progress overlay when all active jobs complete. */
     function checkJobs() {
-        if (activeJobs <= 0) {
+        if (activeJobs.size <= 0) {
             hideProgressOverlay();
         }
     }
@@ -502,8 +560,52 @@ const UploadPage = (() => {
      */
     function resetProcessingState() {
         pendingFiles.clear();
-        activeJobs = 0;
+        clearAllJobTimeouts();
+        activeJobs.clear();
         hideProgressOverlay();
+    }
+
+    /**
+     * Start a timeout watchdog for a worker job.
+     * @param {string} jobId - Worker job id
+     * @param {string} fileName - Uploaded file name
+     */
+    function scheduleJobTimeout(jobId, fileName) {
+        clearJobTimeout(jobId);
+        const timeoutId = window.setTimeout(() => {
+            if (!activeJobs.has(jobId)) {
+                return;
+            }
+
+            completeJob(jobId, fileName);
+            setHint(`Processing took too long for ${fileName}. Please retry this file.`, true);
+        }, JOB_TIMEOUT_MS);
+
+        jobTimeouts.set(jobId, timeoutId);
+    }
+
+    /**
+     * Clear watchdog timeout for a completed job.
+     * @param {string|null} jobId - Worker job id
+     */
+    function clearJobTimeout(jobId) {
+        if (!jobId || !jobTimeouts.has(jobId)) {
+            return;
+        }
+
+        const timeoutId = jobTimeouts.get(jobId);
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+        jobTimeouts.delete(jobId);
+    }
+
+    /** Clear all active job timeout watchdogs. */
+    function clearAllJobTimeouts() {
+        jobTimeouts.forEach(timeoutId => {
+            window.clearTimeout(timeoutId);
+        });
+        jobTimeouts.clear();
     }
 
     /** Show the progress overlay and start animation. */
@@ -514,7 +616,7 @@ const UploadPage = (() => {
         progressValue = 0;
         drawProgressBar(progressValue);
         animateProgressTo(0.72, 650, () => {
-            if (sessionId !== progressSessionId || activeJobs <= 0) {
+            if (sessionId !== progressSessionId || activeJobs.size <= 0) {
                 return;
             }
             startProgressCrawl(sessionId);
@@ -592,6 +694,11 @@ const UploadPage = (() => {
 
         function crawl(now) {
             if (sessionId !== progressSessionId) {
+                progressAnimationId = null;
+                return;
+            }
+
+            if (activeJobs.size <= 0) {
                 progressAnimationId = null;
                 return;
             }

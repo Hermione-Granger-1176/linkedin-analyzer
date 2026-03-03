@@ -18,6 +18,7 @@ const ConnectionsPage = (() => {
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
     const CACHE_EVENTS = new Set(['filesChanged', 'storageCleared']);
     const WORKER_URL = 'js/connections-worker.js?v=20260301-2';
+    const WORKER_TIMEOUT_MS = 30000;
     const TOP_N = 10;
 
     const state = {
@@ -38,6 +39,7 @@ const ConnectionsPage = (() => {
     let worker = null;
     let requestId = 0;
     let pendingRequestId = 0;
+    let workerTimeoutId = null;
 
     /** Initialize connections page: bind events, worker, and cache subscription. */
     function init() {
@@ -175,6 +177,16 @@ const ConnectionsPage = (() => {
         }
         worker.terminate();
         worker = null;
+        clearWorkerTimeout();
+    }
+
+    /** Clear any in-flight worker watchdog timeout. */
+    function clearWorkerTimeout() {
+        if (!workerTimeoutId) {
+            return;
+        }
+        window.clearTimeout(workerTimeoutId);
+        workerTimeoutId = null;
     }
 
     /**
@@ -200,11 +212,14 @@ const ConnectionsPage = (() => {
     /** Load connections CSV from IndexedDB and send to worker for parsing. */
     async function loadData() {
         showConnectionsLoading(true);
+        markPerformance('connections:idb-read:start');
 
         try {
             initWorker();
 
             const file = await loadConnectionsFile();
+            markPerformance('connections:idb-read:end');
+            measurePerformance('connections:idb-read', 'connections:idb-read:start', 'connections:idb-read:end');
             if (!file || !file.text) {
                 setEmptyState(
                     'No connections data available yet',
@@ -225,6 +240,17 @@ const ConnectionsPage = (() => {
 
             const id = ++requestId;
             pendingRequestId = id;
+            clearWorkerTimeout();
+            workerTimeoutId = window.setTimeout(() => {
+                if (pendingRequestId !== id) {
+                    return;
+                }
+                pendingRequestId = 0;
+                setEmptyState('Connections timeout', 'Parsing took too long. Please retry the upload.');
+                showConnectionsLoading(false);
+                terminateWorker();
+            }, WORKER_TIMEOUT_MS);
+            markPerformance('connections:worker-parse:start');
             worker.postMessage({
                 type: 'process',
                 requestId: id,
@@ -288,6 +314,10 @@ const ConnectionsPage = (() => {
             return;
         }
 
+        clearWorkerTimeout();
+        markPerformance('connections:worker-parse:end');
+        measurePerformance('connections:worker-parse', 'connections:worker-parse:start', 'connections:worker-parse:end');
+
         const payload = message.payload || {};
 
         if (!payload.success) {
@@ -303,11 +333,14 @@ const ConnectionsPage = (() => {
         const rawRows = payload.rows || [];
 
         /* Normalize field names for client-side filtering (worker returns title-case keys) */
+        markPerformance('connections:normalize:start');
         const rows = rawRows.map(row => ({
             connectedOn: parseConnectedOn(row['Connected On']),
             company: (row['Company'] || '').trim(),
             position: (row['Position'] || '').trim()
         }));
+        markPerformance('connections:normalize:end');
+        measurePerformance('connections:normalize', 'connections:normalize:start', 'connections:normalize:end');
 
         state.dataReady = true;
         state.hasData = rows.length > 0;
@@ -322,7 +355,10 @@ const ConnectionsPage = (() => {
             return;
         }
 
+        markPerformance('connections:render:start');
         applyFiltersAndRender();
+        markPerformance('connections:render:end');
+        measurePerformance('connections:render', 'connections:render:start', 'connections:render:end');
     }
 
     /**
@@ -330,6 +366,7 @@ const ConnectionsPage = (() => {
      * @param {object} message - Worker error message
      */
     function handleWorkerErrorPayload(message) {
+        clearWorkerTimeout();
         const text = (message.payload && message.payload.message)
             ? message.payload.message
             : 'Unable to parse Connections.csv.';
@@ -339,8 +376,37 @@ const ConnectionsPage = (() => {
 
     /** Handle worker-level errors (uncaught exceptions). */
     function handleWorkerError() {
+        clearWorkerTimeout();
         setEmptyState('Worker error', 'Refresh the page and try again.');
         showConnectionsLoading(false);
+    }
+
+    /**
+     * Mark a performance point if available.
+     * @param {string} name - Mark name
+     */
+    function markPerformance(name) {
+        if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+            return;
+        }
+        performance.mark(name);
+    }
+
+    /**
+     * Measure a performance range if available.
+     * @param {string} name - Measure name
+     * @param {string} start - Start mark
+     * @param {string} end - End mark
+     */
+    function measurePerformance(name, start, end) {
+        if (typeof performance === 'undefined' || typeof performance.measure !== 'function') {
+            return;
+        }
+        try {
+            performance.measure(name, start, end);
+        } catch {
+            // Ignore missing marks to keep instrumentation resilient.
+        }
     }
 
     /**

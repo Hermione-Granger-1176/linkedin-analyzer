@@ -87,6 +87,7 @@ const ScreenManager = (() => {
      */
     function switchScreens(previousScreen, nextScreen) {
         const token = ++transitionToken;
+        const isInitialMount = !previousScreen;
 
         if (previousScreen && previousScreen !== nextScreen) {
             previousScreen.classList.remove('enter');
@@ -107,6 +108,11 @@ const ScreenManager = (() => {
 
         nextScreen.classList.add('active');
         nextScreen.classList.remove('exit');
+
+        if (isInitialMount) {
+            nextScreen.classList.remove('enter');
+            return;
+        }
 
         requestAnimationFrame(() => {
             if (token !== transitionToken) {

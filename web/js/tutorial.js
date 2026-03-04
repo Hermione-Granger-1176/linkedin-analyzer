@@ -1,4 +1,4 @@
-/* Guided tutorial and contextual mini tips */
+/* Guided tutorial and contextual mini-tip callouts */
 /* exported Tutorial */
 
 const Tutorial = (() => {
@@ -6,11 +6,22 @@ const Tutorial = (() => {
 
     const TUTORIAL_STORAGE_VERSION = 'v1';
     const STORAGE_PREFIX = `linkedin-analyzer:tutorial:${TUTORIAL_STORAGE_VERSION}`;
-    const AUTO_START_DELAY_MS = 180;
+    const AUTO_START_DELAY_MS = 1500;
+    const AUTO_START_RETRY_MS = 260;
+    const AUTO_START_VISIBLE_PAUSE_MS = 900;
     const INITIAL_TARGET_RETRY_MS = 160;
     const INITIAL_TARGET_RETRY_MAX = 8;
     const MINI_TIP_RETRY_MS = 300;
     const MINI_TIP_RETRY_MAX = 8;
+    const MINI_TIP_INITIAL_DELAY_MS = 2200;
+    const MINI_TIP_DELAY_GROWTH_MS = 90;
+    const MINI_TIP_DELAY_MAX_EXTRA_MS = 2200;
+    const MINI_TIP_BASE_COOLDOWN_MS = 30000;
+    const MINI_TIP_COOLDOWN_GROWTH_MS = 2500;
+    const MINI_TIP_COOLDOWN_MAX_MS = 240000;
+    const MINI_TIP_MIN_INTERVAL_VISITS = 2;
+    const MINI_TIP_MAX_INTERVAL_VISITS = 6;
+    const MINI_TIP_INTERVAL_STEP = 12;
     const EDGE_PADDING = 12;
     const STEP_SCROLL_MARGIN = 56;
     const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -63,6 +74,7 @@ const Tutorial = (() => {
         highlightedStyle: null,
         previousFocus: null,
         miniTipsRoute: '',
+        miniTipTimer: 0,
         miniTipRetryTimer: 0,
         miniTipRetryCount: 0,
         miniTipEntries: []
@@ -111,15 +123,25 @@ const Tutorial = (() => {
         }
 
         cancelPendingAutoStart();
+        cancelPendingMiniTipStart();
         clearRetryTimer();
         clearMiniTipRetry();
         state.miniTipRetryCount = 0;
+
+        if (state.active && state.routeName === normalized) {
+            return;
+        }
 
         if (state.active && state.routeName !== normalized) {
             teardownActiveTutorial(false);
         }
 
-        renderMiniTips(normalized);
+        const token = ++state.token;
+        const visitCount = incrementMiniTipVisitCount();
+
+        clearMiniTips();
+        state.miniTipsRoute = normalized;
+        scheduleMiniTips(normalized, token, visitCount);
 
         if (isComplete(normalized)) {
             return;
@@ -129,13 +151,7 @@ const Tutorial = (() => {
             return;
         }
 
-        const token = ++state.token;
-        state.autoTimer = window.setTimeout(() => {
-            if (token !== state.token) {
-                return;
-            }
-            start(normalized, { auto: true });
-        }, AUTO_START_DELAY_MS);
+        scheduleAutoStart(normalized, token, AUTO_START_DELAY_MS, false);
     }
 
     /**
@@ -163,6 +179,7 @@ const Tutorial = (() => {
         }
 
         cancelPendingAutoStart();
+        cancelPendingMiniTipStart();
         clearRetryTimer();
         clearMiniTipRetry();
         state.miniTipRetryCount = 0;
@@ -456,35 +473,31 @@ const Tutorial = (() => {
             return;
         }
 
-        if (event.key === 'Escape') {
-            event.preventDefault();
-            completeCurrentRoute();
-            return;
-        }
-
-        if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            handleNextClick();
-            return;
-        }
-
-        if (event.key === 'Enter') {
-            if (shouldUseNativeEnter(event.target)) {
+        switch (event.key) {
+            case 'Escape':
+                event.preventDefault();
+                completeCurrentRoute();
                 return;
-            }
-            event.preventDefault();
-            handleNextClick();
-            return;
-        }
-
-        if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            handleBackClick();
-            return;
-        }
-
-        if (event.key === 'Tab') {
-            trapFocus(event);
+            case 'ArrowRight':
+                event.preventDefault();
+                handleNextClick();
+                return;
+            case 'Enter':
+                if (shouldUseNativeEnter(event.target)) {
+                    return;
+                }
+                event.preventDefault();
+                handleNextClick();
+                return;
+            case 'ArrowLeft':
+                event.preventDefault();
+                handleBackClick();
+                return;
+            case 'Tab':
+                trapFocus(event);
+                return;
+            default:
+                return;
         }
     }
 
@@ -772,7 +785,7 @@ const Tutorial = (() => {
     /**
      * Collect primary and fallback step targets.
      * @param {object} step - Step config
-     * @returns {(string|HTMLElement)[]}
+     * @returns {(string|Element)[]}
      */
     function collectTargetCandidates(step) {
         if (!step || typeof step !== 'object') {
@@ -1142,7 +1155,14 @@ const Tutorial = (() => {
      * @param {boolean} keepCompletion - Whether completion was updated
      */
     function teardownActiveTutorial(keepCompletion) {
+        const routeName = state.routeName;
+        const token = state.token;
+        const visitCount = getMiniTipVisitCount();
+
+        cancelPendingMiniTipStart();
         clearRetryTimer();
+        clearMiniTipRetry();
+        state.miniTipRetryCount = 0;
 
         setHighlightedTarget(null);
         ui.root.hidden = true;
@@ -1151,15 +1171,17 @@ const Tutorial = (() => {
         ui.spotlight.style.display = 'none';
         document.body.classList.remove('tutorial-open');
 
-        if (state.miniTipsRoute) {
-            renderMiniTips(state.miniTipsRoute);
+        state.active = false;
+
+        if (keepCompletion && routeName) {
+            state.miniTipsRoute = routeName;
+            scheduleMiniTips(routeName, token, visitCount);
         }
 
         if (state.previousFocus && typeof state.previousFocus.focus === 'function') {
             state.previousFocus.focus();
         }
 
-        state.active = false;
         state.routeName = '';
         state.steps = [];
         state.renderableIndices = [];
@@ -1172,9 +1194,9 @@ const Tutorial = (() => {
         }
     }
 
-    /** Render contextual mini tips for a route. */
+    /** Render contextual mini-tip callouts for a route. */
     function renderMiniTips(routeName) {
-        if (!ui.miniTipsLayer) {
+        if (state.active || isLoadingActive() || !ui.miniTipsLayer) {
             return;
         }
 
@@ -1216,6 +1238,10 @@ const Tutorial = (() => {
         }
 
         positionMiniTips();
+        const hasVisibleTip = state.miniTipEntries.some(entry => entry.node && !entry.node.hidden);
+        if (hasVisibleTip) {
+            markMiniTipShown();
+        }
     }
 
     /**
@@ -1320,7 +1346,7 @@ const Tutorial = (() => {
         node.style.top = `${clamp(top, EDGE_PADDING, maxTop)}px`;
     }
 
-    /** Position all rendered mini tips against current viewport geometry. */
+    /** Position rendered mini-tip callouts against viewport geometry. */
     function positionMiniTips() {
         if (!state.miniTipEntries.length) {
             return;
@@ -1371,6 +1397,10 @@ const Tutorial = (() => {
                 return;
             }
             if (routeName !== state.miniTipsRoute) {
+                return;
+            }
+            if (isLoadingActive()) {
+                scheduleMiniTipRetry(routeName);
                 return;
             }
             renderMiniTips(routeName);
@@ -1445,38 +1475,35 @@ const Tutorial = (() => {
      * @returns {object[]}
      */
     function getRouteSteps(routeName) {
-        if (typeof window.TutorialSteps === 'undefined' || !window.TutorialSteps) {
-            return [];
-        }
-
-        if (Array.isArray(window.TutorialSteps)) {
-            return window.TutorialSteps.filter(step => normalizeRouteName(step.route) === routeName);
-        }
-
-        if (typeof window.TutorialSteps === 'object') {
-            const list = window.TutorialSteps[routeName];
-            return Array.isArray(list) ? list.slice() : [];
-        }
-
-        return [];
+        return getRouteConfigItems(window.TutorialSteps, routeName);
     }
 
     /**
-     * Read route mini tips from global config.
+     * Read route mini-tip callouts from global config.
      * @param {string} routeName - Route name
      * @returns {object[]}
      */
     function getRouteMiniTips(routeName) {
-        if (typeof window.TutorialMiniTips === 'undefined' || !window.TutorialMiniTips) {
+        return getRouteConfigItems(window.TutorialMiniTips, routeName);
+    }
+
+    /**
+     * Read route-scoped config items from global window config.
+     * @param {object[]|Object<string, object[]>|undefined} config - Route config source
+     * @param {string} routeName - Route name
+     * @returns {object[]}
+     */
+    function getRouteConfigItems(config, routeName) {
+        if (!config) {
             return [];
         }
 
-        if (Array.isArray(window.TutorialMiniTips)) {
-            return window.TutorialMiniTips.filter(tip => normalizeRouteName(tip.route) === routeName);
+        if (Array.isArray(config)) {
+            return config.filter(item => normalizeRouteName(item.route) === routeName);
         }
 
-        if (typeof window.TutorialMiniTips === 'object') {
-            const list = window.TutorialMiniTips[routeName];
+        if (typeof config === 'object') {
+            const list = config[routeName];
             return Array.isArray(list) ? list.slice() : [];
         }
 
@@ -1492,6 +1519,225 @@ const Tutorial = (() => {
         }
         window.clearTimeout(state.autoTimer);
         state.autoTimer = 0;
+    }
+
+    /** Cancel pending mini-tip show timer. */
+    function cancelPendingMiniTipStart() {
+        if (!state.miniTipTimer) {
+            return;
+        }
+        window.clearTimeout(state.miniTipTimer);
+        state.miniTipTimer = 0;
+    }
+
+    /**
+     * Schedule mini-tip callouts for a route after engagement-aware pacing.
+     * @param {string} routeName - Route name
+     * @param {number} token - Route token
+     * @param {number} visitCount - Engagement visit count
+     */
+    function scheduleMiniTips(routeName, token, visitCount) {
+        cancelPendingMiniTipStart();
+
+        const normalized = normalizeRouteName(routeName);
+        if (!normalized || state.active) {
+            return;
+        }
+        if (!isComplete(normalized)) {
+            return;
+        }
+        if (!getRouteMiniTips(normalized).length) {
+            return;
+        }
+        if (!shouldScheduleMiniTips(visitCount)) {
+            return;
+        }
+
+        const delayMs = getMiniTipDisplayDelayMs(visitCount);
+        scheduleMiniTipStart(normalized, token, delayMs);
+    }
+
+    /**
+     * Check whether a delayed callback token is stale.
+     * @param {number} token - Route token snapshot
+     * @returns {boolean}
+     */
+    function isTokenStale(token) {
+        return token !== state.token;
+    }
+
+    /**
+     * Check whether mini-tip callouts can start for the route/token.
+     * @param {string} routeName - Route name
+     * @param {number} token - Route token snapshot
+     * @returns {boolean}
+     */
+    function canStartMiniTips(routeName, token) {
+        if (isTokenStale(token) || state.active) {
+            return false;
+        }
+        return routeName === state.miniTipsRoute;
+    }
+
+    /**
+     * Queue a mini-tip render attempt.
+     * @param {string} routeName - Route name
+     * @param {number} token - Route token
+     * @param {number} delayMs - Delay before attempt
+     */
+    function scheduleMiniTipStart(routeName, token, delayMs) {
+        state.miniTipTimer = window.setTimeout(() => {
+            state.miniTipTimer = 0;
+
+            if (!canStartMiniTips(routeName, token)) {
+                return;
+            }
+            if (isLoadingActive()) {
+                scheduleMiniTipStart(routeName, token, MINI_TIP_RETRY_MS);
+                return;
+            }
+
+            renderMiniTips(routeName);
+        }, delayMs);
+    }
+
+    /**
+     * Decide whether mini-tip callouts should be shown for this visit.
+     * @param {number} visitCount - Engagement visit count
+     * @returns {boolean}
+     */
+    function shouldScheduleMiniTips(visitCount) {
+        const normalizedVisitCount = normalizeVisitCount(visitCount);
+        const interval = getMiniTipVisitInterval(normalizedVisitCount);
+        if ((normalizedVisitCount % interval) !== 0) {
+            return false;
+        }
+
+        const lastShownAt = getMiniTipLastShownAt();
+        if (!lastShownAt) {
+            return true;
+        }
+
+        const cooldownMs = getMiniTipCooldownMs(normalizedVisitCount);
+        return (Date.now() - lastShownAt) >= cooldownMs;
+    }
+
+    /**
+     * Compute mini-tip delay for current engagement level.
+     * @param {number} visitCount - Engagement visit count
+     * @returns {number}
+     */
+    function getMiniTipDisplayDelayMs(visitCount) {
+        const normalizedVisitCount = normalizeVisitCount(visitCount);
+        const extraDelay = Math.min(
+            normalizedVisitCount * MINI_TIP_DELAY_GROWTH_MS,
+            MINI_TIP_DELAY_MAX_EXTRA_MS
+        );
+        return MINI_TIP_INITIAL_DELAY_MS + extraDelay;
+    }
+
+    /**
+     * Compute minimum cooldown between mini-tip callouts.
+     * @param {number} visitCount - Engagement visit count
+     * @returns {number}
+     */
+    function getMiniTipCooldownMs(visitCount) {
+        const normalizedVisitCount = normalizeVisitCount(visitCount);
+        const growth = normalizedVisitCount * MINI_TIP_COOLDOWN_GROWTH_MS;
+        return Math.min(MINI_TIP_COOLDOWN_MAX_MS, MINI_TIP_BASE_COOLDOWN_MS + growth);
+    }
+
+    /**
+     * Compute route-visit interval between mini-tip appearances.
+     * @param {number} visitCount - Engagement visit count
+     * @returns {number}
+     */
+    function getMiniTipVisitInterval(visitCount) {
+        const normalizedVisitCount = normalizeVisitCount(visitCount);
+        const growthSteps = Math.floor(normalizedVisitCount / MINI_TIP_INTERVAL_STEP);
+        return Math.min(MINI_TIP_MAX_INTERVAL_VISITS, MINI_TIP_MIN_INTERVAL_VISITS + growthSteps);
+    }
+
+    /**
+     * Increment and persist engagement visit count for mini-tip pacing.
+     * @returns {number}
+     */
+    function incrementMiniTipVisitCount() {
+        const key = getMiniTipVisitCountKey();
+        const current = getStorageNumberValue(key, 0);
+        const next = Math.max(0, Math.floor(current)) + 1;
+        setStorageValue(key, String(next));
+        return next;
+    }
+
+    /**
+     * Read persisted mini-tip engagement visit count.
+     * @returns {number}
+     */
+    function getMiniTipVisitCount() {
+        return getStorageNumberValue(getMiniTipVisitCountKey(), 0);
+    }
+
+    /** Persist mini-tip display timestamp for cooldown pacing. */
+    function markMiniTipShown() {
+        setStorageValue(getMiniTipLastShownAtKey(), String(Date.now()));
+    }
+
+    /**
+     * Read mini-tip display timestamp.
+     * @returns {number}
+     */
+    function getMiniTipLastShownAt() {
+        return getStorageNumberValue(getMiniTipLastShownAtKey(), 0);
+    }
+
+    /**
+     * Retry auto tutorial start until loading overlay finishes.
+     * @param {string} routeName - Route name
+     * @param {number} token - Route token
+     * @param {number} delayMs - Delay before attempt
+     * @param {boolean} needsVisiblePause - Whether to wait once loading settles
+     */
+    function scheduleAutoStart(routeName, token, delayMs, needsVisiblePause) {
+        state.autoTimer = window.setTimeout(() => {
+            if (isTokenStale(token)) {
+                return;
+            }
+
+            if (isLoadingActive()) {
+                scheduleAutoStart(routeName, token, AUTO_START_RETRY_MS, true);
+                return;
+            }
+
+            if (needsVisiblePause) {
+                scheduleAutoStart(routeName, token, AUTO_START_VISIBLE_PAUSE_MS, false);
+                return;
+            }
+
+            start(routeName, { auto: true });
+        }, delayMs);
+    }
+
+    /**
+     * Read loading overlay activity state when available.
+     * @returns {boolean}
+     */
+    function isLoadingActive() {
+        if (typeof LoadingOverlay !== 'undefined' && typeof LoadingOverlay.isActive === 'function' && LoadingOverlay.isActive()) {
+            return true;
+        }
+
+        const contentOverlay = document.getElementById('contentLoadingOverlay');
+        if (contentOverlay && !contentOverlay.hidden) {
+            return true;
+        }
+
+        const uploadOverlay = document.getElementById('progressOverlay');
+        if (uploadOverlay && !uploadOverlay.hidden) {
+            return true;
+        }
+
+        return false;
     }
 
     /** Clear initial retry timer. */
@@ -1520,6 +1766,19 @@ const Tutorial = (() => {
      */
     function isMiniTipDismissed(routeName, tipId) {
         return getStorageValue(getMiniTipKey(routeName, tipId)) === '1';
+    }
+
+    /**
+     * Normalize engagement visit count.
+     * @param {number} value - Raw visit count
+     * @returns {number}
+     */
+    function normalizeVisitCount(value) {
+        const count = Number(value);
+        if (!Number.isFinite(count) || count < 1) {
+            return 1;
+        }
+        return Math.floor(count);
     }
 
     /**
@@ -1562,6 +1821,22 @@ const Tutorial = (() => {
     }
 
     /**
+     * Build mini-tip engagement visit count storage key.
+     * @returns {string}
+     */
+    function getMiniTipVisitCountKey() {
+        return `${STORAGE_PREFIX}:mini-tip:route-visits`;
+    }
+
+    /**
+     * Build mini-tip last shown timestamp storage key.
+     * @returns {string}
+     */
+    function getMiniTipLastShownAtKey() {
+        return `${STORAGE_PREFIX}:mini-tip:last-shown-at`;
+    }
+
+    /**
      * Safe localStorage getter.
      * @param {string} key - Storage key
      * @returns {string|null}
@@ -1572,6 +1847,21 @@ const Tutorial = (() => {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Safe localStorage number getter.
+     * @param {string} key - Storage key
+     * @param {number} fallbackValue - Fallback value
+     * @returns {number}
+     */
+    function getStorageNumberValue(key, fallbackValue) {
+        const rawValue = getStorageValue(key);
+        const parsed = Number(rawValue);
+        if (!Number.isFinite(parsed)) {
+            return fallbackValue;
+        }
+        return parsed;
     }
 
     /**
@@ -1588,7 +1878,7 @@ const Tutorial = (() => {
     }
 
     /**
-     * Safe localStorage remove.
+     * Remove a localStorage value safely.
      * @param {string} key - Storage key
      */
     function removeStorageValue(key) {

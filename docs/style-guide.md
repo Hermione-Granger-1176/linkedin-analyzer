@@ -23,6 +23,7 @@
 - Avoid deeply nested if statements.
 - Use guard clauses and early returns.
 - Prefer flat, linear flow over complex branching.
+- For delegated DOM click handlers, use `DomEvents.closest(event, selector)` to avoid repeating `instanceof Element` guards.
 
 ## Loops
 - Prefer for-loops over while-loops.

@@ -1,98 +1,98 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
+import { describe, expect, it } from 'vitest';
 
-const LinkedInCleaner = require(path.join(__dirname, '..', 'js', 'cleaner.js'));
+import { LinkedInCleaner } from '../src/cleaner.js';
 
-test('auto-detects and cleans messages CSV', () => {
-    const csv = [
-        'CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS',
-        'abc,Ada,Bob,2025-01-01 10:00:00 UTC,"He said ""hello""",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob'
-    ].join('\n');
+describe('LinkedInCleaner', () => {
+    it('auto-detects and cleans messages CSV', () => {
+        const csv = [
+            'CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS',
+            'abc,Ada,Bob,2025-01-01 10:00:00 UTC,"He said ""hello""",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob'
+        ].join('\n');
 
-    const result = LinkedInCleaner.process(csv, 'auto');
+        const result = LinkedInCleaner.process(csv, 'auto');
 
-    assert.equal(result.success, true);
-    assert.equal(result.fileType, 'messages');
-    assert.equal(result.rowCount, 1);
-    assert.equal(result.cleanedData[0].CONTENT, 'He said "hello"');
-});
+        expect(result.success).toBe(true);
+        expect(result.fileType).toBe('messages');
+        expect(result.rowCount).toBe(1);
+        expect(result.cleanedData[0].CONTENT).toBe('He said "hello"');
+    });
 
-test('auto-detects and cleans connections CSV with preamble', () => {
-    const csv = [
-        'Notes:',
-        'Export metadata',
-        '',
-        'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
-        'Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 Jan 2026'
-    ].join('\n');
+    it('auto-detects and cleans connections CSV with preamble', () => {
+        const csv = [
+            'Notes:',
+            'Export metadata',
+            '',
+            'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+            'Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 Jan 2026'
+        ].join('\n');
 
-    const result = LinkedInCleaner.process(csv, 'auto');
+        const result = LinkedInCleaner.process(csv, 'auto');
 
-    assert.equal(result.success, true);
-    assert.equal(result.fileType, 'connections');
-    assert.equal(result.rowCount, 1);
-    assert.equal(result.cleanedData[0]['Connected On'], '2026-01-30');
-});
+        expect(result.success).toBe(true);
+        expect(result.fileType).toBe('connections');
+        expect(result.rowCount).toBe(1);
+        expect(result.cleanedData[0]['Connected On']).toBe('2026-01-30');
+    });
 
-test('cleans connections long month names', () => {
-    const csv = [
-        'Notes:',
-        'Export metadata',
-        '',
-        'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
-        'Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 January 2026'
-    ].join('\n');
+    it('cleans connections long month names', () => {
+        const csv = [
+            'Notes:',
+            'Export metadata',
+            '',
+            'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+            'Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 January 2026'
+        ].join('\n');
 
-    const result = LinkedInCleaner.process(csv, 'connections');
+        const result = LinkedInCleaner.process(csv, 'connections');
 
-    assert.equal(result.success, true);
-    assert.equal(result.cleanedData[0]['Connected On'], '2026-01-30');
-});
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0]['Connected On']).toBe('2026-01-30');
+    });
 
-test('cleans connections month names case-insensitively', () => {
-    const csv = [
-        'Notes:',
-        'Export metadata',
-        '',
-        'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
-        'Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 JAN 2026'
-    ].join('\n');
+    it('cleans connections month names case-insensitively', () => {
+        const csv = [
+            'Notes:',
+            'Export metadata',
+            '',
+            'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+            'Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 JAN 2026'
+        ].join('\n');
 
-    const result = LinkedInCleaner.process(csv, 'connections');
+        const result = LinkedInCleaner.process(csv, 'connections');
 
-    assert.equal(result.success, true);
-    assert.equal(result.cleanedData[0]['Connected On'], '2026-01-30');
-});
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0]['Connected On']).toBe('2026-01-30');
+    });
 
-test('drops messages rows missing required values', () => {
-    const csv = [
-        'CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS',
-        'abc,Ada,Bob,2025-01-01 10:00:00 UTC,"Valid message",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob',
-        'def,Ada,Bob,2025-01-01 11:00:00 UTC,,INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob',
-        'ghi,#N/A,Bob,2025-01-01 12:00:00 UTC,"Ignored row",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob'
-    ].join('\n');
+    it('drops messages rows missing required values', () => {
+        const csv = [
+            'CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS',
+            'abc,Ada,Bob,2025-01-01 10:00:00 UTC,"Valid message",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob',
+            'def,Ada,Bob,2025-01-01 11:00:00 UTC,,INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob',
+            'ghi,#N/A,Bob,2025-01-01 12:00:00 UTC,"Ignored row",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob'
+        ].join('\n');
 
-    const result = LinkedInCleaner.process(csv, 'messages');
+        const result = LinkedInCleaner.process(csv, 'messages');
 
-    assert.equal(result.success, true);
-    assert.equal(result.rowCount, 1);
-    assert.equal(result.cleanedData[0].CONTENT, 'Valid message');
-});
+        expect(result.success).toBe(true);
+        expect(result.rowCount).toBe(1);
+        expect(result.cleanedData[0].CONTENT).toBe('Valid message');
+    });
 
-test('drops connections rows when all identity fields are missing', () => {
-    const csv = [
-        'Notes:',
-        'Export metadata',
-        '',
-        'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
-        ',,,,,,30 Jan 2026',
-        ',,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 Jan 2026'
-    ].join('\n');
+    it('drops connections rows when all identity fields are missing', () => {
+        const csv = [
+            'Notes:',
+            'Export metadata',
+            '',
+            'First Name,Last Name,URL,Email Address,Company,Position,Connected On',
+            ',,,,,,30 Jan 2026',
+            ',,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,30 Jan 2026'
+        ].join('\n');
 
-    const result = LinkedInCleaner.process(csv, 'connections');
+        const result = LinkedInCleaner.process(csv, 'connections');
 
-    assert.equal(result.success, true);
-    assert.equal(result.rowCount, 1);
-    assert.equal(result.cleanedData[0].URL, 'https://linkedin.com/in/ada');
+        expect(result.success).toBe(true);
+        expect(result.rowCount).toBe(1);
+        expect(result.cleanedData[0].URL).toBe('https://linkedin.com/in/ada');
+    });
 });

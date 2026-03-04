@@ -29,11 +29,11 @@ repos:
         pass_filenames: false
       - id: eslint
         name: eslint
-        entry: npm run lint:web
+        entry: npm run lint
         language: system
         pass_filenames: false
       - id: node-test
         name: node-test
-        entry: npm run test:web
+        entry: npm run test
         language: system
         pass_filenames: false

@@ -41,6 +41,13 @@ Supported range values:
 
 - `1m`, `3m`, `6m`, `12m`, `all`
 
+## Delegated Click Safety
+
+Delegated click handlers use `DomEvents.closest(event, selector)` from `web/src/dom-events.js`.
+
+- Prevents runtime errors when `event.target` is not an `Element` (for example text-node targets).
+- Keeps delegated handler guards consistent across screens.
+
 ## Guided Tutorials
 
 Each screen has its own guided tutorial with first-visit auto start after a short delay (~1.5s):
@@ -145,18 +152,14 @@ Your files never leave your browser.
 ## Running Locally
 
 ```bash
-# Using Python
-python3 -m http.server 3000 --directory web
-
-# Using npx
-npx serve web -l 3000
+npm run dev
 ```
 
-Then open `http://localhost:3000`.
+Then open the Vite URL printed in the terminal.
 
 ## Deployment
 
-Deploy `web/` to any static host (Vercel, Netlify, GitHub Pages).
+Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages).
 
 ## Icons and Meta
 
@@ -168,8 +171,8 @@ Browsers pick the best format automatically:
 
 | File                          | Size  | Used by                         |
 | ----------------------------- | ----- | ------------------------------- |
-| `assets/icon.svg`             | any   | Modern browsers (Chrome, FF)    |
-| `assets/favicon.ico`          | 32px  | Legacy browsers (older IE/Edge) |
+| `public/assets/icon.svg`             | any   | Modern browsers (Chrome, FF)    |
+| `public/assets/favicon.ico`          | 32px  | Legacy browsers (older IE/Edge) |
 | `assets/apple-touch-icon.png` | 180px | iOS home screen bookmark        |
 | `assets/icon-192.png`         | 192px | Android home screen, PWA        |
 | `assets/icon-512.png`         | 512px | PWA splash screen, OG cards     |

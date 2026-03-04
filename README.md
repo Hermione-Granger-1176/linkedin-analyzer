@@ -27,7 +27,11 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards, relations
 
 ## Quick start
 
-**Web** — Just open the app and drag your CSV files. No install needed.
+**Web** — Run the Vite dev server and open the local URL:
+
+```bash
+npm run dev
+```
 
 **CLI** — For automation:
 ```bash

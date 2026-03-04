@@ -15,10 +15,10 @@ npm install
 npm run dev
 
 # Run tests
-npm run test:web
+npm run test
 
 # Lint
-npm run lint:web
+npm run lint
 ```
 
 ## Python CLI
@@ -67,8 +67,8 @@ See `.github/workflows/ci.yml`.
 ### JavaScript
 
 - ESLint for linting
-- Node's built-in test runner
-- No build step (vanilla JS)
+- Vitest for tests
+- Vite for bundling
 
 ## Testing
 
@@ -83,7 +83,7 @@ pytest -k "test_clean"          # By name pattern
 ### Web tests
 
 ```bash
-npm run test:web
+npm run test
 ```
 
 Tests are in `web/tests/`.

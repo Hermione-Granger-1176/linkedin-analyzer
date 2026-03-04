@@ -1,8 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const path = require('node:path');
+import { describe, expect, it } from 'vitest';
 
-const AnalyticsEngine = require(path.join(__dirname, '..', 'js', 'analytics.js'));
+import { AnalyticsEngine } from '../src/analytics.js';
 
 function sampleData() {
     const shares = [
@@ -48,81 +46,83 @@ function sampleData() {
     return { shares, comments };
 }
 
-test('compute aggregates totals and base indices', () => {
-    const { shares, comments } = sampleData();
-    const analytics = AnalyticsEngine.compute(shares, comments);
+describe('AnalyticsEngine', () => {
+    it('compute aggregates totals and base indices', () => {
+        const { shares, comments } = sampleData();
+        const analytics = AnalyticsEngine.compute(shares, comments);
 
-    assert.equal(analytics.totals.posts, 3);
-    assert.equal(analytics.totals.comments, 2);
-    assert.equal(analytics.totals.total, 5);
+        expect(analytics.totals.posts).toBe(3);
+        expect(analytics.totals.comments).toBe(2);
+        expect(analytics.totals.total).toBe(5);
 
-    assert.ok(Object.keys(analytics.months).length > 0);
-    assert.ok(Object.keys(analytics.dayIndex).length > 0);
-});
-
-test('buildView respects topic and shareType filters', () => {
-    const { shares, comments } = sampleData();
-    const analytics = AnalyticsEngine.compute(shares, comments);
-
-    const viewAll = AnalyticsEngine.buildView(analytics, {
-        timeRange: 'all',
-        topic: 'all',
-        monthFocus: null,
-        day: null,
-        hour: null,
-        shareType: 'all'
+        expect(Object.keys(analytics.months).length).toBeGreaterThan(0);
+        expect(Object.keys(analytics.dayIndex).length).toBeGreaterThan(0);
     });
 
-    assert.equal(viewAll.totals.total, 5);
-    assert.equal(viewAll.contentMix.media, 1);
+    it('buildView respects topic and shareType filters', () => {
+        const { shares, comments } = sampleData();
+        const analytics = AnalyticsEngine.compute(shares, comments);
 
-    const topTopics = viewAll.topics.map(item => item.topic);
-    assert.ok(topTopics.includes('excel'));
+        const viewAll = AnalyticsEngine.buildView(analytics, {
+            timeRange: 'all',
+            topic: 'all',
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: 'all'
+        });
 
-    const viewTopic = AnalyticsEngine.buildView(analytics, {
-        timeRange: 'all',
-        topic: 'excel',
-        monthFocus: null,
-        day: null,
-        hour: null,
-        shareType: 'all'
+        expect(viewAll.totals.total).toBe(5);
+        expect(viewAll.contentMix.media).toBe(1);
+
+        const topTopics = viewAll.topics.map(item => item.topic);
+        expect(topTopics.includes('excel')).toBe(true);
+
+        const viewTopic = AnalyticsEngine.buildView(analytics, {
+            timeRange: 'all',
+            topic: 'excel',
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: 'all'
+        });
+
+        expect(viewTopic.totals.total).toBe(3);
+
+        const viewMedia = AnalyticsEngine.buildView(analytics, {
+            timeRange: 'all',
+            topic: 'all',
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: 'media'
+        });
+
+        expect(viewMedia.totals.posts).toBe(1);
+        expect(viewMedia.totals.comments).toBe(0);
     });
 
-    assert.equal(viewTopic.totals.total, 3);
+    it('buildView respects day and hour filters', () => {
+        const { shares, comments } = sampleData();
+        const analytics = AnalyticsEngine.compute(shares, comments);
 
-    const viewMedia = AnalyticsEngine.buildView(analytics, {
-        timeRange: 'all',
-        topic: 'all',
-        monthFocus: null,
-        day: null,
-        hour: null,
-        shareType: 'media'
+        const view = AnalyticsEngine.buildView(analytics, {
+            timeRange: 'all',
+            topic: 'all',
+            monthFocus: null,
+            day: 3,
+            hour: 5,
+            shareType: 'all'
+        });
+
+        expect(view.totals.total).toBe(1);
+        expect(view.totals.posts).toBe(1);
+        expect(view.totals.comments).toBe(0);
     });
 
-    assert.equal(viewMedia.totals.posts, 1);
-    assert.equal(viewMedia.totals.comments, 0);
-});
-
-test('buildView respects day and hour filters', () => {
-    const { shares, comments } = sampleData();
-    const analytics = AnalyticsEngine.compute(shares, comments);
-
-    const view = AnalyticsEngine.buildView(analytics, {
-        timeRange: 'all',
-        topic: 'all',
-        monthFocus: null,
-        day: 3,
-        hour: 5,
-        shareType: 'all'
+    it('generateInsights handles empty views safely', () => {
+        const result = AnalyticsEngine.generateInsights({ totals: { total: 0 } });
+        expect(result.insights).toEqual([]);
+        expect(result.tip).toBe(null);
     });
-
-    assert.equal(view.totals.total, 1);
-    assert.equal(view.totals.posts, 1);
-    assert.equal(view.totals.comments, 0);
-});
-
-test('generateInsights handles empty views safely', () => {
-    const result = AnalyticsEngine.generateInsights({ totals: { total: 0 } });
-    assert.deepEqual(result.insights, []);
-    assert.equal(result.tip, null);
 });

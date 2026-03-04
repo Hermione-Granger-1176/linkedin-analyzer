@@ -175,6 +175,8 @@ const UploadPage = (() => {
 
         try {
             await restorePromise;
+        } catch {
+            setHint('Unable to restore saved files. Please re-upload.', true);
         } finally {
             restorePromise = null;
             restoredOnce = true;
@@ -711,8 +713,10 @@ const UploadPage = (() => {
             return;
         }
 
-        const sharesCsv = fileMap.shares ? fileMap.shares.text : '';
-        const commentsCsv = fileMap.comments ? fileMap.comments.text : '';
+        const sharesFile = fileMap.shares || null;
+        const commentsFile = fileMap.comments || null;
+        const sharesCsv = sharesFile ? sharesFile.text : '';
+        const commentsCsv = commentsFile ? commentsFile.text : '';
         if (!sharesCsv && !commentsCsv) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
@@ -720,7 +724,9 @@ const UploadPage = (() => {
             return;
         }
 
-        const signature = `${sharesCsv.length}:${commentsCsv.length}`;
+        const sharesStamp = sharesFile ? `${sharesFile.updatedAt || 0}:${sharesFile.rowCount || 0}` : '-';
+        const commentsStamp = commentsFile ? `${commentsFile.updatedAt || 0}:${commentsFile.rowCount || 0}` : '-';
+        const signature = `${sharesStamp}|${commentsStamp}`;
         if (signature === lastPrimedSignature) {
             pendingPrimePayload = null;
             clearPrimeSchedule();

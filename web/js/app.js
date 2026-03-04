@@ -55,7 +55,7 @@
     const SESSION_CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
     /** Initialize router and screen lifecycle wiring. */
-    async function init() {
+    function init() {
         if (typeof AppRouter === 'undefined' || typeof ScreenManager === 'undefined') {
             return;
         }

@@ -17,7 +17,7 @@ const ConnectionsPage = (() => {
 
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
     const CACHE_EVENTS = new Set(['filesChanged', 'storageCleared']);
-    const WORKER_URL = 'js/connections-worker.js?v=20260301-2';
+    const WORKER_URL = 'js/connections-worker.js';
     const WORKER_TIMEOUT_MS = 30000;
     const TOP_N = 10;
 
@@ -215,6 +215,10 @@ const ConnectionsPage = (() => {
         markPerformance('connections:idb-read:start');
 
         try {
+            if (typeof Session !== 'undefined' && typeof Session.waitForCleanup === 'function') {
+                await Session.waitForCleanup();
+            }
+
             initWorker();
 
             const file = await loadConnectionsFile();
@@ -257,6 +261,7 @@ const ConnectionsPage = (() => {
                 payload: { connectionsCsv: file.text }
             });
         } catch {
+            clearWorkerTimeout();
             setEmptyState(
                 'Storage error',
                 'Unable to load saved data. Try clearing browser data and re-uploading.'

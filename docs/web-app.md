@@ -126,7 +126,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Connections parsing runs in `connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `messages-worker.js` with safe fallback.
 - IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
-- On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache.
+- On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
 - Service worker uses network-first for the HTML shell and stale-while-revalidate for static assets to auto-refresh users onto newer builds.
 - **Clear All** removes stored uploads/analytics from IndexedDB and clears in-memory cache.

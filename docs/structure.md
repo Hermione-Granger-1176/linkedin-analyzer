@@ -130,7 +130,7 @@ linkedin-analyzer/
 
 1. User uploads CSV files on `#home`.
 2. Raw CSV text is stored in IndexedDB via `storage.js`.
-3. On startup, a non-blocking TTL sweep clears stale session data while caches hydrate.
+3. On startup, a non-blocking TTL sweep clears stale session data while caches hydrate. Screens wait for cleanup to finish before loading stored data.
 4. Analytics aggregate base is prepared in `analytics-worker.js` on a scheduled prime; connections analytics in `connections-worker.js`.
 5. Screen controllers load cached/persisted data through `data-cache.js` and `storage.js`.
 6. Route changes swap screens without full page reload.

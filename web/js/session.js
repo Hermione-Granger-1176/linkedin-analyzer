@@ -5,6 +5,7 @@
 
     const STORAGE_KEY = 'linkedin-analyzer:last-activity';
     const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+    const CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
     /** Safe localStorage getter. */
     function getStorageValue(key) {
@@ -66,8 +67,25 @@
         return true;
     }
 
+    /**
+     * Wait for any in-flight session cleanup to finish.
+     * @returns {Promise<void>}
+     */
+    async function waitForCleanup() {
+        const cleanupPromise = window[CLEANUP_PROMISE_KEY];
+        if (!cleanupPromise || typeof cleanupPromise.then !== 'function') {
+            return;
+        }
+        try {
+            await cleanupPromise;
+        } catch {
+            return;
+        }
+    }
+
     window.Session = {
         cleanIfStale,
-        touch
+        touch,
+        waitForCleanup
     };
 })();

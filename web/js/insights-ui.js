@@ -15,7 +15,7 @@ const InsightsPage = (() => {
 
     const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
     const CACHE_EVENTS = new Set(['analyticsChanged', 'storageCleared', 'filesChanged']);
-    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
+    const WORKER_URL = 'js/analytics-worker.js';
 
     const state = {
         filters: { ...FILTER_DEFAULTS },
@@ -139,6 +139,10 @@ const InsightsPage = (() => {
         showInsightsLoading(true);
 
         try {
+            if (typeof Session !== 'undefined' && typeof Session.waitForCleanup === 'function') {
+                await Session.waitForCleanup();
+            }
+
             initWorker();
             if (!worker) {
                 setEmptyState('Insights not supported', 'Your browser does not support analytics workers.');

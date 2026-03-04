@@ -15,7 +15,7 @@ const MessagesPage = (() => {
         '12m': 12
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    const MESSAGES_WORKER_URL = 'js/messages-worker.js?v=20260303-1';
+    const MESSAGES_WORKER_URL = 'js/messages-worker.js';
     const WORKER_TIMEOUT_MS = 30000;
 
     const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -277,6 +277,10 @@ const MessagesPage = (() => {
     async function loadData() {
         showMessagesLoading(true);
         markPerformance('messages:idb-read:start');
+
+        if (typeof Session !== 'undefined' && typeof Session.waitForCleanup === 'function') {
+            await Session.waitForCleanup();
+        }
 
         let files = null;
         let messagesFile = null;

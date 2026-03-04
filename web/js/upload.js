@@ -45,7 +45,7 @@ const UploadPage = (() => {
         { type: 'connections', item: elements.fileStatusItems.connections, label: elements.connectionsStatus }
     ]);
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
+    const WORKER_URL = 'js/analytics-worker.js';
     const JOB_TIMEOUT_MS = 45000;
     const SESSION_CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
@@ -363,8 +363,13 @@ const UploadPage = (() => {
             return;
         }
 
+        if (!pending) {
+            completeJob(jobId, fileName);
+            return;
+        }
+
         try {
-            const text = pending ? pending.text : '';
+            const text = pending.text;
 
             await persistProcessedFile(fileType, fileName, text, rowCount, payload.analyticsBase);
             await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);

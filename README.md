@@ -82,7 +82,7 @@ linkedin-analyzer all
 | -------------------- | --------------------------------------------------------- |
 | **100% client-side** | Files never leave your browser                            |
 | **Light/dark theme** | Hand-drawn sketch aesthetic                               |
-| **Guided tutorials** | Per-page tutorials with skip/back/next and restart        |
+| **Guided tutorials** | Per-page tutorials                                        |
 | **Analytics**        | Timeline, topics, heatmap                                 |
 | **Messages view**    | Top contacts, silent connections, fading chats            |
 | **SPA routing**      | Hash routes with URL-synced filters                       |
@@ -90,7 +90,7 @@ linkedin-analyzer all
 | **Connections**      | Network growth, top companies, top positions              |
 | **Chart export**     | Download any chart as PNG                                 |
 | **PWA-ready**        | Installable with auto-refreshing service worker caching   |
-| **Session cleanup**  | Stale uploads and cached analytics cleared on startup     |
+| **Session cleanup**  | Stale uploads and cached analytics cleared asynchronously |
 | **Social previews**  | Open Graph and Twitter Card meta tags                     |
 | **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold)           |
 

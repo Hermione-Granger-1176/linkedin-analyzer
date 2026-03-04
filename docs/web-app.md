@@ -43,7 +43,7 @@ Supported range values:
 
 ## Guided Tutorials
 
-Each screen has its own guided tutorial with first-visit auto start:
+Each screen has its own guided tutorial with first-visit auto start after a short delay (~1.5s):
 
 - Home
 - Clean
@@ -63,8 +63,9 @@ Special behavior:
 - Only the **Home** tutorial includes the dark/light mode step (`#themeToggle`).
 - Use the floating `?` help button in the bottom-right corner to replay the tutorial for the current page.
 - Completing or skipping marks that page tutorial as done; the floating help button resets and replays it.
-- Contextual mini tips show per route until dismissed.
-- Tutorial completion and mini-tip dismissal are stored in versioned `localStorage` keys (bump version to re-onboard after new tutorial features).
+- Tutorial auto-start waits until active loading overlays finish, then adds a brief visible pause before opening.
+- Contextual mini-tip callouts appear only after the route tutorial is completed/skipped, then follow engagement-based pacing and cooldowns until dismissed.
+- Tutorial completion, mini-tip dismissal, and mini-tip pacing metadata are stored in versioned `localStorage` keys (bump version to re-onboard after new tutorial features).
 - Sketch-style arrow callouts point to the highlighted target; the arrow style varies per step unless a step specifies `arrowStyle`.
 
 ## Screens
@@ -120,11 +121,13 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 
 - A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
 - Active content is blurred while loading to keep the loading state clear.
+- Tutorial auto-start and mini-tip rendering are gated by loading state, so onboarding UI does not appear while loading overlays are active.
 - Analytics computation runs in `analytics-worker.js`.
 - Connections parsing runs in `connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `messages-worker.js` with safe fallback.
 - IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
-- On startup, a session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache.
+- On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache.
+- Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
 - Service worker uses network-first for the HTML shell and stale-while-revalidate for static assets to auto-refresh users onto newer builds.
 - **Clear All** removes stored uploads/analytics from IndexedDB and clears in-memory cache.
 - Fonts are self-hosted (no external Google Fonts dependency).
@@ -136,7 +139,7 @@ Your files never leave your browser.
 - Processing is local JavaScript only.
 - Data persistence uses browser IndexedDB.
 - Theme preference is persisted across sessions.
-- Tutorial completion state is preserved in `localStorage` (versioned keys).
+- Tutorial and mini-tip onboarding state is preserved in `localStorage` (versioned keys).
 - No backend API calls for file content.
 
 ## Running Locally

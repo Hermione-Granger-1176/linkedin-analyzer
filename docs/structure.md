@@ -44,7 +44,7 @@ linkedin-analyzer/
 │   │   ├── messages-insights.js        # Messages screen controller
 │   │   ├── insights-ui.js              # Insights screen controller
 │   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
-│   │   ├── tutorial.js                 # Tutorial engine (spotlight, controls, persistence)
+│   │   ├── tutorial.js                 # Tutorial engine
 │   │   └── charts.js                   # Canvas chart rendering (incl. PNG export)
 │   ├── sw.js                           # Service Worker for PWA offline caching
 │   └── tests/                          # Web tests
@@ -130,8 +130,8 @@ linkedin-analyzer/
 
 1. User uploads CSV files on `#home`.
 2. Raw CSV text is stored in IndexedDB via `storage.js`.
-3. On startup, stale session data is purged via TTL cleanup before caches hydrate.
-4. Analytics aggregate base is prepared in `analytics-worker.js`; connections analytics in `connections-worker.js`.
+3. On startup, a non-blocking TTL sweep clears stale session data while caches hydrate.
+4. Analytics aggregate base is prepared in `analytics-worker.js` on a scheduled prime; connections analytics in `connections-worker.js`.
 5. Screen controllers load cached/persisted data through `data-cache.js` and `storage.js`.
 6. Route changes swap screens without full page reload.
 7. URL query params (for example `range`) are used to restore filter state.

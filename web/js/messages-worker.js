@@ -1,9 +1,8 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 /* global MessagesAnalytics */
 
-const WORKER_VERSION = '20260303-1';
 if (typeof importScripts === 'function') {
-    importScripts(`cleaner.js?v=${WORKER_VERSION}`, `messages-analytics.js?v=${WORKER_VERSION}`);
+    importScripts('cleaner.js', 'messages-analytics.js');
 }
 
 /**

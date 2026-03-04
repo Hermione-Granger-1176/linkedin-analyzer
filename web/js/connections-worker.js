@@ -1,8 +1,7 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
-const WORKER_VERSION = '20260301-2';
 if (typeof importScripts === 'function') {
-    importScripts(`cleaner.js?v=${WORKER_VERSION}`);
+    importScripts('cleaner.js');
 }
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */

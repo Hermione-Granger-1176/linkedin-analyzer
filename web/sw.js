@@ -126,13 +126,13 @@ async function networkFirst(request) {
         await putInCache(request, response);
         return response;
     } catch {
-        const cached = await caches.match(request);
+        const cached = await caches.match(request, { ignoreSearch: true });
         if (cached) {
             return cached;
         }
 
         const fallbackUrl = new URL('./index.html', self.registration.scope).toString();
-        const fallback = await caches.match(fallbackUrl);
+        const fallback = await caches.match(fallbackUrl, { ignoreSearch: true });
         if (fallback) {
             return fallback;
         }
@@ -148,9 +148,10 @@ async function networkFirst(request) {
  */
 async function staleWhileRevalidate(event) {
     const request = event.request;
-    const cached = await caches.match(request);
+    const cached = await caches.match(request, { ignoreSearch: true });
 
-    const networkUpdate = fetch(request)
+    const reloadRequest = new Request(request, { cache: 'reload' });
+    const networkUpdate = fetch(reloadRequest)
         .then(async response => {
             await putInCache(request, response);
             return response;

@@ -1,14 +1,14 @@
 /* LinkedIn Analyzer - Messages parsing worker */
+/* global MessagesAnalytics */
 
-const WORKER_VERSION = '20260228-1';
 if (typeof importScripts === 'function') {
-    importScripts(`cleaner.js?v=${WORKER_VERSION}`);
+    importScripts('cleaner.js', 'messages-analytics.js');
 }
 
 /**
  * Parse messages and connections CSV payload.
  * @param {{messagesCsv?: string, connectionsCsv?: string}} payload - Raw CSV payload
- * @returns {{success: boolean, messagesData?: object[], connectionsData?: object[], connectionError?: string|null, error?: string}}
+ * @returns {{success: boolean, messageState?: object, connectionState?: object, totalInputRows?: number, connectionError?: string|null, error?: string, messagesData?: object[], connectionsData?: object[]}}
  */
 function processPayload(payload) {
     const messagesCsv = typeof payload.messagesCsv === 'string' ? payload.messagesCsv : '';
@@ -34,11 +34,50 @@ function processPayload(payload) {
         }
     }
 
+    const messagesData = messagesResult.cleanedData;
+    const messageState = typeof MessagesAnalytics !== 'undefined'
+        ? MessagesAnalytics.buildMessageState(messagesData)
+        : null;
+    const connectionState = typeof MessagesAnalytics !== 'undefined'
+        ? MessagesAnalytics.buildConnectionState(connectionsData)
+        : null;
+
     return {
         success: true,
-        messagesData: messagesResult.cleanedData,
-        connectionsData,
-        connectionError
+        totalInputRows: messagesData.length,
+        messageState: messageState ? serializeMessageState(messageState) : null,
+        connectionState: connectionState ? serializeConnectionState(connectionState) : null,
+        connectionError,
+        messagesData: messageState ? [] : messagesData,
+        connectionsData: connectionState ? [] : connectionsData
+    };
+}
+
+/**
+ * Serialize message state for structured clone.
+ * @param {object} state - Message state with Maps/Sets
+ * @returns {object}
+ */
+function serializeMessageState(state) {
+    return {
+        contacts: Array.from(state.contacts.values()),
+        events: state.events,
+        rowTimestamps: state.rowTimestamps,
+        skippedRows: state.skippedRows,
+        talkedNameKeys: Array.from(state.talkedNameKeys),
+        talkedUrlKeys: Array.from(state.talkedUrlKeys),
+        latestTimestamp: state.latestTimestamp
+    };
+}
+
+/**
+ * Serialize connection state for structured clone.
+ * @param {object} state - Connection state with Maps
+ * @returns {object}
+ */
+function serializeConnectionState(state) {
+    return {
+        list: state.list
     };
 }
 

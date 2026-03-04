@@ -19,7 +19,8 @@ linkedin-analyzer/
 │   │   ├── variables.css               # Theme variables + @font-face (light/dark)
 │   │   ├── style.css                   # Main styles
 │   │   ├── screens.css                 # Screen transitions + page animation rules
-│   │   └── sketch.css                  # Hand-drawn effects
+│   │   ├── sketch.css                  # Hand-drawn effects
+│   │   └── tutorial.css                # Tutorial overlays, popovers, and mini tips
 │   ├── js/
 │   │   ├── runtime.js                  # Global error handler
 │   │   ├── theme.js                    # Theme toggle
@@ -42,6 +43,8 @@ linkedin-analyzer/
 │   │   ├── messages-worker.js          # Worker for messages/connections parsing
 │   │   ├── messages-insights.js        # Messages screen controller
 │   │   ├── insights-ui.js              # Insights screen controller
+│   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
+│   │   ├── tutorial.js                 # Tutorial engine
 │   │   └── charts.js                   # Canvas chart rendering (incl. PNG export)
 │   ├── sw.js                           # Service Worker for PWA offline caching
 │   └── tests/                          # Web tests
@@ -89,6 +92,7 @@ linkedin-analyzer/
 | `web/js/app.js`             | Route registration and bootstrapping                           |
 | `web/js/loading-overlay.js` | Global content loading overlay + blur handling                 |
 | `web/js/data-cache.js`      | In-memory cache and cache notifications                        |
+| `web/js/session.js`         | Session TTL cleanup on startup                                 |
 
 ### Assets & Meta
 
@@ -111,6 +115,7 @@ linkedin-analyzer/
 | `web/js/analytics-worker.js`   | Builds analytics views off main thread                |
 | `web/js/connections-worker.js` | Parses connections and computes network analytics     |
 | `web/js/messages-worker.js`    | Parses messages/connections off main thread           |
+| `web/js/messages-analytics.js` | Shared messages analytics helpers for UI + worker     |
 | `web/js/excel.js`              | `.xlsx` generation and download helpers               |
 
 ### Python CLI
@@ -125,10 +130,11 @@ linkedin-analyzer/
 
 1. User uploads CSV files on `#home`.
 2. Raw CSV text is stored in IndexedDB via `storage.js`.
-3. Analytics aggregate base is prepared in `analytics-worker.js`; connections analytics in `connections-worker.js`.
-4. Screen controllers load cached/persisted data through `data-cache.js` and `storage.js`.
-5. Route changes swap screens without full page reload.
-6. URL query params (for example `range`) are used to restore filter state.
+3. On startup, a non-blocking TTL sweep clears stale session data while caches hydrate. Screens wait for cleanup to finish before loading stored data.
+4. Analytics aggregate base is prepared in `analytics-worker.js` on a scheduled prime; connections analytics in `connections-worker.js`.
+5. Screen controllers load cached/persisted data through `data-cache.js` and `storage.js`.
+6. Route changes swap screens without full page reload.
+7. URL query params (for example `range`) are used to restore filter state.
 
 ## Data Flow (CLI)
 

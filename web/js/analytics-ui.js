@@ -70,7 +70,7 @@ const AnalyticsPage = (() => {
         msPerPoint: 45
     };
 
-    const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
+    const WORKER_URL = 'js/analytics-worker.js';
 
     const state = {
         filters: { ...FILTER_DEFAULTS },
@@ -259,6 +259,10 @@ const AnalyticsPage = (() => {
     /** Load analytics base data from IndexedDB and send to worker. */
     async function loadBase() {
         try {
+            if (typeof Session !== 'undefined' && typeof Session.waitForCleanup === 'function') {
+                await Session.waitForCleanup();
+            }
+
             initWorker();
             if (!worker) {
                 setEmptyState('Analytics not supported', 'Your browser does not support analytics workers.');

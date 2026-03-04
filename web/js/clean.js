@@ -92,6 +92,10 @@ const CleanPage = (() => {
      * Load stored files from IndexedDB into local state.
      */
     async function loadFiles() {
+        if (typeof Session !== 'undefined' && typeof Session.waitForCleanup === 'function') {
+            await Session.waitForCleanup();
+        }
+
         let files = null;
         if (typeof DataCache !== 'undefined') {
             files = DataCache.get('storage:files') || null;

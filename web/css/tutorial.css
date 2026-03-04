@@ -1,0 +1,407 @@
+/* Tutorial overlays, spotlight, and mini tips */
+
+.tutorial-open {
+    overflow-x: hidden;
+}
+
+.tutorial-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    pointer-events: auto;
+}
+
+.tutorial-overlay {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--text-primary) 42%, transparent);
+    opacity: 0.85;
+}
+
+.tutorial-spotlight {
+    position: fixed;
+    z-index: 1;
+    border: 2px dashed var(--accent-yellow);
+    border-radius: 14px 16px 13px 15px / 15px 13px 16px 14px;
+    box-shadow:
+        0 0 0 9999px color-mix(in srgb, var(--text-primary) 38%, transparent),
+        0 0 0 3px color-mix(in srgb, var(--accent-blue) 65%, transparent),
+        var(--shadow-md);
+    background: color-mix(in srgb, var(--accent-yellow-bg) 65%, transparent);
+    pointer-events: none;
+    animation: tutorial-spotlight-wobble 1.6s ease-in-out infinite alternate;
+}
+
+.tutorial-highlighted {
+    z-index: 1201 !important;
+}
+
+.tutorial-popover {
+    position: fixed;
+    z-index: 3;
+    pointer-events: auto;
+    width: min(420px, calc(100vw - 24px));
+    padding: var(--space-md);
+    border: 2px dashed var(--border-color);
+    border-radius: 16px 14px 17px 13px / 14px 17px 13px 16px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-lg);
+    transform: rotate(-0.35deg);
+}
+
+.tutorial-popover::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 1px dashed color-mix(in srgb, var(--border-color) 45%, transparent);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.tutorial-title {
+    margin: 0 0 var(--space-sm);
+    font-family: var(--font-hand-alt);
+    font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+    line-height: 1.1;
+}
+
+.tutorial-text {
+    margin: 0;
+    font-family: var(--font-hand);
+    font-size: var(--font-size-base);
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
+.tutorial-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.tutorial-progress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.tutorial-counter {
+    font-family: var(--font-hand);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.tutorial-dots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tutorial-dot {
+    width: 12px;
+    height: 12px;
+    border: 1px dashed var(--border-color);
+    border-radius: 47% 53% 50% 50% / 53% 47% 52% 48%;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    transition:
+        transform var(--transition-fast),
+        background-color var(--transition-fast),
+        border-color var(--transition-fast);
+}
+
+.tutorial-dot:hover {
+    transform: rotate(-6deg) scale(1.08);
+}
+
+.tutorial-dot.is-active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.tutorial-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.tutorial-btn {
+    appearance: none;
+    border: 2px dashed var(--border-color);
+    border-radius: 13px 15px 14px 16px / 15px 13px 16px 14px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: var(--font-hand);
+    font-size: var(--font-size-sm);
+    line-height: 1;
+    padding: 0.55rem 0.7rem;
+    cursor: pointer;
+    transition:
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast),
+        background-color var(--transition-fast);
+}
+
+.tutorial-btn:hover,
+.tutorial-btn:focus-visible {
+    transform: translateY(-1px) rotate(-0.7deg);
+    box-shadow: var(--shadow-sm);
+}
+
+.tutorial-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.tutorial-btn-next {
+    background: var(--accent-blue-bg);
+    border-color: var(--accent-blue);
+}
+
+.tutorial-btn-skip {
+    background: var(--accent-yellow-bg);
+    border-color: var(--accent-yellow);
+}
+
+.tutorial-pointer {
+    position: fixed;
+    z-index: 1700;
+    width: 92px;
+    height: 92px;
+    display: none;
+    pointer-events: none;
+    overflow: visible;
+    filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--text-primary) 24%, transparent));
+    transform-origin: center;
+}
+
+.tutorial-pointer-path-main {
+    fill: none;
+    stroke: color-mix(in srgb, var(--text-primary) 88%, var(--accent-blue));
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tutorial-pointer-path-echo {
+    fill: none;
+    stroke: color-mix(in srgb, var(--accent-blue) 62%, var(--text-primary));
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.62;
+}
+
+.tutorial-pointer-head {
+    fill: none;
+    stroke: color-mix(in srgb, var(--text-primary) 90%, var(--accent-red));
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tutorial-pointer[data-arrow-style="dashed"] .tutorial-pointer-path-main {
+    stroke-dasharray: 10 7;
+    animation: tutorial-pointer-dash 1.35s linear infinite;
+}
+
+.tutorial-pointer[data-arrow-style="dashed"] .tutorial-pointer-path-echo {
+    stroke-dasharray: 4 8;
+    animation: tutorial-pointer-dash 1.8s linear infinite reverse;
+}
+
+.tutorial-pointer[data-arrow-style="solid"] .tutorial-pointer-path-main,
+.tutorial-pointer[data-arrow-style="solid"] .tutorial-pointer-path-echo {
+    animation: none;
+}
+
+.tutorial-mini-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1100;
+}
+
+.tutorial-mini-tip {
+    position: fixed;
+    width: min(260px, calc(100vw - 24px));
+    padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-sm);
+    border: 2px dashed var(--border-color);
+    border-radius: 13px 16px 14px 15px / 15px 13px 16px 14px;
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
+    transform: rotate(0.45deg);
+    pointer-events: auto;
+}
+
+.tutorial-mini-tip:nth-child(even) {
+    transform: rotate(-0.45deg);
+}
+
+.tutorial-mini-title {
+    display: block;
+    margin-right: 24px;
+    font-family: var(--font-hand-alt);
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.tutorial-mini-text {
+    margin: 0.2rem 0 0;
+    font-family: var(--font-hand);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.tutorial-mini-dismiss {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border: 1px dashed var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-family: var(--font-hand-alt);
+    line-height: 1;
+    cursor: pointer;
+}
+
+.tutorial-restart-btn {
+    border: 2px dashed var(--accent-green);
+    background: var(--accent-green-bg);
+    color: var(--text-primary);
+    font-family: var(--font-hand);
+}
+
+.tutorial-help-btn {
+    position: fixed;
+    right: var(--space-lg);
+    bottom: var(--space-lg);
+    width: 58px;
+    height: 58px;
+    border: 2px dashed var(--border-color);
+    border-radius: 47% 53% 50% 50% / 53% 47% 52% 48%;
+    background: color-mix(in srgb, var(--accent-yellow-bg) 70%, var(--bg-secondary));
+    color: var(--text-primary);
+    box-shadow: var(--shadow-md);
+    z-index: 260;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-hand-alt);
+    font-size: 2rem;
+    line-height: 1;
+    transition:
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast),
+        border-color var(--transition-fast),
+        background-color var(--transition-fast);
+}
+
+.tutorial-help-btn::before {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border: 1px dashed color-mix(in srgb, var(--border-color) 45%, transparent);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.tutorial-help-btn:hover,
+.tutorial-help-btn:focus-visible {
+    transform: rotate(-4deg) translateY(-1px);
+    border-color: var(--accent-blue);
+    box-shadow: var(--shadow-lg);
+}
+
+.tutorial-help-btn:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 2px var(--bg-secondary),
+        0 0 0 4px var(--accent-blue),
+        var(--shadow-lg);
+}
+
+@media (max-width: 700px) {
+    .tutorial-popover {
+        width: calc(100vw - 20px);
+        padding: 0.85rem;
+    }
+
+    .tutorial-footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .tutorial-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .tutorial-btn {
+        flex: 1;
+        text-align: center;
+    }
+
+    .tutorial-mini-tip {
+        width: calc(100vw - 20px);
+    }
+
+    .tutorial-pointer {
+        width: 82px;
+        height: 82px;
+    }
+
+    .tutorial-help-btn {
+        right: var(--space-md);
+        bottom: var(--space-md);
+        width: 54px;
+        height: 54px;
+        font-size: 1.8rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tutorial-spotlight,
+    .tutorial-pointer-path-main,
+    .tutorial-pointer-path-echo,
+    .tutorial-btn,
+    .tutorial-dot,
+    .tutorial-mini-tip,
+    .tutorial-help-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .tutorial-spotlight,
+    .tutorial-btn,
+    .tutorial-dot,
+    .tutorial-mini-tip,
+    .tutorial-help-btn {
+        transform: none;
+    }
+}
+
+@keyframes tutorial-spotlight-wobble {
+    from {
+        transform: rotate(-0.4deg);
+    }
+    to {
+        transform: rotate(0.4deg);
+    }
+}
+
+@keyframes tutorial-pointer-dash {
+    from {
+        stroke-dashoffset: 0;
+    }
+    to {
+        stroke-dashoffset: -13;
+    }
+}

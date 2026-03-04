@@ -40,14 +40,14 @@ const LoadingOverlay = (() => {
             message: 'Preparing your data view.'
         };
         activeSources.set(source, {
-            title: (options && options.title) || defaults.title,
-            message: (options && options.message) || defaults.message
+            title: options?.title || defaults.title,
+            message: options?.message || defaults.message
         });
         render();
     }
 
     /**
-     * Hide overlay source key.
+     * Hide overlay for a source key.
      * @param {string} source - Source identifier
      */
     function hide(source) {
@@ -62,6 +62,14 @@ const LoadingOverlay = (() => {
     function clear() {
         activeSources.clear();
         render();
+    }
+
+    /**
+     * Check whether any loading source is active.
+     * @returns {boolean}
+     */
+    function isActive() {
+        return activeSources.size > 0;
     }
 
     /** Reapply blur class to the currently active screen. */
@@ -120,7 +128,7 @@ const LoadingOverlay = (() => {
 
     /**
      * Resolve overlay elements.
-     * @returns {{overlay: HTMLElement, title: HTMLElement, message: HTMLElement}|null}
+     * @returns {{overlay: HTMLElement, title: HTMLElement|null, message: HTMLElement|null}|null}
      */
     function ensureElements() {
         if (overlayElements) {
@@ -144,6 +152,7 @@ const LoadingOverlay = (() => {
         show,
         hide,
         clear,
+        isActive,
         syncActiveScreen
     };
 })();

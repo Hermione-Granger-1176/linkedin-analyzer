@@ -1165,7 +1165,7 @@ const MessagesPage = (() => {
 
     /**
      * Format timestamp as human-readable date.
-     * @param {number} timestamp - Unix timestamp in ms
+     * @param {number} timestamp - Timestamp in milliseconds
      * @returns {string}
      */
     function formatShortDate(timestamp) {

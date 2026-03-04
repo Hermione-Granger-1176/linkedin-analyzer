@@ -412,7 +412,7 @@ const ConnectionsPage = (() => {
     /**
      * Apply client-side time-range filter and recompute the view.
      * Growth chart always shows ALL-TIME data for context.
-     * Company, position, and stats are filtered by range.
+     * Company and position are filtered by range; stats combine all-time and range-specific values.
      */
     function applyFiltersAndRender() {
         if (!state.allRows || !state.allRows.length) {

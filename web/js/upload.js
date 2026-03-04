@@ -5,6 +5,7 @@ const UploadPage = (() => {
     'use strict';
 
     const TRACKED_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+    const TRACKED_TYPES_SET = new Set(TRACKED_TYPES);
     const UPLOAD_HINT_BY_STATE = Object.freeze({
         '0-0-0': 'Upload at least one file to start.',
         '0-0-1': 'Upload at least one file to start.',
@@ -13,7 +14,7 @@ const UploadPage = (() => {
         '1-1-0': 'Processing analytics in the background.',
         '1-1-1': 'Analytics are ready. Open the dashboard.',
         '1-0-0': 'Files loaded. Open Messages tab for conversation insights.',
-        '1-0-1': 'Analytics are ready. Open the dashboard.'
+        '1-0-1': 'Files loaded. Open Messages tab for conversation insights.'
     });
 
     const elements = {
@@ -37,8 +38,16 @@ const UploadPage = (() => {
         progressPercent: document.getElementById('progressPercent')
     };
 
+    const STATUS_ITEMS = Object.freeze([
+        { type: 'shares', item: elements.fileStatusItems.shares, label: elements.sharesStatus },
+        { type: 'comments', item: elements.fileStatusItems.comments, label: elements.commentsStatus },
+        { type: 'messages', item: elements.fileStatusItems.messages, label: elements.messagesStatus },
+        { type: 'connections', item: elements.fileStatusItems.connections, label: elements.connectionsStatus }
+    ]);
+
     const WORKER_URL = 'js/analytics-worker.js?v=20260228-2';
     const JOB_TIMEOUT_MS = 45000;
+    const SESSION_CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
     let worker = null;
     const pendingFiles = new Map();
@@ -49,6 +58,11 @@ const UploadPage = (() => {
     let progressSessionId = 0;
     let initialized = false;
     let lastPrimedSignature = null;
+    let restorePromise = null;
+    let restoredOnce = false;
+    let primeTimerId = null;
+    let primeIdleId = null;
+    let pendingPrimePayload = null;
 
     /** Initialize the upload page. */
     function init() {
@@ -68,6 +82,10 @@ const UploadPage = (() => {
     function onRouteChange() {
         if (!initialized) {
             init();
+            return;
+        }
+        if (restoredOnce) {
+            syncStatusFromCache();
             return;
         }
         restoreState();
@@ -120,6 +138,8 @@ const UploadPage = (() => {
 
         elements.clearAllBtn.addEventListener('click', async () => {
             await Storage.clearAll();
+            clearPrimeSchedule();
+            pendingPrimePayload = null;
             if (worker) {
                 worker.postMessage({ type: 'clear' });
             }
@@ -135,21 +155,69 @@ const UploadPage = (() => {
         window.addEventListener('resize', () => drawProgressBar(progressValue));
     }
 
-    /** Restore upload status from IndexedDB on page load. */
+    /** Restore upload status from IndexedDB and prime cache/worker on load. */
     async function restoreState() {
-        const files = await Storage.getAllFiles();
-        if (typeof DataCache !== 'undefined') {
-            DataCache.set('storage:files', files);
+        if (restorePromise) {
+            return restorePromise;
         }
-        const fileMap = getFileMap(files);
-        primeAnalyticsWorker(fileMap);
-        const analyticsReady = await hasAnalyticsData();
-        updateStatus({ fileMap, analyticsReady });
+
+        restorePromise = (async () => {
+            await waitForSessionCleanup();
+            const files = await Storage.getAllFiles();
+            if (typeof DataCache !== 'undefined') {
+                DataCache.set('storage:files', files);
+            }
+            const fileMap = getFileMap(files);
+            scheduleAnalyticsWorkerPrime(fileMap, { priority: 'idle' });
+            const analyticsReady = await hasAnalyticsData();
+            updateStatus({ fileMap, analyticsReady });
+        })();
+
+        try {
+            await restorePromise;
+        } finally {
+            restorePromise = null;
+            restoredOnce = true;
+        }
+    }
+
+    /**
+     * Wait for non-blocking session cleanup to finish when present.
+     * @returns {Promise<void>}
+     */
+    async function waitForSessionCleanup() {
+        const cleanupPromise = window[SESSION_CLEANUP_PROMISE_KEY];
+        if (!cleanupPromise || typeof cleanupPromise.then !== 'function') {
+            return;
+        }
+        try {
+            await cleanupPromise;
+        } catch {
+            return;
+        }
+    }
+
+    /** Sync upload status from cache when available, otherwise restore from storage. */
+    function syncStatusFromCache() {
+        if (typeof DataCache === 'undefined') {
+            restoreState();
+            return;
+        }
+
+        const files = DataCache.get('storage:files');
+        const analyticsReady = getAnalyticsReadyFromCache();
+
+        if (!files || analyticsReady === null) {
+            restoreState();
+            return;
+        }
+
+        updateStatus({ fileMap: getFileMap(files), analyticsReady });
     }
 
     /**
      * Handle dragover to show drop zone highlight.
-     * @param {DragEvent} event
+     * @param {DragEvent} event - Dragover event
      */
     function handleDragOver(event) {
         event.preventDefault();
@@ -158,7 +226,7 @@ const UploadPage = (() => {
 
     /**
      * Handle dragleave to remove drop zone highlight.
-     * @param {DragEvent} event
+     * @param {DragEvent} event - Dragleave event
      */
     function handleDragLeave(event) {
         event.preventDefault();
@@ -167,7 +235,7 @@ const UploadPage = (() => {
 
     /**
      * Handle file drop event.
-     * @param {DragEvent} event
+     * @param {DragEvent} event - Drop event
      */
     function handleDrop(event) {
         event.preventDefault();
@@ -180,7 +248,7 @@ const UploadPage = (() => {
 
     /**
      * Handle file input change event.
-     * @param {Event} event
+     * @param {Event} event - File input change event
      */
     function handleFileInput(event) {
         const files = Array.from(event.target.files || []);
@@ -192,7 +260,7 @@ const UploadPage = (() => {
 
     /**
      * Read CSV files and send them to the worker for processing.
-     * @param {File[]} files
+     * @param {File[]} files - Selected files
      */
     function processFiles(files) {
         const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
@@ -238,7 +306,7 @@ const UploadPage = (() => {
 
     /**
      * Read a File object as UTF-8 text.
-     * @param {File} file
+     * @param {File} file - Uploaded file
      * @returns {Promise<string>}
      */
     function readFileAsText(file) {
@@ -252,7 +320,7 @@ const UploadPage = (() => {
 
     /**
      * Handle messages from the analytics worker.
-     * @param {MessageEvent} event
+     * @param {MessageEvent} event - Worker message event
      */
     async function handleWorkerMessage(event) {
         const message = event.data || {};
@@ -298,50 +366,121 @@ const UploadPage = (() => {
         try {
             const text = pending ? pending.text : '';
 
-            await Storage.saveFile(fileType, { name: fileName, text, rowCount });
-            if (payload.analyticsBase) {
-                await Storage.saveAnalytics(payload.analyticsBase);
-            }
+            await persistProcessedFile(fileType, fileName, text, rowCount, payload.analyticsBase);
+            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);
 
-            if (typeof DataCache !== 'undefined') {
-                DataCache.invalidate('storage:');
-                DataCache.invalidate('clean:');
-                DataCache.invalidate('messages:');
-                const files = await Storage.getAllFiles();
-                DataCache.set('storage:files', files);
-                if (fileType === 'messages' || fileType === 'connections') {
-                    const key = fileType === 'messages'
-                        ? 'storage:file:messages'
-                        : 'storage:file:connections';
-                    const match = files.find(file => file.type === fileType) || null;
-                    if (match) {
-                        DataCache.set(key, match);
-                    }
-                }
-                if (payload.analyticsBase) {
-                    DataCache.set('storage:analyticsBase', payload.analyticsBase);
-                }
-                DataCache.notify({ type: 'filesChanged', fileType });
-                if (payload.analyticsBase) {
-                    DataCache.notify({ type: 'analyticsChanged' });
-                }
-            }
-
-            const files = typeof DataCache !== 'undefined'
-                ? (DataCache.get('storage:files') || await Storage.getAllFiles())
-                : await Storage.getAllFiles();
+            const files = await getStoredFilesSnapshot();
             const fileMap = getFileMap(files);
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
             setHint('File loaded successfully.', false);
             if (fileType === 'shares' || fileType === 'comments') {
-                primeAnalyticsWorker(fileMap);
+                scheduleAnalyticsWorkerPrime(fileMap, { priority: 'immediate' });
             }
         } catch {
             setHint('Error saving file data. Please try again.', true);
         } finally {
             completeJob(jobId, fileName);
         }
+    }
+
+    /**
+     * Persist processed file payload in IndexedDB.
+     * @param {string} fileType - Processed file type
+     * @param {string} fileName - Uploaded file name
+     * @param {string} text - Raw CSV text
+     * @param {number} rowCount - Processed row count
+     * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @returns {Promise<void>}
+     */
+    async function persistProcessedFile(fileType, fileName, text, rowCount, analyticsBase) {
+        await Storage.saveFile(fileType, { name: fileName, text, rowCount });
+        if (!analyticsBase) {
+            return;
+        }
+        await Storage.saveAnalytics(analyticsBase);
+    }
+
+    /**
+     * Sync in-memory caches and notify listeners after file persistence.
+     * @param {string} fileType - Processed file type
+     * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @returns {Promise<void>}
+     */
+    async function syncCacheAfterProcessedFile(fileType, analyticsBase) {
+        if (typeof DataCache === 'undefined') {
+            return;
+        }
+
+        DataCache.invalidate('storage:');
+        DataCache.invalidate('clean:');
+        DataCache.invalidate('messages:');
+
+        const files = await Storage.getAllFiles();
+        DataCache.set('storage:files', files);
+        syncTypeSpecificFileCache(fileType, files);
+
+        if (analyticsBase) {
+            DataCache.set('storage:analyticsBase', analyticsBase);
+        }
+
+        DataCache.notify({ type: 'filesChanged', fileType });
+        if (analyticsBase) {
+            DataCache.notify({ type: 'analyticsChanged' });
+        }
+    }
+
+    /**
+     * Sync type-specific file cache entries.
+     * @param {string} fileType - Processed file type
+     * @param {object[]} files - Stored files snapshot
+     */
+    function syncTypeSpecificFileCache(fileType, files) {
+        if (typeof DataCache === 'undefined') {
+            return;
+        }
+
+        const key = getTypeSpecificFileCacheKey(fileType);
+        if (!key) {
+            return;
+        }
+
+        const match = files.find(file => file.type === fileType) || null;
+        if (!match) {
+            return;
+        }
+
+        DataCache.set(key, match);
+    }
+
+    /**
+     * Resolve per-file cache key for messages/connections datasets.
+     * @param {string} fileType - Processed file type
+     * @returns {string|null}
+     */
+    function getTypeSpecificFileCacheKey(fileType) {
+        switch (fileType) {
+            case 'messages':
+                return 'storage:file:messages';
+            case 'connections':
+                return 'storage:file:connections';
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Read files from cache when available, otherwise from storage.
+     * @returns {Promise<object[]>}
+     */
+    async function getStoredFilesSnapshot() {
+        if (typeof DataCache !== 'undefined') {
+            const files = DataCache.get('storage:files');
+            if (files) {
+                return files;
+            }
+        }
+        return Storage.getAllFiles();
     }
 
     /**
@@ -361,16 +500,13 @@ const UploadPage = (() => {
             return null;
         }
 
-        const match = Array.from(pendingFiles.entries()).find(([, pending]) => {
-            return pending.fileName === fileName;
-        });
-        if (!match) {
-            return null;
+        for (const [key, pending] of pendingFiles.entries()) {
+            if (pending.fileName === fileName) {
+                pendingFiles.delete(key);
+                return pending;
+            }
         }
-
-        const [key, pending] = match;
-        pendingFiles.delete(key);
-        return pending;
+        return null;
     }
 
     /** Handle worker-level errors. */
@@ -381,26 +517,11 @@ const UploadPage = (() => {
 
     /**
      * Mark a processing job complete and hide overlay when done.
-     * @param {string|null} jobId - Worker job id
+     * @param {string|null} jobId - Worker job ID
      * @param {string} fileName - Uploaded file name fallback
      */
     function completeJob(jobId, fileName) {
-        const normalizedFileName = String(fileName || '');
-        let resolvedJobId = typeof jobId === 'string' && jobId ? jobId : null;
-
-        if (!resolvedJobId && normalizedFileName) {
-            const match = Array.from(pendingFiles.entries()).find(([, pending]) => {
-                return pending && pending.fileName === normalizedFileName;
-            });
-            if (match) {
-                resolvedJobId = match[0];
-            }
-        }
-
-        if (!resolvedJobId) {
-            const iterator = activeJobs.values().next();
-            resolvedJobId = iterator.done ? null : iterator.value;
-        }
+        const resolvedJobId = resolveJobId(jobId, fileName);
 
         if (!resolvedJobId) {
             checkJobs();
@@ -411,6 +532,55 @@ const UploadPage = (() => {
         clearJobTimeout(resolvedJobId);
         activeJobs.delete(resolvedJobId);
         checkJobs();
+    }
+
+    /**
+     * Resolve a job ID from explicit ID, file name, or active queue fallback.
+     * @param {string|null} jobId - Worker job ID
+     * @param {string} fileName - Uploaded file name fallback
+     * @returns {string|null}
+     */
+    function resolveJobId(jobId, fileName) {
+        const normalizedJobId = typeof jobId === 'string' && jobId ? jobId : null;
+        if (normalizedJobId) {
+            return normalizedJobId;
+        }
+
+        const pendingJobId = resolvePendingJobIdByFileName(fileName);
+        if (pendingJobId) {
+            return pendingJobId;
+        }
+
+        return getFirstActiveJobId();
+    }
+
+    /**
+     * Resolve pending job ID by uploaded file name.
+     * @param {string} fileName - Uploaded file name
+     * @returns {string|null}
+     */
+    function resolvePendingJobIdByFileName(fileName) {
+        const normalizedFileName = String(fileName || '');
+        if (!normalizedFileName) {
+            return null;
+        }
+
+        for (const [key, pending] of pendingFiles.entries()) {
+            if (pending && pending.fileName === normalizedFileName) {
+                return key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve first active job ID as final fallback.
+     * @returns {string|null}
+     */
+    function getFirstActiveJobId() {
+        const iterator = activeJobs.values().next();
+        return iterator.done ? null : iterator.value;
     }
 
     /**
@@ -437,10 +607,9 @@ const UploadPage = (() => {
      * @param {{fileMap: Object<string, object|null>, analyticsReady: boolean}} status
      */
     function updateStatus({ fileMap, analyticsReady }) {
-        updateFileStatus(elements.fileStatusItems.shares, elements.sharesStatus, fileMap.shares);
-        updateFileStatus(elements.fileStatusItems.comments, elements.commentsStatus, fileMap.comments);
-        updateFileStatus(elements.fileStatusItems.messages, elements.messagesStatus, fileMap.messages);
-        updateFileStatus(elements.fileStatusItems.connections, elements.connectionsStatus, fileMap.connections);
+        STATUS_ITEMS.forEach(({ type, item, label }) => {
+            updateFileStatus(item, label, fileMap[type]);
+        });
 
         const hasAny = TRACKED_TYPES.some(type => Boolean(fileMap[type]));
         const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
@@ -468,7 +637,7 @@ const UploadPage = (() => {
     function getFileMap(files) {
         const map = createEmptyFileMap();
         files.forEach(file => {
-            if (TRACKED_TYPES.includes(file.type)) {
+            if (TRACKED_TYPES_SET.has(file.type)) {
                 map[file.type] = file;
             }
         });
@@ -510,11 +679,29 @@ const UploadPage = (() => {
         );
     }
 
+    /** Read analytics-ready state from cache only. */
+    function getAnalyticsReadyFromCache() {
+        if (typeof DataCache === 'undefined') {
+            return null;
+        }
+        const analyticsBase = DataCache.get('storage:analyticsBase') || null;
+        if (!analyticsBase) {
+            return null;
+        }
+        return Boolean(
+            analyticsBase
+            && analyticsBase.months
+            && Object.keys(analyticsBase.months).length
+        );
+    }
+
     /**
      * Seed worker with existing shares/comments datasets for accurate recompute.
+     * Uses idle scheduling unless priority is immediate.
      * @param {{shares: object|null, comments: object|null}} fileMap - Stored files map
+     * @param {{priority?: 'idle'|'immediate'}} [options] - Scheduling options
      */
-    function primeAnalyticsWorker(fileMap) {
+    function scheduleAnalyticsWorkerPrime(fileMap, options) {
         if (!worker) {
             return;
         }
@@ -523,25 +710,75 @@ const UploadPage = (() => {
         const commentsCsv = fileMap.comments ? fileMap.comments.text : '';
         if (!sharesCsv && !commentsCsv) {
             lastPrimedSignature = null;
+            pendingPrimePayload = null;
+            clearPrimeSchedule();
             return;
         }
 
         const signature = `${sharesCsv.length}:${commentsCsv.length}`;
         if (signature === lastPrimedSignature) {
+            pendingPrimePayload = null;
+            clearPrimeSchedule();
             return;
         }
-        lastPrimedSignature = signature;
+
+        pendingPrimePayload = { sharesCsv, commentsCsv, signature };
+        const priority = options && options.priority ? options.priority : 'idle';
+        if (priority === 'immediate') {
+            clearPrimeSchedule();
+            primeAnalyticsWorkerNow();
+            return;
+        }
+
+        if (primeTimerId || primeIdleId) {
+            return;
+        }
+
+        if (typeof requestIdleCallback === 'function') {
+            primeIdleId = requestIdleCallback(() => {
+                primeIdleId = null;
+                primeAnalyticsWorkerNow();
+            }, { timeout: 1500 });
+            return;
+        }
+
+        primeTimerId = window.setTimeout(() => {
+            primeTimerId = null;
+            primeAnalyticsWorkerNow();
+        }, 250);
+    }
+
+    /** Prime analytics worker immediately with pending payload when available. */
+    function primeAnalyticsWorkerNow() {
+        if (!worker || !pendingPrimePayload) {
+            return;
+        }
+        const payload = pendingPrimePayload;
+        pendingPrimePayload = null;
+        lastPrimedSignature = payload.signature;
 
         worker.postMessage({
             type: 'restoreFiles',
-            payload: { sharesCsv, commentsCsv }
+            payload: { sharesCsv: payload.sharesCsv, commentsCsv: payload.commentsCsv }
         });
+    }
+
+    /** Clear all queued analytics prime timers and idle callbacks. */
+    function clearPrimeSchedule() {
+        if (primeTimerId) {
+            window.clearTimeout(primeTimerId);
+            primeTimerId = null;
+        }
+        if (primeIdleId && typeof cancelIdleCallback === 'function') {
+            cancelIdleCallback(primeIdleId);
+        }
+        primeIdleId = null;
     }
 
     /**
      * Update the upload hint text and error state.
-     * @param {string} message
-     * @param {boolean} isError
+     * @param {string} message - Hint text
+     * @param {boolean} isError - Whether the hint is an error
      */
     function setHint(message, isError) {
         elements.uploadHint.textContent = message;

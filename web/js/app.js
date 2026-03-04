@@ -52,6 +52,7 @@
             }
         }
     ]);
+    const SESSION_CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
     /** Initialize router and screen lifecycle wiring. */
     async function init() {
@@ -63,13 +64,7 @@
         registerRoutes();
         bindRouteLinks();
 
-        if (typeof Session !== 'undefined' && Session.cleanIfStale) {
-            try {
-                await Session.cleanIfStale();
-            } catch {
-                // Ignore session cleanup failures to avoid blocking startup.
-            }
-        }
+        runSessionCleanup();
 
         AppRouter.subscribe(({ to }) => {
             ScreenManager.activate(to.name, to.params);
@@ -82,6 +77,21 @@
         AppRouter.start('home');
     }
 
+    /** Run session cleanup without blocking initial render. */
+    function runSessionCleanup() {
+        if (typeof Session === 'undefined' || !Session.cleanIfStale) {
+            window[SESSION_CLEANUP_PROMISE_KEY] = Promise.resolve(false);
+            return;
+        }
+
+        window[SESSION_CLEANUP_PROMISE_KEY] = Promise.resolve()
+            .then(() => Session.cleanIfStale())
+            .catch(() => {
+                // Ignore session cleanup failures to avoid blocking startup.
+                return false;
+            });
+    }
+
     /** Initialize tutorial module when available. */
     function initTutorial() {
         if (typeof Tutorial === 'undefined' || typeof Tutorial.init !== 'function') {
@@ -91,13 +101,34 @@
         Tutorial.init();
     }
 
-    /** Notify tutorial module of route changes when available. */
+    /**
+     * Notify tutorial module of route changes when available.
+     * @param {string} routeName - Active route name
+     */
     function notifyTutorialRouteChange(routeName) {
         if (typeof Tutorial === 'undefined' || typeof Tutorial.onRouteChange !== 'function') {
             return;
         }
 
         Tutorial.onRouteChange(routeName);
+    }
+
+    /**
+     * Check whether a click includes modifier keys.
+     * @param {MouseEvent} event - Click event
+     * @returns {boolean}
+     */
+    function isModifiedClick(event) {
+        return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+    }
+
+    /**
+     * Check whether click came from primary mouse button.
+     * @param {MouseEvent} event - Click event
+     * @returns {boolean}
+     */
+    function isPrimaryButtonClick(event) {
+        return event.button === 0;
     }
 
     /** Register route names in router + screen manager. */
@@ -119,10 +150,7 @@
                 return;
             }
 
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                return;
-            }
-            if (event.button !== 0) {
+            if (isModifiedClick(event) || !isPrimaryButtonClick(event)) {
                 return;
             }
 

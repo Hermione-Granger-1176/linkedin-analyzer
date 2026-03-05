@@ -41,6 +41,13 @@ Supported range values:
 
 - `1m`, `3m`, `6m`, `12m`, `all`
 
+## Delegated Click Safety
+
+Delegated click handlers use `DomEvents.closest(event, selector)` from `web/src/dom-events.js`.
+
+- Prevents runtime errors when `event.target` is not an `Element` (for example text-node targets).
+- Keeps delegated handler guards consistent across screens.
+
 ## Guided Tutorials
 
 Each screen has its own guided tutorial with first-visit auto start after a short delay (~1.5s):
@@ -128,7 +135,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
-- Service worker uses network-first for the HTML shell and stale-while-revalidate for static assets to auto-refresh users onto newer builds.
+- Service worker caches navigation with NetworkFirst, scripts/styles with StaleWhileRevalidate, and fonts/images with CacheFirst (30-day TTL) to auto-refresh users onto newer builds.
 - **Clear All** removes stored uploads/analytics from IndexedDB and clears in-memory cache.
 - Fonts are self-hosted (no external Google Fonts dependency).
 
@@ -145,18 +152,29 @@ Your files never leave your browser.
 ## Running Locally
 
 ```bash
-# Using Python
-python3 -m http.server 3000 --directory web
-
-# Using npx
-npx serve web -l 3000
+npm run dev
 ```
 
-Then open `http://localhost:3000`.
+Then open the Vite URL printed in the terminal.
 
 ## Deployment
 
-Deploy `web/` to any static host (Vercel, Netlify, GitHub Pages).
+Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages).
+
+Recommended production setup:
+
+1. Build with `npm run build`
+2. Publish the `web/dist/` output
+3. Set environment variables:
+   - `VITE_SENTRY_DSN` (optional but recommended)
+   - `VITE_APP_RELEASE` (recommended for release-level error tracking)
+4. Verify security headers from `vercel.json` in deployed responses
+
+## Browser Compatibility
+
+- Build target follows `browserslist` from `package.json`: `> 0.5%, last 2 versions, not dead`
+- Playwright E2E coverage currently runs on Chromium and Firefox
+- Hash routing (`#...`) avoids server-side rewrite requirements
 
 ## Icons and Meta
 
@@ -168,8 +186,8 @@ Browsers pick the best format automatically:
 
 | File                          | Size  | Used by                         |
 | ----------------------------- | ----- | ------------------------------- |
-| `assets/icon.svg`             | any   | Modern browsers (Chrome, FF)    |
-| `assets/favicon.ico`          | 32px  | Legacy browsers (older IE/Edge) |
+| `public/assets/icon.svg`      | any   | Modern browsers (Chrome, FF)    |
+| `public/assets/favicon.ico`   | 32px  | Legacy browsers (older IE/Edge) |
 | `assets/apple-touch-icon.png` | 180px | iOS home screen bookmark        |
 | `assets/icon-192.png`         | 192px | Android home screen, PWA        |
 | `assets/icon-512.png`         | 512px | PWA splash screen, OG cards     |
@@ -188,4 +206,4 @@ Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the b
 
 ### robots.txt
 
-`web/robots.txt` allows all crawlers.
+`web/public/robots.txt` allows all crawlers.

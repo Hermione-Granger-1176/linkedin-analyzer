@@ -82,11 +82,10 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         normalize_required_columns(df, config.required_columns)
         if config.required_columns:
             df = df.dropna(subset=config.required_columns)
-        if config.drop_if_all_missing:
-            drop_columns = [col for col in config.drop_if_all_missing if col in df.columns]
-            if drop_columns:
-                normalize_required_columns(df, drop_columns)
-                df = df.dropna(subset=drop_columns, how="all")
+        drop_columns = [col for col in (config.drop_if_all_missing or []) if col in df.columns]
+        if drop_columns:
+            normalize_required_columns(df, drop_columns)
+            df = df.dropna(subset=drop_columns, how="all")
 
         for col_config in config.columns:
             if col_config.name not in df.columns:

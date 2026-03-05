@@ -4,25 +4,30 @@
 linkedin-analyzer/
 ├── web/                                # Web app (SPA)
 │   ├── index.html                      # SPA shell containing all screens
-│   ├── robots.txt                      # Search engine directives
-│   ├── assets/
-│   │   ├── icon.svg                    # SVG favicon (modern browsers)
-│   │   ├── favicon.ico                 # ICO favicon (legacy browsers)
-│   │   ├── apple-touch-icon.png        # 180px icon (iOS home screen)
-│   │   ├── icon-192.png                # 192px icon (Android/PWA)
-│   │   ├── icon-512.png                # 512px icon (PWA splash/OG cards)
-│   │   └── manifest.webmanifest        # PWA web app manifest
-│   ├── fonts/
-│   │   ├── PatrickHand-Regular.woff2   # Self-hosted Patrick Hand font
-│   │   └── Caveat-Regular.woff2        # Self-hosted Caveat font
-│   ├── css/
-│   │   ├── variables.css               # Theme variables + @font-face (light/dark)
-│   │   ├── style.css                   # Main styles
-│   │   ├── screens.css                 # Screen transitions + page animation rules
-│   │   ├── sketch.css                  # Hand-drawn effects
-│   │   └── tutorial.css                # Tutorial overlays, popovers, and mini tips
-│   ├── js/
+│   ├── public/
+│   │   ├── assets/
+│   │   │   ├── icon.svg                # SVG favicon (modern browsers)
+│   │   │   ├── favicon.ico             # ICO favicon (legacy browsers)
+│   │   │   ├── apple-touch-icon.png    # 180px icon (iOS home screen)
+│   │   │   ├── icon-192.png            # 192px icon (Android/PWA)
+│   │   │   ├── icon-512.png            # 512px icon (PWA splash/OG cards)
+│   │   │   └── manifest.webmanifest    # PWA web app manifest
+│   │   ├── fonts/
+│   │   │   ├── PatrickHand-Regular.woff2 # Self-hosted Patrick Hand font
+│   │   │   └── Caveat-Regular.woff2    # Self-hosted Caveat font
+│   │   └── robots.txt                  # Search engine directives
+│   ├── src/
+│   │   ├── css/
+│   │   │   ├── variables.css           # Theme variables + @font-face (light/dark)
+│   │   │   ├── style.css               # Main styles
+│   │   │   ├── screens.css             # Screen transitions + page animation rules
+│   │   │   ├── sketch.css              # Hand-drawn effects
+│   │   │   └── tutorial.css            # Tutorial overlays, popovers, and mini tips
+│   │   ├── dom-events.js               # Delegated DOM event target helpers
 │   │   ├── runtime.js                  # Global error handler
+│   │   ├── sentry.js                   # Sentry error reporting integration
+│   │   ├── telemetry.js                # Web-vitals and perf telemetry
+│   │   ├── session.js                  # Session management
 │   │   ├── theme.js                    # Theme toggle
 │   │   ├── decorations.js              # Background doodles (Rough.js)
 │   │   ├── storage.js                  # IndexedDB helpers
@@ -41,12 +46,15 @@ linkedin-analyzer/
 │   │   ├── connections-worker.js       # Worker for connections network analytics
 │   │   ├── connections-ui.js           # Connections screen controller
 │   │   ├── messages-worker.js          # Worker for messages/connections parsing
+│   │   ├── messages-analytics.js       # Messages analytics computations
 │   │   ├── messages-insights.js        # Messages screen controller
 │   │   ├── insights-ui.js              # Insights screen controller
 │   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
 │   │   ├── tutorial.js                 # Tutorial engine
-│   │   └── charts.js                   # Canvas chart rendering (incl. PNG export)
-│   ├── sw.js                           # Service Worker for PWA offline caching
+│   │   ├── charts.js                   # Canvas chart rendering (incl. PNG export)
+│   │   ├── worker-contracts.js         # Shared worker message contracts
+│   │   ├── ui/                         # Reusable UI modules
+│   │   └── sw.js                       # Service Worker for PWA offline caching
 │   └── tests/                          # Web tests
 │
 ├── src/linkedin_analyzer/              # Python package
@@ -85,38 +93,38 @@ linkedin-analyzer/
 
 ### Web App Core
 
-| File                        | Purpose                                                        |
-| --------------------------- | -------------------------------------------------------------- |
-| `web/js/router.js`          | Hash route parsing, URL query params, shared param propagation |
-| `web/js/screen-manager.js`  | Screen transitions and controller lifecycle                    |
-| `web/js/app.js`             | Route registration and bootstrapping                           |
-| `web/js/loading-overlay.js` | Global content loading overlay + blur handling                 |
-| `web/js/data-cache.js`      | In-memory cache and cache notifications                        |
-| `web/js/session.js`         | Session TTL cleanup on startup                                 |
+| File                         | Purpose                                                        |
+| ---------------------------- | -------------------------------------------------------------- |
+| `web/src/router.js`          | Hash route parsing, URL query params, shared param propagation |
+| `web/src/screen-manager.js`  | Screen transitions and controller lifecycle                    |
+| `web/src/app.js`             | Route registration and bootstrapping                           |
+| `web/src/loading-overlay.js` | Global content loading overlay + blur handling                 |
+| `web/src/data-cache.js`      | In-memory cache and cache notifications                        |
+| `web/src/session.js`         | Session TTL cleanup on startup                                 |
 
 ### Assets & Meta
 
-| File                              | Purpose                                        |
-| --------------------------------- | ---------------------------------------------- |
-| `web/assets/icon.svg`             | SVG favicon served to modern browsers          |
-| `web/assets/favicon.ico`          | 32px ICO fallback for legacy browsers          |
-| `web/assets/apple-touch-icon.png` | 180px PNG for iOS home screen bookmark         |
-| `web/assets/icon-192.png`         | 192px PNG for Android and PWA icon             |
-| `web/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards   |
-| `web/assets/manifest.webmanifest` | PWA manifest (name, icons, theme, display)     |
-| `web/robots.txt`                  | Allows all crawlers                            |
-| `web/index.html` `<head>`         | OG, Twitter Card, theme-color, and icon `link` |
+| File                                     | Purpose                                        |
+| ---------------------------------------- | ---------------------------------------------- |
+| `web/public/assets/icon.svg`             | SVG favicon served to modern browsers          |
+| `web/public/assets/favicon.ico`          | 32px ICO fallback for legacy browsers          |
+| `web/public/assets/apple-touch-icon.png` | 180px PNG for iOS home screen bookmark         |
+| `web/public/assets/icon-192.png`         | 192px PNG for Android and PWA icon             |
+| `web/public/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards   |
+| `web/public/assets/manifest.webmanifest` | PWA manifest (name, icons, theme, display)     |
+| `web/public/robots.txt`                  | Allows all crawlers                            |
+| `web/index.html` `<head>`                | OG, Twitter Card, theme-color, and icon `link` |
 
 ### Processing
 
-| File                           | Purpose                                               |
-| ------------------------------ | ----------------------------------------------------- |
-| `web/js/cleaner.js`            | CSV parsing/cleaning logic used by web workers and UI |
-| `web/js/analytics-worker.js`   | Builds analytics views off main thread                |
-| `web/js/connections-worker.js` | Parses connections and computes network analytics     |
-| `web/js/messages-worker.js`    | Parses messages/connections off main thread           |
-| `web/js/messages-analytics.js` | Shared messages analytics helpers for UI + worker     |
-| `web/js/excel.js`              | `.xlsx` generation and download helpers               |
+| File                            | Purpose                                               |
+| ------------------------------- | ----------------------------------------------------- |
+| `web/src/cleaner.js`            | CSV parsing/cleaning logic used by web workers and UI |
+| `web/src/analytics-worker.js`   | Builds analytics views off main thread                |
+| `web/src/connections-worker.js` | Parses connections and computes network analytics     |
+| `web/src/messages-worker.js`    | Parses messages/connections off main thread           |
+| `web/src/messages-analytics.js` | Shared messages analytics helpers for UI + worker     |
+| `web/src/excel.js`              | `.xlsx` generation and download helpers               |
 
 ### Python CLI
 

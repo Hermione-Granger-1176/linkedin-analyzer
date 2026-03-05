@@ -6,13 +6,19 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "npx serve web -l 3000",
-    "preview": "npx serve web -l 3000",
-    "lint": "npm run lint:web",
-    "test:web": "node --test web/tests/*.test.js",
-    "lint:web": "eslint \"web/js/**/*.js\" \"web/tests/**/*.js\"",
-    "test": "npm run test:web",
-    "ci:web": "npm run lint:web && npm run test:web"
+    "dev": "vite --config web/vite.config.js",
+    "build": "vite build --config web/vite.config.js",
+    "preview": "vite preview --config web/vite.config.js",
+    "format": "prettier --no-error-on-unmatched-pattern --write \"*.{json,md,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml}\" \"web/**/*.json\"",
+    "format:check": "prettier --no-error-on-unmatched-pattern --check \"*.{json,md,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml}\" \"web/**/*.json\"",
+    "lint": "eslint \"web/src/**/*.js\" \"web/tests/**/*.js\"",
+    "typecheck:web": "tsc --noEmit --project jsconfig.json",
+    "test": "vitest run --config web/vitest.config.js --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:install": "playwright install chromium firefox",
+    "test:e2e:ui": "playwright test --ui",
+    "ci:web": "npm run format:check && npm run lint && npm run typecheck:web && npm run test && npm run build"
   },
   "keywords": [
     "linkedin",
@@ -28,8 +34,29 @@
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
+  "browserslist": "> 0.5%, last 2 versions, not dead",
+  "overrides": {
+    "serialize-javascript": "^7.0.3"
+  },
+  "dependencies": {
+    "@sentry/browser": "^9.5.0",
+    "roughjs": "^4.6.6",
+    "web-vitals": "^4.2.4",
+    "xlsx": "^0.18.5"
+  },
   "devDependencies": {
-    "eslint": "^10.0.2",
-    "globals": "^17.4.0"
+    "@playwright/test": "^1.56.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.3",
+    "eslint-plugin-import-x": "^4.16.1",
+    "eslint-plugin-jsdoc": "^62.7.1",
+    "jsdom": "^26.0.0",
+    "fake-indexeddb": "^6.1.0",
+    "globals": "^17.4.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.0.18"
   }
 }

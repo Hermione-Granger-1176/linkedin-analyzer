@@ -27,9 +27,15 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards, relations
 
 ## Quick start
 
-**Web** — Just open the app and drag your CSV files. No install needed.
+**Web** — Run the Vite dev server and open the local URL:
+
+```bash
+cp .env.example .env  # optional; set VITE_SENTRY_DSN + VITE_APP_RELEASE for observability
+npm run dev
+```
 
 **CLI** — For automation:
+
 ```bash
 pip install -e .
 linkedin-analyzer shares
@@ -51,6 +57,7 @@ linkedin-analyzer all
 </p>
 
 **Web app**
+
 <p>
   <img src="https://img.shields.io/badge/Rough.js-000000?style=flat" alt="Rough.js">
   <img src="https://img.shields.io/badge/Canvas_API-FF6384?style=flat" alt="Canvas API">
@@ -60,6 +67,7 @@ linkedin-analyzer all
 </p>
 
 **Python CLI**
+
 <p>
   <img src="https://img.shields.io/badge/openpyxl-217346?style=flat" alt="openpyxl">
   <img src="https://img.shields.io/badge/argparse-4EAA25?style=flat" alt="argparse">
@@ -67,6 +75,7 @@ linkedin-analyzer all
 </p>
 
 **Dev & CI**
+
 <p>
   <img src="https://img.shields.io/badge/pytest-0A9EDC?style=flat&logo=pytest&logoColor=white" alt="pytest">
   <img src="https://img.shields.io/badge/Ruff-D7FF64?style=flat&logo=ruff&logoColor=black" alt="Ruff">
@@ -105,6 +114,9 @@ See the [`docs/`](docs/) folder for:
 - [Development Setup](docs/development.md)
 - [Project Structure](docs/structure.md)
 - [Style Guide](docs/style-guide.md)
+- [Operations and Deployment](docs/operations.md)
+
+Security reporting guidelines: [SECURITY.md](SECURITY.md)
 
 <br>
 

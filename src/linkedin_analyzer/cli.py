@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from linkedin_analyzer import __version__
 from linkedin_analyzer.cleaners.comments import clean_comments
 from linkedin_analyzer.cleaners.connections import clean_connections
 from linkedin_analyzer.cleaners.messages import clean_messages
@@ -138,27 +139,27 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Clean Shares.csv and export to Shares.xlsx
-  linkedin-analyzer shares
+    # Clean Shares.csv and export to Shares.xlsx
+    linkedin-analyzer shares
 
-  # Clean Comments.csv and export to Comments.xlsx
-  linkedin-analyzer comments
+    # Clean Comments.csv and export to Comments.xlsx
+    linkedin-analyzer comments
 
-  # Clean all exports
-  linkedin-analyzer all
+    # Clean all exports
+    linkedin-analyzer all
 
-  # Clean messages and connections
-  linkedin-analyzer messages
-  linkedin-analyzer connections
+    # Clean messages and connections
+    linkedin-analyzer messages
+    linkedin-analyzer connections
 
-  # Specify custom input/output paths
-  linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
+    # Specify custom input/output paths
+    linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
         """,
     )
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 1.0.0",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "--log-level",

@@ -1,0 +1,7 @@
+{
+  "ghsas": ["GHSA-4r6h-8v6p-xvw6", "GHSA-5pgg-2g8v-p4x9"],
+  "modules": ["xlsx"],
+  "notes": {
+    "xlsx": "Temporary allowlist: client-side export-only usage. Revisit quarterly and replace when a maintained alternative is adopted."
+  }
+}

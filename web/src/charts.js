@@ -1,12 +1,12 @@
 /* LinkedIn Analyzer - Hand-drawn Charts (Optimized) */
 
-import rough from 'roughjs/bundled/rough.esm.js';
+import rough from "roughjs/bundled/rough.esm.js";
 
 export const SketchCharts = (() => {
-    'use strict';
+    "use strict";
 
-    const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const WEEKLY_TIME_RANGES = new Set(['1m', '3m']);
+    const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const WEEKLY_TIME_RANGES = new Set(["1m", "3m"]);
 
     const registry = new Map();
     const drawRegistry = new Map();
@@ -22,14 +22,14 @@ export const SketchCharts = (() => {
     function getColors() {
         const styles = getComputedStyle(document.documentElement);
         return {
-            text: styles.getPropertyValue('--text-primary').trim(),
-            textSecondary: styles.getPropertyValue('--text-secondary').trim(),
-            border: styles.getPropertyValue('--border-color').trim(),
-            blue: styles.getPropertyValue('--accent-blue').trim(),
-            yellow: styles.getPropertyValue('--accent-yellow').trim(),
-            green: styles.getPropertyValue('--accent-green').trim(),
-            purple: styles.getPropertyValue('--accent-purple').trim(),
-            red: styles.getPropertyValue('--accent-red').trim()
+            text: styles.getPropertyValue("--text-primary").trim(),
+            textSecondary: styles.getPropertyValue("--text-secondary").trim(),
+            border: styles.getPropertyValue("--border-color").trim(),
+            blue: styles.getPropertyValue("--accent-blue").trim(),
+            yellow: styles.getPropertyValue("--accent-yellow").trim(),
+            green: styles.getPropertyValue("--accent-green").trim(),
+            purple: styles.getPropertyValue("--accent-purple").trim(),
+            red: styles.getPropertyValue("--accent-red").trim(),
         };
     }
 
@@ -42,11 +42,13 @@ export const SketchCharts = (() => {
     function resizeCanvas(canvas, dprOverride) {
         const rect = canvas.getBoundingClientRect();
         /* v8 ignore next */
-        if (!rect.width || !rect.height) {return null;}
+        if (!rect.width || !rect.height) {
+            return null;
+        }
         const ratio = exportDpr || dprOverride || window.devicePixelRatio || 1;
         canvas.width = rect.width * ratio;
         canvas.height = rect.height * ratio;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         return { ctx, width: rect.width, height: rect.height };
     }
@@ -57,13 +59,15 @@ export const SketchCharts = (() => {
      * @returns {{r: number, g: number, b: number}}
      */
     function hexToRgb(hex) {
-        const cleaned = hex.replace('#', '').trim();
+        const cleaned = hex.replace("#", "").trim();
         /* v8 ignore next */
-        if (cleaned.length !== 6) {return { r: 90, g: 150, b: 213 };}
+        if (cleaned.length !== 6) {
+            return { r: 90, g: 150, b: 213 };
+        }
         return {
             r: parseInt(cleaned.slice(0, 2), 16),
             g: parseInt(cleaned.slice(2, 4), 16),
-            b: parseInt(cleaned.slice(4, 6), 16)
+            b: parseInt(cleaned.slice(4, 6), 16),
         };
     }
 
@@ -98,11 +102,20 @@ export const SketchCharts = (() => {
      */
     function getItemAt(canvas, x, y) {
         const items = registry.get(canvas);
-        if (!items) {return null;}
+        if (!items) {
+            return null;
+        }
         for (const item of items) {
-            if (item.hitTest && item.hitTest(x, y)) {return item;}
-            if (typeof item.x === 'number') {
-                if (x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height) {
+            if (item.hitTest && item.hitTest(x, y)) {
+                return item;
+            }
+            if (typeof item.x === "number") {
+                if (
+                    x >= item.x &&
+                    x <= item.x + item.width &&
+                    y >= item.y &&
+                    y <= item.y + item.height
+                ) {
                     return item;
                 }
             }
@@ -144,17 +157,21 @@ export const SketchCharts = (() => {
     function drawTimeline(canvas, data, timeRange, progress = 1, maxOverride = 0) {
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
-        if (!size) {return;}
+        if (!size) {
+            return;
+        }
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
         drawRegistry.set(canvas, () => drawTimeline(canvas, data, timeRange, 1, maxOverride));
-        if (!data || !data.length) {return;}
+        if (!data || !data.length) {
+            return;
+        }
 
         const padding = { top: 22, right: 12, bottom: 42, left: 40 };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        const maxValue = Math.max(maxOverride || 0, ...data.map(p => p.value), 1);
+        const maxValue = Math.max(maxOverride || 0, ...data.map((p) => p.value), 1);
         const sliceWidth = chartWidth / data.length;
         const baseY = padding.top + chartHeight;
 
@@ -197,8 +214,8 @@ export const SketchCharts = (() => {
         // Primary line
         ctx.strokeStyle = colors.blue;
         ctx.lineWidth = 2.1;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
         /* v8 ignore next */
         if (visiblePoints.length) {
             ctx.beginPath();
@@ -240,55 +257,65 @@ export const SketchCharts = (() => {
         // Value labels
         const showAllValues = data.length <= 24;
         const valueEvery = showAllValues ? 1 : Math.ceil(data.length / 10);
-        ctx.font = '11px Patrick Hand, sans-serif';
+        ctx.font = "11px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.text;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
         visiblePoints.forEach(({ point, x, y, index }) => {
-            if (!showAllValues && index % valueEvery !== 0 && index !== points.length - 1) {return;}
+            if (!showAllValues && index % valueEvery !== 0 && index !== points.length - 1) {
+                return;
+            }
             const labelY = Math.max(padding.top + 10, y - 6);
             ctx.fillText(String(point.value), x, labelY);
         });
 
         // Labels
-        ctx.font = '12px Patrick Hand, sans-serif';
+        ctx.font = "12px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.textSecondary;
         const isWeekly = WEEKLY_TIME_RANGES.has(timeRange);
-        if (timeRange === 'all' && data.length > 18) {
+        if (timeRange === "all" && data.length > 18) {
             let lastYear = null;
             points.forEach(({ point, x }, index) => {
-                const [year, month] = point.key.split('-').map(Number);
+                const [year, month] = point.key.split("-").map(Number);
                 /* v8 ignore next */
-                if (!year || !month) {return;}
+                if (!year || !month) {
+                    return;
+                }
                 const isStart = index === 0;
                 const isJan = month === 1;
                 const isLast = index === points.length - 1;
-                if (!isStart && !isJan && !isLast) {return;}
-                if (year === lastYear && !isLast) {return;}
+                if (!isStart && !isJan && !isLast) {
+                    return;
+                }
+                if (year === lastYear && !isLast) {
+                    return;
+                }
                 lastYear = year;
                 ctx.save();
                 ctx.translate(x, baseY + 20);
                 ctx.rotate(-0.18);
-                ctx.textAlign = 'center';
+                ctx.textAlign = "center";
                 ctx.fillText(String(year), 0, 0);
                 ctx.restore();
             });
         } else {
             const labelEvery = data.length <= 10 ? 1 : Math.ceil(data.length / 8);
             points.forEach(({ point, x }, index) => {
-                if (index % labelEvery !== 0 && index !== points.length - 1) {return;}
-                const labelText = isWeekly ? point.label : point.label.split(' ')[0];
+                if (index % labelEvery !== 0 && index !== points.length - 1) {
+                    return;
+                }
+                const labelText = isWeekly ? point.label : point.label.split(" ")[0];
                 ctx.save();
                 ctx.translate(x, baseY + 18);
                 ctx.rotate(-0.35);
-                ctx.textAlign = 'center';
+                ctx.textAlign = "center";
                 ctx.fillText(labelText, 0, 0);
                 ctx.restore();
             });
         }
 
         const items = points.map(({ point, x }) => ({
-            type: isWeekly ? 'week' : 'month',
+            type: isWeekly ? "week" : "month",
             key: point.key,
             monthKey: point.monthKey || point.key,
             label: point.label,
@@ -297,7 +324,7 @@ export const SketchCharts = (() => {
             y: padding.top,
             width: sliceWidth,
             height: chartHeight,
-            tooltip: `${point.label}: ${point.value}`
+            tooltip: `${point.label}: ${point.value}`,
         }));
 
         register(canvas, items);
@@ -312,23 +339,24 @@ export const SketchCharts = (() => {
     function drawTopics(canvas, data, progress = 1) {
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
-        if (!size) {return;}
+        if (!size) {
+            return;
+        }
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
         drawRegistry.set(canvas, () => drawTopics(canvas, data, 1));
-        if (!data || !data.length) {return;}
+        if (!data || !data.length) {
+            return;
+        }
 
-        ctx.font = '13px Patrick Hand, sans-serif';
-        const maxLabelWidth = Math.max(
-            ...data.map(p => ctx.measureText(p.topic).width),
-            60
-        );
+        ctx.font = "13px Patrick Hand, sans-serif";
+        const maxLabelWidth = Math.max(...data.map((p) => ctx.measureText(p.topic).width), 60);
         const leftPad = Math.min(Math.ceil(maxLabelWidth) + 16, Math.floor(width * 0.4));
         const padding = { top: 10, right: 10, bottom: 10, left: leftPad };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        const maxValue = Math.max(...data.map(p => p.count), 1);
+        const maxValue = Math.max(...data.map((p) => p.count), 1);
         const barHeight = Math.min(24, chartHeight / data.length - 6);
         const items = [];
 
@@ -350,17 +378,21 @@ export const SketchCharts = (() => {
             sketchyRect(ctx, padding.left, y, bw, barHeight, colors.purple);
 
             ctx.fillStyle = colors.text;
-            ctx.textAlign = 'right';
+            ctx.textAlign = "right";
             let label = point.topic;
             const maxLabelSpace = padding.left - 12;
-            while (label.length > 1 && ctx.measureText(label).width > maxLabelSpace) {
-                label = label.slice(0, -1);
+            for (
+                ;
+                label.length > 1 && ctx.measureText(label).width > maxLabelSpace;
+                label = label.slice(0, -1)
+            ) {}
+            if (label !== point.topic) {
+                label += "\u2026";
             }
-            if (label !== point.topic) {label += '\u2026';}
             ctx.fillText(label, padding.left - 8, y + barHeight - 6);
 
             items.push({
-                type: 'topic',
+                type: "topic",
                 key: point.topic,
                 label: point.topic,
                 value: point.count,
@@ -368,7 +400,7 @@ export const SketchCharts = (() => {
                 y,
                 width: bw,
                 height: barHeight,
-                tooltip: `${point.topic}: ${point.count}`
+                tooltip: `${point.topic}: ${point.count}`,
             });
         });
 
@@ -383,12 +415,16 @@ export const SketchCharts = (() => {
     function drawHeatmap(canvas, grid) {
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
-        if (!size) {return;}
+        if (!size) {
+            return;
+        }
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
         drawRegistry.set(canvas, () => drawHeatmap(canvas, grid));
-        if (!grid || !grid.length) {return;}
+        if (!grid || !grid.length) {
+            return;
+        }
 
         const padding = { top: 20, right: 20, bottom: 26, left: 44 };
         const chartWidth = width - padding.left - padding.right;
@@ -399,7 +435,7 @@ export const SketchCharts = (() => {
         const maxValue = Math.max(...flat, 1);
         const baseColor = hexToRgb(colors.blue);
 
-        ctx.font = '11px Patrick Hand, sans-serif';
+        ctx.font = "11px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.textSecondary;
 
         // Day labels
@@ -409,7 +445,11 @@ export const SketchCharts = (() => {
 
         // Hour labels
         for (let hour = 0; hour < 24; hour += 3) {
-            ctx.fillText(String(hour).padStart(2, '0'), padding.left + hour * cellWidth + 2, height - 6);
+            ctx.fillText(
+                String(hour).padStart(2, "0"),
+                padding.left + hour * cellWidth + 2,
+                height - 6,
+            );
         }
 
         const items = [];
@@ -425,11 +465,14 @@ export const SketchCharts = (() => {
                 ctx.fillRect(x, y, cellWidth, cellHeight);
 
                 items.push({
-                    type: 'heatmap',
-                    day, hour, x, y,
+                    type: "heatmap",
+                    day,
+                    hour,
+                    x,
+                    y,
                     width: cellWidth,
                     height: cellHeight,
-                    tooltip: `${DAY_LABELS[day]} ${String(hour).padStart(2, '0')}:00 - ${value}`
+                    tooltip: `${DAY_LABELS[day]} ${String(hour).padStart(2, "0")}:00 - ${value}`,
                 });
             }
         }
@@ -458,7 +501,7 @@ export const SketchCharts = (() => {
             rc.rectangle(padding.left, padding.top, chartWidth, chartHeight, {
                 stroke: colors.border,
                 strokeWidth: 1.2,
-                roughness: 1.4
+                roughness: 1.4,
             });
         }
 
@@ -474,23 +517,27 @@ export const SketchCharts = (() => {
     function drawDonut(canvas, mix, progress = 1) {
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
-        if (!size) {return;}
+        if (!size) {
+            return;
+        }
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
         drawRegistry.set(canvas, () => drawDonut(canvas, mix, 1));
-        if (!mix) {return;}
+        if (!mix) {
+            return;
+        }
 
         const values = [
-            { label: 'Text', value: mix.textOnly, color: colors.green },
-            { label: 'Links', value: mix.links, color: colors.blue },
-            { label: 'Media', value: mix.media, color: colors.yellow }
+            { label: "Text", value: mix.textOnly, color: colors.green },
+            { label: "Links", value: mix.links, color: colors.blue },
+            { label: "Media", value: mix.media, color: colors.yellow },
         ];
         const total = values.reduce((sum, item) => sum + item.value, 0);
         if (total === 0) {
-            ctx.font = '14px Patrick Hand, sans-serif';
+            ctx.font = "14px Patrick Hand, sans-serif";
             ctx.fillStyle = colors.textSecondary;
-            ctx.fillText('No share data yet', 20, height / 2);
+            ctx.fillText("No share data yet", 20, height / 2);
             return;
         }
 
@@ -503,8 +550,10 @@ export const SketchCharts = (() => {
         const items = [];
 
         // Draw segments with simple canvas (no RoughJS per segment)
-        values.forEach(item => {
-            if (item.value === 0) {return;}
+        values.forEach((item) => {
+            if (item.value === 0) {
+                return;
+            }
             const angle = (item.value / total) * Math.PI * 2 * progress;
             const segmentStart = startAngle;
             const segmentEnd = startAngle + angle;
@@ -527,7 +576,7 @@ export const SketchCharts = (() => {
             ctx.stroke();
 
             items.push({
-                type: 'mix',
+                type: "mix",
                 label: item.label,
                 value: item.value,
                 tooltip: `${item.label}: ${item.value}`,
@@ -535,24 +584,29 @@ export const SketchCharts = (() => {
                     const dx = x - centerX;
                     const dy = y - centerY;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < innerRadius || dist > radius) {return false;}
+                    if (dist < innerRadius || dist > radius) {
+                        return false;
+                    }
                     let anglePoint = Math.atan2(dy, dx);
-                    if (anglePoint < -Math.PI / 2) {anglePoint += Math.PI * 2;}
-                    const ns = segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
+                    if (anglePoint < -Math.PI / 2) {
+                        anglePoint += Math.PI * 2;
+                    }
+                    const ns =
+                        segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
                     const ne = segmentEnd < -Math.PI / 2 ? segmentEnd + Math.PI * 2 : segmentEnd;
                     return anglePoint >= ns && anglePoint <= ne;
-                }
+                },
             });
 
             startAngle = segmentEnd;
         });
 
         // Cut out center
-        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
         ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalCompositeOperation = "source-over";
 
         // Single RoughJS call for outer circle
         if (rough) {
@@ -560,7 +614,7 @@ export const SketchCharts = (() => {
             rc.circle(centerX, centerY, radius * 2, {
                 stroke: colors.border,
                 strokeWidth: 1.2,
-                roughness: 1.5
+                roughness: 1.5,
             });
         }
 
@@ -585,9 +639,13 @@ export const SketchCharts = (() => {
 
         function step(timestamp) {
             /* v8 ignore next */
-            if (myId !== animationId) {return;} // Cancelled
+            if (myId !== animationId) {
+                return;
+            } // Cancelled
             /* v8 ignore next */
-            if (!start) {start = timestamp;}
+            if (!start) {
+                start = timestamp;
+            }
             const elapsed = timestamp - start;
             const progress = Math.min(elapsed / duration, 1);
             drawFn(progress);
@@ -606,10 +664,14 @@ export const SketchCharts = (() => {
      */
     function exportPng(canvas, filename) {
         /* v8 ignore next */
-        if (!canvas) {return;}
+        if (!canvas) {
+            return;
+        }
         const redraw = drawRegistry.get(canvas);
         /* v8 ignore next */
-        if (!redraw) {return;}
+        if (!redraw) {
+            return;
+        }
 
         // Render at high DPR, copy pixels to a temp canvas, restore immediately
         cancelAnimations();
@@ -617,26 +679,28 @@ export const SketchCharts = (() => {
         redraw();
         exportDpr = 0;
 
-        const tempCanvas = document.createElement('canvas');
+        const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
-        tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        tempCanvas.getContext("2d").drawImage(canvas, 0, 0);
 
         // Restore on-screen canvas synchronously — no async gap
         redraw();
 
         // Export from the detached temp canvas (immune to further redraws)
-        tempCanvas.toBlob(blob => {
-            if (!blob) {return;}
+        tempCanvas.toBlob((blob) => {
+            if (!blob) {
+                return;
+            }
             const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
+            const link = document.createElement("a");
             link.href = url;
-            link.download = filename || 'chart.png';
+            link.download = filename || "chart.png";
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-        }, 'image/png');
+        }, "image/png");
     }
 
     return {
@@ -647,6 +711,6 @@ export const SketchCharts = (() => {
         animateDraw,
         cancelAnimations,
         getItemAt,
-        exportPng
+        exportPng,
     };
 })();

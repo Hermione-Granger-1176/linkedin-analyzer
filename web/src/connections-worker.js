@@ -1,9 +1,9 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
-import { LinkedInCleaner } from './cleaner.js';
-import { parseConnectionsWorkerRequest } from './worker-contracts.js';
+import { LinkedInCleaner } from "./cleaner.js";
+import { parseConnectionsWorkerRequest } from "./worker-contracts.js";
 
-/* ── Constants ─────────────────────────────────────────────────────────────── */
+/* -- Constants --------------------------------------------------------------- */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -13,11 +13,21 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * building human-readable month labels in the growth timeline.
  */
 const MONTH_LABELS = Object.freeze([
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
 ]);
 
-/* ── Date helpers ──────────────────────────────────────────────────────────── */
+/* -- Date helpers ------------------------------------------------------------ */
 
 /**
  * Parse a cleaned "Connected On" value into a Date.
@@ -28,17 +38,25 @@ const MONTH_LABELS = Object.freeze([
  * @returns {Date|null} Local-midnight Date, or null if unparseable
  */
 function parseConnectionDate(dateStr) {
-    if (!dateStr || typeof dateStr !== 'string') {return null;}
+    if (!dateStr || typeof dateStr !== "string") {
+        return null;
+    }
 
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) {return null;}
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) {
+        return null;
+    }
 
     const year = Number(parts[0]);
     const month = Number(parts[1]);
     const day = Number(parts[2]);
 
-    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {return null;}
-    if (month < 1 || month > 12 || day < 1 || day > 31) {return null;}
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+        return null;
+    }
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+        return null;
+    }
 
     return new Date(year, month - 1, day);
 }
@@ -47,12 +65,12 @@ function parseConnectionDate(dateStr) {
  * Build a YYYY-MM key from a Date, used as the bucket identifier in the
  * growth timeline so months are naturally sortable.
  *
- * @param {Date} date
+ * @param {Date} date - Date to convert
  * @returns {string} e.g. "2024-01"
  */
 function toMonthKey(date) {
     const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
 }
 
@@ -64,12 +82,12 @@ function toMonthKey(date) {
  * @returns {string} e.g. "Jan 2024"
  */
 function monthKeyToLabel(key) {
-    const [yearStr, monthStr] = key.split('-');
+    const [yearStr, monthStr] = key.split("-");
     const monthIndex = Number(monthStr) - 1;
     return `${MONTH_LABELS[monthIndex]} ${yearStr}`;
 }
 
-/* ── Growth timeline ───────────────────────────────────────────────────────── */
+/* -- Growth timeline --------------------------------------------------------- */
 
 /**
  * Bucket connections by month and fill gaps so the timeline has no missing
@@ -83,13 +101,17 @@ function buildGrowthTimeline(rows) {
     const buckets = new Map();
 
     for (const row of rows) {
-        const date = parseConnectionDate(row['Connected On']);
-        if (!date) {continue;}
+        const date = parseConnectionDate(row["Connected On"]);
+        if (!date) {
+            continue;
+        }
         const key = toMonthKey(date);
         buckets.set(key, (buckets.get(key) || 0) + 1);
     }
 
-    if (buckets.size === 0) {return [];}
+    if (buckets.size === 0) {
+        return [];
+    }
 
     /* Fill gaps between earliest and latest month */
     const sortedKeys = Array.from(buckets.keys()).sort();
@@ -97,26 +119,26 @@ function buildGrowthTimeline(rows) {
     const lastKey = sortedKeys[sortedKeys.length - 1];
 
     const timeline = [];
-    const [startYear, startMonth] = firstKey.split('-').map(Number);
-    const [endYear, endMonth] = lastKey.split('-').map(Number);
+    const [startYear, startMonth] = firstKey.split("-").map(Number);
+    const [endYear, endMonth] = lastKey.split("-").map(Number);
     const monthSpan = (endYear - startYear) * 12 + (endMonth - startMonth);
 
     for (let offset = 0; offset <= monthSpan; offset += 1) {
-        const absoluteMonth = (startMonth - 1) + offset;
+        const absoluteMonth = startMonth - 1 + offset;
         const year = startYear + Math.floor(absoluteMonth / 12);
         const month = (absoluteMonth % 12) + 1;
-        const key = `${year}-${String(month).padStart(2, '0')}`;
+        const key = `${year}-${String(month).padStart(2, "0")}`;
         timeline.push({
             key,
             label: monthKeyToLabel(key),
-            value: buckets.get(key) || 0
+            value: buckets.get(key) || 0,
         });
     }
 
     return timeline;
 }
 
-/* ── Summary stats ─────────────────────────────────────────────────────────── */
+/* -- Summary stats ----------------------------------------------------------- */
 
 /**
  * Compute high-level stats that feed the dashboard stat cards.
@@ -133,22 +155,27 @@ function computeStats(rows) {
     let earliestMs = Infinity;
 
     for (const row of rows) {
-        const date = parseConnectionDate(row['Connected On']);
-        if (!date) {continue;}
+        const date = parseConnectionDate(row["Connected On"]);
+        if (!date) {
+            continue;
+        }
 
         const ms = date.getTime();
-        if (ms < earliestMs) {earliestMs = ms;}
+        if (ms < earliestMs) {
+            earliestMs = ms;
+        }
     }
 
     /* Network age in whole months from earliest connection to now */
-    const networkAgeMonths = earliestMs === Infinity
-        ? 0
-        : Math.max(0, Math.round((now - earliestMs) / (MS_PER_DAY * 30.44)));
+    const networkAgeMonths =
+        earliestMs === Infinity
+            ? 0
+            : Math.max(0, Math.round((now - earliestMs) / (MS_PER_DAY * 30.44)));
 
     return Object.freeze({ total, networkAgeMonths });
 }
 
-/* ── Main processing pipeline ──────────────────────────────────────────────── */
+/* -- Main processing pipeline ------------------------------------------------ */
 
 /**
  * Parse and aggregate a Connections CSV into analytics ready for the UI.
@@ -159,23 +186,23 @@ function computeStats(rows) {
  * @returns {{success: boolean, analytics?: object, rows?: object[], error?: string}}
  */
 function processConnections(connectionsCsv) {
-    if (!connectionsCsv || typeof connectionsCsv !== 'string') {
-        return { success: false, error: 'No connections CSV data provided.' };
+    if (!connectionsCsv || typeof connectionsCsv !== "string") {
+        return { success: false, error: "No connections CSV data provided." };
     }
 
-    const result = LinkedInCleaner.process(connectionsCsv, 'connections');
+    const result = LinkedInCleaner.process(connectionsCsv, "connections");
     if (!result.success) {
-        return { success: false, error: result.error || 'Unable to parse Connections.csv.' };
+        return { success: false, error: result.error || "Unable to parse Connections.csv." };
     }
 
     const rows = result.cleanedData;
     if (!rows.length) {
-        return { success: false, error: 'Connections file contained no valid rows.' };
+        return { success: false, error: "Connections file contained no valid rows." };
     }
 
     const analytics = Object.freeze({
         growthTimeline: buildGrowthTimeline(rows),
-        stats: computeStats(rows)
+        stats: computeStats(rows),
     });
 
     return { success: true, analytics, rows };
@@ -183,47 +210,47 @@ function processConnections(connectionsCsv) {
 
 /**
  * Convert unknown error values into a message string.
- * @param {unknown} error
+ * @param {unknown} error - Error value to normalize
  * @returns {string}
  */
 function toErrorMessage(error) {
     if (error instanceof Error && error.message) {
         return error.message;
     }
-    if (typeof error === 'string' && error) {
+    if (typeof error === "string" && error) {
         return error;
     }
-    return 'Connections worker runtime failure.';
+    return "Connections worker runtime failure.";
 }
 
 /**
  * Post a normalized worker error payload.
- * @param {number|string} requestId
- * @param {unknown} error
+ * @param {number|string} requestId - Worker request identifier
+ * @param {unknown} error - Error value to normalize
  */
 function postWorkerError(requestId, error) {
     self.postMessage({
-        type: 'error',
+        type: "error",
         requestId,
         payload: {
-            message: toErrorMessage(error)
-        }
+            message: toErrorMessage(error),
+        },
     });
 }
 
 /**
  * Extract an error-like value from a worker error event.
- * @param {unknown} event
+ * @param {unknown} event - Worker error event
  * @returns {unknown}
  */
 function extractWorkerError(event) {
-    if (!event || typeof event !== 'object') {
+    if (!event || typeof event !== "object") {
         return undefined;
     }
-    if ('error' in event && event.error) {
+    if ("error" in event && event.error) {
         return event.error;
     }
-    if ('message' in event && event.message) {
+    if ("message" in event && event.message) {
         return event.message;
     }
     return undefined;
@@ -231,28 +258,28 @@ function extractWorkerError(event) {
 
 /**
  * Extract rejection reason from a worker unhandledrejection event.
- * @param {unknown} event
+ * @param {unknown} event - Worker rejection event
  * @returns {unknown}
  */
 function extractWorkerRejection(event) {
-    if (!event || typeof event !== 'object' || !('reason' in event)) {
+    if (!event || typeof event !== "object" || !("reason" in event)) {
         return undefined;
     }
     return event.reason;
 }
 
-/* ── Worker message handler ────────────────────────────────────────────────── */
+/* -- Worker message handler -------------------------------------------------- */
 
-if (typeof self !== 'undefined') {
-    self.addEventListener('message', (event) => {
+if (typeof self !== "undefined") {
+    self.addEventListener("message", (event) => {
         const rawMessage = event.data || {};
-        if (!rawMessage || rawMessage.type !== 'process') {
+        if (!rawMessage || rawMessage.type !== "process") {
             return;
         }
 
         const parsed = parseConnectionsWorkerRequest(rawMessage);
         if (!parsed.valid) {
-            postWorkerError(0, parsed.error || 'Invalid worker request payload.');
+            postWorkerError(0, parsed.error || "Invalid worker request payload.");
             return;
         }
 
@@ -261,25 +288,25 @@ if (typeof self !== 'undefined') {
             const result = processConnections(message.payload.connectionsCsv);
 
             self.postMessage({
-                type: 'processed',
+                type: "processed",
                 requestId: message.requestId,
                 payload: {
                     success: result.success,
                     analytics: result.analytics || null,
                     rows: result.rows || null,
-                    error: result.error || null
-                }
+                    error: result.error || null,
+                },
             });
         } catch (error) {
             postWorkerError(message.requestId, error);
         }
     });
 
-    self.addEventListener('error', event => {
+    self.addEventListener("error", (event) => {
         postWorkerError(0, extractWorkerError(event));
     });
 
-    self.addEventListener('unhandledrejection', event => {
+    self.addEventListener("unhandledrejection", (event) => {
         postWorkerError(0, extractWorkerRejection(event));
     });
 }
@@ -290,5 +317,5 @@ export {
     monthKeyToLabel,
     buildGrowthTimeline,
     computeStats,
-    processConnections
+    processConnections,
 };

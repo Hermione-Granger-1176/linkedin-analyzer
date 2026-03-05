@@ -1,34 +1,32 @@
 /* Insights page logic */
 
-import { DataCache } from './data-cache.js';
-import { LoadingOverlay } from './loading-overlay.js';
-import { AppRouter } from './router.js';
-import { captureError } from './sentry.js';
-import { Session } from './session.js';
-import { Storage } from './storage.js';
-import { parseAnalyticsWorkerMessage } from './worker-contracts.js';
+import { DataCache } from "./data-cache.js";
+import { LoadingOverlay } from "./loading-overlay.js";
+import { AppRouter } from "./router.js";
+import { captureError } from "./sentry.js";
+import { Session } from "./session.js";
+import { Storage } from "./storage.js";
+import { parseAnalyticsWorkerMessage } from "./worker-contracts.js";
 
 export const InsightsPage = (() => {
-    'use strict';
+    "use strict";
 
     const FILTER_DEFAULTS = Object.freeze({
-        timeRange: '12m',
-        topic: 'all',
+        timeRange: "12m",
+        topic: "all",
         monthFocus: null,
         day: null,
         hour: null,
-        shareType: 'all'
+        shareType: "all",
     });
 
-    const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
-    const CACHE_EVENTS = new Set(['analyticsChanged', 'storageCleared', 'filesChanged']);
-    const WORKER_URL = new URL('./analytics-worker.js', import.meta.url);
-
+    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
         hasData: false,
-        currentInsights: null
+        currentInsights: null,
     };
 
     let elements = null;
@@ -97,23 +95,26 @@ export const InsightsPage = (() => {
      */
     function resolveElements() {
         return {
-            timeRangeButtons: document.querySelectorAll('#insightsTimeRangeButtons .filter-btn'),
-            resetFiltersBtn: document.getElementById('insightsResetFiltersBtn'),
-            insightsEmpty: document.getElementById('insightsEmpty'),
-            insightsGrid: document.getElementById('insightsGrid'),
-            insightTip: document.getElementById('insightTip'),
-            insightTipText: document.getElementById('insightTipText')
+            timeRangeButtons: document.querySelectorAll("#insightsTimeRangeButtons .filter-btn"),
+            resetFiltersBtn: document.getElementById("insightsResetFiltersBtn"),
+            insightsEmpty: document.getElementById("insightsEmpty"),
+            insightsGrid: document.getElementById("insightsGrid"),
+            insightTip: document.getElementById("insightTip"),
+            insightTipText: document.getElementById("insightTipText"),
         };
     }
 
     /** Attach event listeners for time range buttons and reset. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach(button => {
-            button.addEventListener('click', () => handleTimeRangeChange(button));
-            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((button) => {
+            button.addEventListener("click", () => handleTimeRangeChange(button));
+            button.setAttribute(
+                "aria-pressed",
+                button.classList.contains("active") ? "true" : "false",
+            );
         });
         if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener('click', resetFilters);
+            elements.resetFiltersBtn.addEventListener("click", resetFilters);
         }
     }
 
@@ -134,21 +135,23 @@ export const InsightsPage = (() => {
 
     /** Create the analytics Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined' || worker) {
+        if (typeof Worker === "undefined" || worker) {
             return;
         }
 
         try {
-            worker = new Worker(WORKER_URL, { type: 'module' });
-            worker.addEventListener('message', handleWorkerMessage);
-            worker.addEventListener('error', handleWorkerError);
+            worker = new Worker(new URL("./analytics-worker.js", import.meta.url), {
+                type: "module",
+            });
+            worker.addEventListener("message", handleWorkerMessage);
+            worker.addEventListener("error", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {
-                module: 'insights-ui',
-                operation: 'init-worker'
+                module: "insights-ui",
+                operation: "init-worker",
             });
-            setEmptyState('Worker blocked', 'Open this page from a local server (not file://).');
+            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
         }
     }
 
@@ -162,37 +165,46 @@ export const InsightsPage = (() => {
             initWorker();
             /* v8 ignore next 5 */
             if (!worker) {
-                setEmptyState('Insights not supported', 'Your browser does not support analytics workers.');
+                setEmptyState(
+                    "Insights not supported",
+                    "Your browser does not support analytics workers.",
+                );
                 showInsightsLoading(false);
                 return;
             }
 
             let analyticsBase = null;
-            analyticsBase = DataCache.get('storage:analyticsBase') || null;
+            analyticsBase = DataCache.get("storage:analyticsBase") || null;
 
             if (!analyticsBase) {
                 analyticsBase = await Storage.getAnalytics();
-                DataCache.set('storage:analyticsBase', analyticsBase);
+                DataCache.set("storage:analyticsBase", analyticsBase);
             }
 
             if (!analyticsBase || !analyticsBase.months) {
-                setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
+                setEmptyState(
+                    "No data available yet",
+                    "Upload Shares.csv or Comments.csv on the Home page.",
+                );
                 needsBaseReload = false;
                 showInsightsLoading(false);
                 return;
             }
 
             worker.postMessage({
-                type: 'initBase',
-                payload: analyticsBase
+                type: "initBase",
+                payload: analyticsBase,
             });
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
-                module: 'insights-ui',
-                operation: 'load-base'
+                module: "insights-ui",
+                operation: "load-base",
             });
-            setEmptyState('Storage error', 'Unable to load saved analytics. Please re-upload your files.');
+            setEmptyState(
+                "Storage error",
+                "Unable to load saved analytics. Please re-upload your files.",
+            );
             showInsightsLoading(false);
         }
     }
@@ -204,9 +216,9 @@ export const InsightsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            captureError(new Error(parsed.error || 'Invalid analytics worker payload.'), {
-                module: 'insights-ui',
-                operation: 'worker-message-parse'
+            captureError(new Error(parsed.error || "Invalid analytics worker payload."), {
+                module: "insights-ui",
+                operation: "worker-message-parse",
             });
             return;
         }
@@ -214,25 +226,31 @@ export const InsightsPage = (() => {
         const message = parsed.value;
 
         switch (message.type) {
-            case 'init':
+            case "init":
                 state.analyticsReady = true;
                 state.hasData = Boolean(message.payload && message.payload.hasData);
                 updateVisibility();
                 requestView();
                 return;
-            case 'view':
+            case "view":
                 if (message.requestId !== pendingViewId) {
                     return;
                 }
                 applyWorkerInsightsPayload(message.payload || {});
                 return;
-            case 'error':
-                captureError(new Error(getWorkerMessage(message.payload, 'Analytics worker error.')), {
-                    module: 'insights-ui',
-                    operation: 'worker-error-payload',
-                    requestId: message.requestId
-                });
-                setEmptyState('Insights error', getWorkerMessage(message.payload, 'Analytics worker error.'));
+            case "error":
+                captureError(
+                    new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
+                    {
+                        module: "insights-ui",
+                        operation: "worker-error-payload",
+                        requestId: message.requestId,
+                    },
+                );
+                setEmptyState(
+                    "Insights error",
+                    getWorkerMessage(message.payload, "Analytics worker error."),
+                );
                 showInsightsLoading(false);
                 return;
             /* v8 ignore next 2 */
@@ -268,11 +286,14 @@ export const InsightsPage = (() => {
      * @param {ErrorEvent} event - Worker error event
      */
     function handleWorkerError(event) {
-        captureError(event && event.error ? event.error : new Error('Insights worker error event'), {
-            module: 'insights-ui',
-            operation: 'worker-error-event'
-        });
-        setEmptyState('Insights worker error', 'Refresh the page and try again.');
+        captureError(
+            event && event.error ? event.error : new Error("Insights worker error event"),
+            {
+                module: "insights-ui",
+                operation: "worker-error-event",
+            },
+        );
+        setEmptyState("Insights worker error", "Refresh the page and try again.");
         showInsightsLoading(false);
     }
 
@@ -286,9 +307,9 @@ export const InsightsPage = (() => {
         const id = ++requestId;
         pendingViewId = id;
         worker.postMessage({
-            type: 'view',
+            type: "view",
             requestId: id,
-            filters: { ...state.filters }
+            filters: { ...state.filters },
         });
     }
 
@@ -297,7 +318,7 @@ export const InsightsPage = (() => {
      * @param {HTMLElement} button - The clicked time range button.
      */
     function handleTimeRangeChange(button) {
-        const range = button.getAttribute('data-range');
+        const range = button.getAttribute("data-range");
         /* v8 ignore next 3 */
         if (!range) {
             return;
@@ -330,17 +351,20 @@ export const InsightsPage = (() => {
      * @param {string} range - The active time range key.
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach(btn => {
-            const isActive = btn.getAttribute('data-range') === range;
-            btn.classList.toggle('active', isActive);
-            btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((btn) => {
+            const isActive = btn.getAttribute("data-range") === range;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
     }
 
     /** Toggle empty state vs insights grid based on data availability. */
     function updateVisibility() {
         if (!state.hasData) {
-            setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
+            setEmptyState(
+                "No data available yet",
+                "Upload Shares.csv or Comments.csv on the Home page.",
+            );
             return;
         }
         hideEmptyState();
@@ -354,10 +378,10 @@ export const InsightsPage = (() => {
         const insights = payload.insights || [];
         const tip = payload.tip || null;
 
-        elements.insightsGrid.innerHTML = '';
-        insights.slice(0, 6).forEach(insight => {
-            const card = document.createElement('div');
-            card.className = 'insight-card';
+        elements.insightsGrid.innerHTML = "";
+        insights.slice(0, 6).forEach((insight) => {
+            const card = document.createElement("div");
+            card.className = "insight-card";
             card.dataset.accent = insight.accent;
             card.innerHTML = `
                 <div class="insight-icon ${insight.accent}">${getInsightIcon(insight.icon)}</div>
@@ -383,8 +407,8 @@ export const InsightsPage = (() => {
      * @param {string} message - The descriptive message for the empty state.
      */
     function setEmptyState(title, message) {
-        const heading = elements.insightsEmpty.querySelector('h2');
-        const text = elements.insightsEmpty.querySelector('p');
+        const heading = elements.insightsEmpty.querySelector("h2");
+        const text = elements.insightsEmpty.querySelector("p");
         /* v8 ignore next 5 */
         if (heading) {
             heading.textContent = title;
@@ -409,7 +433,7 @@ export const InsightsPage = (() => {
      * @returns {string}
      */
     function parseRangeParam(value) {
-        const range = String(value || '').toLowerCase();
+        const range = String(value || "").toLowerCase();
         return RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
     }
 
@@ -431,7 +455,7 @@ export const InsightsPage = (() => {
             return;
         }
         const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== 'insights') {
+        if (!currentRoute || currentRoute.name !== "insights") {
             return;
         }
         AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
@@ -447,10 +471,10 @@ export const InsightsPage = (() => {
         }
 
         if (isLoading) {
-            LoadingOverlay.show('insights');
+            LoadingOverlay.show("insights");
             return;
         }
-        LoadingOverlay.hide('insights');
+        LoadingOverlay.hide("insights");
     }
 
     /** Render temporary skeleton cards while insights are loading. */
@@ -477,7 +501,7 @@ export const InsightsPage = (() => {
      * @returns {string} The HTML-escaped string.
      */
     function escapeHtml(value) {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = value;
         return div.innerHTML;
     }
@@ -497,7 +521,7 @@ export const InsightsPage = (() => {
             handshake: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 36 L24 24 L34 34" fill="none" stroke="currentColor" stroke-width="2"/><path d="M54 36 L40 24 L30 34" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 24 L32 18 L40 24" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
             trophy: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M20 12 H44 V24 C44 32 38 38 32 38 C26 38 20 32 20 24 Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 12 H8 C8 24 14 30 20 30" fill="none" stroke="currentColor" stroke-width="2"/><path d="M48 12 H56 C56 24 50 30 44 30" fill="none" stroke="currentColor" stroke-width="2"/><path d="M28 38 V48 H36 V38" fill="none" stroke="currentColor" stroke-width="2"/><path d="M24 52 H40" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
             calendar: `<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="12" y="16" width="40" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 26 H52" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 12 V20 M42 12 V20" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 36 L28 42 L40 30" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
-            flame: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 10 C36 18 26 22 30 30 C32 34 40 34 40 42 C40 50 34 54 32 54 C26 54 22 48 22 42 C22 34 28 30 26 24" fill="none" stroke="currentColor" stroke-width="2"/></svg>`
+            flame: `<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 10 C36 18 26 22 30 30 C32 34 40 34 40 42 C40 50 34 54 32 54 C26 54 22 48 22 42 C22 34 28 30 26 24" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
         };
         return icons[name] || icons.calendar;
     }
@@ -505,6 +529,6 @@ export const InsightsPage = (() => {
     return {
         init,
         onRouteChange,
-        onRouteLeave
+        onRouteLeave,
     };
 })();

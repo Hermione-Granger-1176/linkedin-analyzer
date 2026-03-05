@@ -1,49 +1,62 @@
 /* Analytics page logic */
 
-import rough from 'roughjs/bundled/rough.esm.js';
+import rough from "roughjs/bundled/rough.esm.js";
 
-import { SketchCharts } from './charts.js';
-import { DataCache } from './data-cache.js';
-import { DomEvents } from './dom-events.js';
-import { LoadingOverlay } from './loading-overlay.js';
-import { AppRouter } from './router.js';
-import { captureError } from './sentry.js';
-import { Session } from './session.js';
-import { Storage } from './storage.js';
-import { hideChartTooltip, showChartTooltip } from './ui/chart-tooltip.js';
-import { parseAnalyticsWorkerMessage } from './worker-contracts.js';
+import { SketchCharts } from "./charts.js";
+import { DataCache } from "./data-cache.js";
+import { DomEvents } from "./dom-events.js";
+import { LoadingOverlay } from "./loading-overlay.js";
+import { AppRouter } from "./router.js";
+import { captureError } from "./sentry.js";
+import { Session } from "./session.js";
+import { Storage } from "./storage.js";
+import { hideChartTooltip, showChartTooltip } from "./ui/chart-tooltip.js";
+import { parseAnalyticsWorkerMessage } from "./worker-contracts.js";
 
 export const AnalyticsPage = (() => {
-    'use strict';
+    "use strict";
 
     const FILTER_DEFAULTS = Object.freeze({
-        timeRange: '12m',
-        topic: 'all',
+        timeRange: "12m",
+        topic: "all",
         monthFocus: null,
         day: null,
         hour: null,
-        shareType: 'all'
+        shareType: "all",
     });
 
-    const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
-    const CACHE_EVENTS = new Set(['analyticsChanged', 'storageCleared', 'filesChanged']);
-    const CLICKABLE_TYPES = new Set(['month', 'week', 'heatmap', 'topic']);
+    const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const MONTH_LABELS = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ];
+    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
+    const CLICKABLE_TYPES = new Set(["month", "week", "heatmap", "topic"]);
 
     const ROUTE_FILTER_PARSERS = Object.freeze({
         range: (value, normalized) => {
-            const range = String(value || '').toLowerCase();
+            const range = String(value || "").toLowerCase();
             normalized.timeRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
         },
         topic: (value, normalized) => {
-            const topic = String(value || '').trim();
+            const topic = String(value || "").trim();
             if (topic) {
                 normalized.topic = topic;
             }
         },
         month: (value, normalized) => {
-            const month = String(value || '').trim();
+            const month = String(value || "").trim();
             if (/^\d{4}-\d{2}$/.test(month)) {
                 normalized.monthFocus = month;
             }
@@ -61,34 +74,35 @@ export const AnalyticsPage = (() => {
             }
         },
         shareType: (value, normalized) => {
-            const shareType = String(value || '').trim();
+            const shareType = String(value || "").trim();
             if (shareType) {
                 normalized.shareType = shareType;
             }
-        }
+        },
     });
 
     const ROUTE_FILTER_SERIALIZERS = Object.freeze({
-        topic: filters => (filters.topic && filters.topic !== 'all' ? filters.topic : null),
-        month: filters => (filters.monthFocus || null),
-        day: filters => (filters.day !== null && filters.day !== undefined ? String(filters.day) : null),
-        hour: filters => (filters.hour !== null && filters.hour !== undefined ? String(filters.hour) : null),
-        shareType: filters => (filters.shareType && filters.shareType !== 'all' ? filters.shareType : null)
+        topic: (filters) => (filters.topic && filters.topic !== "all" ? filters.topic : null),
+        month: (filters) => filters.monthFocus || null,
+        day: (filters) =>
+            filters.day !== null && filters.day !== undefined ? String(filters.day) : null,
+        hour: (filters) =>
+            filters.hour !== null && filters.hour !== undefined ? String(filters.hour) : null,
+        shareType: (filters) =>
+            filters.shareType && filters.shareType !== "all" ? filters.shareType : null,
     });
 
     const TIMELINE_ANIMATION = {
         minDuration: 380,
         maxDuration: 1200,
-        msPerPoint: 45
+        msPerPoint: 45,
     };
-
-    const WORKER_URL = new URL('./analytics-worker.js', import.meta.url);
 
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
         hasData: false,
-        currentView: null
+        currentView: null,
     };
 
     let elements = null;
@@ -121,7 +135,11 @@ export const AnalyticsPage = (() => {
             return;
         }
 
-        chartCanvases = [elements.timelineChart, elements.topicsChart, elements.heatmapChart].filter(Boolean);
+        chartCanvases = [
+            elements.timelineChart,
+            elements.topicsChart,
+            elements.heatmapChart,
+        ].filter(Boolean);
 
         initialized = true;
         bindEvents();
@@ -173,78 +191,80 @@ export const AnalyticsPage = (() => {
      */
     function resolveElements() {
         return {
-            timeRangeButtons: document.querySelectorAll('#analyticsTimeRangeButtons .filter-btn'),
-            resetFiltersBtn: document.getElementById('analyticsResetFiltersBtn'),
-            activeFilters: document.getElementById('activeFilters'),
-            activeFiltersList: document.getElementById('activeFiltersList'),
-            analyticsEmpty: document.getElementById('analyticsEmpty'),
-            analyticsGrid: document.getElementById('analyticsGrid'),
-            statsGrid: document.getElementById('statsGrid'),
-            timelineChart: document.getElementById('timelineChart'),
-            topicsChart: document.getElementById('topicsChart'),
-            heatmapChart: document.getElementById('heatmapChart'),
-            statPosts: document.getElementById('statPosts'),
-            statComments: document.getElementById('statComments'),
-            statTotal: document.getElementById('statTotal'),
-            statPeak: document.getElementById('statPeak'),
-            statStreak: document.getElementById('statStreak'),
-            chartTooltip: document.getElementById('chartTooltip')
+            timeRangeButtons: document.querySelectorAll("#analyticsTimeRangeButtons .filter-btn"),
+            resetFiltersBtn: document.getElementById("analyticsResetFiltersBtn"),
+            activeFilters: document.getElementById("activeFilters"),
+            activeFiltersList: document.getElementById("activeFiltersList"),
+            analyticsEmpty: document.getElementById("analyticsEmpty"),
+            analyticsGrid: document.getElementById("analyticsGrid"),
+            statsGrid: document.getElementById("statsGrid"),
+            timelineChart: document.getElementById("timelineChart"),
+            topicsChart: document.getElementById("topicsChart"),
+            heatmapChart: document.getElementById("heatmapChart"),
+            statPosts: document.getElementById("statPosts"),
+            statComments: document.getElementById("statComments"),
+            statTotal: document.getElementById("statTotal"),
+            statPeak: document.getElementById("statPeak"),
+            statStreak: document.getElementById("statStreak"),
+            chartTooltip: document.getElementById("chartTooltip"),
         };
     }
 
     /** Attach event listeners for filters, charts, theme, and visibility. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach(button => {
-            button.addEventListener('click', () => handleTimeRangeChange(button));
+        elements.timeRangeButtons.forEach((button) => {
+            button.addEventListener("click", () => handleTimeRangeChange(button));
         });
 
         if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener('click', resetFilters);
+            elements.resetFiltersBtn.addEventListener("click", resetFilters);
         }
         if (elements.activeFiltersList) {
-            elements.activeFiltersList.addEventListener('click', handleFilterChipClick);
+            elements.activeFiltersList.addEventListener("click", handleFilterChipClick);
         }
 
-        window.addEventListener('beforeunload', terminateWorker);
-        window.addEventListener('pagehide', terminateWorker);
+        window.addEventListener("beforeunload", terminateWorker);
+        window.addEventListener("pagehide", terminateWorker);
 
-        document.addEventListener('themechange', () => {
+        document.addEventListener("themechange", () => {
             if (state.currentView) {
                 renderAnalyticsView(state.currentView);
             }
         });
 
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && state.currentView) {
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible" && state.currentView) {
                 renderAnalyticsView(state.currentView);
             }
         });
 
-        chartCanvases.forEach(canvas => {
-            canvas.addEventListener('mousemove', handleChartHover);
-            canvas.addEventListener('mouseleave', hideTooltip);
-            canvas.addEventListener('click', handleChartClick);
-            canvas.setAttribute('tabindex', '0');
+        chartCanvases.forEach((canvas) => {
+            canvas.addEventListener("mousemove", handleChartHover);
+            canvas.addEventListener("mouseleave", hideTooltip);
+            canvas.addEventListener("click", handleChartClick);
+            canvas.setAttribute("tabindex", "0");
         });
     }
 
     /** Create the analytics Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined' || worker) {
+        if (typeof Worker === "undefined" || worker) {
             return;
         }
 
         try {
-            worker = new Worker(WORKER_URL, { type: 'module' });
-            worker.addEventListener('message', handleWorkerMessage);
-            worker.addEventListener('error', handleWorkerError);
+            worker = new Worker(new URL("./analytics-worker.js", import.meta.url), {
+                type: "module",
+            });
+            worker.addEventListener("message", handleWorkerMessage);
+            worker.addEventListener("error", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {
-                module: 'analytics-ui',
-                operation: 'init-worker'
+                module: "analytics-ui",
+                operation: "init-worker",
             });
-            setEmptyState('Worker blocked', 'Open this page from a local server (not file://).');
+            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
         }
     }
 
@@ -281,36 +301,45 @@ export const AnalyticsPage = (() => {
 
             initWorker();
             if (!worker) {
-                setEmptyState('Analytics not supported', 'Your browser does not support analytics workers.');
+                setEmptyState(
+                    "Analytics not supported",
+                    "Your browser does not support analytics workers.",
+                );
                 return;
             }
 
             let analyticsBase = null;
-            analyticsBase = DataCache.get('storage:analyticsBase') || null;
+            analyticsBase = DataCache.get("storage:analyticsBase") || null;
 
             if (!analyticsBase) {
                 analyticsBase = await Storage.getAnalytics();
-                DataCache.set('storage:analyticsBase', analyticsBase);
+                DataCache.set("storage:analyticsBase", analyticsBase);
             }
 
             if (!analyticsBase || !analyticsBase.months) {
-                setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
+                setEmptyState(
+                    "No data available yet",
+                    "Upload Shares.csv or Comments.csv on the Home page.",
+                );
                 needsBaseReload = false;
                 return;
             }
 
             showAnalyticsLoading(true);
             worker.postMessage({
-                type: 'initBase',
-                payload: analyticsBase
+                type: "initBase",
+                payload: analyticsBase,
             });
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
-                module: 'analytics-ui',
-                operation: 'load-base'
+                module: "analytics-ui",
+                operation: "load-base",
             });
-            setEmptyState('Storage error', 'Unable to load saved data. Try clearing browser data and re-uploading.');
+            setEmptyState(
+                "Storage error",
+                "Unable to load saved data. Try clearing browser data and re-uploading.",
+            );
             showAnalyticsLoading(false);
         }
     }
@@ -322,9 +351,9 @@ export const AnalyticsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            captureError(new Error(parsed.error || 'Invalid analytics worker message.'), {
-                module: 'analytics-ui',
-                operation: 'worker-message-parse'
+            captureError(new Error(parsed.error || "Invalid analytics worker message."), {
+                module: "analytics-ui",
+                operation: "worker-message-parse",
             });
             return;
         }
@@ -332,25 +361,31 @@ export const AnalyticsPage = (() => {
         const message = parsed.value;
 
         switch (message.type) {
-            case 'init':
+            case "init":
                 state.analyticsReady = true;
                 state.hasData = Boolean(message.payload && message.payload.hasData);
                 updateVisibility();
                 scheduleViewRequest(true);
                 return;
-            case 'view':
+            case "view":
                 if (message.requestId !== pendingViewId) {
                     return;
                 }
                 applyWorkerViewPayload(message.payload || {});
                 return;
-            case 'error':
-                captureError(new Error(getWorkerMessage(message.payload, 'Analytics worker error.')), {
-                    module: 'analytics-ui',
-                    operation: 'worker-error-payload',
-                    requestId: message.requestId
-                });
-                setEmptyState('Analytics error', getWorkerMessage(message.payload, 'Analytics worker error.'));
+            case "error":
+                captureError(
+                    new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
+                    {
+                        module: "analytics-ui",
+                        operation: "worker-error-payload",
+                        requestId: message.requestId,
+                    },
+                );
+                setEmptyState(
+                    "Analytics error",
+                    getWorkerMessage(message.payload, "Analytics worker error."),
+                );
                 return;
             /* v8 ignore next 2 */
             default:
@@ -391,12 +426,13 @@ export const AnalyticsPage = (() => {
      * @param {ErrorEvent} event - Worker error event
      */
     function handleWorkerError(event) {
-        const workerError = event && event.error ? event.error : new Error('Analytics worker error event');
+        const workerError =
+            event && event.error ? event.error : new Error("Analytics worker error event");
         captureError(workerError, {
-            module: 'analytics-ui',
-            operation: 'worker-error-event'
+            module: "analytics-ui",
+            operation: "worker-error-event",
         });
-        setEmptyState('Analytics worker error', 'Refresh the page and try again.');
+        setEmptyState("Analytics worker error", "Refresh the page and try again.");
     }
 
     /**
@@ -408,11 +444,11 @@ export const AnalyticsPage = (() => {
         return [
             filters.timeRange,
             filters.topic,
-            filters.monthFocus || 'none',
-            filters.day !== null && filters.day !== undefined ? filters.day : 'none',
-            filters.hour !== null && filters.hour !== undefined ? filters.hour : 'none',
-            filters.shareType || 'all'
-        ].join('|');
+            filters.monthFocus || "none",
+            filters.day !== null && filters.day !== undefined ? filters.day : "none",
+            filters.hour !== null && filters.hour !== undefined ? filters.hour : "none",
+            filters.shareType || "all",
+        ].join("|");
     }
 
     /**
@@ -449,9 +485,9 @@ export const AnalyticsPage = (() => {
         const id = ++requestId;
         pendingViewId = id;
         worker.postMessage({
-            type: 'view',
+            type: "view",
             requestId: id,
-            filters: { ...state.filters }
+            filters: { ...state.filters },
         });
         showAnalyticsLoading(true);
     }
@@ -461,7 +497,7 @@ export const AnalyticsPage = (() => {
      * @returns {boolean} True if all canvases are sized.
      */
     function areChartsSized() {
-        return chartCanvases.every(canvas => {
+        return chartCanvases.every((canvas) => {
             const rect = canvas.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
         });
@@ -478,8 +514,8 @@ export const AnalyticsPage = (() => {
             return;
         }
 
-        const wrappers = chartCanvases.map(canvas => canvas.parentElement).filter(Boolean);
-        if (typeof ResizeObserver !== 'undefined' && wrappers.length) {
+        const wrappers = chartCanvases.map((canvas) => canvas.parentElement).filter(Boolean);
+        if (typeof ResizeObserver !== "undefined" && wrappers.length) {
             resizeObserver = new ResizeObserver(() => {
                 /* v8 ignore next 3 */
                 if (!pendingRender || !areChartsSized()) {
@@ -492,7 +528,7 @@ export const AnalyticsPage = (() => {
                 renderRetryCount = 0;
                 renderAnalyticsView(next);
             });
-            wrappers.forEach(wrapper => resizeObserver.observe(wrapper));
+            wrappers.forEach((wrapper) => resizeObserver.observe(wrapper));
             return;
         }
 
@@ -521,11 +557,11 @@ export const AnalyticsPage = (() => {
         elements.statComments.textContent = view.totals.comments;
         elements.statTotal.textContent = view.totals.total;
         elements.statPeak.textContent = view.totals.total
-            ? `${String(view.peakHour.hour).padStart(2, '0')}:00`
-            : '-';
+            ? `${String(view.peakHour.hour).padStart(2, "0")}:00`
+            : "-";
         elements.statStreak.textContent = view.totals.total
             ? `${view.streaks.current} days`
-            : '0 days';
+            : "0 days";
     }
 
     /**
@@ -536,7 +572,7 @@ export const AnalyticsPage = (() => {
     function getTimelineAnimationDuration(pointCount) {
         return Math.min(
             TIMELINE_ANIMATION.maxDuration,
-            Math.max(TIMELINE_ANIMATION.minDuration, pointCount * TIMELINE_ANIMATION.msPerPoint)
+            Math.max(TIMELINE_ANIMATION.minDuration, pointCount * TIMELINE_ANIMATION.msPerPoint),
         );
     }
 
@@ -556,7 +592,7 @@ export const AnalyticsPage = (() => {
                     view.timeline,
                     state.filters.timeRange,
                     progress,
-                    view.timelineMax
+                    view.timelineMax,
                 );
             }, duration);
             return;
@@ -567,7 +603,7 @@ export const AnalyticsPage = (() => {
             view.timeline,
             state.filters.timeRange,
             1,
-            view.timelineMax
+            view.timelineMax,
         );
     }
 
@@ -583,14 +619,17 @@ export const AnalyticsPage = (() => {
 
         try {
             if (!view) {
-                setEmptyState('No analytics data', 'Try resetting filters.');
+                setEmptyState("No analytics data", "Try resetting filters.");
                 showAnalyticsLoading(false);
                 return;
             }
 
             /* v8 ignore next 5 */
             if (!rough) {
-                setEmptyState('Charts unavailable', 'Required libraries failed to load. Please refresh the page.');
+                setEmptyState(
+                    "Charts unavailable",
+                    "Required libraries failed to load. Please refresh the page.",
+                );
                 showAnalyticsLoading(false);
                 return;
             }
@@ -612,10 +651,10 @@ export const AnalyticsPage = (() => {
             renderCharts(view);
         } catch (error) {
             captureError(error, {
-                module: 'analytics-ui',
-                operation: 'render-view'
+                module: "analytics-ui",
+                operation: "render-view",
             });
-            setEmptyState('Render error', 'Failed to draw charts. Please refresh the page.');
+            setEmptyState("Render error", "Failed to draw charts. Please refresh the page.");
         } finally {
             /* v8 ignore next 9 */
             if (isRendering) {
@@ -633,7 +672,10 @@ export const AnalyticsPage = (() => {
     /** Toggle empty state vs analytics grid based on data availability. */
     function updateVisibility() {
         if (!state.hasData) {
-            setEmptyState('No data available yet', 'Upload Shares.csv or Comments.csv on the Home page.');
+            setEmptyState(
+                "No data available yet",
+                "Upload Shares.csv or Comments.csv on the Home page.",
+            );
             return;
         }
         hideEmptyState();
@@ -644,7 +686,7 @@ export const AnalyticsPage = (() => {
      * @param {HTMLElement} button - The clicked time range button element.
      */
     function handleTimeRangeChange(button) {
-        const range = button.getAttribute('data-range');
+        const range = button.getAttribute("data-range");
         /* v8 ignore next 3 */
         if (!range) {
             return;
@@ -687,10 +729,10 @@ export const AnalyticsPage = (() => {
      * @param {string} range - The active time range identifier.
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach(btn => {
-            const isActive = btn.getAttribute('data-range') === range;
-            btn.classList.toggle('active', isActive);
-            btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((btn) => {
+            const isActive = btn.getAttribute("data-range") === range;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
     }
 
@@ -699,17 +741,25 @@ export const AnalyticsPage = (() => {
      * @param {Event} event - The click event.
      */
     function handleFilterChipClick(event) {
-        const button = DomEvents.closest(event, 'button[data-filter]');
+        const button = DomEvents.closest(event, "button[data-filter]");
         if (!button) {
             return;
         }
 
-        const filter = button.getAttribute('data-filter');
+        const filter = button.getAttribute("data-filter");
         const FILTER_RESET_MAP = {
-            topic: () => { state.filters.topic = 'all'; },
-            month: () => { state.filters.monthFocus = null; },
-            day: () => { state.filters.day = null; },
-            hour: () => { state.filters.hour = null; }
+            topic: () => {
+                state.filters.topic = "all";
+            },
+            month: () => {
+                state.filters.monthFocus = null;
+            },
+            day: () => {
+                state.filters.day = null;
+            },
+            hour: () => {
+                state.filters.hour = null;
+            },
         };
         const resetFn = FILTER_RESET_MAP[filter];
         if (resetFn) {
@@ -723,22 +773,26 @@ export const AnalyticsPage = (() => {
     function renderActiveFilters() {
         const filters = [];
 
-        if (state.filters.topic && state.filters.topic !== 'all') {
-            filters.push({ key: 'topic', label: `Topic: ${state.filters.topic}` });
+        if (state.filters.topic && state.filters.topic !== "all") {
+            filters.push({ key: "topic", label: `Topic: ${state.filters.topic}` });
         }
         if (state.filters.monthFocus) {
-            const [year, month] = state.filters.monthFocus.split('-').map(Number);
-            const label = (year && month)
-                ? `Month: ${MONTH_LABELS[month - 1]} ${year}`
-                : `Month: ${state.filters.monthFocus}`;
-            filters.push({ key: 'month', label });
+            const [year, month] = state.filters.monthFocus.split("-").map(Number);
+            const label =
+                year && month
+                    ? `Month: ${MONTH_LABELS[month - 1]} ${year}`
+                    : `Month: ${state.filters.monthFocus}`;
+            filters.push({ key: "month", label });
         }
         if (state.filters.day !== null && state.filters.day !== undefined) {
-            const label = DAY_LABELS[state.filters.day] || 'Unknown';
-            filters.push({ key: 'day', label: `Day: ${label}` });
+            const label = DAY_LABELS[state.filters.day] || "Unknown";
+            filters.push({ key: "day", label: `Day: ${label}` });
         }
         if (state.filters.hour !== null && state.filters.hour !== undefined) {
-            filters.push({ key: 'hour', label: `Hour: ${String(state.filters.hour).padStart(2, '0')}:00` });
+            filters.push({
+                key: "hour",
+                label: `Hour: ${String(state.filters.hour).padStart(2, "0")}:00`,
+            });
         }
 
         if (!filters.length) {
@@ -749,7 +803,7 @@ export const AnalyticsPage = (() => {
 
         elements.activeFilters.hidden = false;
         const fragment = document.createDocumentFragment();
-        filters.forEach(filter => {
+        filters.forEach((filter) => {
             fragment.appendChild(createFilterChip(filter));
         });
         elements.activeFiltersList.replaceChildren(fragment);
@@ -761,14 +815,14 @@ export const AnalyticsPage = (() => {
      * @returns {HTMLElement}
      */
     function createFilterChip(filter) {
-        const chip = document.createElement('span');
-        chip.className = 'filter-chip';
+        const chip = document.createElement("span");
+        chip.className = "filter-chip";
         chip.append(document.createTextNode(filter.label));
 
-        const button = document.createElement('button');
-        button.setAttribute('data-filter', filter.key);
-        button.setAttribute('aria-label', 'Remove filter');
-        button.textContent = 'x';
+        const button = document.createElement("button");
+        button.setAttribute("data-filter", filter.key);
+        button.setAttribute("aria-label", "Remove filter");
+        button.textContent = "x";
 
         chip.appendChild(button);
         return chip;
@@ -790,7 +844,7 @@ export const AnalyticsPage = (() => {
             hideTooltip();
         }
 
-        canvas.style.cursor = item && CLICKABLE_TYPES.has(item.type) ? 'pointer' : 'default';
+        canvas.style.cursor = item && CLICKABLE_TYPES.has(item.type) ? "pointer" : "default";
     }
 
     /**
@@ -808,18 +862,19 @@ export const AnalyticsPage = (() => {
         }
 
         switch (item.type) {
-            case 'month':
+            case "month":
                 state.filters.monthFocus = state.filters.monthFocus === item.key ? null : item.key;
                 break;
-            case 'week': {
+            case "week": {
                 const targetMonth = item.monthKey || item.key;
-                state.filters.monthFocus = state.filters.monthFocus === targetMonth ? null : targetMonth;
+                state.filters.monthFocus =
+                    state.filters.monthFocus === targetMonth ? null : targetMonth;
                 break;
             }
-            case 'topic':
-                state.filters.topic = state.filters.topic === item.key ? 'all' : item.key;
+            case "topic":
+                state.filters.topic = state.filters.topic === item.key ? "all" : item.key;
                 break;
-            case 'heatmap': {
+            case "heatmap": {
                 const isSame = state.filters.day === item.day && state.filters.hour === item.hour;
                 state.filters.day = isSame ? null : item.day;
                 state.filters.hour = isSame ? null : item.hour;
@@ -853,14 +908,14 @@ export const AnalyticsPage = (() => {
      * @param {boolean} isLoading - Whether analytics is loading
      */
     function showAnalyticsLoading(isLoading) {
-        elements.analyticsGrid.style.opacity = isLoading ? '0.55' : '1';
-        elements.statsGrid.style.opacity = isLoading ? '0.55' : '1';
-        elements.analyticsGrid.style.pointerEvents = isLoading ? 'none' : 'auto';
+        elements.analyticsGrid.style.opacity = isLoading ? "0.55" : "1";
+        elements.statsGrid.style.opacity = isLoading ? "0.55" : "1";
+        elements.analyticsGrid.style.pointerEvents = isLoading ? "none" : "auto";
 
         if (isLoading) {
-            LoadingOverlay.show('analytics');
+            LoadingOverlay.show("analytics");
         } else {
-            LoadingOverlay.hide('analytics');
+            LoadingOverlay.hide("analytics");
         }
     }
 
@@ -870,8 +925,8 @@ export const AnalyticsPage = (() => {
      * @param {string} message - The description text for the empty state.
      */
     function setEmptyState(title, message) {
-        const heading = elements.analyticsEmpty.querySelector('h2');
-        const text = elements.analyticsEmpty.querySelector('p');
+        const heading = elements.analyticsEmpty.querySelector("h2");
+        const text = elements.analyticsEmpty.querySelector("p");
 
         if (heading) {
             heading.textContent = title;
@@ -901,13 +956,18 @@ export const AnalyticsPage = (() => {
      * @returns {boolean} True if the timeline should animate.
      */
     function shouldAnimate(view) {
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
             return false;
         }
-        if (document.visibilityState && document.visibilityState !== 'visible') {
+        if (document.visibilityState && document.visibilityState !== "visible") {
             return false;
         }
-        if (!view || !Array.isArray(view.timeline) || view.timeline.length < 2 || view.timeline.length > 48) {
+        if (
+            !view ||
+            !Array.isArray(view.timeline) ||
+            view.timeline.length < 2 ||
+            view.timeline.length > 48
+        ) {
             return false;
         }
         return view.totals.total < 4000;
@@ -951,17 +1011,17 @@ export const AnalyticsPage = (() => {
         }
 
         const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== 'analytics') {
+        if (!currentRoute || currentRoute.name !== "analytics") {
             return;
         }
 
         const params = {
-            range: state.filters.timeRange
+            range: state.filters.timeRange,
         };
 
         Object.entries(ROUTE_FILTER_SERIALIZERS).forEach(([paramKey, serializer]) => {
             const value = serializer(state.filters);
-            if (value !== null && value !== undefined && value !== '') {
+            if (value !== null && value !== undefined && value !== "") {
                 params[paramKey] = value;
             }
         });
@@ -972,6 +1032,6 @@ export const AnalyticsPage = (() => {
     return {
         init,
         onRouteChange,
-        onRouteLeave
+        onRouteLeave,
     };
 })();

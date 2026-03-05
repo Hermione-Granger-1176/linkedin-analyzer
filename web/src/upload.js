@@ -1,61 +1,72 @@
 /* Upload page logic */
 
-import rough from 'roughjs/bundled/rough.esm.js';
+import rough from "roughjs/bundled/rough.esm.js";
 
-import { DataCache } from './data-cache.js';
-import { AppRouter } from './router.js';
-import { captureError } from './sentry.js';
-import { Storage } from './storage.js';
-import { parseAnalyticsWorkerMessage, parseStoredUploadFile } from './worker-contracts.js';
+import { DataCache } from "./data-cache.js";
+import { AppRouter } from "./router.js";
+import { captureError } from "./sentry.js";
+import { Storage } from "./storage.js";
+import { parseAnalyticsWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
 
 export const UploadPage = (() => {
-    'use strict';
+    "use strict";
 
-    const TRACKED_TYPES = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+    const TRACKED_TYPES = Object.freeze(["shares", "comments", "messages", "connections"]);
     const TRACKED_TYPES_SET = new Set(TRACKED_TYPES);
     const UPLOAD_HINT_BY_STATE = Object.freeze({
-        '0-0-0': 'Upload at least one file to start.',
-        '0-0-1': 'Upload at least one file to start.',
-        '0-1-0': 'Upload at least one file to start.',
-        '0-1-1': 'Upload at least one file to start.',
-        '1-1-0': 'Processing analytics in the background.',
-        '1-1-1': 'Analytics are ready. Open the dashboard.',
-        '1-0-0': 'Files loaded. Open Messages tab for conversation insights.',
-        '1-0-1': 'Files loaded. Open Messages tab for conversation insights.'
+        "0-0-0": "Upload at least one file to start.",
+        "0-0-1": "Upload at least one file to start.",
+        "0-1-0": "Upload at least one file to start.",
+        "0-1-1": "Upload at least one file to start.",
+        "1-1-0": "Processing analytics in the background.",
+        "1-1-1": "Analytics are ready. Open the dashboard.",
+        "1-0-0": "Files loaded. Open Messages tab for conversation insights.",
+        "1-0-1": "Files loaded. Open Messages tab for conversation insights.",
     });
 
     const elements = {
-        dropZone: document.getElementById('multiDropZone'),
-        fileInput: document.getElementById('multiFileInput'),
-        sharesStatus: document.getElementById('sharesStatus'),
-        commentsStatus: document.getElementById('commentsStatus'),
-        messagesStatus: document.getElementById('messagesStatus'),
-        connectionsStatus: document.getElementById('connectionsStatus'),
-        uploadHint: document.getElementById('uploadHint'),
-        openAnalyticsBtn: document.getElementById('openAnalyticsBtn'),
-        clearAllBtn: document.getElementById('clearAllBtn'),
+        dropZone: document.getElementById("multiDropZone"),
+        fileInput: document.getElementById("multiFileInput"),
+        sharesStatus: document.getElementById("sharesStatus"),
+        commentsStatus: document.getElementById("commentsStatus"),
+        messagesStatus: document.getElementById("messagesStatus"),
+        connectionsStatus: document.getElementById("connectionsStatus"),
+        uploadHint: document.getElementById("uploadHint"),
+        openAnalyticsBtn: document.getElementById("openAnalyticsBtn"),
+        clearAllBtn: document.getElementById("clearAllBtn"),
         fileStatusItems: {
             shares: document.querySelector('.file-status-item[data-file="shares"]'),
             comments: document.querySelector('.file-status-item[data-file="comments"]'),
             messages: document.querySelector('.file-status-item[data-file="messages"]'),
-            connections: document.querySelector('.file-status-item[data-file="connections"]')
+            connections: document.querySelector('.file-status-item[data-file="connections"]'),
         },
-        progressOverlay: document.getElementById('progressOverlay'),
-        progressCanvas: document.getElementById('progressCanvas'),
-        progressPercent: document.getElementById('progressPercent'),
-        offlineBanner: document.getElementById('offlineBanner')
+        progressOverlay: document.getElementById("progressOverlay"),
+        progressCanvas: document.getElementById("progressCanvas"),
+        progressPercent: document.getElementById("progressPercent"),
+        offlineBanner: document.getElementById("offlineBanner"),
     };
 
     const STATUS_ITEMS = Object.freeze([
-        { type: 'shares', item: elements.fileStatusItems.shares, label: elements.sharesStatus },
-        { type: 'comments', item: elements.fileStatusItems.comments, label: elements.commentsStatus },
-        { type: 'messages', item: elements.fileStatusItems.messages, label: elements.messagesStatus },
-        { type: 'connections', item: elements.fileStatusItems.connections, label: elements.connectionsStatus }
+        { type: "shares", item: elements.fileStatusItems.shares, label: elements.sharesStatus },
+        {
+            type: "comments",
+            item: elements.fileStatusItems.comments,
+            label: elements.commentsStatus,
+        },
+        {
+            type: "messages",
+            item: elements.fileStatusItems.messages,
+            label: elements.messagesStatus,
+        },
+        {
+            type: "connections",
+            item: elements.fileStatusItems.connections,
+            label: elements.connectionsStatus,
+        },
     ]);
 
-    const WORKER_URL = new URL('./analytics-worker.js', import.meta.url);
     const JOB_TIMEOUT_MS = 45000;
-    const SESSION_CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
+    const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
     const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024;
     const MAX_FILE_BYTES = 40 * 1024 * 1024;
     const MAX_CSV_CHARS = 30 * 1024 * 1024;
@@ -101,18 +112,19 @@ export const UploadPage = (() => {
         }
         storagePersistenceRequested = true;
 
-        if (!navigator.storage || typeof navigator.storage.persist !== 'function') {
+        if (!navigator.storage || typeof navigator.storage.persist !== "function") {
             return;
         }
 
-        navigator.storage.persist()
-            .then(isPersisted => {
-                DataCache.set('storage:persisted', Boolean(isPersisted));
+        navigator.storage
+            .persist()
+            .then((isPersisted) => {
+                DataCache.set("storage:persisted", Boolean(isPersisted));
             })
-            .catch(error => {
+            .catch((error) => {
                 captureError(error, {
-                    module: 'upload',
-                    operation: 'storage-persist-request'
+                    module: "upload",
+                    operation: "storage-persist-request",
                 });
             });
     }
@@ -132,73 +144,78 @@ export const UploadPage = (() => {
 
     /** Create the analytics Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined') {
+        if (typeof Worker === "undefined") {
             return;
         }
         try {
-            worker = new Worker(WORKER_URL, { type: 'module' });
-            worker.addEventListener('message', handleWorkerMessage);
-            worker.addEventListener('error', handleWorkerError);
+            worker = new Worker(new URL("./analytics-worker.js", import.meta.url), {
+                type: "module",
+            });
+            worker.addEventListener("message", handleWorkerMessage);
+            worker.addEventListener("error", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {
-                module: 'upload',
-                operation: 'init-worker'
+                module: "upload",
+                operation: "init-worker",
             });
-            setHint('This page must be opened from a local server (not file://). Start a server and reload.', true);
+            setHint(
+                "This page must be opened from a local server (not file://). Start a server and reload.",
+                true,
+            );
         }
     }
 
     /** Attach event listeners for drag/drop, file input, and buttons. */
     function bindEvents() {
-        elements.dropZone.addEventListener('click', () => elements.fileInput.click());
-        elements.dropZone.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
+        elements.dropZone.addEventListener("click", () => elements.fileInput.click());
+        elements.dropZone.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 elements.fileInput.click();
             }
         });
-        elements.fileInput.addEventListener('change', handleFileInput);
-        elements.dropZone.addEventListener('dragover', handleDragOver);
-        elements.dropZone.addEventListener('dragleave', handleDragLeave);
-        elements.dropZone.addEventListener('drop', handleDrop);
+        elements.fileInput.addEventListener("change", handleFileInput);
+        elements.dropZone.addEventListener("dragover", handleDragOver);
+        elements.dropZone.addEventListener("dragleave", handleDragLeave);
+        elements.dropZone.addEventListener("drop", handleDrop);
 
-        window.addEventListener('dragover', (event) => event.preventDefault());
-        window.addEventListener('drop', (event) => event.preventDefault());
+        window.addEventListener("dragover", (event) => event.preventDefault());
+        window.addEventListener("drop", (event) => event.preventDefault());
 
-        elements.openAnalyticsBtn.addEventListener('click', () => {
+        elements.openAnalyticsBtn.addEventListener("click", () => {
             if (elements.openAnalyticsBtn.disabled) {
                 return;
             }
 
-            AppRouter.navigate('analytics', undefined, { replaceHistory: false });
+            AppRouter.navigate("analytics", undefined, { replaceHistory: false });
         });
 
-        elements.clearAllBtn.addEventListener('click', async () => {
+        elements.clearAllBtn.addEventListener("click", async () => {
             try {
                 await Storage.clearAll();
                 clearPrimeSchedule();
                 pendingPrimePayload = null;
                 if (worker) {
-                    worker.postMessage({ type: 'clear' });
+                    worker.postMessage({ type: "clear" });
                 }
                 DataCache.clear();
-                DataCache.notify({ type: 'storageCleared' });
+                DataCache.notify({ type: "storageCleared" });
                 lastPrimedSignature = null;
                 resetProcessingState();
                 updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
             } catch (error) {
                 captureError(error, {
-                    module: 'upload',
-                    operation: 'clear-all'
+                    module: "upload",
+                    operation: "clear-all",
                 });
-                setHint('Unable to clear stored data. Please try again.', true);
+                setHint("Unable to clear stored data. Please try again.", true);
             }
         });
 
-        window.addEventListener('resize', () => drawProgressBar(progressValue));
-        window.addEventListener('online', updateOfflineBanner);
-        window.addEventListener('offline', updateOfflineBanner);
+        window.addEventListener("resize", () => drawProgressBar(progressValue));
+        window.addEventListener("online", updateOfflineBanner);
+        window.addEventListener("offline", updateOfflineBanner);
     }
 
     /**
@@ -215,9 +232,9 @@ export const UploadPage = (() => {
             await waitForSessionCleanup();
             updateOfflineBanner();
             const files = await Storage.getAllFiles();
-            DataCache.set('storage:files', files);
+            DataCache.set("storage:files", files);
             const fileMap = getFileMap(files);
-            scheduleAnalyticsWorkerPrime(fileMap, { priority: 'idle' });
+            scheduleAnalyticsWorkerPrime(fileMap, { priority: "idle" });
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
         })();
@@ -226,10 +243,10 @@ export const UploadPage = (() => {
             await restorePromise;
         } catch (error) {
             captureError(error, {
-                module: 'upload',
-                operation: 'restore-state'
+                module: "upload",
+                operation: "restore-state",
             });
-            setHint('Unable to restore saved files. Please re-upload.', true);
+            setHint("Unable to restore saved files. Please re-upload.", true);
         } finally {
             restorePromise = null;
             restoredOnce = true;
@@ -244,15 +261,15 @@ export const UploadPage = (() => {
      */
     async function waitForSessionCleanup() {
         const cleanupPromise = window[SESSION_CLEANUP_PROMISE_KEY];
-        if (!cleanupPromise || typeof cleanupPromise.then !== 'function') {
+        if (!cleanupPromise || typeof cleanupPromise.then !== "function") {
             return;
         }
         try {
             await cleanupPromise;
         } catch (error) {
             captureError(error, {
-                module: 'upload',
-                operation: 'wait-session-cleanup'
+                module: "upload",
+                operation: "wait-session-cleanup",
             });
             return;
         }
@@ -263,13 +280,13 @@ export const UploadPage = (() => {
         if (!elements.offlineBanner) {
             return;
         }
-        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
         elements.offlineBanner.hidden = !isOffline;
     }
 
     /** Sync upload status from cache when available, otherwise restore from storage. */
     function syncStatusFromCache() {
-        const files = DataCache.get('storage:files');
+        const files = DataCache.get("storage:files");
         const analyticsReady = getAnalyticsReadyFromCache();
 
         if (!files || analyticsReady === null) {
@@ -286,7 +303,7 @@ export const UploadPage = (() => {
      */
     function handleDragOver(event) {
         event.preventDefault();
-        elements.dropZone.classList.add('drag-over');
+        elements.dropZone.classList.add("drag-over");
     }
 
     /**
@@ -295,7 +312,7 @@ export const UploadPage = (() => {
      */
     function handleDragLeave(event) {
         event.preventDefault();
-        elements.dropZone.classList.remove('drag-over');
+        elements.dropZone.classList.remove("drag-over");
     }
 
     /**
@@ -304,7 +321,7 @@ export const UploadPage = (() => {
      */
     function handleDrop(event) {
         event.preventDefault();
-        elements.dropZone.classList.remove('drag-over');
+        elements.dropZone.classList.remove("drag-over");
         const files = Array.from(event.dataTransfer?.files || []);
         if (files.length) {
             processFiles(files);
@@ -320,7 +337,7 @@ export const UploadPage = (() => {
         if (files.length) {
             processFiles(files);
         }
-        event.target.value = '';
+        event.target.value = "";
     }
 
     /**
@@ -328,29 +345,29 @@ export const UploadPage = (() => {
      * @param {File[]} files - Selected files
      */
     function processFiles(files) {
-        const csvFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
+        const csvFiles = files.filter((file) => file.name.toLowerCase().endsWith(".csv"));
         if (!csvFiles.length) {
-            setHint('Please upload CSV files.', true);
+            setHint("Please upload CSV files.", true);
             return;
         }
 
-        const tooLargeFiles = csvFiles.filter(file => file.size > MAX_FILE_BYTES);
+        const tooLargeFiles = csvFiles.filter((file) => file.size > MAX_FILE_BYTES);
         if (tooLargeFiles.length) {
             const maxMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));
             setHint(`Some files exceed ${maxMb}MB and were skipped.`, true);
         }
 
-        const acceptedFiles = csvFiles.filter(file => file.size <= MAX_FILE_BYTES);
+        const acceptedFiles = csvFiles.filter((file) => file.size <= MAX_FILE_BYTES);
         if (!acceptedFiles.length) {
             return;
         }
 
-        const oversizeFiles = acceptedFiles.filter(file => file.size > LARGE_FILE_WARNING_BYTES);
+        const oversizeFiles = acceptedFiles.filter((file) => file.size > LARGE_FILE_WARNING_BYTES);
         if (oversizeFiles.length) {
-            setHint('Some files are large (10MB+). Processing may take longer than usual.', false);
+            setHint("Some files are large (10MB+). Processing may take longer than usual.", false);
         }
         if (!worker) {
-            setHint('Workers are unavailable. Open this page from a local server.', true);
+            setHint("Workers are unavailable. Open this page from a local server.", true);
             return;
         }
         warnIfStorageLow();
@@ -358,55 +375,68 @@ export const UploadPage = (() => {
         if (activeJobs.size === 0) {
             showProgressOverlay();
         }
-        acceptedFiles.forEach(file => {
+        acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
             scheduleJobTimeout(jobId, file.name);
             readFileAsText(file)
-                .then(text => {
+                .then((text) => {
                     pendingFiles.set(jobId, { text, fileName: file.name });
                     worker.postMessage({
-                        type: 'addFile',
+                        type: "addFile",
                         payload: {
                             csvText: text,
                             fileName: file.name,
                             jobId,
-                            totalSize: file.size
-                        }
+                            totalSize: file.size,
+                        },
                     });
                 })
                 .catch((error) => {
                     captureError(error, {
-                        module: 'upload',
-                        operation: 'read-file',
+                        module: "upload",
+                        operation: "read-file",
                         fileName: file.name,
-                        fileSize: file.size
+                        fileSize: file.size,
                     });
                     completeJob(jobId, file.name);
-                    setHint(error && error.message ? error.message : 'Error reading file. Please try again.', true);
+                    setHint(
+                        error && error.message
+                            ? error.message
+                            : "Error reading file. Please try again.",
+                        true,
+                    );
                 });
         });
     }
 
     /** Estimate storage and warn if space is low. */
     function warnIfStorageLow() {
-        if (!navigator.storage || typeof navigator.storage.estimate !== 'function') {
+        if (!navigator.storage || typeof navigator.storage.estimate !== "function") {
             return;
         }
-        navigator.storage.estimate()
-            .then(estimate => {
-                if (!estimate || typeof estimate.quota !== 'number' || typeof estimate.usage !== 'number') {
+        navigator.storage
+            .estimate()
+            .then((estimate) => {
+                if (
+                    !estimate ||
+                    typeof estimate.quota !== "number" ||
+                    typeof estimate.usage !== "number"
+                ) {
                     return;
                 }
                 const remaining = estimate.quota - estimate.usage;
                 if (remaining < 20 * 1024 * 1024) {
-                    setHint('Storage is running low. Consider clearing data after exporting.', false);
+                    setHint(
+                        "Storage is running low. Consider clearing data after exporting.",
+                        false,
+                    );
                 }
             })
             .catch(() => {
-                captureError(new Error('Failed to estimate browser storage quota.'), {
-                    module: 'upload',
-                    operation: 'storage-estimate'
+                captureError(new Error("Failed to estimate browser storage quota."), {
+                    module: "upload",
+                    operation: "storage-estimate",
                 });
             });
     }
@@ -431,10 +461,11 @@ export const UploadPage = (() => {
             return Promise.reject(new Error(`"${file.name}" exceeds the ${maxMb}MB upload limit.`));
         }
 
-        const useStreamingRead = file.size >= STREAMING_READ_THRESHOLD_BYTES
-            && typeof file.stream === 'function'
-            && typeof TextDecoder !== 'undefined'
-            && typeof ReadableStream !== 'undefined';
+        const useStreamingRead =
+            file.size >= STREAMING_READ_THRESHOLD_BYTES &&
+            typeof file.stream === "function" &&
+            typeof TextDecoder !== "undefined" &&
+            typeof ReadableStream !== "undefined";
 
         if (useStreamingRead) {
             return readFileAsTextStream(file);
@@ -462,7 +493,7 @@ export const UploadPage = (() => {
                 finish(() => reject(new Error(`Reading ${file.name} timed out.`)));
             }, FILE_READ_TIMEOUT_MS);
 
-            const finish = callback => {
+            const finish = (callback) => {
                 if (settled) {
                     return;
                 }
@@ -476,16 +507,18 @@ export const UploadPage = (() => {
                 if (settled) {
                     return;
                 }
-                const text = typeof reader.result === 'string' ? reader.result : '';
+                const text = typeof reader.result === "string" ? reader.result : "";
                 if (text.length > MAX_CSV_CHARS) {
                     const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-                    finish(() => reject(new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`)));
+                    finish(() =>
+                        reject(new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`)),
+                    );
                     return;
                 }
                 finish(() => resolve(text));
             };
             reader.onerror = () => {
-                finish(() => reject(new Error('Error reading file')));
+                finish(() => reject(new Error("Error reading file")));
             };
             reader.readAsText(file);
         });
@@ -498,8 +531,8 @@ export const UploadPage = (() => {
      */
     async function readFileAsTextStream(file) {
         const reader = file.stream().getReader();
-        const decoder = new TextDecoder('utf-8');
-        let text = '';
+        const decoder = new TextDecoder("utf-8");
+        let text = "";
         let timedOut = false;
 
         const timeoutId = window.setTimeout(() => {
@@ -511,12 +544,7 @@ export const UploadPage = (() => {
         }, FILE_READ_TIMEOUT_MS);
 
         try {
-            while (true) {
-                const chunk = await reader.read();
-                if (chunk.done) {
-                    break;
-                }
-
+            for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
                 if (timedOut) {
                     throw new Error(`Reading ${file.name} timed out.`);
                 }
@@ -547,39 +575,39 @@ export const UploadPage = (() => {
     async function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            captureError(new Error(parsed.error || 'Invalid analytics worker payload.'), {
-                module: 'upload',
-                operation: 'worker-message-parse'
+            captureError(new Error(parsed.error || "Invalid analytics worker payload."), {
+                module: "upload",
+                operation: "worker-message-parse",
             });
-            setHint('Unexpected worker response. Please retry the upload.', true);
+            setHint("Unexpected worker response. Please retry the upload.", true);
             return;
         }
 
         const message = parsed.value;
         switch (message.type) {
-            case 'restored':
+            case "restored":
                 return;
-            case 'fileProcessed':
+            case "fileProcessed":
                 await handleFileProcessedMessage(message.payload || {});
                 return;
-            case 'progress':
+            case "progress":
                 handleProgressMessage(message.payload || {});
                 return;
-            case 'error': {
+            case "error": {
                 const payload = message.payload || {};
-                const errorMessage = payload.message || 'Worker error.';
+                const errorMessage = payload.message || "Worker error.";
                 setHint(errorMessage, true);
                 captureError(new Error(errorMessage), {
-                    module: 'upload',
-                    operation: 'worker-error-payload',
+                    module: "upload",
+                    operation: "worker-error-payload",
                     jobId: payload.jobId || null,
-                    fileName: payload.fileName || null
+                    fileName: payload.fileName || null,
                 });
                 if (!payload.jobId && !payload.fileName) {
                     resetProcessingState();
                     return;
                 }
-                completeJob(payload.jobId || null, payload.fileName || '');
+                completeJob(payload.jobId || null, payload.fileName || "");
                 return;
             }
             default:
@@ -599,7 +627,7 @@ export const UploadPage = (() => {
         const pending = consumePendingFile(jobId, fileName);
 
         if (!fileType) {
-            setHint(payload.error || 'File could not be processed.', true);
+            setHint(payload.error || "File could not be processed.", true);
             completeJob(jobId, fileName);
             return;
         }
@@ -619,18 +647,18 @@ export const UploadPage = (() => {
             const fileMap = getFileMap(files);
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
-            setHint('File loaded successfully.', false);
-            if (fileType === 'shares' || fileType === 'comments') {
-                scheduleAnalyticsWorkerPrime(fileMap, { priority: 'immediate' });
+            setHint("File loaded successfully.", false);
+            if (fileType === "shares" || fileType === "comments") {
+                scheduleAnalyticsWorkerPrime(fileMap, { priority: "immediate" });
             }
         } catch (error) {
             captureError(error, {
-                module: 'upload',
-                operation: 'persist-processed-file',
+                module: "upload",
+                operation: "persist-processed-file",
                 fileType,
-                fileName
+                fileName,
             });
-            setHint('Error saving file data. Please try again.', true);
+            setHint("Error saving file data. Please try again.", true);
         } finally {
             completeJob(jobId, fileName);
         }
@@ -641,7 +669,7 @@ export const UploadPage = (() => {
      * @param {{jobId?: string|null, percent?: number}} payload - Progress payload
      */
     function handleProgressMessage(payload) {
-        if (!payload || typeof payload.percent !== 'number') {
+        if (!payload || typeof payload.percent !== "number") {
             return;
         }
         if (activeJobs.size === 0) {
@@ -680,21 +708,21 @@ export const UploadPage = (() => {
      * @returns {Promise<void>}
      */
     async function syncCacheAfterProcessedFile(fileType, analyticsBase) {
-        DataCache.invalidate('storage:');
-        DataCache.invalidate('clean:');
-        DataCache.invalidate('messages:');
+        DataCache.invalidate("storage:");
+        DataCache.invalidate("clean:");
+        DataCache.invalidate("messages:");
 
         const files = await Storage.getAllFiles();
-        DataCache.set('storage:files', files);
+        DataCache.set("storage:files", files);
         syncTypeSpecificFileCache(fileType, files);
 
         if (analyticsBase) {
-            DataCache.set('storage:analyticsBase', analyticsBase);
+            DataCache.set("storage:analyticsBase", analyticsBase);
         }
 
-        DataCache.notify({ type: 'filesChanged', fileType });
+        DataCache.notify({ type: "filesChanged", fileType });
         if (analyticsBase) {
-            DataCache.notify({ type: 'analyticsChanged' });
+            DataCache.notify({ type: "analyticsChanged" });
         }
     }
 
@@ -709,7 +737,7 @@ export const UploadPage = (() => {
             return;
         }
 
-        const match = files.find(file => file.type === fileType) || null;
+        const match = files.find((file) => file.type === fileType) || null;
         if (!match) {
             return;
         }
@@ -724,10 +752,10 @@ export const UploadPage = (() => {
      */
     function getTypeSpecificFileCacheKey(fileType) {
         switch (fileType) {
-            case 'messages':
-                return 'storage:file:messages';
-            case 'connections':
-                return 'storage:file:connections';
+            case "messages":
+                return "storage:file:messages";
+            case "connections":
+                return "storage:file:connections";
             default:
                 return null;
         }
@@ -738,7 +766,7 @@ export const UploadPage = (() => {
      * @returns {Promise<object[]>}
      */
     async function getStoredFilesSnapshot() {
-        const files = DataCache.get('storage:files');
+        const files = DataCache.get("storage:files");
         if (files) {
             return files;
         }
@@ -776,12 +804,13 @@ export const UploadPage = (() => {
      * @param {ErrorEvent} event - Worker error event
      */
     function handleWorkerError(event) {
-        const workerError = event && event.error ? event.error : new Error('Analytics worker error event');
+        const workerError =
+            event && event.error ? event.error : new Error("Analytics worker error event");
         captureError(workerError, {
-            module: 'upload',
-            operation: 'worker-error-event'
+            module: "upload",
+            operation: "worker-error-event",
         });
-        setHint('Analytics worker error. Try refreshing.', true);
+        setHint("Analytics worker error. Try refreshing.", true);
         resetProcessingState();
     }
 
@@ -811,7 +840,7 @@ export const UploadPage = (() => {
      * @returns {string|null}
      */
     function resolveJobId(jobId, fileName) {
-        const normalizedJobId = typeof jobId === 'string' && jobId ? jobId : null;
+        const normalizedJobId = typeof jobId === "string" && jobId ? jobId : null;
         if (normalizedJobId) {
             return normalizedJobId;
         }
@@ -830,7 +859,7 @@ export const UploadPage = (() => {
      * @returns {string|null}
      */
     function resolvePendingJobIdByFileName(fileName) {
-        const normalizedFileName = String(fileName || '');
+        const normalizedFileName = String(fileName || "");
         if (!normalizedFileName) {
             return null;
         }
@@ -864,11 +893,11 @@ export const UploadPage = (() => {
             return;
         }
         if (fileData) {
-            statusItem.classList.add('is-ready');
+            statusItem.classList.add("is-ready");
             statusLabel.textContent = `${fileData.rowCount} rows loaded`;
         } else {
-            statusItem.classList.remove('is-ready');
-            statusLabel.textContent = 'Not uploaded';
+            statusItem.classList.remove("is-ready");
+            statusLabel.textContent = "Not uploaded";
         }
     }
 
@@ -881,7 +910,7 @@ export const UploadPage = (() => {
             updateFileStatus(item, label, fileMap[type]);
         });
 
-        const hasAny = TRACKED_TYPES.some(type => Boolean(fileMap[type]));
+        const hasAny = TRACKED_TYPES.some((type) => Boolean(fileMap[type]));
         const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
         elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
         setHint(getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady), false);
@@ -896,7 +925,10 @@ export const UploadPage = (() => {
      */
     function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
         const stateKey = `${hasAny ? 1 : 0}-${hasAnalyticsFiles ? 1 : 0}-${analyticsReady ? 1 : 0}`;
-        return UPLOAD_HINT_BY_STATE[stateKey] || 'Files loaded. Open Messages tab for conversation insights.';
+        return (
+            UPLOAD_HINT_BY_STATE[stateKey] ||
+            "Files loaded. Open Messages tab for conversation insights."
+        );
     }
 
     /**
@@ -906,12 +938,12 @@ export const UploadPage = (() => {
      */
     function getFileMap(files) {
         const map = createEmptyFileMap();
-        files.forEach(file => {
+        files.forEach((file) => {
             const parsed = parseStoredUploadFile(file);
             if (!parsed.valid) {
-                captureError(new Error(parsed.error || 'Invalid stored upload file record.'), {
-                    module: 'upload',
-                    operation: 'parse-stored-file-map'
+                captureError(new Error(parsed.error || "Invalid stored upload file record."), {
+                    module: "upload",
+                    operation: "parse-stored-file-map",
                 });
                 return;
             }
@@ -933,7 +965,7 @@ export const UploadPage = (() => {
             shares: null,
             comments: null,
             messages: null,
-            connections: null
+            connections: null,
         };
     }
 
@@ -942,10 +974,10 @@ export const UploadPage = (() => {
      * @returns {Promise<boolean>}
      */
     async function hasAnalyticsData() {
-        let analyticsBase = DataCache.get('storage:analyticsBase') || null;
+        let analyticsBase = DataCache.get("storage:analyticsBase") || null;
         if (!analyticsBase) {
             analyticsBase = await Storage.getAnalytics();
-            DataCache.set('storage:analyticsBase', analyticsBase);
+            DataCache.set("storage:analyticsBase", analyticsBase);
         }
         return hasAnalyticsMonths(analyticsBase);
     }
@@ -955,7 +987,7 @@ export const UploadPage = (() => {
      * @returns {boolean|null}
      */
     function getAnalyticsReadyFromCache() {
-        const analyticsBase = DataCache.get('storage:analyticsBase') || null;
+        const analyticsBase = DataCache.get("storage:analyticsBase") || null;
         if (!analyticsBase) {
             return null;
         }
@@ -969,9 +1001,7 @@ export const UploadPage = (() => {
      */
     function hasAnalyticsMonths(analyticsBase) {
         return Boolean(
-            analyticsBase
-            && analyticsBase.months
-            && Object.keys(analyticsBase.months).length
+            analyticsBase && analyticsBase.months && Object.keys(analyticsBase.months).length,
         );
     }
 
@@ -989,8 +1019,8 @@ export const UploadPage = (() => {
 
         const sharesFile = fileMap.shares || null;
         const commentsFile = fileMap.comments || null;
-        const sharesCsv = sharesFile ? sharesFile.text : '';
-        const commentsCsv = commentsFile ? commentsFile.text : '';
+        const sharesCsv = sharesFile ? sharesFile.text : "";
+        const commentsCsv = commentsFile ? commentsFile.text : "";
         if (!sharesCsv && !commentsCsv) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
@@ -998,8 +1028,12 @@ export const UploadPage = (() => {
             return;
         }
 
-        const sharesStamp = sharesFile ? `${sharesFile.updatedAt || 0}:${sharesFile.rowCount || 0}` : '-';
-        const commentsStamp = commentsFile ? `${commentsFile.updatedAt || 0}:${commentsFile.rowCount || 0}` : '-';
+        const sharesStamp = sharesFile
+            ? `${sharesFile.updatedAt || 0}:${sharesFile.rowCount || 0}`
+            : "-";
+        const commentsStamp = commentsFile
+            ? `${commentsFile.updatedAt || 0}:${commentsFile.rowCount || 0}`
+            : "-";
         const signature = `${sharesStamp}|${commentsStamp}`;
         if (signature === lastPrimedSignature) {
             pendingPrimePayload = null;
@@ -1008,8 +1042,8 @@ export const UploadPage = (() => {
         }
 
         pendingPrimePayload = { sharesCsv, commentsCsv, signature };
-        const priority = options && options.priority ? options.priority : 'idle';
-        if (priority === 'immediate') {
+        const priority = options && options.priority ? options.priority : "idle";
+        if (priority === "immediate") {
             clearPrimeSchedule();
             primeAnalyticsWorkerNow();
             return;
@@ -1019,11 +1053,14 @@ export const UploadPage = (() => {
             return;
         }
 
-        if (typeof requestIdleCallback === 'function') {
-            primeIdleId = requestIdleCallback(() => {
-                primeIdleId = null;
-                primeAnalyticsWorkerNow();
-            }, { timeout: 1500 });
+        if (typeof requestIdleCallback === "function") {
+            primeIdleId = requestIdleCallback(
+                () => {
+                    primeIdleId = null;
+                    primeAnalyticsWorkerNow();
+                },
+                { timeout: 1500 },
+            );
             return;
         }
 
@@ -1043,8 +1080,8 @@ export const UploadPage = (() => {
         lastPrimedSignature = payload.signature;
 
         worker.postMessage({
-            type: 'restoreFiles',
-            payload: { sharesCsv: payload.sharesCsv, commentsCsv: payload.commentsCsv }
+            type: "restoreFiles",
+            payload: { sharesCsv: payload.sharesCsv, commentsCsv: payload.commentsCsv },
         });
     }
 
@@ -1054,7 +1091,7 @@ export const UploadPage = (() => {
             window.clearTimeout(primeTimerId);
             primeTimerId = null;
         }
-        if (primeIdleId && typeof cancelIdleCallback === 'function') {
+        if (primeIdleId && typeof cancelIdleCallback === "function") {
             cancelIdleCallback(primeIdleId);
         }
         primeIdleId = null;
@@ -1067,7 +1104,7 @@ export const UploadPage = (() => {
      */
     function setHint(message, isError) {
         elements.uploadHint.textContent = message;
-        elements.uploadHint.classList.toggle('is-error', Boolean(isError));
+        elements.uploadHint.classList.toggle("is-error", Boolean(isError));
     }
 
     /** Hide progress overlay when all active jobs complete. */
@@ -1078,7 +1115,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Clear queued processing state and hide the overlay.
+     * Clear queued processing state and immediately hide the overlay.
      */
     function resetProcessingState() {
         pendingFiles.clear();
@@ -1125,7 +1162,7 @@ export const UploadPage = (() => {
 
     /** Clear all active job timeout watchdogs. */
     function clearAllJobTimeouts() {
-        jobTimeouts.forEach(timeoutId => {
+        jobTimeouts.forEach((timeoutId) => {
             window.clearTimeout(timeoutId);
         });
         jobTimeouts.clear();
@@ -1139,12 +1176,17 @@ export const UploadPage = (() => {
         progressValue = 0;
         lastProgressPercent = 0;
         drawProgressBar(progressValue);
-        animateProgressTo(0.72, 650, () => {
-            if (sessionId !== progressSessionId || activeJobs.size <= 0) {
-                return;
-            }
-            startProgressCrawl(sessionId);
-        }, sessionId);
+        animateProgressTo(
+            0.72,
+            650,
+            () => {
+                if (sessionId !== progressSessionId || activeJobs.size <= 0) {
+                    return;
+                }
+                startProgressCrawl(sessionId);
+            },
+            sessionId,
+        );
     }
 
     /** Animate progress to 100% then hide the overlay. */
@@ -1153,12 +1195,17 @@ export const UploadPage = (() => {
             return;
         }
         const sessionId = progressSessionId;
-        animateProgressTo(1, 320, () => {
-            if (sessionId !== progressSessionId) {
-                return;
-            }
-            elements.progressOverlay.hidden = true;
-        }, sessionId);
+        animateProgressTo(
+            1,
+            320,
+            () => {
+                if (sessionId !== progressSessionId) {
+                    return;
+                }
+                elements.progressOverlay.hidden = true;
+            },
+            sessionId,
+        );
     }
 
     /**
@@ -1238,7 +1285,7 @@ export const UploadPage = (() => {
 
             if (remaining > 0.0005) {
                 const normalizedRemaining = Math.min(1, remaining / 0.265);
-                const unitsPerSecond = 0.007 + (0.06 * normalizedRemaining);
+                const unitsPerSecond = 0.007 + 0.06 * normalizedRemaining;
                 const increment = (unitsPerSecond * deltaMs) / 1000;
                 progressValue = Math.min(crawlCap, progressValue + increment);
                 drawProgressBar(progressValue);
@@ -1267,7 +1314,7 @@ export const UploadPage = (() => {
         const ratio = window.devicePixelRatio || 1;
         canvas.width = rect.width * ratio;
         canvas.height = rect.height * ratio;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         /* v8 ignore next */
         if (!ctx) {
             return;
@@ -1275,9 +1322,13 @@ export const UploadPage = (() => {
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.clearRect(0, 0, rect.width, rect.height);
 
+        /* v8 ignore next 3 */
+        if (typeof document === "undefined" || !document.documentElement) {
+            return;
+        }
         const styles = getComputedStyle(document.documentElement);
-        const border = styles.getPropertyValue('--border-color').trim();
-        const fill = styles.getPropertyValue('--accent-purple').trim();
+        const border = styles.getPropertyValue("--border-color").trim();
+        const fill = styles.getPropertyValue("--accent-purple").trim();
 
         const trackX = 8;
         const trackY = rect.height / 2 - 14;
@@ -1289,7 +1340,7 @@ export const UploadPage = (() => {
             rc.rectangle(trackX, trackY, trackWidth, trackHeight, {
                 stroke: border,
                 strokeWidth: 1.5,
-                roughness: 1.4
+                roughness: 1.4,
             });
             const fillWidth = Math.max(4, (trackWidth - 4) * value);
             ctx.fillStyle = fill;
@@ -1299,7 +1350,7 @@ export const UploadPage = (() => {
             rc.rectangle(trackX + 2, trackY + 2, fillWidth, trackHeight - 4, {
                 stroke: fill,
                 strokeWidth: 1.2,
-                roughness: 1.2
+                roughness: 1.2,
             });
         }
 
@@ -1308,6 +1359,6 @@ export const UploadPage = (() => {
 
     return {
         init,
-        onRouteChange
+        onRouteChange,
     };
 })();

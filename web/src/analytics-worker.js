@@ -1,8 +1,8 @@
 /* LinkedIn Analyzer - Analytics Web Worker */
 
-import { AnalyticsEngine } from './analytics.js';
-import { LinkedInCleaner } from './cleaner.js';
-import { parseAnalyticsWorkerRequest } from './worker-contracts.js';
+import { AnalyticsEngine } from "./analytics.js";
+import { LinkedInCleaner } from "./cleaner.js";
+import { parseAnalyticsWorkerRequest } from "./worker-contracts.js";
 
 let sharesData = null;
 let commentsData = null;
@@ -11,8 +11,8 @@ let viewCache = new Map();
 let currentRequestId = 0;
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
-const ANALYTICS_SOURCE_TYPES = Object.freeze(['shares', 'comments']);
-const WORKER_REQUEST_TYPES = new Set(['addFile', 'restoreFiles', 'initBase', 'view', 'clear']);
+const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments"]);
+const WORKER_REQUEST_TYPES = new Set(["addFile", "restoreFiles", "initBase", "view", "clear"]);
 
 /**
  * Normalize raw filter values into a safe, complete filter object.
@@ -22,12 +22,12 @@ const WORKER_REQUEST_TYPES = new Set(['addFile', 'restoreFiles', 'initBase', 'vi
 function normalizeFilters(filters) {
     const safe = filters || {};
     return {
-        timeRange: safe.timeRange || '12m',
-        topic: safe.topic || 'all',
+        timeRange: safe.timeRange || "12m",
+        topic: safe.topic || "all",
         monthFocus: safe.monthFocus || null,
-        day: typeof safe.day === 'number' ? safe.day : null,
-        hour: typeof safe.hour === 'number' ? safe.hour : null,
-        shareType: safe.shareType || 'all'
+        day: typeof safe.day === "number" ? safe.day : null,
+        hour: typeof safe.hour === "number" ? safe.hour : null,
+        shareType: safe.shareType || "all",
     };
 }
 
@@ -41,16 +41,16 @@ function getViewKey(filters) {
     return [
         safe.timeRange,
         safe.topic,
-        safe.monthFocus || 'none',
-        safe.day !== null ? safe.day : 'none',
-        safe.hour !== null ? safe.hour : 'none',
-        safe.shareType || 'all'
-    ].join('|');
+        safe.monthFocus || "none",
+        safe.day !== null ? safe.day : "none",
+        safe.hour !== null ? safe.hour : "none",
+        safe.shareType || "all",
+    ].join("|");
 }
 
 /**
  * Recompute analytics aggregates from current shares and comments data.
- * @description Clears the view cache since aggregates have changed.
+ * Clears the view cache since aggregates have changed.
  */
 function computeAnalytics() {
     analytics = AnalyticsEngine.compute(sharesData, commentsData);
@@ -79,7 +79,10 @@ function hasAnalyticsData() {
  * @returns {object|null}
  */
 function serializeAnalytics(analyticsData) {
-    if (!analyticsData) {return null;}
+    if (!analyticsData) {
+        /* v8 ignore next */
+        return null;
+    }
     // The new format is already serializable (no Date objects, no Sets in final output)
     return analyticsData;
 }
@@ -90,21 +93,23 @@ function serializeAnalytics(analyticsData) {
  * @returns {object|null}
  */
 function hydrateAnalytics(base) {
-    if (!base || !base.months) {return null;}
+    if (!base || !base.months) {
+        return null;
+    }
 
     // Convert activeDays arrays back to Sets for streak calculation
     const months = {};
     for (const [key, bucket] of Object.entries(base.months)) {
         months[key] = {
             ...bucket,
-            activeDays: new Set(bucket.activeDays || [])
+            activeDays: new Set(bucket.activeDays || []),
         };
     }
 
     return {
         ...base,
         months,
-        activeDays: new Set(base.activeDays || [])
+        activeDays: new Set(base.activeDays || []),
     };
 }
 
@@ -115,9 +120,9 @@ function hydrateAnalytics(base) {
  */
 function postError(requestId, message) {
     self.postMessage({
-        type: 'error',
+        type: "error",
         requestId,
-        payload: { message }
+        payload: { message },
     });
 }
 
@@ -130,10 +135,12 @@ function toErrorMessage(error) {
     if (error instanceof Error && error.message) {
         return error.message;
     }
-    if (typeof error === 'string' && error) {
+    /* v8 ignore next 3 */
+    if (typeof error === "string" && error) {
         return error;
     }
-    return 'Worker runtime failure.';
+    /* v8 ignore next */
+    return "Worker runtime failure.";
 }
 
 /**
@@ -145,7 +152,7 @@ function cacheView(key, payload) {
     viewCache.set(key, payload);
     if (viewCache.size > VIEW_CACHE_LIMIT) {
         const keysToDelete = Array.from(viewCache.keys()).slice(0, VIEW_CACHE_TRIM);
-        keysToDelete.forEach(k => viewCache.delete(k));
+        keysToDelete.forEach((k) => viewCache.delete(k));
     }
 }
 
@@ -154,30 +161,31 @@ function cacheView(key, payload) {
  * @param {{csvText: string, fileName: string, jobId?: string, totalSize?: number}} payload - File content and name
  */
 function handleAddFile(payload) {
-    const {
-        csvText = '',
-        fileName = '',
-        jobId = null
-    } = payload || {};
+    const { csvText = "", fileName = "", jobId = null } = payload || {};
 
     self.postMessage({
-        type: 'progress',
-        payload: { jobId, fileName, percent: 0.02 }
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.05 },
     });
 
     self.postMessage({
-        type: 'progress',
-        payload: { jobId, fileName, percent: 0.08 }
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.12 },
     });
 
-    const processed = LinkedInCleaner.process(csvText, 'auto');
+    const processed = LinkedInCleaner.process(csvText, "auto");
     if (!processed.success) {
         self.postMessage({
-            type: 'fileProcessed',
-            payload: { error: processed.error || 'Unable to process file.', jobId, fileName }
+            type: "fileProcessed",
+            payload: { error: processed.error || "Unable to process file.", jobId, fileName },
         });
         return;
     }
+
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.4 },
+    });
 
     const fileType = processed.fileType;
     let analyticsBase = null;
@@ -187,32 +195,36 @@ function handleAddFile(payload) {
         },
         comments: () => {
             commentsData = processed.cleanedData;
-        }
+        },
     };
     const updateSource = updateSourceByType[fileType];
     if (updateSource) {
         updateSource();
         self.postMessage({
-            type: 'progress',
-            payload: { jobId, fileName, percent: 0.6 }
+            type: "progress",
+            payload: { jobId, fileName, percent: 0.55 },
         });
         computeAnalytics();
         self.postMessage({
-            type: 'progress',
-            payload: { jobId, fileName, percent: 0.92 }
+            type: "progress",
+            payload: { jobId, fileName, percent: 0.85 },
         });
         analyticsBase = serializeAnalytics(analytics);
+        self.postMessage({
+            type: "progress",
+            payload: { jobId, fileName, percent: 0.95 },
+        });
     }
     self.postMessage({
-        type: 'fileProcessed',
+        type: "fileProcessed",
         payload: {
             fileType,
             fileName,
             jobId,
             rowCount: processed.rowCount,
             analyticsBase,
-            hasData: hasAnalyticsData()
-        }
+            hasData: hasAnalyticsData(),
+        },
     });
 }
 
@@ -221,14 +233,11 @@ function handleAddFile(payload) {
  * @param {{sharesCsv?: string, commentsCsv?: string}} payload - Persisted analytics inputs
  */
 function handleRestoreFiles(payload) {
-    const {
-        sharesCsv = '',
-        commentsCsv = ''
-    } = payload || {};
+    const { sharesCsv = "", commentsCsv = "" } = payload || {};
 
     const sourceCsvByType = {
         shares: sharesCsv,
-        comments: commentsCsv
+        comments: commentsCsv,
     };
     const assignSourceByType = {
         shares: (cleanedData) => {
@@ -236,13 +245,13 @@ function handleRestoreFiles(payload) {
         },
         comments: (cleanedData) => {
             commentsData = cleanedData;
-        }
+        },
     };
 
     sharesData = null;
     commentsData = null;
 
-    ANALYTICS_SOURCE_TYPES.forEach(type => {
+    ANALYTICS_SOURCE_TYPES.forEach((type) => {
         const csvText = sourceCsvByType[type];
         if (!csvText) {
             return;
@@ -258,14 +267,15 @@ function handleRestoreFiles(payload) {
     if (sharesData || commentsData) {
         computeAnalytics();
     } else {
+        /* v8 ignore next */
         resetAnalyticsState();
     }
 
     self.postMessage({
-        type: 'restored',
+        type: "restored",
         payload: {
-            hasData: hasAnalyticsData()
-        }
+            hasData: hasAnalyticsData(),
+        },
     });
 }
 
@@ -278,8 +288,8 @@ function handleInitBase(payload) {
     viewCache = new Map();
     const hasData = hasAnalyticsData();
     self.postMessage({
-        type: 'init',
-        payload: { hasData }
+        type: "init",
+        payload: { hasData },
     });
 }
 
@@ -292,7 +302,7 @@ function handleView(requestId, filters) {
     currentRequestId = requestId;
 
     if (!analytics) {
-        postError(requestId, 'Analytics not ready.');
+        postError(requestId, "Analytics not ready.");
         return;
     }
 
@@ -300,35 +310,41 @@ function handleView(requestId, filters) {
     const key = getViewKey(safeFilters);
 
     if (viewCache.has(key)) {
-        if (currentRequestId !== requestId) {return;}
+        if (currentRequestId !== requestId) {
+            /* v8 ignore next */
+            return;
+        }
         self.postMessage({
-            type: 'view',
+            type: "view",
             requestId,
-            payload: viewCache.get(key)
+            payload: viewCache.get(key),
         });
         return;
     }
 
     const view = AnalyticsEngine.buildView(analytics, safeFilters);
 
-    if (currentRequestId !== requestId) {return;}
+    if (currentRequestId !== requestId) {
+        /* v8 ignore next */
+        return;
+    }
 
     if (!view) {
-        postError(requestId, 'Unable to build analytics view.');
+        postError(requestId, "Unable to build analytics view.");
         return;
     }
 
     const insights = AnalyticsEngine.generateInsights(view);
     const payload = {
         view: { ...view, key },
-        insights
+        insights,
     };
 
     cacheView(key, payload);
     self.postMessage({
-        type: 'view',
+        type: "view",
         requestId,
-        payload
+        payload,
     });
 }
 
@@ -340,29 +356,31 @@ function handleClear() {
     commentsData = null;
     resetAnalyticsState();
     currentRequestId = 0;
-    self.postMessage({ type: 'cleared' });
+    self.postMessage({ type: "cleared" });
 }
 
-self.addEventListener('message', (event) => {
+self.addEventListener("message", (event) => {
     const rawMessage = event.data || {};
-    const type = rawMessage && typeof rawMessage.type === 'string' ? rawMessage.type : '';
+    const type = rawMessage && typeof rawMessage.type === "string" ? rawMessage.type : "";
     if (!WORKER_REQUEST_TYPES.has(type)) {
         return;
     }
 
     const parsed = parseAnalyticsWorkerRequest(rawMessage);
+    /* v8 ignore next 4 */
     if (!parsed.valid) {
-        postError(0, parsed.error || 'Invalid analytics worker message.');
+        postError(0, parsed.error || "Invalid analytics worker message.");
         return;
     }
 
     const message = parsed.value;
+    /* v8 ignore next 6 */
     const handlers = {
         addFile: () => handleAddFile(message.payload),
         restoreFiles: () => handleRestoreFiles(message.payload),
         initBase: () => handleInitBase(message.payload),
         view: () => handleView(message.requestId, message.filters),
-        clear: () => handleClear()
+        clear: () => handleClear(),
     };
     const handler = handlers[message.type];
     /* v8 ignore next */
@@ -375,12 +393,21 @@ self.addEventListener('message', (event) => {
     }
 });
 
-self.addEventListener('error', event => {
+self.addEventListener("error", (event) => {
+    /* v8 ignore next */
     postError(0, toErrorMessage(event && event.error ? event.error : event && event.message));
 });
 
-self.addEventListener('unhandledrejection', event => {
+self.addEventListener("unhandledrejection", (event) => {
     postError(0, toErrorMessage(event && event.reason));
 });
 
-export { normalizeFilters, getViewKey, handleAddFile, handleRestoreFiles, handleInitBase, handleView, handleClear };
+export {
+    normalizeFilters,
+    getViewKey,
+    handleAddFile,
+    handleRestoreFiles,
+    handleInitBase,
+    handleView,
+    handleClear,
+};

@@ -1,56 +1,55 @@
 /* Messages insights page logic */
 
-import { LinkedInCleaner } from './cleaner.js';
-import { DataCache } from './data-cache.js';
-import { ExcelGenerator } from './excel.js';
-import { LoadingOverlay } from './loading-overlay.js';
-import { MessagesAnalytics } from './messages-analytics.js';
-import { AppRouter } from './router.js';
-import { captureError } from './sentry.js';
-import { Session } from './session.js';
-import { Storage } from './storage.js';
-import { reportPerformanceMeasure } from './telemetry.js';
-import { parseMessagesWorkerMessage, parseStoredUploadFile } from './worker-contracts.js';
+import { LinkedInCleaner } from "./cleaner.js";
+import { DataCache } from "./data-cache.js";
+import { ExcelGenerator } from "./excel.js";
+import { LoadingOverlay } from "./loading-overlay.js";
+import { MessagesAnalytics } from "./messages-analytics.js";
+import { AppRouter } from "./router.js";
+import { captureError } from "./sentry.js";
+import { Session } from "./session.js";
+import { Storage } from "./storage.js";
+import { reportPerformanceMeasure } from "./telemetry.js";
+import { parseMessagesWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
 
 export const MessagesPage = (() => {
-    'use strict';
+    "use strict";
 
     const FILTER_DEFAULTS = Object.freeze({
-        timeRange: '12m'
+        timeRange: "12m",
     });
     const RANGE_MONTHS = Object.freeze({
-        '1m': 1,
-        '3m': 3,
-        '6m': 6,
-        '12m': 12
+        "1m": 1,
+        "3m": 3,
+        "6m": 6,
+        "12m": 12,
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    const MESSAGES_WORKER_URL = new URL('./messages-worker.js', import.meta.url);
     const WORKER_TIMEOUT_MS = 30000;
 
     const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric'
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
     });
 
     const elements = {
-        timeRangeButtons: document.querySelectorAll('#messagesTimeRangeButtons .filter-btn'),
-        resetFiltersBtn: document.getElementById('messagesResetFiltersBtn'),
-        topContactsExportBtn: document.getElementById('topContactsExportBtn'),
-        silentConnectionsExportBtn: document.getElementById('silentConnectionsExportBtn'),
-        fadingConversationsExportBtn: document.getElementById('fadingConversationsExportBtn'),
-        messagesEmpty: document.getElementById('messagesEmpty'),
-        messagesLayout: document.getElementById('messagesLayout'),
-        topContactsList: document.getElementById('topContactsList'),
-        silentConnectionsList: document.getElementById('silentConnectionsList'),
-        fadingConversationsList: document.getElementById('fadingConversationsList'),
-        msgStatMessages: document.getElementById('msgStatMessages'),
-        msgStatContacts: document.getElementById('msgStatContacts'),
-        msgStatConnected: document.getElementById('msgStatConnected'),
-        msgStatFading: document.getElementById('msgStatFading'),
-        messagesTip: document.getElementById('messagesTip'),
-        messagesTipText: document.getElementById('messagesTipText')
+        timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
+        resetFiltersBtn: document.getElementById("messagesResetFiltersBtn"),
+        topContactsExportBtn: document.getElementById("topContactsExportBtn"),
+        silentConnectionsExportBtn: document.getElementById("silentConnectionsExportBtn"),
+        fadingConversationsExportBtn: document.getElementById("fadingConversationsExportBtn"),
+        messagesEmpty: document.getElementById("messagesEmpty"),
+        messagesLayout: document.getElementById("messagesLayout"),
+        topContactsList: document.getElementById("topContactsList"),
+        silentConnectionsList: document.getElementById("silentConnectionsList"),
+        fadingConversationsList: document.getElementById("fadingConversationsList"),
+        msgStatMessages: document.getElementById("msgStatMessages"),
+        msgStatContacts: document.getElementById("msgStatContacts"),
+        msgStatConnected: document.getElementById("msgStatConnected"),
+        msgStatFading: document.getElementById("msgStatFading"),
+        messagesTip: document.getElementById("messagesTip"),
+        messagesTipText: document.getElementById("messagesTipText"),
     };
 
     const state = {
@@ -64,8 +63,8 @@ export const MessagesPage = (() => {
         currentLists: {
             topContacts: [],
             silentConnections: [],
-            fadingConversations: []
-        }
+            fadingConversations: [],
+        },
     };
 
     let initialized = false;
@@ -111,40 +110,48 @@ export const MessagesPage = (() => {
 
     /** Attach event listeners for filters. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach(button => {
-            button.addEventListener('click', () => handleTimeRangeChange(button));
-            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((button) => {
+            button.addEventListener("click", () => handleTimeRangeChange(button));
+            button.setAttribute(
+                "aria-pressed",
+                button.classList.contains("active") ? "true" : "false",
+            );
         });
-        elements.resetFiltersBtn.addEventListener('click', resetFilters);
+        elements.resetFiltersBtn.addEventListener("click", resetFilters);
         if (elements.topContactsExportBtn) {
-            elements.topContactsExportBtn.addEventListener('click', exportTopContacts);
+            elements.topContactsExportBtn.addEventListener("click", exportTopContacts);
         }
         if (elements.silentConnectionsExportBtn) {
-            elements.silentConnectionsExportBtn.addEventListener('click', exportSilentConnections);
+            elements.silentConnectionsExportBtn.addEventListener("click", exportSilentConnections);
         }
         if (elements.fadingConversationsExportBtn) {
-            elements.fadingConversationsExportBtn.addEventListener('click', exportFadingConversations);
+            elements.fadingConversationsExportBtn.addEventListener(
+                "click",
+                exportFadingConversations,
+            );
         }
 
-        window.addEventListener('beforeunload', terminateWorker);
-        window.addEventListener('pagehide', terminateWorker);
+        window.addEventListener("beforeunload", terminateWorker);
+        window.addEventListener("pagehide", terminateWorker);
 
         updateExportButtonStates();
     }
 
     /** Initialize background worker for messages/connections parsing. */
     function initWorker() {
-        if (parseWorker || typeof Worker === 'undefined') {
+        if (parseWorker || typeof Worker === "undefined") {
             return;
         }
 
         try {
-            parseWorker = new Worker(MESSAGES_WORKER_URL, { type: 'module' });
+            parseWorker = new Worker(new URL("./messages-worker.js", import.meta.url), {
+                type: "module",
+            });
         } catch (error) {
             parseWorker = null;
             captureError(error, {
-                module: 'messages-insights',
-                operation: 'init-worker'
+                module: "messages-insights",
+                operation: "init-worker",
             });
         }
     }
@@ -199,21 +206,21 @@ export const MessagesPage = (() => {
 
         const requestId = ++parseWorkerRequestId;
 
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             clearWorkerTimeout();
             const handleMessage = (event) => {
                 const parsed = parseMessagesWorkerMessage(event.data || {});
                 if (!parsed.valid) {
-                    captureError(new Error(parsed.error || 'Invalid messages worker response.'), {
-                        module: 'messages-insights',
-                        operation: 'worker-message-parse',
-                        requestId
+                    captureError(new Error(parsed.error || "Invalid messages worker response."), {
+                        module: "messages-insights",
+                        operation: "worker-message-parse",
+                        requestId,
                     });
                     return;
                 }
 
                 const message = parsed.value;
-                if (message.type !== 'processed' || message.requestId !== requestId) {
+                if (message.type !== "processed" || message.requestId !== requestId) {
                     return;
                 }
                 finishRequest();
@@ -221,11 +228,14 @@ export const MessagesPage = (() => {
             };
 
             const handleError = (event) => {
-                captureError(event && event.error ? event.error : new Error('Messages worker error event'), {
-                    module: 'messages-insights',
-                    operation: 'worker-error-event',
-                    requestId
-                });
+                captureError(
+                    event && event.error ? event.error : new Error("Messages worker error event"),
+                    {
+                        module: "messages-insights",
+                        operation: "worker-error-event",
+                        requestId,
+                    },
+                );
                 finishRequest();
                 terminateWorker();
                 resolve(null);
@@ -235,8 +245,8 @@ export const MessagesPage = (() => {
                 if (!parseWorker) {
                     return;
                 }
-                parseWorker.removeEventListener('message', handleMessage);
-                parseWorker.removeEventListener('error', handleError);
+                parseWorker.removeEventListener("message", handleMessage);
+                parseWorker.removeEventListener("error", handleError);
             };
 
             const finishRequest = () => {
@@ -245,10 +255,10 @@ export const MessagesPage = (() => {
             };
 
             parseWorkerTimeoutId = window.setTimeout(() => {
-                captureError(new Error('Messages worker request timed out.'), {
-                    module: 'messages-insights',
-                    operation: 'worker-timeout',
-                    requestId
+                captureError(new Error("Messages worker request timed out."), {
+                    module: "messages-insights",
+                    operation: "worker-timeout",
+                    requestId,
                 });
                 finishRequest();
                 terminateWorker();
@@ -256,21 +266,21 @@ export const MessagesPage = (() => {
             }, WORKER_TIMEOUT_MS);
 
             try {
-                parseWorker.addEventListener('message', handleMessage);
-                parseWorker.addEventListener('error', handleError);
+                parseWorker.addEventListener("message", handleMessage);
+                parseWorker.addEventListener("error", handleError);
                 parseWorker.postMessage({
-                    type: 'process',
+                    type: "process",
                     requestId,
                     payload: {
                         messagesCsv,
-                        connectionsCsv
-                    }
+                        connectionsCsv,
+                    },
                 });
             } catch (error) {
                 captureError(error, {
-                    module: 'messages-insights',
-                    operation: 'worker-post-message',
-                    requestId
+                    module: "messages-insights",
+                    operation: "worker-post-message",
+                    requestId,
                 });
                 finishRequest();
                 terminateWorker();
@@ -286,11 +296,11 @@ export const MessagesPage = (() => {
      * @returns {object}
      */
     function processFilesOnMainThread(messagesCsv, connectionsCsv) {
-        const messagesResult = LinkedInCleaner.process(messagesCsv, 'messages');
+        const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
         if (!messagesResult.success) {
             return {
                 success: false,
-                error: messagesResult.error || 'Unable to parse messages.csv.'
+                error: messagesResult.error || "Unable to parse messages.csv.",
             };
         }
 
@@ -298,11 +308,11 @@ export const MessagesPage = (() => {
         let connectionError = null;
 
         if (connectionsCsv) {
-            const connectionsResult = LinkedInCleaner.process(connectionsCsv, 'connections');
+            const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");
             if (connectionsResult.success) {
                 connectionsData = connectionsResult.cleanedData;
             } else {
-                connectionError = connectionsResult.error || 'Unable to parse Connections.csv.';
+                connectionError = connectionsResult.error || "Unable to parse Connections.csv.";
             }
         }
 
@@ -312,14 +322,14 @@ export const MessagesPage = (() => {
             messagesData,
             connectionsData,
             connectionError,
-            totalInputRows: messagesData.length
+            totalInputRows: messagesData.length,
         };
     }
 
     /** Load messages and connections files from IndexedDB. */
     async function loadData() {
         showMessagesLoading(true);
-        markPerformance('messages:idb-read:start');
+        markPerformance("messages:idb-read:start");
 
         try {
             await Session.waitForCleanup();
@@ -328,42 +338,56 @@ export const MessagesPage = (() => {
             let messagesFile = null;
             let connectionsFile = null;
 
-            messagesFile = DataCache.get('storage:file:messages') || null;
-            connectionsFile = DataCache.get('storage:file:connections') || null;
-            files = DataCache.get('storage:files') || null;
+            messagesFile = DataCache.get("storage:file:messages") || null;
+            connectionsFile = DataCache.get("storage:file:connections") || null;
+            files = DataCache.get("storage:files") || null;
 
-            messagesFile = normalizeStoredFile(messagesFile, 'messages');
-            connectionsFile = normalizeStoredFile(connectionsFile, 'connections');
+            messagesFile = normalizeStoredFile(messagesFile, "messages");
+            connectionsFile = normalizeStoredFile(connectionsFile, "connections");
 
             if (!messagesFile || !connectionsFile) {
                 if (!files) {
                     files = await Storage.getAllFiles();
-                    DataCache.set('storage:files', files);
+                    DataCache.set("storage:files", files);
                 }
                 if (!messagesFile) {
-                    messagesFile = normalizeStoredFile(files.find(file => file.type === 'messages') || null, 'messages');
+                    messagesFile = normalizeStoredFile(
+                        files.find((file) => file.type === "messages") || null,
+                        "messages",
+                    );
                     if (messagesFile) {
-                        DataCache.set('storage:file:messages', messagesFile);
+                        DataCache.set("storage:file:messages", messagesFile);
                     }
                 }
                 if (!connectionsFile) {
-                    connectionsFile = normalizeStoredFile(files.find(file => file.type === 'connections') || null, 'connections');
+                    connectionsFile = normalizeStoredFile(
+                        files.find((file) => file.type === "connections") || null,
+                        "connections",
+                    );
                     if (connectionsFile) {
-                        DataCache.set('storage:file:connections', connectionsFile);
+                        DataCache.set("storage:file:connections", connectionsFile);
                     }
                 }
             }
 
-            markPerformance('messages:idb-read:end');
-            measurePerformance('messages:idb-read', 'messages:idb-read:start', 'messages:idb-read:end');
+            markPerformance("messages:idb-read:end");
+            measurePerformance(
+                "messages:idb-read",
+                "messages:idb-read:start",
+                "messages:idb-read:end",
+            );
             state.hasConnectionsFile = Boolean(connectionsFile);
 
             const signature = buildDataSignature(messagesFile, connectionsFile);
             if (signature === state.loadedSignature && state.messageState) {
-                markPerformance('messages:render:start');
+                markPerformance("messages:render:start");
                 renderView();
-                markPerformance('messages:render:end');
-                measurePerformance('messages:render', 'messages:render:start', 'messages:render:end');
+                markPerformance("messages:render:end");
+                measurePerformance(
+                    "messages:render",
+                    "messages:render:start",
+                    "messages:render:end",
+                );
                 showMessagesLoading(false);
                 return;
             }
@@ -371,8 +395,8 @@ export const MessagesPage = (() => {
             if (!messagesFile) {
                 state.loadedSignature = signature;
                 setEmptyState(
-                    'No messages data available yet',
-                    'Upload messages.csv on the Home page to unlock messaging insights.'
+                    "No messages data available yet",
+                    "Upload messages.csv on the Home page to unlock messaging insights.",
                 );
                 showMessagesLoading(false);
                 return;
@@ -385,29 +409,38 @@ export const MessagesPage = (() => {
                 state.connectionLoadError = cachedState.connectionLoadError;
                 state.hasConnectionsFile = cachedState.hasConnectionsFile;
                 state.loadedSignature = signature;
-                markPerformance('messages:render:start');
+                markPerformance("messages:render:start");
                 renderView();
-                markPerformance('messages:render:end');
-                measurePerformance('messages:render', 'messages:render:start', 'messages:render:end');
+                markPerformance("messages:render:end");
+                measurePerformance(
+                    "messages:render",
+                    "messages:render:start",
+                    "messages:render:end",
+                );
                 showMessagesLoading(false);
                 return;
             }
 
             await nextFrame();
 
-            markPerformance('messages:worker-parse:start');
+            markPerformance("messages:worker-parse:start");
             const processed = await processFiles(
                 messagesFile.text,
-                connectionsFile ? connectionsFile.text : ''
+                connectionsFile ? connectionsFile.text : "",
             );
-            markPerformance('messages:worker-parse:end');
-            measurePerformance('messages:worker-parse', 'messages:worker-parse:start', 'messages:worker-parse:end');
+            markPerformance("messages:worker-parse:end");
+            measurePerformance(
+                "messages:worker-parse",
+                "messages:worker-parse:start",
+                "messages:worker-parse:end",
+            );
 
             if (!processed.success) {
                 state.loadedSignature = signature;
                 setEmptyState(
-                    'Messages parsing error',
-                    processed.error || 'Unable to parse messages.csv. Re-upload the file and try again.'
+                    "Messages parsing error",
+                    processed.error ||
+                        "Unable to parse messages.csv. Re-upload the file and try again.",
                 );
                 showMessagesLoading(false);
                 return;
@@ -425,8 +458,8 @@ export const MessagesPage = (() => {
             if (!state.messageState.events.length) {
                 state.loadedSignature = signature;
                 setEmptyState(
-                    'No usable message rows',
-                    'The file loaded, but no valid message rows were found for analysis.'
+                    "No usable message rows",
+                    "The file loaded, but no valid message rows were found for analysis.",
                 );
                 showMessagesLoading(false);
                 return;
@@ -441,19 +474,19 @@ export const MessagesPage = (() => {
 
             state.loadedSignature = signature;
             cacheComputedState(signature);
-            markPerformance('messages:render:start');
+            markPerformance("messages:render:start");
             renderView();
-            markPerformance('messages:render:end');
-            measurePerformance('messages:render', 'messages:render:start', 'messages:render:end');
+            markPerformance("messages:render:end");
+            measurePerformance("messages:render", "messages:render:start", "messages:render:end");
             showMessagesLoading(false);
         } catch (error) {
             captureError(error, {
-                module: 'messages-insights',
-                operation: 'load-data'
+                module: "messages-insights",
+                operation: "load-data",
             });
             setEmptyState(
-                'Storage error',
-                'Unable to load saved files. Try clearing browser data and re-uploading.'
+                "Storage error",
+                "Unable to load saved files. Try clearing browser data and re-uploading.",
             );
             showMessagesLoading(false);
         }
@@ -472,10 +505,10 @@ export const MessagesPage = (() => {
 
         const parsed = parseStoredUploadFile(file);
         if (!parsed.valid) {
-            captureError(new Error(parsed.error || 'Invalid stored file payload.'), {
-                module: 'messages-insights',
-                operation: 'parse-stored-file',
-                expectedType
+            captureError(new Error(parsed.error || "Invalid stored file payload."), {
+                module: "messages-insights",
+                operation: "parse-stored-file",
+                expectedType,
             });
             return null;
         }
@@ -500,11 +533,11 @@ export const MessagesPage = (() => {
             }
             const updatedAt = file.updatedAt || 0;
             const rowCount = file.rowCount || 0;
-            const name = file.name || 'unknown';
+            const name = file.name || "unknown";
             return `${type}:${name}:${updatedAt}:${rowCount}`;
         };
 
-        return [toPart(messagesFile, 'messages'), toPart(connectionsFile, 'connections')].join('|');
+        return [toPart(messagesFile, "messages"), toPart(connectionsFile, "connections")].join("|");
     }
 
     /**
@@ -525,7 +558,7 @@ export const MessagesPage = (() => {
             messageState: state.messageState,
             connectionState: state.connectionState,
             hasConnectionsFile: state.hasConnectionsFile,
-            connectionLoadError: state.connectionLoadError
+            connectionLoadError: state.connectionLoadError,
         });
     }
 
@@ -534,7 +567,7 @@ export const MessagesPage = (() => {
      * @returns {Promise<void>}
      */
     function nextFrame() {
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             requestAnimationFrame(() => resolve());
         });
     }
@@ -544,7 +577,7 @@ export const MessagesPage = (() => {
      * @param {string} name - Mark name
      */
     function markPerformance(name) {
-        if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+        if (typeof performance === "undefined" || typeof performance.mark !== "function") {
             return;
         }
         performance.mark(name);
@@ -557,18 +590,22 @@ export const MessagesPage = (() => {
      * @param {string} end - End mark
      */
     function measurePerformance(name, start, end) {
-        if (typeof performance === 'undefined' || typeof performance.measure !== 'function') {
+        if (typeof performance === "undefined" || typeof performance.measure !== "function") {
             return;
         }
         try {
             performance.measure(name, start, end);
 
-            if (typeof performance.getEntriesByName === 'function') {
+            if (typeof performance.getEntriesByName === "function") {
                 const entries = performance.getEntriesByName(name);
                 const lastEntry = entries.length ? entries[entries.length - 1] : null;
-                if (lastEntry && lastEntry.entryType === 'measure' && Number.isFinite(lastEntry.duration)) {
+                if (
+                    lastEntry &&
+                    lastEntry.entryType === "measure" &&
+                    Number.isFinite(lastEntry.duration)
+                ) {
                     reportPerformanceMeasure(name, lastEntry.duration, {
-                        module: 'messages-insights'
+                        module: "messages-insights",
                     });
                 }
             }
@@ -583,10 +620,14 @@ export const MessagesPage = (() => {
      * @returns {object}
      */
     function buildMessageState(rows) {
-        markPerformance('messages:build-state:start');
+        markPerformance("messages:build-state:start");
         const result = MessagesAnalytics.buildMessageState(rows);
-        markPerformance('messages:build-state:end');
-        measurePerformance('messages:build-state', 'messages:build-state:start', 'messages:build-state:end');
+        markPerformance("messages:build-state:end");
+        measurePerformance(
+            "messages:build-state",
+            "messages:build-state:start",
+            "messages:build-state:end",
+        );
         return result;
     }
 
@@ -596,10 +637,14 @@ export const MessagesPage = (() => {
      * @returns {{list: object[], byUrl: Map<string, object>, byName: Map<string, object>}}
      */
     function buildConnectionState(rows) {
-        markPerformance('messages:build-connections:start');
+        markPerformance("messages:build-connections:start");
         const result = MessagesAnalytics.buildConnectionState(rows);
-        markPerformance('messages:build-connections:end');
-        measurePerformance('messages:build-connections', 'messages:build-connections:start', 'messages:build-connections:end');
+        markPerformance("messages:build-connections:end");
+        measurePerformance(
+            "messages:build-connections",
+            "messages:build-connections:start",
+            "messages:build-connections:end",
+        );
         return result;
     }
 
@@ -612,7 +657,7 @@ export const MessagesPage = (() => {
         const safePayload = payload || {};
         const contacts = new Map();
         const contactList = Array.isArray(safePayload.contacts) ? safePayload.contacts : [];
-        contactList.forEach(contact => {
+        contactList.forEach((contact) => {
             if (!contact || !contact.key) {
                 return;
             }
@@ -622,11 +667,19 @@ export const MessagesPage = (() => {
         return {
             contacts,
             events: Array.isArray(safePayload.events) ? safePayload.events : [],
-            rowTimestamps: Array.isArray(safePayload.rowTimestamps) ? safePayload.rowTimestamps : [],
+            rowTimestamps: Array.isArray(safePayload.rowTimestamps)
+                ? safePayload.rowTimestamps
+                : [],
             skippedRows: Number.isFinite(safePayload.skippedRows) ? safePayload.skippedRows : 0,
-            talkedNameKeys: new Set(Array.isArray(safePayload.talkedNameKeys) ? safePayload.talkedNameKeys : []),
-            talkedUrlKeys: new Set(Array.isArray(safePayload.talkedUrlKeys) ? safePayload.talkedUrlKeys : []),
-            latestTimestamp: Number.isFinite(safePayload.latestTimestamp) ? safePayload.latestTimestamp : 0
+            talkedNameKeys: new Set(
+                Array.isArray(safePayload.talkedNameKeys) ? safePayload.talkedNameKeys : [],
+            ),
+            talkedUrlKeys: new Set(
+                Array.isArray(safePayload.talkedUrlKeys) ? safePayload.talkedUrlKeys : [],
+            ),
+            latestTimestamp: Number.isFinite(safePayload.latestTimestamp)
+                ? safePayload.latestTimestamp
+                : 0,
         };
     }
 
@@ -641,7 +694,7 @@ export const MessagesPage = (() => {
         const byUrl = new Map();
         const byName = new Map();
 
-        list.forEach(connection => {
+        list.forEach((connection) => {
             if (!connection) {
                 return;
             }
@@ -661,7 +714,7 @@ export const MessagesPage = (() => {
      * @param {HTMLElement} button - Clicked time range button
      */
     function handleTimeRangeChange(button) {
-        const range = button.getAttribute('data-range');
+        const range = button.getAttribute("data-range");
         if (!range) {
             return;
         }
@@ -692,10 +745,10 @@ export const MessagesPage = (() => {
      * @param {string} range - Active time range
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach(button => {
-            const isActive = button.getAttribute('data-range') === range;
-            button.classList.toggle('active', isActive);
-            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((button) => {
+            const isActive = button.getAttribute("data-range") === range;
+            button.classList.toggle("active", isActive);
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
     }
 
@@ -705,8 +758,8 @@ export const MessagesPage = (() => {
      * @returns {string}
      */
     function parseRangeParam(value) {
-        const range = String(value || '').toLowerCase();
-        return (RANGE_MONTHS[range] || range === 'all') ? range : FILTER_DEFAULTS.timeRange;
+        const range = String(value || "").toLowerCase();
+        return RANGE_MONTHS[range] || range === "all" ? range : FILTER_DEFAULTS.timeRange;
     }
 
     /**
@@ -726,7 +779,7 @@ export const MessagesPage = (() => {
             return;
         }
         const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== 'messages') {
+        if (!currentRoute || currentRoute.name !== "messages") {
             return;
         }
         AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
@@ -741,7 +794,7 @@ export const MessagesPage = (() => {
     function getTopContactsInRange(messageState, rangeStart) {
         const rangeCounts = new Map();
 
-        messageState.events.forEach(event => {
+        messageState.events.forEach((event) => {
             if (rangeStart && event.timestamp < rangeStart) {
                 return;
             }
@@ -753,7 +806,7 @@ export const MessagesPage = (() => {
             }
             rangeCounts.set(event.contactKey, {
                 count: 1,
-                lastTimestamp: event.timestamp
+                lastTimestamp: event.timestamp,
             });
         });
 
@@ -761,10 +814,10 @@ export const MessagesPage = (() => {
             const base = messageState.contacts.get(contactKey);
             return {
                 key: contactKey,
-                name: base ? base.name : 'Unknown',
-                url: base ? base.url : '',
+                name: base ? base.name : "Unknown",
+                url: base ? base.url : "",
                 count: metric.count,
-                lastTimestamp: metric.lastTimestamp
+                lastTimestamp: metric.lastTimestamp,
             };
         });
 
@@ -782,14 +835,15 @@ export const MessagesPage = (() => {
         let totalRows = messageState.rowTimestamps.length;
         if (rangeStart) {
             totalRows = messageState.rowTimestamps.reduce(
-                (sum, ts) => sum + (ts >= rangeStart ? 1 : 0), 0
+                (sum, ts) => sum + (ts >= rangeStart ? 1 : 0),
+                0,
             );
         }
         return {
             items,
             totalMessages,
             totalRows,
-            totalPeople: items.length
+            totalPeople: items.length,
         };
     }
 
@@ -800,15 +854,22 @@ export const MessagesPage = (() => {
      * @returns {object[]}
      */
     function getSilentConnections(messageState, connectionState) {
-        const silent = connectionState.list.filter(connection => {
+        const silent = connectionState.list.filter((connection) => {
             const seenByUrl = connection.url && messageState.talkedUrlKeys.has(connection.url);
-            const seenByName = connection.nameKey && messageState.talkedNameKeys.has(connection.nameKey);
+            const seenByName =
+                connection.nameKey && messageState.talkedNameKeys.has(connection.nameKey);
             return !(seenByUrl || seenByName);
         });
 
         silent.sort((left, right) => {
-            const leftTs = left.connectedOnTimestamp === null ? Number.POSITIVE_INFINITY : left.connectedOnTimestamp;
-            const rightTs = right.connectedOnTimestamp === null ? Number.POSITIVE_INFINITY : right.connectedOnTimestamp;
+            const leftTs =
+                left.connectedOnTimestamp === null
+                    ? Number.POSITIVE_INFINITY
+                    : left.connectedOnTimestamp;
+            const rightTs =
+                right.connectedOnTimestamp === null
+                    ? Number.POSITIVE_INFINITY
+                    : right.connectedOnTimestamp;
             if (leftTs !== rightTs) {
                 return leftTs - rightTs;
             }
@@ -828,7 +889,7 @@ export const MessagesPage = (() => {
         const now = Date.now();
         const fading = [];
 
-        messageState.contacts.forEach(contact => {
+        messageState.contacts.forEach((contact) => {
             const connection = findMatchingConnection(contact, connectionState);
             if (!connection) {
                 return;
@@ -841,10 +902,10 @@ export const MessagesPage = (() => {
 
             fading.push({
                 name: contact.name,
-                url: contact.url || connection.url || '',
+                url: contact.url || connection.url || "",
                 daysSince,
                 lastTimestamp: contact.lastTimestamp,
-                company: connection.company
+                company: connection.company,
             });
         });
 
@@ -883,7 +944,10 @@ export const MessagesPage = (() => {
 
         hideEmptyState();
 
-        const rangeStart = getRangeStart(state.filters.timeRange, state.messageState.latestTimestamp);
+        const rangeStart = getRangeStart(
+            state.filters.timeRange,
+            state.messageState.latestTimestamp,
+        );
         const topSummary = getTopContactsInRange(state.messageState, rangeStart);
 
         const hasConnections = state.connectionState && state.connectionState.list.length > 0;
@@ -903,7 +967,11 @@ export const MessagesPage = (() => {
         renderFadingConversations(fadingConversations.slice(0, 10));
         updateExportButtonStates();
 
-        updateStats(topSummary, hasConnections ? state.connectionState.list.length : 0, fadingConversations.length);
+        updateStats(
+            topSummary,
+            hasConnections ? state.connectionState.list.length : 0,
+            fadingConversations.length,
+        );
         updateTip(topSummary.items, silentConnections, fadingConversations);
     }
 
@@ -913,18 +981,20 @@ export const MessagesPage = (() => {
      */
     function renderTopContacts(items) {
         if (!items.length) {
-            renderEmptyList(elements.topContactsList, 'No conversations in this range yet.');
+            renderEmptyList(elements.topContactsList, "No conversations in this range yet.");
             return;
         }
 
         const fragment = document.createDocumentFragment();
-        items.forEach(item => {
-            fragment.appendChild(createMessageItem({
-                name: item.name,
-                url: item.url,
-                meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
-                value: `${item.count} msgs`
-            }));
+        items.forEach((item) => {
+            fragment.appendChild(
+                createMessageItem({
+                    name: item.name,
+                    url: item.url,
+                    meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
+                    value: `${item.count} msgs`,
+                }),
+            );
         });
         elements.topContactsList.replaceChildren(fragment);
     }
@@ -934,29 +1004,34 @@ export const MessagesPage = (() => {
      * @param {object[]} items - Silent connection rows
      */
     function renderSilentConnections(items) {
-        const unavailableReason = getConnectionsUnavailableMessage('silent');
+        const unavailableReason = getConnectionsUnavailableMessage("silent");
         if (unavailableReason) {
             renderEmptyList(elements.silentConnectionsList, unavailableReason);
             return;
         }
 
         if (!items.length) {
-            renderEmptyList(elements.silentConnectionsList, 'Great job — every connection has at least one message.');
+            renderEmptyList(
+                elements.silentConnectionsList,
+                "Great job — every connection has at least one message.",
+            );
             return;
         }
 
         const fragment = document.createDocumentFragment();
-        items.forEach(item => {
-            const roleMeta = [item.position, item.company].filter(Boolean).join(' @ ');
+        items.forEach((item) => {
+            const roleMeta = [item.position, item.company].filter(Boolean).join(" @ ");
             const connectedOn = item.connectedOnTimestamp
                 ? formatShortDate(item.connectedOnTimestamp)
-                : 'No date';
-            fragment.appendChild(createMessageItem({
-                name: item.name,
-                url: item.url,
-                meta: roleMeta || 'No role info',
-                value: connectedOn
-            }));
+                : "No date";
+            fragment.appendChild(
+                createMessageItem({
+                    name: item.name,
+                    url: item.url,
+                    meta: roleMeta || "No role info",
+                    value: connectedOn,
+                }),
+            );
         });
         elements.silentConnectionsList.replaceChildren(fragment);
     }
@@ -966,25 +1041,30 @@ export const MessagesPage = (() => {
      * @param {object[]} items - Fading conversation rows
      */
     function renderFadingConversations(items) {
-        const unavailableReason = getConnectionsUnavailableMessage('fading');
+        const unavailableReason = getConnectionsUnavailableMessage("fading");
         if (unavailableReason) {
             renderEmptyList(elements.fadingConversationsList, unavailableReason);
             return;
         }
 
         if (!items.length) {
-            renderEmptyList(elements.fadingConversationsList, 'No fading conversations in your connected network.');
+            renderEmptyList(
+                elements.fadingConversationsList,
+                "No fading conversations in your connected network.",
+            );
             return;
         }
 
         const fragment = document.createDocumentFragment();
-        items.forEach(item => {
-            fragment.appendChild(createMessageItem({
-                name: item.name,
-                url: item.url,
-                meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
-                value: `${item.daysSince} days`
-            }));
+        items.forEach((item) => {
+            fragment.appendChild(
+                createMessageItem({
+                    name: item.name,
+                    url: item.url,
+                    meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
+                    value: `${item.daysSince} days`,
+                }),
+            );
         });
         elements.fadingConversationsList.replaceChildren(fragment);
     }
@@ -995,22 +1075,22 @@ export const MessagesPage = (() => {
      * @returns {HTMLElement}
      */
     function createMessageItem(item) {
-        const listItem = document.createElement('li');
-        listItem.className = 'message-item';
+        const listItem = document.createElement("li");
+        listItem.className = "message-item";
 
-        const main = document.createElement('div');
-        main.className = 'message-item-main';
+        const main = document.createElement("div");
+        main.className = "message-item-main";
 
-        const title = document.createElement('p');
-        title.className = 'message-item-title';
+        const title = document.createElement("p");
+        title.className = "message-item-title";
         appendContactName(title, item.name, item.url);
 
-        const meta = document.createElement('p');
-        meta.className = 'message-item-meta';
+        const meta = document.createElement("p");
+        meta.className = "message-item-meta";
         meta.textContent = item.meta;
 
-        const value = document.createElement('span');
-        value.className = 'message-item-value';
+        const value = document.createElement("span");
+        value.className = "message-item-value";
         value.textContent = item.value;
 
         main.appendChild(title);
@@ -1027,17 +1107,17 @@ export const MessagesPage = (() => {
      * @param {string} url - Contact profile URL
      */
     function appendContactName(container, name, url) {
-        const label = cleanText(name) || 'Unknown';
+        const label = cleanText(name) || "Unknown";
         const cleanUrl = cleanText(url);
         if (!cleanUrl) {
             container.textContent = label;
             return;
         }
 
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.href = cleanUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
         link.textContent = label;
         container.appendChild(link);
     }
@@ -1049,46 +1129,73 @@ export const MessagesPage = (() => {
      * @param {number} fadingCount - Number of fading conversations
      */
     function updateStats(topSummary, totalConnections, fadingCount) {
-        const card = elements.msgStatMessages.closest('.stat-card');
-        if (card) {card.classList.remove('popup-active');}
+        const card = elements.msgStatMessages.closest(".stat-card");
+        if (card) {
+            card.classList.remove("popup-active");
+        }
 
         const skipped = state.messageState ? state.messageState.skippedRows : 0;
-        elements.msgStatMessages.replaceChildren(document.createTextNode(String(topSummary.totalRows)));
+        elements.msgStatMessages.replaceChildren(
+            document.createTextNode(String(topSummary.totalRows)),
+        );
 
         if (skipped > 0) {
-            const popupId = 'msgSkippedPopup';
+            const popupId = "msgSkippedPopup";
             const msg = `${skipped} of ${state.totalInputRows} cleaned rows were excluded from analysis (self-messages, anonymous contacts, or unparseable dates)`;
 
-            const asterisk = document.createElement('span');
-            asterisk.className = 'stat-asterisk';
-            asterisk.setAttribute('role', 'button');
-            asterisk.setAttribute('tabindex', '0');
-            asterisk.setAttribute('aria-label', 'Show excluded row details');
-            asterisk.setAttribute('aria-describedby', popupId);
-            asterisk.textContent = '*';
+            const asterisk = document.createElement("span");
+            asterisk.className = "stat-asterisk";
+            asterisk.setAttribute("role", "button");
+            asterisk.setAttribute("tabindex", "0");
+            asterisk.setAttribute("aria-label", "Show excluded row details");
+            asterisk.setAttribute("aria-describedby", popupId);
+            asterisk.textContent = "*";
 
-            const popup = document.createElement('span');
-            popup.className = 'stat-popup';
-            popup.setAttribute('role', 'tooltip');
+            const popup = document.createElement("span");
+            popup.className = "stat-popup";
+            popup.setAttribute("role", "tooltip");
             popup.id = popupId;
-            popup.setAttribute('aria-hidden', 'true');
+            popup.setAttribute("aria-hidden", "true");
             popup.textContent = msg;
 
             elements.msgStatMessages.appendChild(asterisk);
             elements.msgStatMessages.appendChild(popup);
 
-            function showPopup() { popup.classList.add('visible'); popup.setAttribute('aria-hidden', 'false'); if (card) {card.classList.add('popup-active');} }
-            function hidePopup() { popup.classList.remove('visible'); popup.setAttribute('aria-hidden', 'true'); if (card) {card.classList.remove('popup-active');} }
-            function togglePopup() { if (popup.classList.contains('visible')) { hidePopup(); } else { showPopup(); } }
+            function showPopup() {
+                popup.classList.add("visible");
+                popup.setAttribute("aria-hidden", "false");
+                if (card) {
+                    card.classList.add("popup-active");
+                }
+            }
+            function hidePopup() {
+                popup.classList.remove("visible");
+                popup.setAttribute("aria-hidden", "true");
+                if (card) {
+                    card.classList.remove("popup-active");
+                }
+            }
+            function togglePopup() {
+                if (popup.classList.contains("visible")) {
+                    hidePopup();
+                } else {
+                    showPopup();
+                }
+            }
 
-            asterisk.addEventListener('mouseenter', showPopup);
-            asterisk.addEventListener('mouseleave', hidePopup);
-            asterisk.addEventListener('click', togglePopup);
-            asterisk.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') { hidePopup(); }
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePopup(); }
+            asterisk.addEventListener("mouseenter", showPopup);
+            asterisk.addEventListener("mouseleave", hidePopup);
+            asterisk.addEventListener("click", togglePopup);
+            asterisk.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") {
+                    hidePopup();
+                }
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    togglePopup();
+                }
             });
-            asterisk.addEventListener('focusout', hidePopup);
+            asterisk.addEventListener("focusout", hidePopup);
         }
         elements.msgStatContacts.textContent = String(topSummary.totalPeople);
         elements.msgStatConnected.textContent = String(totalConnections);
@@ -1119,7 +1226,7 @@ export const MessagesPage = (() => {
      * @returns {string|null}
      */
     function buildTipText(topContacts, silentConnections, fadingConversations) {
-        const unavailableReason = getConnectionsUnavailableMessage('tip');
+        const unavailableReason = getConnectionsUnavailableMessage("tip");
         if (unavailableReason) {
             return unavailableReason;
         }
@@ -1149,9 +1256,9 @@ export const MessagesPage = (() => {
      */
     function getConnectionsUnavailableMessage(section) {
         const missingFileMessages = {
-            silent: 'Upload Connections.csv to view silent connections.',
-            fading: 'Upload Connections.csv to identify fading conversations.',
-            tip: 'Upload Connections.csv to unlock silent and fading relationship insights.'
+            silent: "Upload Connections.csv to view silent connections.",
+            fading: "Upload Connections.csv to identify fading conversations.",
+            tip: "Upload Connections.csv to unlock silent and fading relationship insights.",
         };
 
         if (!state.hasConnectionsFile) {
@@ -1169,45 +1276,47 @@ export const MessagesPage = (() => {
      * @param {string} message - Empty message text
      */
     function renderEmptyList(listElement, message) {
-        const item = document.createElement('li');
-        item.className = 'message-empty';
+        const item = document.createElement("li");
+        item.className = "message-empty";
         item.textContent = message;
         listElement.replaceChildren(item);
     }
 
     /** Export top contacts panel data. */
     function exportTopContacts() {
-        const rows = state.currentLists.topContacts.map(item => ({
+        const rows = state.currentLists.topContacts.map((item) => ({
             Name: item.name,
-            'LinkedIn URL': toLinkedInCell(item.url),
+            "LinkedIn URL": toLinkedInCell(item.url),
             Messages: item.count,
-            'Last Message': formatShortDate(item.lastTimestamp)
+            "Last Message": formatShortDate(item.lastTimestamp),
         }));
-        downloadExport('top-contacts', 'Top Contacts', rows);
+        downloadExport("top-contacts", "Top Contacts", rows);
     }
 
     /** Export silent connections panel data. */
     function exportSilentConnections() {
-        const rows = state.currentLists.silentConnections.map(item => ({
+        const rows = state.currentLists.silentConnections.map((item) => ({
             Name: item.name,
-            'LinkedIn URL': toLinkedInCell(item.url),
-            'Connected On': item.connectedOnTimestamp ? formatShortDate(item.connectedOnTimestamp) : '',
-            Position: item.position || '',
-            Company: item.company || ''
+            "LinkedIn URL": toLinkedInCell(item.url),
+            "Connected On": item.connectedOnTimestamp
+                ? formatShortDate(item.connectedOnTimestamp)
+                : "",
+            Position: item.position || "",
+            Company: item.company || "",
         }));
-        downloadExport('silent-connections', 'Silent Connections', rows);
+        downloadExport("silent-connections", "Silent Connections", rows);
     }
 
     /** Export fading conversations panel data. */
     function exportFadingConversations() {
-        const rows = state.currentLists.fadingConversations.map(item => ({
+        const rows = state.currentLists.fadingConversations.map((item) => ({
             Name: item.name,
-            'LinkedIn URL': toLinkedInCell(item.url),
-            'Days Since Last Message': item.daysSince,
-            'Last Message': formatShortDate(item.lastTimestamp),
-            Company: item.company || ''
+            "LinkedIn URL": toLinkedInCell(item.url),
+            "Days Since Last Message": item.daysSince,
+            "Last Message": formatShortDate(item.lastTimestamp),
+            Company: item.company || "",
         }));
-        downloadExport('fading-conversations', 'Fading Conversations', rows);
+        downloadExport("fading-conversations", "Fading Conversations", rows);
     }
 
     /**
@@ -1219,11 +1328,11 @@ export const MessagesPage = (() => {
         const value = cleanText(url);
         /* v8 ignore next 3 */
         if (!value) {
-            return '';
+            return "";
         }
         return {
             value,
-            hyperlink: value
+            hyperlink: value,
         };
     }
 
@@ -1239,34 +1348,42 @@ export const MessagesPage = (() => {
             return;
         }
         /* v8 ignore next 3 */
-        if (!ExcelGenerator || typeof ExcelGenerator.downloadFromSpec !== 'function') {
+        if (!ExcelGenerator || typeof ExcelGenerator.downloadFromSpec !== "function") {
             return;
         }
 
         const headers = Object.keys(rows[0]);
-        const orderedRows = rows.map(row => headers.map(header => row[header] ?? ''));
+        const orderedRows = rows.map((row) => headers.map((header) => row[header] ?? ""));
         ExcelGenerator.downloadFromSpec(
             {
                 sheetName,
                 headers,
-                rows: orderedRows
+                rows: orderedRows,
             },
-            `messages-${filePrefix}.xlsx`
+            `messages-${filePrefix}.xlsx`,
         );
     }
 
     /** Enable/disable export buttons based on availability and list content. */
     function updateExportButtonStates() {
-        const exportReady = Boolean(ExcelGenerator && typeof ExcelGenerator.downloadFromSpec === 'function');
+        const exportReady = Boolean(
+            ExcelGenerator && typeof ExcelGenerator.downloadFromSpec === "function",
+        );
 
         if (elements.topContactsExportBtn) {
-            elements.topContactsExportBtn.disabled = !(exportReady && state.currentLists.topContacts.length);
+            elements.topContactsExportBtn.disabled = !(
+                exportReady && state.currentLists.topContacts.length
+            );
         }
         if (elements.silentConnectionsExportBtn) {
-            elements.silentConnectionsExportBtn.disabled = !(exportReady && state.currentLists.silentConnections.length);
+            elements.silentConnectionsExportBtn.disabled = !(
+                exportReady && state.currentLists.silentConnections.length
+            );
         }
         if (elements.fadingConversationsExportBtn) {
-            elements.fadingConversationsExportBtn.disabled = !(exportReady && state.currentLists.fadingConversations.length);
+            elements.fadingConversationsExportBtn.disabled = !(
+                exportReady && state.currentLists.fadingConversations.length
+            );
         }
     }
 
@@ -1277,7 +1394,7 @@ export const MessagesPage = (() => {
      * @returns {number|null}
      */
     function getRangeStart(range, latestTimestamp) {
-        if (range === 'all') {
+        if (range === "all") {
             return null;
         }
         const months = RANGE_MONTHS[range];
@@ -1292,7 +1409,7 @@ export const MessagesPage = (() => {
             0,
             0,
             0,
-            0
+            0,
         ).getTime();
     }
 
@@ -1329,8 +1446,8 @@ export const MessagesPage = (() => {
      * @param {string} message - Empty state message
      */
     function setEmptyState(title, message) {
-        const heading = elements.messagesEmpty.querySelector('h2');
-        const text = elements.messagesEmpty.querySelector('p');
+        const heading = elements.messagesEmpty.querySelector("h2");
+        const text = elements.messagesEmpty.querySelector("p");
         if (heading) {
             heading.textContent = title;
         }
@@ -1356,10 +1473,10 @@ export const MessagesPage = (() => {
     function showMessagesLoading(isLoading) {
         if (isLoading) {
             renderLoadingSkeleton();
-            LoadingOverlay.show('messages');
+            LoadingOverlay.show("messages");
             return;
         }
-        LoadingOverlay.hide('messages');
+        LoadingOverlay.hide("messages");
     }
 
     /** Render temporary skeleton rows while loading data. */
@@ -1386,6 +1503,6 @@ export const MessagesPage = (() => {
     return {
         init,
         onRouteChange,
-        onRouteLeave
+        onRouteLeave,
     };
 })();

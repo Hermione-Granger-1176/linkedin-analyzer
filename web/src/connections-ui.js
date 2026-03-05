@@ -1,33 +1,32 @@
 /* Connections page logic */
 
-import { SketchCharts } from './charts.js';
-import { DataCache } from './data-cache.js';
-import { LoadingOverlay } from './loading-overlay.js';
-import { AppRouter } from './router.js';
-import { captureError } from './sentry.js';
-import { Session } from './session.js';
-import { Storage } from './storage.js';
-import { reportPerformanceMeasure } from './telemetry.js';
-import { hideChartTooltip, showChartTooltip } from './ui/chart-tooltip.js';
-import { parseConnectionsWorkerMessage, parseStoredUploadFile } from './worker-contracts.js';
+import { SketchCharts } from "./charts.js";
+import { DataCache } from "./data-cache.js";
+import { LoadingOverlay } from "./loading-overlay.js";
+import { AppRouter } from "./router.js";
+import { captureError } from "./sentry.js";
+import { Session } from "./session.js";
+import { Storage } from "./storage.js";
+import { reportPerformanceMeasure } from "./telemetry.js";
+import { hideChartTooltip, showChartTooltip } from "./ui/chart-tooltip.js";
+import { parseConnectionsWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
 
 export const ConnectionsPage = (() => {
-    'use strict';
+    "use strict";
 
     const FILTER_DEFAULTS = Object.freeze({
-        timeRange: '12m'
+        timeRange: "12m",
     });
 
     const RANGE_DAYS = Object.freeze({
-        '1m': 30,
-        '3m': 91,
-        '6m': 182,
-        '12m': 365
+        "1m": 30,
+        "3m": 91,
+        "6m": 182,
+        "12m": 365,
     });
 
-    const RANGE_VALUES = new Set(['1m', '3m', '6m', '12m', 'all']);
-    const CACHE_EVENTS = new Set(['filesChanged', 'storageCleared']);
-    const WORKER_URL = new URL('./connections-worker.js', import.meta.url);
+    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
     const WORKER_TIMEOUT_MS = 30000;
     const TOP_N = 10;
 
@@ -38,7 +37,7 @@ export const ConnectionsPage = (() => {
         allRows: null,
         allTimeline: null,
         workerStats: null,
-        currentView: null
+        currentView: null,
     };
 
     let elements = null;
@@ -65,7 +64,7 @@ export const ConnectionsPage = (() => {
         chartCanvases = [
             elements.connectionGrowthChart,
             elements.connectionCompaniesChart,
-            elements.connectionPositionsChart
+            elements.connectionPositionsChart,
             /* v8 ignore next */
         ].filter(Boolean);
 
@@ -119,70 +118,75 @@ export const ConnectionsPage = (() => {
      */
     function resolveElements() {
         return {
-            timeRangeButtons: document.querySelectorAll('#connectionsTimeRangeButtons .filter-btn'),
-            resetFiltersBtn: document.getElementById('connectionsResetFiltersBtn'),
-            connectionsEmpty: document.getElementById('connectionsEmpty'),
-            connectionsGrid: document.getElementById('connectionsGrid'),
-            connectionsStatsGrid: document.getElementById('connectionsStatsGrid'),
-            connStatTotal: document.getElementById('connStatTotal'),
-            connStatRecent: document.getElementById('connStatRecent'),
-            connStatTopCompany: document.getElementById('connStatTopCompany'),
-            connStatNetworkAge: document.getElementById('connStatNetworkAge'),
-            connectionGrowthChart: document.getElementById('connectionGrowthChart'),
-            connectionCompaniesChart: document.getElementById('connectionCompaniesChart'),
-            connectionPositionsChart: document.getElementById('connectionPositionsChart'),
-            chartTooltip: document.getElementById('chartTooltip')
+            timeRangeButtons: document.querySelectorAll("#connectionsTimeRangeButtons .filter-btn"),
+            resetFiltersBtn: document.getElementById("connectionsResetFiltersBtn"),
+            connectionsEmpty: document.getElementById("connectionsEmpty"),
+            connectionsGrid: document.getElementById("connectionsGrid"),
+            connectionsStatsGrid: document.getElementById("connectionsStatsGrid"),
+            connStatTotal: document.getElementById("connStatTotal"),
+            connStatRecent: document.getElementById("connStatRecent"),
+            connStatTopCompany: document.getElementById("connStatTopCompany"),
+            connStatNetworkAge: document.getElementById("connStatNetworkAge"),
+            connectionGrowthChart: document.getElementById("connectionGrowthChart"),
+            connectionCompaniesChart: document.getElementById("connectionCompaniesChart"),
+            connectionPositionsChart: document.getElementById("connectionPositionsChart"),
+            chartTooltip: document.getElementById("chartTooltip"),
         };
     }
 
     /** Attach event listeners for filters and chart interactions. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach(button => {
-            button.addEventListener('click', () => handleTimeRangeChange(button));
-            button.setAttribute('aria-pressed', button.classList.contains('active') ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((button) => {
+            button.addEventListener("click", () => handleTimeRangeChange(button));
+            button.setAttribute(
+                "aria-pressed",
+                button.classList.contains("active") ? "true" : "false",
+            );
         });
 
         if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener('click', resetFilters);
+            elements.resetFiltersBtn.addEventListener("click", resetFilters);
         }
 
-        window.addEventListener('beforeunload', terminateWorker);
-        window.addEventListener('pagehide', terminateWorker);
+        window.addEventListener("beforeunload", terminateWorker);
+        window.addEventListener("pagehide", terminateWorker);
 
-        document.addEventListener('themechange', () => {
+        document.addEventListener("themechange", () => {
             if (state.currentView) {
                 renderView(state.currentView);
             }
         });
 
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && state.currentView) {
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible" && state.currentView) {
                 renderView(state.currentView);
             }
         });
 
-        chartCanvases.forEach(canvas => {
-            canvas.addEventListener('mousemove', handleChartHover);
-            canvas.addEventListener('mouseleave', hideTooltip);
-            canvas.setAttribute('tabindex', '0');
+        chartCanvases.forEach((canvas) => {
+            canvas.addEventListener("mousemove", handleChartHover);
+            canvas.addEventListener("mouseleave", hideTooltip);
+            canvas.setAttribute("tabindex", "0");
         });
     }
 
     /** Create the connections Web Worker. */
     function initWorker() {
-        if (typeof Worker === 'undefined' || worker) {
+        if (typeof Worker === "undefined" || worker) {
             return;
         }
 
         try {
-            worker = new Worker(WORKER_URL, { type: 'module' });
-            worker.addEventListener('message', handleWorkerMessage);
-            worker.addEventListener('error', handleWorkerError);
+            worker = new Worker(new URL("./connections-worker.js", import.meta.url), {
+                type: "module",
+            });
+            worker.addEventListener("message", handleWorkerMessage);
+            worker.addEventListener("error", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {
-                module: 'connections-ui',
-                operation: 'init-worker'
+                module: "connections-ui",
+                operation: "init-worker",
             });
         }
     }
@@ -212,9 +216,11 @@ export const ConnectionsPage = (() => {
      */
     function handleCacheChange(event) {
         const type = event && event.type;
-        if (!CACHE_EVENTS.has(type)) {return;}
+        if (!CACHE_EVENTS.has(type)) {
+            return;
+        }
 
-        if (type === 'filesChanged' && event.fileType && event.fileType !== 'connections') {
+        if (type === "filesChanged" && event.fileType && event.fileType !== "connections") {
             return;
         }
 
@@ -229,7 +235,7 @@ export const ConnectionsPage = (() => {
     /** Load connections CSV from IndexedDB and send to worker for parsing. */
     async function loadData() {
         showConnectionsLoading(true);
-        markPerformance('connections:idb-read:start');
+        markPerformance("connections:idb-read:start");
 
         try {
             await Session.waitForCleanup();
@@ -237,12 +243,16 @@ export const ConnectionsPage = (() => {
             initWorker();
 
             const file = await loadConnectionsFile();
-            markPerformance('connections:idb-read:end');
-            measurePerformance('connections:idb-read', 'connections:idb-read:start', 'connections:idb-read:end');
+            markPerformance("connections:idb-read:end");
+            measurePerformance(
+                "connections:idb-read",
+                "connections:idb-read:start",
+                "connections:idb-read:end",
+            );
             if (!file || !file.text) {
                 setEmptyState(
-                    'No connections data available yet',
-                    'Upload Connections.csv on the Home page to see your network analytics.'
+                    "No connections data available yet",
+                    "Upload Connections.csv on the Home page to see your network analytics.",
                 );
                 showConnectionsLoading(false);
                 return;
@@ -250,8 +260,8 @@ export const ConnectionsPage = (() => {
 
             if (!worker) {
                 setEmptyState(
-                    'Connections not supported',
-                    'Your browser does not support Web Workers. Open this page from a local server (not file://).'
+                    "Connections not supported",
+                    "Your browser does not support Web Workers. Open this page from a local server (not file://).",
                 );
                 showConnectionsLoading(false);
                 return;
@@ -265,26 +275,29 @@ export const ConnectionsPage = (() => {
                     return;
                 }
                 pendingRequestId = 0;
-                setEmptyState('Connections timeout', 'Parsing took too long. Please retry the upload.');
+                setEmptyState(
+                    "Connections timeout",
+                    "Parsing took too long. Please retry the upload.",
+                );
                 showConnectionsLoading(false);
                 terminateWorker();
             }, WORKER_TIMEOUT_MS);
-            markPerformance('connections:worker-parse:start');
+            markPerformance("connections:worker-parse:start");
             worker.postMessage({
-                type: 'process',
+                type: "process",
                 requestId: id,
-                payload: { connectionsCsv: file.text }
+                payload: { connectionsCsv: file.text },
             });
-        /* v8 ignore next 7 */
+            /* v8 ignore next 7 */
         } catch (error) {
             captureError(error, {
-                module: 'connections-ui',
-                operation: 'load-data'
+                module: "connections-ui",
+                operation: "load-data",
             });
             clearWorkerTimeout();
             setEmptyState(
-                'Storage error',
-                'Unable to load saved data. Try clearing browser data and re-uploading.'
+                "Storage error",
+                "Unable to load saved data. Try clearing browser data and re-uploading.",
             );
             showConnectionsLoading(false);
         }
@@ -295,14 +308,14 @@ export const ConnectionsPage = (() => {
      * @returns {Promise<object|null>} The stored file record or null
      */
     async function loadConnectionsFile() {
-        const cacheKey = 'storage:file:connections';
+        const cacheKey = "storage:file:connections";
 
-        const cached = normalizeConnectionsFile(DataCache.get(cacheKey) || null, 'cache');
+        const cached = normalizeConnectionsFile(DataCache.get(cacheKey) || null, "cache");
         if (cached) {
             return cached;
         }
 
-        const file = normalizeConnectionsFile(await Storage.getFile('connections'), 'storage');
+        const file = normalizeConnectionsFile(await Storage.getFile("connections"), "storage");
         if (file) {
             DataCache.set(cacheKey, file);
         }
@@ -321,21 +334,28 @@ export const ConnectionsPage = (() => {
         }
 
         const parsed = parseStoredUploadFile(file);
-        if (!parsed.valid || parsed.value.type !== 'connections') {
-            if (file && typeof file.text === 'string') {
+        if (!parsed.valid || parsed.value.type !== "connections") {
+            if (file && typeof file.text === "string") {
                 return {
-                    type: 'connections',
-                    name: typeof file.name === 'string' ? file.name : 'Connections.csv',
+                    type: "connections",
+                    name: typeof file.name === "string" ? file.name : "Connections.csv",
                     text: file.text,
                     rowCount: Number.isFinite(file.rowCount) ? file.rowCount : 0,
-                    updatedAt: Number.isFinite(file.updatedAt) ? file.updatedAt : Date.now()
+                    updatedAt: Number.isFinite(file.updatedAt) ? file.updatedAt : Date.now(),
                 };
             }
-            captureError(new Error(parsed.valid ? 'Unexpected file type in connections cache.' : (parsed.error || 'Invalid connections file payload.')), {
-                module: 'connections-ui',
-                operation: 'parse-stored-file',
-                source
-            });
+            captureError(
+                new Error(
+                    parsed.valid
+                        ? "Unexpected file type in connections cache."
+                        : parsed.error || "Invalid connections file payload.",
+                ),
+                {
+                    module: "connections-ui",
+                    operation: "parse-stored-file",
+                    source,
+                },
+            );
             return null;
         }
         return parsed.value;
@@ -348,9 +368,9 @@ export const ConnectionsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseConnectionsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            captureError(new Error(parsed.error || 'Invalid connections worker message.'), {
-                module: 'connections-ui',
-                operation: 'worker-message-parse'
+            captureError(new Error(parsed.error || "Invalid connections worker message."), {
+                module: "connections-ui",
+                operation: "worker-message-parse",
             });
             return;
         }
@@ -359,7 +379,7 @@ export const ConnectionsPage = (() => {
 
         const HANDLERS = {
             processed: handleParsedPayload,
-            error: handleWorkerErrorPayload
+            error: handleWorkerErrorPayload,
         };
 
         const handler = HANDLERS[message.type];
@@ -380,16 +400,17 @@ export const ConnectionsPage = (() => {
         }
 
         clearWorkerTimeout();
-        markPerformance('connections:worker-parse:end');
-        measurePerformance('connections:worker-parse', 'connections:worker-parse:start', 'connections:worker-parse:end');
+        markPerformance("connections:worker-parse:end");
+        measurePerformance(
+            "connections:worker-parse",
+            "connections:worker-parse:start",
+            "connections:worker-parse:end",
+        );
 
         const payload = message.payload || {};
 
         if (!payload.success) {
-            setEmptyState(
-                'Connections error',
-                payload.error || 'Unable to parse Connections.csv.'
-            );
+            setEmptyState("Connections error", payload.error || "Unable to parse Connections.csv.");
             showConnectionsLoading(false);
             return;
         }
@@ -399,14 +420,18 @@ export const ConnectionsPage = (() => {
         const rawRows = payload.rows || [];
 
         /* Normalize field names for client-side filtering (worker returns title-case keys) */
-        markPerformance('connections:normalize:start');
-        const rows = rawRows.map(row => ({
-            connectedOn: parseConnectedOn(row['Connected On']),
-            company: (row.Company || '').trim(),
-            position: (row.Position || '').trim()
+        markPerformance("connections:normalize:start");
+        const rows = rawRows.map((row) => ({
+            connectedOn: parseConnectedOn(row["Connected On"]),
+            company: (row.Company || "").trim(),
+            position: (row.Position || "").trim(),
         }));
-        markPerformance('connections:normalize:end');
-        measurePerformance('connections:normalize', 'connections:normalize:start', 'connections:normalize:end');
+        markPerformance("connections:normalize:end");
+        measurePerformance(
+            "connections:normalize",
+            "connections:normalize:start",
+            "connections:normalize:end",
+        );
 
         state.dataReady = true;
         state.hasData = rows.length > 0;
@@ -421,10 +446,14 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        markPerformance('connections:render:start');
+        markPerformance("connections:render:start");
         applyFiltersAndRender();
-        markPerformance('connections:render:end');
-        measurePerformance('connections:render', 'connections:render:start', 'connections:render:end');
+        markPerformance("connections:render:end");
+        measurePerformance(
+            "connections:render",
+            "connections:render:start",
+            "connections:render:end",
+        );
     }
 
     /**
@@ -433,15 +462,16 @@ export const ConnectionsPage = (() => {
      */
     function handleWorkerErrorPayload(message) {
         clearWorkerTimeout();
-        const text = (message.payload && message.payload.message)
-            ? message.payload.message
-            : 'Unable to parse Connections.csv.';
+        const text =
+            message.payload && message.payload.message
+                ? message.payload.message
+                : "Unable to parse Connections.csv.";
         captureError(new Error(text), {
-            module: 'connections-ui',
-            operation: 'worker-error-payload',
-            requestId: message.requestId
+            module: "connections-ui",
+            operation: "worker-error-payload",
+            requestId: message.requestId,
         });
-        setEmptyState('Connections error', text);
+        setEmptyState("Connections error", text);
         showConnectionsLoading(false);
     }
 
@@ -451,11 +481,14 @@ export const ConnectionsPage = (() => {
      */
     function handleWorkerError(event) {
         clearWorkerTimeout();
-        captureError(event && event.error ? event.error : new Error('Connections worker error event'), {
-            module: 'connections-ui',
-            operation: 'worker-error-event'
-        });
-        setEmptyState('Worker error', 'Refresh the page and try again.');
+        captureError(
+            event && event.error ? event.error : new Error("Connections worker error event"),
+            {
+                module: "connections-ui",
+                operation: "worker-error-event",
+            },
+        );
+        setEmptyState("Worker error", "Refresh the page and try again.");
         showConnectionsLoading(false);
     }
 
@@ -465,7 +498,7 @@ export const ConnectionsPage = (() => {
      */
     function markPerformance(name) {
         /* v8 ignore next 3 */
-        if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+        if (typeof performance === "undefined" || typeof performance.mark !== "function") {
             return;
         }
         performance.mark(name);
@@ -479,22 +512,26 @@ export const ConnectionsPage = (() => {
      */
     function measurePerformance(name, start, end) {
         /* v8 ignore next 3 */
-        if (typeof performance === 'undefined' || typeof performance.measure !== 'function') {
+        if (typeof performance === "undefined" || typeof performance.measure !== "function") {
             return;
         }
         try {
             performance.measure(name, start, end);
 
-            if (typeof performance.getEntriesByName === 'function') {
+            if (typeof performance.getEntriesByName === "function") {
                 const entries = performance.getEntriesByName(name);
                 const lastEntry = entries.length ? entries[entries.length - 1] : null;
-                if (lastEntry && lastEntry.entryType === 'measure' && Number.isFinite(lastEntry.duration)) {
+                if (
+                    lastEntry &&
+                    lastEntry.entryType === "measure" &&
+                    Number.isFinite(lastEntry.duration)
+                ) {
                     reportPerformanceMeasure(name, lastEntry.duration, {
-                        module: 'connections-ui'
+                        module: "connections-ui",
                     });
                 }
             }
-        /* v8 ignore next 3 */
+            /* v8 ignore next 3 */
         } catch {
             // Ignore missing marks to keep instrumentation resilient.
         }
@@ -511,21 +548,21 @@ export const ConnectionsPage = (() => {
         }
 
         const filtered = filterRowsByRange(state.allRows, state.filters.timeRange);
-        const companies = aggregateField(filtered, 'company');
-        const positions = aggregateField(filtered, 'position');
+        const companies = aggregateField(filtered, "company");
+        const positions = aggregateField(filtered, "position");
         const ws = state.workerStats;
         const stats = {
             total: (ws && ws.total) || state.allRows.length,
             recent: filtered.length,
-            topCompany: findTopValue(filtered, 'company'),
-            networkAge: formatNetworkAge((ws && ws.networkAgeMonths) || 0)
+            topCompany: findTopValue(filtered, "company"),
+            networkAge: formatNetworkAge((ws && ws.networkAgeMonths) || 0),
         };
 
         const view = {
             timeline: state.allTimeline,
             companies,
             positions,
-            stats
+            stats,
         };
 
         state.currentView = view;
@@ -539,13 +576,19 @@ export const ConnectionsPage = (() => {
      */
     function parseConnectedOn(dateStr) {
         /* v8 ignore next 6 */
-        if (!dateStr || typeof dateStr !== 'string') {return 0;}
-        const parts = dateStr.split('-');
-        if (parts.length !== 3) {return 0;}
+        if (!dateStr || typeof dateStr !== "string") {
+            return 0;
+        }
+        const parts = dateStr.split("-");
+        if (parts.length !== 3) {
+            return 0;
+        }
         const y = Number(parts[0]);
         const m = Number(parts[1]);
         const d = Number(parts[2]);
-        if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) {return 0;}
+        if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) {
+            return 0;
+        }
         return new Date(y, m - 1, d).getTime();
     }
 
@@ -556,7 +599,7 @@ export const ConnectionsPage = (() => {
      * @returns {Array<object>} Filtered rows within the range
      */
     function filterRowsByRange(rows, range) {
-        if (range === 'all') {
+        if (range === "all") {
             return rows;
         }
 
@@ -567,7 +610,7 @@ export const ConnectionsPage = (() => {
         }
 
         const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-        return rows.filter(row => row.connectedOn >= cutoff);
+        return rows.filter((row) => row.connectedOn >= cutoff);
     }
 
     /**
@@ -601,29 +644,32 @@ export const ConnectionsPage = (() => {
      */
     function findTopValue(rows, field) {
         if (!rows.length) {
-            return '-';
+            return "-";
         }
 
-        const summary = rows.reduce((acc, row) => {
-            const value = row[field];
-            /* v8 ignore next 3 */
-            if (!value) {
+        const summary = rows.reduce(
+            (acc, row) => {
+                const value = row[field];
+                /* v8 ignore next 3 */
+                if (!value) {
+                    return acc;
+                }
+                const next = (acc.counts[value] || 0) + 1;
+                acc.counts[value] = next;
+                if (next > acc.maxCount) {
+                    acc.maxCount = next;
+                    acc.maxKey = value;
+                }
                 return acc;
-            }
-            const next = (acc.counts[value] || 0) + 1;
-            acc.counts[value] = next;
-            if (next > acc.maxCount) {
-                acc.maxCount = next;
-                acc.maxKey = value;
-            }
-            return acc;
-        }, {
-            counts: Object.create(null),
-            maxKey: '',
-            maxCount: 0
-        });
+            },
+            {
+                counts: Object.create(null),
+                maxKey: "",
+                maxCount: 0,
+            },
+        );
 
-        return summary.maxKey || '-';
+        return summary.maxKey || "-";
     }
 
     /**
@@ -632,8 +678,12 @@ export const ConnectionsPage = (() => {
      * @returns {string} Human-readable network age (e.g. '3.2 yr')
      */
     function formatNetworkAge(months) {
-        if (!months) {return '-';}
-        if (months < 12) {return `${months} mo`;}
+        if (!months) {
+            return "-";
+        }
+        if (months < 12) {
+            return `${months} mo`;
+        }
         return `${(months / 12).toFixed(1)} yr`;
     }
 
@@ -644,7 +694,7 @@ export const ConnectionsPage = (() => {
     function renderView(view) {
         /* v8 ignore next 6 */
         if (!view) {
-            setEmptyState('No connections data', 'Try resetting filters.');
+            setEmptyState("No connections data", "Try resetting filters.");
             showConnectionsLoading(false);
             return;
         }
@@ -652,8 +702,8 @@ export const ConnectionsPage = (() => {
         /* v8 ignore next 7 */
         if (!SketchCharts) {
             setEmptyState(
-                'Charts unavailable',
-                'Required libraries failed to load. Please refresh the page.'
+                "Charts unavailable",
+                "Required libraries failed to load. Please refresh the page.",
             );
             showConnectionsLoading(false);
             return;
@@ -681,13 +731,7 @@ export const ConnectionsPage = (() => {
      * @param {object} view - The computed view data
      */
     function renderCharts(view) {
-        SketchCharts.drawTimeline(
-            elements.connectionGrowthChart,
-            view.timeline,
-            'all',
-            1,
-            0
-        );
+        SketchCharts.drawTimeline(elements.connectionGrowthChart, view.timeline, "all", 1, 0);
 
         SketchCharts.drawTopics(elements.connectionCompaniesChart, view.companies, 1);
         SketchCharts.drawTopics(elements.connectionPositionsChart, view.positions, 1);
@@ -697,8 +741,8 @@ export const ConnectionsPage = (() => {
     function updateVisibility() {
         if (!state.hasData) {
             setEmptyState(
-                'No connections data available yet',
-                'Upload Connections.csv on the Home page to see your network analytics.'
+                "No connections data available yet",
+                "Upload Connections.csv on the Home page to see your network analytics.",
             );
             return;
         }
@@ -710,7 +754,7 @@ export const ConnectionsPage = (() => {
      * @param {HTMLElement} button - The clicked time range button element
      */
     function handleTimeRangeChange(button) {
-        const range = button.getAttribute('data-range');
+        const range = button.getAttribute("data-range");
         /* v8 ignore next 3 */
         if (!range) {
             return;
@@ -743,10 +787,10 @@ export const ConnectionsPage = (() => {
      * @param {string} range - The active time range identifier
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach(btn => {
-            const isActive = btn.getAttribute('data-range') === range;
-            btn.classList.toggle('active', isActive);
-            btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        elements.timeRangeButtons.forEach((btn) => {
+            const isActive = btn.getAttribute("data-range") === range;
+            btn.classList.toggle("active", isActive);
+            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
     }
 
@@ -756,7 +800,7 @@ export const ConnectionsPage = (() => {
      * @returns {string} Validated range key
      */
     function parseRangeParam(value) {
-        const range = String(value || '').toLowerCase();
+        const range = String(value || "").toLowerCase();
         return RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
     }
 
@@ -782,14 +826,11 @@ export const ConnectionsPage = (() => {
         }
 
         const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== 'connections') {
+        if (!currentRoute || currentRoute.name !== "connections") {
             return;
         }
 
-        AppRouter.setParams(
-            { range: state.filters.timeRange },
-            { replaceHistory: false }
-        );
+        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
     }
 
     /**
@@ -835,17 +876,17 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        elements.connectionsGrid.style.opacity = isLoading ? '0.55' : '1';
-        elements.connectionsGrid.style.pointerEvents = isLoading ? 'none' : 'auto';
+        elements.connectionsGrid.style.opacity = isLoading ? "0.55" : "1";
+        elements.connectionsGrid.style.pointerEvents = isLoading ? "none" : "auto";
 
         if (elements.connectionsStatsGrid) {
-            elements.connectionsStatsGrid.style.opacity = isLoading ? '0.55' : '1';
+            elements.connectionsStatsGrid.style.opacity = isLoading ? "0.55" : "1";
         }
 
         if (isLoading) {
-            LoadingOverlay.show('connections');
+            LoadingOverlay.show("connections");
         } else {
-            LoadingOverlay.hide('connections');
+            LoadingOverlay.hide("connections");
         }
     }
 
@@ -855,8 +896,8 @@ export const ConnectionsPage = (() => {
      * @param {string} message - The description text for the empty state
      */
     function setEmptyState(title, message) {
-        const heading = elements.connectionsEmpty.querySelector('h2');
-        const text = elements.connectionsEmpty.querySelector('p');
+        const heading = elements.connectionsEmpty.querySelector("h2");
+        const text = elements.connectionsEmpty.querySelector("p");
 
         /* v8 ignore next 5 */
         if (heading) {
@@ -882,6 +923,6 @@ export const ConnectionsPage = (() => {
     return {
         init,
         onRouteChange,
-        onRouteLeave
+        onRouteLeave,
     };
 })();

@@ -1,9 +1,9 @@
 /* In-memory cache helpers for SPA screens */
 
-import { captureError } from './sentry.js';
+import { captureError } from "./sentry.js";
 
 export const DataCache = (() => {
-    'use strict';
+    "use strict";
 
     const values = new Map();
     const listeners = new Set();
@@ -54,14 +54,16 @@ export const DataCache = (() => {
             return;
         }
         const keys = Array.from(values.keys());
-        keys.forEach(key => {
+        keys.forEach((key) => {
             if (key.startsWith(prefix)) {
                 values.delete(key);
             }
         });
     }
 
-    /** Clear all cached values. */
+    /**
+     * Clear all cached values.
+     */
     function clear() {
         values.clear();
     }
@@ -72,7 +74,7 @@ export const DataCache = (() => {
      * @returns {function(): void} Unsubscribe function
      */
     function subscribe(listener) {
-        if (typeof listener !== 'function') {
+        if (typeof listener !== "function") {
             return () => {};
         }
         listeners.add(listener);
@@ -86,13 +88,13 @@ export const DataCache = (() => {
      * @param {object} payload - Event payload
      */
     function notify(payload) {
-        listeners.forEach(listener => {
+        listeners.forEach((listener) => {
             try {
                 listener(payload || {});
             } catch (error) {
                 captureError(error, {
-                    module: 'data-cache',
-                    operation: 'notify-listener'
+                    module: "data-cache",
+                    operation: "notify-listener",
                 });
             }
         });
@@ -106,6 +108,6 @@ export const DataCache = (() => {
         invalidate,
         clear,
         subscribe,
-        notify
+        notify,
     };
 })();

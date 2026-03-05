@@ -9,9 +9,16 @@
     "dev": "vite --config web/vite.config.js",
     "build": "vite build --config web/vite.config.js",
     "preview": "vite preview --config web/vite.config.js",
+    "format": "prettier --no-error-on-unmatched-pattern --write \"*.{json,md,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml}\" \"web/**/*.json\"",
+    "format:check": "prettier --no-error-on-unmatched-pattern --check \"*.{json,md,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml}\" \"web/**/*.json\"",
     "lint": "eslint \"web/src/**/*.js\" \"web/tests/**/*.js\"",
+    "typecheck:web": "tsc --noEmit --project jsconfig.json",
     "test": "vitest run --config web/vitest.config.js --coverage",
-    "ci:web": "npm run lint && npm run test && npm run build"
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:install": "playwright install chromium firefox",
+    "test:e2e:ui": "playwright test --ui",
+    "ci:web": "npm run format:check && npm run lint && npm run typecheck:web && npm run test && npm run build"
   },
   "keywords": [
     "linkedin",
@@ -31,19 +38,25 @@
   "overrides": {
     "serialize-javascript": "^7.0.3"
   },
-  "devDependencies": {
+  "dependencies": {
     "@sentry/browser": "^9.5.0",
+    "roughjs": "^4.6.6",
+    "web-vitals": "^4.2.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.3",
     "eslint-plugin-import-x": "^4.16.1",
     "eslint-plugin-jsdoc": "^62.7.1",
-    "globals": "^17.4.0",
     "jsdom": "^26.0.0",
     "fake-indexeddb": "^6.1.0",
-    "roughjs": "^4.6.6",
+    "globals": "^17.4.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.0.18",
-    "xlsx": "^0.18.5"
+    "vitest": "^4.0.18"
   }
 }

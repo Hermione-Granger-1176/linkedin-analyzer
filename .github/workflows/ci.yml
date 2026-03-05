@@ -2,33 +2,66 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   web:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Format check
+        run: npm run format:check
       - name: Lint web
         run: npm run lint
+      - name: Type check web
+        run: npm run typecheck:web
       - name: Test web
         run: npm run test
       - name: Build web
         run: npm run build
+      - name: Install Playwright browser
+        if: matrix.node-version == '20'
+        run: npx playwright install --with-deps chromium firefox
+      - name: Test web E2E
+        if: matrix.node-version == '20'
+        run: npm run test:e2e
+      - name: Upload Playwright artifacts
+        if: failure() && matrix.node-version == '20'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-artifacts-node-${{ matrix.node-version }}
+          if-no-files-found: ignore
+          path: |
+            playwright-report/
+            test-results/
 
   python:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12']
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

@@ -1,4 +1,4 @@
-.PHONY: lint format typecheck test web-lint web-test web-build web ci
+.PHONY: lint format typecheck test web-lint web-format-check web-typecheck web-test web-build web ci
 
 lint:
 	.venv/bin/ruff check src/ tests/
@@ -15,6 +15,12 @@ test:
 web-lint:
 	npm run lint
 
+web-format-check:
+	npm run format:check
+
+web-typecheck:
+	npm run typecheck:web
+
 web-test:
 	npm run test
 
@@ -24,4 +30,4 @@ web:
 web-build:
 	npm run build
 
-ci: lint typecheck test web-lint web-test
+ci: lint typecheck test web-format-check web-lint web-typecheck web-test

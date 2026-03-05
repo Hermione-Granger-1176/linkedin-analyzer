@@ -32,6 +32,16 @@ repos:
         entry: npm run lint
         language: system
         pass_filenames: false
+      - id: prettier-check
+        name: prettier-check
+        entry: npm run format:check
+        language: system
+        pass_filenames: false
+      - id: web-typecheck
+        name: web-typecheck
+        entry: npm run typecheck:web
+        language: system
+        pass_filenames: false
       - id: node-test
         name: node-test
         entry: npm run test

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "types": ["vite/client"],
+    "strict": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false
+  },
+  "include": ["web/src/sentry.js", "web/src/telemetry.js", "web/src/worker-contracts.js"],
+  "exclude": ["web/dist/**", "web/e2e/**", "coverage/**", "node_modules/**"]
+}

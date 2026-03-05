@@ -29,6 +29,10 @@ dist/
 
 # Node
 node_modules/
+coverage/
+playwright-report/
+test-results/
+.playwright/
 
 # Data
 data/input/*
@@ -38,3 +42,8 @@ data/output/*
 
 # Local testing artifacts
 testing/
+
+# Local environment files
+.env
+.env.*
+!.env.example

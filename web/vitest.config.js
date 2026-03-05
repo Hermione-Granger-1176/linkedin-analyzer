@@ -3,12 +3,18 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     test: {
         environment: 'jsdom',
+        include: ['web/tests/**/*.test.js'],
+        exclude: ['web/e2e/**'],
         coverage: {
             provider: 'v8',
+            reportsDirectory: './coverage',
+            all: true,
+            include: ['web/src/**/*.js'],
             thresholds: {
-                lines: 90,
+                statements: 95,
                 branches: 85,
-                functions: 90
+                functions: 96,
+                lines: 96
             }
         }
     }

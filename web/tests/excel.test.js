@@ -62,4 +62,65 @@ describe('ExcelGenerator', () => {
         expect(result.success).toBe(false);
         expect(result.error).toBeTruthy();
     });
+
+    // ── normalizeSpec validation paths (lines 239, 249, 253, 258) ─────────────
+
+    it('downloadFromSpec returns error when spec is null (line 239)', () => {
+        const result = ExcelGenerator.downloadFromSpec(null, 'out.xlsx');
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/Invalid sheet spec/i);
+    });
+
+    it('downloadFromSpec returns error when sheetName is missing (line 244-245)', () => {
+        const result = ExcelGenerator.downloadFromSpec({
+            sheetName: '',
+            headers: ['A'],
+            rows: [['1']]
+        }, 'out.xlsx');
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/non-empty sheetName/i);
+    });
+
+    it('downloadFromSpec returns error when headers is not an array (line 249)', () => {
+        const result = ExcelGenerator.downloadFromSpec({
+            sheetName: 'Test',
+            headers: 'not-an-array',
+            rows: [['1']]
+        }, 'out.xlsx');
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/headers must be an array/i);
+    });
+
+    it('downloadFromSpec returns error when rows is not an array (line 253)', () => {
+        const result = ExcelGenerator.downloadFromSpec({
+            sheetName: 'Test',
+            headers: ['A'],
+            rows: 'not-an-array'
+        }, 'out.xlsx');
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/rows must be an array/i);
+    });
+
+    it('downloadFromSpec returns error when a row is not an array (line 258)', () => {
+        const result = ExcelGenerator.downloadFromSpec({
+            sheetName: 'Test',
+            headers: ['A'],
+            rows: ['not-an-array']
+        }, 'out.xlsx');
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/row must be an array/i);
+    });
+
+    it('generateFromSpec handles hyperlink-only cell objects (line 83)', () => {
+        // A cell with a hyperlink property but no value property — value should
+        // fall back to the hyperlink string itself (normalizeCell line 83)
+        const blob = ExcelGenerator.generateFromSpec({
+            sheetName: 'Links',
+            headers: ['URL'],
+            rows: [
+                [{ hyperlink: 'https://example.com' }]
+            ]
+        });
+        expect(blob).toBeInstanceOf(Blob);
+    });
 });

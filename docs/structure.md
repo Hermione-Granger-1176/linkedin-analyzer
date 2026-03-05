@@ -4,17 +4,18 @@
 linkedin-analyzer/
 ├── web/                                # Web app (SPA)
 │   ├── index.html                      # SPA shell containing all screens
-│   ├── robots.txt                      # Search engine directives
-│   ├── assets/
-│   │   ├── icon.svg                    # SVG favicon (modern browsers)
-│   │   ├── favicon.ico                 # ICO favicon (legacy browsers)
-│   │   ├── apple-touch-icon.png        # 180px icon (iOS home screen)
-│   │   ├── icon-192.png                # 192px icon (Android/PWA)
-│   │   ├── icon-512.png                # 512px icon (PWA splash/OG cards)
-│   │   └── manifest.webmanifest        # PWA web app manifest
-│   ├── fonts/
-│   │   ├── PatrickHand-Regular.woff2   # Self-hosted Patrick Hand font
-│   │   └── Caveat-Regular.woff2        # Self-hosted Caveat font
+│   ├── public/
+│   │   ├── assets/
+│   │   │   ├── icon.svg                # SVG favicon (modern browsers)
+│   │   │   ├── favicon.ico             # ICO favicon (legacy browsers)
+│   │   │   ├── apple-touch-icon.png    # 180px icon (iOS home screen)
+│   │   │   ├── icon-192.png            # 192px icon (Android/PWA)
+│   │   │   ├── icon-512.png            # 512px icon (PWA splash/OG cards)
+│   │   │   └── manifest.webmanifest    # PWA web app manifest
+│   │   ├── fonts/
+│   │   │   ├── PatrickHand-Regular.woff2 # Self-hosted Patrick Hand font
+│   │   │   └── Caveat-Regular.woff2    # Self-hosted Caveat font
+│   │   └── robots.txt                  # Search engine directives
 │   ├── src/
 │   │   ├── css/
 │   │   │   ├── variables.css           # Theme variables + @font-face (light/dark)
@@ -25,6 +26,7 @@ linkedin-analyzer/
 │   │   ├── dom-events.js               # Delegated DOM event target helpers
 │   │   ├── runtime.js                  # Global error handler
 │   │   ├── sentry.js                   # Sentry error reporting integration
+│   │   ├── telemetry.js                # Web-vitals and perf telemetry
 │   │   ├── session.js                  # Session management
 │   │   ├── theme.js                    # Theme toggle
 │   │   ├── decorations.js              # Background doodles (Rough.js)
@@ -50,6 +52,8 @@ linkedin-analyzer/
 │   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
 │   │   ├── tutorial.js                 # Tutorial engine
 │   │   ├── charts.js                   # Canvas chart rendering (incl. PNG export)
+│   │   ├── worker-contracts.js         # Shared worker message contracts
+│   │   ├── ui/                         # Reusable UI modules
 │   │   └── sw.js                       # Service Worker for PWA offline caching
 │   └── tests/                          # Web tests
 │

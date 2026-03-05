@@ -21,6 +21,14 @@
 - Prefer self-explanatory code; comment only non-obvious intent.
 - Avoid narrating the code; explain why, not what.
 - Keep comments short and aligned with nearby logic.
+- Match project tone: direct, neutral, and implementation-focused.
+
+## Maintainer Voice and Consistency
+
+- This repository is maintainer-led; changes should read like one coherent codebase.
+- Follow existing naming, module boundaries, and terminology before introducing new patterns.
+- Avoid broad style rewrites in unrelated files; keep diffs focused and reviewable.
+- When updating docs, keep wording consistent with existing command names and feature terms.
 
 ## Control Flow Preferences
 

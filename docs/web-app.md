@@ -135,7 +135,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
-- Service worker uses network-first for the HTML shell and stale-while-revalidate for static assets to auto-refresh users onto newer builds.
+- Service worker caches navigation with NetworkFirst, scripts/styles with StaleWhileRevalidate, and fonts/images with CacheFirst (30-day TTL) to auto-refresh users onto newer builds.
 - **Clear All** removes stored uploads/analytics from IndexedDB and clears in-memory cache.
 - Fonts are self-hosted (no external Google Fonts dependency).
 
@@ -206,4 +206,4 @@ Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the b
 
 ### robots.txt
 
-`web/robots.txt` allows all crawlers.
+`web/public/robots.txt` allows all crawlers.

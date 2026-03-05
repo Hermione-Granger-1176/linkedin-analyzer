@@ -108,7 +108,7 @@ linkedin-analyzer all \
 - Shares: `Date`, `ShareLink`, `ShareCommentary`
 - Comments: `Date`, `Link`, `Message`
 - Messages: `FROM`, `TO`, `DATE`, `CONTENT`
-- Connections: `First Name`, `Last Name`, `Connected On`
+- Connections: `Connected On`
 
 ## Python API
 

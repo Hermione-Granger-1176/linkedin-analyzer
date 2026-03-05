@@ -7,6 +7,40 @@ from typing import Any, cast
 
 import pandas as pd
 
+MISSING_TEXT_VALUES = frozenset(
+    {
+        "#N/A",
+        "#N/A N/A",
+        "#NA",
+        "-1.#IND",
+        "-1.#QNAN",
+        "-NAN",
+        "1.#IND",
+        "1.#QNAN",
+        "N/A",
+        "NA",
+        "NULL",
+        "NAN",
+        "NONE",
+        "<NA>",
+    }
+)
+CONNECTION_MONTH_LOOKUP = {
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
+}
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 
 def is_missing(value: object) -> bool:
     """Check if a value is missing (None, pandas NA, empty, or NA-like string).
@@ -28,26 +62,7 @@ def is_missing(value: object) -> bool:
     # Check string values for empty, whitespace-only, or NA-like literals
     if isinstance(value, str):
         trimmed = value.strip()
-        if trimmed == "":
-            return True
-        upper = trimmed.upper()
-        missing_values = {
-            "#N/A",
-            "#N/A N/A",
-            "#NA",
-            "-1.#IND",
-            "-1.#QNAN",
-            "-NAN",
-            "1.#IND",
-            "1.#QNAN",
-            "N/A",
-            "NA",
-            "NULL",
-            "NAN",
-            "NONE",
-            "<NA>",
-        }
-        return upper in missing_values
+        return not trimmed or trimmed.upper() in MISSING_TEXT_VALUES
     try:
         # Use cast to Any since pd.isna accepts more types than stubs indicate
         result = pd.isna(cast("Any", value))
@@ -176,12 +191,11 @@ def clean_date(value: object) -> str:
         text = text[:-4].strip()
 
     try:
-        fmt = "%Y-%m-%d %H:%M:%S"
-        utc_dt = datetime.strptime(text, fmt).replace(
+        utc_dt = datetime.strptime(text, DATETIME_FORMAT).replace(
             tzinfo=UTC,
         )
         local_dt = utc_dt.astimezone()
-        return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+        return local_dt.strftime(DATETIME_FORMAT)
     except (ValueError, OverflowError):
         return text
 
@@ -212,21 +226,7 @@ def clean_connections_date(value: object) -> str:
     if not day_str.isdigit() or not year_str.isdigit():
         return text
 
-    month_lookup = {
-        "jan": 1,
-        "feb": 2,
-        "mar": 3,
-        "apr": 4,
-        "may": 5,
-        "jun": 6,
-        "jul": 7,
-        "aug": 8,
-        "sep": 9,
-        "oct": 10,
-        "nov": 11,
-        "dec": 12,
-    }
-    month = month_lookup.get(month_str[:3].lower())
+    month = CONNECTION_MONTH_LOOKUP.get(month_str[:3].lower())
     if month is None:
         return text
 

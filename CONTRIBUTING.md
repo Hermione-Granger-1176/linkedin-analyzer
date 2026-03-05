@@ -50,3 +50,9 @@ See [`docs/style-guide.md`](docs/style-guide.md) for code conventions.
 - Keep changes focused and describe why the change is needed.
 - Add tests for new behavior.
 - Ensure all checks pass before requesting review.
+
+## Maintainer-first workflow
+
+- Treat existing project conventions as the default unless a maintainer-approved change says otherwise.
+- Keep docs, comments, and naming aligned with the current repository voice.
+- Prefer incremental refactors over broad stylistic rewrites so history stays easy to review.

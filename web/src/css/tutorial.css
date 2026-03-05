@@ -1,7 +1,7 @@
 /* Tutorial overlays, spotlight, and mini tips */
 
 .tutorial-open {
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .tutorial-layer {
@@ -51,7 +51,7 @@
 }
 
 .tutorial-popover::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 6px;
     border: 1px dashed color-mix(in srgb, var(--border-color) 45%, transparent);
@@ -305,7 +305,7 @@
 }
 
 .tutorial-help-btn::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 5px;
     border: 1px dashed color-mix(in srgb, var(--border-color) 45%, transparent);

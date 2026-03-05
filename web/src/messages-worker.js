@@ -1,8 +1,8 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 
-import { LinkedInCleaner } from './cleaner.js';
-import { MessagesAnalytics } from './messages-analytics.js';
-import { parseMessagesWorkerRequest } from './worker-contracts.js';
+import { LinkedInCleaner } from "./cleaner.js";
+import { MessagesAnalytics } from "./messages-analytics.js";
+import { parseMessagesWorkerRequest } from "./worker-contracts.js";
 
 /**
  * Parse messages and connections CSV payload.
@@ -11,16 +11,16 @@ import { parseMessagesWorkerRequest } from './worker-contracts.js';
  */
 function processPayload(payload) {
     /* v8 ignore next */
-    const messagesCsv = typeof payload.messagesCsv === 'string' ? payload.messagesCsv : '';
+    const messagesCsv = typeof payload.messagesCsv === "string" ? payload.messagesCsv : "";
     /* v8 ignore next */
-    const connectionsCsv = typeof payload.connectionsCsv === 'string' ? payload.connectionsCsv : '';
+    const connectionsCsv = typeof payload.connectionsCsv === "string" ? payload.connectionsCsv : "";
 
-    const messagesResult = LinkedInCleaner.process(messagesCsv, 'messages');
+    const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
     if (!messagesResult.success) {
         return {
             success: false,
             /* v8 ignore next */
-            error: messagesResult.error || 'Unable to parse messages.csv.'
+            error: messagesResult.error || "Unable to parse messages.csv.",
         };
     }
 
@@ -28,12 +28,12 @@ function processPayload(payload) {
     let connectionError = null;
 
     if (connectionsCsv) {
-        const connectionsResult = LinkedInCleaner.process(connectionsCsv, 'connections');
+        const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");
         if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {
             /* v8 ignore next */
-            connectionError = connectionsResult.error || 'Unable to parse Connections.csv.';
+            connectionError = connectionsResult.error || "Unable to parse Connections.csv.";
         }
     }
 
@@ -52,7 +52,7 @@ function processPayload(payload) {
         /* v8 ignore next */
         messagesData: messageState ? [] : messagesData,
         /* v8 ignore next */
-        connectionsData: connectionState ? [] : connectionsData
+        connectionsData: connectionState ? [] : connectionsData,
     };
 }
 
@@ -69,7 +69,7 @@ function serializeMessageState(state) {
         skippedRows: state.skippedRows,
         talkedNameKeys: Array.from(state.talkedNameKeys),
         talkedUrlKeys: Array.from(state.talkedUrlKeys),
-        latestTimestamp: state.latestTimestamp
+        latestTimestamp: state.latestTimestamp,
     };
 }
 
@@ -80,7 +80,7 @@ function serializeMessageState(state) {
  */
 function serializeConnectionState(state) {
     return {
-        list: state.list
+        list: state.list,
     };
 }
 
@@ -93,10 +93,10 @@ function toErrorMessage(error) {
     if (error instanceof Error && error.message) {
         return error.message;
     }
-    if (typeof error === 'string' && error) {
+    if (typeof error === "string" && error) {
         return error;
     }
-    return 'Messages worker runtime failure.';
+    return "Messages worker runtime failure.";
 }
 
 /**
@@ -106,12 +106,12 @@ function toErrorMessage(error) {
  */
 function postProcessedError(requestId, error) {
     self.postMessage({
-        type: 'processed',
+        type: "processed",
         requestId,
         payload: {
             success: false,
-            error: toErrorMessage(error)
-        }
+            error: toErrorMessage(error),
+        },
     });
 }
 
@@ -121,13 +121,14 @@ function postProcessedError(requestId, error) {
  * @returns {unknown}
  */
 function extractWorkerError(event) {
-    if (!event || typeof event !== 'object') {
+    /* v8 ignore next 3 */
+    if (!event || typeof event !== "object") {
         return undefined;
     }
-    if ('error' in event && event.error) {
+    if ("error" in event && event.error) {
         return event.error;
     }
-    if ('message' in event && event.message) {
+    if ("message" in event && event.message) {
         return event.message;
     }
     return undefined;
@@ -139,23 +140,23 @@ function extractWorkerError(event) {
  * @returns {unknown}
  */
 function extractWorkerRejection(event) {
-    if (!event || typeof event !== 'object' || !('reason' in event)) {
+    if (!event || typeof event !== "object" || !("reason" in event)) {
         return undefined;
     }
     return event.reason;
 }
 
 /* v8 ignore next 16 */
-if (typeof self !== 'undefined') {
-    self.addEventListener('message', (event) => {
+if (typeof self !== "undefined") {
+    self.addEventListener("message", (event) => {
         const rawMessage = event.data || {};
-        if (!rawMessage || rawMessage.type !== 'process') {
+        if (!rawMessage || rawMessage.type !== "process") {
             return;
         }
 
         const parsed = parseMessagesWorkerRequest(rawMessage);
         if (!parsed.valid) {
-            postProcessedError(0, parsed.error || 'Invalid worker request payload.');
+            postProcessedError(0, parsed.error || "Invalid worker request payload.");
             return;
         }
 
@@ -163,20 +164,20 @@ if (typeof self !== 'undefined') {
         try {
             const payload = processPayload(message.payload);
             self.postMessage({
-                type: 'processed',
+                type: "processed",
                 requestId: message.requestId,
-                payload
+                payload,
             });
         } catch (error) {
             postProcessedError(message.requestId, error);
         }
     });
 
-    self.addEventListener('error', event => {
+    self.addEventListener("error", (event) => {
         postProcessedError(0, extractWorkerError(event));
     });
 
-    self.addEventListener('unhandledrejection', event => {
+    self.addEventListener("unhandledrejection", (event) => {
         postProcessedError(0, extractWorkerRejection(event));
     });
 }

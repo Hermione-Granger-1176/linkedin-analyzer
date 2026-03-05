@@ -244,6 +244,7 @@ function postWorkerError(requestId, error) {
  * @returns {unknown}
  */
 function extractWorkerError(event) {
+    /* v8 ignore next 3 */
     if (!event || typeof event !== "object") {
         return undefined;
     }

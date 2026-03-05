@@ -23,7 +23,7 @@ jobs:
         run: npm ci
       - name: npm audit (filtered)
         run: |
-          npm audit --json > audit.json
+          npm audit --json > audit.json || true
           node - <<'NODE'
           const fs = require('fs');
 

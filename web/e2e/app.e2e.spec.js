@@ -1,12 +1,12 @@
-const path = require('path');
+const path = require("path");
 
-const { expect, test } = require('@playwright/test');
+const { expect, test } = require("@playwright/test");
 
-const SHARES_CSV = path.join(__dirname, 'fixtures', 'Shares.csv');
-const COMMENTS_CSV = path.join(__dirname, 'fixtures', 'Comments.csv');
-const MESSAGES_CSV = path.join(__dirname, 'fixtures', 'Messages.csv');
-const CONNECTIONS_CSV = path.join(__dirname, 'fixtures', 'Connections.csv');
-const INVALID_CSV = path.join(__dirname, 'fixtures', 'Invalid.csv');
+const SHARES_CSV = path.join(__dirname, "fixtures", "Shares.csv");
+const COMMENTS_CSV = path.join(__dirname, "fixtures", "Comments.csv");
+const MESSAGES_CSV = path.join(__dirname, "fixtures", "Messages.csv");
+const CONNECTIONS_CSV = path.join(__dirname, "fixtures", "Connections.csv");
+const INVALID_CSV = path.join(__dirname, "fixtures", "Invalid.csv");
 
 /**
  * Upload one or more CSV fixtures using the hidden file input.
@@ -14,8 +14,8 @@ const INVALID_CSV = path.join(__dirname, 'fixtures', 'Invalid.csv');
  * @param {string[]} files - Absolute fixture paths
  */
 async function uploadFiles(page, files) {
-    await page.goto('/#home');
-    await page.getByTestId('upload-input').setInputFiles(files);
+    await page.goto("/#home");
+    await page.getByTestId("upload-input").setInputFiles(files);
 }
 
 /**
@@ -24,75 +24,75 @@ async function uploadFiles(page, files) {
  * @param {string} id - Status element id
  */
 async function waitForLoadedStatus(page, id) {
-    await expect(page.locator(`#${id}`)).not.toHaveText('Not uploaded', { timeout: 20000 });
+    await expect(page.locator(`#${id}`)).not.toHaveText("Not uploaded", { timeout: 20000 });
 }
 
-test('upload shares and render clean preview', async ({ page }) => {
+test("upload shares and render clean preview", async ({ page }) => {
     await uploadFiles(page, [SHARES_CSV]);
-    await waitForLoadedStatus(page, 'sharesStatus');
+    await waitForLoadedStatus(page, "sharesStatus");
 
-    await page.locator('#screen-home a[data-route="clean"]').click();
+    await page.locator('#screen-home a.hub-card[data-route="clean"]').click();
     await expect(page).toHaveURL(/#clean/);
 
-    const previewTable = page.getByTestId('clean-preview-table');
-    await expect(previewTable.locator('tbody tr').first()).toBeVisible();
-    await expect(page.locator('#cleanFileInfo')).toContainText('Shares -');
+    const previewTable = page.getByTestId("clean-preview-table");
+    await expect(previewTable.locator("tbody tr").first()).toBeVisible();
+    await expect(page.locator("#cleanFileInfo")).toContainText("Shares -");
 });
 
-test('download cleaned excel from clean screen', async ({ page }) => {
+test("download cleaned excel from clean screen", async ({ page }) => {
     await uploadFiles(page, [SHARES_CSV]);
-    await waitForLoadedStatus(page, 'sharesStatus');
+    await waitForLoadedStatus(page, "sharesStatus");
 
-    await page.locator('#screen-home a[data-route="clean"]').click();
+    await page.locator('#screen-home a.hub-card[data-route="clean"]').click();
     await expect(page).toHaveURL(/#clean/);
 
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByTestId('clean-download-btn').click();
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByTestId("clean-download-btn").click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename().toLowerCase()).toContain('shares');
+    expect(download.suggestedFilename().toLowerCase()).toContain("shares");
 });
 
-test('upload shares+comments and render analytics', async ({ page }) => {
+test("upload shares+comments and render analytics", async ({ page }) => {
     await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV]);
-    await waitForLoadedStatus(page, 'sharesStatus');
-    await waitForLoadedStatus(page, 'commentsStatus');
+    await waitForLoadedStatus(page, "sharesStatus");
+    await waitForLoadedStatus(page, "commentsStatus");
 
-    const openAnalyticsBtn = page.getByTestId('open-analytics-btn');
+    const openAnalyticsBtn = page.getByTestId("open-analytics-btn");
     await expect(openAnalyticsBtn).toBeEnabled({ timeout: 20000 });
     await openAnalyticsBtn.click();
 
     await expect(page).toHaveURL(/#analytics/);
-    await expect(page.getByTestId('analytics-grid')).toBeVisible();
-    await expect(page.getByTestId('analytics-empty')).toBeHidden();
-    await expect(page.getByTestId('analytics-total')).not.toHaveText('0');
+    await expect(page.getByTestId("analytics-grid")).toBeVisible();
+    await expect(page.getByTestId("analytics-empty")).toBeHidden();
+    await expect(page.getByTestId("analytics-total")).not.toHaveText("0");
 });
 
-test('upload connections and render connections dashboard', async ({ page }) => {
+test("upload connections and render connections dashboard", async ({ page }) => {
     await uploadFiles(page, [CONNECTIONS_CSV]);
-    await waitForLoadedStatus(page, 'connectionsStatus');
+    await waitForLoadedStatus(page, "connectionsStatus");
 
-    await page.locator('#screen-home a[data-route="connections"]').click();
+    await page.locator('#screen-home a.hub-card[data-route="connections"]').click();
     await expect(page).toHaveURL(/#connections/);
 
-    await expect(page.locator('#connectionsGrid')).toBeVisible();
-    await expect(page.locator('#connectionsEmpty')).toBeHidden();
-    await expect(page.locator('#connStatTotal')).not.toHaveText('0');
+    await expect(page.locator("#connectionsGrid")).toBeVisible();
+    await expect(page.locator("#connectionsEmpty")).toBeHidden();
+    await expect(page.locator("#connStatTotal")).not.toHaveText("0");
 });
 
-test('upload messages+connections and render relationship insights', async ({ page }) => {
+test("upload messages+connections and render relationship insights", async ({ page }) => {
     await uploadFiles(page, [MESSAGES_CSV, CONNECTIONS_CSV]);
-    await waitForLoadedStatus(page, 'messagesStatus');
-    await waitForLoadedStatus(page, 'connectionsStatus');
+    await waitForLoadedStatus(page, "messagesStatus");
+    await waitForLoadedStatus(page, "connectionsStatus");
 
-    await page.locator('#screen-home a[data-route="messages"]').click();
+    await page.locator('#screen-home a.hub-card[data-route="messages"]').click();
     await expect(page).toHaveURL(/#messages/);
 
-    await expect(page.locator('#messagesLayout')).toBeVisible();
-    await expect(page.locator('#messagesEmpty')).toBeHidden();
-    await expect(page.locator('#topContactsList li').first()).toBeVisible();
+    await expect(page.locator("#messagesLayout")).toBeVisible();
+    await expect(page.locator("#messagesEmpty")).toBeHidden();
+    await expect(page.locator("#topContactsList li").first()).toBeVisible();
 });
 
-test('shows an error hint for malformed CSV uploads', async ({ page }) => {
+test("shows an error hint for malformed CSV uploads", async ({ page }) => {
     await uploadFiles(page, [INVALID_CSV]);
-    await expect(page.locator('#uploadHint')).toContainText('Could not auto-detect file type');
+    await expect(page.locator("#uploadHint")).toContainText("Could not auto-detect file type");
 });

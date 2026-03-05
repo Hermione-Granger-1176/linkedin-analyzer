@@ -1,6 +1,6 @@
-import { onCLS, onFCP, onINP, onLCP, onTTFB } from 'web-vitals';
+import { onCLS, onFCP, onINP, onLCP, onTTFB } from "web-vitals";
 
-import { captureError, captureMetric } from './sentry.js';
+import { captureError, captureMetric } from "./sentry.js";
 
 let telemetryInitialized = false;
 
@@ -11,17 +11,17 @@ let telemetryInitialized = false;
  * @param {object} [context]
  */
 export function reportPerformanceMeasure(name, durationMs, context) {
-    if (typeof name !== 'string' || !name) {
+    if (typeof name !== "string" || !name) {
         return;
     }
 
-    if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
+    if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 0) {
         return;
     }
 
     captureMetric(`perf:${name}`, durationMs, {
-        unit: 'ms',
-        ...(context && typeof context === 'object' ? context : {})
+        unit: "ms",
+        ...(context && typeof context === "object" ? context : {}),
     });
 }
 
@@ -34,8 +34,8 @@ export function initTelemetry() {
     }
     telemetryInitialized = true;
 
-    const reportWebVital = metric => {
-        if (!metric || typeof metric !== 'object') {
+    const reportWebVital = (metric) => {
+        if (!metric || typeof metric !== "object") {
             return;
         }
 
@@ -44,12 +44,15 @@ export function initTelemetry() {
             return;
         }
 
-        captureMetric(`web-vital:${metric.name || 'unknown'}`, value, {
-            unit: 'ms',
+        const name = metric.name || "unknown";
+        const unit = name === "CLS" ? "" : "ms";
+
+        captureMetric(`web-vital:${name}`, value, {
+            unit,
             id: metric.id || null,
             rating: metric.rating || null,
             delta: Number.isFinite(metric.delta) ? metric.delta : null,
-            navigationType: metric.navigationType || null
+            navigationType: metric.navigationType || null,
         });
     };
 
@@ -61,8 +64,8 @@ export function initTelemetry() {
         onTTFB(reportWebVital);
     } catch (error) {
         captureError(error, {
-            module: 'telemetry',
-            operation: 'init-web-vitals'
+            module: "telemetry",
+            operation: "init-web-vitals",
         });
     }
 }

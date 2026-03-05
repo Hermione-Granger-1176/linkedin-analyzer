@@ -1,12 +1,12 @@
 /* Runtime contracts for worker request/response payloads */
 
-const FILE_TYPES = new Set(['shares', 'comments', 'messages', 'connections']);
+const FILE_TYPES = new Set(["shares", "comments", "messages", "connections"]);
 
 const LIMITS = Object.freeze({
     maxCsvChars: 30 * 1024 * 1024,
     maxFileNameChars: 255,
     maxJobIdChars: 128,
-    maxMessageChars: 500
+    maxMessageChars: 500,
 });
 
 /**
@@ -33,7 +33,7 @@ function invalid(error) {
  * @returns {value is Record<string, any>}
  */
 function isPlainObject(value) {
-    if (!value || typeof value !== 'object') {
+    if (!value || typeof value !== "object") {
         return false;
     }
     return Object.getPrototypeOf(value) === Object.prototype;
@@ -46,8 +46,8 @@ function isPlainObject(value) {
  * @returns {string}
  */
 function normalizeString(value, maxLength) {
-    if (typeof value !== 'string') {
-        return '';
+    if (typeof value !== "string") {
+        return "";
     }
     if (value.length > maxLength) {
         return value.slice(0, maxLength);
@@ -62,7 +62,7 @@ function normalizeString(value, maxLength) {
  * @returns {string|null}
  */
 function normalizeOptionalString(value, maxLength) {
-    if (typeof value !== 'string') {
+    if (typeof value !== "string") {
         return null;
     }
     if (!value) {
@@ -83,7 +83,7 @@ function normalizeOptionalString(value, maxLength) {
  * @returns {number}
  */
 function normalizeNumber(value, fallback, min, max) {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
         return fallback;
     }
     if (value < min) {
@@ -101,10 +101,10 @@ function normalizeNumber(value, fallback, min, max) {
  * @returns {number|string}
  */
 function normalizeRequestId(value) {
-    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
         return value;
     }
-    if (typeof value === 'string' && value) {
+    if (typeof value === "string" && value) {
         return value;
     }
     return 0;
@@ -117,20 +117,20 @@ function normalizeRequestId(value) {
  */
 function parseAddFilePayload(payload) {
     if (!isPlainObject(payload)) {
-        return invalid('Invalid addFile payload');
+        return invalid("Invalid addFile payload");
     }
 
     const csvText = normalizeString(payload.csvText, LIMITS.maxCsvChars + 1);
     if (!csvText) {
-        return invalid('Missing csvText payload');
+        return invalid("Missing csvText payload");
     }
     if (csvText.length > LIMITS.maxCsvChars) {
-        return invalid('CSV payload exceeds allowed size');
+        return invalid("CSV payload exceeds allowed size");
     }
 
     const fileName = normalizeString(payload.fileName, LIMITS.maxFileNameChars);
     if (!fileName) {
-        return invalid('Missing fileName payload');
+        return invalid("Missing fileName payload");
     }
 
     const jobId = normalizeOptionalString(payload.jobId, LIMITS.maxJobIdChars);
@@ -140,7 +140,7 @@ function parseAddFilePayload(payload) {
         csvText,
         fileName,
         jobId,
-        totalSize
+        totalSize,
     });
 }
 
@@ -151,11 +151,16 @@ function parseAddFilePayload(payload) {
  */
 function parseRestoreFilesPayload(payload) {
     if (!isPlainObject(payload)) {
-        return invalid('Invalid restoreFiles payload');
+        return invalid("Invalid restoreFiles payload");
     }
 
-    const sharesCsv = normalizeString(payload.sharesCsv, LIMITS.maxCsvChars);
-    const commentsCsv = normalizeString(payload.commentsCsv, LIMITS.maxCsvChars);
+    const sharesCsv = normalizeString(payload.sharesCsv, LIMITS.maxCsvChars + 1);
+    const commentsCsv = normalizeString(payload.commentsCsv, LIMITS.maxCsvChars + 1);
+
+    if (sharesCsv.length > LIMITS.maxCsvChars || commentsCsv.length > LIMITS.maxCsvChars) {
+        return invalid("CSV payload exceeds allowed size");
+    }
+
     return valid({ sharesCsv, commentsCsv });
 }
 
@@ -165,40 +170,40 @@ function parseRestoreFilesPayload(payload) {
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
 export function parseAnalyticsWorkerRequest(message) {
-    if (!isPlainObject(message) || typeof message.type !== 'string') {
-        return invalid('Invalid analytics worker request envelope');
+    if (!isPlainObject(message) || typeof message.type !== "string") {
+        return invalid("Invalid analytics worker request envelope");
     }
 
     switch (message.type) {
-        case 'addFile': {
+        case "addFile": {
             const payloadResult = parseAddFilePayload(message.payload);
             if (!payloadResult.valid) {
                 return payloadResult;
             }
-            return valid({ type: 'addFile', payload: payloadResult.value });
+            return valid({ type: "addFile", payload: payloadResult.value });
         }
-        case 'restoreFiles': {
+        case "restoreFiles": {
             const payloadResult = parseRestoreFilesPayload(message.payload);
             if (!payloadResult.valid) {
                 return payloadResult;
             }
-            return valid({ type: 'restoreFiles', payload: payloadResult.value });
+            return valid({ type: "restoreFiles", payload: payloadResult.value });
         }
-        case 'initBase':
+        case "initBase":
             return valid({
-                type: 'initBase',
-                payload: isPlainObject(message.payload) ? message.payload : null
+                type: "initBase",
+                payload: isPlainObject(message.payload) ? message.payload : null,
             });
-        case 'view':
+        case "view":
             return valid({
-                type: 'view',
+                type: "view",
                 requestId: normalizeRequestId(message.requestId),
-                filters: isPlainObject(message.filters) ? message.filters : {}
+                filters: isPlainObject(message.filters) ? message.filters : {},
             });
-        case 'clear':
-            return valid({ type: 'clear' });
+        case "clear":
+            return valid({ type: "clear" });
         default:
-            return invalid('Unknown analytics worker request type');
+            return invalid("Unknown analytics worker request type");
     }
 }
 
@@ -208,45 +213,45 @@ export function parseAnalyticsWorkerRequest(message) {
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
 export function parseAnalyticsWorkerMessage(message) {
-    if (!isPlainObject(message) || typeof message.type !== 'string') {
-        return invalid('Invalid analytics worker message envelope');
+    if (!isPlainObject(message) || typeof message.type !== "string") {
+        return invalid("Invalid analytics worker message envelope");
     }
 
     const base = {
         type: message.type,
-        requestId: normalizeRequestId(message.requestId)
+        requestId: normalizeRequestId(message.requestId),
     };
 
     switch (message.type) {
-        case 'restored':
+        case "restored":
             return valid({
                 ...base,
-                payload: isPlainObject(message.payload) ? message.payload : { hasData: false }
+                payload: isPlainObject(message.payload) ? message.payload : { hasData: false },
             });
-        case 'init':
+        case "init":
             return valid({
                 ...base,
                 payload: {
-                    hasData: Boolean(isPlainObject(message.payload) && message.payload.hasData)
-                }
+                    hasData: Boolean(isPlainObject(message.payload) && message.payload.hasData),
+                },
             });
-        case 'view':
+        case "view":
             return valid({
                 ...base,
-                payload: isPlainObject(message.payload) ? message.payload : {}
+                payload: isPlainObject(message.payload) ? message.payload : {},
             });
-        case 'progress': {
+        case "progress": {
             const payload = isPlainObject(message.payload) ? message.payload : {};
             return valid({
                 ...base,
                 payload: {
                     jobId: normalizeOptionalString(payload.jobId, LIMITS.maxJobIdChars),
                     fileName: normalizeString(payload.fileName, LIMITS.maxFileNameChars),
-                    percent: normalizeNumber(payload.percent, 0, 0, 1)
-                }
+                    percent: normalizeNumber(payload.percent, 0, 0, 1),
+                },
             });
         }
-        case 'fileProcessed': {
+        case "fileProcessed": {
             const payload = isPlainObject(message.payload) ? message.payload : {};
             const fileType = normalizeString(payload.fileType, 32);
             return valid({
@@ -256,27 +261,30 @@ export function parseAnalyticsWorkerMessage(message) {
                     fileName: normalizeString(payload.fileName, LIMITS.maxFileNameChars),
                     jobId: normalizeOptionalString(payload.jobId, LIMITS.maxJobIdChars),
                     rowCount: normalizeNumber(payload.rowCount, 0, 0, Number.MAX_SAFE_INTEGER),
-                    analyticsBase: isPlainObject(payload.analyticsBase) ? payload.analyticsBase : null,
+                    analyticsBase: isPlainObject(payload.analyticsBase)
+                        ? payload.analyticsBase
+                        : null,
                     hasData: Boolean(payload.hasData),
-                    error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars)
-                }
+                    error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
+                },
             });
         }
-        case 'error': {
+        case "error": {
             const payload = isPlainObject(message.payload) ? message.payload : {};
             return valid({
                 ...base,
                 payload: {
-                    message: normalizeString(payload.message, LIMITS.maxMessageChars) || 'Worker error.',
+                    message:
+                        normalizeString(payload.message, LIMITS.maxMessageChars) || "Worker error.",
                     jobId: normalizeOptionalString(payload.jobId, LIMITS.maxJobIdChars),
-                    fileName: normalizeString(payload.fileName, LIMITS.maxFileNameChars)
-                }
+                    fileName: normalizeString(payload.fileName, LIMITS.maxFileNameChars),
+                },
             });
         }
-        case 'cleared':
+        case "cleared":
             return valid({ ...base, payload: {} });
         default:
-            return invalid('Unknown analytics worker message type');
+            return invalid("Unknown analytics worker message type");
     }
 }
 
@@ -286,21 +294,21 @@ export function parseAnalyticsWorkerMessage(message) {
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
 export function parseConnectionsWorkerRequest(message) {
-    if (!isPlainObject(message) || message.type !== 'process') {
-        return invalid('Invalid connections worker request envelope');
+    if (!isPlainObject(message) || message.type !== "process") {
+        return invalid("Invalid connections worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
     const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
     if (!connectionsCsv) {
-        return invalid('Missing connectionsCsv payload');
+        return invalid("Missing connectionsCsv payload");
     }
     if (connectionsCsv.length > LIMITS.maxCsvChars) {
-        return invalid('connectionsCsv payload exceeds allowed size');
+        return invalid("connectionsCsv payload exceeds allowed size");
     }
     return valid({
-        type: 'process',
+        type: "process",
         requestId: normalizeRequestId(message.requestId),
-        payload: { connectionsCsv }
+        payload: { connectionsCsv },
     });
 }
 
@@ -310,35 +318,36 @@ export function parseConnectionsWorkerRequest(message) {
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
 export function parseConnectionsWorkerMessage(message) {
-    if (!isPlainObject(message) || typeof message.type !== 'string') {
-        return invalid('Invalid connections worker message envelope');
+    if (!isPlainObject(message) || typeof message.type !== "string") {
+        return invalid("Invalid connections worker message envelope");
     }
 
-    if (message.type === 'error') {
+    if (message.type === "error") {
         const payload = isPlainObject(message.payload) ? message.payload : {};
         return valid({
-            type: 'error',
+            type: "error",
             requestId: normalizeRequestId(message.requestId),
             payload: {
-                message: normalizeString(payload.message, LIMITS.maxMessageChars) || 'Worker error.'
-            }
+                message:
+                    normalizeString(payload.message, LIMITS.maxMessageChars) || "Worker error.",
+            },
         });
     }
 
-    if (message.type !== 'processed') {
-        return invalid('Unknown connections worker message type');
+    if (message.type !== "processed") {
+        return invalid("Unknown connections worker message type");
     }
 
     const payload = isPlainObject(message.payload) ? message.payload : {};
     return valid({
-        type: 'processed',
+        type: "processed",
         requestId: normalizeRequestId(message.requestId),
         payload: {
             success: Boolean(payload.success),
             analytics: isPlainObject(payload.analytics) ? payload.analytics : null,
             rows: Array.isArray(payload.rows) ? payload.rows : [],
-            error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars)
-        }
+            error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
+        },
     });
 }
 
@@ -348,25 +357,25 @@ export function parseConnectionsWorkerMessage(message) {
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
 export function parseMessagesWorkerRequest(message) {
-    if (!isPlainObject(message) || message.type !== 'process') {
-        return invalid('Invalid messages worker request envelope');
+    if (!isPlainObject(message) || message.type !== "process") {
+        return invalid("Invalid messages worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
     const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
     if (!messagesCsv) {
-        return invalid('Missing messagesCsv payload');
+        return invalid("Missing messagesCsv payload");
     }
     if (messagesCsv.length > LIMITS.maxCsvChars) {
-        return invalid('messagesCsv payload exceeds allowed size');
+        return invalid("messagesCsv payload exceeds allowed size");
     }
     const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars);
     return valid({
-        type: 'process',
+        type: "process",
         requestId: normalizeRequestId(message.requestId),
         payload: {
             messagesCsv,
-            connectionsCsv
-        }
+            connectionsCsv,
+        },
     });
 }
 
@@ -376,13 +385,13 @@ export function parseMessagesWorkerRequest(message) {
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
 export function parseMessagesWorkerMessage(message) {
-    if (!isPlainObject(message) || message.type !== 'processed') {
-        return invalid('Invalid messages worker message envelope');
+    if (!isPlainObject(message) || message.type !== "processed") {
+        return invalid("Invalid messages worker message envelope");
     }
     return valid({
-        type: 'processed',
+        type: "processed",
         requestId: normalizeRequestId(message.requestId),
-        payload: isPlainObject(message.payload) ? message.payload : null
+        payload: isPlainObject(message.payload) ? message.payload : null,
     });
 }
 
@@ -393,12 +402,12 @@ export function parseMessagesWorkerMessage(message) {
  */
 export function parseStoredUploadFile(file) {
     if (!isPlainObject(file)) {
-        return invalid('Invalid stored file payload');
+        return invalid("Invalid stored file payload");
     }
 
     const type = normalizeString(file.type, 32);
     if (!FILE_TYPES.has(type)) {
-        return invalid('Invalid stored file type');
+        return invalid("Invalid stored file type");
     }
 
     return valid({
@@ -406,6 +415,6 @@ export function parseStoredUploadFile(file) {
         name: normalizeString(file.name, LIMITS.maxFileNameChars),
         text: normalizeString(file.text, LIMITS.maxCsvChars),
         rowCount: normalizeNumber(file.rowCount, 0, 0, Number.MAX_SAFE_INTEGER),
-        updatedAt: normalizeNumber(file.updatedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER)
+        updatedAt: normalizeNumber(file.updatedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER),
     });
 }

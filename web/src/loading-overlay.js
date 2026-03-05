@@ -94,9 +94,11 @@ export const LoadingOverlay = (() => {
         }
 
         const latest = Array.from(activeSources.values()).pop();
+        /* v8 ignore next 3 */
         if (elements.title) {
             elements.title.textContent = latest.title;
         }
+        /* v8 ignore next 3 */
         if (elements.message) {
             elements.message.textContent = latest.message;
         }

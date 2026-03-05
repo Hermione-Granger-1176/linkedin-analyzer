@@ -94,7 +94,7 @@ export const ExcelGenerator = (() => {
      * @returns {string} String representation
      */
     function valueToText(cell) {
-        if (!cell || cell.value === null || typeof cell.value === 'undefined') return '';
+        if (!cell || cell.value === null || typeof cell.value === 'undefined') {return '';}
         return String(cell.value);
     }
 
@@ -155,9 +155,9 @@ export const ExcelGenerator = (() => {
     }
 
     /**
-     * Set column widths on the worksheet from config.
+     * Set column widths on the worksheet.
      * @param {object} ws - SheetJS worksheet
-     * @param {object} config - Cleaner config with column width definitions
+     * @param {number[]} widths - Column widths in character units
      */
     function applyColumnWidths(ws, widths) {
         ws['!cols'] = widths.map(width => ({ wch: width }));
@@ -171,7 +171,7 @@ export const ExcelGenerator = (() => {
     function applyHeaderStyles(ws, range) {
         for (let col = range.s.c; col <= range.e.c; col++) {
             const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-            if (!ws[cellRef]) continue;
+            if (!ws[cellRef]) {continue;}
             ws[cellRef].s = HEADER_STYLE;
         }
     }
@@ -179,7 +179,7 @@ export const ExcelGenerator = (() => {
     /**
      * Apply alignment and border styles to data rows.
      * @param {object} ws - SheetJS worksheet
-     * @param {object} config - Cleaner config with wrapText flags per column
+     * @param {boolean[]} wrapColumns - Columns to wrap text
      * @param {number} rowCount - Number of data rows
      * @param {{s: {c: number}, e: {c: number}}} range - Decoded sheet range
      */
@@ -187,7 +187,7 @@ export const ExcelGenerator = (() => {
         for (let row = 1; row <= rowCount; row++) {
             for (let col = range.s.c; col <= range.e.c; col++) {
                 const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-                if (!ws[cellRef]) continue;
+                if (!ws[cellRef]) {continue;}
 
                 ws[cellRef].s = {
                     alignment: {
@@ -214,7 +214,7 @@ export const ExcelGenerator = (() => {
     /**
      * Apply all formatting (headers, body, row heights) to a worksheet.
      * @param {object} ws - SheetJS worksheet
-     * @param {object} config - Cleaner config
+     * @param {boolean[]} wrapColumns - Columns to wrap text
      * @param {number} rowCount - Number of data rows
      */
     function applyStyles(ws, wrapColumns, rowCount) {
@@ -259,7 +259,7 @@ export const ExcelGenerator = (() => {
             }
 
             return headers.map((_, index) => {
-                if (index >= row.length) return normalizeCell('');
+                if (index >= row.length) {return normalizeCell('');}
                 return normalizeCell(row[index]);
             });
         });
@@ -391,6 +391,7 @@ export const ExcelGenerator = (() => {
      * @param {object[]} data - Cleaned data array
      * @param {string} fileType - Supported file type
      * @param {string} [customFilename] - Optional custom filename
+     * @returns {{success: boolean, error: string|null}}
      */
     function generateAndDownload(data, fileType, customFilename = null) {
         try {

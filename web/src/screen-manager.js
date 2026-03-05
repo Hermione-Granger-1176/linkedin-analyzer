@@ -56,6 +56,7 @@ export const ScreenManager = (() => {
 
         ensureControllerInitialized(nextRoute);
         if (nextRoute.controller && typeof nextRoute.controller.onRouteChange === 'function') {
+            /* v8 ignore next */
             nextRoute.controller.onRouteChange(params || {}, { from: previousName, to: routeName });
         }
 

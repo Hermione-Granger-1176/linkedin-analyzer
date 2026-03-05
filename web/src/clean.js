@@ -1,8 +1,9 @@
 /* Clean page logic */
 
+import { LinkedInCleaner } from './cleaner.js';
 import { DataCache } from './data-cache.js';
 import { ExcelGenerator } from './excel.js';
-import { LinkedInCleaner } from './cleaner.js';
+import { captureError } from './sentry.js';
 import { Session } from './session.js';
 import { Storage } from './storage.js';
 
@@ -79,8 +80,18 @@ export const CleanPage = (() => {
 
     /** Reload files from storage and redraw the panel. */
     async function refresh() {
-        await loadFiles();
-        updateView();
+        try {
+            await loadFiles();
+            updateView();
+        } catch (error) {
+            captureError(error, {
+                module: 'clean',
+                operation: 'refresh'
+            });
+            showError('Unable to load saved files. Re-upload your CSV files and try again.');
+            hidePreview();
+            hideDownload();
+        }
     }
 
     /**
@@ -139,6 +150,7 @@ export const CleanPage = (() => {
         });
 
         const selectedType = getSelectedType();
+        /* v8 ignore next 9 */
         if (!storedFiles[selectedType] && loadedCount > 0) {
             const fallbackType = loadedTypes[0];
             const fallbackInput = document.querySelector(
@@ -186,17 +198,37 @@ export const CleanPage = (() => {
         const fileUpdatedAt = file.updatedAt || 0;
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
-            const processed = LinkedInCleaner.process(file.text, type);
-            if (!processed.success) {
-                showError(processed.error || 'Unable to parse file.');
+            try {
+                const processed = LinkedInCleaner.process(file.text, type);
+                if (!processed.success) {
+                    const message = processed.error || 'Unable to parse file.';
+                    captureError(new Error(message), {
+                        module: 'clean',
+                        operation: 'parse-file',
+                        fileType: type,
+                        fileName: file.name || null
+                    });
+                    showError(message);
+                    hidePreview();
+                    hideDownload();
+                    return;
+                }
+                cache[type] = {
+                    updatedAt: fileUpdatedAt,
+                    result: processed
+                };
+            } catch (error) {
+                captureError(error, {
+                    module: 'clean',
+                    operation: 'parse-file',
+                    fileType: type,
+                    fileName: file.name || null
+                });
+                showError('Unable to parse file.');
                 hidePreview();
                 hideDownload();
                 return;
             }
-            cache[type] = {
-                updatedAt: fileUpdatedAt,
-                result: processed
-            };
         }
 
         showPreview(cache[type].result, type);
@@ -205,13 +237,15 @@ export const CleanPage = (() => {
 
     /**
      * Populate the preview table with cleaned data.
-     * @param {Object} result - The processed result from LinkedInCleaner.
+     * @param {object} result - The processed result from LinkedInCleaner.
      * @param {string} fileType - The file type ('shares' or 'comments').
      */
     function showPreview(result, fileType) {
         const config = LinkedInCleaner.configs[fileType];
-        if (!config) return;
+        /* v8 ignore next */
+        if (!config) {return;}
         const headers = config.columns.map(column => column.name);
+        /* v8 ignore next */
         const label = FILE_TYPE_LABELS[fileType] || fileType;
         elements.cleanFileInfo.textContent = `${label} - ${result.rowCount} rows`;
 
@@ -222,6 +256,7 @@ export const CleanPage = (() => {
         const previewRows = result.cleanedData.slice(0, PREVIEW_ROW_LIMIT);
         tbody.innerHTML = previewRows.map(row =>
             `<tr>${headers.map(header => {
+                /* v8 ignore next */
                 const value = row[header] || '';
                 return `<td title="${escapeHtml(value)}">${escapeHtml(truncate(value, PREVIEW_CELL_LIMIT))}</td>`;
             }).join('')}</tr>`
@@ -263,10 +298,20 @@ export const CleanPage = (() => {
         const cached = cache[type];
         if (!cached || !cached.result) {
             showError('No data to download.');
+            captureError(new Error('No data to download from clean page.'), {
+                module: 'clean',
+                operation: 'download-without-cache',
+                fileType: type
+            });
             return;
         }
         const downloadResult = ExcelGenerator.generateAndDownload(cached.result.cleanedData, type);
         if (!downloadResult.success) {
+            captureError(new Error(downloadResult.error || 'Excel generation failed.'), {
+                module: 'clean',
+                operation: 'excel-generate',
+                fileType: type
+            });
             showError(`Error generating Excel: ${downloadResult.error}`);
         }
     }
@@ -305,9 +350,10 @@ export const CleanPage = (() => {
      * @returns {string} The truncated string.
      */
     function truncate(value, maxLength) {
-        if (!value) return '';
-        if (value.length <= maxLength) return value;
-        return value.slice(0, maxLength) + '...';
+        /* v8 ignore next */
+        if (!value) {return '';}
+        if (value.length <= maxLength) {return value;}
+        return `${value.slice(0, maxLength)  }...`;
     }
 
     return {

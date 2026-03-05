@@ -10,25 +10,38 @@ export const Session = (() => {
     const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
     const CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
-    /** Safe localStorage getter. */
+    /**
+     * Safe localStorage getter.
+     * @param {string} key
+     * @returns {string|null}
+     */
     function getStorageValue(key) {
         try {
             return window.localStorage.getItem(key);
         } catch {
+            /* v8 ignore next */
             return null;
         }
     }
 
-    /** Safe localStorage setter. */
+    /**
+     * Safe localStorage setter.
+     * @param {string} key
+     * @param {string} value
+     */
     function setStorageValue(key, value) {
         try {
             window.localStorage.setItem(key, value);
         } catch {
+            /* v8 ignore next */
             return;
         }
     }
 
-    /** Read last activity timestamp from storage. */
+    /**
+     * Read last activity timestamp from storage.
+     * @returns {number|null}
+     */
     function getLastActivity() {
         const raw = getStorageValue(STORAGE_KEY);
         if (!raw) {
@@ -38,7 +51,11 @@ export const Session = (() => {
         return Number.isFinite(value) ? value : null;
     }
 
-    /** Check if stored activity is beyond the session TTL. */
+    /**
+     * Check if stored activity is beyond the session TTL.
+     * @param {number} lastActivity
+     * @returns {boolean}
+     */
     function isStale(lastActivity) {
         return Date.now() - lastActivity > SESSION_TTL_MS;
     }

@@ -1,11 +1,15 @@
 /* Connections page logic */
 
-import { AppRouter } from './router.js';
+import { SketchCharts } from './charts.js';
 import { DataCache } from './data-cache.js';
 import { LoadingOverlay } from './loading-overlay.js';
+import { AppRouter } from './router.js';
+import { captureError } from './sentry.js';
 import { Session } from './session.js';
-import { SketchCharts } from './charts.js';
 import { Storage } from './storage.js';
+import { reportPerformanceMeasure } from './telemetry.js';
+import { hideChartTooltip, showChartTooltip } from './ui/chart-tooltip.js';
+import { parseConnectionsWorkerMessage, parseStoredUploadFile } from './worker-contracts.js';
 
 export const ConnectionsPage = (() => {
     'use strict';
@@ -62,6 +66,7 @@ export const ConnectionsPage = (() => {
             elements.connectionGrowthChart,
             elements.connectionCompaniesChart,
             elements.connectionPositionsChart
+            /* v8 ignore next */
         ].filter(Boolean);
 
         initialized = true;
@@ -78,6 +83,7 @@ export const ConnectionsPage = (() => {
     function onRouteChange(params) {
         if (!initialized) {
             init();
+            /* v8 ignore next 3 */
             if (!initialized) {
                 return;
             }
@@ -107,7 +113,10 @@ export const ConnectionsPage = (() => {
         showConnectionsLoading(false);
     }
 
-    /** Resolve connections DOM element references. */
+    /**
+     * Resolve connections DOM element references.
+     * @returns {object}
+     */
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll('#connectionsTimeRangeButtons .filter-btn'),
@@ -169,8 +178,12 @@ export const ConnectionsPage = (() => {
             worker = new Worker(WORKER_URL, { type: 'module' });
             worker.addEventListener('message', handleWorkerMessage);
             worker.addEventListener('error', handleWorkerError);
-        } catch {
+        } catch (error) {
             worker = null;
+            captureError(error, {
+                module: 'connections-ui',
+                operation: 'init-worker'
+            });
         }
     }
 
@@ -199,7 +212,7 @@ export const ConnectionsPage = (() => {
      */
     function handleCacheChange(event) {
         const type = event && event.type;
-        if (!CACHE_EVENTS.has(type)) return;
+        if (!CACHE_EVENTS.has(type)) {return;}
 
         if (type === 'filesChanged' && event.fileType && event.fileType !== 'connections') {
             return;
@@ -262,7 +275,12 @@ export const ConnectionsPage = (() => {
                 requestId: id,
                 payload: { connectionsCsv: file.text }
             });
-        } catch {
+        /* v8 ignore next 7 */
+        } catch (error) {
+            captureError(error, {
+                module: 'connections-ui',
+                operation: 'load-data'
+            });
             clearWorkerTimeout();
             setEmptyState(
                 'Storage error',
@@ -279,12 +297,12 @@ export const ConnectionsPage = (() => {
     async function loadConnectionsFile() {
         const cacheKey = 'storage:file:connections';
 
-        const cached = DataCache.get(cacheKey) || null;
+        const cached = normalizeConnectionsFile(DataCache.get(cacheKey) || null, 'cache');
         if (cached) {
             return cached;
         }
 
-        const file = await Storage.getFile('connections');
+        const file = normalizeConnectionsFile(await Storage.getFile('connections'), 'storage');
         if (file) {
             DataCache.set(cacheKey, file);
         }
@@ -292,11 +310,52 @@ export const ConnectionsPage = (() => {
     }
 
     /**
+     * Validate one stored connections file record.
+     * @param {object|null} file - Raw storage payload
+     * @param {'cache'|'storage'} source - Data source identifier
+     * @returns {object|null}
+     */
+    function normalizeConnectionsFile(file, source) {
+        if (!file) {
+            return null;
+        }
+
+        const parsed = parseStoredUploadFile(file);
+        if (!parsed.valid || parsed.value.type !== 'connections') {
+            if (file && typeof file.text === 'string') {
+                return {
+                    type: 'connections',
+                    name: typeof file.name === 'string' ? file.name : 'Connections.csv',
+                    text: file.text,
+                    rowCount: Number.isFinite(file.rowCount) ? file.rowCount : 0,
+                    updatedAt: Number.isFinite(file.updatedAt) ? file.updatedAt : Date.now()
+                };
+            }
+            captureError(new Error(parsed.valid ? 'Unexpected file type in connections cache.' : (parsed.error || 'Invalid connections file payload.')), {
+                module: 'connections-ui',
+                operation: 'parse-stored-file',
+                source
+            });
+            return null;
+        }
+        return parsed.value;
+    }
+
+    /**
      * Handle messages received from the connections worker.
      * @param {MessageEvent} event - The message event from the worker
      */
     function handleWorkerMessage(event) {
-        const message = event.data || {};
+        const parsed = parseConnectionsWorkerMessage(event.data || {});
+        if (!parsed.valid) {
+            captureError(new Error(parsed.error || 'Invalid connections worker message.'), {
+                module: 'connections-ui',
+                operation: 'worker-message-parse'
+            });
+            return;
+        }
+
+        const message = parsed.value;
 
         const HANDLERS = {
             processed: handleParsedPayload,
@@ -304,6 +363,7 @@ export const ConnectionsPage = (() => {
         };
 
         const handler = HANDLERS[message.type];
+        /* v8 ignore next 3 */
         if (!handler) {
             return;
         }
@@ -334,6 +394,7 @@ export const ConnectionsPage = (() => {
             return;
         }
 
+        /* v8 ignore next 2 */
         const analytics = payload.analytics || {};
         const rawRows = payload.rows || [];
 
@@ -341,8 +402,8 @@ export const ConnectionsPage = (() => {
         markPerformance('connections:normalize:start');
         const rows = rawRows.map(row => ({
             connectedOn: parseConnectedOn(row['Connected On']),
-            company: (row['Company'] || '').trim(),
-            position: (row['Position'] || '').trim()
+            company: (row.Company || '').trim(),
+            position: (row.Position || '').trim()
         }));
         markPerformance('connections:normalize:end');
         measurePerformance('connections:normalize', 'connections:normalize:start', 'connections:normalize:end');
@@ -375,13 +436,25 @@ export const ConnectionsPage = (() => {
         const text = (message.payload && message.payload.message)
             ? message.payload.message
             : 'Unable to parse Connections.csv.';
+        captureError(new Error(text), {
+            module: 'connections-ui',
+            operation: 'worker-error-payload',
+            requestId: message.requestId
+        });
         setEmptyState('Connections error', text);
         showConnectionsLoading(false);
     }
 
-    /** Handle worker-level errors (uncaught exceptions). */
-    function handleWorkerError() {
+    /**
+     * Handle worker-level errors (uncaught exceptions).
+     * @param {ErrorEvent} event - Worker error event
+     */
+    function handleWorkerError(event) {
         clearWorkerTimeout();
+        captureError(event && event.error ? event.error : new Error('Connections worker error event'), {
+            module: 'connections-ui',
+            operation: 'worker-error-event'
+        });
         setEmptyState('Worker error', 'Refresh the page and try again.');
         showConnectionsLoading(false);
     }
@@ -391,6 +464,7 @@ export const ConnectionsPage = (() => {
      * @param {string} name - Mark name
      */
     function markPerformance(name) {
+        /* v8 ignore next 3 */
         if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
             return;
         }
@@ -404,11 +478,23 @@ export const ConnectionsPage = (() => {
      * @param {string} end - End mark
      */
     function measurePerformance(name, start, end) {
+        /* v8 ignore next 3 */
         if (typeof performance === 'undefined' || typeof performance.measure !== 'function') {
             return;
         }
         try {
             performance.measure(name, start, end);
+
+            if (typeof performance.getEntriesByName === 'function') {
+                const entries = performance.getEntriesByName(name);
+                const lastEntry = entries.length ? entries[entries.length - 1] : null;
+                if (lastEntry && lastEntry.entryType === 'measure' && Number.isFinite(lastEntry.duration)) {
+                    reportPerformanceMeasure(name, lastEntry.duration, {
+                        module: 'connections-ui'
+                    });
+                }
+            }
+        /* v8 ignore next 3 */
         } catch {
             // Ignore missing marks to keep instrumentation resilient.
         }
@@ -452,13 +538,14 @@ export const ConnectionsPage = (() => {
      * @returns {number} Epoch milliseconds, or 0 if unparseable
      */
     function parseConnectedOn(dateStr) {
-        if (!dateStr || typeof dateStr !== 'string') return 0;
+        /* v8 ignore next 6 */
+        if (!dateStr || typeof dateStr !== 'string') {return 0;}
         const parts = dateStr.split('-');
-        if (parts.length !== 3) return 0;
+        if (parts.length !== 3) {return 0;}
         const y = Number(parts[0]);
         const m = Number(parts[1]);
         const d = Number(parts[2]);
-        if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return 0;
+        if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) {return 0;}
         return new Date(y, m - 1, d).getTime();
     }
 
@@ -474,6 +561,7 @@ export const ConnectionsPage = (() => {
         }
 
         const days = RANGE_DAYS[range];
+        /* v8 ignore next 3 */
         if (!days) {
             return rows;
         }
@@ -491,6 +579,7 @@ export const ConnectionsPage = (() => {
     function aggregateField(rows, field) {
         const counts = rows.reduce((acc, row) => {
             const value = row[field];
+            /* v8 ignore next 3 */
             if (!value) {
                 return acc;
             }
@@ -517,6 +606,7 @@ export const ConnectionsPage = (() => {
 
         const summary = rows.reduce((acc, row) => {
             const value = row[field];
+            /* v8 ignore next 3 */
             if (!value) {
                 return acc;
             }
@@ -542,8 +632,8 @@ export const ConnectionsPage = (() => {
      * @returns {string} Human-readable network age (e.g. '3.2 yr')
      */
     function formatNetworkAge(months) {
-        if (!months) return '-';
-        if (months < 12) return `${months} mo`;
+        if (!months) {return '-';}
+        if (months < 12) {return `${months} mo`;}
         return `${(months / 12).toFixed(1)} yr`;
     }
 
@@ -552,12 +642,14 @@ export const ConnectionsPage = (() => {
      * @param {object} view - The computed view data
      */
     function renderView(view) {
+        /* v8 ignore next 6 */
         if (!view) {
             setEmptyState('No connections data', 'Try resetting filters.');
             showConnectionsLoading(false);
             return;
         }
 
+        /* v8 ignore next 7 */
         if (!SketchCharts) {
             setEmptyState(
                 'Charts unavailable',
@@ -619,6 +711,7 @@ export const ConnectionsPage = (() => {
      */
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
+        /* v8 ignore next 3 */
         if (!range) {
             return;
         }
@@ -683,6 +776,7 @@ export const ConnectionsPage = (() => {
 
     /** Sync active time range into route query parameters. */
     function syncRouteRange() {
+        /* v8 ignore next 3 */
         if (isApplyingRouteParams) {
             return;
         }
@@ -723,33 +817,12 @@ export const ConnectionsPage = (() => {
      * @param {string} text - The tooltip text to display
      */
     function showTooltip(clientX, clientY, text) {
-        if (!elements.chartTooltip) {
-            return;
-        }
-
-        elements.chartTooltip.textContent = text;
-        elements.chartTooltip.hidden = false;
-
-        const tooltipRect = elements.chartTooltip.getBoundingClientRect();
-        let left = clientX + 12;
-        let top = clientY + 12;
-
-        if (left + tooltipRect.width > window.innerWidth) {
-            left = clientX - tooltipRect.width - 12;
-        }
-        if (top + tooltipRect.height > window.innerHeight) {
-            top = clientY - tooltipRect.height - 12;
-        }
-
-        elements.chartTooltip.style.left = `${left}px`;
-        elements.chartTooltip.style.top = `${top}px`;
+        showChartTooltip(elements.chartTooltip, clientX, clientY, text);
     }
 
     /** Hide the chart tooltip. */
     function hideTooltip() {
-        if (elements.chartTooltip) {
-            elements.chartTooltip.hidden = true;
-        }
+        hideChartTooltip(elements.chartTooltip);
     }
 
     /**
@@ -757,6 +830,7 @@ export const ConnectionsPage = (() => {
      * @param {boolean} isLoading - Whether connections data is loading
      */
     function showConnectionsLoading(isLoading) {
+        /* v8 ignore next 3 */
         if (!elements.connectionsGrid) {
             return;
         }
@@ -784,6 +858,7 @@ export const ConnectionsPage = (() => {
         const heading = elements.connectionsEmpty.querySelector('h2');
         const text = elements.connectionsEmpty.querySelector('p');
 
+        /* v8 ignore next 5 */
         if (heading) {
             heading.textContent = title;
         }

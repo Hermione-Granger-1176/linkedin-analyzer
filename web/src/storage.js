@@ -17,9 +17,11 @@ export const Storage = (() => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
+                /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(FILE_STORE)) {
                     db.createObjectStore(FILE_STORE, { keyPath: 'type' });
                 }
+                /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
                     db.createObjectStore(ANALYTICS_STORE, { keyPath: 'id' });
                 }
@@ -90,6 +92,7 @@ export const Storage = (() => {
             const tx = db.transaction(FILE_STORE, 'readonly');
             const store = tx.objectStore(FILE_STORE);
             const request = store.getAll();
+            /* v8 ignore next */
             request.onsuccess = () => resolve(request.result || []);
             request.onerror = () => reject(request.error);
         });

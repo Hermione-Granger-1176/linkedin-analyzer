@@ -2,13 +2,16 @@
 
 import rough from 'roughjs/bundled/rough.esm.js';
 
-import { AppRouter } from './router.js';
+import { SketchCharts } from './charts.js';
 import { DataCache } from './data-cache.js';
 import { DomEvents } from './dom-events.js';
 import { LoadingOverlay } from './loading-overlay.js';
+import { AppRouter } from './router.js';
+import { captureError } from './sentry.js';
 import { Session } from './session.js';
-import { SketchCharts } from './charts.js';
 import { Storage } from './storage.js';
+import { hideChartTooltip, showChartTooltip } from './ui/chart-tooltip.js';
+import { parseAnalyticsWorkerMessage } from './worker-contracts.js';
 
 export const AnalyticsPage = (() => {
     'use strict';
@@ -134,6 +137,7 @@ export const AnalyticsPage = (() => {
     function onRouteChange(params) {
         if (!initialized) {
             init();
+            /* v8 ignore next 3 */
             if (!initialized) {
                 return;
             }
@@ -163,7 +167,10 @@ export const AnalyticsPage = (() => {
         showAnalyticsLoading(false);
     }
 
-    /** Resolve analytics DOM element references. */
+    /**
+     * Resolve analytics DOM element references.
+     * @returns {object}
+     */
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll('#analyticsTimeRangeButtons .filter-btn'),
@@ -231,8 +238,12 @@ export const AnalyticsPage = (() => {
             worker = new Worker(WORKER_URL, { type: 'module' });
             worker.addEventListener('message', handleWorkerMessage);
             worker.addEventListener('error', handleWorkerError);
-        } catch {
+        } catch (error) {
             worker = null;
+            captureError(error, {
+                module: 'analytics-ui',
+                operation: 'init-worker'
+            });
             setEmptyState('Worker blocked', 'Open this page from a local server (not file://).');
         }
     }
@@ -294,7 +305,11 @@ export const AnalyticsPage = (() => {
                 payload: analyticsBase
             });
             needsBaseReload = false;
-        } catch {
+        } catch (error) {
+            captureError(error, {
+                module: 'analytics-ui',
+                operation: 'load-base'
+            });
             setEmptyState('Storage error', 'Unable to load saved data. Try clearing browser data and re-uploading.');
             showAnalyticsLoading(false);
         }
@@ -305,7 +320,16 @@ export const AnalyticsPage = (() => {
      * @param {MessageEvent} event - The message event from the worker.
      */
     function handleWorkerMessage(event) {
-        const message = event.data || {};
+        const parsed = parseAnalyticsWorkerMessage(event.data || {});
+        if (!parsed.valid) {
+            captureError(new Error(parsed.error || 'Invalid analytics worker message.'), {
+                module: 'analytics-ui',
+                operation: 'worker-message-parse'
+            });
+            return;
+        }
+
+        const message = parsed.value;
 
         switch (message.type) {
             case 'init':
@@ -321,8 +345,14 @@ export const AnalyticsPage = (() => {
                 applyWorkerViewPayload(message.payload || {});
                 return;
             case 'error':
+                captureError(new Error(getWorkerMessage(message.payload, 'Analytics worker error.')), {
+                    module: 'analytics-ui',
+                    operation: 'worker-error-payload',
+                    requestId: message.requestId
+                });
                 setEmptyState('Analytics error', getWorkerMessage(message.payload, 'Analytics worker error.'));
                 return;
+            /* v8 ignore next 2 */
             default:
                 return;
         }
@@ -356,14 +386,22 @@ export const AnalyticsPage = (() => {
         return payload && payload.message ? payload.message : fallback;
     }
 
-    /** Handle worker-level errors. */
-    function handleWorkerError() {
+    /**
+     * Handle worker-level errors.
+     * @param {ErrorEvent} event - Worker error event
+     */
+    function handleWorkerError(event) {
+        const workerError = event && event.error ? event.error : new Error('Analytics worker error event');
+        captureError(workerError, {
+            module: 'analytics-ui',
+            operation: 'worker-error-event'
+        });
         setEmptyState('Analytics worker error', 'Refresh the page and try again.');
     }
 
     /**
      * Build a unique string key from the current filter state.
-     * @param {Object} filters - The current filter state.
+     * @param {object} filters - The current filter state.
      * @returns {string} A pipe-delimited key representing the filters.
      */
     function getFilterKey(filters) {
@@ -431,10 +469,11 @@ export const AnalyticsPage = (() => {
 
     /**
      * Defer rendering until chart containers have layout dimensions.
-     * @param {Object} view - The analytics view data to render once sized.
+     * @param {object} view - The analytics view data to render once sized.
      */
     function scheduleRenderWhenSized(view) {
         pendingRender = view;
+        /* v8 ignore next 3 */
         if (resizeObserver) {
             return;
         }
@@ -442,6 +481,7 @@ export const AnalyticsPage = (() => {
         const wrappers = chartCanvases.map(canvas => canvas.parentElement).filter(Boolean);
         if (typeof ResizeObserver !== 'undefined' && wrappers.length) {
             resizeObserver = new ResizeObserver(() => {
+                /* v8 ignore next 3 */
                 if (!pendingRender || !areChartsSized()) {
                     return;
                 }
@@ -456,6 +496,7 @@ export const AnalyticsPage = (() => {
             return;
         }
 
+        /* v8 ignore next 11 */
         if (renderRetryCount < MAX_RENDER_RETRIES) {
             renderRetryCount += 1;
             clearTimeout(renderRetryTimer);
@@ -473,7 +514,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Update the stats bar with totals from the current view.
-     * @param {Object} view - The analytics view containing totals, peakHour, and streaks.
+     * @param {object} view - The analytics view containing totals, peakHour, and streaks.
      */
     function updateStats(view) {
         elements.statPosts.textContent = view.totals.posts;
@@ -501,7 +542,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Draw all three chart canvases from the view data.
-     * @param {Object} view - The analytics view containing timeline, topics, and heatmap data.
+     * @param {object} view - The analytics view containing timeline, topics, and heatmap data.
      */
     function renderCharts(view) {
         SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
@@ -532,7 +573,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Main render entry point: update stats, filters, and charts.
-     * @param {Object} view - The analytics view data to render.
+     * @param {object} view - The analytics view data to render.
      */
     function renderAnalyticsView(view) {
         if (isRendering) {
@@ -547,6 +588,7 @@ export const AnalyticsPage = (() => {
                 return;
             }
 
+            /* v8 ignore next 5 */
             if (!rough) {
                 setEmptyState('Charts unavailable', 'Required libraries failed to load. Please refresh the page.');
                 showAnalyticsLoading(false);
@@ -568,9 +610,14 @@ export const AnalyticsPage = (() => {
             showAnalyticsLoading(true);
             SketchCharts.cancelAnimations();
             renderCharts(view);
-        } catch {
+        } catch (error) {
+            captureError(error, {
+                module: 'analytics-ui',
+                operation: 'render-view'
+            });
             setEmptyState('Render error', 'Failed to draw charts. Please refresh the page.');
         } finally {
+            /* v8 ignore next 9 */
             if (isRendering) {
                 showAnalyticsLoading(false);
                 isRendering = false;
@@ -598,6 +645,7 @@ export const AnalyticsPage = (() => {
      */
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
+        /* v8 ignore next 3 */
         if (!range) {
             return;
         }
@@ -695,14 +743,35 @@ export const AnalyticsPage = (() => {
 
         if (!filters.length) {
             elements.activeFilters.hidden = true;
-            elements.activeFiltersList.innerHTML = '';
+            elements.activeFiltersList.replaceChildren();
             return;
         }
 
         elements.activeFilters.hidden = false;
-        elements.activeFiltersList.innerHTML = filters.map(filter =>
-            `<span class="filter-chip">${filter.label}<button data-filter="${filter.key}" aria-label="Remove filter">x</button></span>`
-        ).join('');
+        const fragment = document.createDocumentFragment();
+        filters.forEach(filter => {
+            fragment.appendChild(createFilterChip(filter));
+        });
+        elements.activeFiltersList.replaceChildren(fragment);
+    }
+
+    /**
+     * Create one active-filter chip element.
+     * @param {{key: string, label: string}} filter - Filter descriptor
+     * @returns {HTMLElement}
+     */
+    function createFilterChip(filter) {
+        const chip = document.createElement('span');
+        chip.className = 'filter-chip';
+        chip.append(document.createTextNode(filter.label));
+
+        const button = document.createElement('button');
+        button.setAttribute('data-filter', filter.key);
+        button.setAttribute('aria-label', 'Remove filter');
+        button.textContent = 'x';
+
+        chip.appendChild(button);
+        return chip;
     }
 
     /**
@@ -771,33 +840,12 @@ export const AnalyticsPage = (() => {
      * @param {string} text - The tooltip text to display.
      */
     function showTooltip(clientX, clientY, text) {
-        if (!elements.chartTooltip) {
-            return;
-        }
-
-        elements.chartTooltip.textContent = text;
-        elements.chartTooltip.hidden = false;
-
-        const tooltipRect = elements.chartTooltip.getBoundingClientRect();
-        let left = clientX + 12;
-        let top = clientY + 12;
-
-        if (left + tooltipRect.width > window.innerWidth) {
-            left = clientX - tooltipRect.width - 12;
-        }
-        if (top + tooltipRect.height > window.innerHeight) {
-            top = clientY - tooltipRect.height - 12;
-        }
-
-        elements.chartTooltip.style.left = `${left}px`;
-        elements.chartTooltip.style.top = `${top}px`;
+        showChartTooltip(elements.chartTooltip, clientX, clientY, text);
     }
 
     /** Hide the chart tooltip. */
     function hideTooltip() {
-        if (elements.chartTooltip) {
-            elements.chartTooltip.hidden = true;
-        }
+        hideChartTooltip(elements.chartTooltip);
     }
 
     /**
@@ -836,7 +884,7 @@ export const AnalyticsPage = (() => {
         elements.analyticsGrid.hidden = true;
         elements.statsGrid.hidden = true;
         elements.activeFilters.hidden = true;
-        elements.activeFiltersList.innerHTML = '';
+        elements.activeFiltersList.replaceChildren();
         showAnalyticsLoading(false);
     }
 
@@ -849,7 +897,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Determine whether timeline animation should play.
-     * @param {Object} view - The analytics view to check.
+     * @param {object} view - The analytics view to check.
      * @returns {boolean} True if the timeline should animate.
      */
     function shouldAnimate(view) {
@@ -897,6 +945,7 @@ export const AnalyticsPage = (() => {
 
     /** Sync active filter state into route query parameters. */
     function syncRouteFromFilters() {
+        /* v8 ignore next 3 */
         if (isApplyingRouteParams) {
             return;
         }

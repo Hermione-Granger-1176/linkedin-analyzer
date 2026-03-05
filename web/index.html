@@ -94,8 +94,8 @@
                 </nav>
 
                 <section class="upload-layout">
-                    <div class="drop-zone" id="multiDropZone" tabindex="0" role="button" aria-label="Upload CSV files">
-                        <input type="file" id="multiFileInput" accept=".csv" multiple hidden>
+                    <div class="drop-zone" id="multiDropZone" data-testid="upload-dropzone" tabindex="0" role="button" aria-label="Upload CSV files">
+                        <input type="file" id="multiFileInput" data-testid="upload-input" accept=".csv" multiple hidden>
                         <div class="drop-zone-content">
                             <svg class="upload-icon" viewBox="0 0 64 64" aria-hidden="true">
                                 <path d="M32 44 L32 20" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
@@ -147,7 +147,7 @@
                         </div>
                         <p class="upload-hint" id="uploadHint">Upload at least one file to start.</p>
                         <div class="action-buttons">
-                            <button class="primary-btn" id="openAnalyticsBtn" disabled>Open Analytics</button>
+                            <button class="primary-btn" id="openAnalyticsBtn" data-testid="open-analytics-btn" disabled>Open Analytics</button>
                             <button class="reset-btn" id="clearAllBtn">Clear data</button>
                         </div>
                     </div>
@@ -288,7 +288,7 @@
                             <span class="file-info" id="cleanFileInfo"></span>
                         </div>
                         <div class="preview-table-wrapper">
-                            <table class="preview-table" id="cleanPreviewTable">
+                            <table class="preview-table" id="cleanPreviewTable" data-testid="clean-preview-table">
                                 <thead></thead>
                                 <tbody></tbody>
                             </table>
@@ -298,7 +298,7 @@
 
                     <div class="download-section" id="cleanDownloadSection" hidden>
                         <div class="action-buttons">
-                            <button class="download-btn" id="cleanDownloadBtn">
+                            <button class="download-btn" id="cleanDownloadBtn" data-testid="clean-download-btn">
                                 <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/>
                                     <polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -360,7 +360,7 @@
                     <div class="active-filters-list" id="activeFiltersList"></div>
                 </div>
 
-                <div class="analytics-empty" id="analyticsEmpty" hidden>
+                <div class="analytics-empty" id="analyticsEmpty" data-testid="analytics-empty" hidden>
                     <h2>No data available yet</h2>
                     <p>Upload Shares.csv or Comments.csv on the Home page.</p>
                     <div class="action-buttons">
@@ -368,7 +368,7 @@
                     </div>
                 </div>
 
-                <div class="analytics-grid" id="analyticsGrid">
+                <div class="analytics-grid" id="analyticsGrid" data-testid="analytics-grid">
                     <div class="chart-card chart-card--wide" id="timelineCard">
                         <div class="chart-header">
                             <h3>Activity timeline</h3>
@@ -422,7 +422,7 @@
                         <p class="stat-label">Comments</p>
                     </div>
                     <div class="stat-card">
-                        <p class="stat-value" id="statTotal">0</p>
+                        <p class="stat-value" id="statTotal" data-testid="analytics-total">0</p>
                         <p class="stat-label">Total activity</p>
                     </div>
                     <div class="stat-card">
@@ -716,7 +716,7 @@
         <p>You are offline. Your data stays local and can still be processed.</p>
     </div>
 
-    <div class="progress-overlay" id="contentLoadingOverlay" hidden>
+    <div class="progress-overlay" id="contentLoadingOverlay" data-testid="content-loading-overlay" hidden>
         <div class="progress-card content-loading-card">
             <div class="progress-gear-wrap" aria-hidden="true">
                 <svg class="progress-gear" viewBox="0 0 80 80">

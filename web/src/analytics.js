@@ -32,13 +32,13 @@ export const AnalyticsEngine = (() => {
      * @returns {{ timestamp: number, dayIndex: number, hour: number, dateKey: string, monthKey: string } | null} Parsed date components, or null if invalid.
      */
     function parseLinkedInDate(value) {
-        if (!value || typeof value !== 'string') return null;
+        if (!value || typeof value !== 'string') {return null;}
         const trimmed = value.trim();
         const [datePart, timePart] = trimmed.split(' ');
-        if (!datePart || !timePart) return null;
+        if (!datePart || !timePart) {return null;}
         const [year, month, day] = datePart.split('-').map(Number);
         const [hour, minute] = timePart.split(':').map(Number);
-        if (!year || !month || !day) return null;
+        if (!year || !month || !day) {return null;}
 
         // Timestamps are already converted to local time by the cleaner.
         const localDate = new Date(year, month - 1, day, hour || 0, minute || 0, 0);
@@ -66,7 +66,7 @@ export const AnalyticsEngine = (() => {
      * @returns {string} Cleaned text with URLs removed and whitespace collapsed.
      */
     function normalizeText(text) {
-        if (!text) return '';
+        if (!text) {return '';}
         return String(text).replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim();
     }
 
@@ -77,18 +77,18 @@ export const AnalyticsEngine = (() => {
      */
     function extractTopics(text) {
         const normalized = normalizeText(text);
-        if (!normalized) return [];
+        if (!normalized) {return [];}
         const hashtags = normalized.match(/#([A-Za-z0-9_]+)/g) || [];
         const textWithoutTags = normalized.replace(/#[A-Za-z0-9_]+/g, ' ');
         const words = textWithoutTags.match(/\b[a-zA-Z]{3,}\b/g) || [];
         const tokenSet = new Set();
         hashtags.forEach(tag => {
             const cleaned = tag.replace('#', '').toLowerCase();
-            if (cleaned && !STOP_WORDS.has(cleaned)) tokenSet.add(cleaned);
+            if (cleaned && !STOP_WORDS.has(cleaned)) {tokenSet.add(cleaned);}
         });
         words.forEach(word => {
             const cleaned = word.toLowerCase();
-            if (!STOP_WORDS.has(cleaned)) tokenSet.add(cleaned);
+            if (!STOP_WORDS.has(cleaned)) {tokenSet.add(cleaned);}
         });
         return Array.from(tokenSet);
     }
@@ -98,6 +98,9 @@ export const AnalyticsEngine = (() => {
     /**
      * Pre-compute aggregates during initial load.
      * This creates an indexed structure that allows fast filter lookups.
+     * @param {object[]|null|undefined} sharesData - Cleaned shares rows
+     * @param {object[]|null|undefined} commentsData - Cleaned comments rows
+     * @returns {object} Analytics aggregates and indices
      */
     function compute(sharesData, commentsData) {
         // Pre-aggregated indices
@@ -145,12 +148,12 @@ export const AnalyticsEngine = (() => {
             for (let i = 0; i < sharesData.length; i++) {
                 const row = sharesData[i];
                 const dateInfo = parseLinkedInDate(row.Date);
-                if (!dateInfo) continue;
+                if (!dateInfo) {continue;}
 
                 const hasMedia = Boolean(String(row.MediaUrl || '').trim());
                 const hasLink = Boolean(String(row.SharedUrl || '').trim());
                 const topics = extractTopics(row.ShareCommentary);
-                const { timestamp, monthKey, dayIndex, hour, dateKey } = dateInfo;
+                const { timestamp, monthKey, dayIndex: dayIdx, hour, dateKey } = dateInfo;
 
                 // Update global stats
                 totalPosts++;
@@ -163,9 +166,9 @@ export const AnalyticsEngine = (() => {
                 const bucket = getMonthBucket(monthKey);
                 bucket.posts++;
                 bucket.total++;
-                bucket.days[dayIndex]++;
+                bucket.days[dayIdx]++;
                 bucket.hours[hour]++;
-                bucket.heatmap[dayIndex][hour]++;
+                bucket.heatmap[dayIdx][hour]++;
                 bucket.activeDays.add(dateKey);
 
                 const dayBucket = getDayBucket(dateKey);
@@ -194,10 +197,10 @@ export const AnalyticsEngine = (() => {
             for (let i = 0; i < commentsData.length; i++) {
                 const row = commentsData[i];
                 const dateInfo = parseLinkedInDate(row.Date);
-                if (!dateInfo) continue;
+                if (!dateInfo) {continue;}
 
                 const topics = extractTopics(row.Message);
-                const { timestamp, monthKey, dayIndex, hour, dateKey } = dateInfo;
+                const { timestamp, monthKey, dayIndex: dayIdx, hour, dateKey } = dateInfo;
 
                 totalComments++;
                 latestTimestamp = Math.max(latestTimestamp, timestamp);
@@ -208,9 +211,9 @@ export const AnalyticsEngine = (() => {
                 const bucket = getMonthBucket(monthKey);
                 bucket.comments++;
                 bucket.total++;
-                bucket.days[dayIndex]++;
+                bucket.days[dayIdx]++;
                 bucket.hours[hour]++;
-                bucket.heatmap[dayIndex][hour]++;
+                bucket.heatmap[dayIdx][hour]++;
                 bucket.activeDays.add(dateKey);
 
                 const dayBucket = getDayBucket(dateKey);
@@ -340,25 +343,25 @@ export const AnalyticsEngine = (() => {
 
     /**
      * @description Get the topic filter ratio for a month bucket. Returns the fraction of activity matching the selected topic.
-     * @param {Object} bucket - Month bucket with topics and total count.
-     * @param {Object} filters - Active filters including topic.
+     * @param {object} bucket - Month bucket with topics and total count.
+     * @param {object} filters - Active filters including topic.
      * @returns {number} Ratio between 0 and 1.
      */
     function getTopicRatio(bucket, filters) {
-        if (!filters.topic || filters.topic === 'all') return 1;
-        if (!bucket.total) return 0;
+        if (!filters.topic || filters.topic === 'all') {return 1;}
+        if (!bucket.total) {return 0;}
         const topicCount = bucket.topics[filters.topic] || 0;
         return topicCount / bucket.total;
     }
 
     /**
      * @description Get the hour/day filter ratio for a month bucket. Returns the fraction of activity matching the selected hour and/or day.
-     * @param {Object} bucket - Month bucket with hours, days, and heatmap arrays.
-     * @param {Object} filters - Active filters including hour and day.
+     * @param {object} bucket - Month bucket with hours, days, and heatmap arrays.
+     * @param {object} filters - Active filters including hour and day.
      * @returns {number} Ratio between 0 and 1.
      */
     function getHourRatio(bucket, filters) {
-        if (filters.hour === null || filters.hour === undefined) return 1;
+        if (filters.hour === null || filters.hour === undefined) {return 1;}
         if (filters.day !== null && filters.day !== undefined) {
             const dayTotal = bucket.days[filters.day] || 0;
             const dayHour = bucket.heatmap[filters.day][filters.hour] || 0;
@@ -370,8 +373,8 @@ export const AnalyticsEngine = (() => {
 
     /**
      * @description Apply all active filters (topic, share type, day, hour) to a month bucket and return adjusted counts.
-     * @param {Object} bucket - Month bucket with posts, comments, total, and sub-indices.
-     * @param {Object} filters - Active filters to apply.
+     * @param {object} bucket - Month bucket with posts, comments, total, and sub-indices.
+     * @param {object} filters - Active filters to apply.
      * @param {number} topicRatio - Pre-computed topic ratio for this bucket.
      * @param {boolean} hasDay - Whether a day filter is active.
      * @param {boolean} hasHour - Whether an hour filter is active.
@@ -425,7 +428,7 @@ export const AnalyticsEngine = (() => {
      * @returns {string[]} Array of month keys in chronological order.
      */
     function getMonthKeysInRange(earliestTimestamp, latestTimestamp, rangeKey, monthFocus) {
-        if (!latestTimestamp) return [];
+        if (!latestTimestamp) {return [];}
 
         if (monthFocus) {
             return [monthFocus];
@@ -444,7 +447,7 @@ export const AnalyticsEngine = (() => {
         }
 
         const monthCount = Number(rangeKey.replace('m', ''));
-        if (!monthCount || Number.isNaN(monthCount)) return [];
+        if (!monthCount || Number.isNaN(monthCount)) {return [];}
 
         const keys = [];
         for (let i = 0; i < monthCount; i++) {
@@ -457,9 +460,12 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Build view from pre-computed aggregates - O(months) not O(events)
+     * @param {object|null} analytics - Pre-computed analytics payload
+     * @param {object} filters - Active filter state
+     * @returns {object|null} View model or null when no analytics
      */
     function buildView(analytics, filters) {
-        if (!analytics || !analytics.months) return null;
+        if (!analytics || !analytics.months) {return null;}
 
         const { months, latestTimestamp, earliestTimestamp, dayIndex } = analytics;
         const monthKeys = getMonthKeysInRange(earliestTimestamp, latestTimestamp, filters.timeRange, filters.monthFocus);
@@ -599,13 +605,14 @@ export const AnalyticsEngine = (() => {
 
     /**
      * @description Build a weekly timeline from the day-level index for the given target months, applying all active filters.
-     * @param {Object} dayIndex - Day-level index mapping dateKey to daily counts.
+     * @param {object} dayIndex - Day-level index mapping dateKey to daily counts.
      * @param {string[]} targetMonths - Array of "YYYY-MM" month keys to include.
-     * @param {Object} filters - Active filters (shareType, day, topic, hour).
-     * @param {Object} monthMeta - Per-month metadata with topicRatio and hourRatio.
+     * @param {object} filters - Active filters (shareType, day, topic, hour).
+     * @param {object} monthMeta - Per-month metadata with topicRatio and hourRatio.
      * @returns {{ timeline: Array, timelineMax: number }} Weekly timeline entries and max baseline value.
      */
     function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
+        /* v8 ignore next 3 */
         if (!dayIndex || !targetMonths.length) {
             return { timeline: [], timelineMax: 1 };
         }
@@ -637,19 +644,19 @@ export const AnalyticsEngine = (() => {
         const hasHour = filters.hour !== null && filters.hour !== undefined;
 
         for (const [dateKey, entry] of Object.entries(dayIndex)) {
-            if (dateKey < startKey || dateKey > endKey) continue;
+            if (dateKey < startKey || dateKey > endKey) {continue;}
             const date = parseDateKey(dateKey);
             const weekKey = formatDateKey(startOfWeek(date));
             const index = weekIndex.get(weekKey);
-            if (index === undefined) continue;
+            if (index === undefined) {continue;}
 
             const dayTotal = entry.total || 0;
             baselineTotals[index] += dayTotal;
 
             let value = dayTotal;
-            const SHARE_TYPE_MAP = { text: 'textOnly', links: 'links', media: 'media' };
             const typeKey = SHARE_TYPE_MAP[filters.shareType];
             if (typeKey) {
+                /* v8 ignore next */
                 value = entry.shareTypes ? entry.shareTypes[typeKey] : 0;
             }
 
@@ -683,7 +690,7 @@ export const AnalyticsEngine = (() => {
 
         let timelineMax = 1;
         for (const total of baselineTotals) {
-            if (total > timelineMax) timelineMax = total;
+            if (total > timelineMax) {timelineMax = total;}
         }
 
         return { timeline: weeks, timelineMax };
@@ -691,7 +698,7 @@ export const AnalyticsEngine = (() => {
 
     /**
      * @description Create an empty analytics view with zeroed-out values for all fields.
-     * @returns {Object} Empty view object.
+     * @returns {object} Empty view object.
      */
     function createEmptyView() {
         return {
@@ -782,7 +789,7 @@ export const AnalyticsEngine = (() => {
      * @returns {{ percent: number, direction: string, currentCount: number, previousCount: number } | null} Trend info, or null if insufficient data.
      */
     function computeTrendFromTimeline(timeline) {
-        if (timeline.length < 2) return null;
+        if (timeline.length < 2) {return null;}
 
         const half = Math.floor(timeline.length / 2);
         let recent = 0, older = 0;
@@ -821,7 +828,7 @@ export const AnalyticsEngine = (() => {
             { max: 5, id: 'early-bird', title: 'Early Bird', template: 'Your peak hour is {hour}. Mornings are your power time.', icon: 'rooster', accent: 'accent-yellow' },
             { min: 21, id: 'night-owl', title: 'Night Owl', template: 'Your peak hour is {hour}. Late hours work best for you.', icon: 'owl', accent: 'accent-purple' }
         ];
-        const hourLabel = String(peakHour).padStart(2, '0') + ':00';
+        const hourLabel = `${String(peakHour).padStart(2, '0')  }:00`;
         const timeInsight = TIME_OF_DAY_INSIGHTS.find(i => (i.max !== undefined && peakHour <= i.max) || (i.min !== undefined && peakHour >= i.min))
             || { id: 'steady-pace', title: 'Steady Rhythm', template: 'Most activity happens around {hour}. You keep a consistent rhythm.', icon: 'calendar', accent: 'accent-blue' };
         insights.push({

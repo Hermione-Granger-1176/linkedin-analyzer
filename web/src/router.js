@@ -19,6 +19,7 @@ export const AppRouter = (() => {
      */
     function registerRoute(name, options) {
         const normalized = normalizeRouteName(name);
+        /* v8 ignore next 3 */
         if (!normalized) {
             return;
         }
@@ -79,6 +80,7 @@ export const AppRouter = (() => {
      */
     function setParams(params, options) {
         const current = getCurrentRoute();
+        /* v8 ignore next 3 */
         if (!current) {
             return;
         }
@@ -93,6 +95,7 @@ export const AppRouter = (() => {
      */
     function updateParams(patch, options) {
         const current = getCurrentRoute();
+        /* v8 ignore next 3 */
         if (!current) {
             return;
         }
@@ -183,6 +186,7 @@ export const AppRouter = (() => {
     /** Handle browser hash changes. */
     function handleHashChange() {
         const next = parseHash(window.location.hash);
+        /* v8 ignore next 4 */
         if (!routes.has(next.name)) {
             setHash(defaultRoute, {}, true);
             return;

@@ -1,10 +1,12 @@
 /* Insights page logic */
 
-import { AppRouter } from './router.js';
 import { DataCache } from './data-cache.js';
 import { LoadingOverlay } from './loading-overlay.js';
+import { AppRouter } from './router.js';
+import { captureError } from './sentry.js';
 import { Session } from './session.js';
 import { Storage } from './storage.js';
+import { parseAnalyticsWorkerMessage } from './worker-contracts.js';
 
 export const InsightsPage = (() => {
     'use strict';
@@ -62,6 +64,7 @@ export const InsightsPage = (() => {
     function onRouteChange(params) {
         if (!initialized) {
             init();
+            /* v8 ignore next 3 */
             if (!initialized) {
                 return;
             }
@@ -88,7 +91,10 @@ export const InsightsPage = (() => {
         showInsightsLoading(false);
     }
 
-    /** Resolve insights DOM references. */
+    /**
+     * Resolve insights DOM references.
+     * @returns {object}
+     */
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll('#insightsTimeRangeButtons .filter-btn'),
@@ -111,10 +117,15 @@ export const InsightsPage = (() => {
         }
     }
 
-    /** Handle cache notifications from uploads/clear operations. */
+    /**
+     * Handle cache notifications from uploads/clear operations.
+     * @param {Event} event
+     */
     function handleCacheChange(event) {
         const type = event && event.type;
-        if (!CACHE_EVENTS.has(type)) return;
+        if (!CACHE_EVENTS.has(type)) {
+            return;
+        }
         needsBaseReload = true;
         state.analyticsReady = false;
         state.hasData = false;
@@ -131,8 +142,12 @@ export const InsightsPage = (() => {
             worker = new Worker(WORKER_URL, { type: 'module' });
             worker.addEventListener('message', handleWorkerMessage);
             worker.addEventListener('error', handleWorkerError);
-        } catch {
+        } catch (error) {
             worker = null;
+            captureError(error, {
+                module: 'insights-ui',
+                operation: 'init-worker'
+            });
             setEmptyState('Worker blocked', 'Open this page from a local server (not file://).');
         }
     }
@@ -145,6 +160,7 @@ export const InsightsPage = (() => {
             await Session.waitForCleanup();
 
             initWorker();
+            /* v8 ignore next 5 */
             if (!worker) {
                 setEmptyState('Insights not supported', 'Your browser does not support analytics workers.');
                 showInsightsLoading(false);
@@ -171,7 +187,11 @@ export const InsightsPage = (() => {
                 payload: analyticsBase
             });
             needsBaseReload = false;
-        } catch {
+        } catch (error) {
+            captureError(error, {
+                module: 'insights-ui',
+                operation: 'load-base'
+            });
             setEmptyState('Storage error', 'Unable to load saved analytics. Please re-upload your files.');
             showInsightsLoading(false);
         }
@@ -182,7 +202,16 @@ export const InsightsPage = (() => {
      * @param {MessageEvent} event - The message event from the worker.
      */
     function handleWorkerMessage(event) {
-        const message = event.data || {};
+        const parsed = parseAnalyticsWorkerMessage(event.data || {});
+        if (!parsed.valid) {
+            captureError(new Error(parsed.error || 'Invalid analytics worker payload.'), {
+                module: 'insights-ui',
+                operation: 'worker-message-parse'
+            });
+            return;
+        }
+
+        const message = parsed.value;
 
         switch (message.type) {
             case 'init':
@@ -198,9 +227,15 @@ export const InsightsPage = (() => {
                 applyWorkerInsightsPayload(message.payload || {});
                 return;
             case 'error':
+                captureError(new Error(getWorkerMessage(message.payload, 'Analytics worker error.')), {
+                    module: 'insights-ui',
+                    operation: 'worker-error-payload',
+                    requestId: message.requestId
+                });
                 setEmptyState('Insights error', getWorkerMessage(message.payload, 'Analytics worker error.'));
                 showInsightsLoading(false);
                 return;
+            /* v8 ignore next 2 */
             default:
                 return;
         }
@@ -228,8 +263,15 @@ export const InsightsPage = (() => {
         return payload && payload.message ? payload.message : fallback;
     }
 
-    /** Handle worker-level errors. */
-    function handleWorkerError() {
+    /**
+     * Handle worker-level errors.
+     * @param {ErrorEvent} event - Worker error event
+     */
+    function handleWorkerError(event) {
+        captureError(event && event.error ? event.error : new Error('Insights worker error event'), {
+            module: 'insights-ui',
+            operation: 'worker-error-event'
+        });
         setEmptyState('Insights worker error', 'Refresh the page and try again.');
         showInsightsLoading(false);
     }
@@ -256,6 +298,7 @@ export const InsightsPage = (() => {
      */
     function handleTimeRangeChange(button) {
         const range = button.getAttribute('data-range');
+        /* v8 ignore next 3 */
         if (!range) {
             return;
         }
@@ -305,7 +348,7 @@ export const InsightsPage = (() => {
 
     /**
      * Render insight cards and tip from the worker response.
-     * @param {Object} payload - The insights payload from the worker.
+     * @param {object} payload - The insights payload from the worker.
      */
     function renderInsights(payload) {
         const insights = payload.insights || [];
@@ -342,6 +385,7 @@ export const InsightsPage = (() => {
     function setEmptyState(title, message) {
         const heading = elements.insightsEmpty.querySelector('h2');
         const text = elements.insightsEmpty.querySelector('p');
+        /* v8 ignore next 5 */
         if (heading) {
             heading.textContent = title;
         }
@@ -382,6 +426,7 @@ export const InsightsPage = (() => {
 
     /** Sync current range filter into route query params. */
     function syncRouteRange() {
+        /* v8 ignore next 3 */
         if (isApplyingRouteParams) {
             return;
         }

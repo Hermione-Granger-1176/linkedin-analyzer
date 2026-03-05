@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 20+
 
 ## Web App
 
@@ -11,14 +11,33 @@
 # Install dependencies
 npm install
 
+# Optional: enable Sentry in local/dev builds
+cp .env.example .env
+# Set VITE_SENTRY_DSN in .env when needed
+
 # Start dev server
 npm run dev
 
 # Run tests
 npm run test
 
+# Install browser for E2E (one-time)
+npm run test:e2e:install
+
+# Linux only: install Playwright system deps (requires sudo)
+npx playwright install-deps chromium firefox
+
+# Run browser E2E tests
+npm run test:e2e
+
 # Lint
 npm run lint
+
+# Type-check JavaScript with checkJs
+npm run typecheck:web
+
+# Format check (docs/config files)
+npm run format:check
 ```
 
 ## Python CLI
@@ -51,7 +70,7 @@ ruff format src tests
 
 GitHub Actions runs on every push:
 
-- **Web**: ESLint + Node tests
+- **Web**: format check + ESLint + JS typecheck + unit tests + build + Playwright E2E
 - **Python**: Ruff + mypy + pytest
 
 See `.github/workflows/ci.yml`.
@@ -84,6 +103,7 @@ pytest -k "test_clean"          # By name pattern
 
 ```bash
 npm run test
+npm run test:e2e
 ```
 
 Tests are in `web/tests/`.

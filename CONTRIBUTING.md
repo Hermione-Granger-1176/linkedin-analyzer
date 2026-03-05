@@ -17,7 +17,16 @@ pip install -e ".[dev]"
 
 ```bash
 npm install
+cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed
 ```
+
+4. Install git hooks:
+
+```bash
+pre-commit install
+```
+
+See [`docs/style-guide.md`](docs/style-guide.md) for code conventions.
 
 ## Running locally
 
@@ -30,7 +39,10 @@ npm install
 - Python typecheck: `make typecheck`
 - Python tests: `make test`
 - Web lint: `make web-lint`
+- Web typecheck: `npm run typecheck:web`
+- Web format check: `npm run format:check`
 - Web tests: `make web-test`
+- Web E2E tests: `npm run test:e2e`
 - Web build: `make web-build`
 
 ## Pull requests

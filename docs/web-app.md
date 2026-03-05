@@ -161,6 +161,21 @@ Then open the Vite URL printed in the terminal.
 
 Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages).
 
+Recommended production setup:
+
+1. Build with `npm run build`
+2. Publish the `web/dist/` output
+3. Set environment variables:
+   - `VITE_SENTRY_DSN` (optional but recommended)
+   - `VITE_APP_RELEASE` (recommended for release-level error tracking)
+4. Verify security headers from `vercel.json` in deployed responses
+
+## Browser Compatibility
+
+- Build target follows `browserslist` from `package.json`: `> 0.5%, last 2 versions, not dead`
+- Playwright E2E coverage currently runs on Chromium and Firefox
+- Hash routing (`#...`) avoids server-side rewrite requirements
+
 ## Icons and Meta
 
 The app ships with a hand-drawn favicon set and production meta tags.
@@ -171,8 +186,8 @@ Browsers pick the best format automatically:
 
 | File                          | Size  | Used by                         |
 | ----------------------------- | ----- | ------------------------------- |
-| `public/assets/icon.svg`             | any   | Modern browsers (Chrome, FF)    |
-| `public/assets/favicon.ico`          | 32px  | Legacy browsers (older IE/Edge) |
+| `public/assets/icon.svg`      | any   | Modern browsers (Chrome, FF)    |
+| `public/assets/favicon.ico`   | 32px  | Legacy browsers (older IE/Edge) |
 | `assets/apple-touch-icon.png` | 180px | iOS home screen bookmark        |
 | `assets/icon-192.png`         | 192px | Android home screen, PWA        |
 | `assets/icon-512.png`         | 512px | PWA splash screen, OG cards     |

@@ -19,12 +19,14 @@ async function uploadFiles(page, files) {
 }
 
 /**
- * Wait for one file status row to switch from default to loaded.
+ * Wait for one file status row to switch from default to loaded,
+ * then wait for the progress overlay to disappear.
  * @param {import('@playwright/test').Page} page - Playwright page instance
  * @param {string} id - Status element id
  */
 async function waitForLoadedStatus(page, id) {
     await expect(page.locator(`#${id}`)).not.toHaveText("Not uploaded", { timeout: 20000 });
+    await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 20000 });
 }
 
 test("upload shares and render clean preview", async ({ page }) => {

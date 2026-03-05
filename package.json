@@ -39,7 +39,7 @@
     "serialize-javascript": "^7.0.3"
   },
   "dependencies": {
-    "@sentry/browser": "^9.5.0",
+    "@sentry/browser": "^10.42.0",
     "roughjs": "^4.6.6",
     "web-vitals": "^4.2.4",
     "xlsx": "^0.18.5"

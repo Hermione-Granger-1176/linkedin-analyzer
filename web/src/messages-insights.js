@@ -15,6 +15,7 @@ import { parseMessagesWorkerMessage, parseStoredUploadFile } from "./worker-cont
 export const MessagesPage = (() => {
     "use strict";
 
+    /** @type {{ timeRange: string }} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
     });
@@ -36,9 +37,9 @@ export const MessagesPage = (() => {
     const elements = {
         timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
         resetFiltersBtn: document.getElementById("messagesResetFiltersBtn"),
-        topContactsExportBtn: document.getElementById("topContactsExportBtn"),
-        silentConnectionsExportBtn: document.getElementById("silentConnectionsExportBtn"),
-        fadingConversationsExportBtn: document.getElementById("fadingConversationsExportBtn"),
+        topContactsExportBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("topContactsExportBtn")),
+        silentConnectionsExportBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("silentConnectionsExportBtn")),
+        fadingConversationsExportBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("fadingConversationsExportBtn")),
         messagesEmpty: document.getElementById("messagesEmpty"),
         messagesLayout: document.getElementById("messagesLayout"),
         topContactsList: document.getElementById("topContactsList"),
@@ -110,7 +111,8 @@ export const MessagesPage = (() => {
 
     /** Attach event listeners for filters. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((button) => {
+        elements.timeRangeButtons.forEach((btn) => {
+            const button = /** @type {HTMLElement} */ (btn);
             button.addEventListener("click", () => handleTimeRangeChange(button));
             button.setAttribute(
                 "aria-pressed",

@@ -62,7 +62,7 @@ export function initRuntime() {
      * @returns {HTMLDivElement} The error banner element
      */
     function getBanner() {
-        return document.getElementById(BANNER_ID) || createBanner();
+        return /** @type {HTMLDivElement} */ (document.getElementById(BANNER_ID) || createBanner());
     }
 
     /**
@@ -103,7 +103,7 @@ export function initRuntime() {
 
     /* Chart PNG export — delegated handler for .chart-export-btn buttons */
     document.addEventListener('click', event => {
-        const btn = DomEvents.closest(event, '.chart-export-btn');
+        const btn = /** @type {HTMLElement|null} */ (DomEvents.closest(event, '.chart-export-btn'));
         if (!btn) {
             return;
         }
@@ -113,7 +113,7 @@ export function initRuntime() {
         }
 
         const filename = btn.dataset.exportName || 'chart.png';
-        const canvas = document.getElementById(canvasId);
+        const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById(canvasId));
         if (!canvas) {
             return;
         }

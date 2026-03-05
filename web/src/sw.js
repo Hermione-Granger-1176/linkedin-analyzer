@@ -6,7 +6,7 @@ import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from 'workbox-strategi
 const APP_SHELL_URL = '/index.html';
 
 cleanupOutdatedCaches();
-precacheAndRoute(/* v8 ignore next */ self.__WB_MANIFEST || []);
+precacheAndRoute(/* v8 ignore next */ /** @type {any} */ (self).__WB_MANIFEST || []);
 
 const navigationStrategy = new NetworkFirst({
     cacheName: 'app-shell-v1',
@@ -17,7 +17,7 @@ registerRoute(
     ({ request }) => request.mode === 'navigate',
     async ({ event }) => {
         try {
-            return await navigationStrategy.handle({ event, request: event.request });
+            return await navigationStrategy.handle({ event, request: /** @type {FetchEvent} */ (event).request });
         } catch {
             const cachedShell = await caches.match(APP_SHELL_URL, { ignoreSearch: true });
             return cachedShell || Response.error();

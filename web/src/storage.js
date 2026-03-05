@@ -3,6 +3,29 @@
 export const Storage = (() => {
     'use strict';
 
+    const isAvailable = (() => {
+        try {
+            return typeof indexedDB !== 'undefined' && indexedDB !== null;
+        } catch {
+            /* v8 ignore next */
+            return false;
+        }
+    })();
+
+    if (!isAvailable) {
+        const memFiles = new Map();
+        let memAnalytics = null;
+        return {
+            isAvailable: false,
+            saveFile: (type, data) => { memFiles.set(type, { type, name: data.name, text: data.text, rowCount: data.rowCount || 0, updatedAt: Date.now() }); return Promise.resolve(); },
+            getFile: (type) => Promise.resolve(memFiles.get(type) || null),
+            getAllFiles: () => Promise.resolve([...memFiles.values()]),
+            saveAnalytics: (base) => { memAnalytics = base; return Promise.resolve(); },
+            getAnalytics: () => Promise.resolve(memAnalytics),
+            clearAll: () => { memFiles.clear(); memAnalytics = null; return Promise.resolve(); }
+        };
+    }
+
     const DB_NAME = 'linkedin-analyzer';
     const DB_VERSION = 1;
     const FILE_STORE = 'files';
@@ -16,7 +39,7 @@ export const Storage = (() => {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             request.onupgradeneeded = (event) => {
-                const db = event.target.result;
+                const db = /** @type {IDBOpenDBRequest} */ (event.target).result;
                 /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(FILE_STORE)) {
                     db.createObjectStore(FILE_STORE, { keyPath: 'type' });
@@ -143,6 +166,7 @@ export const Storage = (() => {
     }
 
     return {
+        isAvailable: true,
         saveFile,
         getFile,
         getAllFiles,

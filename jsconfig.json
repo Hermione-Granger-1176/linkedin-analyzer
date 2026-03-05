@@ -10,8 +10,11 @@
     "types": ["vite/client"],
     "strict": false,
     "skipLibCheck": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "paths": {
+      "roughjs/bundled/rough.esm.js": ["./node_modules/roughjs/bundled/rough.d.ts"]
+    }
   },
-  "include": ["web/src/sentry.js", "web/src/telemetry.js", "web/src/worker-contracts.js"],
+  "include": ["web/src/**/*.js"],
   "exclude": ["web/dist/**", "web/e2e/**", "coverage/**", "node_modules/**"]
 }

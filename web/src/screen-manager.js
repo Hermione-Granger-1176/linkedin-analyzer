@@ -63,6 +63,20 @@ export const ScreenManager = (() => {
         currentRouteName = routeName;
         announceRoute(routeName);
 
+        if (previousName !== routeName && nextScreen) {
+            const targetRoute = routeName;
+            setTimeout(() => {
+                if (currentRouteName !== targetRoute) {
+                    return;
+                }
+                const heading = /** @type {HTMLElement|null} */ (nextScreen.querySelector('h1, h2'));
+                if (heading && !heading.hasAttribute('tabindex')) {
+                    heading.setAttribute('tabindex', '-1');
+                }
+                (heading || nextScreen).focus({ preventScroll: false });
+            }, TRANSITION_DURATION_MS);
+        }
+
         LoadingOverlay.syncActiveScreen();
     }
 

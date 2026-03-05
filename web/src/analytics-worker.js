@@ -2,6 +2,7 @@
 
 import { AnalyticsEngine } from './analytics.js';
 import { LinkedInCleaner } from './cleaner.js';
+import { parseAnalyticsWorkerRequest } from './worker-contracts.js';
 
 let sharesData = null;
 let commentsData = null;
@@ -11,6 +12,7 @@ let currentRequestId = 0;
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
 const ANALYTICS_SOURCE_TYPES = Object.freeze(['shares', 'comments']);
+const WORKER_REQUEST_TYPES = new Set(['addFile', 'restoreFiles', 'initBase', 'view', 'clear']);
 
 /**
  * Normalize raw filter values into a safe, complete filter object.
@@ -73,18 +75,22 @@ function hasAnalyticsData() {
 
 /**
  * Serialize analytics for storage - now much simpler since we store aggregates, not events
+ * @param {object|null} analyticsData - Analytics aggregate payload
+ * @returns {object|null}
  */
 function serializeAnalytics(analyticsData) {
-    if (!analyticsData) return null;
+    if (!analyticsData) {return null;}
     // The new format is already serializable (no Date objects, no Sets in final output)
     return analyticsData;
 }
 
 /**
  * Hydrate analytics from storage - minimal work needed now
+ * @param {object|null} base - Stored analytics payload
+ * @returns {object|null}
  */
 function hydrateAnalytics(base) {
-    if (!base || !base.months) return null;
+    if (!base || !base.months) {return null;}
 
     // Convert activeDays arrays back to Sets for streak calculation
     const months = {};
@@ -113,6 +119,21 @@ function postError(requestId, message) {
         requestId,
         payload: { message }
     });
+}
+
+/**
+ * Convert unknown error values into a message string.
+ * @param {unknown} error
+ * @returns {string}
+ */
+function toErrorMessage(error) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    if (typeof error === 'string' && error) {
+        return error;
+    }
+    return 'Worker runtime failure.';
 }
 
 /**
@@ -279,7 +300,7 @@ function handleView(requestId, filters) {
     const key = getViewKey(safeFilters);
 
     if (viewCache.has(key)) {
-        if (currentRequestId !== requestId) return;
+        if (currentRequestId !== requestId) {return;}
         self.postMessage({
             type: 'view',
             requestId,
@@ -290,7 +311,7 @@ function handleView(requestId, filters) {
 
     const view = AnalyticsEngine.buildView(analytics, safeFilters);
 
-    if (currentRequestId !== requestId) return;
+    if (currentRequestId !== requestId) {return;}
 
     if (!view) {
         postError(requestId, 'Unable to build analytics view.');
@@ -323,18 +344,43 @@ function handleClear() {
 }
 
 self.addEventListener('message', (event) => {
-    const message = event.data || {};
+    const rawMessage = event.data || {};
+    const type = rawMessage && typeof rawMessage.type === 'string' ? rawMessage.type : '';
+    if (!WORKER_REQUEST_TYPES.has(type)) {
+        return;
+    }
+
+    const parsed = parseAnalyticsWorkerRequest(rawMessage);
+    if (!parsed.valid) {
+        postError(0, parsed.error || 'Invalid analytics worker message.');
+        return;
+    }
+
+    const message = parsed.value;
     const handlers = {
-        addFile: () => handleAddFile(message.payload || {}),
-        restoreFiles: () => handleRestoreFiles(message.payload || {}),
-        initBase: () => handleInitBase(message.payload || null),
-        view: () => handleView(message.requestId, message.filters || {}),
+        addFile: () => handleAddFile(message.payload),
+        restoreFiles: () => handleRestoreFiles(message.payload),
+        initBase: () => handleInitBase(message.payload),
+        view: () => handleView(message.requestId, message.filters),
         clear: () => handleClear()
     };
     const handler = handlers[message.type];
+    /* v8 ignore next */
     if (handler) {
-        handler();
+        try {
+            handler();
+        } catch (error) {
+            postError(message.requestId || 0, toErrorMessage(error));
+        }
     }
+});
+
+self.addEventListener('error', event => {
+    postError(0, toErrorMessage(event && event.error ? event.error : event && event.message));
+});
+
+self.addEventListener('unhandledrejection', event => {
+    postError(0, toErrorMessage(event && event.reason));
 });
 
 export { normalizeFilters, getViewKey, handleAddFile, handleRestoreFiles, handleInitBase, handleView, handleClear };

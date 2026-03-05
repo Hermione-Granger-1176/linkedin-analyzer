@@ -1,20 +1,21 @@
 /* SPA bootstrap */
 
-import { initRuntime } from './runtime.js';
-import { initSentry } from './sentry.js';
+import { AnalyticsPage } from './analytics-ui.js';
+import { CleanPage } from './clean.js';
+import { ConnectionsPage } from './connections-ui.js';
 import { initDecorations } from './decorations.js';
-import { Theme } from './theme.js';
-import { AppRouter } from './router.js';
 import { DomEvents } from './dom-events.js';
+import { InsightsPage } from './insights-ui.js';
+import { MessagesPage } from './messages-insights.js';
+import { AppRouter } from './router.js';
+import { initRuntime } from './runtime.js';
 import { ScreenManager } from './screen-manager.js';
+import { captureError, initSentry } from './sentry.js';
 import { Session } from './session.js';
+import { initTelemetry } from './telemetry.js';
+import { Theme } from './theme.js';
 import { Tutorial } from './tutorial.js';
 import { UploadPage } from './upload.js';
-import { CleanPage } from './clean.js';
-import { AnalyticsPage } from './analytics-ui.js';
-import { ConnectionsPage } from './connections-ui.js';
-import { MessagesPage } from './messages-insights.js';
-import { InsightsPage } from './insights-ui.js';
 
 function init() {
     'use strict';
@@ -71,6 +72,7 @@ function init() {
 
     /** Initialize router and screen lifecycle wiring. */
     initSentry();
+    initTelemetry();
     initRuntime();
     initDecorations();
     Theme.init();
@@ -92,7 +94,14 @@ function init() {
     function runSessionCleanup() {
         window[SESSION_CLEANUP_PROMISE_KEY] = Promise.resolve()
             .then(() => Session.cleanIfStale())
-            .catch(() => false);
+            /* v8 ignore next */
+            .catch((error) => {
+                captureError(error, {
+                    module: 'app',
+                    operation: 'session-cleanup'
+                });
+                return false;
+            });
     }
 
     /**
@@ -148,6 +157,7 @@ function init() {
 
 }
 
+/* v8 ignore next 5 */
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {

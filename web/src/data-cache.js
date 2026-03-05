@@ -1,5 +1,7 @@
 /* In-memory cache helpers for SPA screens */
 
+import { captureError } from './sentry.js';
+
 export const DataCache = (() => {
     'use strict';
 
@@ -87,8 +89,11 @@ export const DataCache = (() => {
         listeners.forEach(listener => {
             try {
                 listener(payload || {});
-            } catch {
-                // Ignore listener errors to keep cache notifications resilient.
+            } catch (error) {
+                captureError(error, {
+                    module: 'data-cache',
+                    operation: 'notify-listener'
+                });
             }
         });
     }

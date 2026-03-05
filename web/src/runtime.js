@@ -1,7 +1,7 @@
 /* Global runtime guards */
 
-import { DomEvents } from './dom-events.js';
 import { SketchCharts } from './charts.js';
+import { DomEvents } from './dom-events.js';
 import { captureError } from './sentry.js';
 
 export function initRuntime() {
@@ -104,7 +104,9 @@ export function initRuntime() {
     /* Chart PNG export — delegated handler for .chart-export-btn buttons */
     document.addEventListener('click', event => {
         const btn = DomEvents.closest(event, '.chart-export-btn');
-        if (!btn) return;
+        if (!btn) {
+            return;
+        }
         const canvasId = btn.dataset.exportCanvas;
         if (!canvasId || !SketchCharts) {
             return;
@@ -120,12 +122,16 @@ export function initRuntime() {
     });
 
     /* Service Worker registration */
+    /* v8 ignore next 8 */
     if (import.meta.env && import.meta.env.PROD && 'serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
                 .then(registration => registration.update())
-                .catch(() => {
-                    // SW registration failure is non-critical
+                .catch((error) => {
+                    captureError(error, {
+                        module: 'runtime',
+                        operation: 'service-worker-register'
+                    });
                 });
         });
     }

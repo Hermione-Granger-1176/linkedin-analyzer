@@ -1,6 +1,7 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
 import { LinkedInCleaner } from './cleaner.js';
+import { parseConnectionsWorkerRequest } from './worker-contracts.js';
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
 
@@ -27,17 +28,17 @@ const MONTH_LABELS = Object.freeze([
  * @returns {Date|null} Local-midnight Date, or null if unparseable
  */
 function parseConnectionDate(dateStr) {
-    if (!dateStr || typeof dateStr !== 'string') return null;
+    if (!dateStr || typeof dateStr !== 'string') {return null;}
 
     const parts = dateStr.split('-');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) {return null;}
 
     const year = Number(parts[0]);
     const month = Number(parts[1]);
     const day = Number(parts[2]);
 
-    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {return null;}
+    if (month < 1 || month > 12 || day < 1 || day > 31) {return null;}
 
     return new Date(year, month - 1, day);
 }
@@ -83,12 +84,12 @@ function buildGrowthTimeline(rows) {
 
     for (const row of rows) {
         const date = parseConnectionDate(row['Connected On']);
-        if (!date) continue;
+        if (!date) {continue;}
         const key = toMonthKey(date);
         buckets.set(key, (buckets.get(key) || 0) + 1);
     }
 
-    if (buckets.size === 0) return [];
+    if (buckets.size === 0) {return [];}
 
     /* Fill gaps between earliest and latest month */
     const sortedKeys = Array.from(buckets.keys()).sort();
@@ -133,10 +134,10 @@ function computeStats(rows) {
 
     for (const row of rows) {
         const date = parseConnectionDate(row['Connected On']);
-        if (!date) continue;
+        if (!date) {continue;}
 
         const ms = date.getTime();
-        if (ms < earliestMs) earliestMs = ms;
+        if (ms < earliestMs) {earliestMs = ms;}
     }
 
     /* Network age in whole months from earliest connection to now */
@@ -180,27 +181,106 @@ function processConnections(connectionsCsv) {
     return { success: true, analytics, rows };
 }
 
+/**
+ * Convert unknown error values into a message string.
+ * @param {unknown} error
+ * @returns {string}
+ */
+function toErrorMessage(error) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    if (typeof error === 'string' && error) {
+        return error;
+    }
+    return 'Connections worker runtime failure.';
+}
+
+/**
+ * Post a normalized worker error payload.
+ * @param {number|string} requestId
+ * @param {unknown} error
+ */
+function postWorkerError(requestId, error) {
+    self.postMessage({
+        type: 'error',
+        requestId,
+        payload: {
+            message: toErrorMessage(error)
+        }
+    });
+}
+
+/**
+ * Extract an error-like value from a worker error event.
+ * @param {unknown} event
+ * @returns {unknown}
+ */
+function extractWorkerError(event) {
+    if (!event || typeof event !== 'object') {
+        return undefined;
+    }
+    if ('error' in event && event.error) {
+        return event.error;
+    }
+    if ('message' in event && event.message) {
+        return event.message;
+    }
+    return undefined;
+}
+
+/**
+ * Extract rejection reason from a worker unhandledrejection event.
+ * @param {unknown} event
+ * @returns {unknown}
+ */
+function extractWorkerRejection(event) {
+    if (!event || typeof event !== 'object' || !('reason' in event)) {
+        return undefined;
+    }
+    return event.reason;
+}
+
 /* ── Worker message handler ────────────────────────────────────────────────── */
 
 if (typeof self !== 'undefined') {
     self.addEventListener('message', (event) => {
-        const message = event.data || {};
-        if (message.type !== 'process') return;
+        const rawMessage = event.data || {};
+        if (!rawMessage || rawMessage.type !== 'process') {
+            return;
+        }
 
-        const requestId = message.requestId;
-        const payload = message.payload || {};
-        const result = processConnections(payload.connectionsCsv);
+        const parsed = parseConnectionsWorkerRequest(rawMessage);
+        if (!parsed.valid) {
+            postWorkerError(0, parsed.error || 'Invalid worker request payload.');
+            return;
+        }
 
-        self.postMessage({
-            type: 'processed',
-            requestId,
-            payload: {
-                success: result.success,
-                analytics: result.analytics || null,
-                rows: result.rows || null,
-                error: result.error || null
-            }
-        });
+        const message = parsed.value;
+        try {
+            const result = processConnections(message.payload.connectionsCsv);
+
+            self.postMessage({
+                type: 'processed',
+                requestId: message.requestId,
+                payload: {
+                    success: result.success,
+                    analytics: result.analytics || null,
+                    rows: result.rows || null,
+                    error: result.error || null
+                }
+            });
+        } catch (error) {
+            postWorkerError(message.requestId, error);
+        }
+    });
+
+    self.addEventListener('error', event => {
+        postWorkerError(0, extractWorkerError(event));
+    });
+
+    self.addEventListener('unhandledrejection', event => {
+        postWorkerError(0, extractWorkerRejection(event));
     });
 }
 

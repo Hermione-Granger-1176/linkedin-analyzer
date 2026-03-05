@@ -39,9 +39,9 @@
     "serialize-javascript": "^7.0.3"
   },
   "dependencies": {
-    "@sentry/browser": "^9.5.0",
+    "@sentry/browser": "^10.42.0",
     "roughjs": "^4.6.6",
-    "web-vitals": "^4.2.4",
+    "web-vitals": "^5.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -50,7 +50,7 @@
     "eslint": "^9.39.3",
     "eslint-plugin-import-x": "^4.16.1",
     "eslint-plugin-jsdoc": "^62.7.1",
-    "jsdom": "^26.0.0",
+    "jsdom": "^28.1.0",
     "fake-indexeddb": "^6.1.0",
     "globals": "^17.4.0",
     "prettier": "^3.6.2",

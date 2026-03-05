@@ -69,13 +69,28 @@ class TestParseArgs:
         args = parse_args([])
         assert args.command is None
 
+    def test_log_format_arg(self) -> None:
+        args = parse_args(["--log-format", "json", "shares"])
+        assert args.log_format == "json"
+
+    def test_log_format_default(self) -> None:
+        args = parse_args(["shares"])
+        assert args.log_format == "text"
+
+    def test_log_format_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LOG_FORMAT", "json")
+        args = parse_args(["shares"])
+        assert args.log_format == "json"
+
 
 class TestMain:
     """Tests for main function."""
 
     def test_no_command_returns_error(self) -> None:
         parser = SimpleNamespace(
-            parse_args=lambda _argv=None: SimpleNamespace(command=None, log_level="INFO"),
+            parse_args=lambda _argv=None: SimpleNamespace(
+                command=None, log_level="INFO", log_format="text"
+            ),
             print_help=lambda: None,
         )
         with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
@@ -145,7 +160,9 @@ class TestMain:
 
     def test_no_command_returns_one_when_help_does_not_exit(self) -> None:
         parser = SimpleNamespace(
-            parse_args=lambda _argv=None: SimpleNamespace(command=None, log_level="INFO"),
+            parse_args=lambda _argv=None: SimpleNamespace(
+                command=None, log_level="INFO", log_format="text"
+            ),
             print_help=lambda: None,
         )
         with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
@@ -153,7 +170,9 @@ class TestMain:
 
     def test_unknown_command_returns_error(self) -> None:
         parser = SimpleNamespace(
-            parse_args=lambda _argv=None: SimpleNamespace(command="unknown", log_level="INFO"),
+            parse_args=lambda _argv=None: SimpleNamespace(
+                command="unknown", log_level="INFO", log_format="text"
+            ),
             print_help=lambda: None,
         )
         with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
@@ -161,7 +180,9 @@ class TestMain:
 
     def test_main_handles_handler_exception(self) -> None:
         parser = SimpleNamespace(
-            parse_args=lambda _argv=None: SimpleNamespace(command="shares", log_level="INFO"),
+            parse_args=lambda _argv=None: SimpleNamespace(
+                command="shares", log_level="INFO", log_format="text"
+            ),
             print_help=lambda: None,
         )
         with (

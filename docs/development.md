@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.11+
-- Node.js 20+
+- Node.js 20.19+ (or 22.13+, or 24+)
 
 ## Web App
 

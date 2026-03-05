@@ -16,6 +16,7 @@ import { parseAnalyticsWorkerMessage } from "./worker-contracts.js";
 export const AnalyticsPage = (() => {
     "use strict";
 
+    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string }} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
         topic: "all",
@@ -43,6 +44,7 @@ export const AnalyticsPage = (() => {
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
     const CLICKABLE_TYPES = new Set(["month", "week", "heatmap", "topic"]);
+    const WORKER_TIMEOUT_MS = 30000;
 
     const ROUTE_FILTER_PARSERS = Object.freeze({
         range: (value, normalized) => {
@@ -119,6 +121,7 @@ export const AnalyticsPage = (() => {
     let isRendering = false;
     let pendingRender = null;
 
+    let workerTimeoutId = null;
     let renderRetryCount = 0;
     const MAX_RENDER_RETRIES = 5;
     let resizeObserver = null;
@@ -270,11 +273,21 @@ export const AnalyticsPage = (() => {
 
     /** Terminate the analytics Web Worker to free resources. */
     function terminateWorker() {
+        clearWorkerTimeout();
         if (!worker) {
             return;
         }
         worker.terminate();
         worker = null;
+    }
+
+    /** Clear any in-flight worker watchdog timeout. */
+    function clearWorkerTimeout() {
+        if (!workerTimeoutId) {
+            return;
+        }
+        window.clearTimeout(workerTimeoutId);
+        workerTimeoutId = null;
     }
 
     /**
@@ -330,6 +343,15 @@ export const AnalyticsPage = (() => {
                 type: "initBase",
                 payload: analyticsBase,
             });
+            clearWorkerTimeout();
+            workerTimeoutId = window.setTimeout(() => {
+                workerTimeoutId = null;
+                setEmptyState(
+                    "Worker timeout",
+                    "Analytics worker did not respond in time. Try refreshing the page.",
+                );
+                terminateWorker();
+            }, WORKER_TIMEOUT_MS);
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
@@ -362,6 +384,7 @@ export const AnalyticsPage = (() => {
 
         switch (message.type) {
             case "init":
+                clearWorkerTimeout();
                 state.analyticsReady = true;
                 state.hasData = Boolean(message.payload && message.payload.hasData);
                 updateVisibility();
@@ -374,6 +397,7 @@ export const AnalyticsPage = (() => {
                 applyWorkerViewPayload(message.payload || {});
                 return;
             case "error":
+                clearWorkerTimeout();
                 captureError(
                     new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
                     {
@@ -748,22 +772,14 @@ export const AnalyticsPage = (() => {
 
         const filter = button.getAttribute("data-filter");
         const FILTER_RESET_MAP = {
-            topic: () => {
-                state.filters.topic = "all";
-            },
-            month: () => {
-                state.filters.monthFocus = null;
-            },
-            day: () => {
-                state.filters.day = null;
-            },
-            hour: () => {
-                state.filters.hour = null;
-            },
+            topic: { field: "topic", value: "all" },
+            month: { field: "monthFocus", value: null },
+            day: { field: "day", value: null },
+            hour: { field: "hour", value: null },
         };
-        const resetFn = FILTER_RESET_MAP[filter];
-        if (resetFn) {
-            resetFn();
+        const entry = FILTER_RESET_MAP[filter];
+        if (entry) {
+            state.filters[entry.field] = entry.value;
             syncRouteFromFilters();
             scheduleViewRequest(false);
         }
@@ -833,7 +849,7 @@ export const AnalyticsPage = (() => {
      * @param {MouseEvent} event - The mousemove event.
      */
     function handleChartHover(event) {
-        const canvas = event.currentTarget;
+        const canvas = /** @type {HTMLCanvasElement} */ (event.currentTarget);
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
@@ -852,7 +868,7 @@ export const AnalyticsPage = (() => {
      * @param {MouseEvent} event - The click event.
      */
     function handleChartClick(event) {
-        const canvas = event.currentTarget;
+        const canvas = /** @type {HTMLCanvasElement} */ (event.currentTarget);
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;

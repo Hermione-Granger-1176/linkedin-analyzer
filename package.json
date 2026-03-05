@@ -18,7 +18,9 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium firefox",
     "test:e2e:ui": "playwright test --ui",
-    "ci:web": "npm run format:check && npm run lint && npm run typecheck:web && npm run test && npm run build"
+    "size": "size-limit",
+    "size:check": "size-limit --limit",
+    "ci:web": "npm run format:check && npm run lint && npm run typecheck:web && npm run test && npm run build && npm run size:check"
   },
   "keywords": [
     "linkedin",
@@ -44,16 +46,29 @@
     "web-vitals": "^5.1.0",
     "xlsx": "^0.18.5"
   },
+  "size-limit": [
+    {
+      "path": "web/dist/assets/index-*.js",
+      "limit": "500 kB"
+    },
+    {
+      "path": "web/dist/assets/index-*.css",
+      "limit": "50 kB"
+    }
+  ],
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.56.1",
+    "@size-limit/file": "^12.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.3",
     "eslint-plugin-import-x": "^4.16.1",
     "eslint-plugin-jsdoc": "^62.7.1",
-    "jsdom": "^28.1.0",
     "fake-indexeddb": "^6.1.0",
     "globals": "^17.4.0",
+    "jsdom": "^28.1.0",
     "prettier": "^3.6.2",
+    "size-limit": "^12.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",

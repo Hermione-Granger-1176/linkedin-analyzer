@@ -4,6 +4,10 @@ import 'fake-indexeddb/auto';
 import { Storage } from '../src/storage.js';
 
 describe('Storage', () => {
+    it('reports isAvailable as true when IndexedDB exists', () => {
+        expect(Storage.isAvailable).toBe(true);
+    });
+
     it('saves and retrieves files', async () => {
         await Storage.saveFile('shares', { name: 'Shares.csv', text: 'a,b', rowCount: 2 });
         const file = await Storage.getFile('shares');

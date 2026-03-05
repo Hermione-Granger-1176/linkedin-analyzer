@@ -14,6 +14,7 @@ import { parseConnectionsWorkerMessage, parseStoredUploadFile } from "./worker-c
 export const ConnectionsPage = (() => {
     "use strict";
 
+    /** @type {{ timeRange: string }} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
     });
@@ -334,31 +335,33 @@ export const ConnectionsPage = (() => {
         }
 
         const parsed = parseStoredUploadFile(file);
-        if (!parsed.valid || parsed.value.type !== "connections") {
-            if (file && typeof file.text === "string") {
-                return {
-                    type: "connections",
-                    name: typeof file.name === "string" ? file.name : "Connections.csv",
-                    text: file.text,
-                    rowCount: Number.isFinite(file.rowCount) ? file.rowCount : 0,
-                    updatedAt: Number.isFinite(file.updatedAt) ? file.updatedAt : Date.now(),
-                };
-            }
-            captureError(
-                new Error(
-                    parsed.valid
-                        ? "Unexpected file type in connections cache."
-                        : parsed.error || "Invalid connections file payload.",
-                ),
-                {
-                    module: "connections-ui",
-                    operation: "parse-stored-file",
-                    source,
-                },
-            );
-            return null;
+        if (parsed.valid && parsed.value.type === "connections") {
+            return parsed.value;
         }
-        return parsed.value;
+
+        if (typeof file.text === "string") {
+            return {
+                type: "connections",
+                name: typeof file.name === "string" ? file.name : "Connections.csv",
+                text: file.text,
+                rowCount: Number.isFinite(file.rowCount) ? file.rowCount : 0,
+                updatedAt: Number.isFinite(file.updatedAt) ? file.updatedAt : Date.now(),
+            };
+        }
+
+        captureError(
+            new Error(
+                parsed.valid
+                    ? "Unexpected file type in connections cache."
+                    : parsed.error || "Invalid connections file payload.",
+            ),
+            {
+                module: "connections-ui",
+                operation: "parse-stored-file",
+                source,
+            },
+        );
+        return null;
     }
 
     /**
@@ -620,15 +623,15 @@ export const ConnectionsPage = (() => {
      * @returns {Array<{topic: string, count: number}>} Top N aggregated entries
      */
     function aggregateField(rows, field) {
-        const counts = rows.reduce((acc, row) => {
+        const counts = Object.create(null);
+        for (const row of rows) {
             const value = row[field];
             /* v8 ignore next 3 */
             if (!value) {
-                return acc;
+                continue;
             }
-            acc[value] = (acc[value] || 0) + 1;
-            return acc;
-        }, Object.create(null));
+            counts[value] = (counts[value] || 0) + 1;
+        }
 
         return Object.entries(counts)
             .map(([topic, count]) => ({ topic, count }))
@@ -647,29 +650,24 @@ export const ConnectionsPage = (() => {
             return "-";
         }
 
-        const summary = rows.reduce(
-            (acc, row) => {
-                const value = row[field];
-                /* v8 ignore next 3 */
-                if (!value) {
-                    return acc;
-                }
-                const next = (acc.counts[value] || 0) + 1;
-                acc.counts[value] = next;
-                if (next > acc.maxCount) {
-                    acc.maxCount = next;
-                    acc.maxKey = value;
-                }
-                return acc;
-            },
-            {
-                counts: Object.create(null),
-                maxKey: "",
-                maxCount: 0,
-            },
-        );
+        const counts = Object.create(null);
+        let maxKey = "";
+        let maxCount = 0;
+        for (const row of rows) {
+            const value = row[field];
+            /* v8 ignore next 3 */
+            if (!value) {
+                continue;
+            }
+            const next = (counts[value] || 0) + 1;
+            counts[value] = next;
+            if (next > maxCount) {
+                maxCount = next;
+                maxKey = value;
+            }
+        }
 
-        return summary.maxKey || "-";
+        return maxKey || "-";
     }
 
     /**
@@ -838,7 +836,7 @@ export const ConnectionsPage = (() => {
      * @param {MouseEvent} event - The mousemove event
      */
     function handleChartHover(event) {
-        const canvas = event.currentTarget;
+        const canvas = /** @type {HTMLCanvasElement} */ (event.currentTarget);
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;

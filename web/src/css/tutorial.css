@@ -38,7 +38,7 @@
 
 .tutorial-popover {
     position: fixed;
-    z-index: 3;
+    z-index: 1300;
     pointer-events: auto;
     width: min(420px, calc(100vw - 24px));
     padding: var(--space-md);

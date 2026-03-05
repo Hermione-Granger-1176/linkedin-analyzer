@@ -32,7 +32,7 @@ export const UploadPage = (() => {
         messagesStatus: document.getElementById("messagesStatus"),
         connectionsStatus: document.getElementById("connectionsStatus"),
         uploadHint: document.getElementById("uploadHint"),
-        openAnalyticsBtn: document.getElementById("openAnalyticsBtn"),
+        openAnalyticsBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("openAnalyticsBtn")),
         clearAllBtn: document.getElementById("clearAllBtn"),
         fileStatusItems: {
             shares: document.querySelector('.file-status-item[data-file="shares"]'),
@@ -41,7 +41,7 @@ export const UploadPage = (() => {
             connections: document.querySelector('.file-status-item[data-file="connections"]'),
         },
         progressOverlay: document.getElementById("progressOverlay"),
-        progressCanvas: document.getElementById("progressCanvas"),
+        progressCanvas: /** @type {HTMLCanvasElement|null} */ (document.getElementById("progressCanvas")),
         progressPercent: document.getElementById("progressPercent"),
         offlineBanner: document.getElementById("offlineBanner"),
     };
@@ -99,6 +99,12 @@ export const UploadPage = (() => {
             return;
         }
         initialized = true;
+
+        if (!Storage.isAvailable && elements.uploadHint) {
+            elements.uploadHint.textContent =
+                "Browser storage is unavailable. Uploads will not persist across sessions.";
+        }
+
         initWorker();
         bindEvents();
         requestPersistentStorage();
@@ -333,11 +339,12 @@ export const UploadPage = (() => {
      * @param {Event} event - File input change event
      */
     function handleFileInput(event) {
-        const files = Array.from(event.target.files || []);
+        const input = /** @type {HTMLInputElement} */ (event.target);
+        const files = Array.from(input.files || []);
         if (files.length) {
             processFiles(files);
         }
-        event.target.value = "";
+        input.value = "";
     }
 
     /**
@@ -907,7 +914,7 @@ export const UploadPage = (() => {
      */
     function updateStatus({ fileMap, analyticsReady }) {
         STATUS_ITEMS.forEach(({ type, item, label }) => {
-            updateFileStatus(item, label, fileMap[type]);
+            updateFileStatus(/** @type {HTMLElement} */ (item), label, fileMap[type]);
         });
 
         const hasAny = TRACKED_TYPES.some((type) => Boolean(fileMap[type]));

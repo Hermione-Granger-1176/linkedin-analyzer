@@ -10,7 +10,7 @@ Please do **not** open public GitHub issues for security vulnerabilities.
 
 Instead, report privately by email:
 
-- `aditya.k.darak+security@gmail.com`
+- `adityadarak9314@outlook.com`
 
 When possible, include:
 

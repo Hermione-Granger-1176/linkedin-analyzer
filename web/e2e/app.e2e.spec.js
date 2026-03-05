@@ -1,5 +1,6 @@
 const path = require("path");
 
+const AxeBuilder = require("@axe-core/playwright").default;
 const { expect, test } = require("@playwright/test");
 
 const SHARES_CSV = path.join(__dirname, "fixtures", "Shares.csv");
@@ -97,4 +98,25 @@ test("upload messages+connections and render relationship insights", async ({ pa
 test("shows an error hint for malformed CSV uploads", async ({ page }) => {
     await uploadFiles(page, [INVALID_CSV]);
     await expect(page.locator("#uploadHint")).toContainText("Could not auto-detect file type");
+});
+
+test("analytics screen has no critical accessibility violations", async ({ page }) => {
+    await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV]);
+    await waitForLoadedStatus(page, "sharesStatus");
+    await waitForLoadedStatus(page, "commentsStatus");
+
+    const openAnalyticsBtn = page.getByTestId("open-analytics-btn");
+    await expect(openAnalyticsBtn).toBeEnabled({ timeout: 20000 });
+    await openAnalyticsBtn.click();
+    await expect(page).toHaveURL(/#analytics/);
+    await expect(page.getByTestId("analytics-grid")).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa"])
+        .analyze();
+
+    const critical = results.violations.filter(
+        (v) => v.impact === "critical" || v.impact === "serious"
+    );
+    expect(critical).toEqual([]);
 });

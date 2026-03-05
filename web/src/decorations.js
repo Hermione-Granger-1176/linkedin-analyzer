@@ -5,7 +5,7 @@ import rough from "roughjs/bundled/rough.esm.js";
 export function initDecorations() {
     "use strict";
 
-    const canvas = document.getElementById("roughCanvas");
+    const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById("roughCanvas"));
     if (!canvas || !rough) {
         return;
     }

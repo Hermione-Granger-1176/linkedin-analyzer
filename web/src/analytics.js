@@ -1020,7 +1020,7 @@ export const AnalyticsEngine = (() => {
         for (let i = 1; i < days.length; i++) {
             const prev = parseDay(days[i - 1]);
             const curr = parseDay(days[i]);
-            const diff = (curr - prev) / (1000 * 60 * 60 * 24);
+            const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
             if (diff === 1) {
                 streak++;
                 longest = Math.max(longest, streak);

@@ -128,10 +128,16 @@ export const CleanPage = (() => {
      * @returns {string}
      */
     function getCleanerHint(loadedCount) {
-        const category = loadedCount === FILE_TYPE_ORDER.length
-            ? 'all'
-            : (loadedCount > 1 ? 'many' : (loadedCount === 1 ? 'single' : 'none'));
-        return CLEAN_HINT_BY_CATEGORY[category](loadedCount);
+        if (loadedCount === FILE_TYPE_ORDER.length) {
+            return CLEAN_HINT_BY_CATEGORY.all();
+        }
+        if (loadedCount > 1) {
+            return CLEAN_HINT_BY_CATEGORY.many(loadedCount);
+        }
+        if (loadedCount === 1) {
+            return CLEAN_HINT_BY_CATEGORY.single();
+        }
+        return CLEAN_HINT_BY_CATEGORY.none();
     }
 
     /**
@@ -146,7 +152,8 @@ export const CleanPage = (() => {
         elements.cleanPanel.hidden = !hasFiles;
 
         elements.cleanFileTypeInputs.forEach(input => {
-            input.disabled = !storedFiles[input.value];
+            const el = /** @type {HTMLInputElement} */ (input);
+            el.disabled = !storedFiles[el.value];
         });
 
         const selectedType = getSelectedType();
@@ -157,7 +164,7 @@ export const CleanPage = (() => {
                 `input[name="cleanFileType"][value="${fallbackType}"]`
             );
             if (fallbackInput) {
-                fallbackInput.checked = true;
+                /** @type {HTMLInputElement} */ (fallbackInput).checked = true;
             }
         }
 
@@ -171,12 +178,31 @@ export const CleanPage = (() => {
      * @returns {string} The selected file type.
      */
     function getSelectedType() {
-        const selected = document.querySelector('input[name="cleanFileType"]:checked');
+        const selected = /** @type {HTMLInputElement|null} */ (document.querySelector('input[name="cleanFileType"]:checked'));
         if (selected && storedFiles[selected.value]) {
             return selected.value;
         }
         const fallback = FILE_TYPE_ORDER.find(type => Boolean(storedFiles[type]));
         return fallback || 'shares';
+    }
+
+    /**
+     * Report a file parse error and reset the preview UI.
+     * @param {Error} error - The error to report
+     * @param {string} message - User-facing error message
+     * @param {string} fileType - The file type being parsed
+     * @param {string|null} fileName - The file name, if available
+     */
+    function handleParseError(error, message, fileType, fileName) {
+        captureError(error, {
+            module: 'clean',
+            operation: 'parse-file',
+            fileType,
+            fileName
+        });
+        showError(message);
+        hidePreview();
+        hideDownload();
     }
 
     /**
@@ -202,15 +228,7 @@ export const CleanPage = (() => {
                 const processed = LinkedInCleaner.process(file.text, type);
                 if (!processed.success) {
                     const message = processed.error || 'Unable to parse file.';
-                    captureError(new Error(message), {
-                        module: 'clean',
-                        operation: 'parse-file',
-                        fileType: type,
-                        fileName: file.name || null
-                    });
-                    showError(message);
-                    hidePreview();
-                    hideDownload();
+                    handleParseError(new Error(message), message, type, file.name || null);
                     return;
                 }
                 cache[type] = {
@@ -218,15 +236,7 @@ export const CleanPage = (() => {
                     result: processed
                 };
             } catch (error) {
-                captureError(error, {
-                    module: 'clean',
-                    operation: 'parse-file',
-                    fileType: type,
-                    fileName: file.name || null
-                });
-                showError('Unable to parse file.');
-                hidePreview();
-                hideDownload();
+                handleParseError(error, 'Unable to parse file.', type, file.name || null);
                 return;
             }
         }
@@ -353,7 +363,7 @@ export const CleanPage = (() => {
         /* v8 ignore next */
         if (!value) {return '';}
         if (value.length <= maxLength) {return value;}
-        return `${value.slice(0, maxLength)  }...`;
+        return `${value.slice(0, maxLength)}...`;
     }
 
     return {

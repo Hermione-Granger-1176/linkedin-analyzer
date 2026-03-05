@@ -11,6 +11,7 @@ import { parseAnalyticsWorkerMessage } from "./worker-contracts.js";
 export const InsightsPage = (() => {
     "use strict";
 
+    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string }} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
         topic: "all",

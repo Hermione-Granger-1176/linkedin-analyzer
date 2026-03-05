@@ -206,6 +206,7 @@ export const Tutorial = (() => {
 
         ui.root.hidden = false;
         ui.root.setAttribute("aria-hidden", "false");
+        ui.popover.hidden = false;
         document.body.classList.add("tutorial-open");
 
         return moveToStep(0, 1, Boolean(startOptions.auto));
@@ -274,6 +275,7 @@ export const Tutorial = (() => {
 
         ui.popover = document.createElement("section");
         ui.popover.className = "tutorial-popover";
+        ui.popover.hidden = true;
         ui.popover.setAttribute("role", "dialog");
         ui.popover.setAttribute("aria-modal", "true");
         ui.popover.setAttribute("aria-labelledby", "tutorialPopoverTitle");
@@ -334,12 +336,12 @@ export const Tutorial = (() => {
 
         ui.root.appendChild(ui.overlay);
         ui.root.appendChild(ui.spotlight);
-        ui.root.appendChild(ui.popover);
 
         ui.miniTipsLayer = document.createElement("div");
         ui.miniTipsLayer.className = "tutorial-mini-layer";
 
         document.body.appendChild(ui.root);
+        document.body.appendChild(ui.popover);
         document.body.appendChild(ui.pointer);
         document.body.appendChild(ui.miniTipsLayer);
     }
@@ -436,10 +438,10 @@ export const Tutorial = (() => {
      * @param {Event} event
      */
     function handleRestartClick(event) {
-        const trigger = DomEvents.closest(
+        const trigger = /** @type {HTMLElement|null} */ (DomEvents.closest(
             event,
             '[data-tutorial-action="restart"], .tutorial-restart-btn[data-tutorial-route]',
-        );
+        ));
         if (!trigger) {
             return;
         }
@@ -574,11 +576,10 @@ export const Tutorial = (() => {
             return;
         }
 
-        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         target.scrollIntoView({
             block: "center",
             inline: "nearest",
-            behavior: prefersReducedMotion ? "auto" : "smooth",
+            behavior: "instant",
         });
     }
 
@@ -985,7 +986,15 @@ export const Tutorial = (() => {
         }
 
         if (preferred !== "auto") {
-            return preferred;
+            const gap = 24;
+            const fits =
+                (preferred === "top" && targetRect.top >= popRect.height + gap) ||
+                (preferred === "bottom" && viewportHeight - targetRect.bottom >= popRect.height + gap) ||
+                (preferred === "left" && targetRect.left >= popRect.width + gap) ||
+                (preferred === "right" && viewportWidth - targetRect.right >= popRect.width + gap);
+            if (fits) {
+                return preferred;
+            }
         }
 
         const roomBottom = viewportHeight - targetRect.bottom;
@@ -1253,6 +1262,7 @@ export const Tutorial = (() => {
         setHighlightedTarget(null);
         ui.root.hidden = true;
         ui.root.setAttribute("aria-hidden", "true");
+        ui.popover.hidden = true;
         ui.pointer.style.display = "none";
         ui.spotlight.style.display = "none";
         document.body.classList.remove("tutorial-open");
@@ -1559,7 +1569,7 @@ export const Tutorial = (() => {
         ];
 
         const nodes = root.querySelectorAll(selectors.join(","));
-        return Array.from(nodes).filter((node) => isElementVisible(node));
+        return /** @type {HTMLElement[]} */ (Array.from(nodes)).filter((node) => isElementVisible(node));
     }
 
     /**

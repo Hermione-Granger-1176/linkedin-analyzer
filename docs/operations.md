@@ -41,6 +41,29 @@
 - Scheduled dependency audits run weekly for npm and pip.
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
 
+## CLI Environment Variables
+
+| Variable                     | Default | Description                                                               |
+| ---------------------------- | ------- | ------------------------------------------------------------------------- |
+| `LINKEDIN_ANALYZER_DATA_DIR` | `data`  | Base directory for input/output file paths                                |
+| `LOG_LEVEL`                  | `INFO`  | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)                     |
+| `LOG_FORMAT`                 | `text`  | Log output format — `text` for human-readable, `json` for structured JSON |
+
+### Structured JSON logging
+
+Set `LOG_FORMAT=json` (or pass `--log-format json`) to emit one JSON object per log line:
+
+```json
+{
+  "timestamp": "2026-03-05 12:00:00,000",
+  "level": "INFO",
+  "logger": "linkedin_analyzer",
+  "message": "Processing Shares..."
+}
+```
+
+This is recommended for production/container deployments where logs are ingested by a log aggregator.
+
 ## One-Time External Setup
 
 - Configure PyPI trusted publishing for this repository (OIDC) so `publish.yml` can publish without `PYPI_API_TOKEN`.

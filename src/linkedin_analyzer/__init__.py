@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
+
 from linkedin_analyzer.cleaners.comments import CommentsCleanerConfig, clean_comments
 from linkedin_analyzer.cleaners.connections import ConnectionsCleanerConfig, clean_connections
 from linkedin_analyzer.cleaners.messages import MessagesCleanerConfig, clean_messages
 from linkedin_analyzer.cleaners.shares import SharesCleanerConfig, clean_shares
 from linkedin_analyzer.core.types import CleanerConfig, ColumnConfig
 
-__version__ = "1.0.0"
+try:
+    __version__ = version("linkedin-analyzer")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
 
 __all__ = [
     "CleanerConfig",

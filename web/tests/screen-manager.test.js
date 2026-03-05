@@ -11,8 +11,8 @@ describe('ScreenManager', () => {
                 <a class="top-link" data-route="about"></a>
             </nav>
             <div id="routeAnnouncer"></div>
-            <section id="screen-home" class="screen"></section>
-            <section id="screen-about" class="screen"></section>
+            <section id="screen-home" class="screen" tabindex="-1"><h1 tabindex="-1">Home</h1></section>
+            <section id="screen-about" class="screen" tabindex="-1"><h1 tabindex="-1">About</h1></section>
         `;
         vi.spyOn(LoadingOverlay, 'syncActiveScreen').mockImplementation(() => {});
     });
@@ -188,6 +188,45 @@ describe('ScreenManager', () => {
 
         expect(nextScreen.classList.contains('enter')).toBe(false);
 
+        vi.useRealTimers();
+    });
+
+    it('focuses h1 in next screen after transition delay', () => {
+        vi.useFakeTimers();
+        window.requestAnimationFrame = (cb) => { cb(0); return 0; };
+
+        const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
+        ScreenManager.register('home', { screenId: 'screen-home', controller });
+        ScreenManager.register('about', { screenId: 'screen-about', controller });
+
+        ScreenManager.activate('home', {});
+        ScreenManager.activate('about', {});
+
+        const aboutH1 = document.querySelector('#screen-about h1');
+        vi.advanceTimersByTime(400);
+
+        expect(document.activeElement).toBe(aboutH1);
+        vi.useRealTimers();
+    });
+
+    it('adds tabindex to heading without one before focusing', () => {
+        vi.useFakeTimers();
+        window.requestAnimationFrame = (cb) => { cb(0); return 0; };
+
+        document.getElementById('screen-about').querySelector('h1').removeAttribute('tabindex');
+
+        const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
+        ScreenManager.register('home', { screenId: 'screen-home', controller });
+        ScreenManager.register('about', { screenId: 'screen-about', controller });
+
+        ScreenManager.activate('home', {});
+        ScreenManager.activate('about', {});
+
+        vi.advanceTimersByTime(400);
+
+        const aboutH1 = document.querySelector('#screen-about h1');
+        expect(aboutH1.getAttribute('tabindex')).toBe('-1');
+        expect(document.activeElement).toBe(aboutH1);
         vi.useRealTimers();
     });
 

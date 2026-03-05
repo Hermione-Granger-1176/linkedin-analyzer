@@ -90,11 +90,13 @@ export const ExcelGenerator = (() => {
 
     /**
      * Coerce a normalized cell value to displayable text for width calculations.
-     * @param {{value: *, hyperlink: string}} cell - Normalized cell
+     * @param {{value: *, hyperlink: string}|string} cell - Normalized cell or plain string
      * @returns {string} String representation
      */
     function valueToText(cell) {
-        if (!cell || cell.value === null || typeof cell.value === 'undefined') {return '';}
+        if (!cell) {return '';}
+        if (typeof cell === 'string') {return cell;}
+        if (cell.value === null || typeof cell.value === 'undefined') {return '';}
         return String(cell.value);
     }
 
@@ -171,8 +173,9 @@ export const ExcelGenerator = (() => {
     function applyHeaderStyles(ws, range) {
         for (let col = range.s.c; col <= range.e.c; col++) {
             const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-            if (!ws[cellRef]) {continue;}
-            ws[cellRef].s = HEADER_STYLE;
+            if (ws[cellRef]) {
+                ws[cellRef].s = HEADER_STYLE;
+            }
         }
     }
 
@@ -187,15 +190,15 @@ export const ExcelGenerator = (() => {
         for (let row = 1; row <= rowCount; row++) {
             for (let col = range.s.c; col <= range.e.c; col++) {
                 const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-                if (!ws[cellRef]) {continue;}
-
-                ws[cellRef].s = {
-                    alignment: {
-                        vertical: 'top',
-                        wrapText: wrapColumns[col] || false
-                    },
-                    border: DATA_BORDER
-                };
+                if (ws[cellRef]) {
+                    ws[cellRef].s = {
+                        alignment: {
+                            vertical: 'top',
+                            wrapText: wrapColumns[col] || false
+                        },
+                        border: DATA_BORDER
+                    };
+                }
             }
         }
     }

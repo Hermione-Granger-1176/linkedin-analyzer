@@ -40,6 +40,7 @@ CONNECTION_MONTH_LOOKUP = {
     "dec": 12,
 }
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
 
 
 def is_missing(value: object) -> bool:
@@ -255,14 +256,18 @@ def clean_value(value: object) -> str:
 
 
 def escape_excel_formula(value: object) -> object:
-    """Escape Excel formula-like strings to prevent repair warnings.
+    """Escape strings starting with OWASP formula injection prefixes.
+
+    Prevents Excel/Sheets from interpreting cell values as formulas.
+    Covers: = + - @ TAB CR LF per OWASP CSV Injection guidelines.
 
     Args:
         value: Cleaned cell value
 
     Returns:
-        Original value, or prefixed string if it starts with "="
+        Original value, or quote-prefixed string if it starts with a
+        formula injection character
     """
-    if isinstance(value, str) and value.startswith("="):
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
         return f"'{value}"
     return value

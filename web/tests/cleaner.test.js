@@ -388,6 +388,36 @@ describe('LinkedInCleaner', () => {
         expect(result.error).toMatch(/empty/i);
     });
 
+    it('escapes formula injection prefix + in Visibility column', () => {
+        const csv = [
+            'Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility',
+            '2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,Hello,,,+cmd'
+        ].join('\n');
+        const result = LinkedInCleaner.process(csv, 'shares');
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0].Visibility).toBe("'+cmd");
+    });
+
+    it('escapes formula injection prefix - in Visibility column', () => {
+        const csv = [
+            'Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility',
+            '2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,Hello,,,-cmd'
+        ].join('\n');
+        const result = LinkedInCleaner.process(csv, 'shares');
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0].Visibility).toBe("'-cmd");
+    });
+
+    it('escapes formula injection prefix @ in Visibility column', () => {
+        const csv = [
+            'Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility',
+            '2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,Hello,,,@SUM(A1)'
+        ].join('\n');
+        const result = LinkedInCleaner.process(csv, 'shares');
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0].Visibility).toBe("'@SUM(A1)");
+    });
+
     it('returns parser error when a quoted field exceeds the safety limit', () => {
         const veryLargeField = 'x'.repeat(200001);
         const csv = [

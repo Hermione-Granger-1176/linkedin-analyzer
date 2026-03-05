@@ -94,6 +94,9 @@ export const LinkedInCleaner = (() => {
         maxFieldChars: 200000
     });
 
+    /** OWASP formula injection prefixes (= + - @ TAB CR LF). */
+    const FORMULA_PREFIXES = new Set(['=', '+', '-', '@', '\t', '\r', '\n']);
+
     const MISSING_STRINGS = new Set([
         '#N/A',
         '#N/A N/A',
@@ -441,6 +444,7 @@ export const LinkedInCleaner = (() => {
         const rows = [];
         let row = [];
         let field = '';
+        /** @type {number} */
         let state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
         let parseError = null;
 
@@ -755,16 +759,16 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Clean a generic cell value, escaping Excel formula injection.
+     * Clean a generic cell value, escaping OWASP formula injection prefixes.
      * @param {*} value - Raw cell value
-     * @returns {string} Cleaned value with leading '=' prefixed by a quote
+     * @returns {string} Cleaned value with formula prefix escaped by a leading quote
      */
     function cleanValue(value) {
         if (isMissing(value)) {
             return '';
         }
         const cleaned = String(value).trim();
-        return cleaned.startsWith('=') ? `'${cleaned}` : cleaned;
+        return cleaned.length > 0 && FORMULA_PREFIXES.has(cleaned[0]) ? `'${cleaned}` : cleaned;
     }
 
     /**

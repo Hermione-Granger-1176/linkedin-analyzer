@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -61,15 +63,44 @@ SINGLE_COMMAND_SPECS = (
 ALL_COMMAND_NAMES = tuple(spec[0] for spec in SINGLE_COMMAND_SPECS)
 
 
-def configure_logging(level: str) -> None:
-    """Configure logging with the specified level.
+class JsonFormatter(logging.Formatter):
+    """Structured JSON log formatter."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format a log record as a JSON object.
+
+        Args:
+            record: Log record to format
+
+        Returns:
+            JSON string with timestamp, level, logger, and message fields
+        """
+        return json.dumps(
+            {
+                "timestamp": self.formatTime(record),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            }
+        )
+
+
+def configure_logging(level: str, log_format: str = "text") -> None:
+    """Configure logging with the specified level and format.
 
     Args:
         level: Logging level name (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_format: Output format — "text" for human-readable, "json" for structured
     """
+    handler = logging.StreamHandler()
+    formatters = {
+        "json": JsonFormatter(),
+        "text": logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"),
+    }
+    handler.setFormatter(formatters.get(log_format, formatters["text"]))
     logging.basicConfig(
         level=getattr(logging, level, logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=[handler],
     )
 
 
@@ -163,9 +194,15 @@ Examples:
     )
     parser.add_argument(
         "--log-level",
-        default="INFO",
+        default=os.environ.get("LOG_LEVEL", "INFO"),
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level (default: INFO)",
+        help="Logging level (default: INFO, env: LOG_LEVEL)",
+    )
+    parser.add_argument(
+        "--log-format",
+        default=os.environ.get("LOG_FORMAT", "text"),
+        choices=["text", "json"],
+        help="Log output format (default: text, env: LOG_FORMAT)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -293,7 +330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
-    configure_logging(args.log_level)
+    configure_logging(args.log_level, args.log_format)
 
     if args.command is None:
         parser.print_help()

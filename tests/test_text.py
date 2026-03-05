@@ -312,3 +312,21 @@ class TestEscapeExcelFormula:
 
     def test_leaves_non_string(self) -> None:
         assert escape_excel_formula(123) == 123
+
+    def test_prefixes_plus(self) -> None:
+        assert escape_excel_formula("+cmd") == "'+cmd"
+
+    def test_prefixes_minus(self) -> None:
+        assert escape_excel_formula("-cmd") == "'-cmd"
+
+    def test_prefixes_at(self) -> None:
+        assert escape_excel_formula("@SUM(A1)") == "'@SUM(A1)"
+
+    def test_prefixes_tab(self) -> None:
+        assert escape_excel_formula("\tcmd") == "'\tcmd"
+
+    def test_prefixes_cr(self) -> None:
+        assert escape_excel_formula("\rcmd") == "'\rcmd"
+
+    def test_prefixes_lf(self) -> None:
+        assert escape_excel_formula("\ncmd") == "'\ncmd"

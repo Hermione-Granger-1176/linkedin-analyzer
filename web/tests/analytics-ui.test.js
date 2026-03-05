@@ -1104,4 +1104,22 @@ describe("AnalyticsPage", () => {
         }
         expect(document.getElementById("analyticsEmpty").hidden).toBe(true);
     });
+
+    it("sets empty state when worker times out after 30 seconds", async () => {
+        vi.useFakeTimers();
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+        AnalyticsPage.init();
+        await AnalyticsPage.onRouteChange({});
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Worker has not responded — advance past timeout
+        vi.advanceTimersByTime(30001);
+
+        const emptyEl = document.getElementById("analyticsEmpty");
+        expect(emptyEl.hidden).toBe(false);
+        expect(emptyEl.querySelector("h2").textContent).toContain("timeout");
+
+        vi.useRealTimers();
+    });
 });

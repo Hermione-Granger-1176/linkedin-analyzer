@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-DATA_DIR = Path("data")
+DATA_DIR = Path(os.environ.get("LINKEDIN_ANALYZER_DATA_DIR", "data"))
 INPUT_DIR = DATA_DIR / "input"
 OUTPUT_DIR = DATA_DIR / "output"
 

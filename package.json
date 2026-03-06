@@ -16,7 +16,7 @@
     "test": "vitest run --config web/vitest.config.js --coverage",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:install": "playwright install chromium firefox",
+    "test:e2e:install": "playwright install chromium firefox webkit",
     "test:e2e:ui": "playwright test --ui",
     "size": "size-limit",
     "size:check": "size-limit --limit",
@@ -44,7 +44,7 @@
     "@sentry/browser": "^10.42.0",
     "roughjs": "^4.6.6",
     "web-vitals": "^5.1.0",
-    "xlsx": "^0.18.5"
+    "write-excel-file": "^3.0.5"
   },
   "size-limit": [
     {
@@ -62,6 +62,7 @@
     "@size-limit/file": "^12.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.3",
+    "eslint-import-resolver-node": "^0.3.9",
     "eslint-plugin-import-x": "^4.16.1",
     "eslint-plugin-jsdoc": "^62.7.1",
     "fake-indexeddb": "^6.1.0",

@@ -1,58 +1,58 @@
 /* Clean page logic */
 
-import { LinkedInCleaner } from './cleaner.js';
-import { DataCache } from './data-cache.js';
-import { ExcelGenerator } from './excel.js';
-import { captureError } from './sentry.js';
-import { Session } from './session.js';
-import { Storage } from './storage.js';
+import { LinkedInCleaner } from "./cleaner.js";
+import { DataCache } from "./data-cache.js";
+import { ExcelGenerator } from "./excel.js";
+import { captureError } from "./sentry.js";
+import { Session } from "./session.js";
+import { Storage } from "./storage.js";
 
 export const CleanPage = (() => {
-    'use strict';
+    "use strict";
 
     const PREVIEW_ROW_LIMIT = 5;
     const PREVIEW_CELL_LIMIT = 50;
-    const FILE_TYPE_ORDER = Object.freeze(['shares', 'comments', 'messages', 'connections']);
+    const FILE_TYPE_ORDER = Object.freeze(["shares", "comments", "messages", "connections"]);
     const FILE_TYPE_LABELS = Object.freeze({
-        shares: 'Shares',
-        comments: 'Comments',
-        messages: 'Messages',
-        connections: 'Connections'
+        shares: "Shares",
+        comments: "Comments",
+        messages: "Messages",
+        connections: "Connections",
     });
     const CLEAN_HINT_BY_CATEGORY = Object.freeze({
-        all: () => 'All files loaded. Choose one to clean and export.',
-        many: loadedCount => `${loadedCount} files loaded. Choose one to clean.`,
-        single: () => 'Only one file is loaded. Upload more files for full features.',
-        none: () => 'Upload LinkedIn CSV files to start cleaning.'
+        all: () => "All files loaded. Choose one to clean and export.",
+        many: (loadedCount) => `${loadedCount} files loaded. Choose one to clean.`,
+        single: () => "Only one file is loaded. Upload more files for full features.",
+        none: () => "Upload LinkedIn CSV files to start cleaning.",
     });
 
     const elements = {
-        cleanEmpty: document.getElementById('cleanEmpty'),
-        cleanPanel: document.getElementById('cleanPanel'),
-        cleanerHint: document.getElementById('cleanerHint'),
-        cleanPreviewSection: document.getElementById('cleanPreviewSection'),
-        cleanPreviewTable: document.getElementById('cleanPreviewTable'),
-        cleanFileInfo: document.getElementById('cleanFileInfo'),
-        cleanPreviewNote: document.getElementById('cleanPreviewNote'),
-        cleanDownloadSection: document.getElementById('cleanDownloadSection'),
-        cleanDownloadBtn: document.getElementById('cleanDownloadBtn'),
-        cleanErrorMessage: document.getElementById('cleanErrorMessage'),
-        cleanErrorText: document.getElementById('cleanErrorText'),
-        cleanFileTypeInputs: document.querySelectorAll('input[name="cleanFileType"]')
+        cleanEmpty: document.getElementById("cleanEmpty"),
+        cleanPanel: document.getElementById("cleanPanel"),
+        cleanerHint: document.getElementById("cleanerHint"),
+        cleanPreviewSection: document.getElementById("cleanPreviewSection"),
+        cleanPreviewTable: document.getElementById("cleanPreviewTable"),
+        cleanFileInfo: document.getElementById("cleanFileInfo"),
+        cleanPreviewNote: document.getElementById("cleanPreviewNote"),
+        cleanDownloadSection: document.getElementById("cleanDownloadSection"),
+        cleanDownloadBtn: document.getElementById("cleanDownloadBtn"),
+        cleanErrorMessage: document.getElementById("cleanErrorMessage"),
+        cleanErrorText: document.getElementById("cleanErrorText"),
+        cleanFileTypeInputs: document.querySelectorAll('input[name="cleanFileType"]'),
     };
 
     const cache = {
         shares: null,
         comments: null,
         messages: null,
-        connections: null
+        connections: null,
     };
 
     const storedFiles = {
         shares: null,
         comments: null,
         messages: null,
-        connections: null
+        connections: null,
     };
 
     let initialized = false;
@@ -85,10 +85,10 @@ export const CleanPage = (() => {
             updateView();
         } catch (error) {
             captureError(error, {
-                module: 'clean',
-                operation: 'refresh'
+                module: "clean",
+                operation: "refresh",
             });
-            showError('Unable to load saved files. Re-upload your CSV files and try again.');
+            showError("Unable to load saved files. Re-upload your CSV files and try again.");
             hidePreview();
             hideDownload();
         }
@@ -98,10 +98,12 @@ export const CleanPage = (() => {
      * Attach event listeners for file type radio buttons and download.
      */
     function bindEvents() {
-        elements.cleanFileTypeInputs.forEach(input => {
-            input.addEventListener('change', renderPreview);
+        elements.cleanFileTypeInputs.forEach((input) => {
+            input.addEventListener("change", renderPreview);
         });
-        elements.cleanDownloadBtn.addEventListener('click', handleDownload);
+        elements.cleanDownloadBtn.addEventListener("click", () => {
+            handleDownload();
+        });
     }
 
     /**
@@ -111,14 +113,14 @@ export const CleanPage = (() => {
         await Session.waitForCleanup();
 
         let files = null;
-        files = DataCache.get('storage:files') || null;
+        files = DataCache.get("storage:files") || null;
         if (!files) {
             files = await Storage.getAllFiles();
-            DataCache.set('storage:files', files);
+            DataCache.set("storage:files", files);
         }
 
-        FILE_TYPE_ORDER.forEach(type => {
-            storedFiles[type] = files.find(file => file.type === type) || null;
+        FILE_TYPE_ORDER.forEach((type) => {
+            storedFiles[type] = files.find((file) => file.type === type) || null;
         });
     }
 
@@ -144,28 +146,34 @@ export const CleanPage = (() => {
      * Update the clean page UI based on available files.
      */
     function updateView() {
-        const loadedTypes = FILE_TYPE_ORDER.filter(type => Boolean(storedFiles[type]));
+        const loadedTypes = FILE_TYPE_ORDER.filter((type) => Boolean(storedFiles[type]));
         const loadedCount = loadedTypes.length;
         const hasFiles = loadedCount > 0;
 
         elements.cleanEmpty.hidden = hasFiles;
         elements.cleanPanel.hidden = !hasFiles;
 
-        elements.cleanFileTypeInputs.forEach(input => {
+        elements.cleanFileTypeInputs.forEach((input) => {
             const el = /** @type {HTMLInputElement} */ (input);
             el.disabled = !storedFiles[el.value];
         });
 
-        const selectedType = getSelectedType();
-        /* v8 ignore next 9 */
-        if (!storedFiles[selectedType] && loadedCount > 0) {
-            const fallbackType = loadedTypes[0];
-            const fallbackInput = document.querySelector(
-                `input[name="cleanFileType"][value="${fallbackType}"]`
-            );
-            if (fallbackInput) {
-                /** @type {HTMLInputElement} */ (fallbackInput).checked = true;
-            }
+        const selectedInput = /** @type {HTMLInputElement|null} */ (
+            document.querySelector('input[name="cleanFileType"]:checked')
+        );
+        const selectedType = selectedInput ? selectedInput.value : null;
+        if (!selectedType || storedFiles[selectedType] || loadedCount === 0) {
+            elements.cleanerHint.textContent = getCleanerHint(loadedCount);
+            renderPreview();
+            return;
+        }
+
+        const fallbackType = loadedTypes[0];
+        const fallbackInput = document.querySelector(
+            `input[name="cleanFileType"][value="${fallbackType}"]`,
+        );
+        if (fallbackInput) {
+            /** @type {HTMLInputElement} */ (fallbackInput).checked = true;
         }
 
         elements.cleanerHint.textContent = getCleanerHint(loadedCount);
@@ -178,12 +186,14 @@ export const CleanPage = (() => {
      * @returns {string} The selected file type.
      */
     function getSelectedType() {
-        const selected = /** @type {HTMLInputElement|null} */ (document.querySelector('input[name="cleanFileType"]:checked'));
+        const selected = /** @type {HTMLInputElement|null} */ (
+            document.querySelector('input[name="cleanFileType"]:checked')
+        );
         if (selected && storedFiles[selected.value]) {
             return selected.value;
         }
-        const fallback = FILE_TYPE_ORDER.find(type => Boolean(storedFiles[type]));
-        return fallback || 'shares';
+        const fallback = FILE_TYPE_ORDER.find((type) => Boolean(storedFiles[type]));
+        return fallback || "shares";
     }
 
     /**
@@ -195,10 +205,10 @@ export const CleanPage = (() => {
      */
     function handleParseError(error, message, fileType, fileName) {
         captureError(error, {
-            module: 'clean',
-            operation: 'parse-file',
+            module: "clean",
+            operation: "parse-file",
             fileType,
-            fileName
+            fileName,
         });
         showError(message);
         hidePreview();
@@ -227,16 +237,16 @@ export const CleanPage = (() => {
             try {
                 const processed = LinkedInCleaner.process(file.text, type);
                 if (!processed.success) {
-                    const message = processed.error || 'Unable to parse file.';
+                    const message = processed.error || "Unable to parse file.";
                     handleParseError(new Error(message), message, type, file.name || null);
                     return;
                 }
                 cache[type] = {
                     updatedAt: fileUpdatedAt,
-                    result: processed
+                    result: processed,
                 };
             } catch (error) {
-                handleParseError(error, 'Unable to parse file.', type, file.name || null);
+                handleParseError(error, "Unable to parse file.", type, file.name || null);
                 return;
             }
         }
@@ -248,33 +258,41 @@ export const CleanPage = (() => {
     /**
      * Populate the preview table with cleaned data.
      * @param {object} result - The processed result from LinkedInCleaner.
-     * @param {string} fileType - The file type ('shares' or 'comments').
+     * @param {string} fileType - Selected cleaner file type.
      */
     function showPreview(result, fileType) {
         const config = LinkedInCleaner.configs[fileType];
         /* v8 ignore next */
-        if (!config) {return;}
-        const headers = config.columns.map(column => column.name);
+        if (!config) {
+            return;
+        }
+        const headers = config.columns.map((column) => column.name);
         /* v8 ignore next */
         const label = FILE_TYPE_LABELS[fileType] || fileType;
         elements.cleanFileInfo.textContent = `${label} - ${result.rowCount} rows`;
 
-        const thead = elements.cleanPreviewTable.querySelector('thead');
-        thead.innerHTML = `<tr>${headers.map(header => `<th>${escapeHtml(header)}</th>`).join('')}</tr>`;
+        const thead = elements.cleanPreviewTable.querySelector("thead");
+        thead.innerHTML = `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`;
 
-        const tbody = elements.cleanPreviewTable.querySelector('tbody');
+        const tbody = elements.cleanPreviewTable.querySelector("tbody");
         const previewRows = result.cleanedData.slice(0, PREVIEW_ROW_LIMIT);
-        tbody.innerHTML = previewRows.map(row =>
-            `<tr>${headers.map(header => {
-                /* v8 ignore next */
-                const value = row[header] || '';
-                return `<td title="${escapeHtml(value)}">${escapeHtml(truncate(value, PREVIEW_CELL_LIMIT))}</td>`;
-            }).join('')}</tr>`
-        ).join('');
+        tbody.innerHTML = previewRows
+            .map(
+                (row) =>
+                    `<tr>${headers
+                        .map((header) => {
+                            /* v8 ignore next */
+                            const value = row[header] || "";
+                            return `<td title="${escapeHtml(value)}">${escapeHtml(truncate(value, PREVIEW_CELL_LIMIT))}</td>`;
+                        })
+                        .join("")}</tr>`,
+            )
+            .join("");
 
-        elements.cleanPreviewNote.textContent = result.rowCount > PREVIEW_ROW_LIMIT
-            ? `Showing first ${PREVIEW_ROW_LIMIT} of ${result.rowCount} rows`
-            : `Showing all ${result.rowCount} rows`;
+        elements.cleanPreviewNote.textContent =
+            result.rowCount > PREVIEW_ROW_LIMIT
+                ? `Showing first ${PREVIEW_ROW_LIMIT} of ${result.rowCount} rows`
+                : `Showing all ${result.rowCount} rows`;
 
         elements.cleanPreviewSection.hidden = false;
     }
@@ -303,24 +321,27 @@ export const CleanPage = (() => {
     /**
      * Generate and trigger download of the cleaned Excel file.
      */
-    function handleDownload() {
+    async function handleDownload() {
         const type = getSelectedType();
         const cached = cache[type];
         if (!cached || !cached.result) {
-            showError('No data to download.');
-            captureError(new Error('No data to download from clean page.'), {
-                module: 'clean',
-                operation: 'download-without-cache',
-                fileType: type
+            showError("No data to download.");
+            captureError(new Error("No data to download from clean page."), {
+                module: "clean",
+                operation: "download-without-cache",
+                fileType: type,
             });
             return;
         }
-        const downloadResult = ExcelGenerator.generateAndDownload(cached.result.cleanedData, type);
+        const downloadResult = await ExcelGenerator.generateAndDownload(
+            cached.result.cleanedData,
+            type,
+        );
         if (!downloadResult.success) {
-            captureError(new Error(downloadResult.error || 'Excel generation failed.'), {
-                module: 'clean',
-                operation: 'excel-generate',
-                fileType: type
+            captureError(new Error(downloadResult.error || "Excel generation failed."), {
+                module: "clean",
+                operation: "excel-generate",
+                fileType: type,
             });
             showError(`Error generating Excel: ${downloadResult.error}`);
         }
@@ -348,7 +369,7 @@ export const CleanPage = (() => {
      * @returns {string} The HTML-escaped string.
      */
     function escapeHtml(value) {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = value;
         return div.innerHTML;
     }
@@ -361,13 +382,17 @@ export const CleanPage = (() => {
      */
     function truncate(value, maxLength) {
         /* v8 ignore next */
-        if (!value) {return '';}
-        if (value.length <= maxLength) {return value;}
+        if (!value) {
+            return "";
+        }
+        if (value.length <= maxLength) {
+            return value;
+        }
         return `${value.slice(0, maxLength)}...`;
     }
 
     return {
         init,
-        onRouteChange
+        onRouteChange,
     };
 })();

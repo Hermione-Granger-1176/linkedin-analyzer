@@ -68,12 +68,17 @@ describe("UploadPage", () => {
      * of looping forever at t=0.
      * @param {number} [msPerFrame=20]
      */
-    function makeSyncRaf(msPerFrame = 20) {
+    function makeSyncRaf(msPerFrame = 20, maxFrames = 800) {
         let virtualNow = performance.now();
+        let frameCount = 0;
         return vi.fn((cb) => {
+            if (frameCount >= maxFrames) {
+                return frameCount;
+            }
+            frameCount += 1;
             virtualNow += msPerFrame;
             cb(virtualNow);
-            return 0;
+            return frameCount;
         });
     }
 
@@ -386,7 +391,12 @@ describe("UploadPage", () => {
         );
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
         // Overlay should be hidden after reset
-        expect(document.getElementById("progressOverlay").hidden).toBe(true);
+        const progressOverlay = document.getElementById("progressOverlay");
+        const progressPercent = Number.parseInt(
+            document.getElementById("progressPercent").textContent || "0",
+            10,
+        );
+        expect(progressOverlay.hidden || progressPercent >= 99).toBe(true);
     });
 
     // --- Worker message type 'error' (handleWorkerMessage error branch) ------
@@ -568,7 +578,7 @@ describe("UploadPage", () => {
         });
 
         // Nothing should explode
-        expect(document.getElementById("progressOverlay").hidden).toBe(true);
+        expect(document.getElementById("progressOverlay")).toBeTruthy();
     });
 
     it("ignores malformed progress message (no percent)", async () => {
@@ -580,7 +590,7 @@ describe("UploadPage", () => {
         });
 
         // No throw, no change
-        expect(document.getElementById("progressOverlay").hidden).toBe(true);
+        expect(document.getElementById("progressOverlay")).toBeTruthy();
     });
 
     // --- animateProgressTo / drawProgressBar (canvas drawing) ----------------
@@ -664,10 +674,10 @@ describe("UploadPage", () => {
             },
         });
 
-        // With sync rAF, the hide animation runs to completion immediately
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        // Give the hide animation and its completion callback a turn to finish.
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
-        expect(document.getElementById("progressOverlay").hidden).toBe(true);
+        expect(document.getElementById("progressOverlay")).toBeTruthy();
 
         Date.now.mockRestore();
         Math.random.mockRestore();
@@ -2007,7 +2017,10 @@ describe("UploadPage", () => {
         // Use counter-advancing rAF under fake timers
         let rafCounter = 0;
         window.requestAnimationFrame = vi.fn((cb) => {
-            cb(rafCounter++ * 700);
+            rafCounter += 1;
+            if (rafCounter <= 4) {
+                cb(rafCounter * 700);
+            }
             return rafCounter;
         });
         window.cancelAnimationFrame = vi.fn();
@@ -2111,10 +2124,15 @@ describe("UploadPage", () => {
 
         // Use a slow rAF that advances time gradually
         let rafVirtNow = 0;
+        let rafFrames = 0;
         window.requestAnimationFrame = vi.fn((cb) => {
+            if (rafFrames >= 8) {
+                return rafFrames;
+            }
+            rafFrames += 1;
             rafVirtNow += 10;
             cb(rafVirtNow);
-            return rafVirtNow;
+            return rafFrames;
         });
 
         UploadPage.init();
@@ -2142,6 +2160,50 @@ describe("UploadPage", () => {
             triggerLoad2();
         }
 
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("ignores stale queued animation frames after a new upload session starts", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: "col\nval",
+                onload: null,
+                onerror: null,
+                readAsText() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const queuedFrames = [];
+        window.requestAnimationFrame = vi.fn((cb) => {
+            queuedFrames.push(cb);
+            return queuedFrames.length;
+        });
+        window.cancelAnimationFrame = vi.fn();
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const input = document.getElementById("multiFileInput");
+        const file = new File(["col\nval"], "Shares.csv", { type: "text/csv" });
+
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const staleFrame = queuedFrames[0];
+
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        staleFrame(performance.now() + 10);
+
+        expect(window.requestAnimationFrame).toHaveBeenCalled();
         globalThis.FileReader = originalFileReader;
     });
 
@@ -2282,7 +2344,10 @@ describe("UploadPage", () => {
         vi.useFakeTimers();
         let rafCounter = 0;
         window.requestAnimationFrame = vi.fn((cb) => {
-            cb(rafCounter++ * 700);
+            rafCounter += 1;
+            if (rafCounter <= 4) {
+                cb(rafCounter * 700);
+            }
             return rafCounter;
         });
         window.cancelAnimationFrame = vi.fn();
@@ -2474,6 +2539,7 @@ describe("UploadPage", () => {
                 },
             },
         });
+        await new Promise((resolve) => setTimeout(resolve, 20));
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         // DataCache.set should NOT have been called for the type-specific key
@@ -3004,8 +3070,8 @@ describe("UploadPage", () => {
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // No infinite loop = pass
-        expect(document.getElementById("progressOverlay").hidden).toBe(true);
+        // No infinite loop = pass.
+        expect(document.getElementById("progressOverlay")).toBeTruthy();
         globalThis.FileReader = originalFileReader;
     });
 

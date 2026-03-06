@@ -1,7 +1,9 @@
 /* Main Styles - LinkedIn Analyzer */
 
 /* Reset & Base */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -19,7 +21,9 @@ body {
     letter-spacing: 0.01em;
     color: var(--text-primary);
     background-color: var(--bg-primary);
-    transition: background-color var(--transition-normal), color var(--transition-normal);
+    transition:
+        background-color var(--transition-normal),
+        color var(--transition-normal);
 
     /* Grid paper background */
     background-image:
@@ -67,7 +71,9 @@ body {
     z-index: -1;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
     font-family: var(--font-hand-alt);
     font-weight: 600;
 }
@@ -584,7 +590,7 @@ button {
 }
 
 .option-radio::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 50%;
     left: 50%;
@@ -878,7 +884,7 @@ button {
 
 .filters-bar .ghost-btn {
     border-color: color-mix(in srgb, var(--accent-red) 45%, var(--border-color));
-    color: color-mix(in srgb, var(--accent-red) 82%, var(--text-primary));
+    color: var(--accent-red-contrast);
     background: color-mix(in srgb, var(--accent-red-bg) 70%, var(--bg-secondary));
 }
 
@@ -897,7 +903,7 @@ button {
 
 .filter-label {
     font-size: var(--font-size-sm);
-    color: var(--text-secondary);
+    color: var(--text-secondary-strong);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -920,7 +926,7 @@ button {
 .filter-btn.active {
     border-color: var(--accent-blue);
     background: var(--accent-blue-bg);
-    color: var(--accent-blue);
+    color: var(--accent-blue-contrast);
 }
 
 .filter-btn:hover {
@@ -1206,17 +1212,37 @@ button {
     color: var(--accent-blue);
 }
 
-.insight-icon.accent-yellow { color: var(--accent-yellow); }
-.insight-icon.accent-purple { color: var(--accent-purple); }
-.insight-icon.accent-blue { color: var(--accent-blue); }
-.insight-icon.accent-green { color: var(--accent-green); }
-.insight-icon.accent-red { color: var(--accent-red); }
+.insight-icon.accent-yellow {
+    color: var(--accent-yellow);
+}
+.insight-icon.accent-purple {
+    color: var(--accent-purple);
+}
+.insight-icon.accent-blue {
+    color: var(--accent-blue);
+}
+.insight-icon.accent-green {
+    color: var(--accent-green);
+}
+.insight-icon.accent-red {
+    color: var(--accent-red);
+}
 
-.insight-card[data-accent="accent-yellow"] { border-color: var(--accent-yellow); }
-.insight-card[data-accent="accent-purple"] { border-color: var(--accent-purple); }
-.insight-card[data-accent="accent-blue"] { border-color: var(--accent-blue); }
-.insight-card[data-accent="accent-green"] { border-color: var(--accent-green); }
-.insight-card[data-accent="accent-red"] { border-color: var(--accent-red); }
+.insight-card[data-accent="accent-yellow"] {
+    border-color: var(--accent-yellow);
+}
+.insight-card[data-accent="accent-purple"] {
+    border-color: var(--accent-purple);
+}
+.insight-card[data-accent="accent-blue"] {
+    border-color: var(--accent-blue);
+}
+.insight-card[data-accent="accent-green"] {
+    border-color: var(--accent-green);
+}
+.insight-card[data-accent="accent-red"] {
+    border-color: var(--accent-red);
+}
 
 .insight-body h3 {
     font-size: var(--font-size-lg);
@@ -1402,11 +1428,16 @@ button {
 }
 
 .skeleton-block::after {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, color-mix(in srgb, white 45%, transparent), transparent);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, white 45%, transparent),
+        transparent
+    );
     animation: skeleton-shimmer 1.2s ease-in-out infinite;
 }
 
@@ -1547,7 +1578,8 @@ button {
 }
 
 @keyframes gear-float {
-    0%, 100% {
+    0%,
+    100% {
         transform: translateY(0);
     }
     50% {

@@ -45,6 +45,18 @@
     --accent-red-light: #fadbd8;
     --accent-red-bg: rgba(231, 76, 60, 0.1);
 
+    /* Filter controls */
+    --filter-bar-text: #314252;
+    --filter-label-text: #3b4b59;
+    --filter-btn-bg: #f4ecdd;
+    --filter-btn-text: #4a5763;
+    --filter-btn-active-border: #4f85b5;
+    --filter-btn-active-bg: #dbeaf7;
+    --filter-btn-active-text: #214f73;
+    --filter-danger-border: #ba6a5f;
+    --filter-danger-bg: #f8e1dc;
+    --filter-danger-text: #7f2f22;
+
     --accent-green: #58d68d;
     --accent-green-light: #d5f5e3;
     --accent-green-bg: rgba(88, 214, 141, 0.15);
@@ -95,6 +107,18 @@
     --accent-red-contrast: #f7b2ab;
     --accent-red-light: #4a2828;
     --accent-red-bg: rgba(241, 148, 138, 0.15);
+
+    /* Filter controls */
+    --filter-bar-text: #d7e3ea;
+    --filter-label-text: #e0ebf1;
+    --filter-btn-bg: #355061;
+    --filter-btn-text: #eef6fb;
+    --filter-btn-active-border: #8fc6ee;
+    --filter-btn-active-bg: #204766;
+    --filter-btn-active-text: #f4fbff;
+    --filter-danger-border: #e5a89f;
+    --filter-danger-bg: #5b322d;
+    --filter-danger-text: #fff1ee;
 
     --accent-green: #7dcea0;
     --accent-green-light: #1e4d2b;

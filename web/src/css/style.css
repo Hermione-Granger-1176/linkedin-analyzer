@@ -880,13 +880,13 @@ button {
     background: var(--bg-secondary);
     box-shadow: var(--shadow-sm);
     margin-bottom: var(--space-lg);
-    color: #314252;
+    color: var(--filter-bar-text);
 }
 
 .filters-bar .ghost-btn {
-    border-color: #ba6a5f;
-    color: #7f2f22;
-    background: #f8e1dc;
+    border-color: var(--filter-danger-border);
+    color: var(--filter-danger-text);
+    background: var(--filter-danger-bg);
 }
 
 .filters-bar .ghost-btn:hover {
@@ -904,7 +904,7 @@ button {
 
 .filter-label {
     font-size: var(--font-size-sm);
-    color: #3b4b59;
+    color: var(--filter-label-text);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -919,16 +919,16 @@ button {
     padding: var(--space-xs) var(--space-md);
     border: 2px solid var(--border-light);
     border-radius: var(--radius-md);
-    background: #f4ecdd;
-    color: #4a5763;
+    background: var(--filter-btn-bg);
+    color: var(--filter-btn-text);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
 
 .filter-btn.active {
-    border-color: #4f85b5;
-    background: #dbeaf7;
-    color: #214f73;
+    border-color: var(--filter-btn-active-border);
+    background: var(--filter-btn-active-bg);
+    color: var(--filter-btn-active-text);
 }
 
 .filter-btn:hover {

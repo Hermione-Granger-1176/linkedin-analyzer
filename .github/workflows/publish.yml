@@ -20,8 +20,16 @@ jobs:
       - name: Build distributions
         run: |
           python -m pip install --upgrade pip
-          python -m pip install hatch
+          python -m pip install hatch twine
           hatch build
+      - name: Validate distributions
+        run: |
+          twine check dist/*
+          python -m venv .venv-publish-check
+          . .venv-publish-check/bin/activate
+          pip install --upgrade pip
+          pip install dist/*.whl
+          linkedin-analyzer --version
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cd9f54aa2f37f504a2c46bb5b0d7e0c08b1b7b13 # v1
 
@@ -61,6 +69,8 @@ jobs:
             VERSION=${{ steps.image-meta.outputs.version }}
             REVISION=${{ steps.image-meta.outputs.revision }}
             SOURCE_URL=${{ steps.image-meta.outputs.source_url }}
+      - name: Smoke test local image
+        run: docker run --rm ${{ steps.image-meta.outputs.image }}:scan --version
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # 0.34.2
         with:
@@ -77,6 +87,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.image-meta.outputs.image }}:${{ steps.image-meta.outputs.version }}
+            ${{ steps.image-meta.outputs.image }}:sha-${{ github.sha }}
             ${{ steps.image-meta.outputs.image }}:latest
           build-args: |
             VERSION=${{ steps.image-meta.outputs.version }}

@@ -229,7 +229,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         argv: Command-line arguments (defaults to sys.argv[1:])
 
     Returns:
-        Parser and parsed arguments namespace
+        Parsed arguments namespace.
     """
     return _build_parser().parse_args(argv)
 

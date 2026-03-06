@@ -2,7 +2,7 @@
 
 <p align="center">
   Clean and analyze your LinkedIn data exports.<br>
-  <sub>Web app or Python CLI. In the web app, your data never leaves your browser.</sub>
+  <sub>Web app or Python CLI. File contents stay local in the web app; optional diagnostics are opt-in.</sub>
 </p>
 
 <p align="center">
@@ -30,19 +30,25 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards, relations
 **Web** — Run the Vite dev server and open the local URL:
 
 ```bash
-cp .env.example .env  # optional; set VITE_SENTRY_DSN + VITE_APP_RELEASE for observability
+cp .env.example .env  # optional; set VITE_SENTRY_DSN + VITE_APP_RELEASE for opt-in diagnostics
 npm run dev
 ```
 
 **CLI** — For automation:
 
 ```bash
-pip install -e .
+pip install linkedin-analyzer
 linkedin-analyzer shares
 linkedin-analyzer comments
 linkedin-analyzer messages
 linkedin-analyzer connections
 linkedin-analyzer all
+```
+
+**Container** — Run the published CLI image:
+
+```bash
+docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-analyzer:latest --version
 ```
 
 <br>
@@ -63,7 +69,7 @@ linkedin-analyzer all
   <img src="https://img.shields.io/badge/Canvas_API-FF6384?style=flat" alt="Canvas API">
   <img src="https://img.shields.io/badge/IndexedDB-4285F4?style=flat" alt="IndexedDB">
   <img src="https://img.shields.io/badge/Web_Workers-FF9800?style=flat" alt="Web Workers">
-  <img src="https://img.shields.io/badge/SheetJS-107C10?style=flat" alt="SheetJS">
+  <img src="https://img.shields.io/badge/write--excel--file-107C10?style=flat" alt="write-excel-file">
 </p>
 
 **Python CLI**
@@ -89,7 +95,7 @@ linkedin-analyzer all
 
 | Feature              | Detail                                                    |
 | -------------------- | --------------------------------------------------------- |
-| **100% client-side** | Files never leave your browser                            |
+| **100% client-side** | File contents stay local in your browser                  |
 | **Light/dark theme** | Hand-drawn sketch aesthetic                               |
 | **Guided tutorials** | Per-page tutorials                                        |
 | **Analytics**        | Timeline, topics, heatmap                                 |

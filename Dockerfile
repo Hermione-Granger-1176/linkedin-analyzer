@@ -1,5 +1,7 @@
 FROM python:3.13-slim@sha256:8bc60ca09afaa8ea0d6d1220bde073bacfedd66a4bf8129cbdc8ef0e16c8a952 AS builder
 
+ARG VERSION=0.0.0
+
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -9,7 +11,7 @@ COPY pyproject.toml README.md /build/
 COPY src /build/src
 
 RUN python -m pip install --upgrade pip build \
-    && python -m build --wheel --outdir /dist
+    && SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m build --wheel --outdir /dist
 
 FROM python:3.13-slim@sha256:8bc60ca09afaa8ea0d6d1220bde073bacfedd66a4bf8129cbdc8ef0e16c8a952 AS runtime
 

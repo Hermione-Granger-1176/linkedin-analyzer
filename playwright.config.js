@@ -1,43 +1,46 @@
-const { defineConfig } = require('@playwright/test');
+const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
-    testDir: './web/e2e',
+    testDir: "./web/e2e",
     timeout: 45000,
     expect: {
-        timeout: 10000
+        timeout: 10000,
     },
     fullyParallel: false,
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 1 : 0,
-    reporter: [
-        ['list'],
-        ['html', { open: 'never' }]
-    ],
+    reporter: [["list"], ["html", { open: "never" }]],
     use: {
-        baseURL: 'http://127.0.0.1:4173',
+        baseURL: "http://127.0.0.1:4173",
         headless: true,
-        reducedMotion: 'reduce',
-        trace: 'retain-on-failure',
-        screenshot: 'only-on-failure'
+        reducedMotion: "reduce",
+        trace: "retain-on-failure",
+        screenshot: "only-on-failure",
     },
     projects: [
         {
-            name: 'chromium',
+            name: "chromium",
             use: {
-                browserName: 'chromium'
-            }
+                browserName: "chromium",
+            },
         },
         {
-            name: 'firefox',
+            name: "firefox",
             use: {
-                browserName: 'firefox'
-            }
-        }
+                browserName: "firefox",
+            },
+        },
+        {
+            name: "webkit",
+            use: {
+                browserName: "webkit",
+            },
+        },
     ],
     webServer: {
-        command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
-        url: 'http://127.0.0.1:4173',
+        command: "npm run build && npm run preview -- --host 127.0.0.1 --port 4173 --strictPort",
+        url: "http://127.0.0.1:4173",
         reuseExistingServer: !process.env.CI,
-        timeout: 120000
-    }
+        timeout: 120000,
+    },
 });

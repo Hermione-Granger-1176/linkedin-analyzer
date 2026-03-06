@@ -40,8 +40,14 @@ data/output/*
 !data/input/.gitkeep
 !data/output/.gitkeep
 
+# Build output
+web/dist/
+
 # Local testing artifacts
 testing/
+
+# Editor / tool config
+.claude/
 
 # Local environment files
 .env

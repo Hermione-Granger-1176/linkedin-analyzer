@@ -1223,7 +1223,7 @@ export const UploadPage = (() => {
      * Smoothly animate progress bar to target value.
      * @param {number} target - Target progress value (0-1)
      * @param {number} duration - Animation duration in ms
-     * @param {Function} [callback] - Optional callback when animation completes
+     * @param {(() => void) | null} [callback] - Optional callback when animation completes
      * @param {number} [sessionId] - Progress animation session token
      */
     function animateProgressTo(target, duration, callback, sessionId) {

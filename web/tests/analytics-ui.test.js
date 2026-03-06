@@ -173,6 +173,17 @@ describe("AnalyticsPage", () => {
         expect(document.getElementById("analyticsGrid").hidden).toBe(true);
     });
 
+    it("initializes on route change when the page is not initialized yet", async () => {
+        Storage.getAnalytics.mockResolvedValue(null);
+        DataCache.get.mockReturnValue(null);
+
+        await AnalyticsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("analyticsEmpty").hidden).toBe(false);
+        expect(document.getElementById("analyticsGrid").hidden).toBe(true);
+    });
+
     it("syncs filters from route and renders chips", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);

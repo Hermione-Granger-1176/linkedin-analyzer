@@ -1,11 +1,46 @@
-/* IndexedDB storage helpers */
+/* IndexedDB storage helpers with in-memory fallback support */
+
+const FILE_SCHEMA_VERSION = 2;
+const ANALYTICS_SCHEMA_VERSION = 2;
+
+function normalizeStoredFile(record) {
+    if (!record || typeof record !== "object") {
+        return null;
+    }
+    const schemaVersion = Number(record.schemaVersion || 1);
+    if (schemaVersion > FILE_SCHEMA_VERSION) {
+        return null;
+    }
+    return {
+        type: record.type,
+        name: record.name,
+        text: record.text,
+        rowCount: Number(record.rowCount || 0),
+        updatedAt: Number(record.updatedAt || 0),
+        schemaVersion: FILE_SCHEMA_VERSION,
+    };
+}
+
+function normalizeStoredAnalytics(record) {
+    if (!record || typeof record !== "object") {
+        return null;
+    }
+    const schemaVersion = Number(record.schemaVersion || 1);
+    if (schemaVersion > ANALYTICS_SCHEMA_VERSION) {
+        return null;
+    }
+    if (Object.prototype.hasOwnProperty.call(record, "data")) {
+        return record.data;
+    }
+    return record;
+}
 
 export const Storage = (() => {
-    'use strict';
+    "use strict";
 
     const isAvailable = (() => {
         try {
-            return typeof indexedDB !== 'undefined' && indexedDB !== null;
+            return typeof indexedDB !== "undefined" && indexedDB !== null;
         } catch {
             /* v8 ignore next */
             return false;
@@ -17,19 +52,37 @@ export const Storage = (() => {
         let memAnalytics = null;
         return {
             isAvailable: false,
-            saveFile: (type, data) => { memFiles.set(type, { type, name: data.name, text: data.text, rowCount: data.rowCount || 0, updatedAt: Date.now() }); return Promise.resolve(); },
-            getFile: (type) => Promise.resolve(memFiles.get(type) || null),
-            getAllFiles: () => Promise.resolve([...memFiles.values()]),
-            saveAnalytics: (base) => { memAnalytics = base; return Promise.resolve(); },
-            getAnalytics: () => Promise.resolve(memAnalytics),
-            clearAll: () => { memFiles.clear(); memAnalytics = null; return Promise.resolve(); }
+            saveFile: (type, data) => {
+                memFiles.set(type, {
+                    type,
+                    name: data.name,
+                    text: data.text,
+                    rowCount: data.rowCount || 0,
+                    updatedAt: Date.now(),
+                    schemaVersion: FILE_SCHEMA_VERSION,
+                });
+                return Promise.resolve();
+            },
+            getFile: (type) => Promise.resolve(normalizeStoredFile(memFiles.get(type) || null)),
+            getAllFiles: () =>
+                Promise.resolve([...memFiles.values()].map(normalizeStoredFile).filter(Boolean)),
+            saveAnalytics: (base) => {
+                memAnalytics = { data: base, schemaVersion: ANALYTICS_SCHEMA_VERSION };
+                return Promise.resolve();
+            },
+            getAnalytics: () => Promise.resolve(normalizeStoredAnalytics(memAnalytics)),
+            clearAll: () => {
+                memFiles.clear();
+                memAnalytics = null;
+                return Promise.resolve();
+            },
         };
     }
 
-    const DB_NAME = 'linkedin-analyzer';
-    const DB_VERSION = 1;
-    const FILE_STORE = 'files';
-    const ANALYTICS_STORE = 'analytics';
+    const DB_NAME = "linkedin-analyzer";
+    const DB_VERSION = 2;
+    const FILE_STORE = "files";
+    const ANALYTICS_STORE = "analytics";
 
     /**
      * Open the IndexedDB database, creating object stores on first run.
@@ -42,11 +95,11 @@ export const Storage = (() => {
                 const db = /** @type {IDBOpenDBRequest} */ (event.target).result;
                 /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(FILE_STORE)) {
-                    db.createObjectStore(FILE_STORE, { keyPath: 'type' });
+                    db.createObjectStore(FILE_STORE, { keyPath: "type" });
                 }
                 /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
-                    db.createObjectStore(ANALYTICS_STORE, { keyPath: 'id' });
+                    db.createObjectStore(ANALYTICS_STORE, { keyPath: "id" });
                 }
             };
             request.onerror = () => reject(request.error);
@@ -84,9 +137,10 @@ export const Storage = (() => {
             name: data.name,
             text: data.text,
             rowCount: data.rowCount || 0,
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            schemaVersion: FILE_SCHEMA_VERSION,
         };
-        return withStore(FILE_STORE, 'readwrite', (store) => store.put(payload));
+        return withStore(FILE_STORE, "readwrite", (store) => store.put(payload));
     }
 
     /**
@@ -97,10 +151,10 @@ export const Storage = (() => {
     async function getFile(type) {
         const db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(FILE_STORE, 'readonly');
+            const tx = db.transaction(FILE_STORE, "readonly");
             const store = tx.objectStore(FILE_STORE);
             const request = store.get(type);
-            request.onsuccess = () => resolve(request.result || null);
+            request.onsuccess = () => resolve(normalizeStoredFile(request.result || null));
             request.onerror = () => reject(request.error);
         });
     }
@@ -112,11 +166,12 @@ export const Storage = (() => {
     async function getAllFiles() {
         const db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(FILE_STORE, 'readonly');
+            const tx = db.transaction(FILE_STORE, "readonly");
             const store = tx.objectStore(FILE_STORE);
             const request = store.getAll();
             /* v8 ignore next */
-            request.onsuccess = () => resolve(request.result || []);
+            request.onsuccess = () =>
+                resolve((request.result || []).map(normalizeStoredFile).filter(Boolean));
             request.onerror = () => reject(request.error);
         });
     }
@@ -128,11 +183,12 @@ export const Storage = (() => {
      */
     async function saveAnalytics(base) {
         const payload = {
-            id: 'base',
+            id: "base",
             updatedAt: Date.now(),
-            data: base
+            schemaVersion: ANALYTICS_SCHEMA_VERSION,
+            data: base,
         };
-        return withStore(ANALYTICS_STORE, 'readwrite', (store) => store.put(payload));
+        return withStore(ANALYTICS_STORE, "readwrite", (store) => store.put(payload));
     }
 
     /**
@@ -142,10 +198,10 @@ export const Storage = (() => {
     async function getAnalytics() {
         const db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(ANALYTICS_STORE, 'readonly');
+            const tx = db.transaction(ANALYTICS_STORE, "readonly");
             const store = tx.objectStore(ANALYTICS_STORE);
-            const request = store.get('base');
-            request.onsuccess = () => resolve(request.result ? request.result.data : null);
+            const request = store.get("base");
+            request.onsuccess = () => resolve(normalizeStoredAnalytics(request.result || null));
             request.onerror = () => reject(request.error);
         });
     }
@@ -157,7 +213,7 @@ export const Storage = (() => {
     async function clearAll() {
         const db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction([FILE_STORE, ANALYTICS_STORE], 'readwrite');
+            const tx = db.transaction([FILE_STORE, ANALYTICS_STORE], "readwrite");
             tx.objectStore(FILE_STORE).clear();
             tx.objectStore(ANALYTICS_STORE).clear();
             tx.oncomplete = () => resolve();
@@ -172,6 +228,6 @@ export const Storage = (() => {
         getAllFiles,
         saveAnalytics,
         getAnalytics,
-        clearAll
+        clearAll,
     };
 })();

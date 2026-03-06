@@ -4,7 +4,7 @@ Thanks for contributing to LinkedIn Analyzer. This repo contains a Python CLI an
 
 ## Development setup
 
-1. Install Python 3.11+ and Node.js 20+
+1. Install Python 3.11+ and Node.js 20.19+, 22.13+, or 24+
 2. Create a Python virtual environment and install dependencies:
 
 ```bash
@@ -17,7 +17,7 @@ pip install -e ".[dev]"
 
 ```bash
 npm install
-cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed
+cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed for opt-in diagnostics
 ```
 
 4. Install git hooks:

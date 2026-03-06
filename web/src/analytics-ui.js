@@ -158,10 +158,10 @@ export const AnalyticsPage = (() => {
     function onRouteChange(params) {
         if (!initialized) {
             init();
-            /* v8 ignore next 3 */
-            if (!initialized) {
-                return;
-            }
+        }
+        /* v8 ignore next 2 */
+        if (!initialized) {
+            return;
         }
 
         const filtersFromRoute = parseRouteFilters(params || {});

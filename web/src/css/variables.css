@@ -3,51 +3,66 @@
 /* Self-hosted fonts (eliminates Google Fonts DNS lookup) */
 
 @font-face {
-    font-family: 'Patrick Hand';
+    font-family: "Patrick Hand";
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url('/fonts/PatrickHand-Regular.woff2') format('woff2');
+    src: url("/fonts/PatrickHand-Regular.woff2") format("woff2");
 }
 
 @font-face {
-    font-family: 'Caveat';
+    font-family: "Caveat";
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url('/fonts/Caveat-Regular.woff2') format('woff2');
+    src: url("/fonts/Caveat-Regular.woff2") format("woff2");
 }
 
 :root {
     /* Light Theme (Default) */
-    --bg-primary: #FDF6E3;
-    --bg-secondary: #FFFFFF;
-    --bg-tertiary: #F7F3E9;
-    --text-primary: #2C3E50;
-    --text-secondary: #5D6D7E;
-    --text-muted: #95A5A6;
-    --border-color: #4A4A4A;
-    --border-light: #D5D5D5;
+    --bg-primary: #fdf6e3;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f7f3e9;
+    --text-primary: #2c3e50;
+    --text-secondary: #4b5968;
+    --text-muted: #95a5a6;
+    --text-secondary-strong: #42505d;
+    --border-color: #4a4a4a;
+    --border-light: #d5d5d5;
 
     /* Accent Colors */
-    --accent-blue: #5B9BD5;
-    --accent-blue-light: #A8D1F0;
+    --accent-blue: #5b9bd5;
+    --accent-blue-contrast: #295f8d;
+    --accent-blue-light: #a8d1f0;
     --accent-blue-bg: rgba(91, 155, 213, 0.1);
 
-    --accent-yellow: #F4D03F;
-    --accent-yellow-light: #FCF3CF;
+    --accent-yellow: #f4d03f;
+    --accent-yellow-light: #fcf3cf;
     --accent-yellow-bg: rgba(244, 208, 63, 0.15);
 
-    --accent-red: #E74C3C;
-    --accent-red-light: #FADBD8;
+    --accent-red: #e74c3c;
+    --accent-red-contrast: #8f2a20;
+    --accent-red-light: #fadbd8;
     --accent-red-bg: rgba(231, 76, 60, 0.1);
 
-    --accent-green: #58D68D;
-    --accent-green-light: #D5F5E3;
+    /* Filter controls */
+    --filter-bar-text: #314252;
+    --filter-label-text: #3b4b59;
+    --filter-btn-bg: #f4ecdd;
+    --filter-btn-text: #4a5763;
+    --filter-btn-active-border: #4f85b5;
+    --filter-btn-active-bg: #dbeaf7;
+    --filter-btn-active-text: #214f73;
+    --filter-danger-border: #ba6a5f;
+    --filter-danger-bg: #f8e1dc;
+    --filter-danger-text: #7f2f22;
+
+    --accent-green: #58d68d;
+    --accent-green-light: #d5f5e3;
     --accent-green-bg: rgba(88, 214, 141, 0.15);
 
-    --accent-purple: #9B59B6;
-    --accent-purple-light: #E8DAEF;
+    --accent-purple: #9b59b6;
+    --accent-purple-light: #e8daef;
     --accent-purple-bg: rgba(155, 89, 182, 0.1);
 
     /* Shadows */
@@ -59,7 +74,7 @@
     --grid-color: rgba(0, 0, 0, 0.03);
 
     /* Selection */
-    --selection-text: #1A1A2E;
+    --selection-text: #1a1a2e;
 
     /* Transitions */
     --transition-fast: 0.15s ease;
@@ -68,34 +83,49 @@
 
 /* Dark Theme */
 [data-theme="dark"] {
-    --bg-primary: #1A1A2E;
-    --bg-secondary: #16213E;
-    --bg-tertiary: #0F3460;
-    --text-primary: #EAECEE;
-    --text-secondary: #ABB2B9;
-    --text-muted: #7F8C8D;
-    --border-color: #E0E0E0;
-    --border-light: #4A4A4A;
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --text-primary: #eaecee;
+    --text-secondary: #abb2b9;
+    --text-muted: #7f8c8d;
+    --text-secondary-strong: #d5dbe0;
+    --border-color: #e0e0e0;
+    --border-light: #4a4a4a;
 
     /* Softer accent colors for dark mode */
-    --accent-blue: #7FB3D5;
-    --accent-blue-light: #2E4A62;
+    --accent-blue: #7fb3d5;
+    --accent-blue-contrast: #a9d0e8;
+    --accent-blue-light: #2e4a62;
     --accent-blue-bg: rgba(127, 179, 213, 0.15);
 
-    --accent-yellow: #F7DC6F;
-    --accent-yellow-light: #4A4528;
+    --accent-yellow: #f7dc6f;
+    --accent-yellow-light: #4a4528;
     --accent-yellow-bg: rgba(247, 220, 111, 0.15);
 
-    --accent-red: #F1948A;
-    --accent-red-light: #4A2828;
+    --accent-red: #f1948a;
+    --accent-red-contrast: #f7b2ab;
+    --accent-red-light: #4a2828;
     --accent-red-bg: rgba(241, 148, 138, 0.15);
 
-    --accent-green: #7DCEA0;
-    --accent-green-light: #1E4D2B;
+    /* Filter controls */
+    --filter-bar-text: #d7e3ea;
+    --filter-label-text: #e0ebf1;
+    --filter-btn-bg: #355061;
+    --filter-btn-text: #eef6fb;
+    --filter-btn-active-border: #8fc6ee;
+    --filter-btn-active-bg: #204766;
+    --filter-btn-active-text: #f4fbff;
+    --filter-danger-border: #e5a89f;
+    --filter-danger-bg: #5b322d;
+    --filter-danger-text: #fff1ee;
+
+    --accent-green: #7dcea0;
+    --accent-green-light: #1e4d2b;
     --accent-green-bg: rgba(125, 206, 160, 0.15);
 
-    --accent-purple: #BB8FCE;
-    --accent-purple-light: #3D2850;
+    --accent-purple: #bb8fce;
+    --accent-purple-light: #3d2850;
     --accent-purple-bg: rgba(187, 143, 206, 0.15);
 
     /* Shadows for dark mode */
@@ -112,8 +142,8 @@
 
 /* Typography Variables */
 :root {
-    --font-hand: 'Patrick Hand', cursive;
-    --font-hand-alt: 'Caveat', cursive;
+    --font-hand: "Patrick Hand", cursive;
+    --font-hand-alt: "Caveat", cursive;
     --font-size-xs: 0.75rem;
     --font-size-sm: 0.875rem;
     --font-size-base: 1rem;

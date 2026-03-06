@@ -98,13 +98,15 @@ function hydrateAnalytics(base) {
     }
 
     // Convert activeDays arrays back to Sets for streak calculation
-    const months = {};
-    for (const [key, bucket] of Object.entries(base.months)) {
-        months[key] = {
-            ...bucket,
-            activeDays: new Set(bucket.activeDays || []),
-        };
-    }
+    const months = Object.fromEntries(
+        Object.entries(base.months).map(([key, bucket]) => [
+            key,
+            {
+                ...bucket,
+                activeDays: new Set(bucket.activeDays || []),
+            },
+        ]),
+    );
 
     return {
         ...base,

@@ -19,8 +19,8 @@ DEFAULT_OUTPUT = DEFAULT_CONNECTIONS_OUTPUT
 
 # Column configurations for Connections.csv
 CONNECTIONS_COLUMNS: tuple[ColumnConfig, ...] = (
-    ColumnConfig(name="First Name", width=20),
-    ColumnConfig(name="Last Name", width=20),
+    ColumnConfig(name="First Name", width=20, required=True),
+    ColumnConfig(name="Last Name", width=20, required=True),
     ColumnConfig(name="URL", width=50, cleaner=clean_empty_field),
     ColumnConfig(name="Email Address", width=32, cleaner=clean_empty_field),
     ColumnConfig(name="Company", width=30),
@@ -41,6 +41,7 @@ class ConnectionsCleanerConfig(CleanerConfig):
     columns: tuple[ColumnConfig, ...] = CONNECTIONS_COLUMNS
     csv_kwargs: Mapping[str, object] = field(default_factory=dict)
     skiprows: int = 3
+    required_row_columns: tuple[str, ...] = ("Connected On",)
     drop_if_all_missing: tuple[str, ...] = ("First Name", "Last Name", "URL")
 
 

@@ -40,9 +40,11 @@ jobs:
         run: npm run test
       - name: Build web
         run: npm run build
+      - name: Check web size budget
+        run: npm run size:check
       - name: Install Playwright browser
         if: matrix.node-version == '20'
-        run: npx playwright install --with-deps chromium firefox
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Test web E2E
         if: matrix.node-version == '20'
         run: npm run test:e2e

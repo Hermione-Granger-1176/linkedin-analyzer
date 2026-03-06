@@ -32,7 +32,9 @@ export const UploadPage = (() => {
         messagesStatus: document.getElementById("messagesStatus"),
         connectionsStatus: document.getElementById("connectionsStatus"),
         uploadHint: document.getElementById("uploadHint"),
-        openAnalyticsBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("openAnalyticsBtn")),
+        openAnalyticsBtn: /** @type {HTMLButtonElement|null} */ (
+            document.getElementById("openAnalyticsBtn")
+        ),
         clearAllBtn: document.getElementById("clearAllBtn"),
         fileStatusItems: {
             shares: document.querySelector('.file-status-item[data-file="shares"]'),
@@ -41,7 +43,9 @@ export const UploadPage = (() => {
             connections: document.querySelector('.file-status-item[data-file="connections"]'),
         },
         progressOverlay: document.getElementById("progressOverlay"),
-        progressCanvas: /** @type {HTMLCanvasElement|null} */ (document.getElementById("progressCanvas")),
+        progressCanvas: /** @type {HTMLCanvasElement|null} */ (
+            document.getElementById("progressCanvas")
+        ),
         progressPercent: document.getElementById("progressPercent"),
         offlineBanner: document.getElementById("offlineBanner"),
     };
@@ -1219,7 +1223,7 @@ export const UploadPage = (() => {
      * Smoothly animate progress bar to target value.
      * @param {number} target - Target progress value (0-1)
      * @param {number} duration - Animation duration in ms
-     * @param {Function} [callback] - Optional callback when animation completes
+     * @param {(() => void) | null} [callback] - Optional callback when animation completes
      * @param {number} [sessionId] - Progress animation session token
      */
     function animateProgressTo(target, duration, callback, sessionId) {
@@ -1229,6 +1233,7 @@ export const UploadPage = (() => {
         const animationSession = sessionId || progressSessionId;
 
         function step(now) {
+            /* v8 ignore next 4 */
             if (animationSession !== progressSessionId) {
                 progressAnimationId = null;
                 return;
@@ -1245,7 +1250,7 @@ export const UploadPage = (() => {
 
             progressAnimationId = null;
             if (callback) {
-                callback();
+                queueMicrotask(callback);
             }
         }
 
@@ -1271,6 +1276,7 @@ export const UploadPage = (() => {
         let previousTime = 0;
 
         function crawl(now) {
+            /* v8 ignore next 4 */
             if (sessionId !== progressSessionId) {
                 progressAnimationId = null;
                 return;

@@ -11,9 +11,9 @@
 # Install dependencies
 npm install
 
-# Optional: enable Sentry in local/dev builds
+# Optional: make diagnostics available in local/dev builds
 cp .env.example .env
-# Set VITE_SENTRY_DSN in .env when needed
+# Set VITE_SENTRY_DSN in .env when needed (still requires in-app opt-in)
 
 # Start dev server
 npm run dev
@@ -68,9 +68,9 @@ ruff format src tests
 
 ## CI
 
-GitHub Actions runs on every push:
+GitHub Actions runs on pull requests and pushes to `main`:
 
-- **Web**: format check + ESLint + JS typecheck + unit tests + build + Playwright E2E
+- **Web**: format check + ESLint + JS typecheck + unit tests + build + size-budget check + Playwright E2E
 - **Python**: Ruff + mypy + pytest
 
 See `.github/workflows/ci.yml`.

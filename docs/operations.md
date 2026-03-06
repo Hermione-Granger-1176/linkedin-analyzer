@@ -12,7 +12,7 @@
 2. Build command: `npm run build`
 3. Output directory: `web/dist`
 4. Add environment variables:
-   - `VITE_SENTRY_DSN` (optional but recommended)
+   - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended, e.g. commit SHA)
 5. Verify custom headers from `vercel.json` are applied after deploy.
 
@@ -20,12 +20,12 @@
 
 ### Sentry setup
 
-- Configure `VITE_SENTRY_DSN` in each environment.
+- Configure `VITE_SENTRY_DSN` in each environment if you want opt-in diagnostics.
 - Set `VITE_APP_RELEASE` during builds to correlate errors with deploys.
 - Sentry captures:
   - unhandled runtime errors and rejections
   - page/module errors from guarded operations
-  - selected performance telemetry (`web-vitals` + measured spans)
+  - selected performance telemetry (`web-vitals` + custom performance measures)
 
 ### Recommended alerting
 

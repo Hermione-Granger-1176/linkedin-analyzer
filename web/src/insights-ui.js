@@ -63,10 +63,10 @@ export const InsightsPage = (() => {
     function onRouteChange(params) {
         if (!initialized) {
             init();
-            /* v8 ignore next 3 */
-            if (!initialized) {
-                return;
-            }
+        }
+        /* v8 ignore next 2 */
+        if (!initialized) {
+            return;
         }
 
         const range = parseRangeParam(params && params.range);

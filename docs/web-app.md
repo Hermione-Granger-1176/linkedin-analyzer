@@ -1,6 +1,6 @@
 # Web App Guide
 
-The LinkedIn Analyzer web app runs entirely in your browser. No data is uploaded to a server.
+The LinkedIn Analyzer web app runs entirely in your browser. File contents are not uploaded to an app server.
 
 ## Getting Started
 
@@ -50,7 +50,7 @@ Delegated click handlers use `DomEvents.closest(event, selector)` from `web/src/
 
 ## Guided Tutorials
 
-Each screen has its own guided tutorial with first-visit auto start after a short delay (~1.5s):
+Each screen has its own guided tutorial with first-visit auto-start after a short delay (~1.5s):
 
 - Home
 - Clean
@@ -132,7 +132,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Analytics computation runs in `analytics-worker.js`.
 - Connections parsing runs in `connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `messages-worker.js` with safe fallback.
-- IndexedDB stores raw files and analytics base; in-memory cache avoids repeated parsing across route switches.
+- IndexedDB stores raw files and analytics base when available; an in-memory fallback keeps the app functional but does not persist data across reloads.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
 - Service worker caches navigation with NetworkFirst, scripts/styles with StaleWhileRevalidate, and fonts/images with CacheFirst (30-day TTL) to auto-refresh users onto newer builds.
@@ -141,13 +141,14 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 
 ## Privacy
 
-Your files never leave your browser.
+Your file contents stay in your browser unless you explicitly enable diagnostics.
 
 - Processing is local JavaScript only.
-- Data persistence uses browser IndexedDB.
+- Data persistence uses browser IndexedDB when available, with an in-memory fallback when IndexedDB is unavailable.
 - Theme preference is persisted across sessions.
 - Tutorial and mini-tip onboarding state is preserved in `localStorage` (versioned keys).
 - No backend API calls for file content.
+- If `VITE_SENTRY_DSN` is configured, diagnostics remain disabled until the user opts in.
 
 ## Running Locally
 
@@ -166,14 +167,14 @@ Recommended production setup:
 1. Build with `npm run build`
 2. Publish the `web/dist/` output
 3. Set environment variables:
-   - `VITE_SENTRY_DSN` (optional but recommended)
+   - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended for release-level error tracking)
 4. Verify security headers from `vercel.json` in deployed responses
 
 ## Browser Compatibility
 
-- Build target follows `browserslist` from `package.json`: `> 0.5%, last 2 versions, not dead`
-- Playwright E2E coverage currently runs on Chromium and Firefox
+- Vite production builds target `es2022`
+- Playwright E2E coverage currently runs on Chromium, Firefox, and WebKit
 - Hash routing (`#...`) avoids server-side rewrite requirements
 
 ## Icons and Meta
@@ -184,13 +185,13 @@ The app ships with a hand-drawn favicon set and production meta tags.
 
 Browsers pick the best format automatically:
 
-| File                          | Size  | Used by                         |
-| ----------------------------- | ----- | ------------------------------- |
-| `public/assets/icon.svg`      | any   | Modern browsers (Chrome, FF)    |
-| `public/assets/favicon.ico`   | 32px  | Legacy browsers (older IE/Edge) |
-| `assets/apple-touch-icon.png` | 180px | iOS home screen bookmark        |
-| `assets/icon-192.png`         | 192px | Android home screen, PWA        |
-| `assets/icon-512.png`         | 512px | PWA splash screen, OG cards     |
+| Repo path                                | Size  | Used by                         |
+| ---------------------------------------- | ----- | ------------------------------- |
+| `web/public/assets/icon.svg`             | any   | Modern browsers (Chrome, FF)    |
+| `web/public/assets/favicon.ico`          | 32px  | Legacy browsers (older IE/Edge) |
+| `web/public/assets/apple-touch-icon.png` | 180px | iOS home screen bookmark        |
+| `web/public/assets/icon-192.png`         | 192px | Android home screen, PWA        |
+| `web/public/assets/icon-512.png`         | 512px | PWA splash screen, OG cards     |
 
 ### PWA Manifest
 

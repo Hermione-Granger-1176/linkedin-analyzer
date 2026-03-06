@@ -37,9 +37,15 @@ export const MessagesPage = (() => {
     const elements = {
         timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
         resetFiltersBtn: document.getElementById("messagesResetFiltersBtn"),
-        topContactsExportBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("topContactsExportBtn")),
-        silentConnectionsExportBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("silentConnectionsExportBtn")),
-        fadingConversationsExportBtn: /** @type {HTMLButtonElement|null} */ (document.getElementById("fadingConversationsExportBtn")),
+        topContactsExportBtn: /** @type {HTMLButtonElement|null} */ (
+            document.getElementById("topContactsExportBtn")
+        ),
+        silentConnectionsExportBtn: /** @type {HTMLButtonElement|null} */ (
+            document.getElementById("silentConnectionsExportBtn")
+        ),
+        fadingConversationsExportBtn: /** @type {HTMLButtonElement|null} */ (
+            document.getElementById("fadingConversationsExportBtn")
+        ),
         messagesEmpty: document.getElementById("messagesEmpty"),
         messagesLayout: document.getElementById("messagesLayout"),
         topContactsList: document.getElementById("topContactsList"),
@@ -94,9 +100,9 @@ export const MessagesPage = (() => {
     function onRouteChange(params) {
         if (!initialized) {
             init();
-            if (!initialized) {
-                return;
-            }
+        }
+        if (!initialized) {
+            return;
         }
 
         const nextRange = parseRangeParam(params && params.range);
@@ -1189,12 +1195,17 @@ export const MessagesPage = (() => {
             asterisk.addEventListener("mouseleave", hidePopup);
             asterisk.addEventListener("click", togglePopup);
             asterisk.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") {
-                    hidePopup();
-                }
-                if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    togglePopup();
+                switch (e.key) {
+                    case "Escape":
+                        hidePopup();
+                        break;
+                    case "Enter":
+                    case " ":
+                        e.preventDefault();
+                        togglePopup();
+                        break;
+                    default:
+                        break;
                 }
             });
             asterisk.addEventListener("focusout", hidePopup);
@@ -1285,18 +1296,18 @@ export const MessagesPage = (() => {
     }
 
     /** Export top contacts panel data. */
-    function exportTopContacts() {
+    async function exportTopContacts() {
         const rows = state.currentLists.topContacts.map((item) => ({
             Name: item.name,
             "LinkedIn URL": toLinkedInCell(item.url),
             Messages: item.count,
             "Last Message": formatShortDate(item.lastTimestamp),
         }));
-        downloadExport("top-contacts", "Top Contacts", rows);
+        await downloadExport("top-contacts", "Top Contacts", rows);
     }
 
     /** Export silent connections panel data. */
-    function exportSilentConnections() {
+    async function exportSilentConnections() {
         const rows = state.currentLists.silentConnections.map((item) => ({
             Name: item.name,
             "LinkedIn URL": toLinkedInCell(item.url),
@@ -1306,11 +1317,11 @@ export const MessagesPage = (() => {
             Position: item.position || "",
             Company: item.company || "",
         }));
-        downloadExport("silent-connections", "Silent Connections", rows);
+        await downloadExport("silent-connections", "Silent Connections", rows);
     }
 
     /** Export fading conversations panel data. */
-    function exportFadingConversations() {
+    async function exportFadingConversations() {
         const rows = state.currentLists.fadingConversations.map((item) => ({
             Name: item.name,
             "LinkedIn URL": toLinkedInCell(item.url),
@@ -1318,7 +1329,7 @@ export const MessagesPage = (() => {
             "Last Message": formatShortDate(item.lastTimestamp),
             Company: item.company || "",
         }));
-        downloadExport("fading-conversations", "Fading Conversations", rows);
+        await downloadExport("fading-conversations", "Fading Conversations", rows);
     }
 
     /**
@@ -1344,7 +1355,7 @@ export const MessagesPage = (() => {
      * @param {string} sheetName - Worksheet name
      * @param {object[]} rows - Export rows
      */
-    function downloadExport(filePrefix, sheetName, rows) {
+    async function downloadExport(filePrefix, sheetName, rows) {
         /* v8 ignore next 3 */
         if (!rows.length) {
             return;
@@ -1356,7 +1367,7 @@ export const MessagesPage = (() => {
 
         const headers = Object.keys(rows[0]);
         const orderedRows = rows.map((row) => headers.map((header) => row[header] ?? ""));
-        ExcelGenerator.downloadFromSpec(
+        const result = await ExcelGenerator.downloadFromSpec(
             {
                 sheetName,
                 headers,
@@ -1364,6 +1375,13 @@ export const MessagesPage = (() => {
             },
             `messages-${filePrefix}.xlsx`,
         );
+        if (!result.success) {
+            captureError(new Error(result.error || "Messages export failed."), {
+                module: "messages-insights",
+                operation: "export",
+                exportType: filePrefix,
+            });
+        }
     }
 
     /** Enable/disable export buttons based on availability and list content. */

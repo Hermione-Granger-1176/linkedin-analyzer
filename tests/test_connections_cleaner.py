@@ -21,7 +21,9 @@ def test_connections_defaults() -> None:
     assert config.output_path == DEFAULT_CONNECTIONS_OUTPUT
     assert config.columns == CONNECTIONS_COLUMNS
     assert config.skiprows == 3
+    assert config.required_row_columns == ("Connected On",)
     assert config.drop_if_all_missing == ("First Name", "Last Name", "URL")
+    assert config.required_columns == ["First Name", "Last Name", "Connected On"]
 
 
 def test_clean_connections_success(tmp_path: Path) -> None:

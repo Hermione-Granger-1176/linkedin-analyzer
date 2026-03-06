@@ -118,24 +118,21 @@ function buildGrowthTimeline(rows) {
     const firstKey = sortedKeys[0];
     const lastKey = sortedKeys[sortedKeys.length - 1];
 
-    const timeline = [];
     const [startYear, startMonth] = firstKey.split("-").map(Number);
     const [endYear, endMonth] = lastKey.split("-").map(Number);
     const monthSpan = (endYear - startYear) * 12 + (endMonth - startMonth);
 
-    for (let offset = 0; offset <= monthSpan; offset += 1) {
+    return Array.from({ length: monthSpan + 1 }, (_, offset) => {
         const absoluteMonth = startMonth - 1 + offset;
         const year = startYear + Math.floor(absoluteMonth / 12);
         const month = (absoluteMonth % 12) + 1;
         const key = `${year}-${String(month).padStart(2, "0")}`;
-        timeline.push({
+        return {
             key,
             label: monthKeyToLabel(key),
             value: buckets.get(key) || 0,
-        });
-    }
-
-    return timeline;
+        };
+    });
 }
 
 /* -- Summary stats ----------------------------------------------------------- */

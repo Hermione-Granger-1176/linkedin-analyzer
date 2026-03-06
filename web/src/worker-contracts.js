@@ -322,33 +322,34 @@ export function parseConnectionsWorkerMessage(message) {
         return invalid("Invalid connections worker message envelope");
     }
 
-    if (message.type === "error") {
-        const payload = isPlainObject(message.payload) ? message.payload : {};
-        return valid({
-            type: "error",
-            requestId: normalizeRequestId(message.requestId),
-            payload: {
-                message:
-                    normalizeString(payload.message, LIMITS.maxMessageChars) || "Worker error.",
-            },
-        });
+    switch (message.type) {
+        case "error": {
+            const payload = isPlainObject(message.payload) ? message.payload : {};
+            return valid({
+                type: "error",
+                requestId: normalizeRequestId(message.requestId),
+                payload: {
+                    message:
+                        normalizeString(payload.message, LIMITS.maxMessageChars) || "Worker error.",
+                },
+            });
+        }
+        case "processed": {
+            const payload = isPlainObject(message.payload) ? message.payload : {};
+            return valid({
+                type: "processed",
+                requestId: normalizeRequestId(message.requestId),
+                payload: {
+                    success: Boolean(payload.success),
+                    analytics: isPlainObject(payload.analytics) ? payload.analytics : null,
+                    rows: Array.isArray(payload.rows) ? payload.rows : [],
+                    error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
+                },
+            });
+        }
+        default:
+            return invalid("Unknown connections worker message type");
     }
-
-    if (message.type !== "processed") {
-        return invalid("Unknown connections worker message type");
-    }
-
-    const payload = isPlainObject(message.payload) ? message.payload : {};
-    return valid({
-        type: "processed",
-        requestId: normalizeRequestId(message.requestId),
-        payload: {
-            success: Boolean(payload.success),
-            analytics: isPlainObject(payload.analytics) ? payload.analytics : null,
-            rows: Array.isArray(payload.rows) ? payload.rows : [],
-            error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
-        },
-    });
 }
 
 /**

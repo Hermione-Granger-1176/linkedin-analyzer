@@ -398,16 +398,9 @@ export const AnalyticsEngine = (() => {
                 dayBucket.posts++;
                 dayBucket.total++;
 
-                if (hasMedia) {
-                    bucket.shareTypes.media++;
-                    dayBucket.shareTypes.media++;
-                } else if (hasLink) {
-                    bucket.shareTypes.links++;
-                    dayBucket.shareTypes.links++;
-                } else {
-                    bucket.shareTypes.textOnly++;
-                    dayBucket.shareTypes.textOnly++;
-                }
+                const shareTypeKey = hasMedia ? "media" : hasLink ? "links" : "textOnly";
+                bucket.shareTypes[shareTypeKey]++;
+                dayBucket.shareTypes[shareTypeKey]++;
 
                 for (const topic of topics) {
                     bucket.topics.set(topic, (bucket.topics.get(topic) || 0) + 1);
@@ -451,25 +444,24 @@ export const AnalyticsEngine = (() => {
         }
 
         // Convert month index to serializable format
-        const months = {};
-        for (const [key, bucket] of monthIndex) {
-            months[key] = {
-                posts: bucket.posts,
-                comments: bucket.comments,
-                total: bucket.total,
-                topics: Object.fromEntries(bucket.topics),
-                days: bucket.days,
-                hours: bucket.hours,
-                heatmap: bucket.heatmap,
-                shareTypes: bucket.shareTypes,
-                activeDays: Array.from(bucket.activeDays),
-            };
-        }
+        const months = Object.fromEntries(
+            Array.from(monthIndex, ([key, bucket]) => [
+                key,
+                {
+                    posts: bucket.posts,
+                    comments: bucket.comments,
+                    total: bucket.total,
+                    topics: Object.fromEntries(bucket.topics),
+                    days: bucket.days,
+                    hours: bucket.hours,
+                    heatmap: bucket.heatmap,
+                    shareTypes: bucket.shareTypes,
+                    activeDays: Array.from(bucket.activeDays),
+                },
+            ]),
+        );
 
-        const dayIndexData = {};
-        for (const [key, bucket] of dayIndex) {
-            dayIndexData[key] = bucket;
-        }
+        const dayIndexData = Object.fromEntries(dayIndex);
 
         return {
             months,
@@ -943,12 +935,7 @@ export const AnalyticsEngine = (() => {
             week.value = Math.round(week.value);
         });
 
-        let timelineMax = 1;
-        for (const total of baselineTotals) {
-            if (total > timelineMax) {
-                timelineMax = total;
-            }
-        }
+        const timelineMax = baselineTotals.reduce((max, total) => Math.max(max, total), 1);
 
         return { timeline: weeks, timelineMax };
     }

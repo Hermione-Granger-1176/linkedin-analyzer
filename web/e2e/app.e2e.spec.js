@@ -19,6 +19,12 @@ async function uploadFiles(page, files) {
     await page.getByTestId("upload-input").setInputFiles(files);
 }
 
+test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+        window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
+    });
+});
+
 /**
  * Wait for one file status row to switch from default to loaded,
  * then wait for the progress overlay to disappear.
@@ -111,12 +117,10 @@ test("analytics screen has no critical accessibility violations", async ({ page 
     await expect(page).toHaveURL(/#analytics/);
     await expect(page.getByTestId("analytics-grid")).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa"])
-        .analyze();
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 
     const critical = results.violations.filter(
-        (v) => v.impact === "critical" || v.impact === "serious"
+        (v) => v.impact === "critical" || v.impact === "serious",
     );
     expect(critical).toEqual([]);
 });

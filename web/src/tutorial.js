@@ -104,8 +104,21 @@ export const Tutorial = (() => {
         miniTipsLayer: null,
     };
 
+    /**
+     * Allow automated environments to opt out of tutorial overlays.
+     * @returns {boolean}
+     */
+    function tutorialsDisabled() {
+        const globalWindow =
+            /** @type {Window & { __LINKEDIN_ANALYZER_DISABLE_TUTORIALS__?: boolean }} */ (window);
+        return Boolean(globalWindow.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__);
+    }
+
     /** Initialize tutorial shell and listeners once. */
     function init() {
+        if (tutorialsDisabled()) {
+            return;
+        }
         if (state.initialized) {
             return;
         }
@@ -120,6 +133,9 @@ export const Tutorial = (() => {
      * @param {string} routeName - Active route name
      */
     function onRouteChange(routeName) {
+        if (tutorialsDisabled()) {
+            return;
+        }
         init();
 
         const normalized = normalizeRouteName(routeName);
@@ -166,6 +182,9 @@ export const Tutorial = (() => {
      * @returns {boolean}
      */
     function start(routeName, options) {
+        if (tutorialsDisabled()) {
+            return false;
+        }
         init();
 
         const normalized = normalizeRouteName(routeName);
@@ -438,10 +457,12 @@ export const Tutorial = (() => {
      * @param {Event} event
      */
     function handleRestartClick(event) {
-        const trigger = /** @type {HTMLElement|null} */ (DomEvents.closest(
-            event,
-            '[data-tutorial-action="restart"], .tutorial-restart-btn[data-tutorial-route]',
-        ));
+        const trigger = /** @type {HTMLElement|null} */ (
+            DomEvents.closest(
+                event,
+                '[data-tutorial-action="restart"], .tutorial-restart-btn[data-tutorial-route]',
+            )
+        );
         if (!trigger) {
             return;
         }
@@ -989,7 +1010,8 @@ export const Tutorial = (() => {
             const gap = 24;
             const fits =
                 (preferred === "top" && targetRect.top >= popRect.height + gap) ||
-                (preferred === "bottom" && viewportHeight - targetRect.bottom >= popRect.height + gap) ||
+                (preferred === "bottom" &&
+                    viewportHeight - targetRect.bottom >= popRect.height + gap) ||
                 (preferred === "left" && targetRect.left >= popRect.width + gap) ||
                 (preferred === "right" && viewportWidth - targetRect.right >= popRect.width + gap);
             if (fits) {
@@ -1569,7 +1591,9 @@ export const Tutorial = (() => {
         ];
 
         const nodes = root.querySelectorAll(selectors.join(","));
-        return /** @type {HTMLElement[]} */ (Array.from(nodes)).filter((node) => isElementVisible(node));
+        return /** @type {HTMLElement[]} */ (Array.from(nodes)).filter((node) =>
+            isElementVisible(node),
+        );
     }
 
     /**

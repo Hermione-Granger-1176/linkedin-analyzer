@@ -880,12 +880,13 @@ button {
     background: var(--bg-secondary);
     box-shadow: var(--shadow-sm);
     margin-bottom: var(--space-lg);
+    color: #314252;
 }
 
 .filters-bar .ghost-btn {
-    border-color: color-mix(in srgb, var(--accent-red) 45%, var(--border-color));
-    color: var(--accent-red-contrast);
-    background: color-mix(in srgb, var(--accent-red-bg) 70%, var(--bg-secondary));
+    border-color: #ba6a5f;
+    color: #7f2f22;
+    background: #f8e1dc;
 }
 
 .filters-bar .ghost-btn:hover {
@@ -903,7 +904,7 @@ button {
 
 .filter-label {
     font-size: var(--font-size-sm);
-    color: var(--text-secondary-strong);
+    color: #3b4b59;
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -918,15 +919,16 @@ button {
     padding: var(--space-xs) var(--space-md);
     border: 2px solid var(--border-light);
     border-radius: var(--radius-md);
-    background: var(--bg-tertiary);
+    background: #f4ecdd;
+    color: #4a5763;
     cursor: pointer;
     transition: all var(--transition-fast);
 }
 
 .filter-btn.active {
-    border-color: var(--accent-blue);
-    background: var(--accent-blue-bg);
-    color: var(--accent-blue-contrast);
+    border-color: #4f85b5;
+    background: #dbeaf7;
+    color: #214f73;
 }
 
 .filter-btn:hover {

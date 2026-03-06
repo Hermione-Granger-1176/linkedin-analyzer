@@ -74,17 +74,20 @@ function init() {
         },
     ]);
     const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
+    const hasTelemetryConsent = telemetryConsentGranted();
 
     /* Initialize runtime modules and route wiring. */
     initSentry();
-    initTelemetry();
+    if (hasTelemetryConsent) {
+        initTelemetry();
+    }
     initRuntime();
     initDecorations();
     Theme.init();
     Tutorial.init();
     registerRoutes();
     bindRouteLinks();
-    initTelemetryBanner();
+    initTelemetryBanner(hasTelemetryConsent);
 
     runSessionCleanup();
 
@@ -161,7 +164,7 @@ function init() {
         });
     }
 
-    function initTelemetryBanner() {
+    function initTelemetryBanner(consentGranted) {
         const banner = document.getElementById("telemetryBanner");
         const enableButton = document.getElementById("telemetryEnableBtn");
         const dismissButton = document.getElementById("telemetryDismissBtn");
@@ -171,7 +174,7 @@ function init() {
         }
 
         const shouldOfferTelemetry = Boolean(import.meta.env.VITE_SENTRY_DSN);
-        if (!shouldOfferTelemetry || telemetryConsentGranted()) {
+        if (!shouldOfferTelemetry || consentGranted) {
             banner.hidden = true;
             return;
         }

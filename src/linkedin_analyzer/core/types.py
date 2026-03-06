@@ -43,6 +43,7 @@ class CleanerConfig:
         columns: List of column configurations
         csv_kwargs: Additional arguments to pass to pd.read_csv
         skiprows: Number of rows to skip before reading headers
+        required_row_columns: Columns that must contain row values after header validation
         drop_if_all_missing: Drop rows when all these columns are missing
     """
 
@@ -51,6 +52,7 @@ class CleanerConfig:
     columns: tuple[ColumnConfig, ...]
     csv_kwargs: Mapping[str, object] = field(default_factory=dict)
     skiprows: int = 0
+    required_row_columns: tuple[str, ...] = ()
     drop_if_all_missing: tuple[str, ...] = ()
 
     @property

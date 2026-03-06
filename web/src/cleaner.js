@@ -67,7 +67,7 @@ export const LinkedInCleaner = (() => {
                 { name: "Position", width: 30 },
                 { name: "Connected On", width: 20, cleaner: "cleanConnectionsDate" },
             ],
-            requiredColumns: ["Connected On"],
+            requiredColumns: ["First Name", "Last Name", "Connected On"],
             requiredRowColumns: ["Connected On"],
             dropIfAllMissing: ["First Name", "Last Name", "URL"],
             outputName: "Connections.xlsx",

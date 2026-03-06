@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import writeXlsxFile from "write-excel-file/browser";
 
 import { ExcelGenerator } from "../src/excel.js";
+
+vi.mock("write-excel-file/browser", () => ({
+    default: vi.fn(
+        async () =>
+            new Blob(["xlsx"], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            }),
+    ),
+}));
 
 describe("ExcelGenerator", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        writeXlsxFile.mockClear();
         vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:excel");
         vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
@@ -153,5 +164,41 @@ describe("ExcelGenerator", () => {
             rows: [[{ hyperlink: "https://example.com" }]],
         });
         expect(blob).toBeInstanceOf(Blob);
+    });
+
+    it("preserves numeric cells and writes hyperlink formulas into the workbook", async () => {
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Metrics",
+            headers: ["Name", "Messages", "Profile"],
+            rows: [
+                [
+                    "Ada",
+                    42,
+                    {
+                        value: "Ada profile",
+                        hyperlink: "https://linkedin.com/in/ada",
+                    },
+                ],
+            ],
+        });
+
+        expect(writeXlsxFile).toHaveBeenCalledTimes(1);
+
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        const messageCell = sheetData[1][1];
+        const profileCell = sheetData[1][2];
+
+        expect(messageCell).toEqual(
+            expect.objectContaining({
+                type: Number,
+                value: 42,
+            }),
+        );
+        expect(profileCell).toEqual(
+            expect.objectContaining({
+                type: "Formula",
+                value: 'HYPERLINK("https://linkedin.com/in/ada","Ada profile")',
+            }),
+        );
     });
 });

@@ -58,6 +58,33 @@ export const ExcelGenerator = (() => {
         return String(cell.value);
     }
 
+    function isFiniteNumber(value) {
+        return typeof value === "number" && Number.isFinite(value);
+    }
+
+    function getCellType(value) {
+        if (isFiniteNumber(value)) {
+            return Number;
+        }
+        if (typeof value === "boolean") {
+            return Boolean;
+        }
+        if (value instanceof Date && Number.isFinite(value.getTime())) {
+            return Date;
+        }
+        return String;
+    }
+
+    function normalizeCellValue(value, type) {
+        if (value === null || typeof value === "undefined") {
+            return "";
+        }
+        if (type === Number || type === Boolean || type === Date) {
+            return value;
+        }
+        return String(value);
+    }
+
     function clampWidth(width) {
         if (!Number.isFinite(width)) {
             return MIN_COLUMN_WIDTH;
@@ -141,9 +168,10 @@ export const ExcelGenerator = (() => {
 
     function createValueCell(cell, wrap) {
         const text = valueToText(cell);
+        const type = getCellType(cell.value);
         const baseCell = {
-            type: String,
-            value: text,
+            type,
+            value: normalizeCellValue(cell.value, type),
             alignVertical: "top",
             wrap,
             height: DATA_ROW_HEIGHT,
@@ -203,7 +231,7 @@ export const ExcelGenerator = (() => {
     function createSpecFromDataAndType(data, fileType) {
         const config = getConfig(fileType);
         const headers = config.columns.map((column) => column.name);
-        const rows = data.map((row) => headers.map((header) => row[header] || ""));
+        const rows = data.map((row) => headers.map((header) => row[header] ?? ""));
 
         const sheetNames = {
             shares: "Shares",

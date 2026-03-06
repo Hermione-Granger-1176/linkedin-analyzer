@@ -79,9 +79,10 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
 
         LOG.info("Validating columns")
         validate_columns(df, config.required_columns)
-        normalize_required_columns(df, config.required_columns)
-        if config.required_columns:
-            df = df.dropna(subset=config.required_columns)
+        required_row_columns = list(config.required_row_columns or config.required_columns)
+        normalize_required_columns(df, required_row_columns)
+        if required_row_columns:
+            df = df.dropna(subset=required_row_columns)
         drop_columns = [col for col in (config.drop_if_all_missing or []) if col in df.columns]
         if drop_columns:
             normalize_required_columns(df, drop_columns)

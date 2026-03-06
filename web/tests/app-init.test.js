@@ -5,6 +5,7 @@ import { AppRouter } from "../src/router.js";
 import { ScreenManager } from "../src/screen-manager.js";
 import { initSentry, setTelemetryConsent, telemetryConsentGranted } from "../src/sentry.js";
 import { Session } from "../src/session.js";
+import { initTelemetry } from "../src/telemetry.js";
 import { Tutorial } from "../src/tutorial.js";
 
 vi.mock("../src/analytics-ui.js", () => ({
@@ -152,6 +153,7 @@ describe("app init wiring", () => {
         vi.resetModules();
         await import("../src/app.js");
         expect(document.getElementById("telemetryBanner").hidden).toBe(false);
+        expect(initTelemetry).not.toHaveBeenCalled();
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });
@@ -164,6 +166,7 @@ describe("app init wiring", () => {
         vi.resetModules();
         await import("../src/app.js");
         expect(document.getElementById("telemetryBanner").hidden).toBe(true);
+        expect(initTelemetry).toHaveBeenCalled();
 
         telemetryConsentGranted.mockReturnValue(false);
         import.meta.env.VITE_SENTRY_DSN = original;
@@ -179,6 +182,7 @@ describe("app init wiring", () => {
         document.getElementById("telemetryEnableBtn").click();
         expect(setTelemetryConsent).toHaveBeenCalledWith(true);
         expect(initSentry).toHaveBeenCalled();
+        expect(initTelemetry).toHaveBeenCalled();
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });
@@ -194,5 +198,24 @@ describe("app init wiring", () => {
         expect(document.getElementById("telemetryBanner").hidden).toBe(true);
 
         import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("captures session cleanup failures without blocking bootstrap", async () => {
+        const cleanupError = new Error("cleanup failed");
+        const sentry = await import("../src/sentry.js");
+
+        Session.cleanIfStale.mockRejectedValueOnce(cleanupError);
+        vi.resetModules();
+        await import("../src/app.js");
+        await window.__linkedinAnalyzerSessionCleanupPromise;
+
+        expect(sentry.captureError).toHaveBeenCalledWith(
+            cleanupError,
+            expect.objectContaining({
+                module: "app",
+                operation: "session-cleanup",
+            }),
+        );
+        expect(AppRouter.start).toHaveBeenCalledWith("home");
     });
 });

@@ -55,7 +55,7 @@ jobs:
       - name: Build metadata
         id: image-meta
         run: |
-          echo "image=ghcr.io/${{ github.repository }}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
           echo "revision=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "source_url=https://github.com/${{ github.repository }}" >> "$GITHUB_OUTPUT"

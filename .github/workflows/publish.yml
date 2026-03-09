@@ -31,7 +31,7 @@ jobs:
           pip install dist/*.whl
           linkedin-analyzer --version
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@cd9f54aa2f37f504a2c46bb5b0d7e0c08b1b7b13 # v1
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
 
   publish-docker:
     needs: publish-pypi

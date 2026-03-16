@@ -10,9 +10,10 @@ import { LinkedInCleaner } from "./cleaner.js";
 export const ExcelGenerator = (() => {
     "use strict";
 
-    const HEADER_BACKGROUND = "rgba(232, 232, 232, 1)";
-    const HEADER_BORDER = "rgba(0, 0, 0, 1)";
-    const DATA_BORDER = "rgba(204, 204, 204, 1)";
+    // write-excel-file requires hex colors (throws if not "#" prefixed)
+    const HEADER_BACKGROUND = "#E8E8E8";
+    const HEADER_BORDER = "#000000";
+    const DATA_BORDER = "#CCCCCC";
     const HEADER_ROW_HEIGHT = 25;
     const DATA_ROW_HEIGHT = 20;
     const MIN_COLUMN_WIDTH = 10;
@@ -189,7 +190,7 @@ export const ExcelGenerator = (() => {
             ...baseCell,
             type: "Formula",
             value: `HYPERLINK("${escapedUrl}","${escapedText}")`,
-            textColor: "rgba(5, 99, 193, 1)",
+            textColor: "#0563C1",
             textDecoration: { underline: true },
         };
     }

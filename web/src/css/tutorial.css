@@ -62,7 +62,7 @@
 .tutorial-title {
     margin: 0 0 var(--space-sm);
     font-family: var(--font-hand-alt);
-    font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+    font-size: clamp(20px, 1.8vw, 26px);
     line-height: 1.1;
 }
 
@@ -137,7 +137,7 @@
     font-family: var(--font-hand);
     font-size: var(--font-size-sm);
     line-height: 1;
-    padding: 0.55rem 0.7rem;
+    padding: 9px 11px;
     cursor: pointer;
     transition:
         transform var(--transition-fast),
@@ -246,12 +246,12 @@
     display: block;
     margin-right: 24px;
     font-family: var(--font-hand-alt);
-    font-size: 1.1rem;
+    font-size: 18px;
     color: var(--text-primary);
 }
 
 .tutorial-mini-text {
-    margin: 0.2rem 0 0;
+    margin: 3px 0 0;
     font-family: var(--font-hand);
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
@@ -295,7 +295,7 @@
     display: grid;
     place-items: center;
     font-family: var(--font-hand-alt);
-    font-size: 2rem;
+    font-size: 32px;
     line-height: 1;
     transition:
         transform var(--transition-fast),
@@ -331,7 +331,7 @@
 @media (max-width: 700px) {
     .tutorial-popover {
         width: calc(100vw - 20px);
-        padding: 0.85rem;
+        padding: 14px;
     }
 
     .tutorial-footer {
@@ -363,7 +363,7 @@
         bottom: var(--space-md);
         width: 54px;
         height: 54px;
-        font-size: 1.8rem;
+        font-size: 29px;
     }
 }
 

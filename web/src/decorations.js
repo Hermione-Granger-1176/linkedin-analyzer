@@ -21,12 +21,12 @@ export function initDecorations() {
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const styles = getComputedStyle(document.documentElement);
     /* v8 ignore next 5 */
     const colors = {
-        blue: isDark ? "rgba(127, 179, 213, 0.15)" : "rgba(91, 155, 213, 0.1)",
-        yellow: isDark ? "rgba(247, 220, 111, 0.1)" : "rgba(244, 208, 63, 0.08)",
-        purple: isDark ? "rgba(187, 143, 206, 0.1)" : "rgba(155, 89, 182, 0.08)",
+        blue: styles.getPropertyValue("--decoration-blue").trim() || "rgba(46, 66, 209, 0.12)",
+        yellow: styles.getPropertyValue("--decoration-yellow").trim() || "rgba(251, 188, 5, 0.10)",
+        purple: styles.getPropertyValue("--decoration-purple").trim() || "rgba(202, 59, 226, 0.10)",
     };
 
     // Top-right decoration

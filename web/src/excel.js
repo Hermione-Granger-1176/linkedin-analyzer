@@ -10,6 +10,7 @@ import { LinkedInCleaner } from "./cleaner.js";
 export const ExcelGenerator = (() => {
     "use strict";
 
+    // write-excel-file requires hex colors (throws if not "#" prefixed)
     const HEADER_BACKGROUND = "#E8E8E8";
     const HEADER_BORDER = "#000000";
     const DATA_BORDER = "#CCCCCC";

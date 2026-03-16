@@ -128,7 +128,8 @@ describe("UploadPage", () => {
         });
         window.cancelIdleCallback = vi.fn();
         window.getComputedStyle = () => ({
-            getPropertyValue: (name) => (name === "--border-color" ? "#111" : "#a0a"),
+            getPropertyValue: (name) =>
+                name === "--border-color" ? "rgba(17, 17, 17, 1)" : "rgba(170, 0, 170, 1)",
         });
         mockMatchMedia(false);
     }

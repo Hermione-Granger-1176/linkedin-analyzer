@@ -54,20 +54,22 @@ export const SketchCharts = (() => {
     }
 
     /**
-     * Convert hex color string to RGB object.
-     * @param {string} hex - The hex color string (e.g. '#5a9bd5').
+     * Convert an rgb()/rgba() color string to an RGB object.
+     * @param {string} color - The CSS color string (e.g. 'rgba(46, 66, 209, 1)').
      * @returns {{r: number, g: number, b: number}}
      */
-    function hexToRgb(hex) {
-        const cleaned = hex.replace("#", "").trim();
+    function colorToRgb(color) {
+        const match = color.match(
+            /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:\d*\.?\d+))?\s*\)/i,
+        );
         /* v8 ignore next */
-        if (cleaned.length !== 6) {
-            return { r: 90, g: 150, b: 213 };
+        if (!match) {
+            return { r: 81, g: 147, b: 212 };
         }
         return {
-            r: parseInt(cleaned.slice(0, 2), 16),
-            g: parseInt(cleaned.slice(2, 4), 16),
-            b: parseInt(cleaned.slice(4, 6), 16),
+            r: Number.parseInt(match[1], 10),
+            g: Number.parseInt(match[2], 10),
+            b: Number.parseInt(match[3], 10),
         };
     }
 
@@ -433,7 +435,7 @@ export const SketchCharts = (() => {
         const cellHeight = chartHeight / 7;
         const flat = grid.flat();
         const maxValue = Math.max(...flat, 1);
-        const baseColor = hexToRgb(colors.blue);
+        const baseColor = colorToRgb(colors.blue);
 
         ctx.font = "11px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.textSecondary;

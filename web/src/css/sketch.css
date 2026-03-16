@@ -14,11 +14,21 @@
 }
 
 /* Randomize rotation for different elements */
-.drop-zone { --sketch-rotate: 0.3; }
-.upload-status-card { --sketch-rotate: -0.4; }
-.hub-card:nth-child(1) { --sketch-rotate: -0.2; }
-.hub-card:nth-child(2) { --sketch-rotate: 0.4; }
-.hub-card:nth-child(3) { --sketch-rotate: -0.3; }
+.drop-zone {
+    --sketch-rotate: 0.3;
+}
+.upload-status-card {
+    --sketch-rotate: -0.4;
+}
+.hub-card:nth-child(1) {
+    --sketch-rotate: -0.2;
+}
+.hub-card:nth-child(2) {
+    --sketch-rotate: 0.4;
+}
+.hub-card:nth-child(3) {
+    --sketch-rotate: -0.3;
+}
 
 /* Sketch-style focus ring */
 *:focus-visible {
@@ -26,6 +36,12 @@
     box-shadow:
         0 0 0 2px var(--bg-secondary),
         0 0 0 4px var(--accent-blue);
+}
+
+/* tabindex="-1" elements receive only programmatic focus (never keyboard-tabbed),
+   so suppress the visible ring — the .focus() call still fires for screen readers */
+[tabindex="-1"]:focus-visible {
+    box-shadow: none;
 }
 
 /* Imperfect circles for radio buttons */
@@ -83,14 +99,22 @@
             transparent 10px,
             transparent 20px
         );
-    background-size: 3px 100%, 100% 3px, 3px 100%, 100% 3px;
-    background-position: 0 0, 0 0, 100% 0, 0 100%;
+    background-size:
+        3px 100%,
+        100% 3px,
+        3px 100%,
+        100% 3px;
+    background-position:
+        0 0,
+        0 0,
+        100% 0,
+        0 100%;
     background-repeat: no-repeat;
     border: none;
 }
 
 .drop-zone::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: -3px;
     border: 3px dashed transparent;
@@ -100,9 +124,16 @@
 
 /* Hover wobble animation */
 @keyframes wobble {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(0.5deg); }
-    75% { transform: rotate(-0.5deg); }
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(0.5deg);
+    }
+    75% {
+        transform: rotate(-0.5deg);
+    }
 }
 
 .download-btn:hover,
@@ -116,7 +147,7 @@
 }
 
 .title::before {
-    content: '';
+    content: "";
     position: absolute;
     bottom: -8px;
     left: 50%;
@@ -137,7 +168,7 @@
 /* Tape effect for preview section - only show when visible */
 .preview-section:not([hidden])::before,
 .preview-section:not([hidden])::after {
-    content: '';
+    content: "";
     position: absolute;
     width: 60px;
     height: 24px;
@@ -186,7 +217,7 @@
 }
 
 .error-message::before {
-    content: '';
+    content: "";
     position: absolute;
     top: 0;
     left: 50%;

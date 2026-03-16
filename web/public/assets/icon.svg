@@ -2,55 +2,55 @@
   <defs>
     <!-- Parchment background with subtle warmth -->
     <radialGradient id="bg" cx="50%" cy="45%" r="55%">
-      <stop offset="0%" stop-color="#FDF6E3"/>
-      <stop offset="100%" stop-color="#F5EDD6"/>
+      <stop offset="0%" stop-color="rgba(250, 248, 243, 1)"/>
+      <stop offset="100%" stop-color="rgba(243, 241, 236, 1)"/>
     </radialGradient>
   </defs>
 
   <!-- Rounded-square background (slightly irregular for sketch feel) -->
   <rect x="4" y="4" width="120" height="120" rx="24" ry="26"
-        fill="url(#bg)" stroke="#4A4A4A" stroke-width="3"/>
+        fill="url(#bg)" stroke="rgba(68, 64, 60, 1)" stroke-width="3"/>
 
   <!-- Notebook ruled lines (faint) -->
-  <line x1="16" y1="40" x2="88" y2="41" stroke="#D5D5D5" stroke-width="1" stroke-linecap="round"/>
-  <line x1="16" y1="58" x2="88" y2="57" stroke="#D5D5D5" stroke-width="1" stroke-linecap="round"/>
-  <line x1="16" y1="75" x2="88" y2="76" stroke="#D5D5D5" stroke-width="1" stroke-linecap="round"/>
-  <line x1="16" y1="93" x2="88" y2="93" stroke="#D5D5D5" stroke-width="1" stroke-linecap="round"/>
+  <line x1="16" y1="40" x2="88" y2="41" stroke="rgba(214, 211, 209, 1)" stroke-width="1" stroke-linecap="round"/>
+  <line x1="16" y1="58" x2="88" y2="57" stroke="rgba(214, 211, 209, 1)" stroke-width="1" stroke-linecap="round"/>
+  <line x1="16" y1="75" x2="88" y2="76" stroke="rgba(214, 211, 209, 1)" stroke-width="1" stroke-linecap="round"/>
+  <line x1="16" y1="93" x2="88" y2="93" stroke="rgba(214, 211, 209, 1)" stroke-width="1" stroke-linecap="round"/>
 
   <!-- Hand-drawn bar chart (wobbly, organic strokes) -->
   <!-- Bar 1 - short blue -->
   <path d="M22 93 L22 72 Q22.5 70 25 70 L31 70.3 Q33 70.5 33 73 L33.2 93"
-        fill="#5B9BD5" stroke="#4A4A4A" stroke-width="2" stroke-linejoin="round"/>
+        fill="rgba(81, 147, 212, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
   <!-- Bar 2 - medium green -->
   <path d="M40 93.2 L39.8 55 Q40 53 42.5 52.8 L48.5 53 Q50.5 53.2 50.5 55.5 L50.2 93"
-        fill="#58D68D" stroke="#4A4A4A" stroke-width="2" stroke-linejoin="round"/>
+        fill="rgba(80, 196, 135, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
   <!-- Bar 3 - tall yellow -->
   <path d="M57.5 93 L57.2 40 Q57.5 38 60 37.8 L66 38.2 Q68 38.5 68 40.5 L67.8 93.2"
-        fill="#F4D03F" stroke="#4A4A4A" stroke-width="2" stroke-linejoin="round"/>
+        fill="rgba(234, 189, 48, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
   <!-- Bar 4 - tallest purple -->
   <path d="M75 93.2 L75.3 28 Q75.5 26 78 25.8 L84 26.2 Q86 26.5 85.8 29 L85.5 93"
-        fill="#9B59B6" stroke="#4A4A4A" stroke-width="2" stroke-linejoin="round"/>
+        fill="rgba(155, 91, 181, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
 
   <!-- Wobbly baseline -->
   <path d="M16 93.5 Q35 92.8 54 93.8 Q72 92.5 90 93.2"
-        fill="none" stroke="#4A4A4A" stroke-width="2.5" stroke-linecap="round"/>
+        fill="none" stroke="rgba(68, 64, 60, 1)" stroke-width="2.5" stroke-linecap="round"/>
 
   <!-- Hand-drawn trend line (pencil-sketch dashed) -->
   <path d="M24 78 Q38 65 52 52 Q66 40 82 28"
-        fill="none" stroke="#E74C3C" stroke-width="2.5" stroke-linecap="round"
+        fill="none" stroke="rgba(217, 83, 79, 1)" stroke-width="2.5" stroke-linecap="round"
         stroke-dasharray="5 4" opacity="0.85"/>
 
   <!-- Magnifying glass (bold, hand-drawn) -->
-  <circle cx="92" cy="44" r="22" fill="rgba(253,246,227,0.7)"
-          stroke="#4A4A4A" stroke-width="3.5"/>
+  <circle cx="92" cy="44" r="22" fill="rgba(255, 255, 252, 0.72)"
+          stroke="rgba(68, 64, 60, 1)" stroke-width="3.5"/>
   <!-- Glass shine -->
-  <path d="M82 36 Q86 30 94 32" fill="none" stroke="#fff" stroke-width="2.5"
+  <path d="M82 36 Q86 30 94 32" fill="none" stroke="rgba(255, 255, 255, 1)" stroke-width="2.5"
         stroke-linecap="round" opacity="0.6"/>
   <!-- Handle -->
   <path d="M108 60 L120 74 Q122 77 119 79 L117 77 Q116 75 117 73 L106 60"
-        fill="#F4D03F" stroke="#4A4A4A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        fill="rgba(234, 189, 48, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 
   <!-- Small "in" text inside glass (referencing LinkedIn) -->
   <text x="87" y="50" font-family="serif" font-weight="bold"
-        font-size="18" fill="#5B9BD5" opacity="0.7">in</text>
+        font-size="18" fill="rgba(81, 147, 212, 0.72)">in</text>
 </svg>

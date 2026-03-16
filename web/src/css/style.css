@@ -18,7 +18,7 @@ body {
     font-family: var(--font-hand);
     font-size: var(--font-size-base);
     line-height: 1.7;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.16px;
     color: var(--text-primary);
     background-color: var(--bg-primary);
     transition:
@@ -239,7 +239,7 @@ button {
 }
 
 .screen-header .title {
-    font-size: clamp(1.8rem, 3vw + 0.8rem, 3.2rem);
+    font-size: clamp(29px, 3vw + 13px, 51px);
     justify-content: flex-start;
 }
 
@@ -263,7 +263,7 @@ button {
 
 .header-text .subtitle {
     text-align: left;
-    font-size: clamp(1rem, 1.4vw + 0.4rem, 1.35rem);
+    font-size: clamp(16px, 1.4vw + 6px, 22px);
 }
 
 .screen-header--center .title,
@@ -297,7 +297,7 @@ button {
 
 .primary-btn:hover:not(:disabled) {
     background: var(--accent-blue);
-    color: white;
+    color: var(--text-on-accent);
     transform: translateY(-2px);
 }
 
@@ -804,7 +804,7 @@ button {
 
 .download-btn:hover:not(:disabled) {
     background: var(--accent-green);
-    color: white;
+    color: var(--text-on-accent);
     transform: translateY(-3px);
     box-shadow: var(--shadow-lg);
 }
@@ -831,8 +831,8 @@ button {
 
 .reset-btn:hover {
     border-color: var(--accent-red);
-    color: white;
-    background: color-mix(in srgb, var(--accent-red) 88%, #ffffff 12%);
+    color: var(--text-on-accent);
+    background: var(--accent-red);
 }
 
 .reset-icon {
@@ -891,8 +891,8 @@ button {
 
 .filters-bar .ghost-btn:hover {
     border-color: var(--accent-red);
-    color: white;
-    background: color-mix(in srgb, var(--accent-red) 88%, #ffffff 12%);
+    color: var(--text-on-accent);
+    background: var(--accent-red);
 }
 
 .filter-group {
@@ -906,7 +906,7 @@ button {
     font-size: var(--font-size-sm);
     color: var(--filter-label-text);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 1.12px;
 }
 
 .filter-buttons {
@@ -1434,23 +1434,18 @@ button {
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(
-        90deg,
-        transparent,
-        color-mix(in srgb, white 45%, transparent),
-        transparent
-    );
+    background: linear-gradient(90deg, transparent, var(--shimmer-highlight), transparent);
     animation: skeleton-shimmer 1.2s ease-in-out infinite;
 }
 
 .skeleton-title {
     width: min(180px, 62%);
-    height: 1.15rem;
+    height: 18px;
 }
 
 .skeleton-meta {
     width: min(230px, 84%);
-    height: 0.85rem;
+    height: 14px;
     margin-top: var(--space-xs);
 }
 
@@ -1464,7 +1459,7 @@ button {
 
 .skeleton-value {
     width: 72px;
-    height: 1.5rem;
+    height: 24px;
 }
 
 .skeleton-icon {
@@ -1567,7 +1562,7 @@ button {
     font-size: var(--font-size-lg);
     color: var(--text-primary);
     font-weight: 600;
-    min-height: 1.4em;
+    min-height: 28px;
 }
 
 @keyframes gear-spin {

@@ -203,7 +203,7 @@ Browsers pick the best format automatically:
 
 ### Theme Color
 
-Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the browser chrome to match the light (`#FDF6E3`) or dark (`#1A1A2E`) theme.
+Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the browser chrome to match the light (`rgba(250, 248, 243, 1)`) or dark (`rgba(28, 25, 23, 1)`) theme.
 
 ### robots.txt
 

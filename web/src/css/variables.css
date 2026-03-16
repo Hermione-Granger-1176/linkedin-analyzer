@@ -19,10 +19,10 @@
 }
 
 :root {
-    /* Light Theme (Default) */
-    --bg-primary: rgba(250, 248, 243, 1);
-    --bg-secondary: rgba(255, 255, 252, 1);
-    --bg-tertiary: rgba(243, 241, 236, 1);
+    /* Light Theme (Default) — bright, warm, colorful */
+    --bg-primary: rgba(255, 253, 247, 1);
+    --bg-secondary: rgba(255, 255, 255, 1);
+    --bg-tertiary: rgba(255, 248, 230, 1);
     --text-primary: rgba(28, 25, 23, 1);
     --text-secondary: rgba(87, 83, 78, 1);
     --text-muted: rgba(168, 162, 158, 1);
@@ -30,46 +30,46 @@
     --border-color: rgba(68, 64, 60, 1);
     --border-light: rgba(214, 211, 209, 1);
 
-    /* Accent Colors */
-    --accent-blue: rgba(81, 147, 212, 1);
-    --accent-blue-contrast: rgba(45, 102, 152, 1);
-    --accent-blue-light: rgba(176, 210, 238, 1);
-    --accent-blue-bg: rgba(81, 147, 212, 0.1);
+    /* Accent Colors — vibrant Google Doodles palette */
+    --accent-blue: rgba(46, 66, 209, 1);
+    --accent-blue-contrast: rgba(30, 48, 160, 1);
+    --accent-blue-light: rgba(200, 215, 248, 1);
+    --accent-blue-bg: rgba(46, 66, 209, 0.08);
 
-    --accent-yellow: rgba(234, 189, 48, 1);
-    --accent-yellow-light: rgba(250, 240, 200, 1);
-    --accent-yellow-bg: rgba(234, 189, 48, 0.15);
+    --accent-yellow: rgba(251, 188, 5, 1);
+    --accent-yellow-light: rgba(255, 245, 200, 1);
+    --accent-yellow-bg: rgba(251, 188, 5, 0.15);
 
-    --accent-red: rgba(217, 83, 79, 1);
-    --accent-red-contrast: rgba(139, 48, 44, 1);
-    --accent-red-light: rgba(245, 213, 211, 1);
-    --accent-red-bg: rgba(217, 83, 79, 0.1);
+    --accent-red: rgba(249, 74, 54, 1);
+    --accent-red-contrast: rgba(180, 40, 30, 1);
+    --accent-red-light: rgba(254, 215, 210, 1);
+    --accent-red-bg: rgba(249, 74, 54, 0.1);
 
     /* Filter controls */
     --filter-bar-text: rgba(53, 47, 43, 1);
     --filter-label-text: rgba(68, 64, 60, 1);
-    --filter-btn-bg: rgba(240, 236, 228, 1);
+    --filter-btn-bg: rgba(245, 240, 228, 1);
     --filter-btn-text: rgba(87, 83, 78, 1);
-    --filter-btn-active-border: rgba(81, 147, 212, 1);
-    --filter-btn-active-bg: rgba(224, 237, 247, 1);
-    --filter-btn-active-text: rgba(45, 102, 152, 1);
-    --filter-danger-border: rgba(196, 100, 90, 1);
-    --filter-danger-bg: rgba(245, 221, 217, 1);
-    --filter-danger-text: rgba(139, 48, 44, 1);
+    --filter-btn-active-border: rgba(46, 66, 209, 1);
+    --filter-btn-active-bg: rgba(220, 226, 250, 1);
+    --filter-btn-active-text: rgba(30, 48, 160, 1);
+    --filter-danger-border: rgba(249, 74, 54, 1);
+    --filter-danger-bg: rgba(254, 225, 220, 1);
+    --filter-danger-text: rgba(180, 40, 30, 1);
 
-    --accent-green: rgba(80, 196, 135, 1);
-    --accent-green-light: rgba(209, 240, 224, 1);
-    --accent-green-bg: rgba(80, 196, 135, 0.15);
+    --accent-green: rgba(41, 181, 113, 1);
+    --accent-green-light: rgba(200, 240, 220, 1);
+    --accent-green-bg: rgba(41, 181, 113, 0.15);
 
-    --accent-purple: rgba(155, 91, 181, 1);
-    --accent-purple-light: rgba(229, 216, 238, 1);
-    --accent-purple-bg: rgba(155, 91, 181, 0.1);
+    --accent-purple: rgba(202, 59, 226, 1);
+    --accent-purple-light: rgba(240, 210, 248, 1);
+    --accent-purple-bg: rgba(202, 59, 226, 0.1);
 
     --text-on-accent: rgba(255, 255, 255, 1);
     --shimmer-highlight: rgba(255, 255, 255, 0.45);
-    --decoration-blue: rgba(81, 147, 212, 0.1);
-    --decoration-yellow: rgba(234, 189, 48, 0.08);
-    --decoration-purple: rgba(155, 91, 181, 0.08);
+    --decoration-blue: rgba(46, 66, 209, 0.12);
+    --decoration-yellow: rgba(251, 188, 5, 0.1);
+    --decoration-purple: rgba(202, 59, 226, 0.1);
 
     /* Shadows */
     --shadow-sm: 2px 2px 0 rgba(28, 25, 23, 0.08);

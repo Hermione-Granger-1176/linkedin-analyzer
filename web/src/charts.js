@@ -55,7 +55,7 @@ export const SketchCharts = (() => {
 
     /**
      * Convert an rgb()/rgba() color string to an RGB object.
-     * @param {string} color - The CSS color string (e.g. 'rgba(81, 147, 212, 1)').
+     * @param {string} color - The CSS color string (e.g. 'rgba(46, 66, 209, 1)').
      * @returns {{r: number, g: number, b: number}}
      */
     function colorToRgb(color) {

@@ -24,9 +24,9 @@ export function initDecorations() {
     const styles = getComputedStyle(document.documentElement);
     /* v8 ignore next 5 */
     const colors = {
-        blue: styles.getPropertyValue("--decoration-blue").trim() || "rgba(81, 147, 212, 0.1)",
-        yellow: styles.getPropertyValue("--decoration-yellow").trim() || "rgba(234, 189, 48, 0.08)",
-        purple: styles.getPropertyValue("--decoration-purple").trim() || "rgba(155, 91, 181, 0.08)",
+        blue: styles.getPropertyValue("--decoration-blue").trim() || "rgba(46, 66, 209, 0.12)",
+        yellow: styles.getPropertyValue("--decoration-yellow").trim() || "rgba(251, 188, 5, 0.10)",
+        purple: styles.getPropertyValue("--decoration-purple").trim() || "rgba(202, 59, 226, 0.10)",
     };
 
     // Top-right decoration

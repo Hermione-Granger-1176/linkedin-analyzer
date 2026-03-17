@@ -19,9 +19,9 @@
 }
 
 :root {
-    /* Light Theme (Default) — bright, warm, colorful */
+    /* Light Theme (Default) — warm, doodly, marker-on-paper */
     --bg-primary: rgba(255, 253, 247, 1);
-    --bg-secondary: rgba(255, 255, 255, 1);
+    --bg-secondary: rgba(253, 250, 245, 1);
     --bg-tertiary: rgba(255, 248, 230, 1);
     --text-primary: rgba(28, 25, 23, 1);
     --text-secondary: rgba(87, 83, 78, 1);
@@ -30,11 +30,11 @@
     --border-color: rgba(68, 64, 60, 1);
     --border-light: rgba(214, 211, 209, 1);
 
-    /* Accent Colors — vibrant Google Doodles palette */
-    --accent-blue: rgba(46, 66, 209, 1);
-    --accent-blue-contrast: rgba(30, 48, 160, 1);
-    --accent-blue-light: rgba(200, 215, 248, 1);
-    --accent-blue-bg: rgba(46, 66, 209, 0.08);
+    /* Accent Colors — doodle marker palette */
+    --accent-blue: rgba(66, 133, 244, 1);
+    --accent-blue-contrast: rgba(30, 82, 175, 1);
+    --accent-blue-light: rgba(210, 227, 252, 1);
+    --accent-blue-bg: rgba(66, 133, 244, 0.08);
 
     --accent-yellow: rgba(251, 188, 5, 1);
     --accent-yellow-light: rgba(255, 245, 200, 1);
@@ -50,9 +50,9 @@
     --filter-label-text: rgba(68, 64, 60, 1);
     --filter-btn-bg: rgba(245, 240, 228, 1);
     --filter-btn-text: rgba(87, 83, 78, 1);
-    --filter-btn-active-border: rgba(46, 66, 209, 1);
-    --filter-btn-active-bg: rgba(220, 226, 250, 1);
-    --filter-btn-active-text: rgba(30, 48, 160, 1);
+    --filter-btn-active-border: rgba(66, 133, 244, 1);
+    --filter-btn-active-bg: rgba(220, 232, 252, 1);
+    --filter-btn-active-text: rgba(30, 82, 175, 1);
     --filter-danger-border: rgba(249, 74, 54, 1);
     --filter-danger-bg: rgba(254, 225, 220, 1);
     --filter-danger-text: rgba(180, 40, 30, 1);
@@ -61,20 +61,20 @@
     --accent-green-light: rgba(200, 240, 220, 1);
     --accent-green-bg: rgba(41, 181, 113, 0.15);
 
-    --accent-purple: rgba(202, 59, 226, 1);
-    --accent-purple-light: rgba(240, 210, 248, 1);
-    --accent-purple-bg: rgba(202, 59, 226, 0.1);
+    --accent-purple: rgba(155, 81, 224, 1);
+    --accent-purple-light: rgba(232, 218, 246, 1);
+    --accent-purple-bg: rgba(155, 81, 224, 0.1);
 
     --text-on-accent: rgba(255, 255, 255, 1);
     --shimmer-highlight: rgba(255, 255, 255, 0.45);
-    --decoration-blue: rgba(46, 66, 209, 0.12);
+    --decoration-blue: rgba(66, 133, 244, 0.12);
     --decoration-yellow: rgba(251, 188, 5, 0.1);
-    --decoration-purple: rgba(202, 59, 226, 0.1);
+    --decoration-purple: rgba(155, 81, 224, 0.1);
 
-    /* Shadows */
-    --shadow-sm: 2px 2px 0 rgba(28, 25, 23, 0.08);
-    --shadow-md: 4px 4px 0 rgba(28, 25, 23, 0.08);
-    --shadow-lg: 6px 6px 0 rgba(28, 25, 23, 0.12);
+    /* Shadows — warm brown pencil-on-paper feel */
+    --shadow-sm: 2px 2px 0 rgba(87, 65, 47, 0.08);
+    --shadow-md: 4px 4px 0 rgba(87, 65, 47, 0.08);
+    --shadow-lg: 6px 6px 0 rgba(87, 65, 47, 0.12);
 
     /* Grid background */
     --grid-color: rgba(28, 25, 23, 0.03);
@@ -90,20 +90,20 @@
 /* Dark Theme */
 [data-theme="dark"] {
     --bg-primary: rgba(28, 25, 23, 1);
-    --bg-secondary: rgba(41, 37, 36, 1);
+    --bg-secondary: rgba(48, 43, 40, 1);
     --bg-tertiary: rgba(68, 64, 60, 1);
     --text-primary: rgba(231, 229, 228, 1);
     --text-secondary: rgba(168, 162, 158, 1);
     --text-muted: rgba(120, 113, 108, 1);
     --text-secondary-strong: rgba(214, 211, 209, 1);
-    --border-color: rgba(168, 162, 158, 1);
+    --border-color: rgba(156, 142, 130, 1);
     --border-light: rgba(87, 83, 78, 1);
 
-    /* Softer accent colors for dark mode */
-    --accent-blue: rgba(109, 173, 228, 1);
-    --accent-blue-contrast: rgba(161, 206, 240, 1);
-    --accent-blue-light: rgba(45, 74, 94, 1);
-    --accent-blue-bg: rgba(109, 173, 228, 0.15);
+    /* Softer accent colors — marker under warm light */
+    --accent-blue: rgba(124, 196, 250, 1);
+    --accent-blue-contrast: rgba(165, 216, 255, 1);
+    --accent-blue-light: rgba(40, 68, 92, 1);
+    --accent-blue-bg: rgba(124, 196, 250, 0.15);
 
     --accent-yellow: rgba(240, 206, 82, 1);
     --accent-yellow-light: rgba(74, 68, 40, 1);
@@ -119,31 +119,31 @@
     --filter-label-text: rgba(231, 229, 228, 1);
     --filter-btn-bg: rgba(68, 64, 60, 1);
     --filter-btn-text: rgba(231, 229, 228, 1);
-    --filter-btn-active-border: rgba(109, 173, 228, 1);
-    --filter-btn-active-bg: rgba(45, 74, 94, 1);
+    --filter-btn-active-border: rgba(124, 196, 250, 1);
+    --filter-btn-active-bg: rgba(40, 68, 92, 1);
     --filter-btn-active-text: rgba(231, 229, 228, 1);
     --filter-danger-border: rgba(232, 162, 158, 1);
     --filter-danger-bg: rgba(74, 43, 42, 1);
     --filter-danger-text: rgba(245, 224, 222, 1);
 
-    --accent-green: rgba(109, 200, 154, 1);
+    --accent-green: rgba(114, 212, 163, 1);
     --accent-green-light: rgba(30, 77, 45, 1);
-    --accent-green-bg: rgba(109, 200, 154, 0.15);
+    --accent-green-bg: rgba(114, 212, 163, 0.15);
 
-    --accent-purple: rgba(184, 143, 204, 1);
-    --accent-purple-light: rgba(61, 40, 80, 1);
-    --accent-purple-bg: rgba(184, 143, 204, 0.15);
+    --accent-purple: rgba(197, 156, 219, 1);
+    --accent-purple-light: rgba(58, 38, 75, 1);
+    --accent-purple-bg: rgba(197, 156, 219, 0.15);
 
     --text-on-accent: rgba(255, 255, 255, 1);
     --shimmer-highlight: rgba(231, 229, 228, 0.28);
-    --decoration-blue: rgba(109, 173, 228, 0.15);
+    --decoration-blue: rgba(124, 196, 250, 0.15);
     --decoration-yellow: rgba(240, 206, 82, 0.1);
-    --decoration-purple: rgba(184, 143, 204, 0.1);
+    --decoration-purple: rgba(197, 156, 219, 0.1);
 
-    /* Shadows for dark mode */
-    --shadow-sm: 2px 2px 0 rgba(0, 0, 0, 0.25);
-    --shadow-md: 4px 4px 0 rgba(0, 0, 0, 0.25);
-    --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.35);
+    /* Shadows — warm near-black, slightly stronger */
+    --shadow-sm: 2px 2px 0 rgba(10, 8, 6, 0.35);
+    --shadow-md: 4px 4px 0 rgba(10, 8, 6, 0.35);
+    --shadow-lg: 6px 6px 0 rgba(10, 8, 6, 0.45);
 
     /* Grid background */
     --grid-color: rgba(231, 229, 228, 0.03);

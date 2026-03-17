@@ -32,7 +32,7 @@
 
     /* Accent Colors — doodle marker palette */
     --accent-blue: rgba(66, 133, 244, 1);
-    --accent-blue-contrast: rgba(44, 101, 201, 1);
+    --accent-blue-contrast: rgba(30, 82, 175, 1);
     --accent-blue-light: rgba(210, 227, 252, 1);
     --accent-blue-bg: rgba(66, 133, 244, 0.08);
 
@@ -52,7 +52,7 @@
     --filter-btn-text: rgba(87, 83, 78, 1);
     --filter-btn-active-border: rgba(66, 133, 244, 1);
     --filter-btn-active-bg: rgba(220, 232, 252, 1);
-    --filter-btn-active-text: rgba(44, 101, 201, 1);
+    --filter-btn-active-text: rgba(30, 82, 175, 1);
     --filter-danger-border: rgba(249, 74, 54, 1);
     --filter-danger-bg: rgba(254, 225, 220, 1);
     --filter-danger-text: rgba(180, 40, 30, 1);

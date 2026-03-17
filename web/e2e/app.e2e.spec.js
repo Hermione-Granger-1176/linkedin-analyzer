@@ -117,6 +117,7 @@ test("analytics screen has no critical accessibility violations", async ({ page 
     await expect(page).toHaveURL(/#analytics/);
     await expect(page.getByTestId("analytics-grid")).toBeVisible();
     await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 5000 });
+    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState === "finished"));
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 

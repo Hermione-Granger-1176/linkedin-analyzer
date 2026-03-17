@@ -20,7 +20,7 @@
   <!-- Hand-drawn bar chart (wobbly, organic strokes) -->
   <!-- Bar 1 - short blue -->
   <path d="M22 93 L22 72 Q22.5 70 25 70 L31 70.3 Q33 70.5 33 73 L33.2 93"
-        fill="rgba(66, 133, 244, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
+        fill="rgba(46, 66, 209, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
   <!-- Bar 2 - medium green -->
   <path d="M40 93.2 L39.8 55 Q40 53 42.5 52.8 L48.5 53 Q50.5 53.2 50.5 55.5 L50.2 93"
         fill="rgba(41, 181, 113, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
@@ -29,7 +29,7 @@
         fill="rgba(251, 188, 5, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
   <!-- Bar 4 - tallest purple -->
   <path d="M75 93.2 L75.3 28 Q75.5 26 78 25.8 L84 26.2 Q86 26.5 85.8 29 L85.5 93"
-        fill="rgba(155, 81, 224, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
+        fill="rgba(202, 59, 226, 1)" stroke="rgba(68, 64, 60, 1)" stroke-width="2" stroke-linejoin="round"/>
 
   <!-- Wobbly baseline -->
   <path d="M16 93.5 Q35 92.8 54 93.8 Q72 92.5 90 93.2"
@@ -52,5 +52,5 @@
 
   <!-- Small "in" text inside glass (referencing LinkedIn) -->
   <text x="87" y="50" font-family="serif" font-weight="bold"
-        font-size="18" fill="rgba(66, 133, 244, 0.72)">in</text>
+        font-size="18" fill="rgba(46, 66, 209, 0.72)">in</text>
 </svg>

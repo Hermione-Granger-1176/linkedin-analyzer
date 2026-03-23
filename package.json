@@ -41,7 +41,7 @@
     "serialize-javascript": "^7.0.3"
   },
   "dependencies": {
-    "@sentry/browser": "^10.43.0",
+    "@sentry/browser": "^10.45.0",
     "roughjs": "^4.6.6",
     "web-vitals": "^5.1.0",
     "write-excel-file": "^3.0.6"

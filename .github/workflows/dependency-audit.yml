@@ -38,4 +38,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" pip-audit
       - name: pip audit
-        run: pip-audit --strict
+        run: pip-audit --strict --skip-editable

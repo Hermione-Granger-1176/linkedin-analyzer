@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   npm-audit:
     runs-on: ubuntu-latest
@@ -23,6 +27,8 @@ jobs:
         run: npm ci
       - name: npm audit
         run: npm audit --audit-level=high
+      - name: Check if npm overrides are still needed
+        run: npm run check:overrides
 
   pip-audit:
     runs-on: ubuntu-latest

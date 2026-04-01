@@ -77,11 +77,15 @@ linkedin-analyzer/
 │
 ├── tests/                              # Python tests
 ├── docs/                               # Documentation
+│   └── adr/                            # Architecture Decision Records
+├── scripts/
+│   └── check-overrides.js              # Validates npm overrides are still needed
 ├── data/
 │   ├── input/                          # Place CSVs here
 │   └── output/                         # Generated Excel files
 │
-├── .github/workflows/ci.yml            # GitHub Actions
+├── .github/workflows/ci.yml            # CI (lint + test + build)
+├── .github/workflows/dependency-audit.yml  # Weekly security + override staleness
 ├── vercel.json                         # Vercel config
 ├── package.json                        # NPM config
 ├── pyproject.toml                      # Python config

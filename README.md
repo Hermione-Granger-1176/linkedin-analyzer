@@ -123,6 +123,8 @@ See the [`docs/`](docs/) folder for:
 - [Style Guide](docs/style-guide.md)
 - [Operations and Deployment](docs/operations.md)
 
+Architecture Decision Records: [`docs/adr/`](docs/adr/)
+
 Security reporting guidelines: [SECURITY.md](SECURITY.md)
 
 <br>

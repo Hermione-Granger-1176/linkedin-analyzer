@@ -75,6 +75,11 @@ GitHub Actions runs on pull requests and pushes to `main`:
 
 See `.github/workflows/ci.yml`.
 
+A weekly `dependency-audit.yml` workflow also runs every Monday:
+
+- `npm audit` and `pip-audit` for security vulnerabilities
+- `npm run check:overrides` to flag npm overrides that are no longer needed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
+
 ## Code Style
 
 ### Python

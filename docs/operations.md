@@ -39,6 +39,7 @@
 - CI actions are SHA-pinned.
 - Dependency review runs on pull requests.
 - Scheduled dependency audits run weekly for npm and pip.
+- Weekly override staleness check flags npm overrides that can be removed (`npm run check:overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
 
 ## CLI Environment Variables

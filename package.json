@@ -48,7 +48,7 @@
     "@sentry/browser": "^10.51.0",
     "roughjs": "^4.6.6",
     "web-vitals": "^5.2.0",
-    "write-excel-file": "^3.0.8"
+    "write-excel-file": "^4.0.5"
   },
   "size-limit": [
     {

@@ -4,12 +4,14 @@ import writeXlsxFile from "write-excel-file/browser";
 import { ExcelGenerator } from "../src/excel.js";
 
 vi.mock("write-excel-file/browser", () => ({
-    default: vi.fn(
-        async () =>
-            new Blob(["xlsx"], {
-                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            }),
-    ),
+    default: vi.fn(() => ({
+        toBlob: vi.fn(
+            async () =>
+                new Blob(["xlsx"], {
+                    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                }),
+        ),
+    })),
 }));
 
 describe("ExcelGenerator", () => {
@@ -200,5 +202,27 @@ describe("ExcelGenerator", () => {
                 value: 'HYPERLINK("https://linkedin.com/in/ada","Ada profile")',
             }),
         );
+    });
+
+    it("uses write-excel-file v4 browser workbook options", async () => {
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Metrics",
+            headers: ["Name"],
+            rows: [["Ada"]],
+            columnWidths: [16],
+        });
+
+        expect(writeXlsxFile).toHaveBeenCalledWith(
+            expect.any(Array),
+            {
+                sheet: "Metrics",
+                columns: [{ width: 16 }],
+            },
+            {
+                fontFamily: "Calibri",
+                fontSize: 11,
+            },
+        );
+        expect(writeXlsxFile.mock.results[0].value.toBlob).toHaveBeenCalledOnce();
     });
 });

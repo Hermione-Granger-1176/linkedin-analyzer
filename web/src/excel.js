@@ -203,6 +203,20 @@ export const ExcelGenerator = (() => {
         return [headerRow, ...dataRows];
     }
 
+    function createSheetOptions(spec) {
+        return {
+            sheet: spec.sheetName,
+            columns: spec.columnWidths.map((width) => ({ width })),
+        };
+    }
+
+    function createWorkbookOptions() {
+        return {
+            fontFamily: "Calibri",
+            fontSize: 11,
+        };
+    }
+
     async function generateFromSpec(spec) {
         const normalizedSpec = normalizeSpec(spec);
         const data = createSheetData(
@@ -210,13 +224,13 @@ export const ExcelGenerator = (() => {
             normalizedSpec.rows,
             normalizedSpec.wrapColumns,
         );
+        const workbook = writeXlsxFile(
+            data,
+            createSheetOptions(normalizedSpec),
+            createWorkbookOptions(),
+        );
 
-        return writeXlsxFile(data, {
-            sheet: normalizedSpec.sheetName,
-            columns: normalizedSpec.columnWidths.map((width) => ({ width })),
-            fontFamily: "Calibri",
-            fontSize: 11,
-        });
+        return workbook.toBlob();
     }
 
     async function downloadFromSpec(spec, filename) {

@@ -92,7 +92,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Test Python compatibility
-        run: python -m pytest tests/ -v
+        run: make test-py
 
   node-compatibility:
     name: Node.js ${{ matrix.node-version }}

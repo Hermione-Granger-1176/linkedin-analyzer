@@ -12,9 +12,8 @@ PY_PATHS            := src/ tests/ scripts/ci/
 PY_SRC              := src/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
 
-REPO ?= $(strip $(shell repo="$$(git remote get-url origin 2>/dev/null | sed -nE 's|.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$$|\1|p')"; \
-	if [ -z "$$repo" ]; then repo="$$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)"; fi; \
-	printf '%s' "$$repo"))
+REPO ?=
+RESOLVE_REPO = repo="$(REPO)"; if [ -z "$$repo" ]; then repo="$$(git remote get-url origin 2>/dev/null | sed -nE 's|.*github\.com[:/]([^/]+/[^/.]+)(\.git)?$$|\1|p')"; fi; if [ -z "$$repo" ]; then repo="$$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)"; fi; printf '%s' "$$repo"
 
 # ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -267,14 +266,17 @@ pr-comment: ## Add a comment to the current PR (make pr-comment body="msg")
 
 pr-review-comments: ## List review threads with resolution status (make pr-review-comments pr_num=N)
 	@test -n "$(pr_num)" || (printf 'Usage: make pr-review-comments pr_num=19\n' >&2; exit 1)
-	@printf '%s\n' "$(REPO)" | grep -Eq '^[^/]+/[^/]+$$' || (printf 'Error: REPO must be set to owner/name (e.g. REPO=octocat/Hello-World)\n' >&2; exit 1)
-	@owner=$$(echo "$(REPO)" | cut -d/ -f1) && \
-	 name=$$(echo "$(REPO)" | cut -d/ -f2) && \
+	@repo="$$( $(RESOLVE_REPO) )"; \
+	 printf '%s\n' "$$repo" | grep -Eq '^[^/]+/[^/]+$$' || (printf 'Error: REPO must be set to owner/name (e.g. REPO=octocat/Hello-World)\n' >&2; exit 1); \
+	 owner=$$(echo "$$repo" | cut -d/ -f1) && \
+	 name=$$(echo "$$repo" | cut -d/ -f2) && \
 	 gh api graphql -F pr_num:='$(pr_num)' -F owner="$$owner" -F name="$$name" -f query='query($$pr_num: Int!, $$owner: String!, $$name: String!) { repository(owner: $$owner, name: $$name) { pullRequest(number: $$pr_num) { reviewThreads(first: 50) { nodes { id isResolved comments(first: 10) { nodes { body author { login } createdAt } } } } } } }'
 
 pr-reply: ## Reply to a review comment (make pr-reply pr_num=N comment=ID body="msg")
 	@test -n "$(pr_num)" -a -n "$(comment)" -a -n "$(body)" || (printf 'Usage: make pr-reply pr_num=19 comment=123456 body="Fixed"\n' >&2; exit 1)
-	@gh api repos/$(REPO)/pulls/$(pr_num)/comments/$(comment)/replies -f body="$(body)"
+	@repo="$$( $(RESOLVE_REPO) )"; \
+	 printf '%s\n' "$$repo" | grep -Eq '^[^/]+/[^/]+$$' || (printf 'Error: REPO must be set to owner/name (e.g. REPO=octocat/Hello-World)\n' >&2; exit 1); \
+	 gh api repos/"$$repo"/pulls/$(pr_num)/comments/$(comment)/replies -f body="$(body)"
 
 pr-resolve: ## Resolve a review thread (make pr-resolve thread=PRRT_...)
 	@test -n "$(thread)" || (printf 'Usage: make pr-resolve thread=PRRT_kwDO...\n' >&2; exit 1)

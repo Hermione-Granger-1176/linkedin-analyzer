@@ -4,81 +4,98 @@
 
 - Python 3.11+
 - Node.js 20.19+ (or 22.13+, or 24+)
+- uv
 
-## Web App
+## Initial setup
 
 ```bash
-# Install dependencies
-npm install
+# Install locked Python deps into .venv and Node deps into node_modules
+make setup
 
 # Optional: make diagnostics available in local/dev builds
 cp .env.example .env
 # Set VITE_SENTRY_DSN in .env when needed (still requires in-app opt-in)
+```
 
+Python dependencies are declared in `pyproject.toml` and resolved in `uv.lock`. The local
+environment remains `.venv`; uv creates and syncs it from the lockfile.
+
+Refresh `uv.lock` after Python dependency changes:
+
+```bash
+make lock
+```
+
+## Web App
+
+```bash
 # Start dev server
-npm run dev
+make web
 
 # Run tests
-npm run test
+make test-js
 
 # Install browser for E2E (one-time)
-npm run test:e2e:install
+make setup-all
 
-# Linux only: install Playwright system deps (requires sudo)
-npx playwright install-deps chromium firefox
+# CI/Linux setup with Playwright system deps
+make setup-ci
 
 # Run browser E2E tests
-npm run test:e2e
+make test-e2e
 
 # Lint
-npm run lint
+make lint-js
 
 # Type-check JavaScript with checkJs
-npm run typecheck:web
+make typecheck-web
 
 # Format check (docs/config files)
-npm run format:check
+make format-js-check
 ```
 
 ## Python CLI
 
 ```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# Install or refresh the .venv from uv.lock
+make install
 
-# Install with dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest
+# Run Python tests
+make test-py
 
 # With coverage
-pytest --cov=linkedin_analyzer --cov-report=html
+uv run pytest --cov=linkedin_analyzer --cov-report=html
 
-# Type checking
-mypy src/linkedin_analyzer
+# Python type checking
+make typecheck-py
 
-# Lint
-ruff check src tests
+# Python lint
+make lint-py
 
-# Format
-ruff format src tests
+# Format Python, JavaScript, and metadata
+make fmt
 ```
 
 ## CI
 
 GitHub Actions runs on pull requests and pushes to `main`:
 
-- **Web**: format check + ESLint + JS typecheck + unit tests + build + size-budget check + Playwright E2E
-- **Python**: Ruff + mypy + pytest
+- **Quality gate**: workflow lint + Python lint/format/typecheck/tests + web format/lint/typecheck/unit tests
+- **Compatibility**: Python 3.11/3.13 and Node.js 20/24 matrix jobs
+- **Web build**: production build + size-budget check
+- **Browser checks**: Playwright E2E in an isolated job with failure artifacts
 
 See `.github/workflows/ci.yml`.
 
 A weekly `dependency-audit.yml` workflow also runs every Monday:
 
-- `npm audit` and `pip-audit` for security vulnerabilities
-- `npm run check:overrides` to flag npm overrides that are no longer needed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
+- `make security` for npm, Python, and override audits
+- `make check-overrides` to flag npm overrides that are no longer needed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
+
+Maintenance workflows also keep generated repository state current:
+
+- `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for Dependabot uv PRs through a validated artifact handoff.
+- `refresh-action-shas.yml` refreshes pinned GitHub Action SHAs when app credentials are configured.
 
 ## Code Style
 
@@ -99,16 +116,16 @@ A weekly `dependency-audit.yml` workflow also runs every Monday:
 ### Python tests
 
 ```bash
-pytest                          # All tests
-pytest tests/test_text.py -v    # Specific file
-pytest -k "test_clean"          # By name pattern
+make test-py                                # Python tests
+uv run pytest tests/test_text.py -v        # Specific file
+uv run pytest -k "test_clean"              # By name pattern
 ```
 
 ### Web tests
 
 ```bash
-npm run test
-npm run test:e2e
+make test-js
+make test-e2e
 ```
 
 Tests are in `web/tests/`.

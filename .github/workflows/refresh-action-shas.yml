@@ -1,0 +1,174 @@
+name: Refresh Action SHAs
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_ID: ${{ vars.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+    steps:
+      - name: Check GitHub App credentials
+        id: credentials
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_PRIVATE_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub App token
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Capture default branch HEAD SHA
+        if: steps.credentials.outputs.available == 'true'
+        id: head
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Update action SHAs
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          token = os.environ.get("GH_TOKEN")
+          if not token:
+              raise SystemExit("GH_TOKEN is required")
+
+          pattern = re.compile(r"^(\s*(?:-\s*)?uses:\s*)([^@\s]+)@([^\s#]+)(.*)$")
+          sha_pattern = re.compile(r"^[0-9a-f]{40}$")
+          cache = {}
+          timeout_seconds = 15
+          max_attempts = 3
+
+          def resolve_sha(action, ref):
+              repo = "/".join(action.split("/")[:2])
+              key = f"{repo}@{ref}"
+              if key in cache:
+                  return cache[key]
+              url = f"https://api.github.com/repos/{repo}/commits/{ref}"
+              req = Request(
+                  url,
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json",
+                  },
+              )
+              last_error = None
+              for attempt in range(1, max_attempts + 1):
+                  try:
+                      with urlopen(req, timeout=timeout_seconds) as response:
+                          data = json.load(response)
+                      cache[key] = data["sha"]
+                      return cache[key]
+                  except Exception as exc:
+                      last_error = exc
+                      if attempt == max_attempts:
+                          break
+                      time.sleep(attempt * 0.25)
+              raise last_error
+
+          workflow_roots = [Path(".github/workflows"), Path(".github/actions")]
+          files = []
+          for root in workflow_roots:
+              if root.exists():
+                  files.extend(root.rglob("*.yml"))
+                  files.extend(root.rglob("*.yaml"))
+
+          for path in sorted(files):
+              lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+              updated = False
+              new_lines = []
+
+              for line in lines:
+                  match = pattern.match(line)
+                  if not match:
+                      new_lines.append(line)
+                      continue
+
+                  prefix, action, ref, suffix = match.groups()
+                  if action.startswith("./") or action.startswith("docker://") or "$" + "{{" in action:
+                      new_lines.append(line)
+                      continue
+
+                  if sha_pattern.fullmatch(ref):
+                      new_lines.append(line)
+                      continue
+
+                  sha = resolve_sha(action, ref)
+                  ref_suffix = suffix if suffix.strip() else f" # {ref}"
+                  new_lines.append(f"{prefix}{action}@{sha}{ref_suffix}")
+                  updated = True
+
+              if updated:
+                  path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Detect workflow changes
+        if: steps.credentials.outputs.available == 'true'
+        id: changes
+        run: |
+          git add .github/workflows .github/actions
+          if git diff --staged --quiet -- .github/workflows .github/actions; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit changes with verified commit
+        if: >-
+          steps.credentials.outputs.available == 'true' &&
+          steps.changes.outputs.changed == 'true'
+        uses: ./.github/actions/verified-commit
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          base-branch: ${{ github.event.repository.default_branch }}
+          expected-head-sha: ${{ steps.head.outputs.sha }}
+          commit-headline: "Refresh action SHAs"
+          fallback-branch-prefix: ci/refresh-action-shas
+          pr-title: "Refresh action SHAs"
+          pr-body: |
+            ## Summary
+            - Type: CI maintenance
+            - Pin GitHub Actions to full commit SHAs for reproducible runs
+            - Keep workflow behavior unchanged
+          pathspec: |
+            .github/workflows
+            .github/actions
+
+      - name: Note missing app credentials
+        if: steps.credentials.outputs.available != 'true'
+        run: |
+          {
+            echo "## Refresh Action SHAs"
+            echo
+            echo "Skipped because APP_ID and APP_PRIVATE_KEY are not configured."
+          } >> "$GITHUB_STEP_SUMMARY"

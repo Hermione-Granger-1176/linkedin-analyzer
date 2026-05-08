@@ -17,6 +17,7 @@ env/
 .coverage
 .coverage.*
 htmlcov/
+.artifacts/
 
 # Packaging
 build/

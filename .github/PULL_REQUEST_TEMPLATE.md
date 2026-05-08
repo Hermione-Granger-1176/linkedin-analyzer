@@ -4,9 +4,5 @@ What does this change do and why?
 
 ## Testing
 
-- [ ] `make lint`
-- [ ] `make typecheck`
-- [ ] `make test`
-- [ ] `make web-lint`
-- [ ] `make web-test`
-- [ ] `make web-build`
+- [ ] `make ci`
+- [ ] `make test-e2e` (when browser-facing behavior changes)

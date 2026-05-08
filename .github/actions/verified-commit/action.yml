@@ -1,0 +1,58 @@
+name: Verified commit with PR fallback
+description: Create a verified commit on a branch or fall back to a pull request when direct commit creation fails.
+
+inputs:
+  github-token:
+    description: GitHub token used for GraphQL and REST API calls.
+    required: true
+  base-branch:
+    description: Branch to update directly before falling back to a PR branch.
+    required: true
+  expected-head-sha:
+    description: Expected head SHA for the direct commit target branch.
+    required: true
+  commit-headline:
+    description: Commit subject line for the verified commit.
+    required: true
+  fallback-branch-prefix:
+    description: Prefix used to create the fallback branch name when direct commit fails.
+    required: true
+  pr-title:
+    description: Pull request title for the fallback branch.
+    required: true
+  pr-body:
+    description: Pull request body for the fallback branch.
+    required: true
+  pathspec:
+    description: Newline-delimited git pathspec entries used to inspect staged changes.
+    required: true
+  commit-mode:
+    description: "Commit strategy: `direct`, `force-pr`, or `direct-or-pr`."
+    required: false
+    default: direct-or-pr
+
+outputs:
+  changed:
+    description: Whether staged changes were found for the provided pathspec.
+    value: ${{ steps.commit.outputs.changed }}
+  result-url:
+    description: URL of the created commit or pull request.
+    value: ${{ steps.commit.outputs.result-url }}
+
+runs:
+  using: composite
+  steps:
+    - id: commit
+      shell: bash
+      env:
+        GH_TOKEN_INPUT: ${{ inputs.github-token }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+        EXPECTED_HEAD_SHA: ${{ inputs.expected-head-sha }}
+        COMMIT_HEADLINE: ${{ inputs.commit-headline }}
+        FALLBACK_BRANCH_PREFIX: ${{ inputs.fallback-branch-prefix }}
+        PR_TITLE: ${{ inputs.pr-title }}
+        PR_BODY: ${{ inputs.pr-body }}
+        PATHSPEC_INPUT: ${{ inputs.pathspec }}
+        COMMIT_MODE: ${{ inputs.commit-mode }}
+      run: |
+        node ./.github/actions/verified-commit/verified-commit.mjs

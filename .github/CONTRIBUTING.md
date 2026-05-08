@@ -4,19 +4,16 @@ Thanks for contributing to LinkedIn Analyzer. This repo contains a Python CLI an
 
 ## Development setup
 
-1. Install Python 3.11+ and Node.js 20.19+, 22.13+, or 24+
-2. Create a Python virtual environment and install dependencies:
+1. Install Python 3.11+, uv, and Node.js 20.19+, 22.13+, or 24+
+2. Install locked Python and Node dependencies:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+make setup
 ```
 
-3. Install web dependencies:
+3. Configure optional local diagnostics:
 
 ```bash
-npm install
 cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed for opt-in diagnostics
 ```
 
@@ -26,24 +23,26 @@ cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed for opt-in
 pre-commit install
 ```
 
-See [`docs/style-guide.md`](docs/style-guide.md) for code conventions.
+See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 
 ## Running locally
 
 - CLI: `linkedin-analyzer --help`
-- Web app: `npm run dev`
+- Web app: `make web`
 
 ## Checks
 
-- Python lint: `make lint`
-- Python typecheck: `make typecheck`
-- Python tests: `make test`
-- Web lint: `make web-lint`
-- Web typecheck: `npm run typecheck:web`
-- Web format check: `npm run format:check`
-- Web tests: `make web-test`
-- Web E2E tests: `npm run test:e2e`
+- All linters: `make lint`
+- Python lint: `make lint-py`
+- Python typecheck: `make typecheck-py`
+- Python tests: `make test-py`
+- Web lint: `make lint-js`
+- Web typecheck: `make typecheck-web`
+- Web format check: `make format-js-check`
+- Web tests: `make test-js`
+- Web E2E tests: `make test-e2e`
 - Web build: `make web-build`
+- Full local gate: `make ci`
 
 ## Pull requests
 

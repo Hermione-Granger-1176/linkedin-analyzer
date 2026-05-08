@@ -38,9 +38,31 @@
 
 - CI actions are SHA-pinned.
 - Dependency review runs on pull requests.
-- Scheduled dependency audits run weekly for npm and pip.
-- Weekly override staleness check flags npm overrides that can be removed (`npm run check:overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
+- Scheduled dependency audits run weekly for npm and Python dependencies resolved from `uv.lock`.
+- Weekly override staleness check flags npm overrides that can be removed (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
+
+## CI Automation and Verified Writebacks
+
+The workflow structure mirrors the stricter automation pattern used in the `artifacts` repository:
+
+- Pull-request verification is separated from writeback jobs.
+- Generated maintenance changes are passed through short-lived workflow artifacts before any commit is created.
+- Writeback jobs re-check the PR branch SHA before applying generated files, so stale artifacts cannot overwrite newer commits.
+- Automated commits use `.github/actions/verified-commit`, which creates GitHub-verified commits through the API and can fall back to a PR branch.
+
+Configured automation:
+
+- `refresh-action-shas.yml` runs monthly or manually and pins workflow/action `uses:` refs to full commit SHAs.
+- `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
+- `commit-python-locks.yml` downloads the refreshed lock artifact from the completed workflow run, validates its contents, revalidates the Dependabot branch head, and commits `uv.lock` back only if it is still safe.
+
+To enable app-authored maintenance commits, configure these repository values:
+
+- Repository variable: `APP_ID`
+- Repository secret: `APP_PRIVATE_KEY`
+
+If they are missing, the action-SHA refresh workflow records a skipped summary instead of attempting a write.
 
 ## CLI Environment Variables
 

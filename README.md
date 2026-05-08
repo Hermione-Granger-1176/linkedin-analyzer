@@ -28,11 +28,18 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards, relations
 
 ## Quick start
 
+**Development** — Install locked Python and Node dependencies:
+
+```bash
+# Requires Python 3.11+, uv, and Node.js 20.19+/22.13+/24+
+make setup
+```
+
 **Web** — Run the Vite dev server and open the local URL:
 
 ```bash
 cp .env.example .env  # optional; set VITE_SENTRY_DSN + VITE_APP_RELEASE for opt-in diagnostics
-npm run dev
+make web
 ```
 
 **CLI** — For automation:
@@ -125,7 +132,7 @@ See the [`docs/`](docs/) folder for:
 
 Architecture Decision Records: [`docs/adr/`](docs/adr/)
 
-Security reporting guidelines: [SECURITY.md](SECURITY.md)
+Security reporting guidelines: [`.github/SECURITY.md`](.github/SECURITY.md)
 
 <br>
 

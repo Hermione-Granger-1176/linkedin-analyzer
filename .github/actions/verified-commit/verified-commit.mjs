@@ -90,7 +90,7 @@ export function parseDiffOutput(diffOutput, { existsSync, readFileSync }) {
  *   requestTimeoutMs?: number,
  *   sleepImpl?: (delayMs: number) => Promise<void>
  * }} [dependencies] - Injectable overrides for fetch, retry limits, and timeout.
- * @returns {Promise<object | null>} Parsed JSON body, or null on 204.
+ * @returns {Promise<unknown | null>} Parsed JSON body, or null on 204.
  */
 export async function fetchJson(url, options, dependencies = {}) {
     const {
@@ -208,7 +208,7 @@ export function isCliEntrypoint(moduleUrl, argvPath = process.argv[1]) {
  *   fetchDependencies: object
  * }} config - Repository identity, token, and injectable fetch helpers.
  * @returns {{
- *   fetchJson: (url: string, options?: RequestInit) => Promise<object | null>,
+ *   fetchJson: (url: string, options?: RequestInit) => Promise<unknown | null>,
  *   graphql: (query: string, variables: object) => Promise<object>,
  *   owner: string,
  *   repo: string

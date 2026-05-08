@@ -90,6 +90,7 @@ jobs:
         with:
           node-version: ""
           python-version: ${{ matrix.python-version }}
+          install-node-deps: "false"
 
       - name: Test Python compatibility
         run: make test-py

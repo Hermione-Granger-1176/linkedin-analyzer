@@ -9,7 +9,7 @@ inputs:
   head-repo-fork:
     description: Whether the PR head repo is a fork.
     required: false
-    default: "false"
+    default: ""
   pr-author:
     description: PR author login for token policy.
     required: false
@@ -78,8 +78,8 @@ runs:
       shell: bash
       env:
         EVENT_NAME: ${{ inputs.event-name || github.event_name }}
-        HEAD_REPO_FORK: ${{ inputs.head-repo-fork }}
-        PR_AUTHOR: ${{ inputs.pr-author }}
+        HEAD_REPO_FORK: ${{ inputs.head-repo-fork || github.event.pull_request.head.repo.fork || 'false' }}
+        PR_AUTHOR: ${{ inputs.pr-author || github.event.pull_request.user.login || '' }}
       run: >-
         python3 scripts/ci/workflow_helpers.py app-token-policy
         --event-name "$EVENT_NAME"
@@ -157,7 +157,7 @@ runs:
         uv sync --all-extras --frozen --python "$python_bin"
 
     - name: Install Node dependencies
-      if: inputs.install-node-deps == 'true'
+      if: inputs.install-node-deps == 'true' && inputs.node-version != ''
       shell: bash
       run: npm ci
 

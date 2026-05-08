@@ -55,6 +55,8 @@ def reject_symlinks(root: Path) -> None:
     """Reject any symlink inside an artifact tree before copying files out."""
     if not root.exists():
         raise ValueError(f"Artifact root does not exist: {root}")
+    if root.is_symlink():
+        raise ValueError(f"Artifact root is a symlink: {root}")
 
     for walk_root, dirnames, filenames in os.walk(root, followlinks=False):
         current_root = Path(walk_root)

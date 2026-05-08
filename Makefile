@@ -199,7 +199,7 @@ status: ## Show workspace health
 	@test -d web/dist && echo "OK: web/dist exists" || echo "NOT BUILT: run make web-build"
 
 clean: ## Remove local environments, build outputs, and caches
-	rm -rf $(VENV) node_modules web/dist .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
+	rm -rf $(VENV) node_modules web/dist .artifacts .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
 
 help: ## Show this help
 	@awk ' \

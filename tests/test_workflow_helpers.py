@@ -13,7 +13,7 @@ from scripts.ci.workflow_helpers import (
 def write_valid_lock_artifact(root: Path) -> None:
     """Create the expected lock refresh artifact shape."""
     artifact_dir = root / ".artifacts"
-    artifact_dir.mkdir()
+    artifact_dir.mkdir(parents=True)
     (root / "uv.lock").write_text("version = 1\n", encoding="utf-8")
     (artifact_dir / "pr-number.txt").write_text("123\n", encoding="utf-8")
     (artifact_dir / "head-sha.txt").write_text("abc123\n", encoding="utf-8")
@@ -62,6 +62,17 @@ def test_validate_lock_refresh_artifact_rejects_symlink(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Artifact contains a symlink"):
         validate_lock_refresh_artifact(tmp_path)
+
+
+def test_validate_lock_refresh_artifact_rejects_symlinked_root(tmp_path: Path) -> None:
+    """Reject artifact roots that are themselves symlinks."""
+    artifact_root = tmp_path / "artifact"
+    write_valid_lock_artifact(artifact_root)
+    linked_root = tmp_path / "linked-artifact"
+    linked_root.symlink_to(artifact_root, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="Artifact root is a symlink"):
+        validate_lock_refresh_artifact(linked_root)
 
 
 def test_validate_lock_refresh_artifact_rejects_unexpected_files(tmp_path: Path) -> None:

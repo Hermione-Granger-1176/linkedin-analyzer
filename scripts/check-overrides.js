@@ -49,7 +49,11 @@ console.log("\nTesting whether they are still needed...\n");
 /* ------------------------------------------------------------------ */
 const extractLines = (err, pattern, max = 8) => {
     const out = (err.stderr ?? err.stdout ?? "").toString();
-    return out.split("\n").filter((l) => pattern.test(l)).slice(0, max).join("\n");
+    return out
+        .split("\n")
+        .filter((l) => pattern.test(l))
+        .slice(0, max)
+        .join("\n");
 };
 
 const testWithout = (overridesToRemove) => {

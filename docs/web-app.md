@@ -153,7 +153,7 @@ Your file contents stay in your browser unless you explicitly enable diagnostics
 ## Running Locally
 
 ```bash
-npm run dev
+make web
 ```
 
 Then open the Vite URL printed in the terminal.

@@ -26,9 +26,12 @@ export default [
             "no-undef": "error",
             eqeqeq: ["error", "always"],
             "no-console": ["error", { allow: ["error"] }],
-            "curly": ["error", "all"],
+            curly: ["error", "all"],
             "no-shadow": "error",
-            "no-use-before-define": ["error", { functions: false, classes: true, variables: false }],
+            "no-use-before-define": [
+                "error",
+                { functions: false, classes: true, variables: false },
+            ],
             "no-implicit-globals": "error",
             "no-eval": "error",
             "no-implied-eval": "error",
@@ -49,7 +52,7 @@ export default [
             "consistent-return": "error",
             "default-case-last": "error",
             "dot-notation": "error",
-            "yoda": "error",
+            yoda: "error",
             "import-x/no-unresolved": "error",
             "import-x/no-duplicates": "error",
             "import-x/newline-after-import": "error",
@@ -57,11 +60,14 @@ export default [
             "import-x/no-mutable-exports": "error",
             "import-x/no-self-import": "error",
             "import-x/no-cycle": ["error", { maxDepth: 3 }],
-            "import-x/order": ["error", {
-                groups: ["builtin", "external", "internal", "parent", "sibling", "index"],
-                "newlines-between": "always",
-                alphabetize: { order: "asc", caseInsensitive: true }
-            }],
+            "import-x/order": [
+                "error",
+                {
+                    groups: ["builtin", "external", "internal", "parent", "sibling", "index"],
+                    "newlines-between": "always",
+                    alphabetize: { order: "asc", caseInsensitive: true },
+                },
+            ],
             "import-x/extensions": ["error", "ignorePackages", { js: "always" }],
             "jsdoc/check-alignment": "error",
             "jsdoc/check-indentation": "error",

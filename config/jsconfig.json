@@ -12,9 +12,9 @@
     "skipLibCheck": true,
     "noImplicitAny": false,
     "paths": {
-      "roughjs/bundled/rough.esm.js": ["./node_modules/roughjs/bundled/rough.d.ts"]
+      "roughjs/bundled/rough.esm.js": ["../node_modules/roughjs/bundled/rough.d.ts"]
     }
   },
-  "include": ["web/src/**/*.js"],
-  "exclude": ["web/dist/**", "web/e2e/**", "coverage/**", "node_modules/**"]
+  "include": ["../web/src/**/*.js"],
+  "exclude": ["../web/dist/**", "../web/e2e/**", "../coverage/**", "../node_modules/**"]
 }

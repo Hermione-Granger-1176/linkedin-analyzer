@@ -78,17 +78,29 @@ linkedin-analyzer/
 ├── tests/                              # Python tests
 ├── docs/                               # Documentation
 │   └── adr/                            # Architecture Decision Records
+├── config/                             # Tooling config moved out of repo root
+│   ├── eslint.config.mjs               # ESLint flat config
+│   ├── jsconfig.json                   # Web JavaScript type-check config
+│   ├── playwright.config.js            # Playwright browser test config
+│   ├── prettierignore                  # Prettier ignore rules
+│   └── prettierrc.json                 # Prettier formatting rules
 ├── scripts/
-│   └── check-overrides.js              # Validates npm overrides are still needed
+│   ├── check-overrides.js              # Validates npm overrides are still needed
+│   ├── ci/                             # GitHub Actions helper scripts
+│   └── lint/                           # Local lint helpers
 ├── data/
 │   ├── input/                          # Place CSVs here
 │   └── output/                         # Generated Excel files
 │
-├── .github/workflows/ci.yml            # CI (lint + test + build)
-├── .github/workflows/dependency-audit.yml  # Weekly security + override staleness
+├── .github/                            # GitHub metadata, workflows, and community docs
+│   ├── CONTRIBUTING.md                 # Contributor guide shown by GitHub
+│   ├── SECURITY.md                     # Coordinated disclosure policy
+│   └── workflows/                      # CI, audit, publish, and maintenance workflows
 ├── vercel.json                         # Vercel config
+├── Makefile                            # Local and CI command entrypoints
 ├── package.json                        # NPM config
 ├── pyproject.toml                      # Python config
+├── uv.lock                             # Locked Python dependency resolution
 ├── LICENSE                             # MIT license
 └── README.md
 ```

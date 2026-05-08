@@ -1,0 +1,167 @@
+name: CI setup
+description: Mint safe app tokens and set up Python, Node.js, and workspace dependencies.
+
+inputs:
+  event-name:
+    description: GitHub event name for token policy.
+    required: false
+    default: ""
+  head-repo-fork:
+    description: Whether the PR head repo is a fork.
+    required: false
+    default: "false"
+  pr-author:
+    description: PR author login for token policy.
+    required: false
+    default: ""
+  app-id:
+    description: Primary GitHub App ID.
+    required: false
+    default: ""
+  app-private-key:
+    description: Primary GitHub App private key.
+    required: false
+    default: ""
+  escalation-app-id:
+    description: Escalation GitHub App ID for privileged repository writes.
+    required: false
+    default: ""
+  escalation-app-private-key:
+    description: Escalation GitHub App private key.
+    required: false
+    default: ""
+  python-version:
+    description: Python version to install. Leave empty to skip Python setup.
+    required: false
+    default: "3.12"
+  python-cache-dependency-path:
+    description: File path used to key the Python package-manager caches.
+    required: false
+    default: uv.lock
+  node-version:
+    description: Node.js version to install. Leave empty to skip Node setup.
+    required: false
+    default: "22"
+  npm-cache-dependency-path:
+    description: File path used to key the npm cache.
+    required: false
+    default: package-lock.json
+  install-python-deps:
+    description: Whether to install Python package dependencies.
+    required: false
+    default: "true"
+  install-node-deps:
+    description: Whether to install Node package dependencies.
+    required: false
+    default: "true"
+  install-playwright:
+    description: Whether to install Playwright browsers and OS dependencies.
+    required: false
+    default: "false"
+
+outputs:
+  app-token:
+    description: Primary GitHub App installation token.
+    value: ${{ steps.app-token.outputs.token }}
+  escalation-token:
+    description: Escalation GitHub App installation token.
+    value: ${{ steps.escalation-token.outputs.token }}
+  token-available:
+    description: Whether both app tokens were minted successfully.
+    value: ${{ steps.token-status.outputs.available }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine whether app-token actions are allowed
+      id: token-policy
+      shell: bash
+      env:
+        EVENT_NAME: ${{ inputs.event-name || github.event_name }}
+        HEAD_REPO_FORK: ${{ inputs.head-repo-fork }}
+        PR_AUTHOR: ${{ inputs.pr-author }}
+      run: >-
+        python3 scripts/ci/workflow_helpers.py app-token-policy
+        --event-name "$EVENT_NAME"
+        --head-repo-fork "$HEAD_REPO_FORK"
+        --pr-author "$PR_AUTHOR"
+        >> "$GITHUB_OUTPUT"
+
+    - name: Create GitHub App token
+      id: app-token
+      if: >-
+        steps.token-policy.outputs.allowed == 'true' &&
+        inputs.app-id != '' &&
+        inputs.app-private-key != ''
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.app-private-key }}
+
+    - name: Create escalation token
+      id: escalation-token
+      if: >-
+        steps.token-policy.outputs.allowed == 'true' &&
+        inputs.escalation-app-id != '' &&
+        inputs.escalation-app-private-key != ''
+      uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+      with:
+        app-id: ${{ inputs.escalation-app-id }}
+        private-key: ${{ inputs.escalation-app-private-key }}
+
+    - name: Check GitHub App token availability
+      id: token-status
+      shell: bash
+      env:
+        APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        ESCALATION_TOKEN: ${{ steps.escalation-token.outputs.token }}
+      run: |
+        if [ -n "$APP_TOKEN" ] && [ -n "$ESCALATION_TOKEN" ]; then
+          echo "available=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "available=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Set up Python
+      if: inputs.python-version != ''
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: ${{ inputs.python-cache-dependency-path }}
+
+    - name: Cache uv downloads
+      if: inputs.python-version != ''
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ~/.cache/uv
+        key: uv-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles('uv.lock') }}
+        restore-keys: |
+          uv-${{ runner.os }}-${{ inputs.python-version }}-
+          uv-${{ runner.os }}-
+
+    - name: Set up Node.js
+      if: inputs.node-version != ''
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.npm-cache-dependency-path }}
+
+    - name: Install Python dependencies
+      if: inputs.install-python-deps == 'true'
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip uv
+        python_bin="$(python -c 'import sys; print(sys.executable)')"
+        uv sync --all-extras --frozen --python "$python_bin"
+
+    - name: Install Node dependencies
+      if: inputs.install-node-deps == 'true'
+      shell: bash
+      run: npm ci
+
+    - name: Install Playwright browsers
+      if: inputs.install-playwright == 'true'
+      shell: bash
+      run: npx playwright install --with-deps chromium firefox webkit

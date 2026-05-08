@@ -8,11 +8,11 @@ Command-line tool for cleaning LinkedIn CSV exports into formatted Excel files.
 # From PyPI
 pip install linkedin-analyzer
 
-# From source
-pip install -e .
+# From source for development
+uv sync --all-extras --frozen
 
-# With dev dependencies
-pip install -e ".[dev]"
+# Run the local CLI
+uv run linkedin-analyzer --help
 ```
 
 ## Commands

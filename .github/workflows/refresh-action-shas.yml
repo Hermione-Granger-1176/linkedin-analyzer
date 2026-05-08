@@ -63,7 +63,7 @@ jobs:
           if not token:
               raise SystemExit("GH_TOKEN is required")
 
-          pattern = re.compile(r"^(\s*-\s*uses:\s*)([^@\s]+)@([^\s#]+)(.*)$")
+          pattern = re.compile(r"^(\s*(?:-\s*)?uses:\s*)([^@\s]+)@([^\s#]+)(.*)$")
           sha_pattern = re.compile(r"^[0-9a-f]{40}$")
           cache = {}
           timeout_seconds = 15
@@ -114,7 +114,7 @@ jobs:
                       new_lines.append(line)
                       continue
 
-                  prefix, action, ref, _suffix = match.groups()
+                  prefix, action, ref, suffix = match.groups()
                   if action.startswith("./") or action.startswith("docker://") or "$" + "{{" in action:
                       new_lines.append(line)
                       continue
@@ -124,7 +124,8 @@ jobs:
                       continue
 
                   sha = resolve_sha(action, ref)
-                  new_lines.append(f"{prefix}{action}@{sha} # {ref}")
+                  ref_suffix = suffix if suffix.strip() else f" # {ref}"
+                  new_lines.append(f"{prefix}{action}@{sha}{ref_suffix}")
                   updated = True
 
               if updated:

@@ -102,3 +102,13 @@ def test_read_lock_refresh_metadata_strips_expected_values(tmp_path: Path) -> No
         "head-sha": "abc123",
         "head-ref": "dependabot/example",
     }
+
+
+def test_read_lock_refresh_metadata_validates_before_reading(tmp_path: Path) -> None:
+    """Reject unsafe metadata artifacts before reading their contents."""
+    write_valid_lock_artifact(tmp_path)
+    (tmp_path / ".artifacts" / "head-ref.txt").unlink()
+    (tmp_path / ".artifacts" / "head-ref.txt").symlink_to(tmp_path / "uv.lock")
+
+    with pytest.raises(ValueError, match="Artifact contains a symlink"):
+        read_lock_refresh_metadata(tmp_path)

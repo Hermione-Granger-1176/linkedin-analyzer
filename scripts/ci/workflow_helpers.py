@@ -80,6 +80,7 @@ def _artifact_files(root: Path) -> set[Path]:
 
 def read_lock_refresh_metadata(root: Path) -> dict[str, str]:
     """Read lock-refresh metadata values from a downloaded artifact tree."""
+    validate_lock_refresh_artifact(root)
     return {
         key: (root / relative_path).read_text(encoding="utf-8").strip()
         for key, relative_path in LOCK_ARTIFACT_FILES.items()

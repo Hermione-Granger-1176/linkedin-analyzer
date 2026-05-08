@@ -31,15 +31,16 @@ describe("verified commit action helpers", () => {
 
     it("uses the destination path for copied files in GraphQL additions", () => {
         const result = parseDiffOutput("C100\told.txt\tnew.txt", {
-            existsSync: (filePath) => filePath === "new.txt",
-            readFileSync: (filePath) => Buffer.from(`contents:${filePath}`),
+            existsSync: () => false,
+            readFileSync: (filePath) => Buffer.from(`working-tree:${filePath}`),
+            readStagedFileSync: (filePath) => Buffer.from(`staged:${filePath}`),
         });
 
         expect(result.deletions).toEqual([]);
         expect(result.additions).toEqual([
             {
                 path: "new.txt",
-                contents: Buffer.from("contents:new.txt").toString("base64"),
+                contents: Buffer.from("staged:new.txt").toString("base64"),
             },
         ]);
     });

@@ -34,14 +34,21 @@ export function splitPathspec(input) {
  * @param {string} diffOutput - Raw output from `git diff --name-status`.
  * @param {{
  *   existsSync: (path: string) => boolean,
- *   readFileSync: (path: string) => Buffer
+ *   readFileSync: (path: string) => Buffer,
+ *   readStagedFileSync?: (path: string) => Buffer
  * }} deps - File-system helpers.
  * @returns {{ additions: { path: string, contents: string }[], deletions: { path: string }[] }}
  *   GraphQL file payloads.
  */
-export function parseDiffOutput(diffOutput, { existsSync, readFileSync }) {
+export function parseDiffOutput(diffOutput, { existsSync, readFileSync, readStagedFileSync }) {
     const additions = [];
     const deletions = [];
+    const readFileForPayload = readStagedFileSync || readFileSync;
+    const canReadPayload = (filePath) => (readStagedFileSync ? true : existsSync(filePath));
+    const createAddition = (filePath) => ({
+        path: filePath,
+        contents: readFileForPayload(filePath).toString("base64"),
+    });
 
     if (!diffOutput.trim()) {
         return { additions, deletions };
@@ -53,21 +60,15 @@ export function parseDiffOutput(diffOutput, { existsSync, readFileSync }) {
 
         switch (code) {
             case "R":
-                if (path1 && path2) {
+                if (path1 && path2 && canReadPayload(path2)) {
                     deletions.push({ path: path1 });
-                    additions.push({
-                        path: path2,
-                        contents: readFileSync(path2).toString("base64"),
-                    });
+                    additions.push(createAddition(path2));
                 }
                 continue;
 
             case "C":
-                if (path2 && existsSync(path2)) {
-                    additions.push({
-                        path: path2,
-                        contents: readFileSync(path2).toString("base64"),
-                    });
+                if (path2 && canReadPayload(path2)) {
+                    additions.push(createAddition(path2));
                 }
                 continue;
 
@@ -78,11 +79,11 @@ export function parseDiffOutput(diffOutput, { existsSync, readFileSync }) {
                 continue;
 
             default:
-                if (!path1 || !existsSync(path1)) {
+                if (!path1 || !canReadPayload(path1)) {
                     continue;
                 }
 
-                additions.push({ path: path1, contents: readFileSync(path1).toString("base64") });
+                additions.push(createAddition(path1));
         }
     }
 
@@ -323,6 +324,7 @@ export async function runVerifiedCommit({
     const { additions, deletions } = parseDiffOutput(diffOutput, {
         existsSync: existsSyncImpl,
         readFileSync: readFileSyncImpl,
+        readStagedFileSync: (filePath) => execFileSyncImpl("git", ["show", `:${filePath}`]),
     });
 
     if (additions.length === 0 && deletions.length === 0) {

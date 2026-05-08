@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
     CREATE_COMMIT_MUTATION,
     isCliEntrypoint,
+    parseDiffOutput,
 } from "../../.github/actions/verified-commit/verified-commit.mjs";
 
 describe("verified commit action helpers", () => {
@@ -26,5 +27,20 @@ describe("verified commit action helpers", () => {
         expect(isCliEntrypoint(moduleUrl, path.resolve(actionPath))).toBe(true);
         expect(isCliEntrypoint(moduleUrl, "scripts/other.mjs")).toBe(false);
         expect(isCliEntrypoint(moduleUrl, undefined)).toBe(false);
+    });
+
+    it("uses the destination path for copied files in GraphQL additions", () => {
+        const result = parseDiffOutput("C100\told.txt\tnew.txt", {
+            existsSync: (filePath) => filePath === "new.txt",
+            readFileSync: (filePath) => Buffer.from(`contents:${filePath}`),
+        });
+
+        expect(result.deletions).toEqual([]);
+        expect(result.additions).toEqual([
+            {
+                path: "new.txt",
+                contents: Buffer.from("contents:new.txt").toString("base64"),
+            },
+        ]);
     });
 });

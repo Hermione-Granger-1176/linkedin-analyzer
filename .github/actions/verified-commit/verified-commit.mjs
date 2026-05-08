@@ -62,6 +62,15 @@ export function parseDiffOutput(diffOutput, { existsSync, readFileSync }) {
                 }
                 continue;
 
+            case "C":
+                if (path2 && existsSync(path2)) {
+                    additions.push({
+                        path: path2,
+                        contents: readFileSync(path2).toString("base64"),
+                    });
+                }
+                continue;
+
             case "D":
                 if (path1) {
                     deletions.push({ path: path1 });

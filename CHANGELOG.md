@@ -59,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sentry release tracking (`VITE_APP_RELEASE`) and `beforeSend` noise filter.
 - Web Vitals telemetry (CLS, FCP, INP, LCP, TTFB) wired into Sentry metrics.
 - Playwright end-to-end tests with Chromium and Firefox.
-- Prettier, TypeScript type-checking (`jsconfig.json`), and stricter ESLint rules
+- Prettier, TypeScript type-checking (`config/jsconfig.json`), and stricter ESLint rules
   (`no-eval`, `no-implied-eval`, `no-throw-literal`, import cycle depth 3).
 - `.github/SECURITY.md` with coordinated disclosure policy.
 - CodeQL analysis workflow for JavaScript and Python.

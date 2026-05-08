@@ -149,7 +149,7 @@ runs:
         cache-dependency-path: ${{ inputs.npm-cache-dependency-path }}
 
     - name: Install Python dependencies
-      if: inputs.install-python-deps == 'true'
+      if: inputs.install-python-deps == 'true' && inputs.python-version != ''
       shell: bash
       run: |
         python -m pip install --upgrade pip uv

@@ -21,7 +21,7 @@ REPO ?= $(strip $(shell repo="$$(git remote get-url origin 2>/dev/null | sed -nE
 .PHONY: install node-install setup-base setup setup-all setup-ci
 
 install: ## Install locked Python deps into the uv-managed virtual environment
-	$(UV) sync --all-extras --frozen --python $(PYTHON)
+	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-extras --frozen --python $(PYTHON)
 
 node-install: ## Install locked Node deps
 	$(NPM) ci

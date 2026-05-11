@@ -39,12 +39,6 @@
     "node": "^20.19.0 || ^22.13.0 || >=24"
   },
   "browserslist": "> 0.5%, last 2 versions, not dead",
-  "overrides": {
-    "serialize-javascript": "^7.0.5",
-    "vite-plugin-pwa": {
-      "vite": "$vite"
-    }
-  },
   "dependencies": {
     "@sentry/browser": "^10.52.0",
     "roughjs": "^4.6.6",

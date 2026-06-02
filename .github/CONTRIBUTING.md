@@ -4,7 +4,7 @@ Thanks for contributing to LinkedIn Analyzer. This repo contains a Python CLI an
 
 ## Development setup
 
-1. Install Python 3.11+, uv, and Node.js 20.19+, 22.13+, or 24+
+1. Install Python 3.11+, uv, and Node.js 22.13+ or 24+
 2. Install locked Python and Node dependencies:
 
 ```bash

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.11+
-- Node.js 20.19+ (or 22.13+, or 24+)
+- Node.js 22.13+ (or 24+)
 - uv
 
 ## Initial setup
@@ -81,7 +81,7 @@ make fmt
 GitHub Actions runs on pull requests and pushes to `main`:
 
 - **Quality gate**: workflow lint + Python lint/format/typecheck/tests + web format/lint/typecheck/unit tests
-- **Compatibility**: Python 3.11/3.13 and Node.js 20/24 matrix jobs
+- **Compatibility**: Python 3.11/3.13 and Node.js 22/24 matrix jobs
 - **Web build**: production build + size-budget check
 - **Browser checks**: Playwright E2E in an isolated job with failure artifacts
 

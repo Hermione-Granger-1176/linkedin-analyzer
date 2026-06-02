@@ -1,4 +1,4 @@
-FROM python:3.14-slim@sha256:5b3879b6f3cb77e712644d50262d05a7c146b7312d784a18eff7ff5462e77033 AS builder
+FROM python:3.14-slim@sha256:c845af9399020c7e562969a13689e929074a10fd057acd1b1fad06a2fb068e97 AS builder
 
 ARG VERSION=0.0.0
 
@@ -13,7 +13,7 @@ COPY src /build/src
 RUN python -m pip install --upgrade pip build \
     && SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m build --wheel --outdir /dist
 
-FROM python:3.14-slim@sha256:5b3879b6f3cb77e712644d50262d05a7c146b7312d784a18eff7ff5462e77033 AS runtime
+FROM python:3.14-slim@sha256:c845af9399020c7e562969a13689e929074a10fd057acd1b1fad06a2fb068e97 AS runtime
 
 ARG VERSION=dev
 ARG REVISION=unknown

@@ -540,73 +540,64 @@ export const LinkedInCleaner = (() => {
             return true;
         };
 
-        let i = 0;
-        while (i < length && !parseError) {
-            if (state === CSV_PARSE_STATE.INSIDE_QUOTES) {
-                // Bulk-copy the run of ordinary characters up to the next quote,
-                // carriage return, or escape character.
-                let j = i;
-                while (j < length) {
-                    const code = csvText.charCodeAt(j);
-                    if (code === quoteCode || code === CR || code === escapeCode) {
-                        break;
-                    }
-                    j += 1;
+        // Handle one step while inside a quoted field; returns the next index.
+        // parseError (set via fieldTooLarge) is what stops the outer loop.
+        const stepInsideQuotes = (start) => {
+            // Bulk-copy the run of ordinary characters up to the next quote,
+            // carriage return, or escape character.
+            let j = start;
+            while (j < length) {
+                const code = csvText.charCodeAt(j);
+                if (code === quoteCode || code === CR || code === escapeCode) {
+                    break;
                 }
-                if (j > i) {
-                    field += csvText.slice(i, j);
-                    if (fieldTooLarge()) {
-                        break;
-                    }
-                    i = j;
-                    continue;
-                }
-
-                const code = csvText.charCodeAt(i);
-                if (code === CR) {
-                    /* v8 ignore next 10 */
-                    if (csvText.charCodeAt(i + 1) === LF) {
-                        field += "\n";
-                        i += 2;
-                    } else {
-                        field += "\r";
-                        i += 1;
-                    }
-                    if (fieldTooLarge()) {
-                        break;
-                    }
-                } else if (code === quoteCode) {
-                    if (csvText.charCodeAt(i + 1) === quoteCode) {
-                        field += quote;
-                        i += 2;
-                        /* v8 ignore next 3 */
-                        if (fieldTooLarge()) {
-                            break;
-                        }
-                    } else {
-                        state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
-                        i += 1;
-                    }
-                } else {
-                    // Escape character: collapse escape+quote, otherwise keep it literally.
-                    /* v8 ignore next 10 */
-                    if (csvText.charCodeAt(i + 1) === quoteCode) {
-                        field += quote;
-                        i += 2;
-                    } else {
-                        field += csvText[i];
-                        i += 1;
-                    }
-                    if (fieldTooLarge()) {
-                        break;
-                    }
-                }
-                continue;
+                j += 1;
+            }
+            if (j > start) {
+                field += csvText.slice(start, j);
+                fieldTooLarge();
+                return j;
             }
 
-            // Outside quotes: bulk-copy ordinary characters up to the next quote,
-            // delimiter, or line break.
-            let j = i;
+            const code = csvText.charCodeAt(start);
+            if (code === quoteCode) {
+                if (csvText.charCodeAt(start + 1) === quoteCode) {
+                    field += quote;
+                    /* v8 ignore next */
+                    fieldTooLarge();
+                    return start + 2;
+                }
+                state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
+                return start + 1;
+            }
+            /* v8 ignore start */
+            if (code === CR) {
+                if (csvText.charCodeAt(start + 1) === LF) {
+                    field += "\n";
+                    fieldTooLarge();
+                    return start + 2;
+                }
+                field += "\r";
+                fieldTooLarge();
+                return start + 1;
+            }
+            // Escape character: collapse escape+quote, otherwise keep it literally.
+            if (csvText.charCodeAt(start + 1) === quoteCode) {
+                field += quote;
+                fieldTooLarge();
+                return start + 2;
+            }
+            field += csvText[start];
+            fieldTooLarge();
+            return start + 1;
+            /* v8 ignore stop */
+        };
+
+        // Handle one step while outside quotes; returns the next index.
+        const stepOutsideQuotes = (start) => {
+            // Bulk-copy ordinary characters up to the next quote, delimiter,
+            // or line break.
+            let j = start;
             while (j < length) {
                 const code = csvText.charCodeAt(j);
                 if (
@@ -619,39 +610,41 @@ export const LinkedInCleaner = (() => {
                 }
                 j += 1;
             }
-            if (j > i) {
-                field += csvText.slice(i, j);
-                if (fieldTooLarge()) {
-                    break;
-                }
-                i = j;
-                continue;
+            if (j > start) {
+                field += csvText.slice(start, j);
+                fieldTooLarge();
+                return j;
             }
 
-            const code = csvText.charCodeAt(i);
+            const code = csvText.charCodeAt(start);
             if (code === quoteCode) {
                 state = CSV_PARSE_STATE.INSIDE_QUOTES;
-                i += 1;
-            } else if (code === delimiterCode) {
-                if (!pushField()) {
-                    break;
-                }
-                i += 1;
-            } else if (code === LF) {
-                if (!pushField() || !pushRow()) {
-                    break;
-                }
-                i += 1;
-            } else {
-                // Carriage return: end the row, consuming a following newline (CRLF).
-                if (!pushField() || !pushRow()) {
-                    break;
-                }
-                i += 1;
-                if (csvText.charCodeAt(i) === LF) {
-                    i += 1;
-                }
+                return start + 1;
             }
+            if (code === delimiterCode) {
+                pushField();
+                return start + 1;
+            }
+            if (code === LF) {
+                // Short-circuit: only push the row when the field push succeeds.
+                if (pushField()) {
+                    pushRow();
+                }
+                return start + 1;
+            }
+            // Carriage return ends the row, consuming a following newline (CRLF).
+            if (pushField()) {
+                pushRow();
+            }
+            return csvText.charCodeAt(start + 1) === LF ? start + 2 : start + 1;
+        };
+
+        let i = 0;
+        while (i < length && !parseError) {
+            i =
+                state === CSV_PARSE_STATE.INSIDE_QUOTES
+                    ? stepInsideQuotes(i)
+                    : stepOutsideQuotes(i);
         }
 
         if (parseError) {

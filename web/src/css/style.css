@@ -1382,7 +1382,44 @@ button {
     background: var(--bg-tertiary);
 }
 
+.message-item-avatar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-on-accent);
+    background: var(--accent-blue);
+}
+
+.avatar-blue {
+    background: var(--accent-blue);
+}
+
+.avatar-yellow {
+    background: var(--accent-yellow);
+    color: var(--text-primary);
+}
+
+.avatar-red {
+    background: var(--accent-red);
+}
+
+.avatar-green {
+    background: var(--accent-green);
+}
+
+.avatar-purple {
+    background: var(--accent-purple);
+}
+
 .message-item-main {
+    flex: 1;
     min-width: 0;
 }
 
@@ -1460,6 +1497,14 @@ button {
 .skeleton-value {
     width: 72px;
     height: 24px;
+}
+
+/* Matches the .message-item-avatar footprint so skeleton rows don't shift. */
+.skeleton-avatar {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
 }
 
 .skeleton-icon {

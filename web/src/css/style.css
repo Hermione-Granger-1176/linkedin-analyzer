@@ -1499,6 +1499,14 @@ button {
     height: 24px;
 }
 
+/* Matches the .message-item-avatar footprint so skeleton rows don't shift. */
+.skeleton-avatar {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+}
+
 .skeleton-icon {
     width: 56px;
     height: 56px;

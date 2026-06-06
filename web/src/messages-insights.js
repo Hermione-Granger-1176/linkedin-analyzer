@@ -1514,6 +1514,7 @@ export const MessagesPage = (() => {
 
         const skeletonItem = `
             <li class="message-item skeleton-row">
+                <span class="skeleton-block skeleton-avatar"></span>
                 <div class="message-item-main">
                     <div class="skeleton-block skeleton-title"></div>
                     <div class="skeleton-block skeleton-meta"></div>

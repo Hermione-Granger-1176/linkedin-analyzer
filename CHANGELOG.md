@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Python 3.14 to the supported classifiers; documented older-version (3.11–3.13) development with uv.
+- Rollback runbook and versioning guidance in `docs/operations.md`.
+
+### Changed
+
+- Default local and CI Python to 3.14 to match the container runtime; compatibility matrix now covers 3.11/3.12/3.13.
+
+### Fixed
+
+- Write cleaned Excel output atomically so a crash mid-export cannot leave a truncated or corrupt `.xlsx` at the destination.
+
+### Security
+
+- Harden opt-in Sentry diagnostics: disable default PII, cap breadcrumbs, and scrub console/UI breadcrumbs that could carry user data.
+
 ## [0.5.0] - 2026-03-06
 
 ### Added

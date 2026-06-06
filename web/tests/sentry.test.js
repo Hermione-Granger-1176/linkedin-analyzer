@@ -89,13 +89,47 @@ describe("sentry", () => {
                 dsn: "https://key@sentry.io/999",
                 environment: "production",
                 release: "sha-123",
+                sendDefaultPii: false,
+                maxBreadcrumbs: 20,
                 beforeSend: expect.any(Function),
+                beforeBreadcrumb: expect.any(Function),
             }),
         );
 
         import.meta.env.VITE_SENTRY_DSN = original;
         import.meta.env.MODE = originalMode;
         import.meta.env.VITE_APP_RELEASE = originalRelease;
+    });
+
+    it("scrubs sensitive breadcrumbs via beforeBreadcrumb", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.init.mockClear();
+
+        const { initSentry, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        const { beforeBreadcrumb } = sentry.init.mock.calls[0][0];
+
+        // Categories that can carry user input are dropped entirely.
+        expect(beforeBreadcrumb({ category: "console", message: "typed secret" })).toBeNull();
+        expect(beforeBreadcrumb({ category: "ui.input", message: "name field" })).toBeNull();
+        expect(beforeBreadcrumb(null)).toBeNull();
+
+        // DOM breadcrumbs are kept for context but their message is stripped.
+        const ui = beforeBreadcrumb({ category: "ui", message: "div.contact 'Jane Doe'" });
+        expect(ui).toEqual({ category: "ui", message: undefined });
+        const dom = beforeBreadcrumb({ category: "dom", message: "input[value='secret']" });
+        expect(dom).toEqual({ category: "dom", message: undefined });
+
+        // Benign breadcrumbs pass through untouched.
+        const nav = { category: "navigation", data: { to: "#/insights" } };
+        expect(beforeBreadcrumb(nav)).toBe(nav);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
     });
 
     it("captureError is a no-op when sentryReady is false (DSN not set)", async () => {

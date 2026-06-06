@@ -49,7 +49,8 @@ def is_missing(value: object) -> bool:
     Treats the following as missing:
     - None
     - Empty strings or whitespace-only strings
-    - Literal "NA" or "NaN" strings (case-insensitive for "NA")
+    - Any NA-like literal in MISSING_TEXT_VALUES, matched case-insensitively
+      (e.g. "NA", "NaN", "NULL", "NONE", "#N/A", "<NA>")
     - Pandas NA/NaT/NaN types
 
     Args:

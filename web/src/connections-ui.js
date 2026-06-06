@@ -28,6 +28,7 @@ export const ConnectionsPage = (() => {
 
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
     const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
     const WORKER_TIMEOUT_MS = 30000;
     const TOP_N = 10;
 
@@ -612,7 +613,7 @@ export const ConnectionsPage = (() => {
             return rows;
         }
 
-        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        const cutoff = Date.now() - days * MS_PER_DAY;
         return rows.filter((row) => row.connectedOn >= cutoff);
     }
 

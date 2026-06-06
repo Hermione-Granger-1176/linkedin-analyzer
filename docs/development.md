@@ -2,9 +2,14 @@
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.14 (default; the Docker runtime and primary CI gate use 3.14)
 - Node.js 22.13+ (or 24+)
 - uv
+
+The project supports Python 3.11–3.14. 3.14 is the default for local development,
+the container image, and the primary CI quality gate; 3.11–3.13 are verified in the
+CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version)
+if you need to develop or test against 3.11, 3.12, or 3.13.
 
 ## Initial setup
 
@@ -25,6 +30,38 @@ Refresh `uv.lock` after Python dependency changes:
 ```bash
 make lock
 ```
+
+### Using an older Python version
+
+The `make install` target builds the `.venv` against the interpreter named by the
+`PYTHON` variable, which defaults to `3.14` (uv downloads it if it is not already
+installed). To work against an older supported version, override `PYTHON`. uv will
+download and manage the interpreter for you, so you do not need it installed
+system-wide:
+
+```bash
+# Build the .venv against a specific Python (uv fetches it if missing)
+rm -rf .venv && make install PYTHON=3.12
+
+# Subsequent targets use that .venv directly — no override needed
+make test-py
+make typecheck-py
+```
+
+`PYTHON` only affects `make install`, which is what creates the `.venv` (it defaults
+to `3.14`); the other targets always run the `.venv` interpreter you built. uv keeps
+an existing compatible `.venv` rather than rebuilding it, so remove `.venv` first when
+you want the interpreter to actually change. To switch back to the default:
+
+```bash
+rm -rf .venv && make install
+```
+
+You can also point `PYTHON` at an explicit interpreter name on your `PATH` (for
+example `make install PYTHON=python3.11`). The lockfile (`uv.lock`) is universal and
+resolves across 3.11–3.14, so no lock changes are needed to switch versions. Type
+checking (`mypy`) and linting (`ruff`) always target the 3.11 floor regardless of the
+interpreter you run, so newer-only syntax is caught early.
 
 ## Web App
 
@@ -81,7 +118,7 @@ make fmt
 GitHub Actions runs on pull requests and pushes to `main`:
 
 - **Quality gate**: workflow lint + Python lint/format/typecheck/tests + web format/lint/typecheck/unit tests
-- **Compatibility**: Python 3.11/3.13 and Node.js 22/24 matrix jobs
+- **Compatibility**: Python 3.11/3.12/3.13 and Node.js 22/24 matrix jobs (the quality gate runs the primary 3.14)
 - **Web build**: production build + size-budget check
 - **Browser checks**: Playwright E2E in an isolated job with failure artifacts
 

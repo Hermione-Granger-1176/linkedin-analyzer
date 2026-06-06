@@ -2,7 +2,10 @@
 
 # ─── Variables ────────────────────────────────────────────────────────────────
 
-PYTHON              ?= python3
+# Default interpreter for `make install`. uv resolves and downloads this version
+# if it is not already available. Override for older supported versions, e.g.
+# `make install PYTHON=3.12` (see docs/development.md).
+PYTHON              ?= 3.14
 UV                  ?= uv
 VENV                ?= .venv
 VENV_PYTHON         := $(VENV)/bin/python

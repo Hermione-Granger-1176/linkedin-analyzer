@@ -16,6 +16,41 @@
    - `VITE_APP_RELEASE` (recommended, e.g. commit SHA)
 5. Verify custom headers from `vercel.json` are applied after deploy.
 
+## Versioning
+
+Two independent version identifiers exist by design:
+
+- **Python CLI / Docker image** — derived from the Git tag at build time via
+  `hatch-vcs` (`pyproject.toml`, `[tool.hatch.version] source = "vcs"`). Tagging a
+  release is the single source of truth; do not hand-edit a version.
+- **Web app** — `package.json` `version` is cosmetic only. The value that
+  matters in production is `VITE_APP_RELEASE` (recommended: the commit SHA or
+  release tag), which is what Sentry correlates errors against. Set it per build
+  rather than relying on `package.json`.
+
+When cutting a release, the Git tag drives the PyPI and GHCR versions; set
+`VITE_APP_RELEASE` to the same tag/SHA so web telemetry lines up with the CLI release.
+
+## Rollback
+
+Each release surface rolls back independently.
+
+- **Web app (Vercel)** — In the Vercel dashboard, open the project's
+  Deployments, find the last known-good deployment, and use **Promote to
+  Production** (or `vercel rollback <deployment-url>`). The PWA service worker
+  auto-refreshes clients to the promoted build; a hard reload forces it
+  immediately.
+- **PyPI (CLI)** — Releases are immutable and a version cannot be re-uploaded.
+  Roll forward by tagging a new patch release that reverts the offending change.
+  If a release is actively harmful, `yank` it on PyPI so pip stops resolving to
+  it while leaving existing pins working.
+- **GHCR (container)** — Re-point `latest` by pushing the prior good tag, or
+  instruct consumers to pin the previous immutable `:<version>` / `:sha-<sha>`
+  tag (both are published by `publish.yml`).
+
+After any rollback, confirm the active release in Sentry via the `release` tag
+and open a follow-up to roll forward with a fix.
+
 ## Observability
 
 ### Sentry setup

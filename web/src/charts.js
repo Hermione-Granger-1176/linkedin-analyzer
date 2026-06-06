@@ -111,15 +111,14 @@ export const SketchCharts = (() => {
             if (item.hitTest && item.hitTest(x, y)) {
                 return item;
             }
-            if (typeof item.x === "number") {
-                if (
-                    x >= item.x &&
-                    x <= item.x + item.width &&
-                    y >= item.y &&
-                    y <= item.y + item.height
-                ) {
-                    return item;
-                }
+            if (
+                typeof item.x === "number" &&
+                x >= item.x &&
+                x <= item.x + item.width &&
+                y >= item.y &&
+                y <= item.y + item.height
+            ) {
+                return item;
             }
         }
         return null;

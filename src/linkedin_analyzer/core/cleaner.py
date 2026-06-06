@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -41,6 +44,36 @@ def normalize_required_columns(df: pd.DataFrame, required: list[str]) -> None:
         normalized = df[column].astype("string").str.strip()
         normalized = normalized.mask(normalized.map(is_missing), pd.NA)
         df[column] = normalized
+
+
+def _write_excel_atomic(df: pd.DataFrame, output_path: Path, config: CleanerConfig) -> None:
+    """Write and format a DataFrame to an Excel file atomically.
+
+    Writes and formats a temporary file in the destination directory, then
+    atomically replaces the target so a crash mid-write cannot leave a truncated
+    or corrupt .xlsx at output_path. The temporary file is removed if any step
+    fails.
+
+    Args:
+        df: DataFrame to export
+        output_path: Final path for the Excel file
+        config: Cleaner configuration with formatting settings
+    """
+    tmp_fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{output_path.stem}-",
+        suffix=output_path.suffix,
+        dir=output_path.parent,
+    )
+    os.close(tmp_fd)
+    tmp_path = Path(tmp_name)
+    try:
+        df.to_excel(tmp_path, index=False, engine="openpyxl")
+        LOG.info("Formatting Excel output")
+        format_excel_output(tmp_path, config)
+        tmp_path.replace(output_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def run_cleaner(config: CleanerConfig) -> CleanerResult:
@@ -101,10 +134,7 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         df = df.reindex(columns=configured_columns, fill_value="")
 
         LOG.info("Exporting to %s", output_path)
-        df.to_excel(output_path, index=False, engine="openpyxl")
-
-        LOG.info("Formatting Excel output")
-        format_excel_output(output_path, config)
+        _write_excel_atomic(df, output_path, config)
 
         LOG.info("Done. Total rows: %d", len(df))
         return CleanerResult(

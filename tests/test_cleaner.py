@@ -213,6 +213,52 @@ class TestRunCleaner:
         df = pd.read_excel(output_path)
         assert list(df["First Name"].fillna("")) == ["Ada"]
 
+    def test_successful_clean_leaves_no_temp_files(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nhello\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name"),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        leftover = [p.name for p in tmp_path.iterdir() if p.name.startswith(".test-")]
+        assert leftover == []
+
+    def test_write_failure_preserves_existing_output(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failure mid-write must not corrupt an existing output or leave temp files."""
+        import linkedin_analyzer.core.cleaner as cleaner_module
+
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nhello\n")
+        output_path.write_text("previous good output")
+
+        def boom(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("formatting blew up")
+
+        monkeypatch.setattr(cleaner_module, "format_excel_output", boom)
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name"),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert "formatting blew up" in (result.error or "")
+        # Original output is untouched, and no temp file is left behind.
+        assert output_path.read_text() == "previous good output"
+        leftover = [p.name for p in tmp_path.iterdir() if p.name.startswith(".test-")]
+        assert leftover == []
+
     def test_required_columns_drop_na_like_tokens(self, tmp_path: Path) -> None:
         input_path = tmp_path / "messages.csv"
         output_path = tmp_path / "messages.xlsx"

@@ -10,6 +10,11 @@ const NOISY_EVENT_PATTERNS = [
     /safari-extension:\/\//i,
     /Non-Error promise rejection captured/i,
 ];
+// Breadcrumb categories that can capture user-entered content or arbitrary DOM
+// text. Dropped before they reach Sentry because this app processes private
+// LinkedIn data and breadcrumbs are not needed to triage runtime errors.
+const SENSITIVE_BREADCRUMB_CATEGORIES = new Set(["console", "ui.input", "ui.click"]);
+const MAX_BREADCRUMBS = 20;
 
 /**
  * Resolve a release tag for Sentry events.
@@ -61,6 +66,29 @@ function isNoisyEvent(event) {
     return false;
 }
 
+/**
+ * Drop or sanitize breadcrumbs that could carry user data before they are stored.
+ * @param {object} breadcrumb
+ * @returns {object|null}
+ */
+function scrubBreadcrumb(breadcrumb) {
+    if (!breadcrumb || typeof breadcrumb !== "object") {
+        return null;
+    }
+
+    if (SENSITIVE_BREADCRUMB_CATEGORIES.has(breadcrumb.category)) {
+        return null;
+    }
+
+    // DOM breadcrumbs include serialized element text; keep the event type but
+    // drop the message so user-entered content is never transmitted.
+    if (breadcrumb.category === "ui" || breadcrumb.category === "dom") {
+        return { ...breadcrumb, message: undefined };
+    }
+
+    return breadcrumb;
+}
+
 /** Initialize Sentry when DSN is configured and telemetry consent is granted. */
 export function initSentry() {
     const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -74,8 +102,13 @@ export function initSentry() {
         environment: import.meta.env.MODE || "development",
         release: resolveRelease(),
         tracesSampleRate: 0.1,
+        sendDefaultPii: false,
+        maxBreadcrumbs: MAX_BREADCRUMBS,
         beforeSend(event) {
             return isNoisyEvent(event) ? null : event;
+        },
+        beforeBreadcrumb(breadcrumb) {
+            return scrubBreadcrumb(breadcrumb);
         },
     });
     sentryReady = true;

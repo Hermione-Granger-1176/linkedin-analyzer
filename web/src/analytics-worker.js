@@ -74,7 +74,7 @@ function hasAnalyticsData() {
 }
 
 /**
- * Serialize analytics for storage - now much simpler since we store aggregates, not events
+ * Serialize the analytics aggregate for storage.
  * @param {object|null} analyticsData - Analytics aggregate payload
  * @returns {object|null}
  */
@@ -88,7 +88,7 @@ function serializeAnalytics(analyticsData) {
 }
 
 /**
- * Hydrate analytics from storage - minimal work needed now
+ * Hydrate the analytics aggregate from a stored payload.
  * @param {object|null} base - Stored analytics payload
  * @returns {object|null}
  */

@@ -191,12 +191,12 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Clean Message field from LinkedIn Comments export.
-     * Port of: clean_comments_message() from text.py
+     * Strip backslash- and double-double-quote escaping from a CSV value.
+     * Shared helper for the Comments and Messages cleaners.
      *
-     * Handles the backslash-escaped quote pattern used in Comments.csv:
+     * Handles the escaping patterns used in those exports:
      * - Converts backslash-escaped quotes (\") to regular quotes (")
-     * - Handles any double-double quote escaping as fallback
+     * - Converts double-double quotes ("") to regular quotes (")
      * - Preserves line breaks
      *
      * @param {*} value - Raw value from CSV
@@ -213,6 +213,13 @@ export const LinkedInCleaner = (() => {
         return text.trim();
     }
 
+    /**
+     * Clean Message field from LinkedIn Comments export.
+     * Port of: clean_comments_message() from text.py
+     *
+     * @param {*} value - Raw value from CSV
+     * @returns {string} Cleaned string
+     */
     function cleanCommentsMessage(value) {
         return cleanEscapedQuotesText(value);
     }

@@ -72,6 +72,18 @@ linkedin-analyzer --log-level DEBUG shares
 linkedin-analyzer --log-level INFO all
 ```
 
+Defaults to `INFO`. Also configurable via the `LOG_LEVEL` environment variable.
+
+### Log format
+
+```bash
+linkedin-analyzer --log-format json all
+```
+
+Choose `text` (default, human-readable) or `json` (structured, one object per
+line). Also configurable via the `LOG_FORMAT` environment variable. See
+[Operations and Deployment](operations.md) for production logging guidance.
+
 ### Custom paths for single-file commands
 
 ```bash

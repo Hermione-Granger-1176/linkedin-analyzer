@@ -496,4 +496,29 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(false);
         expect(result.error).toMatch(/too large/i);
     });
+
+    it("returns parser error when an unquoted field exceeds the safety limit", () => {
+        const veryLargeField = "x".repeat(200001);
+        const csv = [
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+            `2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,${veryLargeField},,,MEMBER_NETWORK`,
+        ].join("\n");
+
+        const result = LinkedInCleaner.process(csv, "shares");
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/too large/i);
+    });
+
+    it("preserves embedded CRLF newlines inside quoted fields", () => {
+        const csv = [
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+            '2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,"line one\r\nline two",,,MEMBER_NETWORK',
+        ].join("\n");
+
+        const result = LinkedInCleaner.process(csv, "shares");
+
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0].ShareCommentary).toBe("line one\nline two");
+    });
 });

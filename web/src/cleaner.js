@@ -96,7 +96,7 @@ export const LinkedInCleaner = (() => {
 
     const CSV_LIMITS = Object.freeze({
         maxChars: MAX_CSV_CHARS,
-        maxRows: 250000,
+        maxRows: 500000,
         maxColumns: 256,
         maxFieldChars: 200000,
     });
@@ -497,6 +497,14 @@ export const LinkedInCleaner = (() => {
             };
         }
 
+        // Character codes for the hot scanning loop (avoids per-char string allocation).
+        const CR = 13;
+        const LF = 10;
+        const quoteCode = quote.charCodeAt(0);
+        const delimiterCode = delimiter.charCodeAt(0);
+        const escapeCode = escape ? escape.charCodeAt(0) : -1;
+        const length = csvText.length;
+
         const rows = [];
         let row = [];
         let field = "";
@@ -504,13 +512,12 @@ export const LinkedInCleaner = (() => {
         let state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
         let parseError = null;
 
-        const appendChar = (char) => {
-            field += char;
+        const fieldTooLarge = () => {
             if (field.length > CSV_LIMITS.maxFieldChars) {
                 parseError = "CSV parsing error: one field is too large to process safely.";
-                return false;
+                return true;
             }
-            return true;
+            return false;
         };
 
         const pushField = () => {
@@ -533,67 +540,117 @@ export const LinkedInCleaner = (() => {
             return true;
         };
 
-        for (let i = 0; i < csvText.length && !parseError; i++) {
-            const char = csvText[i];
-            const nextChar = csvText[i + 1];
-
+        let i = 0;
+        while (i < length && !parseError) {
             if (state === CSV_PARSE_STATE.INSIDE_QUOTES) {
-                switch (char) {
-                    case "\r":
-                        /* v8 ignore next 5 */
-                        if (nextChar === "\n") {
-                            if (!appendChar("\n")) {
-                                break;
-                            }
-                            i += 1;
-                        } else {
-                            appendChar(char);
-                        }
+                // Bulk-copy the run of ordinary characters up to the next quote,
+                // carriage return, or escape character.
+                let j = i;
+                while (j < length) {
+                    const code = csvText.charCodeAt(j);
+                    if (code === quoteCode || code === CR || code === escapeCode) {
                         break;
-                    case quote:
-                        if (nextChar === quote) {
-                            appendChar(quote);
-                            i += 1;
-                        } else {
-                            state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
-                        }
+                    }
+                    j += 1;
+                }
+                if (j > i) {
+                    field += csvText.slice(i, j);
+                    if (fieldTooLarge()) {
                         break;
-                    default:
-                        /* v8 ignore next 5 */
-                        if (escape && char === escape && nextChar === quote) {
-                            appendChar(quote);
-                            i += 1;
-                        } else {
-                            appendChar(char);
-                        }
+                    }
+                    i = j;
+                    continue;
+                }
+
+                const code = csvText.charCodeAt(i);
+                if (code === CR) {
+                    /* v8 ignore next 10 */
+                    if (csvText.charCodeAt(i + 1) === LF) {
+                        field += "\n";
+                        i += 2;
+                    } else {
+                        field += "\r";
+                        i += 1;
+                    }
+                    if (fieldTooLarge()) {
                         break;
+                    }
+                } else if (code === quoteCode) {
+                    if (csvText.charCodeAt(i + 1) === quoteCode) {
+                        field += quote;
+                        i += 2;
+                        /* v8 ignore next 3 */
+                        if (fieldTooLarge()) {
+                            break;
+                        }
+                    } else {
+                        state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
+                        i += 1;
+                    }
+                } else {
+                    // Escape character: collapse escape+quote, otherwise keep it literally.
+                    /* v8 ignore next 10 */
+                    if (csvText.charCodeAt(i + 1) === quoteCode) {
+                        field += quote;
+                        i += 2;
+                    } else {
+                        field += csvText[i];
+                        i += 1;
+                    }
+                    if (fieldTooLarge()) {
+                        break;
+                    }
                 }
                 continue;
             }
 
-            switch (char) {
-                case quote:
-                    state = CSV_PARSE_STATE.INSIDE_QUOTES;
+            // Outside quotes: bulk-copy ordinary characters up to the next quote,
+            // delimiter, or line break.
+            let j = i;
+            while (j < length) {
+                const code = csvText.charCodeAt(j);
+                if (
+                    code === quoteCode ||
+                    code === delimiterCode ||
+                    code === CR ||
+                    code === LF
+                ) {
                     break;
-                case delimiter:
-                    pushField();
+                }
+                j += 1;
+            }
+            if (j > i) {
+                field += csvText.slice(i, j);
+                if (fieldTooLarge()) {
                     break;
-                case "\n":
-                    if (!pushField() || !pushRow()) {
-                        break;
-                    }
+                }
+                i = j;
+                continue;
+            }
+
+            const code = csvText.charCodeAt(i);
+            if (code === quoteCode) {
+                state = CSV_PARSE_STATE.INSIDE_QUOTES;
+                i += 1;
+            } else if (code === delimiterCode) {
+                if (!pushField()) {
                     break;
-                case "\r":
-                    if (!pushField() || !pushRow()) {
-                        break;
-                    }
-                    if (nextChar === "\n") {
-                        i += 1;
-                    }
+                }
+                i += 1;
+            } else if (code === LF) {
+                if (!pushField() || !pushRow()) {
                     break;
-                default:
-                    appendChar(char);
+                }
+                i += 1;
+            } else {
+                // Carriage return: end the row, consuming a following newline (CRLF).
+                if (!pushField() || !pushRow()) {
                     break;
+                }
+                i += 1;
+                if (csvText.charCodeAt(i) === LF) {
+                    i += 1;
+                }
             }
         }
 
@@ -612,9 +669,9 @@ export const LinkedInCleaner = (() => {
         }
 
         let lastNonEmptyIndex = -1;
-        for (let i = rows.length - 1; i >= 0; i -= 1) {
-            if (!isRowEmpty(rows[i])) {
-                lastNonEmptyIndex = i;
+        for (let k = rows.length - 1; k >= 0; k -= 1) {
+            if (!isRowEmpty(rows[k])) {
+                lastNonEmptyIndex = k;
                 break;
             }
         }
@@ -707,15 +764,20 @@ export const LinkedInCleaner = (() => {
             return headerResult;
         }
 
-        const dataRows = rowsAfterSkip.slice(1).filter((row) => !isRowEmpty(row));
-        const data = dataRows.map((row) =>
-            Object.fromEntries(
-                headers.map((header, index) => [
-                    header,
-                    row[index] !== undefined ? row[index] : "",
-                ]),
-            ),
-        );
+        const headerCount = headers.length;
+        const data = [];
+        for (let r = 1; r < rowsAfterSkip.length; r += 1) {
+            const row = rowsAfterSkip[r];
+            if (isRowEmpty(row)) {
+                continue;
+            }
+            const record = {};
+            for (let c = 0; c < headerCount; c += 1) {
+                const value = row[c];
+                record[headers[c]] = value !== undefined ? value : "";
+            }
+            data.push(record);
+        }
 
         const result = { headers, data, error: null };
         if (cacheKey) {
@@ -799,9 +861,17 @@ export const LinkedInCleaner = (() => {
             return data;
         }
 
-        const cleanedRows = data.map((row) => {
-            const cleanedRow = {};
+        const requiredRowColumns = Array.isArray(config.requiredRowColumns)
+            ? config.requiredRowColumns
+            : config.requiredColumns;
+        const dropIfAllMissing = Array.isArray(config.dropIfAllMissing)
+            ? config.dropIfAllMissing
+            : [];
 
+        // Clean and filter in a single pass to avoid intermediate arrays.
+        const cleanedRows = [];
+        for (const row of data) {
+            const cleanedRow = {};
             config.columns.forEach((column) => {
                 const value = row[column.name];
                 const cleaner = column.cleaner ? CLEANERS[column.cleaner] : null;
@@ -809,24 +879,16 @@ export const LinkedInCleaner = (() => {
                 cleanedRow[column.name] = escapeFormula(cleanedValue);
             });
 
-            return cleanedRow;
-        });
-
-        const requiredRowColumns = Array.isArray(config.requiredRowColumns)
-            ? config.requiredRowColumns
-            : config.requiredColumns;
-        const rowsWithRequiredValues = cleanedRows.filter((row) =>
-            hasRequiredRowValues(row, requiredRowColumns),
-        );
-
-        const dropIfAllMissing = Array.isArray(config.dropIfAllMissing)
-            ? config.dropIfAllMissing
-            : [];
-        if (dropIfAllMissing.length) {
-            return rowsWithRequiredValues.filter((row) => hasAnyRowValue(row, dropIfAllMissing));
+            if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
+                continue;
+            }
+            if (dropIfAllMissing.length && !hasAnyRowValue(cleanedRow, dropIfAllMissing)) {
+                continue;
+            }
+            cleanedRows.push(cleanedRow);
         }
 
-        return rowsWithRequiredValues;
+        return cleanedRows;
     }
 
     /**
@@ -886,7 +948,6 @@ export const LinkedInCleaner = (() => {
             fileType: null,
             detectedType: null,
             headers: [],
-            originalData: [],
             cleanedData: [],
             rowCount: 0,
             error,
@@ -912,7 +973,6 @@ export const LinkedInCleaner = (() => {
                     fileType: selected.type,
                     detectedType: selected.type,
                     headers: selected.headers,
-                    originalData: selected.data,
                     cleanedData,
                     rowCount: cleanedData.length,
                 });
@@ -927,7 +987,6 @@ export const LinkedInCleaner = (() => {
                 "Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.",
                 {
                     headers: initialParse.headers,
-                    originalData: initialParse.data,
                     rowCount: initialParse.data.length,
                 },
             );
@@ -955,7 +1014,6 @@ export const LinkedInCleaner = (() => {
                     fileType,
                     detectedType,
                     headers,
-                    originalData: data,
                     rowCount: data.length,
                 },
             );
@@ -967,7 +1025,6 @@ export const LinkedInCleaner = (() => {
             fileType,
             detectedType,
             headers,
-            originalData: data,
             cleanedData,
             rowCount: cleanedData.length,
         });

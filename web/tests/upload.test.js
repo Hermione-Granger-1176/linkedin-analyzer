@@ -286,7 +286,7 @@ describe("UploadPage", () => {
 
         const oversized = new File(["col\nvalue"], "TooLarge.csv", { type: "text/csv" });
         Object.defineProperty(oversized, "size", {
-            value: 41 * 1024 * 1024,
+            value: 81 * 1024 * 1024,
             configurable: true,
         });
 
@@ -297,7 +297,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         const hint = document.getElementById("uploadHint");
-        expect(hint.textContent).toContain("exceed 40MB");
+        expect(hint.textContent).toContain("exceed 80MB");
         expect(hint.classList.contains("is-error")).toBe(true);
     });
 
@@ -1218,7 +1218,7 @@ describe("UploadPage", () => {
 
     // --- oversize file warning -----------------------------------------------
 
-    it("warns about large files (>10MB) but still processes them", async () => {
+    it("warns about large files (>25MB) but still processes them", async () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
@@ -1236,9 +1236,9 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Create a file mock that reports >10MB size
+        // Create a file mock that reports >25MB size
         const bigFile = new File(["col\nval"], "Huge.csv", { type: "text/csv" });
-        Object.defineProperty(bigFile, "size", { value: 11 * 1024 * 1024 });
+        Object.defineProperty(bigFile, "size", { value: 26 * 1024 * 1024 });
 
         const input = document.getElementById("multiFileInput");
         Object.defineProperty(input, "files", { value: [bigFile] });

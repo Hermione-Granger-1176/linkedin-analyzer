@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_CSV_CHARS } from "../src/constants.js";
 import {
     parseAnalyticsWorkerMessage,
     parseAnalyticsWorkerRequest,
@@ -87,7 +88,7 @@ describe("worker contracts", () => {
         const oversizeCsv = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: {
-                csvText: "a".repeat(30 * 1024 * 1024 + 2),
+                csvText: "a".repeat(MAX_CSV_CHARS + 2),
                 fileName: "Shares.csv",
             },
         });
@@ -102,7 +103,7 @@ describe("worker contracts", () => {
 
         const oversizeRestore = parseAnalyticsWorkerRequest({
             type: "restoreFiles",
-            payload: { sharesCsv: "a".repeat(30 * 1024 * 1024 + 1), commentsCsv: "" },
+            payload: { sharesCsv: "a".repeat(MAX_CSV_CHARS + 1), commentsCsv: "" },
         });
 
         expect(invalidEnvelope.valid).toBe(false);
@@ -334,7 +335,7 @@ describe("worker contracts", () => {
         });
         const oversize = parseConnectionsWorkerRequest({
             type: "process",
-            payload: { connectionsCsv: "a".repeat(30 * 1024 * 1024 + 2) },
+            payload: { connectionsCsv: "a".repeat(MAX_CSV_CHARS + 2) },
         });
 
         expect(invalidType.valid).toBe(false);
@@ -388,13 +389,13 @@ describe("worker contracts", () => {
         const missingPayload = parseMessagesWorkerRequest({ type: "process", payload: null });
         const oversizeRequest = parseMessagesWorkerRequest({
             type: "process",
-            payload: { messagesCsv: "a".repeat(30 * 1024 * 1024 + 2) },
+            payload: { messagesCsv: "a".repeat(MAX_CSV_CHARS + 2) },
         });
         const oversizeConnectionsRequest = parseMessagesWorkerRequest({
             type: "process",
             payload: {
                 messagesCsv: "FROM,TO,DATE,CONTENT\nA,B,2025-01-01,Hi",
-                connectionsCsv: "a".repeat(30 * 1024 * 1024 + 2),
+                connectionsCsv: "a".repeat(MAX_CSV_CHARS + 2),
             },
         });
         const invalidResponse = parseMessagesWorkerMessage({ type: "error" });

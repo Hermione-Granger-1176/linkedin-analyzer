@@ -27,17 +27,28 @@ MISSING_TEXT_VALUES = frozenset(
 )
 CONNECTION_MONTH_LOOKUP = {
     "jan": 1,
+    "january": 1,
     "feb": 2,
+    "february": 2,
     "mar": 3,
+    "march": 3,
     "apr": 4,
+    "april": 4,
     "may": 5,
     "jun": 6,
+    "june": 6,
     "jul": 7,
+    "july": 7,
     "aug": 8,
+    "august": 8,
     "sep": 9,
+    "september": 9,
     "oct": 10,
+    "october": 10,
     "nov": 11,
+    "november": 11,
     "dec": 12,
+    "december": 12,
 }
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
@@ -49,7 +60,8 @@ def is_missing(value: object) -> bool:
     Treats the following as missing:
     - None
     - Empty strings or whitespace-only strings
-    - Literal "NA" or "NaN" strings (case-insensitive for "NA")
+    - Any NA-like literal in MISSING_TEXT_VALUES, matched case-insensitively
+      (e.g. "NA", "NaN", "NULL", "NONE", "#N/A", "<NA>")
     - Pandas NA/NaT/NaN types
 
     Args:
@@ -121,16 +133,7 @@ def clean_comments_message(value: object) -> str:
     Returns:
         Cleaned string
     """
-    if is_missing(value):
-        return ""
-
-    text = str(value)
-
-    text = text.replace('\\"', '"')
-
-    text = text.replace('""', '"')
-
-    return text.strip()
+    return _clean_escaped_quotes_text(value)
 
 
 def clean_messages_content(value: object) -> str:
@@ -147,6 +150,11 @@ def clean_messages_content(value: object) -> str:
     Returns:
         Cleaned string
     """
+    return _clean_escaped_quotes_text(value)
+
+
+def _clean_escaped_quotes_text(value: object) -> str:
+    """Normalize quote escaping shared by comments and messages."""
     if is_missing(value):
         return ""
 
@@ -227,7 +235,7 @@ def clean_connections_date(value: object) -> str:
     if not day_str.isdigit() or not year_str.isdigit():
         return text
 
-    month = CONNECTION_MONTH_LOOKUP.get(month_str[:3].lower())
+    month = CONNECTION_MONTH_LOOKUP.get(month_str.lower())
     if month is None:
         return text
 

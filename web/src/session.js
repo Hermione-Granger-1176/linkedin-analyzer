@@ -1,14 +1,14 @@
 /* Session TTL cleanup */
 
-import { DataCache } from './data-cache.js';
-import { Storage } from './storage.js';
+import { SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
+import { DataCache } from "./data-cache.js";
+import { Storage } from "./storage.js";
 
 export const Session = (() => {
-    'use strict';
+    "use strict";
 
-    const STORAGE_KEY = 'linkedin-analyzer:last-activity';
+    const STORAGE_KEY = "linkedin-analyzer:last-activity";
     const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-    const CLEANUP_PROMISE_KEY = '__linkedinAnalyzerSessionCleanupPromise';
 
     /**
      * Safe localStorage getter.
@@ -88,8 +88,8 @@ export const Session = (() => {
      * @returns {Promise<void>}
      */
     async function waitForCleanup() {
-        const cleanupPromise = window[CLEANUP_PROMISE_KEY];
-        if (!cleanupPromise || typeof cleanupPromise.then !== 'function') {
+        const cleanupPromise = window[SESSION_CLEANUP_PROMISE_KEY];
+        if (!cleanupPromise || typeof cleanupPromise.then !== "function") {
             return;
         }
         try {

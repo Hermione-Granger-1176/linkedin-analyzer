@@ -3,6 +3,7 @@
 import { AnalyticsPage } from "./analytics-ui.js";
 import { CleanPage } from "./clean.js";
 import { ConnectionsPage } from "./connections-ui.js";
+import { SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { initDecorations } from "./decorations.js";
 import { DomEvents } from "./dom-events.js";
 import { InsightsPage } from "./insights-ui.js";
@@ -73,7 +74,6 @@ function init() {
             },
         },
     ]);
-    const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
     const hasTelemetryConsent = telemetryConsentGranted();
 
     /* Initialize runtime modules and route wiring. */
@@ -101,8 +101,7 @@ function init() {
 
     /** Run session cleanup without blocking initial render. */
     function runSessionCleanup() {
-        window[SESSION_CLEANUP_PROMISE_KEY] = Promise.resolve()
-            .then(() => Session.cleanIfStale())
+        window[SESSION_CLEANUP_PROMISE_KEY] = Session.cleanIfStale()
             /* v8 ignore next */
             .catch((error) => {
                 captureError(error, {

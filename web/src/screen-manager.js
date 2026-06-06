@@ -1,9 +1,9 @@
 /* Screen transitions and page lifecycle management */
 
-import { LoadingOverlay } from './loading-overlay.js';
+import { LoadingOverlay } from "./loading-overlay.js";
 
 export const ScreenManager = (() => {
-    'use strict';
+    "use strict";
 
     const TRANSITION_DURATION_MS = 350;
 
@@ -48,14 +48,14 @@ export const ScreenManager = (() => {
         updateActiveLinks(routeName);
 
         if (previousName !== routeName) {
-            if (previousRoute && previousRoute.controller && typeof previousRoute.controller.onRouteLeave === 'function') {
+            if (previousRoute && previousRoute.controller && typeof previousRoute.controller.onRouteLeave === "function") {
                 previousRoute.controller.onRouteLeave({ from: previousName, to: routeName });
             }
             switchScreens(previousScreen, nextScreen);
         }
 
         ensureControllerInitialized(nextRoute);
-        if (nextRoute.controller && typeof nextRoute.controller.onRouteChange === 'function') {
+        if (nextRoute.controller && typeof nextRoute.controller.onRouteChange === "function") {
             /* v8 ignore next */
             nextRoute.controller.onRouteChange(params || {}, { from: previousName, to: routeName });
         }
@@ -69,9 +69,9 @@ export const ScreenManager = (() => {
                 if (currentRouteName !== targetRoute) {
                     return;
                 }
-                const heading = /** @type {HTMLElement|null} */ (nextScreen.querySelector('h1, h2'));
-                if (heading && !heading.hasAttribute('tabindex')) {
-                    heading.setAttribute('tabindex', '-1');
+                const heading = /** @type {HTMLElement|null} */ (nextScreen.querySelector("h1, h2"));
+                if (heading && !heading.hasAttribute("tabindex")) {
+                    heading.setAttribute("tabindex", "-1");
                 }
                 (heading || nextScreen).focus({ preventScroll: false });
             }, TRANSITION_DURATION_MS);
@@ -88,7 +88,7 @@ export const ScreenManager = (() => {
         if (route.initialized) {
             return;
         }
-        if (route.controller && typeof route.controller.init === 'function') {
+        if (route.controller && typeof route.controller.init === "function") {
             route.controller.init();
         }
         route.initialized = true;
@@ -104,15 +104,15 @@ export const ScreenManager = (() => {
         const isInitialMount = !previousScreen;
 
         if (previousScreen && previousScreen !== nextScreen) {
-            previousScreen.classList.remove('enter');
-            previousScreen.classList.remove('active');
-            previousScreen.classList.add('exit');
+            previousScreen.classList.remove("enter");
+            previousScreen.classList.remove("active");
+            previousScreen.classList.add("exit");
             setTimeout(() => {
                 if (token !== transitionToken) {
                     return;
                 }
-                previousScreen.classList.remove('exit');
-                previousScreen.classList.remove('is-loading');
+                previousScreen.classList.remove("exit");
+                previousScreen.classList.remove("is-loading");
             }, TRANSITION_DURATION_MS);
         }
 
@@ -120,11 +120,11 @@ export const ScreenManager = (() => {
             return;
         }
 
-        nextScreen.classList.add('active');
-        nextScreen.classList.remove('exit');
+        nextScreen.classList.add("active");
+        nextScreen.classList.remove("exit");
 
         if (isInitialMount) {
-            nextScreen.classList.remove('enter');
+            nextScreen.classList.remove("enter");
             return;
         }
 
@@ -132,12 +132,12 @@ export const ScreenManager = (() => {
             if (token !== transitionToken) {
                 return;
             }
-            nextScreen.classList.add('enter');
+            nextScreen.classList.add("enter");
             setTimeout(() => {
                 if (token !== transitionToken) {
                     return;
                 }
-                nextScreen.classList.remove('enter');
+                nextScreen.classList.remove("enter");
             }, TRANSITION_DURATION_MS);
         });
     }
@@ -147,14 +147,14 @@ export const ScreenManager = (() => {
      * @param {string} routeName - Active route name
      */
     function updateActiveLinks(routeName) {
-        const links = document.querySelectorAll('.top-link[data-route]');
+        const links = document.querySelectorAll(".top-link[data-route]");
         links.forEach(link => {
-            const isActive = link.getAttribute('data-route') === routeName;
-            link.classList.toggle('is-active', isActive);
+            const isActive = link.getAttribute("data-route") === routeName;
+            link.classList.toggle("is-active", isActive);
             if (isActive) {
-                link.setAttribute('aria-current', 'page');
+                link.setAttribute("aria-current", "page");
             } else {
-                link.removeAttribute('aria-current');
+                link.removeAttribute("aria-current");
             }
         });
     }
@@ -164,17 +164,17 @@ export const ScreenManager = (() => {
      * @param {string} routeName - Active route name
      */
     function announceRoute(routeName) {
-        const announcer = document.getElementById('routeAnnouncer');
+        const announcer = document.getElementById("routeAnnouncer");
         if (!announcer) {
             return;
         }
         const labels = {
-            home: 'Home',
-            clean: 'Clean',
-            analytics: 'Analytics',
-            connections: 'Connections',
-            messages: 'Messages',
-            insights: 'Insights'
+            home: "Home",
+            clean: "Clean",
+            analytics: "Analytics",
+            connections: "Connections",
+            messages: "Messages",
+            insights: "Insights"
         };
         announcer.textContent = `${labels[routeName] || routeName} screen`;
     }

@@ -1,14 +1,14 @@
 /* Hash-based SPA router */
 
 export const AppRouter = (() => {
-    'use strict';
+    "use strict";
 
     const routes = new Map();
     const listeners = new Set();
     const rememberedParams = new Map();
     const sharedParamValues = new Map();
 
-    let defaultRoute = 'home';
+    let defaultRoute = "home";
     let started = false;
     let currentState = null;
 
@@ -39,7 +39,7 @@ export const AppRouter = (() => {
         }
 
         if (!started) {
-            window.addEventListener('hashchange', handleHashChange);
+            window.addEventListener("hashchange", handleHashChange);
             started = true;
         }
 
@@ -103,7 +103,7 @@ export const AppRouter = (() => {
         const merged = { ...current.params };
         Object.keys(patch || {}).forEach(key => {
             const value = patch[key];
-            if (value === null || value === undefined || value === '') {
+            if (value === null || value === undefined || value === "") {
                 delete merged[key];
                 return;
             }
@@ -119,7 +119,7 @@ export const AppRouter = (() => {
      * @returns {function(): void} Unsubscribe function
      */
     function subscribe(listener) {
-        if (typeof listener !== 'function') {
+        if (typeof listener !== "function") {
             return () => {};
         }
         listeners.add(listener);
@@ -144,14 +144,14 @@ export const AppRouter = (() => {
      * @returns {{name: string, params: object}}
      */
     function parseHash(hash) {
-        const raw = (hash || '').replace(/^#/, '').trim();
+        const raw = (hash || "").replace(/^#/, "").trim();
         if (!raw) {
             return { name: defaultRoute, params: {} };
         }
 
-        const parts = raw.split('?');
+        const parts = raw.split("?");
         const name = normalizeRouteName(parts[0]) || defaultRoute;
-        const query = parts.slice(1).join('?');
+        const query = parts.slice(1).join("?");
         const search = new URLSearchParams(query);
         const params = {};
         search.forEach((value, key) => {
@@ -174,7 +174,7 @@ export const AppRouter = (() => {
             .sort()
             .forEach(key => {
                 const value = params[key];
-                if (value === null || value === undefined || value === '') {
+                if (value === null || value === undefined || value === "") {
                     return;
                 }
                 search.set(key, String(value));
@@ -227,7 +227,7 @@ export const AppRouter = (() => {
         if (replaceHistory) {
             history.replaceState(
                 null,
-                '',
+                "",
                 `${window.location.pathname}${window.location.search}${nextHash}`
             );
             handleHashChange();
@@ -243,11 +243,11 @@ export const AppRouter = (() => {
      * @returns {string}
      */
     function normalizeRouteName(value) {
-        const normalized = String(value || '')
+        const normalized = String(value || "")
             .trim()
             .toLowerCase()
-            .replace(/^#/, '')
-            .replace(/^\//, '');
+            .replace(/^#/, "")
+            .replace(/^\//, "");
         return normalized;
     }
 
@@ -270,7 +270,7 @@ export const AppRouter = (() => {
 
             if (hasExplicitValue) {
                 const explicitValue = providedParams[key];
-                if (explicitValue === null || explicitValue === undefined || explicitValue === '') {
+                if (explicitValue === null || explicitValue === undefined || explicitValue === "") {
                     delete nextParams[key];
                     return;
                 }
@@ -305,7 +305,7 @@ export const AppRouter = (() => {
             const value = Object.prototype.hasOwnProperty.call(state.params, key)
                 ? state.params[key]
                 : getDefaultParamValue(routeOptions, key);
-            if (value === null || value === undefined || value === '') {
+            if (value === null || value === undefined || value === "") {
                 sharedParamValues.delete(key);
                 return;
             }
@@ -328,7 +328,7 @@ export const AppRouter = (() => {
         }
 
         const value = defaults[key];
-        if (value === null || value === undefined || value === '') {
+        if (value === null || value === undefined || value === "") {
             return null;
         }
         return String(value);

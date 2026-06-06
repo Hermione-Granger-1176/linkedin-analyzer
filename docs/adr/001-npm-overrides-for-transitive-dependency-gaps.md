@@ -1,8 +1,13 @@
 # ADR-001: npm overrides for transitive dependency gaps
 
 **Date:** 2026-04-01
-**Status:** Accepted
+**Status:** Superseded
+**Resolved:** 2026-06-06
 **Deciders:** Aditya Kumar Darak
+
+This decision is superseded because both upstream dependency gaps have been
+resolved and the temporary overrides have been removed. The generic override
+checker remains available for any future overrides.
 
 ## Context
 
@@ -105,27 +110,23 @@ Keep vite at v7 in this PR; bump only eslint, jsdom, and typescript.
 
 **Option A: npm overrides.**
 
-The overrides are temporary bridges while upstream catches up. They require zero
-code changes, fix the security vulnerability, and carry the lowest maintenance
-burden. This ADR and the linked tracking issues ensure they are not forgotten.
+The overrides were temporary bridges while upstream caught up. They required
+zero code changes, fixed the security vulnerability, and carried the lowest
+maintenance burden.
 
-## Tracking: when to remove each override
+## Resolution
 
-| Override                             | Remove when                                                                                                  | Upstream issue                 |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| `serialize-javascript: "^7.0.5"`     | `workbox-build` updates `@rollup/plugin-terser` to `^1.0.0` (which depends on `serialize-javascript@^7.0.3`) | Tracked in our repo            |
-| `vite-plugin-pwa: { vite: "$vite" }` | `vite-plugin-pwa` adds `^8.0.0` to its vite peer dep                                                         | [vite-pwa/vite-plugin-pwa#918] |
+Both removal conditions are now satisfied:
 
-**How we will know:** Dependabot creates PRs when these packages publish new
-versions. Each Dependabot PR is an opportunity to check whether the override is
-still needed and remove it if not.
+- `vite-plugin-pwa` 1.3.0 supports Vite 8.
+- `workbox-build` 7.4.1 uses `@rollup/plugin-terser` 1.0.0, which resolves
+  `serialize-javascript` 7.0.5.
 
 ## Consequences
 
-- `npm audit` will report zero vulnerabilities after this change.
-- Dependabot PRs for `vite-plugin-pwa` and `workbox-build` should be reviewed
-  with an eye toward removing overrides.
-- If either override is removed, update this ADR's status to reflect which
-  overrides remain (or mark it as superseded when both are gone).
+- `package.json` no longer contains an `overrides` field.
+- `make check-overrides` exits successfully when no overrides are configured
+  and remains available as a generic policy check.
+- Future overrides require their own documented rationale and removal criteria.
 
 [vite-pwa/vite-plugin-pwa#918]: https://github.com/vite-pwa/vite-plugin-pwa/issues/918

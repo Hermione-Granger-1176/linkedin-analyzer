@@ -43,6 +43,7 @@ export default [
             "no-multi-assign": "error",
             "no-return-await": "error",
             "no-unneeded-ternary": "error",
+            quotes: ["error", "double", { avoidEscape: true }],
             "no-useless-catch": "error",
             "no-useless-constructor": "error",
             "object-shorthand": ["error", "always"],

@@ -89,13 +89,47 @@ describe("sentry", () => {
                 dsn: "https://key@sentry.io/999",
                 environment: "production",
                 release: "sha-123",
+                sendDefaultPii: false,
+                maxBreadcrumbs: 20,
                 beforeSend: expect.any(Function),
+                beforeBreadcrumb: expect.any(Function),
             }),
         );
 
         import.meta.env.VITE_SENTRY_DSN = original;
         import.meta.env.MODE = originalMode;
         import.meta.env.VITE_APP_RELEASE = originalRelease;
+    });
+
+    it("scrubs sensitive breadcrumbs via beforeBreadcrumb", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.init.mockClear();
+
+        const { initSentry, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        const { beforeBreadcrumb } = sentry.init.mock.calls[0][0];
+
+        // Categories that can carry user input are dropped entirely.
+        expect(beforeBreadcrumb({ category: "console", message: "typed secret" })).toBeNull();
+        expect(beforeBreadcrumb({ category: "ui.input", message: "name field" })).toBeNull();
+        expect(beforeBreadcrumb(null)).toBeNull();
+
+        // DOM breadcrumbs are kept for context but their message is stripped.
+        const ui = beforeBreadcrumb({ category: "ui", message: "div.contact 'Jane Doe'" });
+        expect(ui).toEqual({ category: "ui", message: undefined });
+        const dom = beforeBreadcrumb({ category: "dom", message: "input[value='secret']" });
+        expect(dom).toEqual({ category: "dom", message: undefined });
+
+        // Benign breadcrumbs pass through untouched.
+        const nav = { category: "navigation", data: { to: "#/insights" } };
+        expect(beforeBreadcrumb(nav)).toBe(nav);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
     });
 
     it("captureError is a no-op when sentryReady is false (DSN not set)", async () => {
@@ -131,6 +165,41 @@ describe("sentry", () => {
 
         expect(sentry.withScope).toHaveBeenCalledTimes(1);
         expect(sentry.captureException).toHaveBeenCalledTimes(1);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("omits filename-related context from error extras", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        const setExtra = vi.fn();
+        sentry.withScope.mockImplementationOnce((callback) => {
+            callback({
+                setExtra,
+                setTag: vi.fn(),
+                setLevel: vi.fn(),
+            });
+        });
+
+        const { initSentry, captureError, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+        captureError(new Error('Reading "private-connections.csv" timed out.'), {
+            module: "upload",
+            fileName: "private-connections.csv",
+            original_file_name: "private-messages.csv",
+            fileType: "connections",
+        });
+
+        expect(setExtra).toHaveBeenCalledWith("module", "upload");
+        expect(setExtra).toHaveBeenCalledWith("fileType", "connections");
+        expect(setExtra).not.toHaveBeenCalledWith("fileName", expect.anything());
+        expect(setExtra).not.toHaveBeenCalledWith("original_file_name", expect.anything());
+        const capturedError = sentry.captureException.mock.calls.at(-1)[0];
+        expect(capturedError.message).toBe('Reading "[file]" timed out.');
+        expect(capturedError.stack).not.toContain("private-connections.csv");
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });
@@ -213,6 +282,37 @@ describe("sentry", () => {
 
         expect(sentry.withScope).toHaveBeenCalledTimes(1);
         expect(sentry.captureMessage).toHaveBeenCalledWith("metric:perf:load");
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("omits filename-related context from metric extras", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        const setExtra = vi.fn();
+        sentry.withScope.mockImplementationOnce((callback) => {
+            callback({
+                setExtra,
+                setTag: vi.fn(),
+                setLevel: vi.fn(),
+            });
+        });
+
+        const { initSentry, captureMetric, setTelemetryConsent } = await import(
+            "../src/sentry.js"
+        );
+        setTelemetryConsent(true);
+        initSentry();
+        captureMetric("upload:duration", 50, {
+            uploadedFilename: "private-shares.csv",
+            fileType: "shares",
+        });
+
+        expect(setExtra).toHaveBeenCalledWith("metric.value", 50);
+        expect(setExtra).toHaveBeenCalledWith("fileType", "shares");
+        expect(setExtra).not.toHaveBeenCalledWith("uploadedFilename", expect.anything());
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });

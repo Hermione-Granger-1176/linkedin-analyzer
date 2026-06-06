@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Python 3.14 to the supported classifiers; documented older-version (3.11–3.13) development with uv.
+- Rollback runbook and versioning guidance in `docs/operations.md`.
+
+### Changed
+
+- Default local and CI Python to 3.14 to match the container runtime; compatibility matrix now covers 3.11/3.12/3.13.
+
+### Fixed
+
+- Write cleaned Excel output atomically so a crash mid-export cannot leave a truncated or corrupt `.xlsx` at the destination.
+- Preserve exception tracebacks in structured JSON logs.
+- Preserve the declared pandas 2.0 compatibility when escaping formula-like cell values.
+- Reject duplicate CSV headers created by BOM and whitespace normalization with a clear error.
+- Run stale-session cleanup before initial route activity refreshes the session timestamp.
+- Keep web and Python connection-date cleaning aligned for invalid calendar dates.
+- Support Excel column width mappings beyond column `Z`.
+- Generate one canonical PWA manifest instead of shipping conflicting static and generated manifests.
+- Include CI helper scripts in strict Python type checking.
+
+### Security
+
+- Harden opt-in Sentry diagnostics: disable default PII, cap breadcrumbs, and scrub console/UI breadcrumbs that could carry user data.
+- Render cleaned CSV previews with DOM text APIs to prevent uploaded values from injecting HTML attributes.
+- Redact local upload filenames from Sentry context and captured error text.
+- Apply formula-injection escaping after every web column cleaner, including message and URL fields.
+
 ## [0.5.0] - 2026-03-06
 
 ### Added

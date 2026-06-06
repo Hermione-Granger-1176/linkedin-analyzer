@@ -1,9 +1,11 @@
 /* Runtime contracts for worker request/response payloads */
 
+import { MAX_CSV_CHARS } from "./constants.js";
+
 const FILE_TYPES = new Set(["shares", "comments", "messages", "connections"]);
 
 const LIMITS = Object.freeze({
-    maxCsvChars: 30 * 1024 * 1024,
+    maxCsvChars: MAX_CSV_CHARS,
     maxFileNameChars: 255,
     maxJobIdChars: 128,
     maxMessageChars: 500,
@@ -369,7 +371,12 @@ export function parseMessagesWorkerRequest(message) {
     if (messagesCsv.length > LIMITS.maxCsvChars) {
         return invalid("messagesCsv payload exceeds allowed size");
     }
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars);
+    // connectionsCsv is optional, but when present it must respect the same size
+    // ceiling as every other CSV payload rather than being silently truncated.
+    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
+    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+        return invalid("connectionsCsv payload exceeds allowed size");
+    }
     return valid({
         type: "process",
         requestId: normalizeRequestId(message.requestId),

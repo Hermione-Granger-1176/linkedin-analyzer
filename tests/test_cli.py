@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import json
+import logging
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
@@ -12,7 +15,7 @@ import linkedin_analyzer.cli as cli
 
 if TYPE_CHECKING:
     import pytest
-from linkedin_analyzer.cli import main, parse_args
+from linkedin_analyzer.cli import JsonFormatter, main, parse_args
 from linkedin_analyzer.core.types import CleanerResult
 
 
@@ -81,6 +84,31 @@ class TestParseArgs:
         monkeypatch.setenv("LOG_FORMAT", "json")
         args = parse_args(["shares"])
         assert args.log_format == "json"
+
+
+class TestJsonFormatter:
+    """Tests for structured JSON logging."""
+
+    def test_includes_exception_traceback(self) -> None:
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError:
+            exc_info = sys.exc_info()
+
+        record = logging.LogRecord(
+            name="linkedin_analyzer",
+            level=logging.ERROR,
+            pathname=__file__,
+            lineno=1,
+            msg="failed",
+            args=(),
+            exc_info=exc_info,
+        )
+
+        payload = json.loads(JsonFormatter().format(record))
+
+        assert payload["message"] == "failed"
+        assert "RuntimeError: boom" in payload["exception"]
 
 
 class TestMain:

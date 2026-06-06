@@ -3,6 +3,8 @@
  * Original: src/linkedin_analyzer/core/text.py
  */
 
+import { MAX_CSV_CHARS } from "./constants.js";
+
 export const LinkedInCleaner = (() => {
     "use strict";
 
@@ -93,7 +95,7 @@ export const LinkedInCleaner = (() => {
     });
 
     const CSV_LIMITS = Object.freeze({
-        maxChars: 30 * 1024 * 1024,
+        maxChars: MAX_CSV_CHARS,
         maxRows: 250000,
         maxColumns: 256,
         maxFieldChars: 200000,
@@ -118,6 +120,32 @@ export const LinkedInCleaner = (() => {
         "NONE",
         "<NA>",
     ]);
+
+    const CONNECTION_MONTH_LOOKUP = Object.freeze({
+        jan: "01",
+        january: "01",
+        feb: "02",
+        february: "02",
+        mar: "03",
+        march: "03",
+        apr: "04",
+        april: "04",
+        may: "05",
+        jun: "06",
+        june: "06",
+        jul: "07",
+        july: "07",
+        aug: "08",
+        august: "08",
+        sep: "09",
+        september: "09",
+        oct: "10",
+        october: "10",
+        nov: "11",
+        november: "11",
+        dec: "12",
+        december: "12",
+    });
 
     /**
      * Deep-freeze a cleaner configuration object.
@@ -191,12 +219,12 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Clean Message field from LinkedIn Comments export.
-     * Port of: clean_comments_message() from text.py
+     * Strip backslash- and double-double-quote escaping from a CSV value.
+     * Shared helper for the Comments and Messages cleaners.
      *
-     * Handles the backslash-escaped quote pattern used in Comments.csv:
+     * Handles the escaping patterns used in those exports:
      * - Converts backslash-escaped quotes (\") to regular quotes (")
-     * - Handles any double-double quote escaping as fallback
+     * - Converts double-double quotes ("") to regular quotes (")
      * - Preserves line breaks
      *
      * @param {*} value - Raw value from CSV
@@ -213,6 +241,13 @@ export const LinkedInCleaner = (() => {
         return text.trim();
     }
 
+    /**
+     * Clean Message field from LinkedIn Comments export.
+     * Port of: clean_comments_message() from text.py
+     *
+     * @param {*} value - Raw value from CSV
+     * @returns {string} Cleaned string
+     */
     function cleanCommentsMessage(value) {
         return cleanEscapedQuotesText(value);
     }
@@ -353,26 +388,29 @@ export const LinkedInCleaner = (() => {
             return text;
         }
 
-        const monthMap = {
-            jan: "01",
-            feb: "02",
-            mar: "03",
-            apr: "04",
-            may: "05",
-            jun: "06",
-            jul: "07",
-            aug: "08",
-            sep: "09",
-            oct: "10",
-            nov: "11",
-            dec: "12",
-        };
-
         const day = monthMatch[1].padStart(2, "0");
-        const monthToken = monthMatch[2].slice(0, 3).toLowerCase();
-        const month = monthMap[monthToken];
+        const monthToken = monthMatch[2].toLowerCase();
+        const month = CONNECTION_MONTH_LOOKUP[monthToken];
         const year = monthMatch[3];
         if (!month) {
+            return text;
+        }
+
+        const numericYear = Number(year);
+        const numericMonth = Number(month);
+        const numericDay = Number(day);
+        const parsedDate = new Date(Date.UTC(numericYear, numericMonth - 1, numericDay));
+        if (
+            !dateMatchesComponents(
+                parsedDate,
+                numericYear,
+                numericMonth,
+                numericDay,
+                0,
+                0,
+                0,
+            )
+        ) {
             return text;
         }
         return `${year}-${month}-${day}`;
@@ -767,7 +805,8 @@ export const LinkedInCleaner = (() => {
             config.columns.forEach((column) => {
                 const value = row[column.name];
                 const cleaner = column.cleaner ? CLEANERS[column.cleaner] : null;
-                cleanedRow[column.name] = cleaner ? cleaner(value) : cleanValue(value);
+                const cleanedValue = cleaner ? cleaner(value) : cleanValue(value);
+                cleanedRow[column.name] = escapeFormula(cleanedValue);
             });
 
             return cleanedRow;
@@ -791,16 +830,24 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Clean a generic cell value, escaping OWASP formula injection prefixes.
+     * Clean a generic cell value.
      * @param {*} value - Raw cell value
-     * @returns {string} Cleaned value with formula prefix escaped by a leading quote
+     * @returns {string} Trimmed cell value
      */
     function cleanValue(value) {
         if (isMissing(value)) {
             return "";
         }
-        const cleaned = String(value).trim();
-        return cleaned.length > 0 && FORMULA_PREFIXES.has(cleaned[0]) ? `'${cleaned}` : cleaned;
+        return String(value).trim();
+    }
+
+    /**
+     * Escape OWASP formula injection prefixes after any column-specific cleaning.
+     * @param {string} value - Cleaned cell value
+     * @returns {string} Formula-safe cell value
+     */
+    function escapeFormula(value) {
+        return value.length > 0 && FORMULA_PREFIXES.has(value[0]) ? `'${value}` : value;
     }
 
     /**

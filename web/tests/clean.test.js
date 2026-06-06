@@ -113,6 +113,27 @@ describe("CleanPage", () => {
         expect(document.querySelector("#cleanPreviewTable tbody").innerHTML).toContain("Hello");
     });
 
+    it("keeps uploaded preview values inert when they contain attribute syntax", async () => {
+        const maliciousValue = '" onmouseover="globalThis.previewInjected=true';
+        delete globalThis.previewInjected;
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 11 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: maliciousValue, Link: "https://example.com" }],
+        });
+
+        await CleanPage.init();
+
+        const cell = document.querySelector("#cleanPreviewTable tbody td");
+        cell.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+
+        expect(cell.title).toBe(maliciousValue);
+        expect(cell.textContent).toBe(maliciousValue);
+        expect(cell.hasAttribute("onmouseover")).toBe(false);
+        expect(globalThis.previewInjected).toBeUndefined();
+    });
+
     it("shows parse error when cleaning fails", async () => {
         Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 12 }]);
         LinkedInCleaner.process.mockReturnValue({

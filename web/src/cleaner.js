@@ -544,7 +544,7 @@ export const LinkedInCleaner = (() => {
         };
 
         // Handle one step while inside a quoted field; returns the next index.
-        // parseError (set via fieldTooLarge) is what stops the outer loop.
+        // parseError (set via wouldOverflowField) is what stops the outer loop.
         const stepInsideQuotes = (start) => {
             // Bulk-copy the run of ordinary characters up to the next quote,
             // carriage return, or escape character.

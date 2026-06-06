@@ -10,12 +10,12 @@ linkedin-analyzer/
 │   │   │   ├── favicon.ico             # ICO favicon (legacy browsers)
 │   │   │   ├── apple-touch-icon.png    # 180px icon (iOS home screen)
 │   │   │   ├── icon-192.png            # 192px icon (Android/PWA)
-│   │   │   ├── icon-512.png            # 512px icon (PWA splash/OG cards)
-│   │   │   └── manifest.webmanifest    # PWA web app manifest
+│   │   │   └── icon-512.png            # 512px icon (PWA splash/OG cards)
 │   │   ├── fonts/
 │   │   │   ├── PatrickHand-Regular.woff2 # Self-hosted Patrick Hand font
 │   │   │   └── Caveat-Regular.woff2    # Self-hosted Caveat font
 │   │   └── robots.txt                  # Search engine directives
+│   ├── vite.config.js                  # Vite build + generated PWA manifest config
 │   ├── src/
 │   │   ├── css/
 │   │   │   ├── variables.css           # Theme variables + @font-face (light/dark)
@@ -85,7 +85,7 @@ linkedin-analyzer/
 │   ├── prettierignore                  # Prettier ignore rules
 │   └── prettierrc.json                 # Prettier formatting rules
 ├── scripts/
-│   ├── check-overrides.js              # Validates npm overrides are still needed
+│   ├── check-overrides.mjs             # Validates npm overrides are still needed
 │   ├── ci/                             # GitHub Actions helper scripts
 │   └── lint/                           # Local lint helpers
 ├── data/
@@ -120,16 +120,16 @@ linkedin-analyzer/
 
 ### Assets & Meta
 
-| File                                     | Purpose                                        |
-| ---------------------------------------- | ---------------------------------------------- |
-| `web/public/assets/icon.svg`             | SVG favicon served to modern browsers          |
-| `web/public/assets/favicon.ico`          | 32px ICO fallback for legacy browsers          |
-| `web/public/assets/apple-touch-icon.png` | 180px PNG for iOS home screen bookmark         |
-| `web/public/assets/icon-192.png`         | 192px PNG for Android and PWA icon             |
-| `web/public/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards   |
-| `web/public/assets/manifest.webmanifest` | PWA manifest (name, icons, theme, display)     |
-| `web/public/robots.txt`                  | Allows all crawlers                            |
-| `web/index.html` `<head>`                | OG, Twitter Card, theme-color, and icon `link` |
+| File                                     | Purpose                                              |
+| ---------------------------------------- | ---------------------------------------------------- |
+| `web/public/assets/icon.svg`             | SVG favicon served to modern browsers                |
+| `web/public/assets/favicon.ico`          | 32px ICO fallback for legacy browsers                |
+| `web/public/assets/apple-touch-icon.png` | 180px PNG for iOS home screen bookmark               |
+| `web/public/assets/icon-192.png`         | 192px PNG for Android and PWA icon                   |
+| `web/public/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards         |
+| `web/vite.config.js`                     | Build config and source for generated PWA metadata   |
+| `web/public/robots.txt`                  | Allows all crawlers                                  |
+| `web/index.html` `<head>`                | OG, Twitter Card, theme-color, and favicon link tags |
 
 ### Processing
 

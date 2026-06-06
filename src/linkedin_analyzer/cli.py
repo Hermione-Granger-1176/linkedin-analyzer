@@ -73,16 +73,18 @@ class JsonFormatter(logging.Formatter):
             record: Log record to format
 
         Returns:
-            JSON string with timestamp, level, logger, and message fields
+            JSON string with timestamp, level, logger, message, and optional
+            exception fields
         """
-        return json.dumps(
-            {
-                "timestamp": self.formatTime(record),
-                "level": record.levelname,
-                "logger": record.name,
-                "message": record.getMessage(),
-            }
-        )
+        payload = {
+            "timestamp": self.formatTime(record),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
 
 
 def configure_logging(level: str, log_format: str = "text") -> None:

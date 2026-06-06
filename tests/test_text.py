@@ -265,6 +265,15 @@ class TestCleanConnectionsDate:
     def test_converts_long_month_name(self) -> None:
         assert clean_connections_date("30 January 2026") == "2026-01-30"
 
+    def test_converts_valid_leap_day(self) -> None:
+        assert clean_connections_date("29 Feb 2024") == "2024-02-29"
+
+    def test_returns_as_is_for_invalid_calendar_date(self) -> None:
+        assert clean_connections_date("29 Feb 2025") == "29 Feb 2025"
+
+    def test_returns_as_is_for_malformed_month_name(self) -> None:
+        assert clean_connections_date("30 Jank 2026") == "30 Jank 2026"
+
     def test_returns_as_is_for_invalid_format(self) -> None:
         assert clean_connections_date("2026/01/30") == "2026/01/30"
 

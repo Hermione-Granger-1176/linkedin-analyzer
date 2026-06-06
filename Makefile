@@ -12,7 +12,7 @@ VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
 NPX                 ?= npx
 PY_PATHS            := src/ tests/ scripts/ci/
-PY_SRC              := src/
+PY_TYPE_PATHS       := src/ scripts/ci/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
 
 REPO ?=
@@ -86,10 +86,10 @@ format-js-check: ## Check Prettier formatting only
 
 .PHONY: typecheck typecheck-py typecheck-web
 
-typecheck: typecheck-py ## Run Python type checks
+typecheck: typecheck-py typecheck-web ## Run all type checks
 
 typecheck-py: ## Run mypy only
-	$(VENV_PYTHON) -m mypy $(PY_SRC)
+	$(VENV_PYTHON) -m mypy $(PY_TYPE_PATHS)
 
 typecheck-web: ## Run web type checks only
 	$(NPM) run typecheck:web

@@ -107,6 +107,11 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         LOG.info("Found %d rows", len(df))
 
         df = df.rename(columns=lambda name: str(name).strip().lstrip("\ufeff"))
+        duplicate_columns = [str(name) for name in df.columns[df.columns.duplicated()].unique()]
+        if duplicate_columns:
+            raise ValueError(
+                f"Duplicate columns after header normalization: {', '.join(duplicate_columns)}"
+            )
         df = df.replace(r"^\s*$", pd.NA, regex=True)
         df = df.dropna(how="all")
 
@@ -128,7 +133,8 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             LOG.info("Cleaning column: %s", col_config.name)
             df[col_config.name] = df[col_config.name].apply(cleaner)
 
-        df = df.map(escape_excel_formula)
+        for column in df.columns:
+            df[column] = df[column].map(escape_excel_formula)
 
         configured_columns = [col.name for col in config.columns]
         df = df.reindex(columns=configured_columns, fill_value="")

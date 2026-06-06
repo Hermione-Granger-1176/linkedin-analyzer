@@ -6,6 +6,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from openpyxl.utils import get_column_letter
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -63,8 +65,10 @@ class CleanerConfig:
     @property
     def column_widths(self) -> dict[str, int]:
         """Return mapping of Excel column letters to widths."""
-        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        return {letters[i]: col.width for i, col in enumerate(self.columns)}
+        return {
+            get_column_letter(index): column.width
+            for index, column in enumerate(self.columns, start=1)
+        }
 
     @property
     def wrap_text_columns(self) -> list[int]:

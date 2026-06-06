@@ -384,6 +384,26 @@ describe("LinkedInCleaner", () => {
         expect(result.cleanedData[0]["Connected On"]).toBe("30 FOO 2026");
     });
 
+    it.each([
+        ["30 Feb 2026", "30 Feb 2026"],
+        ["29 Feb 2025", "29 Feb 2025"],
+        ["29 Feb 2024", "2024-02-29"],
+        ["30 Jank 2026", "30 Jank 2026"],
+    ])("preserves invalid connection date %s and converts valid dates", (input, expected) => {
+        const csv = [
+            "Notes:",
+            "",
+            "",
+            "First Name,Last Name,URL,Email Address,Company,Position,Connected On",
+            `Ada,Lovelace,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,${input}`,
+        ].join("\n");
+
+        const result = LinkedInCleaner.process(csv, "connections");
+
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0]["Connected On"]).toBe(expected);
+    });
+
     it("returns empty-data parser error when parsed rows collapse to empty", () => {
         const result = LinkedInCleaner.process(",,,\n,,", "shares");
 
@@ -419,6 +439,49 @@ describe("LinkedInCleaner", () => {
         const result = LinkedInCleaner.process(csv, "shares");
         expect(result.success).toBe(true);
         expect(result.cleanedData[0].Visibility).toBe("'@SUM(A1)");
+    });
+
+    it.each([
+        {
+            type: "shares",
+            csv: [
+                "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+                "2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,=SUM(1),,,MEMBER_NETWORK",
+            ].join("\n"),
+            column: "ShareCommentary",
+        },
+        {
+            type: "comments",
+            csv: [
+                "Date,Link,Message",
+                "2025-01-01 10:00:00 UTC,https://linkedin.com/posts/1,=SUM(1)",
+            ].join("\n"),
+            column: "Message",
+        },
+        {
+            type: "messages",
+            csv: [
+                "FROM,TO,DATE,CONTENT",
+                "Ada,Bob,2025-01-01 10:00:00 UTC,=SUM(1)",
+            ].join("\n"),
+            column: "CONTENT",
+        },
+        {
+            type: "connections",
+            csv: [
+                "Notes:",
+                "",
+                "",
+                "First Name,Last Name,URL,Email Address,Company,Position,Connected On",
+                "Ada,Lovelace,=SUM(1),,,,30 Jan 2026",
+            ].join("\n"),
+            column: "URL",
+        },
+    ])("escapes formula prefixes after $type-specific cleaning", ({ type, csv, column }) => {
+        const result = LinkedInCleaner.process(csv, type);
+
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0][column]).toBe("'=SUM(1)");
     });
 
     it("returns parser error when a quoted field exceeds the safety limit", () => {

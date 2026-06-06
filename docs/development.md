@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.14 (default; the Docker runtime and primary CI gate use 3.14)
-- Node.js 22.13+ (or 24+)
+- Node.js 22.13.x or 24+
 - uv
 
 The project supports Python 3.11–3.14. 3.14 is the default for local development,
@@ -126,13 +126,13 @@ See `.github/workflows/ci.yml`.
 
 A weekly `dependency-audit.yml` workflow also runs every Monday:
 
-- `make security` for npm, Python, and override audits
-- `make check-overrides` to flag npm overrides that are no longer needed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
+- `make security` for npm, Python, and the generic override-policy check
+- `make check-overrides` to verify any future npm overrides remain necessary; the original overrides have been removed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
 
 Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for Dependabot uv PRs through a validated artifact handoff.
-- `refresh-action-shas.yml` refreshes pinned GitHub Action SHAs when app credentials are configured.
+- `refresh-action-shas.yml` converts tag-based GitHub Action references to full commit SHAs when app credentials are configured. Already pinned references are left unchanged; Dependabot handles action-version updates.
 
 ## Code Style
 

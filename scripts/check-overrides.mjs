@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Checks whether npm overrides in package.json are still necessary.
+ * Checks whether configured npm overrides are still necessary.
  *
  * Approach: copies package.json into a temporary directory with the
  * "overrides" field removed, runs `npm install --package-lock-only`

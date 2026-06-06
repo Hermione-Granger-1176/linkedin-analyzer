@@ -74,7 +74,7 @@ and open a follow-up to roll forward with a fix.
 - CI actions are SHA-pinned.
 - Dependency review runs on pull requests.
 - Scheduled dependency audits run weekly for npm and Python dependencies resolved from `uv.lock`.
-- Weekly override staleness check flags npm overrides that can be removed (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
+- The weekly generic override-policy check verifies that any future npm overrides remain necessary; no overrides are currently configured (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
 
 ## CI Automation and Verified Writebacks
@@ -88,7 +88,7 @@ The workflow structure mirrors the stricter automation pattern used in the `arti
 
 Configured automation:
 
-- `refresh-action-shas.yml` runs monthly or manually and pins workflow/action `uses:` refs to full commit SHAs.
+- `refresh-action-shas.yml` runs monthly or manually and converts tag-based workflow/action `uses:` refs to full commit SHAs. It leaves already pinned refs unchanged; Dependabot updates action versions.
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
 - `commit-python-locks.yml` downloads the refreshed lock artifact from the completed workflow run, validates its contents, revalidates the Dependabot branch head, and commits `uv.lock` back only if it is still safe.
 

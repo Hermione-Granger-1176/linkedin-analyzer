@@ -123,7 +123,10 @@ linkedin-analyzer all \
 - Shares: `Date`, `ShareLink`, `ShareCommentary`
 - Comments: `Date`, `Link`, `Message`
 - Messages: `FROM`, `TO`, `DATE`, `CONTENT`
-- Connections: `Connected On`
+- Connections: `First Name`, `Last Name`, `Connected On`
+
+For Connections rows, only `Connected On` must contain a value. Rows are also
+dropped when `First Name`, `Last Name`, and `URL` are all missing.
 
 ## Python API
 

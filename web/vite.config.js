@@ -21,7 +21,9 @@ export default defineConfig({
             },
             manifest: {
                 name: "LinkedIn Analyzer",
-                short_name: "LinkedIn Analyzer",
+                short_name: "LI Analyzer",
+                description:
+                    "Clean and analyze your LinkedIn data exports. Free, private, runs entirely in your browser.",
                 start_url: "./",
                 scope: "./",
                 display: "standalone",
@@ -37,6 +39,11 @@ export default defineConfig({
                         src: "assets/icon-512.png",
                         sizes: "512x512",
                         type: "image/png",
+                    },
+                    {
+                        src: "assets/icon.svg",
+                        sizes: "any",
+                        type: "image/svg+xml",
                     },
                 ],
             },

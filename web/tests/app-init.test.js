@@ -77,6 +77,27 @@ describe("app init wiring", () => {
         expect(Session.touch).toHaveBeenCalled();
     });
 
+    it("checks for stale session data before initial route activity is recorded", async () => {
+        const callOrder = [];
+        Session.cleanIfStale.mockImplementationOnce(() => {
+            callOrder.push("cleanup");
+            return Promise.resolve(false);
+        });
+        Session.touch.mockImplementationOnce(() => {
+            callOrder.push("touch");
+        });
+        AppRouter.start.mockImplementationOnce(() => {
+            const callback = AppRouter.subscribe.mock.calls[0][0];
+            callback({ to: { name: "home", params: {} } });
+        });
+
+        vi.resetModules();
+        await import("../src/app.js");
+        await window.__linkedinAnalyzerSessionCleanupPromise;
+
+        expect(callOrder).toEqual(["cleanup", "touch"]);
+    });
+
     it("navigates on route link click", async () => {
         const link = document.querySelector("a[data-route]");
         DomEvents.closest.mockReturnValue(link);

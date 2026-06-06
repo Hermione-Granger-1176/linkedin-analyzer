@@ -107,6 +107,23 @@ class TestRunCleaner:
         assert result.success is False
         assert "Missing required columns" in (result.error or "")
 
+    def test_duplicate_columns_after_header_normalization_return_clear_error(
+        self, tmp_path: Path
+    ) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name, Name\nAda,Lovelace\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert result.error == "Duplicate columns after header normalization: Name"
+
     def test_optional_columns_not_required(self, tmp_path: Path) -> None:
         """Optional columns should not cause validation failure."""
         input_path = tmp_path / "test.csv"
@@ -143,6 +160,22 @@ class TestRunCleaner:
         assert result.success is True
         df = pd.read_excel(output_path)
         assert list(df["Name"]) == ["hello", "world"]
+
+    def test_formula_escaping_runs_after_column_cleaners(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nvalue\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", cleaner=lambda _value: "=SUM(1)"),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["Name"]) == ["'=SUM(1)"]
 
     def test_csv_kwargs_passed(self, tmp_path: Path) -> None:
         # Create test CSV with backslash escaping

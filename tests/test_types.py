@@ -75,6 +75,17 @@ class TestCleanerConfig:
         )
         assert config.column_widths == {"A": 20, "B": 60, "C": 100}
 
+    def test_column_widths_support_more_than_26_columns(self) -> None:
+        columns = tuple(ColumnConfig(name=f"Column {index}", width=index) for index in range(1, 28))
+        config = CleanerConfig(
+            input_path=Path("input.csv"),
+            output_path=Path("output.xlsx"),
+            columns=columns,
+        )
+
+        assert config.column_widths["Z"] == 26
+        assert config.column_widths["AA"] == 27
+
     def test_wrap_text_columns(self) -> None:
         config = CleanerConfig(
             input_path=Path("input.csv"),

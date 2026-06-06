@@ -17,6 +17,62 @@ const SENSITIVE_BREADCRUMB_CATEGORIES = new Set(["console", "ui.input", "ui.clic
 const MAX_BREADCRUMBS = 20;
 
 /**
+ * Check whether a context key can identify a local uploaded file.
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isSensitiveContextKey(key) {
+    return key.replace(/[^a-z]/gi, "").toLowerCase().includes("filename");
+}
+
+/**
+ * Add non-sensitive context values to a Sentry scope.
+ * @param {object} scope
+ * @param {object} context
+ */
+function setContextExtras(scope, context) {
+    Object.entries(context).forEach(([key, value]) => {
+        if (!isSensitiveContextKey(key)) {
+            scope.setExtra(key, value === undefined ? null : value);
+        }
+    });
+}
+
+/**
+ * Redact local filenames from captured error messages and stacks.
+ * @param {unknown} error
+ * @param {object|undefined} context
+ * @returns {unknown}
+ */
+function sanitizeCapturedError(error, context) {
+    if (!(error instanceof Error) || !context) {
+        return error;
+    }
+
+    const sensitiveValues = Object.entries(context)
+        .filter(([key, value]) => isSensitiveContextKey(key) && typeof value === "string" && value)
+        .map(([, value]) => value);
+    if (!sensitiveValues.length) {
+        return error;
+    }
+
+    const redact = (text) =>
+        sensitiveValues.reduce((sanitized, value) => sanitized.replaceAll(value, "[file]"), text);
+    const sanitizedMessage = redact(error.message);
+    const sanitizedStack = typeof error.stack === "string" ? redact(error.stack) : undefined;
+    if (sanitizedMessage === error.message && sanitizedStack === error.stack) {
+        return error;
+    }
+
+    const sanitizedError = new Error(sanitizedMessage);
+    sanitizedError.name = typeof error.name === "string" ? error.name : "Error";
+    if (sanitizedStack) {
+        sanitizedError.stack = sanitizedStack;
+    }
+    return sanitizedError;
+}
+
+/**
  * Resolve a release tag for Sentry events.
  * @returns {string|undefined}
  */
@@ -148,16 +204,15 @@ export function captureError(error, context) {
         return;
     }
     try {
+        const capturedError = sanitizeCapturedError(error, context);
         if (context && typeof context === "object") {
             Sentry.withScope((scope) => {
-                Object.entries(context).forEach(([key, value]) => {
-                    scope.setExtra(key, value === undefined ? null : value);
-                });
-                Sentry.captureException(error);
+                setContextExtras(scope, context);
+                Sentry.captureException(capturedError);
             });
             return;
         }
-        Sentry.captureException(error);
+        Sentry.captureException(capturedError);
     } catch {
         // Ignore Sentry failures.
     }
@@ -186,12 +241,7 @@ export function captureMetric(name, value, context) {
             scope.setExtra("metric.value", value);
 
             if (context && typeof context === "object") {
-                Object.entries(context).forEach(([key, metricContextValue]) => {
-                    scope.setExtra(
-                        key,
-                        metricContextValue === undefined ? null : metricContextValue,
-                    );
-                });
+                setContextExtras(scope, context);
             }
 
             Sentry.captureMessage(`metric:${name}`);

@@ -169,6 +169,41 @@ describe("sentry", () => {
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
+    it("omits filename-related context from error extras", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        const setExtra = vi.fn();
+        sentry.withScope.mockImplementationOnce((callback) => {
+            callback({
+                setExtra,
+                setTag: vi.fn(),
+                setLevel: vi.fn(),
+            });
+        });
+
+        const { initSentry, captureError, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+        captureError(new Error('Reading "private-connections.csv" timed out.'), {
+            module: "upload",
+            fileName: "private-connections.csv",
+            original_file_name: "private-messages.csv",
+            fileType: "connections",
+        });
+
+        expect(setExtra).toHaveBeenCalledWith("module", "upload");
+        expect(setExtra).toHaveBeenCalledWith("fileType", "connections");
+        expect(setExtra).not.toHaveBeenCalledWith("fileName", expect.anything());
+        expect(setExtra).not.toHaveBeenCalledWith("original_file_name", expect.anything());
+        const capturedError = sentry.captureException.mock.calls.at(-1)[0];
+        expect(capturedError.message).toBe('Reading "[file]" timed out.');
+        expect(capturedError.stack).not.toContain("private-connections.csv");
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
     it("filters noisy browser-extension errors via beforeSend", async () => {
         const original = import.meta.env.VITE_SENTRY_DSN;
         import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
@@ -247,6 +282,37 @@ describe("sentry", () => {
 
         expect(sentry.withScope).toHaveBeenCalledTimes(1);
         expect(sentry.captureMessage).toHaveBeenCalledWith("metric:perf:load");
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("omits filename-related context from metric extras", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        const setExtra = vi.fn();
+        sentry.withScope.mockImplementationOnce((callback) => {
+            callback({
+                setExtra,
+                setTag: vi.fn(),
+                setLevel: vi.fn(),
+            });
+        });
+
+        const { initSentry, captureMetric, setTelemetryConsent } = await import(
+            "../src/sentry.js"
+        );
+        setTelemetryConsent(true);
+        initSentry();
+        captureMetric("upload:duration", 50, {
+            uploadedFilename: "private-shares.csv",
+            fileType: "shares",
+        });
+
+        expect(setExtra).toHaveBeenCalledWith("metric.value", 50);
+        expect(setExtra).toHaveBeenCalledWith("fileType", "shares");
+        expect(setExtra).not.toHaveBeenCalledWith("uploadedFilename", expect.anything());
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });

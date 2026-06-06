@@ -4,7 +4,7 @@ Thanks for contributing to LinkedIn Analyzer. This repo contains a Python CLI an
 
 ## Development setup
 
-1. Install Python 3.11+, uv, and Node.js 22.13+ or 24+
+1. Install Python 3.11+, uv, and Node.js 22.13.x or 24+
 2. Install locked Python and Node dependencies:
 
 ```bash
@@ -20,14 +20,14 @@ cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed for opt-in
 4. Install git hooks:
 
 ```bash
-pre-commit install
+uvx pre-commit install
 ```
 
 See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 
 ## Running locally
 
-- CLI: `linkedin-analyzer --help`
+- CLI: `uv run linkedin-analyzer --help`
 - Web app: `make web`
 
 ## Checks

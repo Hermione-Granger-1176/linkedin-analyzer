@@ -272,22 +272,30 @@ export const CleanPage = (() => {
         elements.cleanFileInfo.textContent = `${label} - ${result.rowCount} rows`;
 
         const thead = elements.cleanPreviewTable.querySelector("thead");
-        thead.innerHTML = `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>`;
+        const headerRow = document.createElement("tr");
+        headers.forEach((header) => {
+            const cell = document.createElement("th");
+            cell.textContent = header;
+            headerRow.append(cell);
+        });
+        thead.replaceChildren(headerRow);
 
         const tbody = elements.cleanPreviewTable.querySelector("tbody");
         const previewRows = result.cleanedData.slice(0, PREVIEW_ROW_LIMIT);
-        tbody.innerHTML = previewRows
-            .map(
-                (row) =>
-                    `<tr>${headers
-                        .map((header) => {
-                            /* v8 ignore next */
-                            const value = row[header] || "";
-                            return `<td title="${escapeHtml(value)}">${escapeHtml(truncate(value, PREVIEW_CELL_LIMIT))}</td>`;
-                        })
-                        .join("")}</tr>`,
-            )
-            .join("");
+        const bodyFragment = document.createDocumentFragment();
+        previewRows.forEach((row) => {
+            const previewRow = document.createElement("tr");
+            headers.forEach((header) => {
+                /* v8 ignore next */
+                const value = row[header] || "";
+                const cell = document.createElement("td");
+                cell.title = value;
+                cell.textContent = truncate(value, PREVIEW_CELL_LIMIT);
+                previewRow.append(cell);
+            });
+            bodyFragment.append(previewRow);
+        });
+        tbody.replaceChildren(bodyFragment);
 
         elements.cleanPreviewNote.textContent =
             result.rowCount > PREVIEW_ROW_LIMIT
@@ -361,17 +369,6 @@ export const CleanPage = (() => {
      */
     function hideError() {
         elements.cleanErrorMessage.hidden = true;
-    }
-
-    /**
-     * Escape a string for safe HTML insertion.
-     * @param {string} value - The string to escape.
-     * @returns {string} The HTML-escaped string.
-     */
-    function escapeHtml(value) {
-        const div = document.createElement("div");
-        div.textContent = value;
-        return div.innerHTML;
     }
 
     /**

@@ -1,5 +1,6 @@
 /* Messages insights page logic */
 
+import { getInitials, pickAvatarColor } from "./avatar.js";
 import { LinkedInCleaner } from "./cleaner.js";
 import { DataCache } from "./data-cache.js";
 import { ExcelGenerator } from "./excel.js";
@@ -1086,12 +1087,19 @@ export const MessagesPage = (() => {
         const listItem = document.createElement("li");
         listItem.className = "message-item";
 
+        const label = cleanText(item.name) || "Unknown";
+        const avatar = document.createElement("span");
+        avatar.className = `message-item-avatar avatar-${pickAvatarColor(label)}`;
+        avatar.textContent = getInitials(label);
+        avatar.setAttribute("aria-hidden", "true");
+        listItem.appendChild(avatar);
+
         const main = document.createElement("div");
         main.className = "message-item-main";
 
         const title = document.createElement("p");
         title.className = "message-item-title";
-        appendContactName(title, item.name, item.url);
+        appendContactName(title, label, item.url);
 
         const meta = document.createElement("p");
         meta.className = "message-item-meta";
@@ -1111,11 +1119,10 @@ export const MessagesPage = (() => {
     /**
      * Append contact name as link when URL is available.
      * @param {HTMLElement} container - Name container
-     * @param {string} name - Contact name
+     * @param {string} label - Display name (already cleaned, never empty)
      * @param {string} url - Contact profile URL
      */
-    function appendContactName(container, name, url) {
-        const label = cleanText(name) || "Unknown";
+    function appendContactName(container, label, url) {
         const cleanUrl = cleanText(url);
         if (!cleanUrl) {
             container.textContent = label;

@@ -236,7 +236,10 @@ describe("MessagesPage", () => {
         MessagesPage.onRouteChange({});
 
         await tick();
-        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        const topContactsHtml = document.getElementById("topContactsList").innerHTML;
+        expect(topContactsHtml).toContain("Ada Lovelace");
+        expect(topContactsHtml).toContain("message-item-avatar");
+        expect(topContactsHtml).toContain(">AL<");
         expect(document.getElementById("messagesTipText").textContent).toContain(
             "Upload Connections.csv",
         );

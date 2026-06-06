@@ -11,8 +11,9 @@ import {
     parseStoredUploadFile,
 } from "../src/worker-contracts.js";
 
-// One shared oversized payload reused across all size-limit assertions to avoid
-// allocating multiple ~60 MiB strings.
+// One shared oversized payload (MAX_CSV_CHARS + 1 chars, ~63M characters)
+// reused across all size-limit assertions to avoid allocating several large
+// strings.
 const OVERSIZE_CSV = "a".repeat(MAX_CSV_CHARS + 1);
 
 describe("worker contracts", () => {

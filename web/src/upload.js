@@ -71,8 +71,8 @@ export const UploadPage = (() => {
     ]);
 
     const JOB_TIMEOUT_MS = 45000;
-    const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024;
-    const MAX_FILE_BYTES = 40 * 1024 * 1024;
+    const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024;
+    const MAX_FILE_BYTES = 80 * 1024 * 1024;
     const FILE_READ_TIMEOUT_MS = 30000;
     const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
@@ -374,7 +374,7 @@ export const UploadPage = (() => {
 
         const oversizeFiles = acceptedFiles.filter((file) => file.size > LARGE_FILE_WARNING_BYTES);
         if (oversizeFiles.length) {
-            setHint("Some files are large (10MB+). Processing may take longer than usual.", false);
+            setHint("Some files are large (25MB+). Processing may take longer than usual.", false);
         }
         if (!worker) {
             setHint("Workers are unavailable. Open this page from a local server.", true);

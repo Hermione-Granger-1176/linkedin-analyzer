@@ -96,7 +96,7 @@ export const LinkedInCleaner = (() => {
 
     const CSV_LIMITS = Object.freeze({
         maxChars: MAX_CSV_CHARS,
-        maxRows: 250000,
+        maxRows: 500000,
         maxColumns: 256,
         maxFieldChars: 200000,
     });
@@ -497,6 +497,14 @@ export const LinkedInCleaner = (() => {
             };
         }
 
+        // Character codes for the hot scanning loop (avoids per-char string allocation).
+        const CR = 13;
+        const LF = 10;
+        const quoteCode = quote.charCodeAt(0);
+        const delimiterCode = delimiter.charCodeAt(0);
+        const escapeCode = escape ? escape.charCodeAt(0) : -1;
+        const length = csvText.length;
+
         const rows = [];
         let row = [];
         let field = "";
@@ -504,13 +512,15 @@ export const LinkedInCleaner = (() => {
         let state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
         let parseError = null;
 
-        const appendChar = (char) => {
-            field += char;
-            if (field.length > CSV_LIMITS.maxFieldChars) {
+        // Reject oversized fields *before* appending, so we never allocate a
+        // huge string just to discard it. addLength is the number of characters
+        // about to be appended to the current field.
+        const wouldOverflowField = (addLength) => {
+            if (field.length + addLength > CSV_LIMITS.maxFieldChars) {
                 parseError = "CSV parsing error: one field is too large to process safely.";
-                return false;
+                return true;
             }
-            return true;
+            return false;
         };
 
         const pushField = () => {
@@ -533,68 +543,118 @@ export const LinkedInCleaner = (() => {
             return true;
         };
 
-        for (let i = 0; i < csvText.length && !parseError; i++) {
-            const char = csvText[i];
-            const nextChar = csvText[i + 1];
-
-            if (state === CSV_PARSE_STATE.INSIDE_QUOTES) {
-                switch (char) {
-                    case "\r":
-                        /* v8 ignore next 5 */
-                        if (nextChar === "\n") {
-                            if (!appendChar("\n")) {
-                                break;
-                            }
-                            i += 1;
-                        } else {
-                            appendChar(char);
-                        }
-                        break;
-                    case quote:
-                        if (nextChar === quote) {
-                            appendChar(quote);
-                            i += 1;
-                        } else {
-                            state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
-                        }
-                        break;
-                    default:
-                        /* v8 ignore next 5 */
-                        if (escape && char === escape && nextChar === quote) {
-                            appendChar(quote);
-                            i += 1;
-                        } else {
-                            appendChar(char);
-                        }
-                        break;
+        // Handle one step while inside a quoted field; returns the next index.
+        // parseError (set via wouldOverflowField) is what stops the outer loop.
+        const stepInsideQuotes = (start) => {
+            // Bulk-copy the run of ordinary characters up to the next quote,
+            // carriage return, or escape character.
+            let j = start;
+            while (j < length) {
+                const code = csvText.charCodeAt(j);
+                if (code === quoteCode || code === CR || code === escapeCode) {
+                    break;
                 }
-                continue;
+                j += 1;
+            }
+            if (j > start) {
+                if (wouldOverflowField(j - start)) {
+                    return j;
+                }
+                field += csvText.slice(start, j);
+                return j;
             }
 
-            switch (char) {
-                case quote:
-                    state = CSV_PARSE_STATE.INSIDE_QUOTES;
-                    break;
-                case delimiter:
-                    pushField();
-                    break;
-                case "\n":
-                    if (!pushField() || !pushRow()) {
-                        break;
-                    }
-                    break;
-                case "\r":
-                    if (!pushField() || !pushRow()) {
-                        break;
-                    }
-                    if (nextChar === "\n") {
-                        i += 1;
-                    }
-                    break;
-                default:
-                    appendChar(char);
-                    break;
+            const code = csvText.charCodeAt(start);
+            if (code === quoteCode) {
+                // Lone closing quote: leave the quoted section.
+                if (csvText.charCodeAt(start + 1) !== quoteCode) {
+                    state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
+                    return start + 1;
+                }
+                // Doubled quote collapses to a single literal quote.
+                /* v8 ignore next */
+                if (wouldOverflowField(1)) {
+                    return start + 2;
+                }
+                field += quote;
+                return start + 2;
             }
+            /* v8 ignore start */
+            if (wouldOverflowField(1)) {
+                return start + 1;
+            }
+            if (code === CR) {
+                if (csvText.charCodeAt(start + 1) === LF) {
+                    field += "\n";
+                    return start + 2;
+                }
+                field += "\r";
+                return start + 1;
+            }
+            // Escape character: collapse escape+quote, otherwise keep it literally.
+            if (csvText.charCodeAt(start + 1) === quoteCode) {
+                field += quote;
+                return start + 2;
+            }
+            field += csvText[start];
+            return start + 1;
+            /* v8 ignore stop */
+        };
+
+        // Handle one step while outside quotes; returns the next index.
+        const stepOutsideQuotes = (start) => {
+            // Bulk-copy ordinary characters up to the next quote, delimiter,
+            // or line break.
+            let j = start;
+            while (j < length) {
+                const code = csvText.charCodeAt(j);
+                if (
+                    code === quoteCode ||
+                    code === delimiterCode ||
+                    code === CR ||
+                    code === LF
+                ) {
+                    break;
+                }
+                j += 1;
+            }
+            if (j > start) {
+                if (wouldOverflowField(j - start)) {
+                    return j;
+                }
+                field += csvText.slice(start, j);
+                return j;
+            }
+
+            const code = csvText.charCodeAt(start);
+            if (code === quoteCode) {
+                state = CSV_PARSE_STATE.INSIDE_QUOTES;
+                return start + 1;
+            }
+            if (code === delimiterCode) {
+                pushField();
+                return start + 1;
+            }
+            if (code === LF) {
+                // Short-circuit: only push the row when the field push succeeds.
+                if (pushField()) {
+                    pushRow();
+                }
+                return start + 1;
+            }
+            // Carriage return ends the row, consuming a following newline (CRLF).
+            if (pushField()) {
+                pushRow();
+            }
+            return csvText.charCodeAt(start + 1) === LF ? start + 2 : start + 1;
+        };
+
+        let i = 0;
+        while (i < length && !parseError) {
+            i =
+                state === CSV_PARSE_STATE.INSIDE_QUOTES
+                    ? stepInsideQuotes(i)
+                    : stepOutsideQuotes(i);
         }
 
         if (parseError) {
@@ -612,9 +672,9 @@ export const LinkedInCleaner = (() => {
         }
 
         let lastNonEmptyIndex = -1;
-        for (let i = rows.length - 1; i >= 0; i -= 1) {
-            if (!isRowEmpty(rows[i])) {
-                lastNonEmptyIndex = i;
+        for (let k = rows.length - 1; k >= 0; k -= 1) {
+            if (!isRowEmpty(rows[k])) {
+                lastNonEmptyIndex = k;
                 break;
             }
         }
@@ -707,15 +767,22 @@ export const LinkedInCleaner = (() => {
             return headerResult;
         }
 
-        const dataRows = rowsAfterSkip.slice(1).filter((row) => !isRowEmpty(row));
-        const data = dataRows.map((row) =>
-            Object.fromEntries(
-                headers.map((header, index) => [
-                    header,
-                    row[index] !== undefined ? row[index] : "",
-                ]),
-            ),
-        );
+        const headerCount = headers.length;
+        const data = [];
+        for (let r = 1; r < rowsAfterSkip.length; r += 1) {
+            const row = rowsAfterSkip[r];
+            if (isRowEmpty(row)) {
+                continue;
+            }
+            // Null-prototype object: CSV headers are user-controlled, so keys
+            // like "__proto__" must not mutate the prototype chain.
+            const record = Object.create(null);
+            for (let c = 0; c < headerCount; c += 1) {
+                const value = row[c];
+                record[headers[c]] = value !== undefined ? value : "";
+            }
+            data.push(record);
+        }
 
         const result = { headers, data, error: null };
         if (cacheKey) {
@@ -799,9 +866,17 @@ export const LinkedInCleaner = (() => {
             return data;
         }
 
-        const cleanedRows = data.map((row) => {
-            const cleanedRow = {};
+        const requiredRowColumns = Array.isArray(config.requiredRowColumns)
+            ? config.requiredRowColumns
+            : config.requiredColumns;
+        const dropIfAllMissing = Array.isArray(config.dropIfAllMissing)
+            ? config.dropIfAllMissing
+            : [];
 
+        // Clean and filter in a single pass to avoid intermediate arrays.
+        const cleanedRows = [];
+        for (const row of data) {
+            const cleanedRow = {};
             config.columns.forEach((column) => {
                 const value = row[column.name];
                 const cleaner = column.cleaner ? CLEANERS[column.cleaner] : null;
@@ -809,24 +884,16 @@ export const LinkedInCleaner = (() => {
                 cleanedRow[column.name] = escapeFormula(cleanedValue);
             });
 
-            return cleanedRow;
-        });
-
-        const requiredRowColumns = Array.isArray(config.requiredRowColumns)
-            ? config.requiredRowColumns
-            : config.requiredColumns;
-        const rowsWithRequiredValues = cleanedRows.filter((row) =>
-            hasRequiredRowValues(row, requiredRowColumns),
-        );
-
-        const dropIfAllMissing = Array.isArray(config.dropIfAllMissing)
-            ? config.dropIfAllMissing
-            : [];
-        if (dropIfAllMissing.length) {
-            return rowsWithRequiredValues.filter((row) => hasAnyRowValue(row, dropIfAllMissing));
+            if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
+                continue;
+            }
+            if (dropIfAllMissing.length && !hasAnyRowValue(cleanedRow, dropIfAllMissing)) {
+                continue;
+            }
+            cleanedRows.push(cleanedRow);
         }
 
-        return rowsWithRequiredValues;
+        return cleanedRows;
     }
 
     /**
@@ -886,7 +953,6 @@ export const LinkedInCleaner = (() => {
             fileType: null,
             detectedType: null,
             headers: [],
-            originalData: [],
             cleanedData: [],
             rowCount: 0,
             error,
@@ -912,7 +978,6 @@ export const LinkedInCleaner = (() => {
                     fileType: selected.type,
                     detectedType: selected.type,
                     headers: selected.headers,
-                    originalData: selected.data,
                     cleanedData,
                     rowCount: cleanedData.length,
                 });
@@ -927,7 +992,6 @@ export const LinkedInCleaner = (() => {
                 "Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.",
                 {
                     headers: initialParse.headers,
-                    originalData: initialParse.data,
                     rowCount: initialParse.data.length,
                 },
             );
@@ -955,7 +1019,6 @@ export const LinkedInCleaner = (() => {
                     fileType,
                     detectedType,
                     headers,
-                    originalData: data,
                     rowCount: data.length,
                 },
             );
@@ -967,7 +1030,6 @@ export const LinkedInCleaner = (() => {
             fileType,
             detectedType,
             headers,
-            originalData: data,
             cleanedData,
             rowCount: cleanedData.length,
         });

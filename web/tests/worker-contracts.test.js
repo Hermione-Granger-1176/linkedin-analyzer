@@ -11,6 +11,10 @@ import {
     parseStoredUploadFile,
 } from "../src/worker-contracts.js";
 
+// One shared oversized payload reused across all size-limit assertions to avoid
+// allocating multiple ~60 MiB strings.
+const OVERSIZE_CSV = "a".repeat(MAX_CSV_CHARS + 1);
+
 describe("worker contracts", () => {
     it("parses analytics addFile request payload", () => {
         const parsed = parseAnalyticsWorkerRequest({
@@ -88,7 +92,7 @@ describe("worker contracts", () => {
         const oversizeCsv = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: {
-                csvText: "a".repeat(MAX_CSV_CHARS + 2),
+                csvText: OVERSIZE_CSV,
                 fileName: "Shares.csv",
             },
         });
@@ -103,7 +107,7 @@ describe("worker contracts", () => {
 
         const oversizeRestore = parseAnalyticsWorkerRequest({
             type: "restoreFiles",
-            payload: { sharesCsv: "a".repeat(MAX_CSV_CHARS + 1), commentsCsv: "" },
+            payload: { sharesCsv: OVERSIZE_CSV, commentsCsv: "" },
         });
 
         expect(invalidEnvelope.valid).toBe(false);
@@ -335,7 +339,7 @@ describe("worker contracts", () => {
         });
         const oversize = parseConnectionsWorkerRequest({
             type: "process",
-            payload: { connectionsCsv: "a".repeat(MAX_CSV_CHARS + 2) },
+            payload: { connectionsCsv: OVERSIZE_CSV },
         });
 
         expect(invalidType.valid).toBe(false);
@@ -389,13 +393,13 @@ describe("worker contracts", () => {
         const missingPayload = parseMessagesWorkerRequest({ type: "process", payload: null });
         const oversizeRequest = parseMessagesWorkerRequest({
             type: "process",
-            payload: { messagesCsv: "a".repeat(MAX_CSV_CHARS + 2) },
+            payload: { messagesCsv: OVERSIZE_CSV },
         });
         const oversizeConnectionsRequest = parseMessagesWorkerRequest({
             type: "process",
             payload: {
                 messagesCsv: "FROM,TO,DATE,CONTENT\nA,B,2025-01-01,Hi",
-                connectionsCsv: "a".repeat(MAX_CSV_CHARS + 2),
+                connectionsCsv: OVERSIZE_CSV,
             },
         });
         const invalidResponse = parseMessagesWorkerMessage({ type: "error" });

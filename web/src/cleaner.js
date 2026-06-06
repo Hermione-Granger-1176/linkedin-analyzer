@@ -512,8 +512,11 @@ export const LinkedInCleaner = (() => {
         let state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
         let parseError = null;
 
-        const fieldTooLarge = () => {
-            if (field.length > CSV_LIMITS.maxFieldChars) {
+        // Reject oversized fields *before* appending, so we never allocate a
+        // huge string just to discard it. addLength is the number of characters
+        // about to be appended to the current field.
+        const wouldOverflowField = (addLength) => {
+            if (field.length + addLength > CSV_LIMITS.maxFieldChars) {
                 parseError = "CSV parsing error: one field is too large to process safely.";
                 return true;
             }
@@ -554,41 +557,46 @@ export const LinkedInCleaner = (() => {
                 j += 1;
             }
             if (j > start) {
+                if (wouldOverflowField(j - start)) {
+                    return j;
+                }
                 field += csvText.slice(start, j);
-                fieldTooLarge();
                 return j;
             }
 
             const code = csvText.charCodeAt(start);
             if (code === quoteCode) {
-                if (csvText.charCodeAt(start + 1) === quoteCode) {
-                    field += quote;
-                    /* v8 ignore next */
-                    fieldTooLarge();
+                // Lone closing quote: leave the quoted section.
+                if (csvText.charCodeAt(start + 1) !== quoteCode) {
+                    state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
+                    return start + 1;
+                }
+                // Doubled quote collapses to a single literal quote.
+                /* v8 ignore next */
+                if (wouldOverflowField(1)) {
                     return start + 2;
                 }
-                state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
-                return start + 1;
+                field += quote;
+                return start + 2;
             }
             /* v8 ignore start */
+            if (wouldOverflowField(1)) {
+                return start + 1;
+            }
             if (code === CR) {
                 if (csvText.charCodeAt(start + 1) === LF) {
                     field += "\n";
-                    fieldTooLarge();
                     return start + 2;
                 }
                 field += "\r";
-                fieldTooLarge();
                 return start + 1;
             }
             // Escape character: collapse escape+quote, otherwise keep it literally.
             if (csvText.charCodeAt(start + 1) === quoteCode) {
                 field += quote;
-                fieldTooLarge();
                 return start + 2;
             }
             field += csvText[start];
-            fieldTooLarge();
             return start + 1;
             /* v8 ignore stop */
         };
@@ -611,8 +619,10 @@ export const LinkedInCleaner = (() => {
                 j += 1;
             }
             if (j > start) {
+                if (wouldOverflowField(j - start)) {
+                    return j;
+                }
                 field += csvText.slice(start, j);
-                fieldTooLarge();
                 return j;
             }
 
@@ -764,7 +774,9 @@ export const LinkedInCleaner = (() => {
             if (isRowEmpty(row)) {
                 continue;
             }
-            const record = {};
+            // Null-prototype object: CSV headers are user-controlled, so keys
+            // like "__proto__" must not mutate the prototype chain.
+            const record = Object.create(null);
             for (let c = 0; c < headerCount; c += 1) {
                 const value = row[c];
                 record[headers[c]] = value !== undefined ? value : "";

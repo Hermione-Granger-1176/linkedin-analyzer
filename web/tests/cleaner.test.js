@@ -510,6 +510,17 @@ describe("LinkedInCleaner", () => {
         expect(result.error).toMatch(/too large/i);
     });
 
+    it("builds rows with a null prototype so malicious headers cannot pollute", () => {
+        const csv = ["toString,__proto__", "a,b"].join("\n");
+
+        const result = LinkedInCleaner.parseCSV(csv, "auto");
+
+        expect(result.error).toBeNull();
+        expect(Object.getPrototypeOf(result.data[0])).toBeNull();
+        expect(result.data[0].toString).toBe("a");
+        expect(Object.prototype.b).toBeUndefined();
+    });
+
     it("preserves embedded CRLF newlines inside quoted fields", () => {
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",

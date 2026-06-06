@@ -3,6 +3,8 @@
  * Original: src/linkedin_analyzer/core/text.py
  */
 
+import { MAX_CSV_CHARS } from "./constants.js";
+
 export const LinkedInCleaner = (() => {
     "use strict";
 
@@ -93,7 +95,7 @@ export const LinkedInCleaner = (() => {
     });
 
     const CSV_LIMITS = Object.freeze({
-        maxChars: 30 * 1024 * 1024,
+        maxChars: MAX_CSV_CHARS,
         maxRows: 250000,
         maxColumns: 256,
         maxFieldChars: 200000,

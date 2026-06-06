@@ -3,6 +3,7 @@
 import { AnalyticsPage } from "./analytics-ui.js";
 import { CleanPage } from "./clean.js";
 import { ConnectionsPage } from "./connections-ui.js";
+import { SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { initDecorations } from "./decorations.js";
 import { DomEvents } from "./dom-events.js";
 import { InsightsPage } from "./insights-ui.js";
@@ -73,7 +74,6 @@ function init() {
             },
         },
     ]);
-    const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
     const hasTelemetryConsent = telemetryConsentGranted();
 
     /* Initialize runtime modules and route wiring. */

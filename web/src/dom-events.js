@@ -1,7 +1,7 @@
 /* DOM event target safety helpers */
 
 export const DomEvents = (() => {
-    'use strict';
+    "use strict";
 
     /**
      * Safely call Element.closest() from a delegated event target.

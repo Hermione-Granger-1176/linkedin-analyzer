@@ -1,30 +1,30 @@
 /* Theme handling */
 
 export const Theme = (() => {
-    'use strict';
+    "use strict";
 
-    const STORAGE_KEY = 'linkedin-analyzer-theme';
+    const STORAGE_KEY = "linkedin-analyzer-theme";
 
     /** Initialize theme toggle and system preference listeners. */
     function init() {
-        const toggle = document.getElementById('themeToggle');
+        const toggle = document.getElementById("themeToggle");
         if (!toggle) {return;}
 
         const savedTheme = getStoredTheme();
-        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const theme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+        const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = savedTheme || (systemPrefersDark ? "dark" : "light");
         applyTheme(theme);
 
-        toggle.addEventListener('click', () => {
-            const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        toggle.addEventListener("click", () => {
+            const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
             applyTheme(next);
             setStoredTheme(next);
             notifyThemeChange();
         });
 
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
             if (!getStoredTheme()) {
-                applyTheme(event.matches ? 'dark' : 'light');
+                applyTheme(event.matches ? "dark" : "light");
                 notifyThemeChange();
             }
         });
@@ -60,12 +60,12 @@ export const Theme = (() => {
      * @param {string} theme - Theme name ('light' or 'dark')
      */
     function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute("data-theme", theme);
     }
 
     /** Dispatch a custom 'themechange' event on the document. */
     function notifyThemeChange() {
-        document.dispatchEvent(new CustomEvent('themechange'));
+        document.dispatchEvent(new CustomEvent("themechange"));
     }
 
     return { init };

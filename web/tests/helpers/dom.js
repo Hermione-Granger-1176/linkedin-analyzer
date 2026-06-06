@@ -1,26 +1,26 @@
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
-export function setupDom(html = '') {
+export function setupDom(html = "") {
     document.body.innerHTML = html;
 }
 
 export function resetDom() {
-    document.body.innerHTML = '';
-    document.documentElement.removeAttribute('data-theme');
+    document.body.innerHTML = "";
+    document.documentElement.removeAttribute("data-theme");
 }
 
 export function mockMatchMedia(initialMatches = false) {
     const listeners = new Set();
     const mql = {
         matches: initialMatches,
-        media: '',
+        media: "",
         addEventListener: (event, callback) => {
-            if (event === 'change' && typeof callback === 'function') {
+            if (event === "change" && typeof callback === "function") {
                 listeners.add(callback);
             }
         },
         removeEventListener: (event, callback) => {
-            if (event === 'change' && typeof callback === 'function') {
+            if (event === "change" && typeof callback === "function") {
                 listeners.delete(callback);
             }
         },
@@ -60,21 +60,21 @@ export function createMockCanvasContext(overrides = {}) {
         setLineDash: vi.fn(),
         getLineDash: vi.fn(() => []),
         lineWidth: 1,
-        strokeStyle: '',
-        fillStyle: '',
-        font: '',
+        strokeStyle: "",
+        fillStyle: "",
+        font: "",
         globalAlpha: 1,
-        textAlign: 'start',
-        textBaseline: 'alphabetic',
-        lineJoin: 'miter',
-        lineCap: 'butt',
-        globalCompositeOperation: 'source-over'
+        textAlign: "start",
+        textBaseline: "alphabetic",
+        lineJoin: "miter",
+        lineCap: "butt",
+        globalCompositeOperation: "source-over"
     };
     return Object.assign(ctx, overrides);
 }
 
 export function createCanvas({ width = 300, height = 150, ctxOverrides = {} } = {}) {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     const ctx = createMockCanvasContext(ctxOverrides);
     canvas.getContext = vi.fn(() => ctx);
     canvas.getBoundingClientRect = () => ({
@@ -85,7 +85,7 @@ export function createCanvas({ width = 300, height = 150, ctxOverrides = {} } = 
         right: width,
         bottom: height
     });
-    canvas.toBlob = (callback) => callback(new Blob(['test'], { type: 'image/png' }));
+    canvas.toBlob = (callback) => callback(new Blob(["test"], { type: "image/png" }));
     return { canvas, ctx };
 }
 

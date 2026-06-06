@@ -1,7 +1,7 @@
 /* Messages analytics helpers shared by UI and worker */
 
 export const MessagesAnalytics = (() => {
-    'use strict';
+    "use strict";
 
     /**
      * Build message analytics state from cleaned rows.
@@ -10,16 +10,16 @@ export const MessagesAnalytics = (() => {
      */
     function buildMessageState(rows) {
         const safeRows = Array.isArray(rows) ? rows : [];
-        if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
-            performance.mark('messages:detect-self:start');
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            performance.mark("messages:detect-self:start");
         }
         const context = detectSelfContext(safeRows);
-        if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
-            performance.mark('messages:detect-self:end');
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+            performance.mark("messages:detect-self:end");
         }
-        if (typeof performance !== 'undefined' && typeof performance.measure === 'function') {
+        if (typeof performance !== "undefined" && typeof performance.measure === "function") {
             try {
-                performance.measure('messages:detect-self', 'messages:detect-self:start', 'messages:detect-self:end');
+                performance.measure("messages:detect-self", "messages:detect-self:start", "messages:detect-self:end");
             } catch {
                 // Ignore missing marks to keep instrumentation resilient.
             }
@@ -63,7 +63,7 @@ export const MessagesAnalytics = (() => {
                 } else {
                     contacts.set(contactKey, {
                         key: contactKey,
-                        name: contact.name || 'Unknown',
+                        name: contact.name || "Unknown",
                         url: contact.url,
                         count: 1,
                         lastTimestamp: timestamp
@@ -107,12 +107,12 @@ export const MessagesAnalytics = (() => {
         const byName = new Map();
 
         safeRows.forEach(row => {
-            const firstName = cleanText(row['First Name']);
-            const lastName = cleanText(row['Last Name']);
+            const firstName = cleanText(row["First Name"]);
+            const lastName = cleanText(row["Last Name"]);
             const fullName = `${firstName} ${lastName}`.trim();
             const nameKey = normalizeName(fullName);
             const url = normalizeUrl(row.URL);
-            const connectedOnDate = parseDateOnly(row['Connected On']);
+            const connectedOnDate = parseDateOnly(row["Connected On"]);
             const company = cleanText(row.Company);
             const position = cleanText(row.Position);
 
@@ -154,12 +154,12 @@ export const MessagesAnalytics = (() => {
 
         safeRows.forEach((row, index) => {
             const conversationKey = buildConversationKey(row, index);
-            const senderUrl = normalizeUrl(row['SENDER PROFILE URL']);
-            const recipientUrls = normalizeUrlList(row['RECIPIENT PROFILE URLS']);
+            const senderUrl = normalizeUrl(row["SENDER PROFILE URL"]);
+            const recipientUrls = normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
             const senderName = normalizeName(row.FROM);
 
-            recordParticipantStat(urlStats, senderUrl, conversationKey, 'sender');
-            recordParticipantStat(nameStats, senderName, conversationKey, 'sender');
+            recordParticipantStat(urlStats, senderUrl, conversationKey, "sender");
+            recordParticipantStat(nameStats, senderName, conversationKey, "sender");
             if (senderUrl && senderName) {
                 incrementNestedCount(urlNameCounts, senderUrl, senderName);
             }
@@ -167,11 +167,11 @@ export const MessagesAnalytics = (() => {
             const recipientNames = parseRecipientNames(row.TO, recipientUrls.length);
             if (recipientUrls.length) {
                 recipientUrls.forEach((url, recipientIndex) => {
-                    recordParticipantStat(urlStats, url, conversationKey, 'recipient');
+                    recordParticipantStat(urlStats, url, conversationKey, "recipient");
                     const recipientName = normalizeName(
-                        recipientNames[recipientIndex] || recipientNames[0] || ''
+                        recipientNames[recipientIndex] || recipientNames[0] || ""
                     );
-                    recordParticipantStat(nameStats, recipientName, conversationKey, 'recipient');
+                    recordParticipantStat(nameStats, recipientName, conversationKey, "recipient");
                     if (url && recipientName) {
                         incrementNestedCount(urlNameCounts, url, recipientName);
                     }
@@ -180,7 +180,7 @@ export const MessagesAnalytics = (() => {
             }
 
             recipientNames.forEach(name => {
-                recordParticipantStat(nameStats, normalizeName(name), conversationKey, 'recipient');
+                recordParticipantStat(nameStats, normalizeName(name), conversationKey, "recipient");
             });
         });
 
@@ -215,7 +215,7 @@ export const MessagesAnalytics = (() => {
      * @returns {string}
      */
     function buildConversationKey(row, rowIndex) {
-        const conversationId = cleanText(row['CONVERSATION ID']);
+        const conversationId = cleanText(row["CONVERSATION ID"]);
         return conversationId || `row-${rowIndex}`;
     }
 
@@ -232,8 +232,8 @@ export const MessagesAnalytics = (() => {
         }
 
         const roleField = {
-            sender: 'senderCount',
-            recipient: 'recipientCount'
+            sender: "senderCount",
+            recipient: "recipientCount"
         }[role] || null;
 
         const existing = statsMap.get(key);
@@ -353,20 +353,20 @@ export const MessagesAnalytics = (() => {
 
         const sender = {
             name: cleanText(row.FROM),
-            url: normalizeUrl(row['SENDER PROFILE URL'])
+            url: normalizeUrl(row["SENDER PROFILE URL"])
         };
         addParticipant(sender, participants, seenKeys, context);
 
-        const recipientUrls = normalizeUrlList(row['RECIPIENT PROFILE URLS']);
+        const recipientUrls = normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
         const recipientNames = parseRecipientNames(row.TO, recipientUrls.length);
         if (recipientUrls.length) {
             recipientUrls.forEach((url, index) => {
-                const name = recipientNames[index] || recipientNames[0] || '';
+                const name = recipientNames[index] || recipientNames[0] || "";
                 addParticipant({ name, url }, participants, seenKeys, context);
             });
         } else {
             recipientNames.forEach(name => {
-                addParticipant({ name, url: '' }, participants, seenKeys, context);
+                addParticipant({ name, url: "" }, participants, seenKeys, context);
             });
         }
 
@@ -421,7 +421,7 @@ export const MessagesAnalytics = (() => {
         }
 
         return {
-            name: name || 'Unknown',
+            name: name || "Unknown",
             url
         };
     }
@@ -432,7 +432,7 @@ export const MessagesAnalytics = (() => {
      * @returns {boolean}
      */
     function isAnonymousName(name) {
-        return normalizeName(name) === 'linkedin member';
+        return normalizeName(name) === "linkedin member";
     }
 
     /**
@@ -445,7 +445,7 @@ export const MessagesAnalytics = (() => {
             return `url:${contact.url}`;
         }
         const nameKey = normalizeName(contact.name);
-        return `name:${nameKey || 'unknown'}`;
+        return `name:${nameKey || "unknown"}`;
     }
 
     /**
@@ -511,7 +511,7 @@ export const MessagesAnalytics = (() => {
             return [text];
         }
 
-        return text.split(',').map(part => part.trim()).filter(Boolean);
+        return text.split(",").map(part => part.trim()).filter(Boolean);
     }
 
     /**
@@ -522,13 +522,13 @@ export const MessagesAnalytics = (() => {
     function normalizeUrl(value) {
         const text = cleanText(value);
         if (!text) {
-            return '';
+            return "";
         }
         const matches = text.match(/https?:\/\/[^\s,;]+/i);
         if (!matches || !matches[0]) {
-            return '';
+            return "";
         }
-        return matches[0].trim().replace(/\/+$/, '').toLowerCase();
+        return matches[0].trim().replace(/\/+$/, "").toLowerCase();
     }
 
     /**
@@ -562,7 +562,7 @@ export const MessagesAnalytics = (() => {
      * @returns {string}
      */
     function normalizeName(value) {
-        return cleanText(value).toLowerCase().replace(/\s+/g, ' ');
+        return cleanText(value).toLowerCase().replace(/\s+/g, " ");
     }
 
     /**
@@ -590,7 +590,7 @@ export const MessagesAnalytics = (() => {
      * @returns {string}
      */
     function cleanText(value) {
-        return value === null || value === undefined ? '' : String(value).trim();
+        return value === null || value === undefined ? "" : String(value).trim();
     }
 
     return {

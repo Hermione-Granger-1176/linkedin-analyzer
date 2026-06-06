@@ -1,24 +1,24 @@
 /* Shared loading overlay for content screens */
 
 export const LoadingOverlay = (() => {
-    'use strict';
+    "use strict";
 
     const DEFAULT_MESSAGES = Object.freeze({
         analytics: {
-            title: 'Loading analytics',
-            message: 'Crunching your activity view.'
+            title: "Loading analytics",
+            message: "Crunching your activity view."
         },
         connections: {
-            title: 'Loading connections',
-            message: 'Analyzing your professional network.'
+            title: "Loading connections",
+            message: "Analyzing your professional network."
         },
         messages: {
-            title: 'Loading messages',
-            message: 'Reading conversations and building relationship insights.'
+            title: "Loading messages",
+            message: "Reading conversations and building relationship insights."
         },
         insights: {
-            title: 'Loading insights',
-            message: 'Preparing your personalized takeaways.'
+            title: "Loading insights",
+            message: "Preparing your personalized takeaways."
         }
     });
 
@@ -35,8 +35,8 @@ export const LoadingOverlay = (() => {
             return;
         }
         const defaults = DEFAULT_MESSAGES[source] || {
-            title: 'Loading',
-            message: 'Preparing your data view.'
+            title: "Loading",
+            message: "Preparing your data view."
         };
         activeSources.set(source, {
             title: options?.title || defaults.title,
@@ -112,18 +112,18 @@ export const LoadingOverlay = (() => {
      * @param {boolean} isLoading - Whether loading is active
      */
     function applyLoadingClass(isLoading) {
-        const screens = document.querySelectorAll('.screen');
+        const screens = document.querySelectorAll(".screen");
         screens.forEach(screen => {
-            screen.classList.remove('is-loading');
+            screen.classList.remove("is-loading");
         });
 
         if (!isLoading) {
             return;
         }
 
-        const active = document.querySelector('.screen.active');
+        const active = document.querySelector(".screen.active");
         if (active) {
-            active.classList.add('is-loading');
+            active.classList.add("is-loading");
         }
     }
 
@@ -136,15 +136,15 @@ export const LoadingOverlay = (() => {
             return overlayElements;
         }
 
-        const overlay = document.getElementById('contentLoadingOverlay');
+        const overlay = document.getElementById("contentLoadingOverlay");
         if (!overlay) {
             return null;
         }
 
         overlayElements = {
             overlay,
-            title: document.getElementById('contentLoadingTitle'),
-            message: document.getElementById('contentLoadingText')
+            title: document.getElementById("contentLoadingTitle"),
+            message: document.getElementById("contentLoadingText")
         };
         return overlayElements;
     }

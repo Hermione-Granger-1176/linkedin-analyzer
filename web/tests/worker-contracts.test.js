@@ -390,11 +390,19 @@ describe("worker contracts", () => {
             type: "process",
             payload: { messagesCsv: "a".repeat(30 * 1024 * 1024 + 2) },
         });
+        const oversizeConnectionsRequest = parseMessagesWorkerRequest({
+            type: "process",
+            payload: {
+                messagesCsv: "FROM,TO,DATE,CONTENT\nA,B,2025-01-01,Hi",
+                connectionsCsv: "a".repeat(30 * 1024 * 1024 + 2),
+            },
+        });
         const invalidResponse = parseMessagesWorkerMessage({ type: "error" });
 
         expect(invalidRequest.valid).toBe(false);
         expect(missingPayload.valid).toBe(false);
         expect(oversizeRequest.valid).toBe(false);
+        expect(oversizeConnectionsRequest.valid).toBe(false);
         expect(invalidResponse.valid).toBe(false);
     });
 

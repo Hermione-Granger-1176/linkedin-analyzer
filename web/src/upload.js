@@ -2,6 +2,7 @@
 
 import rough from "roughjs/bundled/rough.esm.js";
 
+import { MAX_CSV_CHARS, SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
@@ -70,10 +71,8 @@ export const UploadPage = (() => {
     ]);
 
     const JOB_TIMEOUT_MS = 45000;
-    const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
     const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024;
     const MAX_FILE_BYTES = 40 * 1024 * 1024;
-    const MAX_CSV_CHARS = 30 * 1024 * 1024;
     const FILE_READ_TIMEOUT_MS = 30000;
     const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
 

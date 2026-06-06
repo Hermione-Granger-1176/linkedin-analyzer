@@ -36,7 +36,7 @@ describe("Session", () => {
         expect(resolved).toBe(true);
     });
 
-    it("cleanIfStale runs cleanup and returns true when no prior activity", async () => {
+    it("cleanIfStale touches and returns false when no prior activity", async () => {
         // No last-activity key at all
         window.localStorage.removeItem("linkedin-analyzer:last-activity");
         vi.spyOn(Storage, "clearAll").mockResolvedValue();

@@ -11,10 +11,16 @@ import {
     parseStoredUploadFile,
 } from "../src/worker-contracts.js";
 
-// One shared oversized payload (MAX_CSV_CHARS + 1 chars, ~63M characters)
-// reused across all size-limit assertions to avoid allocating several large
-// strings.
-const OVERSIZE_CSV = "a".repeat(MAX_CSV_CHARS + 1);
+// Oversized payload (MAX_CSV_CHARS + 1 chars, ~63M characters) used by the
+// size-limit assertions. Generated lazily and memoized so it is allocated once,
+// and only when one of those tests actually runs.
+let cachedOversizeCsv;
+const getOversizeCsv = () => {
+    if (cachedOversizeCsv === undefined) {
+        cachedOversizeCsv = "a".repeat(MAX_CSV_CHARS + 1);
+    }
+    return cachedOversizeCsv;
+};
 
 describe("worker contracts", () => {
     it("parses analytics addFile request payload", () => {
@@ -93,7 +99,7 @@ describe("worker contracts", () => {
         const oversizeCsv = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: {
-                csvText: OVERSIZE_CSV,
+                csvText: getOversizeCsv(),
                 fileName: "Shares.csv",
             },
         });
@@ -108,7 +114,7 @@ describe("worker contracts", () => {
 
         const oversizeRestore = parseAnalyticsWorkerRequest({
             type: "restoreFiles",
-            payload: { sharesCsv: OVERSIZE_CSV, commentsCsv: "" },
+            payload: { sharesCsv: getOversizeCsv(), commentsCsv: "" },
         });
 
         expect(invalidEnvelope.valid).toBe(false);
@@ -340,7 +346,7 @@ describe("worker contracts", () => {
         });
         const oversize = parseConnectionsWorkerRequest({
             type: "process",
-            payload: { connectionsCsv: OVERSIZE_CSV },
+            payload: { connectionsCsv: getOversizeCsv() },
         });
 
         expect(invalidType.valid).toBe(false);
@@ -394,13 +400,13 @@ describe("worker contracts", () => {
         const missingPayload = parseMessagesWorkerRequest({ type: "process", payload: null });
         const oversizeRequest = parseMessagesWorkerRequest({
             type: "process",
-            payload: { messagesCsv: OVERSIZE_CSV },
+            payload: { messagesCsv: getOversizeCsv() },
         });
         const oversizeConnectionsRequest = parseMessagesWorkerRequest({
             type: "process",
             payload: {
                 messagesCsv: "FROM,TO,DATE,CONTENT\nA,B,2025-01-01,Hi",
-                connectionsCsv: OVERSIZE_CSV,
+                connectionsCsv: getOversizeCsv(),
             },
         });
         const invalidResponse = parseMessagesWorkerMessage({ type: "error" });

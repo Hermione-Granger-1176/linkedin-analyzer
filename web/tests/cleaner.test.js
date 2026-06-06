@@ -514,11 +514,14 @@ describe("LinkedInCleaner", () => {
         const csv = ["toString,__proto__", "a,b"].join("\n");
 
         const result = LinkedInCleaner.parseCSV(csv, "auto");
+        const row = result.data[0];
 
         expect(result.error).toBeNull();
-        expect(Object.getPrototypeOf(result.data[0])).toBeNull();
-        expect(result.data[0].toString).toBe("a");
-        expect(Object.prototype.b).toBeUndefined();
+        expect(Object.getPrototypeOf(row)).toBeNull();
+        // Header keys become plain own properties instead of mutating the chain.
+        expect(row.toString).toBe("a");
+        expect(Object.prototype.hasOwnProperty.call(row, "__proto__")).toBe(true);
+        expect(row.__proto__).toBe("b");
     });
 
     it("preserves embedded CRLF newlines inside quoted fields", () => {

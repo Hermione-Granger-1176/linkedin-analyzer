@@ -13,6 +13,18 @@
 const MAX_BODY_BYTES = 64 * 1024;
 
 /**
+ * Build an Error carrying an HTTP status code for the handler to surface.
+ * @param {number} statusCode - HTTP status to send in the response.
+ * @param {string} message - Error message.
+ * @returns {Error} The error with a `statusCode` property attached.
+ */
+function httpError(statusCode, message) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+}
+
+/**
  * Derive Sentry's security (CSP) report endpoint from a Sentry DSN.
  * @param {string} dsn - Sentry DSN, e.g. `https://<key>@<host>/<projectId>`.
  * @returns {string|null} The security endpoint URL, or null if the DSN is unusable.
@@ -57,9 +69,7 @@ async function readReportBody(req, limit) {
     if (req.body !== undefined && req.body !== null) {
         const serialized = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
         if (Buffer.byteLength(serialized, "utf8") > limit) {
-            const error = new Error("Payload too large");
-            error.statusCode = 413;
-            throw error;
+            throw httpError(413, "Payload too large");
         }
         return serialized;
     }
@@ -70,9 +80,7 @@ async function readReportBody(req, limit) {
         const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
         size += buf.length;
         if (size > limit) {
-            const error = new Error("Payload too large");
-            error.statusCode = 413;
-            throw error;
+            throw httpError(413, "Payload too large");
         }
         chunks.push(buf);
     }

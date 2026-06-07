@@ -169,7 +169,10 @@ Recommended production setup:
 3. Set environment variables:
    - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended for release-level error tracking)
-4. Verify security headers from `vercel.json` in deployed responses
+   - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables
+     forwarding of CSP violation reports collected at `/api/csp-report`)
+4. Verify security headers from `vercel.json` in deployed responses (the CSP
+   reports violations to the first-party `/api/csp-report` endpoint)
 
 ## Browser Compatibility
 

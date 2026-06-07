@@ -2,8 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
@@ -74,21 +73,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Guided tutorial overlay with per-screen steps, spotlight, SVG pointer arrows, keyboard
-  navigation, focus trap, and mini-tips with engagement-paced timing.
+- Guided tutorial overlay with per-screen steps, spotlight, SVG pointer arrows, keyboard navigation, focus trap, and mini-tips with engagement-paced timing.
 - Session TTL cleanup clearing stale uploads and cached analytics after 24 hours.
-- Worker contracts module (`worker-contracts.js`) with typed parse/normalize helpers for
-  all worker message envelopes.
-- Large-file guardrails: 40 MB hard limit per file, 30-second `FileReader` timeout,
-  streaming `ReadableStream` path for 5-40 MB files, and CSV size limits (30 MB text,
-  250 k rows, 256 columns).
-- XSS-safe DOM APIs via centralized `chart-tooltip.js`; user-controlled strings no longer
-  reach `innerHTML`.
+- Worker contracts module (`worker-contracts.js`) with typed parse/normalize helpers for all worker message envelopes.
+- Large-file guardrails: 40 MB hard limit per file, 30-second `FileReader` timeout, streaming `ReadableStream` path for 5-40 MB files, and CSV size limits (30 MB text, 250 k rows, 256 columns).
+- XSS-safe DOM APIs via centralized `chart-tooltip.js`; user-controlled strings no longer reach `innerHTML`.
 - Sentry release tracking (`VITE_APP_RELEASE`) and `beforeSend` noise filter.
 - Web Vitals telemetry (CLS, FCP, INP, LCP, TTFB) wired into Sentry metrics.
 - Playwright end-to-end tests with Chromium and Firefox.
-- Prettier, TypeScript type-checking (`config/jsconfig.json`), and stricter ESLint rules
-  (`no-eval`, `no-implied-eval`, `no-throw-literal`, import cycle depth 3).
+- Prettier, TypeScript type-checking (`config/jsconfig.json`), and stricter ESLint rules (`no-eval`, `no-implied-eval`, `no-throw-literal`, import cycle depth 3).
 - `.github/SECURITY.md` with coordinated disclosure policy.
 - CodeQL analysis workflow for JavaScript and Python.
 - Dependabot configuration with grouped updates per ecosystem.
@@ -96,8 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Service worker rewritten with Workbox-style strategies: NetworkFirst for navigation,
-  StaleWhileRevalidate for scripts/styles, CacheFirst for fonts/images.
+- Service worker rewritten with Workbox-style strategies: NetworkFirst for navigation, StaleWhileRevalidate for scripts/styles, CacheFirst for fonts/images.
 - CI push triggers scoped to `main` only with concurrency cancellation.
 - Node test matrix expanded to 20 and 22; Python matrix to 3.11, 3.12, and 3.13.
 - PyPI publishing switched to OIDC trusted publishing (no API token secret).
@@ -109,8 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upload timeout race saving empty content when pending entry is null.
 - Session cleanup race resolved with `Session.waitForCleanup()` awaited in all screen load paths.
 - Service worker cache-put floating promise fixed with `event.waitUntil()`.
-- Worker error resilience: all three workers now wrap dispatch in try/catch with consistent
-  error shapes via `toErrorMessage` helper.
+- Worker error resilience: all three workers now wrap dispatch in try/catch with consistent error shapes via `toErrorMessage` helper.
 
 ## [0.3.0] - 2026-03-02
 
@@ -120,22 +111,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Favicon set: SVG source, 32 px ICO, 180 px Apple Touch, 192 px and 512 px PNGs.
 - Open Graph and Twitter Card meta tags for social link previews.
 - `robots.txt` allowing all crawlers with sitemap reference.
-- Connections analytics screen with growth timeline, top companies, top positions bar
-  charts, and network stats.
+- Connections analytics screen with growth timeline, top companies, top positions bar charts, and network stats.
 - Chart PNG export via hover button on all chart cards.
 - Self-hosted Google Fonts eliminating external DNS lookups.
 - Service worker for offline PWA support with static asset and CDN script caching.
 
 ### Changed
 
-- CI workflows hardened with SHA-pinned actions, GitHub App token authentication, and
-  monthly refresh schedule.
+- CI workflows hardened with SHA-pinned actions, GitHub App token authentication, and monthly refresh schedule.
 - Control flow simplified with dispatch/state patterns and modernized loop usage.
 
 ### Fixed
 
-- Screen overlap on refresh and tab transitions (absolute positioning for exit animation,
-  immediate `active` class removal).
+- Screen overlap on refresh and tab transitions (absolute positioning for exit animation, immediate `active` class removal).
 - Animation race in `exportPng` resolved with temporary detached canvas.
 - Stale popup `z-index` on stat card re-renders.
 - `drawRegistry` entries surviving the clear-then-redraw cycle.
@@ -157,9 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Code quality audit: full JSDoc annotations across 13 JS files, `.editorconfig` codifying
-  indent styles, `from __future__ import annotations` in Python init files, dictionary
-  lookups replacing if/elif chains, extracted helper functions.
+- Code quality audit: full JSDoc annotations across 13 JS files, `.editorconfig` codifying indent styles, `from __future__ import annotations` in Python init files, dictionary lookups replacing if/elif chains, extracted helper functions.
 - Cleaner, docs, and tooling alignment pass.
 
 ### Fixed
@@ -168,30 +154,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-01-31
 
-Initial release of linkedin-analyzer encompassing the Python CLI, web application,
-analytics dashboard, CI pipeline, and project documentation.
+Initial release of linkedin-analyzer encompassing the Python CLI, web application, analytics dashboard, CI pipeline, and project documentation.
 
 ### Added
 
-- Python CLI (`linkedin-analyzer`) for cleaning LinkedIn **Shares** and **Comments** CSV
-  exports to formatted Excel files.
+- Python CLI (`linkedin-analyzer`) for cleaning LinkedIn **Shares** and **Comments** CSV exports to formatted Excel files.
 - Centralized default paths and deduplicated CLI argument handling.
 - 95 %+ test coverage with `pytest-cov` threshold enforcement.
-- Web-based Data Cleaner with drag-and-drop CSV upload, auto-detection of file type, and
-  Excel download.
+- Web-based Data Cleaner with drag-and-drop CSV upload, auto-detection of file type, and Excel download.
 - Hand-drawn sketch aesthetic (Rough.js) with dark/light theme toggle.
 - 100 % client-side processing — files never leave the browser.
 - Analytics and Insights screens with multi-file upload support.
-- Pre-computed aggregates, timeline year grouping, and Web Worker offloading for smooth
-  analytics rendering.
+- Pre-computed aggregates, timeline year grouping, and Web Worker offloading for smooth analytics rendering.
 - ESLint configuration and initial web test suite.
 - Vite build pipeline with Vercel static deployment configuration.
 - MIT license (SPDX text) and comprehensive README.
 
 ### Changed
 
-- Web UI refactored from single-page script into multipage flow with dedicated screen
-  modules.
+- Web UI refactored from single-page script into multipage flow with dedicated screen modules.
 - UTC timestamps converted once at ingestion in the web pipeline.
 
 ### Fixed

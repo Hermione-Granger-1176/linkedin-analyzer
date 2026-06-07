@@ -80,9 +80,7 @@ Defaults to `INFO`. Also configurable via the `LOG_LEVEL` environment variable.
 linkedin-analyzer --log-format json all
 ```
 
-Choose `text` (default, human-readable) or `json` (structured, one object per
-line). Also configurable via the `LOG_FORMAT` environment variable. See
-[Operations and Deployment](operations.md) for production logging guidance.
+Choose `text` (default, human-readable) or `json` (structured, one object per line). Also configurable via the `LOG_FORMAT` environment variable. See [Operations and Deployment](operations.md) for production logging guidance.
 
 ### Custom paths for single-file commands
 
@@ -125,8 +123,7 @@ linkedin-analyzer all \
 - Messages: `FROM`, `TO`, `DATE`, `CONTENT`
 - Connections: `First Name`, `Last Name`, `Connected On`
 
-For Connections rows, only `Connected On` must contain a value. Rows are also
-dropped when `First Name`, `Last Name`, and `URL` are all missing.
+For Connections rows, only `Connected On` must contain a value. Rows are also dropped when `First Name`, `Last Name`, and `URL` are all missing.
 
 ## Python API
 

@@ -144,11 +144,11 @@ linkedin-analyzer/
 
 ### Python CLI
 
-| File                                  | Purpose                                                          |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| `src/linkedin_analyzer/cli.py`        | Commands: `shares`, `comments`, `messages`, `connections`, `all` |
-| `src/linkedin_analyzer/core/text.py`  | Quote/date/value normalization rules                             |
-| `src/linkedin_analyzer/core/excel.py` | Excel formatting with `openpyxl`                                 |
+| File | Purpose |
+| --- | --- |
+| `src/linkedin_analyzer/cli.py` | Commands: `shares`, `comments`, `messages`, `connections`, `all` |
+| `src/linkedin_analyzer/core/text.py` | Quote/date/value normalization rules |
+| `src/linkedin_analyzer/core/excel.py` | Excel formatting with `openpyxl` |
 
 ## Data Flow (Web)
 

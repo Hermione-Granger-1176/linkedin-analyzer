@@ -160,10 +160,7 @@ Then open the Vite URL printed in the terminal.
 
 ## Deployment
 
-Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages). The
-first-party CSP report collector lives in `api/csp-report.mjs`; Vercel deploys it
-automatically, while static-only hosts need an equivalent endpoint or should omit
-the CSP reporting directives.
+Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages). The first-party CSP report collector lives in `api/csp-report.mjs`; Vercel deploys it automatically, while static-only hosts need an equivalent endpoint or should omit the CSP reporting directives.
 
 Recommended production setup:
 
@@ -172,10 +169,8 @@ Recommended production setup:
 3. Set environment variables:
    - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended for release-level error tracking)
-   - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables
-     forwarding of CSP violation reports collected at `/api/csp-report`)
-4. Verify security headers from `vercel.json` in deployed responses (the CSP
-   reports violations to the first-party `/api/csp-report` endpoint)
+   - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables forwarding of CSP violation reports collected at `/api/csp-report`)
+4. Verify security headers from `vercel.json` in deployed responses (the CSP reports violations to the first-party `/api/csp-report` endpoint)
 
 ## Browser Compatibility
 

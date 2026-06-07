@@ -2,7 +2,8 @@
 
 ## Production Targets
 
-- **Web app**: static hosting on Vercel (`web/dist`)
+- **Web app**: Vercel hosting (`web/dist` plus the optional `api/csp-report`
+  Serverless Function)
 - **CLI package**: PyPI publish workflow (`.github/workflows/publish.yml`, OIDC trusted publishing)
 - **Container image**: GHCR multi-arch publish (`linux/amd64`, `linux/arm64`)
 

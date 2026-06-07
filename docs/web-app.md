@@ -160,7 +160,10 @@ Then open the Vite URL printed in the terminal.
 
 ## Deployment
 
-Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages).
+Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages). The
+first-party CSP report collector lives in `api/csp-report.mjs`; Vercel deploys it
+automatically, while static-only hosts need an equivalent endpoint or should omit
+the CSP reporting directives.
 
 Recommended production setup:
 

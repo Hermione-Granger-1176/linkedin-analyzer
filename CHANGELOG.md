@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-This changelog tracks the `linkedin-analyzer` Python package — the PyPI CLI and the container image that ships it. Web app changes are intentionally out of scope.
+This changelog tracks the `linkedin-analyzer` Python package — the CLI published to PyPI and the container image that ships it. Web app changes are intentionally out of scope.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -33,7 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Structured JSON logging for the CLI (`--log-format json` / `LOG_FORMAT` env).
 - `LOG_LEVEL` and `LINKEDIN_ANALYZER_DATA_DIR` environment variable support.
 - Dynamic versioning from git tags via `hatch-vcs`.
-- Cross-runtime cleaner parity fixtures shared with the web build.
+- Cross-runtime parity fixtures pinning the Python cleaner's output against a shared reference.
 - Publish-time artifact validation and Docker version propagation.
 
 ### Changed

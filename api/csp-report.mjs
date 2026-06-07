@@ -12,6 +12,12 @@
 
 const MAX_BODY_BYTES = 64 * 1024;
 
+// Cap how long we wait on the upstream collector. Forwarding is best-effort, and
+// the serverless function must still respond promptly, but it cannot truly
+// fire-and-forget (pending work may be frozen once the response is sent), so the
+// request is awaited with a bounded timeout instead.
+const FORWARD_TIMEOUT_MS = 2000;
+
 /**
  * Build an Error carrying an HTTP status code for the handler to surface.
  * @param {number} statusCode - HTTP status to send in the response.
@@ -112,6 +118,8 @@ export default async function handler(req, res) {
 
     const endpoint = resolveReportEndpoint(process.env);
     if (endpoint && body) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT_MS);
         try {
             await fetch(endpoint, {
                 method: "POST",
@@ -119,9 +127,12 @@ export default async function handler(req, res) {
                     "content-type": req.headers["content-type"] || "application/csp-report",
                 },
                 body,
+                signal: controller.signal,
             });
         } catch {
-            // Best-effort forwarding: a failed report must never affect the response.
+            // Best-effort forwarding: a failed or timed-out report must never affect the response.
+        } finally {
+            clearTimeout(timeout);
         }
     }
 

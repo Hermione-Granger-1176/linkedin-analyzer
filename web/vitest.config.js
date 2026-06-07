@@ -9,7 +9,7 @@ export default defineConfig({
             provider: "v8",
             reportsDirectory: "./coverage",
             all: true,
-            include: ["web/src/**/*.js"],
+            include: ["web/src/**/*.js", "api/**/*.mjs"],
             thresholds: {
                 statements: 95,
                 branches: 85,

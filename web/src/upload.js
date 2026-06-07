@@ -92,6 +92,10 @@ export const UploadPage = (() => {
     let pendingPrimePayload = null;
     let lastProgressPercent = 0;
     let storagePersistenceRequested = false;
+    // Restart throttle: at most MAX_WORKER_RESTARTS within WORKER_RESTART_WINDOW_MS.
+    const MAX_WORKER_RESTARTS = 3;
+    const WORKER_RESTART_WINDOW_MS = 10000;
+    let workerRestartTimes = [];
 
     /** Initialize the upload page. */
     function init() {
@@ -149,6 +153,34 @@ export const UploadPage = (() => {
             return;
         }
         restoreState();
+    }
+
+    /** Remove listeners from and terminate the current worker, if any. */
+    function teardownWorker() {
+        if (worker) {
+            worker.removeEventListener("message", handleWorkerMessage);
+            worker.removeEventListener("error", handleWorkerError);
+            worker.terminate();
+            worker = null;
+        }
+    }
+
+    /** Tear down the current worker and spin up a fresh one so later uploads recover. */
+    function restartWorker() {
+        teardownWorker();
+        // A fresh worker has no in-memory primed state, so clear the prime tracking
+        // (otherwise an unchanged signature would skip re-priming and leave analytics stale).
+        clearPrimeSchedule();
+        pendingPrimePayload = null;
+        lastPrimedSignature = null;
+        initWorker();
+        // Re-prime the new worker from cached files so analytics stay accurate after a crash.
+        if (worker) {
+            const cachedFiles = DataCache.get("storage:files");
+            if (cachedFiles) {
+                scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "idle" });
+            }
+        }
     }
 
     /** Create the analytics Web Worker. */
@@ -820,8 +852,24 @@ export const UploadPage = (() => {
             module: "upload",
             operation: "worker-error-event",
         });
-        setHint("Analytics worker error. Try refreshing.", true);
         resetProcessingState();
+
+        // Throttle restarts: a worker that fails on startup (e.g. a script load error)
+        // would otherwise restart-and-fail in a tight loop. Give up after too many
+        // failures in a short window and ask the user to reload instead.
+        const now = Date.now();
+        workerRestartTimes = workerRestartTimes.filter(
+            (time) => now - time < WORKER_RESTART_WINDOW_MS,
+        );
+        if (workerRestartTimes.length >= MAX_WORKER_RESTARTS) {
+            teardownWorker();
+            setHint("Analytics worker keeps failing. Please reload the page to retry.", true);
+            return;
+        }
+        workerRestartTimes.push(now);
+
+        setHint("Analytics worker error. Please retry the upload.", true);
+        restartWorker();
     }
 
     /**

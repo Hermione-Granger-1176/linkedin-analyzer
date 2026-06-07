@@ -400,6 +400,86 @@ describe("UploadPage", () => {
         expect(progressOverlay.hidden || progressPercent >= 99).toBe(true);
     });
 
+    it("restarts the worker after an error so later uploads still process", async () => {
+        const originalFileReader = globalThis.FileReader;
+        const fileReaderInstance = {
+            result: null,
+            onload: null,
+            onerror: null,
+            readAsText() {
+                this.result = "col\nvalue";
+                if (this.onload) {
+                    this.onload();
+                }
+            },
+        };
+        globalThis.FileReader = function FileReader() {
+            return fileReaderInstance;
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        const terminateSpy = vi.spyOn(deadWorker, "terminate");
+
+        // Fire the worker-level error event; handler should recreate the worker.
+        deadWorker.listeners.error[0](new Event("error"));
+
+        expect(terminateSpy).toHaveBeenCalled();
+        expect(workerInstance).not.toBe(deadWorker);
+
+        // A subsequent upload should post to the fresh worker, not the dead one.
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(workerInstance.postMessage).toHaveBeenCalled();
+        expect(deadWorker.postMessage).not.toHaveBeenCalled();
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("re-primes a fresh worker from cached files after a restart", async () => {
+        // Cached files give the restart something to re-prime from.
+        const cachedFiles = [
+            { type: "shares", rowCount: 3, text: "header\nrow1\nrow2\nrow3", updatedAt: 100 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        DataCache.get.mockImplementation((key) =>
+            key === "storage:files" ? cachedFiles : undefined,
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        // Fire the worker-level error event; the handler restarts and re-primes.
+        deadWorker.listeners.error[0](new Event("error"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(workerInstance).not.toBe(deadWorker);
+        const restoreCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0] && call[0].type === "restoreFiles",
+        );
+        expect(restoreCall).toBeTruthy();
+    });
+
+    it("stops restarting after repeated errors within the throttle window", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Exceed the restart throttle with rapid back-to-back errors.
+        for (let i = 0; i < 4; i += 1) {
+            workerInstance.listeners.error[0](new Event("error"));
+        }
+
+        expect(document.getElementById("uploadHint").textContent).toContain("keeps failing");
+    });
+
     // --- Worker message type 'error' (handleWorkerMessage error branch) ------
 
     it("handles error message type from worker without jobId (resets state)", async () => {

@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Python 3.14 to the supported classifiers; documented older-version (3.11–3.13) development with uv.
+- Python 3.14 to the supported classifiers, with documentation for 3.11–3.13 development under uv.
 
 ### Changed
 

@@ -100,8 +100,8 @@ typecheck-web: ## Run web type checks only
 
 test: test-py test-js ## Run non-browser Python and JS tests
 
-test-py: ## Run Python tests only
-	$(VENV_PYTHON) -m pytest tests/ -v
+test-py: ## Run Python tests only (make test-py ARGS="-k name --no-cov" for a subset)
+	$(VENV_PYTHON) -m pytest $(ARGS)
 
 test-js: ## Run JS unit tests only
 	$(NPM) run test

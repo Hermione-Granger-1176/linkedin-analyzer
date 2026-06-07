@@ -400,6 +400,49 @@ describe("UploadPage", () => {
         expect(progressOverlay.hidden || progressPercent >= 99).toBe(true);
     });
 
+    it("restarts the worker after an error so later uploads still process", async () => {
+        const originalFileReader = globalThis.FileReader;
+        const fileReaderInstance = {
+            result: null,
+            onload: null,
+            onerror: null,
+            readAsText() {
+                this.result = "col\nvalue";
+                if (this.onload) {
+                    this.onload();
+                }
+            },
+        };
+        globalThis.FileReader = function FileReader() {
+            return fileReaderInstance;
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        const terminateSpy = vi.spyOn(deadWorker, "terminate");
+
+        // Fire the worker-level error event; handler should recreate the worker.
+        deadWorker.listeners.error[0](new Event("error"));
+
+        expect(terminateSpy).toHaveBeenCalled();
+        expect(workerInstance).not.toBe(deadWorker);
+
+        // A subsequent upload should post to the fresh worker, not the dead one.
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(workerInstance.postMessage).toHaveBeenCalled();
+        expect(deadWorker.postMessage).not.toHaveBeenCalled();
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- Worker message type 'error' (handleWorkerMessage error branch) ------
 
     it("handles error message type from worker without jobId (resets state)", async () => {

@@ -83,6 +83,43 @@ export default [
         },
     },
     {
+        files: ["api/**/*.mjs"],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: "module",
+            globals: {
+                ...globals.node,
+                fetch: "readonly",
+                URL: "readonly",
+            },
+        },
+        plugins: {
+            "import-x": importPlugin,
+            jsdoc,
+        },
+        rules: {
+            "no-var": "error",
+            "prefer-const": "error",
+            "no-unused-vars": ["error", { args: "none" }],
+            "no-undef": "error",
+            eqeqeq: ["error", "always"],
+            "no-console": ["error", { allow: ["error"] }],
+            curly: ["error", "all"],
+            "no-eval": "error",
+            "no-implied-eval": "error",
+            "no-throw-literal": "error",
+            "prefer-promise-reject-errors": "error",
+            quotes: ["error", "double", { avoidEscape: true }],
+            "prefer-template": "error",
+            "consistent-return": "error",
+            "jsdoc/require-param": "error",
+            "jsdoc/require-param-type": "error",
+            "jsdoc/require-returns": "error",
+            "jsdoc/require-returns-type": "error",
+            "jsdoc/valid-types": "error",
+        },
+    },
+    {
         files: ["web/src/**/*-worker.js"],
         languageOptions: {
             globals: {

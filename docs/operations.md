@@ -14,7 +14,12 @@
 4. Add environment variables:
    - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended, e.g. commit SHA)
+   - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables CSP
+     report forwarding — see [CSP violation reporting](#csp-violation-reporting))
 5. Verify custom headers from `vercel.json` are applied after deploy.
+
+The `api/csp-report` Serverless Function deploys automatically from the `api/`
+directory; no extra Vercel configuration is required.
 
 ## Versioning
 
@@ -61,6 +66,24 @@ and open a follow-up to roll forward with a fix.
   - unhandled runtime errors and rejections
   - page/module errors from guarded operations
   - selected performance telemetry (`web-vitals` + custom performance measures)
+
+### CSP violation reporting
+
+The `Content-Security-Policy` header in `vercel.json` enforces a strict policy and
+reports violations via `report-uri` / `report-to` to the first-party endpoint
+`/api/csp-report` (`Reporting-Endpoints: csp-endpoint`). Keeping the endpoint
+same-origin means `vercel.json` never embeds a Sentry org/project and the
+forwarding secret stays server-side.
+
+- The collector (`api/csp-report.mjs`) forwards reports only when `CSP_REPORT_URI`
+  (explicit collector URL) or `SENTRY_DSN` (server-side DSN) is configured; with
+  neither set it accepts and drops reports so the policy stays valid.
+- Reports contain only violation metadata (blocked URI, violated directive,
+  document URI) — never uploaded file contents — so this does not change the
+  app's local-only data guarantee.
+- To verify after deploy, load the site and confirm there are no unexpected CSP
+  violations in the browser console; if forwarding is configured, confirm a test
+  violation reaches the collector.
 
 ### Recommended alerting
 

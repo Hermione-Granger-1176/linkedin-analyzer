@@ -151,6 +151,17 @@ export const UploadPage = (() => {
         restoreState();
     }
 
+    /** Tear down the current worker and spin up a fresh one so later uploads recover. */
+    function restartWorker() {
+        if (worker) {
+            worker.removeEventListener("message", handleWorkerMessage);
+            worker.removeEventListener("error", handleWorkerError);
+            worker.terminate();
+            worker = null;
+        }
+        initWorker();
+    }
+
     /** Create the analytics Web Worker. */
     function initWorker() {
         if (typeof Worker === "undefined") {
@@ -820,8 +831,9 @@ export const UploadPage = (() => {
             module: "upload",
             operation: "worker-error-event",
         });
-        setHint("Analytics worker error. Try refreshing.", true);
+        setHint("Analytics worker error. Please retry the upload.", true);
         resetProcessingState();
+        restartWorker();
     }
 
     /**

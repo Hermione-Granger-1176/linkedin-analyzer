@@ -443,6 +443,43 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("re-primes a fresh worker from cached files after a restart", async () => {
+        // Cached files give the restart something to re-prime from.
+        const cachedFiles = [
+            { type: "shares", rowCount: 3, text: "header\nrow1\nrow2\nrow3", updatedAt: 100 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        DataCache.get.mockImplementation((key) =>
+            key === "storage:files" ? cachedFiles : undefined,
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        // Fire the worker-level error event; the handler restarts and re-primes.
+        deadWorker.listeners.error[0](new Event("error"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(workerInstance).not.toBe(deadWorker);
+        const restoreCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0] && call[0].type === "restoreFiles",
+        );
+        expect(restoreCall).toBeTruthy();
+    });
+
+    it("stops restarting after repeated errors within the throttle window", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Exceed the restart throttle with rapid back-to-back errors.
+        for (let i = 0; i < 4; i += 1) {
+            workerInstance.listeners.error[0](new Event("error"));
+        }
+
+        expect(document.getElementById("uploadHint").textContent).toContain("keeps failing");
+    });
+
     // --- Worker message type 'error' (handleWorkerMessage error branch) ------
 
     it("handles error message type from worker without jobId (resets state)", async () => {

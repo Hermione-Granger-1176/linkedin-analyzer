@@ -94,6 +94,18 @@ typecheck-py: ## Run mypy only
 typecheck-web: ## Run web type checks only
 	$(NPM) run typecheck:web
 
+# ─── Dead code ──────────────────────────────────────────────────────────────────
+
+.PHONY: dead-code dead-code-py dead-code-js
+
+dead-code: dead-code-py dead-code-js ## Detect unused code (vulture + knip)
+
+dead-code-py: ## Detect unused Python code (vulture)
+	$(VENV_PYTHON) -m vulture
+
+dead-code-js: ## Detect unused JS code, exports, and deps (knip)
+	$(NPM) run dead-code
+
 # ─── Test ─────────────────────────────────────────────────────────────────────
 
 .PHONY: test test-py test-js test-e2e test-e2e-headed test-e2e-ui
@@ -147,9 +159,9 @@ web-e2e: test-e2e ## Alias for test-e2e
 
 .PHONY: ci-python ci-web ci check-local check security audit-node audit-python
 
-ci-python: lint-py format-py-check typecheck-py test-py ## Python CI gate
+ci-python: lint-py format-py-check typecheck-py dead-code-py test-py ## Python CI gate
 
-ci-web: format-js-check lint-js typecheck-web test-js web-build-size ## Web CI gate
+ci-web: format-js-check lint-js typecheck-web dead-code-js test-js web-build-size ## Web CI gate
 
 ci: ci-python lint-workflows ci-web ## Full local CI gate
 

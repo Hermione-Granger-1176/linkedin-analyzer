@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["web/index.html", "api/**/*.mjs", "scripts/**/*.{js,mjs}"],
+  "project": ["web/src/**/*.js", "api/**/*.mjs", "config/**/*.{js,mjs}", "scripts/**/*.{js,mjs}"],
+  "vite": {
+    "config": ["web/vite.config.js"]
+  },
+  "vitest": {
+    "config": ["web/vitest.config.js"]
+  },
+  "playwright": {
+    "config": ["config/playwright.config.js"]
+  },
+  "eslint": {
+    "config": ["config/eslint.config.mjs"]
+  },
+  "prettier": {
+    "config": ["config/prettierrc.json"]
+  },
+  "ignoreDependencies": ["workbox-.+"],
+  "ignoreBinaries": ["make"]
+}

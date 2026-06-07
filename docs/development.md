@@ -72,6 +72,9 @@ make lint-js
 # Type-check JavaScript with checkJs
 make typecheck-web
 
+# Detect unused JS code, exports, and deps (knip)
+make dead-code-js
+
 # Format check (docs/config files)
 make format-js-check
 ```
@@ -94,6 +97,9 @@ make typecheck-py
 # Python lint
 make lint-py
 
+# Detect unused Python code (vulture)
+make dead-code-py
+
 # Format Python, JavaScript, and metadata
 make fmt
 ```
@@ -102,7 +108,7 @@ make fmt
 
 GitHub Actions runs on pull requests and pushes to `main`:
 
-- **Quality gate**: workflow lint + Python lint/format/typecheck/tests + web format/lint/typecheck/unit tests
+- **Quality gate**: workflow lint + Python lint/format/typecheck/dead-code/tests + web format/lint/typecheck/dead-code/unit tests
 - **Compatibility**: Python 3.11/3.12/3.13 and Node.js 22/24 matrix jobs (the quality gate runs the primary 3.14)
 - **Web build**: production build + size-budget check
 - **Browser checks**: Playwright E2E in an isolated job with failure artifacts

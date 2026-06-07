@@ -42,10 +42,12 @@ jobs:
           lint-py
           format-py-check
           typecheck-py
+          dead-code-py
           test-py
           format-js-check
           lint-js
           typecheck-web
+          dead-code-js
           test-js
 
       - name: Build web and enforce size budget

@@ -82,11 +82,11 @@ make format-js-check
 # Install or refresh the .venv from uv.lock
 make install
 
-# Run Python tests
+# Run Python tests (coverage runs by default)
 make test-py
 
-# With coverage
-uv run pytest --cov=linkedin_analyzer --cov-report=html
+# Coverage HTML report
+make test-py ARGS="--cov-report=html"
 
 # Python type checking
 make typecheck-py
@@ -138,9 +138,9 @@ Maintenance workflows also keep generated repository state current:
 ### Python tests
 
 ```bash
-make test-py                                # Python tests
-uv run pytest tests/test_text.py -v        # Specific file
-uv run pytest -k "test_clean"              # By name pattern
+make test-py                                    # Full suite (coverage gate)
+make test-py ARGS="tests/test_text.py --no-cov" # Specific file
+make test-py ARGS="-k test_clean --no-cov"      # By name pattern
 ```
 
 ### Web tests

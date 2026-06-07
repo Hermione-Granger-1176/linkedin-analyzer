@@ -38,7 +38,7 @@ function httpError(statusCode, message) {
 export function sentryReportUriFromDsn(dsn) {
     try {
         const url = new URL(dsn);
-        const projectId = url.pathname.replace(/^\/+/, "");
+        const projectId = url.pathname.replace(/^\/+|\/+$/g, "");
         if (!url.username || !projectId) {
             return null;
         }
@@ -118,13 +118,17 @@ export default async function handler(req, res) {
 
     const endpoint = resolveReportEndpoint(process.env);
     if (endpoint && body) {
+        const rawContentType = req.headers["content-type"];
+        const contentType =
+            (Array.isArray(rawContentType) ? rawContentType[0] : rawContentType) ||
+            "application/csp-report";
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT_MS);
         try {
             await fetch(endpoint, {
                 method: "POST",
                 headers: {
-                    "content-type": req.headers["content-type"] || "application/csp-report",
+                    "content-type": contentType,
                 },
                 body,
                 signal: controller.signal,

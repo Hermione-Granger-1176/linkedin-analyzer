@@ -53,6 +53,12 @@ describe("sentryReportUriFromDsn", () => {
         );
     });
 
+    it("trims a trailing slash from the DSN project path", () => {
+        expect(sentryReportUriFromDsn("https://abc123@o45.ingest.sentry.io/678/")).toBe(
+            "https://o45.ingest.sentry.io/api/678/security/?sentry_key=abc123",
+        );
+    });
+
     it("returns null when the DSN has no project id", () => {
         expect(sentryReportUriFromDsn("https://abc123@o45.ingest.sentry.io/")).toBeNull();
     });
@@ -115,6 +121,26 @@ describe("csp-report handler", () => {
         expect(init.method).toBe("POST");
         expect(init.body).toBe(JSON.stringify(report));
         expect(init.headers["content-type"]).toBe("application/csp-report");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("normalizes an array content-type header to a single value", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: { "content-type": ["application/reports+json", "application/csp-report"] },
+                body: "[]",
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers["content-type"]).toBe("application/reports+json");
         expect(res.statusCode).toBe(204);
     });
 

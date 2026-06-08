@@ -283,6 +283,18 @@ def test_resolve_repo_falls_back_to_remote() -> None:
     assert gh_runner.resolve_repo(run_fn=runner) == "octo/Hello"
 
 
+def test_resolve_repo_handles_ssh_remote_with_port() -> None:
+    """An SSH remote URL with an explicit port still yields owner/name."""
+    runner = FakeGh(
+        [
+            (has("repo", "view"), completed_process(1, "", "no repo")),
+            (has("remote"), completed_process(0, "ssh://git@github.com:22/octo/Hello.git\n")),
+        ]
+    )
+
+    assert gh_runner.resolve_repo(run_fn=runner) == "octo/Hello"
+
+
 def test_resolve_repo_falls_back_when_key_missing() -> None:
     """A repo-view payload without nameWithOwner still falls back to the remote."""
     runner = FakeGh(

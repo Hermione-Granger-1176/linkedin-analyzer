@@ -273,14 +273,23 @@ def resolve_repo(*, run_fn: RunFunction | None = None) -> str:
 
 
 def _repo_from_remote(*, run_fn: RunFunction | None = None) -> str:
-    """Extract ``owner/name`` from the ``origin`` remote URL."""
+    """Extract ``owner/name`` from the ``origin`` remote URL.
+
+    Handles both SSH (``git@github.com:octo/Hello.git``,
+    ``ssh://git@github.com:22/octo/Hello.git``) and HTTPS forms. ``owner/name``
+    are always the final two path segments, so any leading ``:`` separator or
+    host port is skipped.
+    """
     try:
         url = run_git(["remote", "get-url", "origin"], run_fn=run_fn)
     except GhError:
         return ""
-    tail = url.split("github.com", 1)[-1].lstrip(":/")
-    tail = tail.removesuffix(".git")
-    return tail if _is_owner_name(tail) else ""
+    tail = url.split("github.com", 1)[-1].removesuffix(".git")
+    segments = [segment for segment in tail.replace(":", "/").split("/") if segment]
+    if len(segments) < 2:
+        return ""
+    owner_name = "/".join(segments[-2:])
+    return owner_name if _is_owner_name(owner_name) else ""
 
 
 def _is_owner_name(value: str) -> bool:

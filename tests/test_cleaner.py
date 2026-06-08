@@ -7,7 +7,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from linkedin_analyzer.core.cleaner import run_cleaner, validate_columns
+from linkedin_analyzer.core.cleaner import (
+    normalize_required_columns,
+    run_cleaner,
+    validate_columns,
+)
 from linkedin_analyzer.core.types import CleanerConfig, ColumnConfig
 
 
@@ -32,6 +36,16 @@ class TestValidateColumns:
     def test_bom_and_whitespace_headers(self) -> None:
         df = pd.DataFrame({"\ufeffDate ": ["2025-01-01"], " Message": ["Hello"]})
         validate_columns(df, ["Date", "Message"])
+
+
+class TestNormalizeRequiredColumns:
+    """Tests for normalize_required_columns function."""
+
+    def test_skips_columns_absent_from_dataframe(self) -> None:
+        # A required column missing from the frame is skipped, not an error.
+        df = pd.DataFrame({"A": ["  x  "]})
+        normalize_required_columns(df, ["A", "B"])
+        assert list(df["A"]) == ["x"]
 
 
 class TestRunCleaner:

@@ -110,6 +110,22 @@ class TestJsonFormatter:
         assert payload["message"] == "failed"
         assert "RuntimeError: boom" in payload["exception"]
 
+    def test_omits_exception_when_absent(self) -> None:
+        record = logging.LogRecord(
+            name="linkedin_analyzer",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg="hello",
+            args=(),
+            exc_info=None,
+        )
+
+        payload = json.loads(JsonFormatter().format(record))
+
+        assert payload["message"] == "hello"
+        assert "exception" not in payload
+
 
 class TestMain:
     """Tests for main function."""

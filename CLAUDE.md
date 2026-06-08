@@ -5,12 +5,14 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 ## Rules
 
 1. **The Makefile is the only interface.** Never run `.venv/bin/*`, `pytest`, `ruff`, `mypy`, `npm run`, `npx`, `vite`, `playwright`, or `gh` directly. Always use `make <target>`. If unsure what's available, run `make help` first — the list is auto-generated from the Makefile.
-2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-reply`, `make pr-resolve`, `make ci-watch` over raw `gh`.
+2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make ci-failures` over raw `gh`. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one) — no `databaseId` lookup needed. The PR number is auto-detected from the current branch (override with `pr_num=N`). Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
 3. **If a target is missing, add it.** Put `## description` after the target name in the Makefile and it appears in `make help` automatically.
 4. **Each tool has one config file.** To change what gets linted/tested/typed, edit that tool's config, nowhere else. See the tool configuration table below.
-5. **Read before acting.** Read the Makefile and existing code before proposing changes.
-6. **Don't run auto-fix commands** (`make fmt`, `make lock`, etc.) unless the user asks.
-7. **CHANGELOG.md is Python-only.** It tracks the `linkedin-analyzer` package; do not add web/Node changes there.
+5. **Configs auto-discover from roots; never enumerate files.** Point tools at directory roots or globs (like coverage's `source = ["src/linkedin_analyzer"]`) so new files are covered automatically. Don't list individual source files — that rots the day someone adds a file and forgets. Tool _config-file_ location pointers (e.g. knip's `vite.config`) are fine; per-file source lists are not.
+6. **Read before acting.** Read the Makefile and existing code before proposing changes.
+7. **Don't run auto-fix commands** (`make fmt`, `make lock`, etc.) unless the user asks.
+8. **Don't commit, push, or open/merge PRs unless asked.** Make and verify changes in the working tree and stop there; the user decides when to commit and push. For small tooling/doc tweaks, fold them into the current in-progress branch instead of opening a separate PR.
+9. **CHANGELOG.md is Python-only.** It tracks the `linkedin-analyzer` package; do not add web/Node changes there.
 
 ## Structure
 
@@ -24,7 +26,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Local commands
 
-**Run `make help` for the full list.** Help is grouped (Setup, Lint, Format, Typecheck, Test, Web, Quality gates, Dependency maintenance, Git, Pull requests, CI). Everything is generated from `## comment` annotations in the Makefile.
+**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, test, web, quality, deps, util, git, pr, ci. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
 
 Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 
@@ -42,6 +44,21 @@ Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 - `make status`: quick workspace health check
 
 Python deps live in `pyproject.toml` (frozen in `uv.lock`); Node deps in `package.json` (frozen in `package-lock.json`). Refresh with `make lock` / `make lock-node`.
+
+## Common commands
+
+High-frequency loops (full surface via `make help`). The PR/CI targets wrap a tested Python helper in `scripts/gh/`; PR number and repo are auto-detected.
+
+| Need | Command |
+| --- | --- |
+| Review threads (with `thread=` ids) | `make pr-review-comments` |
+| Reply to **and** resolve a thread | `make pr-address thread=PRRT_... body="..."` |
+| Reply only / resolve only | `make pr-reply thread=PRRT_... body="..."` / `make pr-resolve thread=PRRT_...` |
+| PR overview (state, CI, open threads) | `make pr-summary` |
+| Why is CI red | `make ci-failures` |
+| New branch off `main` | `make branch name=X` |
+| Full local gate / parallel | `make ci` / `make ci-fast` |
+| Discover commands | `make help` → `make help-<group>` → `make help-json` |
 
 ## Tool configuration
 

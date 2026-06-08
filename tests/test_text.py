@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from linkedin_analyzer.core.text import (
@@ -59,6 +60,14 @@ class TestIsMissing:
     def test_na_like_strings_are_missing(self) -> None:
         for value in ["N/A", "NULL", "#N/A", "-1.#IND", "NONE", "<NA>"]:
             assert is_missing(value) is True
+
+    def test_single_element_array_uses_bool_of_result(self) -> None:
+        # pd.isna returns an array here, so the non-bool branch coerces it.
+        assert is_missing(np.array([np.nan])) is True
+
+    def test_ambiguous_array_result_is_not_missing(self) -> None:
+        # A multi-element truth value raises in bool(), which is caught.
+        assert is_missing(np.array([1.0, 2.0])) is False
 
 
 class TestCleanSharesCommentary:
@@ -276,6 +285,9 @@ class TestCleanConnectionsDate:
 
     def test_returns_as_is_for_invalid_format(self) -> None:
         assert clean_connections_date("2026/01/30") == "2026/01/30"
+
+    def test_returns_as_is_for_non_numeric_day_or_year(self) -> None:
+        assert clean_connections_date("3a Jan 2026") == "3a Jan 2026"
 
 
 class TestCleanValue:

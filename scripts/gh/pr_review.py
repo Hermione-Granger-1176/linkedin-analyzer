@@ -16,10 +16,11 @@ from . import gh_runner
 from .gh_runner import GhError, RunFunction
 
 _THREADS_QUERY = """
-query($owner: String!, $name: String!, $pr: Int!) {
+query($owner: String!, $name: String!, $pr: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $pr) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           isResolved
@@ -67,8 +68,8 @@ class ReviewThread:
     url: str
 
 
-def parse_threads(data: Any) -> list[ReviewThread]:
-    """Convert a GraphQL ``reviewThreads`` payload into ``ReviewThread`` objects.
+def _review_threads(data: Any) -> dict[str, Any]:
+    """Return the ``reviewThreads`` connection (``pageInfo`` + ``nodes``).
 
     Raises:
         GhError: If the payload has no repository or pull request. An invalid or
@@ -79,7 +80,12 @@ def parse_threads(data: Any) -> list[ReviewThread]:
     pull_request = repository.get("pullRequest") if isinstance(repository, dict) else None
     if not isinstance(pull_request, dict):
         raise GhError("No pull request in GraphQL response (invalid or inaccessible PR?).")
-    nodes = pull_request["reviewThreads"]["nodes"]
+    connection: dict[str, Any] = pull_request["reviewThreads"]
+    return connection
+
+
+def _parse_nodes(nodes: list[Any]) -> list[ReviewThread]:
+    """Convert ``reviewThreads.nodes`` entries into ``ReviewThread`` objects."""
     threads: list[ReviewThread] = []
     for node in nodes:
         comments = node.get("comments", {}).get("nodes", [])
@@ -99,21 +105,40 @@ def parse_threads(data: Any) -> list[ReviewThread]:
     return threads
 
 
+def parse_threads(data: Any) -> list[ReviewThread]:
+    """Convert a single GraphQL ``reviewThreads`` page into ``ReviewThread`` objects."""
+    return _parse_nodes(_review_threads(data)["nodes"])
+
+
 def list_threads(
     pr: int | None = None,
     *,
     include_resolved: bool = False,
     run_fn: RunFunction | None = None,
 ) -> list[ReviewThread]:
-    """Return the review threads for ``pr`` (auto-detected when omitted)."""
+    """Return the review threads for ``pr`` (auto-detected when omitted).
+
+    Pages through ``reviewThreads`` so a PR with more than 100 threads is
+    reported in full instead of being silently truncated at the first page.
+    """
     owner, name = _owner_name(run_fn=run_fn)
     pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
-    data = gh_runner.graphql(
-        _THREADS_QUERY,
-        variables={"owner": owner, "name": name, "pr": pr},
-        run_fn=run_fn,
-    )
-    threads = parse_threads(data)
+
+    threads: list[ReviewThread] = []
+    after: str | None = None
+    while True:
+        variables: dict[str, object] = {"owner": owner, "name": name, "pr": pr}
+        if after is not None:
+            variables["after"] = after
+        connection = _review_threads(
+            gh_runner.graphql(_THREADS_QUERY, variables=variables, run_fn=run_fn)
+        )
+        threads.extend(_parse_nodes(connection["nodes"]))
+        page_info = connection["pageInfo"]
+        after = page_info.get("endCursor")
+        if not page_info.get("hasNextPage") or not after:
+            break
+
     if include_resolved:
         return threads
     return [thread for thread in threads if thread.state == "open"]

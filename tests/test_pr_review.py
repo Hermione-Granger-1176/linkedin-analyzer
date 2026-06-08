@@ -56,6 +56,7 @@ THREADS_PAYLOAD = {
         "repository": {
             "pullRequest": {
                 "reviewThreads": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
                     "nodes": [
                         {
                             "id": "PRRT_open1",
@@ -79,7 +80,7 @@ THREADS_PAYLOAD = {
                             "line": None,
                             "comments": {"nodes": []},
                         },
-                    ]
+                    ],
                 }
             }
         }
@@ -98,6 +99,60 @@ def test_parse_threads_maps_fields() -> None:
     assert first.body.startswith("Please rename")
     assert threads[1].state == "resolved"
     assert threads[1].author == "unknown"
+
+
+def _threads_page(
+    thread_id: str, *, has_next: bool, end_cursor: str | None = None
+) -> dict[str, Any]:
+    """Build a one-node reviewThreads page with the given pagination state."""
+    return {
+        "repository": {
+            "pullRequest": {
+                "reviewThreads": {
+                    "pageInfo": {"hasNextPage": has_next, "endCursor": end_cursor},
+                    "nodes": [
+                        {
+                            "id": thread_id,
+                            "isResolved": False,
+                            "path": "f.py",
+                            "line": 1,
+                            "comments": {
+                                "nodes": [{"body": "x", "url": "u", "author": {"login": "r"}}]
+                            },
+                        }
+                    ],
+                }
+            }
+        }
+    }
+
+
+def test_list_threads_follows_pagination() -> None:
+    """list_threads pages through reviewThreads until hasNextPage is false."""
+    pages = iter(
+        [
+            _threads_page("PRRT_a", has_next=True, end_cursor="CURSOR1"),
+            _threads_page("PRRT_b", has_next=False),
+        ]
+    )
+    calls: list[list[str]] = []
+
+    def runner(cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = list(cmd)
+        calls.append(command)
+        if has("repo", "view")(command):
+            return completed_process(0, json.dumps({"nameWithOwner": "o/r"}))
+        if has("graphql")(command):
+            return completed_process(0, json.dumps({"data": next(pages)}))
+        raise AssertionError(command)
+
+    threads = pr_review.list_threads(7, include_resolved=True, run_fn=runner)
+
+    assert [thread.thread_id for thread in threads] == ["PRRT_a", "PRRT_b"]
+    # The second page request carries the first page's endCursor.
+    graphql_calls = [command for command in calls if has("graphql")(command)]
+    assert len(graphql_calls) == 2
+    assert any("after=CURSOR1" in command for command in graphql_calls)
 
 
 def test_parse_threads_raises_on_missing_pull_request() -> None:

@@ -46,6 +46,12 @@ def test_classify_distinguishes_failure_kinds() -> None:
     assert gh_runner._classify("Not Found (HTTP 404)") == "fatal"
 
 
+def test_backoff_never_exceeds_cap() -> None:
+    """Backoff stays within BACKOFF_CAP at every attempt, jitter included."""
+    for attempt in range(10):
+        assert gh_runner._backoff_seconds(attempt) <= gh_runner.BACKOFF_CAP
+
+
 def test_run_retries_transient_then_succeeds(_no_sleep: list[float]) -> None:
     """A transient 5xx is retried with backoff until it succeeds."""
     runner = SequenceRunner(

@@ -84,8 +84,13 @@ def _sleep(seconds: float) -> None:
 
 
 def _backoff_seconds(attempt: int) -> float:
-    """Return the backoff delay for a zero-based retry ``attempt``."""
-    return min(BACKOFF_CAP, BACKOFF_BASE * (2.0**attempt)) + random.uniform(0, BACKOFF_JITTER)
+    """Return the backoff delay (seconds) for a zero-based retry ``attempt``.
+
+    Exponential growth plus jitter, clamped so the result never exceeds
+    ``BACKOFF_CAP``. The cap is applied after the jitter to keep that bound.
+    """
+    delay = BACKOFF_BASE * (2.0**attempt) + random.uniform(0, BACKOFF_JITTER)
+    return min(BACKOFF_CAP, delay)
 
 
 def _classify(detail: str) -> str:

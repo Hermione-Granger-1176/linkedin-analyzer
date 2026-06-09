@@ -85,6 +85,14 @@ class TestParseArgs:
         args = parse_args(["shares"])
         assert args.log_format == "json"
 
+    def test_encoding_default(self) -> None:
+        args = parse_args(["shares"])
+        assert args.encoding is None
+
+    def test_encoding_arg(self) -> None:
+        args = parse_args(["--encoding", "latin-1", "shares"])
+        assert args.encoding == "latin-1"
+
 
 class TestJsonFormatter:
     """Tests for structured JSON logging."""
@@ -150,6 +158,28 @@ class TestMain:
         )
 
         exit_code = main(["shares", "--input", str(input_file), "--output", str(output_file)])
+        assert exit_code == 0
+        assert output_file.exists()
+
+    def test_encoding_flag_plumbs_through_to_cleaner(self, tmp_path: Path) -> None:
+        input_file = tmp_path / "Shares.csv"
+        output_file = tmp_path / "Shares.xlsx"
+        input_file.write_bytes(
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n"
+            "2025-01-01,http://link,Café output,,,PUBLIC\n".encode("latin-1")
+        )
+
+        exit_code = main(
+            [
+                "--encoding",
+                "latin-1",
+                "shares",
+                "--input",
+                str(input_file),
+                "--output",
+                str(output_file),
+            ]
+        )
         assert exit_code == 0
         assert output_file.exists()
 
@@ -249,9 +279,10 @@ class TestRunAll:
             messages_output=tmp_path / "Messages.xlsx",
             connections_input=tmp_path / "Connections.csv",
             connections_output=tmp_path / "Connections.xlsx",
+            encoding=None,
         )
 
-        def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_shares(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -259,7 +290,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_comments(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_comments(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -267,7 +298,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_messages(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_messages(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -275,7 +306,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_connections(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_connections(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -300,9 +331,10 @@ class TestRunAll:
             messages_output=tmp_path / "Messages.xlsx",
             connections_input=tmp_path / "Connections.csv",
             connections_output=tmp_path / "Connections.xlsx",
+            encoding=None,
         )
 
-        def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_shares(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=False,
                 rows_processed=0,
@@ -311,7 +343,7 @@ class TestRunAll:
                 error="boom",
             )
 
-        def fake_comments(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_comments(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -319,7 +351,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_messages(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_messages(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -327,7 +359,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_connections(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_connections(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -354,9 +386,10 @@ class TestRunAll:
             messages_output=tmp_path / "Messages.xlsx",
             connections_input=tmp_path / "Connections.csv",
             connections_output=tmp_path / "Connections.xlsx",
+            encoding=None,
         )
 
-        def fake_shares(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_shares(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -364,7 +397,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_comments(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_comments(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=False,
                 rows_processed=0,
@@ -373,7 +406,7 @@ class TestRunAll:
                 error="boom",
             )
 
-        def fake_messages(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_messages(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,
@@ -381,7 +414,7 @@ class TestRunAll:
                 output_path=output_path,
             )
 
-        def fake_connections(*, input_path: Path, output_path: Path) -> CleanerResult:
+        def fake_connections(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
             return CleanerResult(
                 success=True,
                 rows_processed=1,

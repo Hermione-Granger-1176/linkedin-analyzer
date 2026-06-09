@@ -47,6 +47,7 @@ class CleanerConfig:
         skiprows: Number of rows to skip before reading headers
         required_row_columns: Columns that must contain row values after header validation
         drop_if_all_missing: Drop rows when all these columns are missing
+        encoding: Explicit input CSV encoding; when None, decoding is auto-detected
     """
 
     input_path: Path
@@ -56,6 +57,7 @@ class CleanerConfig:
     skiprows: int = 0
     required_row_columns: tuple[str, ...] = ()
     drop_if_all_missing: tuple[str, ...] = ()
+    encoding: str | None = None
 
     @property
     def required_columns(self) -> list[str]:

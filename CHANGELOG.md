@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Read non-UTF-8 CSV exports: input encoding is auto-detected (UTF-8 BOM-aware, then Latin-1), with a global `--encoding` flag to force a specific encoding.
 - Python 3.14 to the supported classifiers, with documentation for 3.11–3.13 development under uv.
 
 ### Changed

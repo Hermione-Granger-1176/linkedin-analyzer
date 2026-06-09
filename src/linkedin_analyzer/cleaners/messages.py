@@ -52,12 +52,14 @@ class MessagesCleanerConfig(CleanerConfig):
 def clean_messages(
     input_path: Path | None = None,
     output_path: Path | None = None,
+    encoding: str | None = None,
 ) -> CleanerResult:
     """Clean a Messages CSV file and export to Excel.
 
     Args:
         input_path: Path to input CSV file (default: messages.csv)
         output_path: Path to output Excel file (default: Messages.xlsx)
+        encoding: Explicit input CSV encoding; when None, decoding is auto-detected
 
     Returns:
         CleanerResult with operation status and details
@@ -65,5 +67,6 @@ def clean_messages(
     config = MessagesCleanerConfig(
         input_path=input_path or DEFAULT_INPUT,
         output_path=output_path or DEFAULT_OUTPUT,
+        encoding=encoding,
     )
     return run_cleaner(config)

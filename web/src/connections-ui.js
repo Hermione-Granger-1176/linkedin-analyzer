@@ -482,12 +482,16 @@ export const ConnectionsPage = (() => {
 
     /**
      * Handle worker-level errors (uncaught exceptions).
-     * @param {ErrorEvent} event - Worker error event
+     * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
     function handleWorkerError(event) {
         clearWorkerTimeout();
         captureError(
-            event && event.error ? event.error : new Error("Connections worker error event"),
+            event && "error" in event && event.error
+                ? event.error
+                : new Error(
+                      `Connections worker ${event && event.type ? event.type : "error"} event`,
+                  ),
             {
                 module: "connections-ui",
                 operation: "worker-error-event",

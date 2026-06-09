@@ -448,11 +448,13 @@ export const AnalyticsPage = (() => {
 
     /**
      * Handle worker-level errors.
-     * @param {ErrorEvent} event - Worker error event
+     * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
     function handleWorkerError(event) {
         const workerError =
-            event && event.error ? event.error : new Error("Analytics worker error event");
+            event && "error" in event && event.error
+                ? event.error
+                : new Error(`Analytics worker ${event && event.type ? event.type : "error"} event`);
         captureError(workerError, {
             module: "analytics-ui",
             operation: "worker-error-event",

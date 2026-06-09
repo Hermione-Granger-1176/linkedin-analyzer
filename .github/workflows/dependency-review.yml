@@ -18,4 +18,3 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
         with:
           fail-on-severity: high
-          allow-ghsas: GHSA-4r6h-8v6p-xvw6, GHSA-5pgg-2g8v-p4x9

@@ -93,15 +93,21 @@ linkedin-analyzer/
 │   ├── input/                          # Place CSVs here
 │   └── output/                         # Generated Excel files
 │
+├── api/                                # Vercel serverless functions
+│   └── csp-report.mjs                  # CSP violation report collector
 ├── .github/                            # GitHub metadata, workflows, and community docs
 │   ├── CONTRIBUTING.md                 # Contributor guide shown by GitHub
 │   ├── SECURITY.md                     # Coordinated disclosure policy
+│   ├── actions/                        # Composite actions (ci-setup, verified-commit)
 │   └── workflows/                      # CI, audit, publish, and maintenance workflows
+├── Dockerfile                          # CLI container image (multi-stage, non-root)
 ├── vercel.json                         # Vercel config
+├── .pre-commit-config.yaml             # Local pre-commit hooks
 ├── Makefile                            # Local and CI command entrypoints
 ├── package.json                        # NPM config
 ├── pyproject.toml                      # Python config
 ├── uv.lock                             # Locked Python dependency resolution
+├── CHANGELOG.md                        # Python package changelog
 ├── LICENSE                             # MIT license
 └── README.md
 ```

@@ -8,7 +8,8 @@ on:
     branches:
       - main
   schedule:
-    - cron: "0 6 * * 1"
+    # Staggered from dependency-audit.yml (06:00 Mon) to avoid runner contention.
+    - cron: "30 6 * * 1"
 
 permissions:
   actions: read

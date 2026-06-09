@@ -1,6 +1,7 @@
 /* Clean page logic */
 
 import { LinkedInCleaner } from "./cleaner.js";
+import { FILE_TYPE_LABELS } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { ExcelGenerator } from "./excel.js";
 import { captureError } from "./sentry.js";
@@ -13,12 +14,6 @@ export const CleanPage = (() => {
     const PREVIEW_ROW_LIMIT = 5;
     const PREVIEW_CELL_LIMIT = 50;
     const FILE_TYPE_ORDER = Object.freeze(["shares", "comments", "messages", "connections"]);
-    const FILE_TYPE_LABELS = Object.freeze({
-        shares: "Shares",
-        comments: "Comments",
-        messages: "Messages",
-        connections: "Connections",
-    });
     const CLEAN_HINT_BY_CATEGORY = Object.freeze({
         all: () => "All files loaded. Choose one to clean and export.",
         many: (loadedCount) => `${loadedCount} files loaded. Choose one to clean.`,
@@ -112,8 +107,7 @@ export const CleanPage = (() => {
     async function loadFiles() {
         await Session.waitForCleanup();
 
-        let files = null;
-        files = DataCache.get("storage:files") || null;
+        let files = DataCache.get("storage:files") || null;
         if (!files) {
             files = await Storage.getAllFiles();
             DataCache.set("storage:files", files);

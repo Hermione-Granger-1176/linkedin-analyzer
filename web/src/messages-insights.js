@@ -343,13 +343,9 @@ export const MessagesPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            let files = null;
-            let messagesFile = null;
-            let connectionsFile = null;
-
-            messagesFile = DataCache.get("storage:file:messages") || null;
-            connectionsFile = DataCache.get("storage:file:connections") || null;
-            files = DataCache.get("storage:files") || null;
+            let messagesFile = DataCache.get("storage:file:messages") || null;
+            let connectionsFile = DataCache.get("storage:file:connections") || null;
+            let files = DataCache.get("storage:files") || null;
 
             messagesFile = normalizeStoredFile(messagesFile, "messages");
             connectionsFile = normalizeStoredFile(connectionsFile, "connections");

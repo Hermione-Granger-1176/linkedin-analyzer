@@ -238,7 +238,11 @@ export const MessagesPage = (() => {
 
             const handleError = (event) => {
                 captureError(
-                    event && event.error ? event.error : new Error("Messages worker error event"),
+                    event && event.error
+                        ? event.error
+                        : new Error(
+                              `Messages worker ${event && event.type ? event.type : "error"} event`,
+                          ),
                     {
                         module: "messages-insights",
                         operation: "worker-error-event",

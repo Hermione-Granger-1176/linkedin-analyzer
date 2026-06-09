@@ -160,6 +160,7 @@ export const UploadPage = (() => {
         if (worker) {
             worker.removeEventListener("message", handleWorkerMessage);
             worker.removeEventListener("error", handleWorkerError);
+            worker.removeEventListener("messageerror", handleWorkerError);
             worker.terminate();
             worker = null;
         }

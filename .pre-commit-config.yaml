@@ -11,15 +11,15 @@ repos:
     rev: v0.15.4
     hooks:
       - id: ruff
-        args: ["src/", "tests/", "scripts/ci/"]
+        args: ["src/", "tests/", "scripts/ci/", "scripts/gh/"]
       - id: ruff-format
-        args: ["src/", "tests/", "scripts/ci/"]
+        args: ["src/", "tests/", "scripts/ci/", "scripts/gh/"]
 
   - repo: local
     hooks:
       - id: mypy
         name: mypy
-        entry: .venv/bin/mypy src/
+        entry: .venv/bin/mypy src/ scripts/ci/ scripts/gh/
         language: system
         pass_filenames: false
       - id: pytest

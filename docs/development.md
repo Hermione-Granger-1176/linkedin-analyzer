@@ -115,9 +115,9 @@ GitHub Actions runs on pull requests and pushes to `main`:
 
 See `.github/workflows/ci.yml`.
 
-A weekly `dependency-audit.yml` workflow also runs every Monday:
+A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
 
-- `make security` for npm, Python, and the generic override-policy check
+- `make audit-node` and `make audit-python` for the npm and Python dependency audits
 - `make check-overrides` to verify any future npm overrides remain necessary; the original overrides have been removed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
 
 Maintenance workflows also keep generated repository state current:

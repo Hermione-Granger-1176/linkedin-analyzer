@@ -192,25 +192,29 @@ describe("Storage", () => {
             });
         }
 
-        it("saveFile rejects when the write transaction aborts", async () => {
+        it("saveFile rejects with an Error when the write transaction aborts", async () => {
             await Storage.clearAll();
             abortNextTransaction();
-            let rejected = false;
+            // tx.error is null on an explicit abort, so the rejection must still be a
+            // concrete Error (not null) for telemetry and callers to be actionable.
+            let reason;
             await Storage.saveFile("shares", { name: "x.csv", text: "a,b", rowCount: 1 }).catch(
-                () => {
-                    rejected = true;
+                (error) => {
+                    reason = error;
                 },
             );
-            expect(rejected).toBe(true);
+            expect(reason).toBeInstanceOf(Error);
+            expect(reason.message).toBe("IndexedDB transaction failed");
         });
 
-        it("clearAll rejects when the clear transaction aborts", async () => {
+        it("clearAll rejects with an Error when the clear transaction aborts", async () => {
             abortNextTransaction();
-            let rejected = false;
-            await Storage.clearAll().catch(() => {
-                rejected = true;
+            let reason;
+            await Storage.clearAll().catch((error) => {
+                reason = error;
             });
-            expect(rejected).toBe(true);
+            expect(reason).toBeInstanceOf(Error);
+            expect(reason.message).toBe("IndexedDB transaction failed");
         });
     });
 });

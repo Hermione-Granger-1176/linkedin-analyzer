@@ -85,6 +85,18 @@ export const Storage = (() => {
     const ANALYTICS_STORE = "analytics";
 
     /**
+     * Build an actionable Error for an IndexedDB failure event. Abort and blocked
+     * events frequently carry a null `error`, so always return a descriptive Error
+     * and attach the original (when present) as the cause for telemetry.
+     * @param {DOMException|null} error - The native IndexedDB error, if any
+     * @param {string} message - Human-readable description of the failure
+     * @returns {Error} An Error suitable for rejecting the operation's promise
+     */
+    function idbFailure(error, message) {
+        return new Error(message, { cause: error });
+    }
+
+    /**
      * Open the IndexedDB database, creating object stores on first run.
      * @returns {Promise<IDBDatabase>} The opened database instance
      */
@@ -104,7 +116,8 @@ export const Storage = (() => {
             };
             request.onerror = () => reject(request.error);
             /* v8 ignore next */
-            request.onblocked = () => reject(request.error);
+            request.onblocked = () =>
+                reject(idbFailure(request.error, "IndexedDB open blocked by another connection"));
             request.onsuccess = () => resolve(request.result);
         });
     }
@@ -122,9 +135,10 @@ export const Storage = (() => {
             const tx = db.transaction(storeName, mode);
             const store = tx.objectStore(storeName);
             const result = callback(store);
+            const rejectFailure = () => reject(idbFailure(tx.error, "IndexedDB transaction failed"));
             tx.oncomplete = () => resolve(result);
-            tx.onerror = () => reject(tx.error);
-            tx.onabort = () => reject(tx.error);
+            tx.onerror = rejectFailure;
+            tx.onabort = rejectFailure;
         });
     }
 
@@ -219,9 +233,10 @@ export const Storage = (() => {
             const tx = db.transaction([FILE_STORE, ANALYTICS_STORE], "readwrite");
             tx.objectStore(FILE_STORE).clear();
             tx.objectStore(ANALYTICS_STORE).clear();
+            const rejectFailure = () => reject(idbFailure(tx.error, "IndexedDB transaction failed"));
             tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-            tx.onabort = () => reject(tx.error);
+            tx.onerror = rejectFailure;
+            tx.onabort = rejectFailure;
         });
     }
 

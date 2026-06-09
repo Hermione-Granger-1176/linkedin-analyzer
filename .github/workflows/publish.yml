@@ -4,6 +4,13 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish-pypi:
     runs-on: ubuntu-latest
@@ -13,6 +20,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -31,7 +41,12 @@ jobs:
           . .venv-publish-check/bin/activate
           pip install --upgrade pip
           pip install dist/*.whl
-          linkedin-analyzer --version
+          actual="$(linkedin-analyzer --version | awk '{print $NF}')"
+          expected="${GITHUB_REF_NAME#v}"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Built version $actual does not match release tag $expected"
+            exit 1
+          fi
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
 
@@ -44,6 +59,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - name: Setup QEMU
         uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       - name: Setup Buildx
@@ -76,7 +94,13 @@ jobs:
             REVISION=${{ steps.image-meta.outputs.revision }}
             SOURCE_URL=${{ steps.image-meta.outputs.source_url }}
       - name: Smoke test local image
-        run: docker run --rm ${{ steps.image-meta.outputs.image }}:scan --version
+        run: |
+          actual="$(docker run --rm ${{ steps.image-meta.outputs.image }}:scan --version | awk '{print $NF}')"
+          expected="${GITHUB_REF_NAME#v}"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Image version $actual does not match release tag $expected"
+            exit 1
+          fi
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
         with:

@@ -256,6 +256,7 @@ export const MessagesPage = (() => {
                 }
                 parseWorker.removeEventListener("message", handleMessage);
                 parseWorker.removeEventListener("error", handleError);
+                parseWorker.removeEventListener("messageerror", handleError);
             };
 
             const finishRequest = () => {

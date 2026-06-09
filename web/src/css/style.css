@@ -1712,3 +1712,10 @@ button {
         justify-content: center;
     }
 }
+
+.noscript-message {
+    margin: 2rem auto;
+    max-width: 40rem;
+    padding: 0 1rem;
+    text-align: center;
+}

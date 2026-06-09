@@ -238,7 +238,11 @@ export const MessagesPage = (() => {
 
             const handleError = (event) => {
                 captureError(
-                    event && event.error ? event.error : new Error("Messages worker error event"),
+                    event && event.error
+                        ? event.error
+                        : new Error(
+                              `Messages worker ${event && event.type ? event.type : "error"} event`,
+                          ),
                     {
                         module: "messages-insights",
                         operation: "worker-error-event",
@@ -256,6 +260,7 @@ export const MessagesPage = (() => {
                 }
                 parseWorker.removeEventListener("message", handleMessage);
                 parseWorker.removeEventListener("error", handleError);
+                parseWorker.removeEventListener("messageerror", handleError);
             };
 
             const finishRequest = () => {
@@ -277,6 +282,7 @@ export const MessagesPage = (() => {
             try {
                 parseWorker.addEventListener("message", handleMessage);
                 parseWorker.addEventListener("error", handleError);
+                parseWorker.addEventListener("messageerror", handleError);
                 parseWorker.postMessage({
                     type: "process",
                     requestId,
@@ -1120,7 +1126,9 @@ export const MessagesPage = (() => {
      */
     function appendContactName(container, label, url) {
         const cleanUrl = cleanText(url);
-        if (!cleanUrl) {
+        // Defense in depth: callers currently pass normalizeUrl-validated values, but guard the
+        // scheme here so a future non-normalized caller can't introduce a javascript: URL.
+        if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
             container.textContent = label;
             return;
         }

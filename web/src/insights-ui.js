@@ -146,6 +146,7 @@ export const InsightsPage = (() => {
             });
             worker.addEventListener("message", handleWorkerMessage);
             worker.addEventListener("error", handleWorkerError);
+            worker.addEventListener("messageerror", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {
@@ -284,11 +285,13 @@ export const InsightsPage = (() => {
 
     /**
      * Handle worker-level errors.
-     * @param {ErrorEvent} event - Worker error event
+     * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
     function handleWorkerError(event) {
         captureError(
-            event && event.error ? event.error : new Error("Insights worker error event"),
+            event && "error" in event && event.error
+                ? event.error
+                : new Error(`Insights worker ${event && event.type ? event.type : "error"} event`),
             {
                 module: "insights-ui",
                 operation: "worker-error-event",

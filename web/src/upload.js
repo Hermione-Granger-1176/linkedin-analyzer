@@ -160,6 +160,7 @@ export const UploadPage = (() => {
         if (worker) {
             worker.removeEventListener("message", handleWorkerMessage);
             worker.removeEventListener("error", handleWorkerError);
+            worker.removeEventListener("messageerror", handleWorkerError);
             worker.terminate();
             worker = null;
         }
@@ -194,6 +195,7 @@ export const UploadPage = (() => {
             });
             worker.addEventListener("message", handleWorkerMessage);
             worker.addEventListener("error", handleWorkerError);
+            worker.addEventListener("messageerror", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {
@@ -843,11 +845,13 @@ export const UploadPage = (() => {
 
     /**
      * Handle worker-level errors.
-     * @param {ErrorEvent} event - Worker error event
+     * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
     function handleWorkerError(event) {
         const workerError =
-            event && event.error ? event.error : new Error("Analytics worker error event");
+            event && "error" in event && event.error
+                ? event.error
+                : new Error(`Analytics worker ${event && event.type ? event.type : "error"} event`);
         captureError(workerError, {
             module: "upload",
             operation: "worker-error-event",

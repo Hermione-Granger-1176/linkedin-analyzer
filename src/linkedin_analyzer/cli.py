@@ -206,6 +206,11 @@ Examples:
         choices=["text", "json"],
         help="Log output format (default: text, env: LOG_FORMAT)",
     )
+    parser.add_argument(
+        "--encoding",
+        default=None,
+        help="Input CSV encoding (default: auto-detect UTF-8, then Latin-1)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -277,7 +282,7 @@ def run_all(args: argparse.Namespace) -> int:
     exit_code = 0
     for label, cleaner, input_path, output_path in tasks:
         LOG.info("Processing %s...", label)
-        result = cleaner(input_path=input_path, output_path=output_path)
+        result = cleaner(input_path=input_path, output_path=output_path, encoding=args.encoding)
         if _handle_result(result) != 0:
             exit_code = 1
 
@@ -306,7 +311,7 @@ def _run_single_cleaner(
     cleaner: Callable[..., CleanerResult],
 ) -> int:
     """Run one cleaner function with standard CLI arguments."""
-    result = cleaner(input_path=args.input, output_path=args.output)
+    result = cleaner(input_path=args.input, output_path=args.output, encoding=args.encoding)
     return _handle_result(result)
 
 

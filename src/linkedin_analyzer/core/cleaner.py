@@ -17,6 +17,43 @@ from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 LOG = logging.getLogger(__name__)
 
 
+def _read_csv_with_fallback(
+    input_path: Path,
+    csv_kwargs: dict[str, Any],
+    encoding: str | None,
+) -> pd.DataFrame:
+    """Read a CSV, auto-detecting a usable encoding when one is not specified.
+
+    LinkedIn (and user-edited) exports are not always UTF-8. When no explicit
+    encoding is requested, this tries UTF-8 (BOM-aware) first, then falls back to
+    Latin-1, which decodes any byte sequence and so never raises.
+
+    Args:
+        input_path: Path to the CSV file to read
+        csv_kwargs: Additional keyword arguments forwarded to pandas.read_csv;
+            an ``encoding`` entry here is consumed (popped) to avoid passing the
+            argument twice, and is used only when ``encoding`` is None
+        encoding: Explicit encoding to use; when None, encoding is auto-detected
+
+    Returns:
+        The parsed DataFrame
+    """
+    # Resolve encoding precedence and remove it from csv_kwargs so it is never
+    # passed to pandas.read_csv twice. CleanerConfig.encoding wins; otherwise an
+    # encoding supplied via csv_kwargs is honored.
+    kwargs_encoding = csv_kwargs.pop("encoding", None)
+    resolved_encoding = encoding if encoding is not None else kwargs_encoding
+    if resolved_encoding is not None:
+        frame: pd.DataFrame = pd.read_csv(input_path, encoding=resolved_encoding, **csv_kwargs)
+        return frame
+    try:
+        frame = pd.read_csv(input_path, encoding="utf-8-sig", **csv_kwargs)
+    except UnicodeDecodeError:
+        LOG.warning("UTF-8 decode failed for %s; retrying with latin-1", input_path)
+        frame = pd.read_csv(input_path, encoding="latin-1", **csv_kwargs)
+    return frame
+
+
 def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
     """Validate that required columns exist in the DataFrame.
 
@@ -103,7 +140,7 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         csv_kwargs: dict[str, Any] = dict(config.csv_kwargs)
         if config.skiprows:
             csv_kwargs.setdefault("skiprows", config.skiprows)
-        df = pd.read_csv(input_path, **csv_kwargs)
+        df = _read_csv_with_fallback(input_path, csv_kwargs, config.encoding)
         LOG.info("Found %d rows", len(df))
 
         df = df.rename(columns=lambda name: str(name).strip().lstrip("\ufeff"))

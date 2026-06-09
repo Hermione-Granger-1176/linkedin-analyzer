@@ -3,17 +3,10 @@
  * Original: src/linkedin_analyzer/core/text.py
  */
 
-import { MAX_CSV_CHARS } from "./constants.js";
+import { FILE_TYPE_LABELS, MAX_CSV_CHARS } from "./constants.js";
 
 export const LinkedInCleaner = (() => {
     "use strict";
-
-    const FILE_TYPE_LABELS = Object.freeze({
-        shares: "Shares",
-        comments: "Comments",
-        messages: "Messages",
-        connections: "Connections",
-    });
 
     const FILE_TYPES = Object.freeze(["shares", "comments", "messages", "connections"]);
     const EMPTY_CSV_ERROR = "CSV file is empty or has no data rows";
@@ -919,7 +912,7 @@ export const LinkedInCleaner = (() => {
 
     /**
      * Build a user-friendly error message for column validation failures.
-     * @param {string} selectedType - The file type selected by the user ('shares', 'comments', or 'auto')
+     * @param {string} selectedType - The file type selected by the user ('shares', 'comments', 'messages', 'connections', or 'auto')
      * @param {string|null} detectedType - The auto-detected file type, or null
      * @param {string[]} missing - List of missing required column names
      * @returns {string} Descriptive error message

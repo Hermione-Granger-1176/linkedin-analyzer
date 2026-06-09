@@ -6,6 +6,7 @@
 import writeXlsxFile from "write-excel-file/browser";
 
 import { LinkedInCleaner } from "./cleaner.js";
+import { FILE_TYPE_LABELS } from "./constants.js";
 
 export const ExcelGenerator = (() => {
     "use strict";
@@ -248,15 +249,8 @@ export const ExcelGenerator = (() => {
         const headers = config.columns.map((column) => column.name);
         const rows = data.map((row) => headers.map((header) => row[header] ?? ""));
 
-        const sheetNames = {
-            shares: "Shares",
-            comments: "Comments",
-            messages: "Messages",
-            connections: "Connections",
-        };
-
         return {
-            sheetName: sheetNames[fileType] || "Sheet1",
+            sheetName: FILE_TYPE_LABELS[fileType] || "Sheet1",
             headers,
             rows,
             columnWidths: config.columns.map((column) => column.width),

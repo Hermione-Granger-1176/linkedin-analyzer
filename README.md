@@ -115,7 +115,7 @@ docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-
 | **PWA-ready**        | Installable with auto-refreshing service worker caching   |
 | **Session cleanup**  | Stale uploads and cached analytics cleared asynchronously |
 | **Social previews**  | Open Graph and Twitter Card meta tags                     |
-| **Type-safe CLI**    | Strict mypy, high test coverage (95% threshold)           |
+| **Type-safe CLI**    | Strict mypy, high test coverage (100% threshold)          |
 
 <br>
 

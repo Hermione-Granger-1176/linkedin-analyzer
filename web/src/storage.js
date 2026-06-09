@@ -103,6 +103,8 @@ export const Storage = (() => {
                 }
             };
             request.onerror = () => reject(request.error);
+            /* v8 ignore next */
+            request.onblocked = () => reject(request.error);
             request.onsuccess = () => resolve(request.result);
         });
     }
@@ -122,6 +124,7 @@ export const Storage = (() => {
             const result = callback(store);
             tx.oncomplete = () => resolve(result);
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
         });
     }
 
@@ -218,6 +221,7 @@ export const Storage = (() => {
             tx.objectStore(ANALYTICS_STORE).clear();
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
         });
     }
 

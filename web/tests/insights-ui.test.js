@@ -46,6 +46,7 @@ describe("InsightsPage", () => {
             workerInstance = this;
         }
         addEventListener(type, callback) {
+            this.listeners[type] = this.listeners[type] || [];
             this.listeners[type].push(callback);
         }
         terminate() {}

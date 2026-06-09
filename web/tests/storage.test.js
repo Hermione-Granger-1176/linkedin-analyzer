@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import "fake-indexeddb/auto";
 
 import { Storage } from "../src/storage.js";
@@ -174,5 +174,43 @@ describe("Storage", () => {
 
         const analytics = await Storage.getAnalytics();
         expect(analytics.months["2024-01"].total).toBe(2);
+    });
+
+    describe("transaction abort handling", () => {
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        // Abort the next transaction once handlers are wired (mimics a quota-exceeded
+        // write, where the browser fires `abort` rather than `error`).
+        function abortNextTransaction() {
+            const original = IDBDatabase.prototype.transaction;
+            vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (...args) {
+                const tx = original.apply(this, args);
+                queueMicrotask(() => tx.abort());
+                return tx;
+            });
+        }
+
+        it("saveFile rejects when the write transaction aborts", async () => {
+            await Storage.clearAll();
+            abortNextTransaction();
+            let rejected = false;
+            await Storage.saveFile("shares", { name: "x.csv", text: "a,b", rowCount: 1 }).catch(
+                () => {
+                    rejected = true;
+                },
+            );
+            expect(rejected).toBe(true);
+        });
+
+        it("clearAll rejects when the clear transaction aborts", async () => {
+            abortNextTransaction();
+            let rejected = false;
+            await Storage.clearAll().catch(() => {
+                rejected = true;
+            });
+            expect(rejected).toBe(true);
+        });
     });
 });

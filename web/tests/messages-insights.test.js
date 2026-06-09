@@ -2073,6 +2073,54 @@ describe("MessagesPage", () => {
         );
     });
 
+    it("renders contact name as text when URL uses a non-http(s) scheme", async () => {
+        const timestamp = new Date("2024-06-01").getTime();
+        const messagesFile = {
+            type: "messages",
+            name: "link.csv",
+            text: "x",
+            updatedAt: 240,
+            rowCount: 1,
+        };
+        DataCache.set("storage:file:messages", messagesFile);
+
+        const messageState = {
+            contacts: new Map([
+                [
+                    "c1",
+                    {
+                        name: "Sneaky Person",
+                        url: "javascript:alert(1)",
+                        lastTimestamp: timestamp,
+                    },
+                ],
+            ]),
+            events: [{ contactKey: "c1", timestamp }],
+            rowTimestamps: [timestamp],
+            skippedRows: 0,
+            talkedNameKeys: new Set(["sneaky person"]),
+            talkedUrlKeys: new Set([]),
+            latestTimestamp: timestamp,
+        };
+
+        const sig = `messages:${messagesFile.name}:${messagesFile.updatedAt}:${messagesFile.rowCount}|connections:none`;
+        DataCache.set(`messages:state:${sig}`, {
+            messageState,
+            connectionState: null,
+            connectionLoadError: null,
+            hasConnectionsFile: false,
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        const html = document.getElementById("topContactsList").innerHTML;
+        expect(html).toContain("Sneaky Person");
+        expect(html).not.toContain("<a ");
+        expect(html).not.toContain("javascript:");
+    });
+
     // --- hydrateConnectionState: byName fallback when url missing -----------
 
     it("hydrateConnectionState populates byName map from connection list", async () => {

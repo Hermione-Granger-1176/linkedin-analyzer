@@ -261,6 +261,7 @@ export const AnalyticsPage = (() => {
             });
             worker.addEventListener("message", handleWorkerMessage);
             worker.addEventListener("error", handleWorkerError);
+            worker.addEventListener("messageerror", handleWorkerError);
         } catch (error) {
             worker = null;
             captureError(error, {

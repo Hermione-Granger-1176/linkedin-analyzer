@@ -368,6 +368,45 @@ class TestEncoding:
         df = pd.read_excel(output_path)
         assert list(df["Name"]) == ["José"]
 
+    def test_encoding_from_csv_kwargs_is_used(self, tmp_path: Path) -> None:
+        """An encoding supplied via csv_kwargs is honored (no duplicate-kwarg error)."""
+        input_path = tmp_path / "latin1.csv"
+        output_path = tmp_path / "latin1.xlsx"
+        input_path.write_bytes("Name\nJosé\n".encode("latin-1"))
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name"),),
+            csv_kwargs={"encoding": "latin-1"},
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["Name"]) == ["José"]
+
+    def test_config_encoding_takes_precedence_over_csv_kwargs(self, tmp_path: Path) -> None:
+        """CleanerConfig.encoding wins over an encoding in csv_kwargs, without erroring."""
+        input_path = tmp_path / "latin1.csv"
+        output_path = tmp_path / "latin1.xlsx"
+        input_path.write_bytes("Name\nJosé\n".encode("latin-1"))
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name"),),
+            csv_kwargs={"encoding": "utf-8"},
+            encoding="latin-1",
+        )
+        result = run_cleaner(config)
+
+        # latin-1 (from config.encoding) decodes cleanly; the utf-8 in csv_kwargs
+        # would have raised, proving config.encoding took precedence.
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["Name"]) == ["José"]
+
     def test_explicit_encoding_mismatch_fails_cleanly(self, tmp_path: Path) -> None:
         """Forcing a wrong encoding yields a clean failure, not a traceback."""
         input_path = tmp_path / "latin1.csv"

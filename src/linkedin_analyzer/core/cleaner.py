@@ -30,14 +30,21 @@ def _read_csv_with_fallback(
 
     Args:
         input_path: Path to the CSV file to read
-        csv_kwargs: Additional keyword arguments forwarded to pandas.read_csv
+        csv_kwargs: Additional keyword arguments forwarded to pandas.read_csv;
+            an ``encoding`` entry here is consumed (popped) to avoid passing the
+            argument twice, and is used only when ``encoding`` is None
         encoding: Explicit encoding to use; when None, encoding is auto-detected
 
     Returns:
         The parsed DataFrame
     """
-    if encoding is not None:
-        frame: pd.DataFrame = pd.read_csv(input_path, encoding=encoding, **csv_kwargs)
+    # Resolve encoding precedence and remove it from csv_kwargs so it is never
+    # passed to pandas.read_csv twice. CleanerConfig.encoding wins; otherwise an
+    # encoding supplied via csv_kwargs is honored.
+    kwargs_encoding = csv_kwargs.pop("encoding", None)
+    resolved_encoding = encoding if encoding is not None else kwargs_encoding
+    if resolved_encoding is not None:
+        frame: pd.DataFrame = pd.read_csv(input_path, encoding=resolved_encoding, **csv_kwargs)
         return frame
     try:
         frame = pd.read_csv(input_path, encoding="utf-8-sig", **csv_kwargs)

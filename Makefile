@@ -203,7 +203,10 @@ fix-deps: ## Refresh locks and reinstall local environments
 
 # ─── Utilities @util ────────────────────────────────────────────────────────────────
 
-.PHONY: status clean help help-json
+.PHONY: run-cli status clean help help-json
+
+run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connections|all ...")
+	$(VENV)/bin/linkedin-analyzer $(args)
 
 status: ## Show workspace health
 	@echo "=== Git ==="

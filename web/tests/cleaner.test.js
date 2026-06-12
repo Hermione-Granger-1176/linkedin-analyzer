@@ -484,6 +484,18 @@ describe("LinkedInCleaner", () => {
         expect(result.cleanedData[0][column]).toBe("'=SUM(1)");
     });
 
+    it("keeps mid-field quotes literal in unquoted fields", () => {
+        const csv = [
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+            '2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,say ""hi"" or "bye,,,MEMBER_NETWORK',
+        ].join("\n");
+
+        const result = LinkedInCleaner.process(csv, "shares");
+
+        expect(result.success).toBe(true);
+        expect(result.cleanedData[0].ShareCommentary).toBe('say "hi" or "bye');
+    });
+
     it("returns parser error when a quoted field exceeds the safety limit", () => {
         const veryLargeField = "x".repeat(200001);
         const csv = [

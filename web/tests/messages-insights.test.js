@@ -1294,6 +1294,41 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
+    // --- Main-thread fallback skipped for very large files -------------------
+
+    it("skips the main-thread fallback and shows an empty state for very large files", async () => {
+        globalThis.Worker = undefined;
+
+        buildDom();
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+
+        const messagesFile = {
+            type: "messages",
+            name: "huge.csv",
+            text: "a".repeat(5 * 1024 * 1024 + 1),
+            updatedAt: 150,
+            rowCount: 100000,
+        };
+        DataCache.set("storage:file:messages", messagesFile);
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        // The UI-thread re-parse must be skipped entirely.
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        expect(document.getElementById("messagesEmpty").hidden).toBe(false);
+        expect(document.getElementById("messagesEmpty").querySelector("p").textContent).toContain(
+            "too large to analyze",
+        );
+
+        globalThis.Worker = undefined;
+    });
+
     // --- No usable message rows after parse ----------------------------------
 
     it("shows empty state when parsed data has no valid rows", async () => {

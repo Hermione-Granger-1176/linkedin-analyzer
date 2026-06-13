@@ -6,6 +6,7 @@ import { MAX_CSV_CHARS, SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
+import { Session } from "./session.js";
 import { Storage } from "./storage.js";
 import { parseAnalyticsWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
 
@@ -111,6 +112,11 @@ export const UploadPage = (() => {
             elements.uploadHint.textContent =
                 "Browser storage is unavailable. Uploads will not persist across sessions.";
         }
+        // Surface the same warning if storage works at load but fails mid-session
+        // (private mode, corruption) and Storage transparently degrades to memory.
+        Storage.onPersistenceLost(() => {
+            setHint("Browser storage stopped working. Uploads won't persist across sessions.", false);
+        });
 
         initWorker();
         bindEvents();
@@ -280,6 +286,14 @@ export const UploadPage = (() => {
             scheduleAnalyticsWorkerPrime(fileMap, { priority: "idle" });
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
+            // If a stale 24h session was just wiped, tell the user once rather than
+            // letting their previously-uploaded files silently disappear.
+            if (Session.consumeExpiryNotice()) {
+                setHint(
+                    "Your saved data expired after 24 hours and was cleared for privacy. Re-upload to continue.",
+                    false,
+                );
+            }
         })();
 
         try {
@@ -414,7 +428,8 @@ export const UploadPage = (() => {
             setHint("Workers are unavailable. Open this page from a local server.", true);
             return;
         }
-        warnIfStorageLow();
+        const incomingBytes = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
+        warnIfStorageLow(incomingBytes);
 
         if (activeJobs.size === 0) {
             showProgressOverlay();
@@ -424,8 +439,8 @@ export const UploadPage = (() => {
             activeJobs.add(jobId);
             scheduleJobTimeout(jobId, file.name);
             readFileAsText(file)
-                .then((text) => {
-                    pendingFiles.set(jobId, { text, fileName: file.name });
+                .then(({ text, usedFallback }) => {
+                    pendingFiles.set(jobId, { text, fileName: file.name, usedFallback });
                     worker.postMessage({
                         type: "addFile",
                         payload: {
@@ -454,8 +469,11 @@ export const UploadPage = (() => {
         });
     }
 
-    /** Estimate storage and warn if space is low. */
-    function warnIfStorageLow() {
+    /**
+     * Estimate storage and warn if space may be too low for the incoming files.
+     * @param {number} [incomingBytes] - Total size of the files about to be stored
+     */
+    function warnIfStorageLow(incomingBytes = 0) {
         if (!navigator.storage || typeof navigator.storage.estimate !== "function") {
             return;
         }
@@ -470,7 +488,11 @@ export const UploadPage = (() => {
                     return;
                 }
                 const remaining = estimate.quota - estimate.usage;
-                if (remaining < 20 * 1024 * 1024) {
+                // Scale the threshold to the incoming data (IndexedDB transiently
+                // holds the text twice during a put), but keep a 20MB floor so a
+                // nearly-full quota still warns even for small uploads.
+                const threshold = Math.max(incomingBytes * 2, 20 * 1024 * 1024);
+                if (remaining < threshold) {
                     setHint(
                         "Storage is running low. Consider clearing data after exporting.",
                         false,
@@ -495,9 +517,10 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Read a File object as UTF-8 text.
+     * Read a File object as text, decoding as UTF-8 and falling back to
+     * windows-1252 for non-UTF-8 exports (mirrors the CLI's latin-1 fallback).
      * @param {File} file - Uploaded file
-     * @returns {Promise<string>}
+     * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
     function readFileAsText(file) {
         if (file.size > MAX_FILE_BYTES) {
@@ -519,11 +542,54 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Read file text using FileReader with timeout and size guardrails.
+     * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and only
+     * falls back to windows-1252 on a genuine decode error — mirroring the CLI's
+     * latin-1 retry and avoiding false positives on files that legitimately
+     * contain U+FFFD. Enforces the character limit after decoding.
+     * @param {Uint8Array} bytes - Raw file bytes
+     * @param {string} fileName - Original file name, used in error messages
+     * @returns {{text: string, usedFallback: boolean}}
+     */
+    function decodeBytes(bytes, fileName) {
+        if (typeof TextDecoder === "undefined") {
+            // The streaming path already routes around a missing TextDecoder; the
+            // FileReader path lands here, so fail with a clear, user-facing error
+            // instead of a bare ReferenceError from `new TextDecoder(...)`.
+            throw new Error(
+                `Cannot read "${fileName}": your browser is missing required text-decoding support. Please use a newer browser.`,
+            );
+        }
+        let text;
+        let usedFallback = false;
+        try {
+            text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch {
+            text = new TextDecoder("windows-1252").decode(bytes);
+            usedFallback = true;
+        }
+        if (text.length > MAX_CSV_CHARS) {
+            const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
+            throw new Error(`"${fileName}" exceeds the ${maxMb}MB text limit.`);
+        }
+        return { text, usedFallback };
+    }
+
+    /**
+     * Read a File as text via FileReader, decoding the raw bytes so UTF-8
+     * validity is checked directly rather than inferred from the output.
      * @param {File} file - Uploaded file
-     * @returns {Promise<string>}
+     * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
     function readFileAsTextWithReader(file) {
+        return readBytesWithReader(file).then((bytes) => decodeBytes(bytes, file.name));
+    }
+
+    /**
+     * Read a File's raw bytes via FileReader, with timeout and error guards.
+     * @param {File} file - Uploaded file
+     * @returns {Promise<Uint8Array>}
+     */
+    function readBytesWithReader(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             let settled = false;
@@ -551,32 +617,34 @@ export const UploadPage = (() => {
                 if (settled) {
                     return;
                 }
-                const text = typeof reader.result === "string" ? reader.result : "";
-                if (text.length > MAX_CSV_CHARS) {
-                    const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-                    finish(() =>
-                        reject(new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`)),
-                    );
+                // Duck-type for an ArrayBuffer (avoids cross-realm instanceof
+                // pitfalls): a successful read yields a byte buffer, so anything
+                // without a numeric byteLength is an unexpected/failed read and is
+                // surfaced as an error rather than a silently empty file.
+                const buffer = /** @type {ArrayBuffer} */ (reader.result);
+                if (!buffer || typeof buffer.byteLength !== "number") {
+                    finish(() => reject(new Error("Error reading file")));
                     return;
                 }
-                finish(() => resolve(text));
+                finish(() => resolve(new Uint8Array(buffer)));
             };
             reader.onerror = () => {
                 finish(() => reject(new Error("Error reading file")));
             };
-            reader.readAsText(file);
+            reader.readAsArrayBuffer(file);
         });
     }
 
     /**
-     * Read file text via stream chunks for large uploads.
+     * Read file text via stream chunks for large uploads, decoding as UTF-8 and
+     * falling back to windows-1252 when the bytes are not valid UTF-8.
      * @param {File} file - Uploaded file
-     * @returns {Promise<string>}
+     * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
     async function readFileAsTextStream(file) {
         const reader = file.stream().getReader();
-        const decoder = new TextDecoder("utf-8");
-        let text = "";
+        const chunks = [];
+        let totalBytes = 0;
         let timedOut = false;
 
         const timeoutId = window.setTimeout(() => {
@@ -593,23 +661,37 @@ export const UploadPage = (() => {
                     throw new Error(`Reading ${file.name} timed out.`);
                 }
 
-                text += decoder.decode(chunk.value, { stream: true });
-                if (text.length > MAX_CSV_CHARS) {
-                    const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-                    await reader.cancel();
-                    throw new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`);
-                }
+                chunks.push(chunk.value);
+                totalBytes += chunk.value.byteLength;
             }
 
             if (timedOut) {
                 throw new Error(`Reading ${file.name} timed out.`);
             }
-
-            text += decoder.decode();
-            return text;
         } finally {
             window.clearTimeout(timeoutId);
         }
+
+        // Both read paths share decodeBytes: strict UTF-8 validation with a
+        // windows-1252 fallback and the character-count limit applied after
+        // decoding. Peak memory stays bounded by the upstream MAX_FILE_BYTES cap.
+        return decodeBytes(concatChunks(chunks, totalBytes), file.name);
+    }
+
+    /**
+     * Concatenate decoded stream chunks into a single byte array.
+     * @param {Uint8Array[]} chunks - Collected stream chunks
+     * @param {number} totalBytes - Sum of all chunk byte lengths
+     * @returns {Uint8Array}
+     */
+    function concatChunks(chunks, totalBytes) {
+        const bytes = new Uint8Array(totalBytes);
+        let offset = 0;
+        for (const chunk of chunks) {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+        }
+        return bytes;
     }
 
     /**
@@ -647,10 +729,10 @@ export const UploadPage = (() => {
                     jobId: payload.jobId || null,
                     fileName: payload.fileName || null,
                 });
-                if (!payload.jobId && !payload.fileName) {
-                    resetProcessingState();
-                    return;
-                }
+                // A payload-level error reports a single failed job. Complete just
+                // that job (falling back to the first active one) instead of
+                // resetting every in-flight upload — only a worker-level `error`
+                // event (handleWorkerError) wipes all processing state.
                 completeJob(payload.jobId || null, payload.fileName || "");
                 return;
             }
@@ -691,7 +773,12 @@ export const UploadPage = (() => {
             const fileMap = getFileMap(files);
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
-            setHint("File loaded successfully.", false);
+            setHint(
+                pending.usedFallback
+                    ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a fallback — double-check accented names."
+                    : "File loaded successfully.",
+                false,
+            );
             if (fileType === "shares" || fileType === "comments") {
                 scheduleAnalyticsWorkerPrime(fileMap, { priority: "immediate" });
             }
@@ -702,10 +789,41 @@ export const UploadPage = (() => {
                 fileType,
                 fileName,
             });
-            setHint("Error saving file data. Please try again.", true);
+            if (isQuotaExceededError(error)) {
+                setHint(
+                    "Storage is full. Clear saved data or free up space, then try again.",
+                    true,
+                );
+            } else {
+                setHint("Error saving file data. Please try again.", true);
+            }
         } finally {
             completeJob(jobId, fileName);
         }
+    }
+
+    /**
+     * Detect a storage quota error, walking the `cause` chain since Storage wraps
+     * the native DOMException inside a descriptive Error.
+     * @param {unknown} error - The caught error
+     * @returns {boolean}
+     */
+    function isQuotaExceededError(error) {
+        let current = error;
+        for (let depth = 0; current && depth < 10; depth += 1) {
+            const candidate = /** @type {{name?: string, code?: number, cause?: unknown}} */ (
+                current
+            );
+            if (
+                candidate.name === "QuotaExceededError" ||
+                candidate.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+                candidate.code === 22
+            ) {
+                return true;
+            }
+            current = candidate.cause;
+        }
+        return false;
     }
 
     /**
@@ -821,7 +939,7 @@ export const UploadPage = (() => {
      * Consume a pending upload entry for a processed worker job.
      * @param {string|null} jobId - Worker job ID
      * @param {string} fileName - Original file name
-     * @returns {{text: string, fileName: string}|null}
+     * @returns {{text: string, fileName: string, usedFallback?: boolean}|null}
      */
     function consumePendingFile(jobId, fileName) {
         if (jobId && pendingFiles.has(jobId)) {
@@ -1199,7 +1317,12 @@ export const UploadPage = (() => {
                 return;
             }
 
-            completeJob(jobId, fileName);
+            // The shared worker is wedged on this job; terminating and restarting
+            // it stops the runaway parse from pinning the CPU and lets later
+            // uploads still be processed. resetProcessingState() first so the
+            // restart starts from a clean slate.
+            resetProcessingState();
+            restartWorker();
             setHint(`Processing took too long for ${fileName}. Please retry this file.`, true);
         }, JOB_TIMEOUT_MS);
 

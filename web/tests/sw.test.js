@@ -120,4 +120,22 @@ describe("service worker", () => {
         expect(mediaMatcher({ request: { destination: "image" } })).toBe(true);
         expect(mediaMatcher({ request: { destination: "script" } })).toBe(false);
     });
+
+    it("bounds the static-resources cache with an expiration plugin", async () => {
+        await import("../src/sw.js");
+        const routing = await import("workbox-routing");
+
+        // The mocked StaleWhileRevalidate returns its options, and the mocked
+        // ExpirationPlugin returns its config, so the bound limits are inspectable.
+        // Locate the route by cacheName rather than registration order.
+        const staticStrategy = routing.registerRoute.mock.calls
+            .map((call) => call[1])
+            .find((strategy) => strategy && strategy.cacheName === "static-resources-v1");
+        expect(staticStrategy).toBeDefined();
+        expect(staticStrategy.plugins).toHaveLength(1);
+        expect(staticStrategy.plugins[0]).toMatchObject({
+            maxEntries: 60,
+            maxAgeSeconds: 60 * 60 * 24 * 30,
+        });
+    });
 });

@@ -289,9 +289,11 @@ help-json: ## Emit groups and commands as JSON
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
 
-branch: ## Create and switch to a new branch from main (make branch name=X)
-	@test -n "$(name)" || (printf 'Usage: make branch name=my-feature\n' >&2; exit 1)
-	git checkout main && git pull && git checkout -b "$(name)"
+branch: ## Create and switch to a new branch off main, or off base for a stacked branch (make branch name=X [base=branch])
+	@test -n "$(name)" || (printf 'Usage: make branch name=my-feature [base=other-branch]\n' >&2; exit 1)
+	git checkout "$(if $(base),$(base),main)" && \
+	if git rev-parse --symbolic-full-name --abbrev-ref '@{u}' >/dev/null 2>&1; then git pull; fi && \
+	git checkout -b "$(name)"
 
 log: ## Show recent commit log
 	git log --oneline -20
@@ -309,12 +311,20 @@ diff-staged: ## Show staged changes
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
 
-pr-create: ## Open a pull request for the current branch
-	gh pr create --fill
+pr-create: ## Open a pull request for the current branch (make pr-create [base=branch] for a stacked PR)
+	gh pr create --fill $(if $(base),--base "$(base)")
 
+pr-edit: export PR_EDIT_TITLE := $(title)
+pr-edit: export PR_EDIT_BODY := $(body)
 pr-edit: ## Edit the current PR title/body (make pr-edit title="..." [body="..."] [pr_num=N])
-	@test -n "$(title)$(body)" || (printf 'Usage: make pr-edit title="New title" [body="..."]\n' >&2; exit 1)
-	gh pr edit $(if $(pr_num),$(pr_num)) $(if $(title),--title "$(title)") $(if $(body),--body "$$(printf '%b' "$(body)")")
+	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY" || { printf 'Usage: make pr-edit title="New title" [body="..."]\n' >&2; exit 1; }
+	@set -e; \
+	tmp=""; \
+	trap 'test -n "$$tmp" && rm -f "$$tmp"' EXIT; \
+	set -- $(if $(pr_num),$(pr_num)); \
+	if [ -n "$$PR_EDIT_TITLE" ]; then set -- "$$@" --title "$$PR_EDIT_TITLE"; fi; \
+	if [ -n "$$PR_EDIT_BODY" ]; then tmp=$$(mktemp); printf '%s' "$$PR_EDIT_BODY" > "$$tmp"; set -- "$$@" --body-file "$$tmp"; fi; \
+	gh pr edit "$$@"
 
 pr-list: ## List open pull requests
 	gh pr list

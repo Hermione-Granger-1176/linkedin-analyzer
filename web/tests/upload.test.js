@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MAX_CSV_CHARS } from "../src/constants.js";
+
 import { createCanvas, mockMatchMedia, setupDom } from "./helpers/dom.js";
+
+// The reader path now reads raw bytes via FileReader.readAsArrayBuffer, so mock
+// results are ArrayBuffers. This encodes a string the same way the browser would.
+const encodeBuf = (str) => new TextEncoder().encode(str).buffer;
 
 vi.mock("roughjs/bundled/rough.esm.js", () => ({
     default: {
@@ -23,6 +29,8 @@ vi.mock("../src/data-cache.js", () => {
 
 vi.mock("../src/storage.js", () => ({
     Storage: {
+        isAvailable: true,
+        onPersistenceLost: vi.fn(),
         getAllFiles: vi.fn(),
         getAnalytics: vi.fn(),
         saveFile: vi.fn(),
@@ -157,6 +165,7 @@ describe("UploadPage", () => {
         Storage.saveFile.mockReset();
         Storage.saveAnalytics.mockReset();
         Storage.clearAll.mockReset();
+        Storage.onPersistenceLost.mockReset();
         AppRouter.navigate.mockReset();
         DataCache.get.mockReset();
         DataCache.set.mockReset();
@@ -191,14 +200,37 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
     });
 
+    it("warns when storage degrades to memory mid-session", async () => {
+        UploadPage.init();
+
+        expect(Storage.onPersistenceLost).toHaveBeenCalledTimes(1);
+        const onLost = Storage.onPersistenceLost.mock.calls[0][0];
+        onLost(new Error("idb gone"));
+
+        expect(document.getElementById("uploadHint").textContent).toContain("won't persist");
+    });
+
+    it("shows a one-time notice when a stale session was wiped", async () => {
+        window.localStorage.setItem("linkedin-analyzer:expiry-notice", "1");
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("uploadHint").textContent).toContain(
+            "expired after 24 hours",
+        );
+
+        window.localStorage.removeItem("linkedin-analyzer:expiry-notice");
+    });
+
     it("processes CSV uploads and enables analytics", async () => {
         const originalFileReader = globalThis.FileReader;
         const fileReaderInstance = {
             result: null,
             onload: null,
             onerror: null,
-            readAsText() {
-                this.result = "col\nvalue";
+            readAsArrayBuffer() {
+                this.result = encodeBuf("col\nvalue");
                 if (this.onload) {
                     this.onload();
                 }
@@ -324,10 +356,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nvalue",
+                result: encodeBuf("col\nvalue"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -406,8 +438,8 @@ describe("UploadPage", () => {
             result: null,
             onload: null,
             onerror: null,
-            readAsText() {
-                this.result = "col\nvalue";
+            readAsArrayBuffer() {
+                this.result = encodeBuf("col\nvalue");
                 if (this.onload) {
                     this.onload();
                 }
@@ -482,7 +514,7 @@ describe("UploadPage", () => {
 
     // --- Worker message type 'error' (handleWorkerMessage error branch) ------
 
-    it("handles error message type from worker without jobId (resets state)", async () => {
+    it("handles error message type from worker without jobId (does not reset all state)", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -501,10 +533,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -563,10 +595,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -610,10 +642,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "csv",
+                result: encodeBuf("csv"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -683,10 +715,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -711,10 +743,10 @@ describe("UploadPage", () => {
     it("hides progress overlay after all jobs complete", async () => {
         const originalFileReader = globalThis.FileReader;
         const fileReaderInstance = {
-            result: "col\nvalue",
+            result: encodeBuf("col\nvalue"),
             onload: null,
             onerror: null,
-            readAsText() {
+            readAsArrayBuffer() {
                 if (this.onload) {
                     this.onload();
                 }
@@ -771,10 +803,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "header\nrow1",
+                result: encodeBuf("header\nrow1"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -929,10 +961,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1002,7 +1034,7 @@ describe("UploadPage", () => {
 
     // --- Job timeout watchdog ------------------------------------------------
 
-    it("completes job and shows timeout hint when job times out", async () => {
+    it("restarts the worker and shows timeout hint when job times out", async () => {
         // Use fake timers to control the 45-second job timeout.
         // Use a counter-advancing rAF so animations terminate without real time.
         let rafCounter = 0;
@@ -1039,8 +1071,8 @@ describe("UploadPage", () => {
                 result: null,
                 onload: null,
                 onerror: null,
-                readAsText() {
-                    this.result = "col\nval";
+                readAsArrayBuffer() {
+                    this.result = encodeBuf("col\nval");
                     setTimeout(() => {
                         if (this.onload) {
                             this.onload();
@@ -1071,6 +1103,9 @@ describe("UploadPage", () => {
             "Processing took too long",
         );
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
+        // The wedged worker is torn down and a fresh one spun up, leaving no
+        // active jobs and the progress overlay hidden.
+        expect(document.getElementById("progressOverlay").hidden).toBe(true);
 
         globalThis.FileReader = originalFileReader;
         vi.useRealTimers();
@@ -1228,10 +1263,10 @@ describe("UploadPage", () => {
         let callCount = 0;
         globalThis.FileReader = function FileReader() {
             return {
-                result: `col\nrow${++callCount}`,
+                result: encodeBuf(`col\nrow${++callCount}`),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1272,7 +1307,7 @@ describe("UploadPage", () => {
                 result: null,
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onerror) {
                         this.onerror(new Error("read error"));
                     }
@@ -1296,16 +1331,123 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("errors instead of treating a non-ArrayBuffer read result as empty", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    // A successful onload but with a non-ArrayBuffer result must
+                    // surface as an error, not a silently empty file.
+                    this.result = null;
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("errors when the read result is a truthy non-buffer value", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    // A truthy result without a numeric byteLength (e.g. a stray
+                    // string) must also be rejected, not coerced to empty bytes.
+                    this.result = "not-a-buffer";
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("errors with a clear message when TextDecoder is unavailable", async () => {
+        const originalFileReader = globalThis.FileReader;
+        const originalTextDecoder = globalThis.TextDecoder;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    this.result = encodeBuf("col\nval");
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+        // Simulate a browser without TextDecoder support.
+        globalThis.TextDecoder = undefined;
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("text-decoding support");
+
+        globalThis.TextDecoder = originalTextDecoder;
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- oversize file warning -----------------------------------------------
 
     it("warns about large files (>25MB) but still processes them", async () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1556,10 +1698,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1614,8 +1756,8 @@ describe("UploadPage", () => {
                 result: null,
                 onload: null,
                 onerror: null,
-                readAsText() {
-                    this.result = "col\nval";
+                readAsArrayBuffer() {
+                    this.result = encodeBuf("col\nval");
                     triggerLoad = () => {
                         if (this.onload) {
                             this.onload();
@@ -1731,10 +1873,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1767,10 +1909,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1808,16 +1950,211 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("shows a quota-specific hint when the save fails with a wrapped QuotaExceededError", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        // Mirror how Storage wraps the native DOMException inside a descriptive
+        // Error so the cause-chain walk is exercised.
+        const quota = new DOMException("quota", "QuotaExceededError");
+        Storage.saveFile.mockRejectedValue(new Error("IndexedDB transaction failed", { cause: quota }));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "messages",
+                    fileName: "Messages.csv",
+                    rowCount: 1,
+                    jobId: null,
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(document.getElementById("uploadHint").textContent).toContain("Storage is full");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    // --- encoding fallback (UTF-8 -> windows-1252) ---------------------------
+
+    it("falls back to windows-1252 when the read is not valid UTF-8", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    // 0xE9 is an invalid UTF-8 lead byte, so the strict UTF-8
+                    // decode fails and the bytes fall back to windows-1252 ("é").
+                    this.result = new Uint8Array([0xe9]).buffer;
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFileCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "addFile",
+        );
+        expect(addFileCall[0].payload.csvText).toBe("é");
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("uploadHint").textContent).toContain(
+            "decoded with a fallback",
+        );
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    /**
+     * Build a streaming File-like object whose stream yields the given byte chunks.
+     */
+    function makeStreamFile(name, chunks) {
+        let index = 0;
+        return {
+            name,
+            size: 6 * 1024 * 1024,
+            stream() {
+                return {
+                    getReader() {
+                        return {
+                            read() {
+                                if (index < chunks.length) {
+                                    return Promise.resolve({ done: false, value: chunks[index++] });
+                                }
+                                return Promise.resolve({ done: true, value: undefined });
+                            },
+                            cancel() {
+                                return Promise.resolve();
+                            },
+                        };
+                    },
+                };
+            },
+        };
+    }
+
+    it("streams large UTF-8 files without triggering the encoding fallback", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = makeStreamFile("Messages.csv", [new Uint8Array([99, 111, 108, 10, 118, 97, 108])]);
+        const event = new Event("drop");
+        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+        document.getElementById("multiDropZone").dispatchEvent(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFileCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "addFile",
+        );
+        expect(addFileCall[0].payload.csvText).toBe("col\nval");
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("uploadHint").textContent).toContain("File loaded successfully");
+    });
+
+    it("streams large non-UTF-8 files and falls back to windows-1252", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // 0xE9 is an invalid UTF-8 lead byte but decodes to "é" under windows-1252.
+        const file = makeStreamFile("Messages.csv", [new Uint8Array([0xe9])]);
+        const event = new Event("drop");
+        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+        document.getElementById("multiDropZone").dispatchEvent(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFileCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "addFile",
+        );
+        expect(addFileCall[0].payload.csvText).toBe("é");
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("uploadHint").textContent).toContain(
+            "decoded with a fallback",
+        );
+    });
+
+    it("rejects a streamed file whose decoded length exceeds the character limit", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // One byte over the character limit: bytes (NUL) decode 1:1 to characters,
+        // so the post-decode check (not the byte count) is what trips.
+        const oversized = new Uint8Array(MAX_CSV_CHARS + 1);
+        const file = makeStreamFile("Messages.csv", [oversized]);
+        const event = new Event("drop");
+        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+        document.getElementById("multiDropZone").dispatchEvent(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("text limit");
+    });
+
     // --- consumePendingFile by fileName (lines 564-568) ----------------------
 
     it("matches pending file by fileName when jobId is null", async () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -1865,10 +2202,10 @@ describe("UploadPage", () => {
         let triggerLoad = null;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     // Delay load so the job timeout is registered before the error
                     triggerLoad = () => {
                         if (this.onload) {
@@ -1954,10 +2291,10 @@ describe("UploadPage", () => {
         let triggerLoad = null;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     triggerLoad = () => {
                         if (this.onload) {
                             this.onload();
@@ -2008,10 +2345,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2078,10 +2415,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2180,10 +2517,10 @@ describe("UploadPage", () => {
         let fileCount = 0;
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     fileCount++;
                     if (fileCount === 1) {
                         triggerLoad1 = () => {
@@ -2248,10 +2585,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2348,10 +2685,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2411,10 +2748,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2585,10 +2922,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2638,10 +2975,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }
@@ -2727,10 +3064,10 @@ describe("UploadPage", () => {
         let triggerLoad = null;
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     triggerLoad = () => {
                         if (inst.onload) {
                             inst.onload();
@@ -2989,10 +3326,10 @@ describe("UploadPage", () => {
         const resolvers = [];
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     const idx = readCount++;
                     resolvers[idx] = () => {
                         if (inst.onload) {
@@ -3054,10 +3391,10 @@ describe("UploadPage", () => {
         let readCount = 0;
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     const idx = readCount++;
                     resolvers[idx] = () => {
                         if (inst.onload) {
@@ -3108,10 +3445,10 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
-                readAsText() {
+                readAsArrayBuffer() {
                     if (this.onload) {
                         this.onload();
                     }

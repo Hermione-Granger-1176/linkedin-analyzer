@@ -107,11 +107,11 @@ describe("LinkedInCleaner", () => {
 
     // ── buildColumnErrorMessage paths ─────────────────────────────────────────
 
-    it("returns type-mismatch error when wrong file type selected (line 685)", () => {
+    it("returns type-mismatch error when wrong file type selected", () => {
         // Upload a shares CSV but tell the cleaner it's comments.
         // Shares have Date/ShareLink/ShareCommentary; Comments require Date/Link/Message.
         // detectFileType will identify the headers as 'shares', which != 'comments',
-        // so buildColumnErrorMessage fires the "This looks like a X file" branch (line 685).
+        // so buildColumnErrorMessage fires the "This looks like a X file" branch.
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
             "2025-01-01 10:00:00,https://linkedin.com/in/post,Hello world,,,MEMBER_NETWORK",
@@ -120,12 +120,12 @@ describe("LinkedInCleaner", () => {
         const result = LinkedInCleaner.process(csv, "comments");
 
         expect(result.success).toBe(false);
-        // The error must mention that it looks like a Shares file and Connections was chosen
+        // The error must mention that it looks like a Shares file and Comments was chosen
         expect(result.error).toMatch(/Shares/i);
         expect(result.error).toMatch(/Comments/i);
     });
 
-    it("cleanConnectionsDate returns raw value when date does not match expected format (line 325)", () => {
+    it("cleanConnectionsDate returns raw value when date does not match expected format", () => {
         // A connections CSV where Connected On doesn't match "DD Mon YYYY" format
         const csv = [
             "Notes:",
@@ -142,7 +142,7 @@ describe("LinkedInCleaner", () => {
         expect(result.cleanedData[0]["Connected On"]).toBe("2026-01-30");
     });
 
-    it("processes connections where Connected On field has unusual date format (line 325)", () => {
+    it("processes connections where Connected On field has unusual date format", () => {
         // A connections CSV where Connected On has an iso-format date (not matching "DD Mon YYYY")
         // but the URL and name are present so row is not dropped
         const csv = [
@@ -159,9 +159,9 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    it('returns "does not appear to be" error when selected type has no matching headers (line 690)', () => {
+    it('returns "does not appear to be" error when selected type has no matching headers', () => {
         // A CSV with completely unknown columns — selectedType != 'auto',
-        // detectFileType returns null (no known type matches), so line 688-690 fires
+        // detectFileType returns null (no known type matches), so the error branch fires
         const csv = ["Unknown,Column,Headers", "a,b,c"].join("\n");
 
         const result = LinkedInCleaner.process(csv, "shares");
@@ -170,9 +170,9 @@ describe("LinkedInCleaner", () => {
         expect(result.error).toMatch(/doesn't appear to be/i);
     });
 
-    // ── process() auto-detect failure paths (lines 727-731) ──────────────────
+    // ── process() auto-detect failure paths ──────────────────
 
-    it("returns failure with headers when auto-detect finds no match (line 731)", () => {
+    it("returns failure with headers when auto-detect finds no match", () => {
         // A well-formed CSV with unknown column names so no file type matches
         const csv = ["Foo,Bar,Baz", "1,2,3", "4,5,6"].join("\n");
 
@@ -185,9 +185,9 @@ describe("LinkedInCleaner", () => {
         expect(result.rowCount).toBe(2);
     });
 
-    // ── cleanSharesCommentary paths (lines 152-165) ──────────────────────────
+    // ── cleanSharesCommentary paths ──────────────────────────
 
-    it("cleans shares commentary that starts and ends with quotes (lines 158-164)", () => {
+    it("cleans shares commentary that starts and ends with quotes", () => {
         // A shares CSV where ShareCommentary starts with " and ends with "
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -199,7 +199,7 @@ describe("LinkedInCleaner", () => {
         expect(result.rowCount).toBe(1);
     });
 
-    it("cleanDate returns raw value when date has no time component (line 282)", () => {
+    it("cleanDate returns raw value when date has no time component", () => {
         // Date without time — falls through to partial parse return
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -209,7 +209,7 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    it("cleanDate handles NaN date components gracefully (line 287)", () => {
+    it("cleanDate handles NaN date components gracefully", () => {
         // A date with non-numeric parts
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -221,7 +221,7 @@ describe("LinkedInCleaner", () => {
         expect(result.cleanedData[0].Date).toContain("NOT-A-DATE");
     });
 
-    it("cleanDate handles out-of-range date components (line 290)", () => {
+    it("cleanDate handles out-of-range date components", () => {
         // Hour=25 is out of range
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -231,15 +231,15 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    // ── Empty CSV edge cases (line 536-549) ──────────────────────────────────
+    // ── Empty CSV edge cases ──────────────────────────────────
 
-    it("returns empty-CSV error when CSV has no rows (line 537)", () => {
+    it("returns empty-CSV error when CSV has no rows", () => {
         const result = LinkedInCleaner.process("", "shares");
         expect(result.success).toBe(false);
         expect(result.error).toBeTruthy();
     });
 
-    it("returns error when CSV headers are all empty (line 549)", () => {
+    it("returns error when CSV headers are all empty", () => {
         // A CSV with a header row that is entirely commas (empty columns)
         const csv = ",,,\n1,2,3,4";
         const result = LinkedInCleaner.process(csv, "shares");
@@ -248,7 +248,7 @@ describe("LinkedInCleaner", () => {
 
     // ── Date parsing edge cases in cleanDate ────────────────────────────────
 
-    it("returns raw value when date format has no time part (line 282)", () => {
+    it("returns raw value when date format has no time part", () => {
         // A date without a time component — cleanDate should return as-is
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -259,7 +259,7 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    it("returns raw value when date components are out of range (line 290)", () => {
+    it("returns raw value when date components are out of range", () => {
         // Month=13 → invalid range → cleanDate returns as-is
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -269,9 +269,9 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    // ── validateColumns with unknown file type (line 609) ────────────────────
+    // ── validateColumns with unknown file type ────────────────────
 
-    it("validateColumns returns invalid for unknown file type (line 609)", () => {
+    it("validateColumns returns invalid for unknown file type", () => {
         // Process with an unsupported file type → config lookup fails → buildColumnErrorMessage fires
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
@@ -282,11 +282,11 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(false);
     });
 
-    // ── CRLF inside quoted field (line 449) ───────────────────────────────────
+    // ── CRLF inside quoted field ───────────────────────────────────
 
-    it("handles bare \\r (without \\n) inside a quoted CSV field (line 449)", () => {
+    it("handles bare \\r (without \\n) inside a quoted CSV field", () => {
         // A quoted field with \r NOT followed by \n — triggers the `else` branch in
-        // CSV_PARSE_STATE.INSIDE_QUOTES case '\r' at line 449-452
+        // CSV_PARSE_STATE.INSIDE_QUOTES case '\r'
         const csv =
             'CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS\r\nabc,Ada,Bob,2025-01-01 10:00:00 UTC,"Line1\rLine2",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob';
 

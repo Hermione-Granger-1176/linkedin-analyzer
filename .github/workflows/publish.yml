@@ -12,8 +12,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish-pypi:
+  require-ci:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Require green CI for the release commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_REF_NAME}" --jq '.sha')"
+          echo "Release tag ${GITHUB_REF_NAME} resolves to commit ${sha}"
+          conclusion="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=CI%20result" \
+            --jq '.check_runs | sort_by(.started_at) | last | .conclusion // "missing"')"
+          echo "Latest 'CI result' conclusion: ${conclusion}"
+          if [ "${conclusion}" != "success" ]; then
+            echo "::error::CI result for ${sha} is '${conclusion}', refusing to publish."
+            exit 1
+          fi
+
+  publish-pypi:
+    needs: require-ci
+    runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       contents: read
       id-token: write
@@ -27,12 +50,10 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.14"
-          cache: pip
-          cache-dependency-path: uv.lock
       - name: Build distributions
         run: |
           python -m pip install --upgrade pip
-          python -m pip install hatch twine
+          python -m pip install hatch==1.17.0 twine==6.2.0
           hatch build
       - name: Validate distributions
         run: |
@@ -49,9 +70,11 @@ jobs:
           fi
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          skip-existing: true
 
   publish-docker:
-    needs: publish-pypi
+    needs: [require-ci, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -77,10 +100,24 @@ jobs:
       - name: Build metadata
         id: image-meta
         run: |
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "version=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          echo "revision=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "source_url=https://github.com/${{ github.repository }}" >> "$GITHUB_OUTPUT"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          version="${{ github.event.release.tag_name }}"
+          {
+            echo "image=${image}"
+            echo "version=${version}"
+            echo "revision=${{ github.sha }}"
+            echo "source_url=https://github.com/${{ github.repository }}"
+          } >> "$GITHUB_OUTPUT"
+          # Prereleases must never re-point the floating :latest tag.
+          {
+            echo "tags<<TAGS_EOF"
+            echo "${image}:${version}"
+            echo "${image}:sha-${{ github.sha }}"
+            if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+              echo "${image}:latest"
+            fi
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
       - name: Build local image for scanning
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
@@ -116,10 +153,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           cache-from: type=gha
-          tags: |
-            ${{ steps.image-meta.outputs.image }}:${{ steps.image-meta.outputs.version }}
-            ${{ steps.image-meta.outputs.image }}:sha-${{ github.sha }}
-            ${{ steps.image-meta.outputs.image }}:latest
+          tags: ${{ steps.image-meta.outputs.tags }}
           build-args: |
             VERSION=${{ steps.image-meta.outputs.version }}
             REVISION=${{ steps.image-meta.outputs.revision }}

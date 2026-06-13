@@ -88,6 +88,39 @@ THREADS_PAYLOAD = {
 }
 
 
+COMMENTS_PAYLOAD = {
+    "data": {
+        "repository": {
+            "pullRequest": {
+                "reviewThreads": {
+                    "nodes": [
+                        {
+                            "comments": {
+                                "nodes": [
+                                    {
+                                        "id": "PRRC_first",
+                                        "body": "Original review note\nsecond line",
+                                        "url": "https://example/c1",
+                                        "author": {"login": "reviewer"},
+                                    },
+                                    {
+                                        "id": "PRRC_reply",
+                                        "body": "Fixed it",
+                                        "url": "https://example/c2",
+                                        "author": None,
+                                    },
+                                ]
+                            }
+                        },
+                        {"comments": {"nodes": []}},
+                    ]
+                }
+            }
+        }
+    }
+}
+
+
 def test_parse_threads_maps_fields() -> None:
     """Map a GraphQL payload into ReviewThread objects."""
     threads = pr_review.parse_threads(THREADS_PAYLOAD["data"])
@@ -355,3 +388,72 @@ def test_main_list_json(
     captured = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert captured[0]["thread_id"] == "PRRT_x"
+
+
+def test_list_comments_flattens_all_thread_comments() -> None:
+    """list_comments returns every comment across threads, missing author included."""
+    runner = FakeGh(
+        [
+            (has("repo", "view"), completed_process(0, json.dumps({"nameWithOwner": "o/r"}))),
+            (has("graphql"), completed_process(0, json.dumps(COMMENTS_PAYLOAD))),
+        ]
+    )
+
+    comments = pr_review.list_comments(7, run_fn=runner)
+
+    assert [comment.comment_id for comment in comments] == ["PRRC_first", "PRRC_reply"]
+    assert comments[0].author == "reviewer"
+    assert comments[1].author == "unknown"  # null author falls back
+
+
+def test_format_comments_shows_first_line_only() -> None:
+    """Rendering is one greppable line per comment, first body line only."""
+    comment = pr_review.ReviewComment("PRRC_first", "reviewer", "Note here\nsecond line", "u")
+
+    text = pr_review.format_comments([comment])
+
+    assert text == "comment=PRRC_first  @reviewer: Note here"
+
+
+def test_format_comments_empty() -> None:
+    """An empty comment list renders a friendly placeholder."""
+    assert pr_review.format_comments([]) == "No review comments."
+
+
+def test_delete_review_comment_uses_mutation_without_retry() -> None:
+    """Deletion keys off the comment node id via deletePullRequestReviewComment."""
+    runner = FakeGh([(has("graphql"), completed_process(0, json.dumps({"data": {}})))])
+
+    pr_review.delete_review_comment("PRRC_reply", run_fn=runner)
+
+    (cmd,) = runner.calls
+    assert "deletePullRequestReviewComment" in _query_arg(cmd)
+    assert "comment=PRRC_reply" in cmd
+
+
+def test_main_list_comments_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The list-comments command emits JSON when asked."""
+    comment = pr_review.ReviewComment("PRRC_x", "me", "hi", "u")
+    monkeypatch.setattr(pr_review, "list_comments", lambda *_a, **_k: [comment])
+
+    exit_code = cli.main(["list-comments", "--json"])
+
+    captured = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert captured[0]["comment_id"] == "PRRC_x"
+
+
+def test_main_delete_comment_invokes_helper(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The delete-comment command deletes by node id and confirms."""
+    deleted: list[str] = []
+    monkeypatch.setattr(pr_review, "delete_review_comment", lambda comment: deleted.append(comment))
+
+    exit_code = cli.main(["delete-comment", "--comment", "PRRC_x"])
+
+    assert exit_code == 0
+    assert deleted == ["PRRC_x"]
+    assert "Deleted PRRC_x" in capsys.readouterr().out

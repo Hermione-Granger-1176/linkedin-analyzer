@@ -54,6 +54,30 @@ mutation($thread: ID!) {
 }
 """
 
+_COMMENTS_QUERY = """
+query($owner: String!, $name: String!, $pr: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $pr) {
+      reviewThreads(first: 100) {
+        nodes {
+          comments(first: 100) {
+            nodes { id body url author { login } }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+_DELETE_COMMENT_MUTATION = """
+mutation($comment: ID!) {
+  deletePullRequestReviewComment(input: { id: $comment }) {
+    pullRequestReviewComment { id }
+  }
+}
+"""
+
 
 @dataclass(frozen=True)
 class ReviewThread:
@@ -171,6 +195,74 @@ def address_thread(thread_id: str, body: str, *, run_fn: RunFunction | None = No
     """Reply to a review thread and then resolve it, in that order."""
     reply_to_thread(thread_id, body, run_fn=run_fn)
     resolve_thread(thread_id, run_fn=run_fn)
+
+
+@dataclass(frozen=True)
+class ReviewComment:
+    """One individual comment within a pull-request review thread."""
+
+    comment_id: str
+    author: str
+    body: str
+    url: str
+
+
+def list_comments(
+    pr: int | None = None, *, run_fn: RunFunction | None = None
+) -> list[ReviewComment]:
+    """Return every individual review comment on ``pr`` (auto-detected when omitted).
+
+    Unlike ``list_threads`` (which keeps only each thread's first comment for a
+    summary view), this flattens all comments so a specific reply can be
+    targeted by its node id, e.g. to delete a stray one.
+    """
+    owner, name = _owner_name(run_fn=run_fn)
+    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    connection = _review_threads(
+        gh_runner.graphql(
+            _COMMENTS_QUERY,
+            variables={"owner": owner, "name": name, "pr": pr},
+            run_fn=run_fn,
+        )
+    )
+    comments: list[ReviewComment] = []
+    for node in connection["nodes"]:
+        for comment in node.get("comments", {}).get("nodes", []):
+            author = comment.get("author") or {}
+            comments.append(
+                ReviewComment(
+                    comment_id=str(comment["id"]),
+                    author=str(author.get("login") or "unknown"),
+                    body=str(comment.get("body") or ""),
+                    url=str(comment.get("url") or ""),
+                )
+            )
+    return comments
+
+
+def delete_review_comment(comment_id: str, *, run_fn: RunFunction | None = None) -> None:
+    """Delete a single review comment by its node id.
+
+    Deletion is destructive and not idempotent (a retry would error on the
+    already-removed comment), so it does not auto-retry.
+    """
+    gh_runner.graphql(
+        _DELETE_COMMENT_MUTATION,
+        variables={"comment": comment_id},
+        run_fn=run_fn,
+        retries=0,
+    )
+
+
+def format_comments(comments: list[ReviewComment]) -> str:
+    """Render review comments as greppable one-line-per-comment text."""
+    if not comments:
+        return "No review comments."
+    blocks: list[str] = []
+    for comment in comments:
+        first_line = comment.body.splitlines()[0] if comment.body else ""
+        blocks.append(f"comment={comment.comment_id}  @{comment.author}: {first_line}")
+    return "\n".join(blocks)
 
 
 def format_threads(threads: list[ReviewThread]) -> str:

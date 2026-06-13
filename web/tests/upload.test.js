@@ -356,7 +356,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nvalue",
+                result: encodeBuf("col\nvalue"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -533,7 +533,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -595,7 +595,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -642,7 +642,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "csv",
+                result: encodeBuf("csv"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -715,7 +715,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -743,7 +743,7 @@ describe("UploadPage", () => {
     it("hides progress overlay after all jobs complete", async () => {
         const originalFileReader = globalThis.FileReader;
         const fileReaderInstance = {
-            result: "col\nvalue",
+            result: encodeBuf("col\nvalue"),
             onload: null,
             onerror: null,
             readAsArrayBuffer() {
@@ -803,7 +803,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "header\nrow1",
+                result: encodeBuf("header\nrow1"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -961,7 +961,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -1263,7 +1263,7 @@ describe("UploadPage", () => {
         let callCount = 0;
         globalThis.FileReader = function FileReader() {
             return {
-                result: `col\nrow${++callCount}`,
+                result: encodeBuf(`col\nrow${++callCount}`),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -1331,13 +1331,48 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("errors instead of treating a non-ArrayBuffer read result as empty", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    // A successful onload but with a non-ArrayBuffer result must
+                    // surface as an error, not a silently empty file.
+                    this.result = null;
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- oversize file warning -----------------------------------------------
 
     it("warns about large files (>25MB) but still processes them", async () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -1591,7 +1626,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -1766,7 +1801,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -1802,7 +1837,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -1847,7 +1882,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2044,7 +2079,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2095,7 +2130,7 @@ describe("UploadPage", () => {
         let triggerLoad = null;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2184,7 +2219,7 @@ describe("UploadPage", () => {
         let triggerLoad = null;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2238,7 +2273,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2308,7 +2343,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2410,7 +2445,7 @@ describe("UploadPage", () => {
         let fileCount = 0;
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2478,7 +2513,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2578,7 +2613,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2641,7 +2676,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2815,7 +2850,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2868,7 +2903,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -2957,7 +2992,7 @@ describe("UploadPage", () => {
         let triggerLoad = null;
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -3219,7 +3254,7 @@ describe("UploadPage", () => {
         const resolvers = [];
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -3284,7 +3319,7 @@ describe("UploadPage", () => {
         let readCount = 0;
         globalThis.FileReader = function FileReader() {
             const inst = {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {
@@ -3338,7 +3373,7 @@ describe("UploadPage", () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
-                result: "col\nval",
+                result: encodeBuf("col\nval"),
                 onload: null,
                 onerror: null,
                 readAsArrayBuffer() {

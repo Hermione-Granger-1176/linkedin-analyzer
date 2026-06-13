@@ -609,10 +609,16 @@ export const UploadPage = (() => {
                 if (settled) {
                     return;
                 }
-                const result = reader.result;
-                const bytes =
-                    result instanceof ArrayBuffer ? new Uint8Array(result) : new Uint8Array(0);
-                finish(() => resolve(bytes));
+                // Duck-type for an ArrayBuffer (avoids cross-realm instanceof
+                // pitfalls): a successful read yields a byte buffer, so anything
+                // without a numeric byteLength is an unexpected/failed read and is
+                // surfaced as an error rather than a silently empty file.
+                const buffer = /** @type {ArrayBuffer} */ (reader.result);
+                if (!buffer || typeof buffer.byteLength !== "number") {
+                    finish(() => reject(new Error("Error reading file")));
+                    return;
+                }
+                finish(() => resolve(new Uint8Array(buffer)));
             };
             reader.onerror = () => {
                 finish(() => reject(new Error("Error reading file")));

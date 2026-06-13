@@ -312,9 +312,17 @@ pr: ## PR commands (make pr)
 pr-create: ## Open a pull request for the current branch
 	gh pr create --fill
 
+pr-edit: export PR_EDIT_TITLE := $(title)
+pr-edit: export PR_EDIT_BODY := $(body)
 pr-edit: ## Edit the current PR title/body (make pr-edit title="..." [body="..."] [pr_num=N])
-	@test -n "$(title)$(body)" || (printf 'Usage: make pr-edit title="New title" [body="..."]\n' >&2; exit 1)
-	gh pr edit $(if $(pr_num),$(pr_num)) $(if $(title),--title "$(title)") $(if $(body),--body "$$(printf '%b' "$(body)")")
+	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY" || { printf 'Usage: make pr-edit title="New title" [body="..."]\n' >&2; exit 1; }
+	@set -e; \
+	tmp=""; \
+	trap 'test -n "$$tmp" && rm -f "$$tmp"' EXIT; \
+	set -- $(if $(pr_num),$(pr_num)); \
+	if [ -n "$$PR_EDIT_TITLE" ]; then set -- "$$@" --title "$$PR_EDIT_TITLE"; fi; \
+	if [ -n "$$PR_EDIT_BODY" ]; then tmp=$$(mktemp); printf '%s' "$$PR_EDIT_BODY" > "$$tmp"; set -- "$$@" --body-file "$$tmp"; fi; \
+	gh pr edit "$$@"
 
 pr-list: ## List open pull requests
 	gh pr list

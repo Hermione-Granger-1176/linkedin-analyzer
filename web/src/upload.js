@@ -542,41 +542,54 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Detect the Unicode replacement character, the tell-tale sign that bytes
-     * were not valid UTF-8.
-     * @param {string} text - Decoded text
-     * @returns {boolean}
+     * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and only
+     * falls back to windows-1252 on a genuine decode error — mirroring the CLI's
+     * latin-1 retry and avoiding false positives on files that legitimately
+     * contain U+FFFD. Enforces the character limit after decoding.
+     * @param {Uint8Array} bytes - Raw file bytes
+     * @param {string} fileName - Original file name, used in error messages
+     * @returns {{text: string, usedFallback: boolean}}
      */
-    function hasReplacementChar(text) {
-        return text.includes("�");
+    function decodeBytes(bytes, fileName) {
+        if (typeof TextDecoder === "undefined") {
+            // The streaming path already routes around a missing TextDecoder; the
+            // FileReader path lands here, so fail with a clear, user-facing error
+            // instead of a bare ReferenceError from `new TextDecoder(...)`.
+            throw new Error(
+                `Cannot read "${fileName}": your browser is missing required text-decoding support. Please use a newer browser.`,
+            );
+        }
+        let text;
+        let usedFallback = false;
+        try {
+            text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch {
+            text = new TextDecoder("windows-1252").decode(bytes);
+            usedFallback = true;
+        }
+        if (text.length > MAX_CSV_CHARS) {
+            const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
+            throw new Error(`"${fileName}" exceeds the ${maxMb}MB text limit.`);
+        }
+        return { text, usedFallback };
     }
 
     /**
-     * Read file text via FileReader, retrying as windows-1252 when the UTF-8
-     * decode produced replacement characters.
+     * Read a File as text via FileReader, decoding the raw bytes so UTF-8
+     * validity is checked directly rather than inferred from the output.
      * @param {File} file - Uploaded file
      * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
     function readFileAsTextWithReader(file) {
-        return decodeWithReader(file, "utf-8").then((text) => {
-            if (!hasReplacementChar(text)) {
-                return { text, usedFallback: false };
-            }
-            return decodeWithReader(file, "windows-1252").then((fallbackText) => ({
-                text: fallbackText,
-                usedFallback: true,
-            }));
-        });
+        return readBytesWithReader(file).then((bytes) => decodeBytes(bytes, file.name));
     }
 
     /**
-     * Decode a File with FileReader under a given encoding, with timeout and
-     * size guardrails.
+     * Read a File's raw bytes via FileReader, with timeout and error guards.
      * @param {File} file - Uploaded file
-     * @param {string} encoding - Encoding label passed to FileReader.readAsText
-     * @returns {Promise<string>}
+     * @returns {Promise<Uint8Array>}
      */
-    function decodeWithReader(file, encoding) {
+    function readBytesWithReader(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             let settled = false;
@@ -604,20 +617,21 @@ export const UploadPage = (() => {
                 if (settled) {
                     return;
                 }
-                const text = typeof reader.result === "string" ? reader.result : "";
-                if (text.length > MAX_CSV_CHARS) {
-                    const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-                    finish(() =>
-                        reject(new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`)),
-                    );
+                // Duck-type for an ArrayBuffer (avoids cross-realm instanceof
+                // pitfalls): a successful read yields a byte buffer, so anything
+                // without a numeric byteLength is an unexpected/failed read and is
+                // surfaced as an error rather than a silently empty file.
+                const buffer = /** @type {ArrayBuffer} */ (reader.result);
+                if (!buffer || typeof buffer.byteLength !== "number") {
+                    finish(() => reject(new Error("Error reading file")));
                     return;
                 }
-                finish(() => resolve(text));
+                finish(() => resolve(new Uint8Array(buffer)));
             };
             reader.onerror = () => {
                 finish(() => reject(new Error("Error reading file")));
             };
-            reader.readAsText(file, encoding);
+            reader.readAsArrayBuffer(file);
         });
     }
 
@@ -658,27 +672,10 @@ export const UploadPage = (() => {
             window.clearTimeout(timeoutId);
         }
 
-        const bytes = concatChunks(chunks, totalBytes);
-        // Validate UTF-8 strictly (fatal) rather than scanning for U+FFFD: a file
-        // may legitimately contain U+FFFD, so only a genuine decode error should
-        // trigger the windows-1252 fallback (mirrors the CLI's latin-1 retry).
-        let text;
-        let usedFallback = false;
-        try {
-            text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-        } catch {
-            text = new TextDecoder("windows-1252").decode(bytes);
-            usedFallback = true;
-        }
-        // Enforce the limit on decoded character count (not byte count), so
-        // multi-byte UTF-8 exports are accepted up to MAX_CSV_CHARS characters,
-        // matching the FileReader path. Peak memory stays bounded because file
-        // size is already capped at MAX_FILE_BYTES upstream.
-        if (text.length > MAX_CSV_CHARS) {
-            const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-            throw new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`);
-        }
-        return { text, usedFallback };
+        // Both read paths share decodeBytes: strict UTF-8 validation with a
+        // windows-1252 fallback and the character-count limit applied after
+        // decoding. Peak memory stays bounded by the upstream MAX_FILE_BYTES cap.
+        return decodeBytes(concatChunks(chunks, totalBytes), file.name);
     }
 
     /**

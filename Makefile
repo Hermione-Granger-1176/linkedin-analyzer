@@ -289,9 +289,11 @@ help-json: ## Emit groups and commands as JSON
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
 
-branch: ## Create and switch to a new branch from main (make branch name=X)
-	@test -n "$(name)" || (printf 'Usage: make branch name=my-feature\n' >&2; exit 1)
-	git checkout main && git pull && git checkout -b "$(name)"
+branch: ## Create and switch to a new branch off main, or off base for a stacked branch (make branch name=X [base=branch])
+	@test -n "$(name)" || (printf 'Usage: make branch name=my-feature [base=other-branch]\n' >&2; exit 1)
+	git checkout "$(if $(base),$(base),main)" && \
+	if git rev-parse --symbolic-full-name --abbrev-ref '@{u}' >/dev/null 2>&1; then git pull; fi && \
+	git checkout -b "$(name)"
 
 log: ## Show recent commit log
 	git log --oneline -20
@@ -309,8 +311,8 @@ diff-staged: ## Show staged changes
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
 
-pr-create: ## Open a pull request for the current branch
-	gh pr create --fill
+pr-create: ## Open a pull request for the current branch (make pr-create [base=branch] for a stacked PR)
+	gh pr create --fill $(if $(base),--base "$(base)")
 
 pr-edit: export PR_EDIT_TITLE := $(title)
 pr-edit: export PR_EDIT_BODY := $(body)

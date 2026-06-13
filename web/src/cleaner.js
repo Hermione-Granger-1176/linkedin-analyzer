@@ -621,7 +621,18 @@ export const LinkedInCleaner = (() => {
 
             const code = csvText.charCodeAt(start);
             if (code === quoteCode) {
-                state = CSV_PARSE_STATE.INSIDE_QUOTES;
+                // Quotes only open a quoted section at the start of a field;
+                // mid-field quotes stay literal (matches the Python cleaner's
+                // pandas parsing).
+                if (field.length === 0) {
+                    state = CSV_PARSE_STATE.INSIDE_QUOTES;
+                    return start + 1;
+                }
+                /* v8 ignore next 3 */
+                if (wouldOverflowField(1)) {
+                    return start + 1;
+                }
+                field += quote;
                 return start + 1;
             }
             if (code === delimiterCode) {

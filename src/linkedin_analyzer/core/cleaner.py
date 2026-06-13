@@ -49,9 +49,26 @@ def _read_csv_with_fallback(
     try:
         frame = pd.read_csv(input_path, encoding="utf-8-sig", **csv_kwargs)
     except UnicodeDecodeError:
-        LOG.warning("UTF-8 decode failed for %s; retrying with latin-1", input_path)
+        LOG.warning(
+            "UTF-8 decode failed for %s; retrying with latin-1. "
+            "Pass --encoding to choose the correct encoding if characters look wrong.",
+            input_path,
+        )
         frame = pd.read_csv(input_path, encoding="latin-1", **csv_kwargs)
     return frame
+
+
+def _log_dropped(before: int, after: int, reason: str) -> None:
+    """Log how many rows a drop step removed, when any were removed.
+
+    Args:
+        before: Row count before the drop
+        after: Row count after the drop
+        reason: Human-readable description of why the rows were dropped
+    """
+    dropped = before - after
+    if dropped > 0:
+        LOG.info("Dropped %d rows %s", dropped, reason)
 
 
 def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
@@ -150,18 +167,24 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
                 f"Duplicate columns after header normalization: {', '.join(duplicate_columns)}"
             )
         df = df.replace(r"^\s*$", pd.NA, regex=True)
+        rows_before_blank = len(df)
         df = df.dropna(how="all")
+        _log_dropped(rows_before_blank, len(df), "with no values")
 
         LOG.info("Validating columns")
         validate_columns(df, config.required_columns)
         required_row_columns = list(config.required_row_columns or config.required_columns)
         normalize_required_columns(df, required_row_columns)
         if required_row_columns:
+            rows_before_required = len(df)
             df = df.dropna(subset=required_row_columns)
+            _log_dropped(rows_before_required, len(df), "missing required values")
         drop_columns = [col for col in (config.drop_if_all_missing or []) if col in df.columns]
         if drop_columns:
             normalize_required_columns(df, drop_columns)
+            rows_before_optional = len(df)
             df = df.dropna(subset=drop_columns, how="all")
+            _log_dropped(rows_before_optional, len(df), "with all optional fields empty")
 
         for col_config in config.columns:
             if col_config.name not in df.columns:

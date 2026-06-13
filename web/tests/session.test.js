@@ -109,4 +109,19 @@ describe("Session", () => {
         await Session.cleanIfStale();
         expect(DataCache.get("some:key")).toBeUndefined();
     });
+
+    it("cleanIfStale sets a one-time expiry notice consumed by consumeExpiryNotice", async () => {
+        window.localStorage.setItem(
+            "linkedin-analyzer:last-activity",
+            String(Date.now() - 2 * 24 * 60 * 60 * 1000)
+        );
+        await Session.cleanIfStale();
+        // The notice fires once, then resets so it is not shown on every visit.
+        expect(Session.consumeExpiryNotice()).toBe(true);
+        expect(Session.consumeExpiryNotice()).toBe(false);
+    });
+
+    it("consumeExpiryNotice returns false when no stale cleanup occurred", () => {
+        expect(Session.consumeExpiryNotice()).toBe(false);
+    });
 });

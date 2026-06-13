@@ -27,7 +27,14 @@ export const MessagesPage = (() => {
         "12m": 12,
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    const WORKER_TIMEOUT_MS = 30000;
+    // Worker watchdog scales with input size: a base allowance plus more time per
+    // megabyte of CSV so large exports are not cut off prematurely.
+    const WORKER_TIMEOUT_BASE_MS = 30000;
+    const WORKER_TIMEOUT_PER_MB_MS = 5000;
+    const BYTES_PER_MB = 1024 * 1024;
+    // Above this combined CSV size, re-parsing on the UI thread would freeze the
+    // page, so the main-thread fallback is skipped in favor of an empty state.
+    const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
     const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
         month: "short",
@@ -199,7 +206,27 @@ export const MessagesPage = (() => {
         if (workerResult) {
             return workerResult;
         }
+        // The worker was unavailable, errored, or timed out. Re-parsing a large
+        // export on the UI thread would freeze the page, so bail out with an
+        // explanatory empty state above the size ceiling.
+        if (messagesCsv.length + connectionsCsv.length > MAIN_THREAD_FALLBACK_MAX_CHARS) {
+            return {
+                success: false,
+                error: "These files are too large to analyze without a background worker. Reload the page, or open it in a browser that supports Web Workers.",
+            };
+        }
         return processFilesOnMainThread(messagesCsv, connectionsCsv);
+    }
+
+    /**
+     * Compute a size-scaled worker watchdog timeout.
+     * @param {string} messagesCsv - Raw messages CSV text
+     * @param {string} connectionsCsv - Raw connections CSV text
+     * @returns {number} Timeout in milliseconds
+     */
+    function computeWorkerTimeout(messagesCsv, connectionsCsv) {
+        const megabytes = (messagesCsv.length + connectionsCsv.length) / BYTES_PER_MB;
+        return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
     }
 
     /**
@@ -277,7 +304,7 @@ export const MessagesPage = (() => {
                 finishRequest();
                 terminateWorker();
                 resolve(null);
-            }, WORKER_TIMEOUT_MS);
+            }, computeWorkerTimeout(messagesCsv, connectionsCsv));
 
             try {
                 parseWorker.addEventListener("message", handleMessage);

@@ -128,6 +128,7 @@ describe("Storage", () => {
 
         const file = await Storage.getFile("shares");
         expect(file).toBeNull();
+        db.close();
     });
 
     it("ignores future-version analytics records during reads", async () => {
@@ -151,6 +152,7 @@ describe("Storage", () => {
 
         const analytics = await Storage.getAnalytics();
         expect(analytics).toBeNull();
+        db.close();
     });
 
     it("reads legacy analytics records without wrapped data payload", async () => {
@@ -174,6 +176,7 @@ describe("Storage", () => {
 
         const analytics = await Storage.getAnalytics();
         expect(analytics.months["2024-01"].total).toBe(2);
+        db.close();
     });
 
     describe("transaction abort handling", () => {
@@ -215,6 +218,35 @@ describe("Storage", () => {
             });
             expect(reason).toBeInstanceOf(Error);
             expect(reason.message).toBe("IndexedDB transaction failed");
+        });
+    });
+
+    describe("connection lifecycle", () => {
+        it("memoizes a single database connection across operations", async () => {
+            // Earlier tests already opened the shared connection, so further ops
+            // must reuse it rather than calling indexedDB.open again.
+            const openSpy = vi.spyOn(indexedDB, "open");
+            await Storage.getAllFiles();
+            await Storage.getAnalytics();
+            expect(openSpy).not.toHaveBeenCalled();
+            openSpy.mockRestore();
+        });
+
+        it("closes the shared connection on an external version change", async () => {
+            await Storage.getAllFiles();
+            // A newer connection upgrading the DB would block unless our
+            // versionchange handler closes the shared connection first.
+            await new Promise((resolve, reject) => {
+                const request = indexedDB.open("linkedin-analyzer", 3);
+                request.onupgradeneeded = () => {};
+                request.onsuccess = () => {
+                    request.result.close();
+                    resolve();
+                };
+                request.onblocked = () =>
+                    reject(new Error("upgrade blocked: shared connection was not closed"));
+                request.onerror = () => reject(request.error);
+            });
         });
     });
 });

@@ -34,6 +34,12 @@ registerRoute(
     ({ request }) => request.destination === "style" || request.destination === "script",
     new StaleWhileRevalidate({
         cacheName: "static-resources-v1",
+        plugins: [
+            new ExpirationPlugin({
+                maxEntries: 60,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+            }),
+        ],
     }),
 );
 

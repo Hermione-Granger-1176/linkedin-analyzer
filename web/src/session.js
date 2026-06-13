@@ -8,6 +8,7 @@ export const Session = (() => {
     "use strict";
 
     const STORAGE_KEY = "linkedin-analyzer:last-activity";
+    const EXPIRY_NOTICE_KEY = "linkedin-analyzer:expiry-notice";
     const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
     /**
@@ -32,6 +33,19 @@ export const Session = (() => {
     function setStorageValue(key, value) {
         try {
             window.localStorage.setItem(key, value);
+        } catch {
+            /* v8 ignore next */
+            return;
+        }
+    }
+
+    /**
+     * Safe localStorage remover.
+     * @param {string} key
+     */
+    function removeStorageValue(key) {
+        try {
+            window.localStorage.removeItem(key);
         } catch {
             /* v8 ignore next */
             return;
@@ -78,9 +92,24 @@ export const Session = (() => {
 
         await Storage.clearAll();
         DataCache.clear();
+        // Record that data was wiped so the next screen can show a one-time
+        // notice instead of the data silently disappearing.
+        setStorageValue(EXPIRY_NOTICE_KEY, "1");
 
         touch();
         return true;
+    }
+
+    /**
+     * Read and clear the one-time "data expired" notice flag.
+     * @returns {boolean} true when stale cleanup wiped data since the last check
+     */
+    function consumeExpiryNotice() {
+        const hasNotice = getStorageValue(EXPIRY_NOTICE_KEY) === "1";
+        if (hasNotice) {
+            removeStorageValue(EXPIRY_NOTICE_KEY);
+        }
+        return hasNotice;
     }
 
     /**
@@ -101,6 +130,7 @@ export const Session = (() => {
 
     return {
         cleanIfStale,
+        consumeExpiryNotice,
         touch,
         waitForCleanup
     };

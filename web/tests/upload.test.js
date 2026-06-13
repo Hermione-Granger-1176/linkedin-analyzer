@@ -23,6 +23,8 @@ vi.mock("../src/data-cache.js", () => {
 
 vi.mock("../src/storage.js", () => ({
     Storage: {
+        isAvailable: true,
+        onPersistenceLost: vi.fn(),
         getAllFiles: vi.fn(),
         getAnalytics: vi.fn(),
         saveFile: vi.fn(),
@@ -157,6 +159,7 @@ describe("UploadPage", () => {
         Storage.saveFile.mockReset();
         Storage.saveAnalytics.mockReset();
         Storage.clearAll.mockReset();
+        Storage.onPersistenceLost.mockReset();
         AppRouter.navigate.mockReset();
         DataCache.get.mockReset();
         DataCache.set.mockReset();
@@ -189,6 +192,29 @@ describe("UploadPage", () => {
 
         expect(document.getElementById("uploadHint").textContent).toContain("CSV");
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
+    });
+
+    it("warns when storage degrades to memory mid-session", async () => {
+        UploadPage.init();
+
+        expect(Storage.onPersistenceLost).toHaveBeenCalledTimes(1);
+        const onLost = Storage.onPersistenceLost.mock.calls[0][0];
+        onLost(new Error("idb gone"));
+
+        expect(document.getElementById("uploadHint").textContent).toContain("won't persist");
+    });
+
+    it("shows a one-time notice when a stale session was wiped", async () => {
+        window.localStorage.setItem("linkedin-analyzer:expiry-notice", "1");
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("uploadHint").textContent).toContain(
+            "expired after 24 hours",
+        );
+
+        window.localStorage.removeItem("linkedin-analyzer:expiry-notice");
     });
 
     it("processes CSV uploads and enables analytics", async () => {
@@ -482,7 +508,7 @@ describe("UploadPage", () => {
 
     // --- Worker message type 'error' (handleWorkerMessage error branch) ------
 
-    it("handles error message type from worker without jobId (resets state)", async () => {
+    it("handles error message type from worker without jobId (does not reset all state)", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1002,7 +1028,7 @@ describe("UploadPage", () => {
 
     // --- Job timeout watchdog ------------------------------------------------
 
-    it("completes job and shows timeout hint when job times out", async () => {
+    it("restarts the worker and shows timeout hint when job times out", async () => {
         // Use fake timers to control the 45-second job timeout.
         // Use a counter-advancing rAF so animations terminate without real time.
         let rafCounter = 0;
@@ -1071,6 +1097,9 @@ describe("UploadPage", () => {
             "Processing took too long",
         );
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
+        // The wedged worker is torn down and a fresh one spun up, leaving no
+        // active jobs and the progress overlay hidden.
+        expect(document.getElementById("progressOverlay").hidden).toBe(true);
 
         globalThis.FileReader = originalFileReader;
         vi.useRealTimers();
@@ -1806,6 +1835,181 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain("Error saving");
 
         globalThis.FileReader = originalFileReader;
+    });
+
+    it("shows a quota-specific hint when the save fails with a wrapped QuotaExceededError", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: "col\nval",
+                onload: null,
+                onerror: null,
+                readAsText() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        // Mirror how Storage wraps the native DOMException inside a descriptive
+        // Error so the cause-chain walk is exercised.
+        const quota = new DOMException("quota", "QuotaExceededError");
+        Storage.saveFile.mockRejectedValue(new Error("IndexedDB transaction failed", { cause: quota }));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "messages",
+                    fileName: "Messages.csv",
+                    rowCount: 1,
+                    jobId: null,
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        expect(document.getElementById("uploadHint").textContent).toContain("Storage is full");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    // --- encoding fallback (UTF-8 -> windows-1252) ---------------------------
+
+    it("re-decodes with windows-1252 when the UTF-8 read has replacement characters", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsText(_file, encoding) {
+                    // UTF-8 read yields a replacement char; the retry decodes cleanly.
+                    this.result = encoding === "windows-1252" ? "Café" : "Caf�";
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFileCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "addFile",
+        );
+        expect(addFileCall[0].payload.csvText).toBe("Café");
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("uploadHint").textContent).toContain(
+            "decoded with a fallback",
+        );
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    /**
+     * Build a streaming File-like object whose stream yields the given byte chunks.
+     */
+    function makeStreamFile(name, chunks) {
+        let index = 0;
+        return {
+            name,
+            size: 6 * 1024 * 1024,
+            stream() {
+                return {
+                    getReader() {
+                        return {
+                            read() {
+                                if (index < chunks.length) {
+                                    return Promise.resolve({ done: false, value: chunks[index++] });
+                                }
+                                return Promise.resolve({ done: true, value: undefined });
+                            },
+                            cancel() {
+                                return Promise.resolve();
+                            },
+                        };
+                    },
+                };
+            },
+        };
+    }
+
+    it("streams large UTF-8 files without triggering the encoding fallback", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = makeStreamFile("Messages.csv", [new Uint8Array([99, 111, 108, 10, 118, 97, 108])]);
+        const event = new Event("drop");
+        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+        document.getElementById("multiDropZone").dispatchEvent(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFileCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "addFile",
+        );
+        expect(addFileCall[0].payload.csvText).toBe("col\nval");
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("uploadHint").textContent).toContain("File loaded successfully");
+    });
+
+    it("streams large non-UTF-8 files and falls back to windows-1252", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // 0xE9 is an invalid UTF-8 lead byte but decodes to "é" under windows-1252.
+        const file = makeStreamFile("Messages.csv", [new Uint8Array([0xe9])]);
+        const event = new Event("drop");
+        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+        document.getElementById("multiDropZone").dispatchEvent(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFileCall = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "addFile",
+        );
+        expect(addFileCall[0].payload.csvText).toBe("é");
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("uploadHint").textContent).toContain(
+            "decoded with a fallback",
+        );
     });
 
     // --- consumePendingFile by fileName (lines 564-568) ----------------------

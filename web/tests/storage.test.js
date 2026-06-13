@@ -223,8 +223,10 @@ describe("Storage", () => {
 
     describe("connection lifecycle", () => {
         it("memoizes a single database connection across operations", async () => {
-            // Earlier tests already opened the shared connection, so further ops
-            // must reuse it rather than calling indexedDB.open again.
+            // Open the shared connection within this test, then assert further
+            // ops reuse it rather than calling indexedDB.open again — keeping the
+            // test independent of execution order.
+            await Storage.getAllFiles();
             const openSpy = vi.spyOn(indexedDB, "open");
             await Storage.getAllFiles();
             await Storage.getAnalytics();

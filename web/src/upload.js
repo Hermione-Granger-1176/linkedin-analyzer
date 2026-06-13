@@ -659,9 +659,14 @@ export const UploadPage = (() => {
         }
 
         const bytes = concatChunks(chunks, totalBytes);
-        let text = new TextDecoder("utf-8").decode(bytes);
+        // Validate UTF-8 strictly (fatal) rather than scanning for U+FFFD: a file
+        // may legitimately contain U+FFFD, so only a genuine decode error should
+        // trigger the windows-1252 fallback (mirrors the CLI's latin-1 retry).
+        let text;
         let usedFallback = false;
-        if (hasReplacementChar(text)) {
+        try {
+            text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch {
             text = new TextDecoder("windows-1252").decode(bytes);
             usedFallback = true;
         }

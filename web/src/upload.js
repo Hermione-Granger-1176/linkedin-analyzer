@@ -551,6 +551,14 @@ export const UploadPage = (() => {
      * @returns {{text: string, usedFallback: boolean}}
      */
     function decodeBytes(bytes, fileName) {
+        if (typeof TextDecoder === "undefined") {
+            // The streaming path already routes around a missing TextDecoder; the
+            // FileReader path lands here, so fail with a clear, user-facing error
+            // instead of a bare ReferenceError from `new TextDecoder(...)`.
+            throw new Error(
+                `Cannot read "${fileName}": your browser is missing required text-decoding support. Please use a newer browser.`,
+            );
+        }
         let text;
         let usedFallback = false;
         try {

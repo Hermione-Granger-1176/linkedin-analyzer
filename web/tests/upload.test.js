@@ -1401,6 +1401,43 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("errors with a clear message when TextDecoder is unavailable", async () => {
+        const originalFileReader = globalThis.FileReader;
+        const originalTextDecoder = globalThis.TextDecoder;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    this.result = encodeBuf("col\nval");
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+        // Simulate a browser without TextDecoder support.
+        globalThis.TextDecoder = undefined;
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("text-decoding support");
+
+        globalThis.TextDecoder = originalTextDecoder;
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- oversize file warning -----------------------------------------------
 
     it("warns about large files (>25MB) but still processes them", async () => {

@@ -25,8 +25,8 @@ jobs:
           sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_REF_NAME}" --jq '.sha')"
           echo "Release tag ${GITHUB_REF_NAME} resolves to commit ${sha}"
           conclusion="$(gh api \
-            "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=CI%20result" \
-            --jq '.check_runs | sort_by(.started_at) | last | .conclusion // "missing"')"
+            "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?check_name=CI%20result&status=completed" \
+            --jq '.check_runs | sort_by(.completed_at) | last | .conclusion // "missing"')"
           echo "Latest 'CI result' conclusion: ${conclusion}"
           if [ "${conclusion}" != "success" ]; then
             echo "::error::CI result for ${sha} is '${conclusion}', refusing to publish."
@@ -101,7 +101,9 @@ jobs:
         id: image-meta
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          version="${{ github.event.release.tag_name }}"
+          # Docker tags keep the raw vX.Y.Z; build args/labels need a PEP 440 version.
+          tag_version="${{ github.event.release.tag_name }}"
+          version="${tag_version#v}"
           {
             echo "image=${image}"
             echo "version=${version}"
@@ -111,7 +113,7 @@ jobs:
           # Prereleases must never re-point the floating :latest tag.
           {
             echo "tags<<TAGS_EOF"
-            echo "${image}:${version}"
+            echo "${image}:${tag_version}"
             echo "${image}:sha-${{ github.sha }}"
             if [ "${{ github.event.release.prerelease }}" != "true" ]; then
               echo "${image}:latest"

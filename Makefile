@@ -291,7 +291,9 @@ git: ## Git commands (make git)
 
 branch: ## Create and switch to a new branch off main, or off base for a stacked branch (make branch name=X [base=branch])
 	@test -n "$(name)" || (printf 'Usage: make branch name=my-feature [base=other-branch]\n' >&2; exit 1)
-	git checkout "$(if $(base),$(base),main)" && git pull && git checkout -b "$(name)"
+	git checkout "$(if $(base),$(base),main)" && \
+	if git rev-parse --symbolic-full-name --abbrev-ref '@{u}' >/dev/null 2>&1; then git pull; fi && \
+	git checkout -b "$(name)"
 
 log: ## Show recent commit log
 	git log --oneline -20

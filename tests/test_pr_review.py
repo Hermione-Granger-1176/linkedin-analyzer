@@ -88,37 +88,58 @@ THREADS_PAYLOAD = {
 }
 
 
-COMMENTS_PAYLOAD = {
-    "data": {
-        "repository": {
-            "pullRequest": {
-                "reviewThreads": {
-                    "nodes": [
-                        {
-                            "comments": {
-                                "nodes": [
-                                    {
-                                        "id": "PRRC_first",
-                                        "body": "Original review note\nsecond line",
-                                        "url": "https://example/c1",
-                                        "author": {"login": "reviewer"},
+def _comments_page(
+    thread_id: str,
+    comment_nodes: list[dict[str, Any]],
+    *,
+    threads_next: bool = False,
+    threads_cursor: str | None = None,
+    comments_next: bool = False,
+    comments_cursor: str | None = None,
+) -> dict[str, Any]:
+    """Build one ``reviewThreads`` page response for the comments query."""
+    return {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "pageInfo": {"hasNextPage": threads_next, "endCursor": threads_cursor},
+                        "nodes": [
+                            {
+                                "id": thread_id,
+                                "comments": {
+                                    "pageInfo": {
+                                        "hasNextPage": comments_next,
+                                        "endCursor": comments_cursor,
                                     },
-                                    {
-                                        "id": "PRRC_reply",
-                                        "body": "Fixed it",
-                                        "url": "https://example/c2",
-                                        "author": None,
-                                    },
-                                ]
+                                    "nodes": comment_nodes,
+                                },
                             }
-                        },
-                        {"comments": {"nodes": []}},
-                    ]
+                        ],
+                    }
                 }
             }
         }
     }
-}
+
+
+COMMENTS_PAYLOAD = _comments_page(
+    "PRRT_a",
+    [
+        {
+            "id": "PRRC_first",
+            "body": "Original review note\nsecond line",
+            "url": "https://example/c1",
+            "author": {"login": "reviewer"},
+        },
+        {
+            "id": "PRRC_reply",
+            "body": "Fixed it",
+            "url": "https://example/c2",
+            "author": None,
+        },
+    ],
+)
 
 
 def test_parse_threads_maps_fields() -> None:
@@ -404,6 +425,57 @@ def test_list_comments_flattens_all_thread_comments() -> None:
     assert [comment.comment_id for comment in comments] == ["PRRC_first", "PRRC_reply"]
     assert comments[0].author == "reviewer"
     assert comments[1].author == "unknown"  # null author falls back
+
+
+def test_list_comments_paginates_threads_and_comments() -> None:
+    """list_comments pages both reviewThreads and a thread's overflow comments."""
+    thread_comments_page = {
+        "data": {
+            "node": {
+                "comments": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [
+                        {"id": "PRRC_a2", "body": "more", "url": "u", "author": {"login": "r"}}
+                    ],
+                }
+            }
+        }
+    }
+    pages = iter(
+        [
+            _comments_page(
+                "PRRT_a",
+                [{"id": "PRRC_a1", "body": "first", "url": "u", "author": {"login": "r"}}],
+                threads_next=True,
+                threads_cursor="TCUR",
+                comments_next=True,
+                comments_cursor="CCUR",
+            ),
+            thread_comments_page,
+            _comments_page(
+                "PRRT_b",
+                [{"id": "PRRC_b1", "body": "second", "url": "u", "author": {"login": "r"}}],
+            ),
+        ]
+    )
+    calls: list[list[str]] = []
+
+    def runner(cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = list(cmd)
+        calls.append(command)
+        if has("repo", "view")(command):
+            return completed_process(0, json.dumps({"nameWithOwner": "o/r"}))
+        if has("graphql")(command):
+            return completed_process(0, json.dumps(next(pages)))
+        raise AssertionError(command)
+
+    comments = pr_review.list_comments(7, run_fn=runner)
+
+    assert [comment.comment_id for comment in comments] == ["PRRC_a1", "PRRC_a2", "PRRC_b1"]
+    graphql_calls = [command for command in calls if has("graphql")(command)]
+    assert len(graphql_calls) == 3
+    assert any("after=CCUR" in command for command in graphql_calls)  # comment pagination
+    assert any("after=TCUR" in command for command in graphql_calls)  # thread pagination
 
 
 def test_format_comments_shows_first_line_only() -> None:

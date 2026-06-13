@@ -55,15 +55,31 @@ mutation($thread: ID!) {
 """
 
 _COMMENTS_QUERY = """
-query($owner: String!, $name: String!, $pr: Int!) {
+query($owner: String!, $name: String!, $pr: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $pr) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
+          id
           comments(first: 100) {
+            pageInfo { hasNextPage endCursor }
             nodes { id body url author { login } }
           }
         }
+      }
+    }
+  }
+}
+"""
+
+_THREAD_COMMENTS_QUERY = """
+query($thread: ID!, $after: String) {
+  node(id: $thread) {
+    ... on PullRequestReviewThread {
+      comments(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id body url author { login } }
       }
     }
   }
@@ -207,6 +223,41 @@ class ReviewComment:
     url: str
 
 
+def _parse_comment_nodes(nodes: list[Any]) -> list[ReviewComment]:
+    """Convert raw comment nodes into ``ReviewComment`` objects."""
+    comments: list[ReviewComment] = []
+    for comment in nodes:
+        author = comment.get("author") or {}
+        comments.append(
+            ReviewComment(
+                comment_id=str(comment["id"]),
+                author=str(author.get("login") or "unknown"),
+                body=str(comment.get("body") or ""),
+                url=str(comment.get("url") or ""),
+            )
+        )
+    return comments
+
+
+def _remaining_thread_comments(
+    thread_id: str, page_info: dict[str, Any], *, run_fn: RunFunction | None = None
+) -> list[ReviewComment]:
+    """Page a single thread's comments beyond the first 100 already collected."""
+    comments: list[ReviewComment] = []
+    after = page_info.get("endCursor")
+    while page_info.get("hasNextPage") and after:
+        node = gh_runner.graphql(
+            _THREAD_COMMENTS_QUERY,
+            variables={"thread": thread_id, "after": after},
+            run_fn=run_fn,
+        )["node"]
+        connection = node["comments"]
+        comments.extend(_parse_comment_nodes(connection["nodes"]))
+        page_info = connection["pageInfo"]
+        after = page_info.get("endCursor")
+    return comments
+
+
 def list_comments(
     pr: int | None = None, *, run_fn: RunFunction | None = None
 ) -> list[ReviewComment]:
@@ -214,29 +265,34 @@ def list_comments(
 
     Unlike ``list_threads`` (which keeps only each thread's first comment for a
     summary view), this flattens all comments so a specific reply can be
-    targeted by its node id, e.g. to delete a stray one.
+    targeted by its node id, e.g. to delete a stray one. Both the thread list
+    and each thread's comments are fully paginated, so "every" is literal even
+    past the 100-per-page GraphQL caps.
     """
     owner, name = _owner_name(run_fn=run_fn)
     pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
-    connection = _review_threads(
-        gh_runner.graphql(
-            _COMMENTS_QUERY,
-            variables={"owner": owner, "name": name, "pr": pr},
-            run_fn=run_fn,
-        )
-    )
+
     comments: list[ReviewComment] = []
-    for node in connection["nodes"]:
-        for comment in node.get("comments", {}).get("nodes", []):
-            author = comment.get("author") or {}
-            comments.append(
-                ReviewComment(
-                    comment_id=str(comment["id"]),
-                    author=str(author.get("login") or "unknown"),
-                    body=str(comment.get("body") or ""),
-                    url=str(comment.get("url") or ""),
+    after: str | None = None
+    while True:
+        variables: dict[str, object] = {"owner": owner, "name": name, "pr": pr}
+        if after is not None:
+            variables["after"] = after
+        connection = _review_threads(
+            gh_runner.graphql(_COMMENTS_QUERY, variables=variables, run_fn=run_fn)
+        )
+        for node in connection["nodes"]:
+            thread_comments = node["comments"]
+            comments.extend(_parse_comment_nodes(thread_comments["nodes"]))
+            comments.extend(
+                _remaining_thread_comments(
+                    str(node["id"]), thread_comments["pageInfo"], run_fn=run_fn
                 )
             )
+        page_info = connection["pageInfo"]
+        after = page_info.get("endCursor")
+        if not page_info.get("hasNextPage") or not after:
+            break
     return comments
 
 

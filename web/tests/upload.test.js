@@ -1366,6 +1366,41 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("errors when the read result is a truthy non-buffer value", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    // A truthy result without a numeric byteLength (e.g. a stray
+                    // string) must also be rejected, not coerced to empty bytes.
+                    this.result = "not-a-buffer";
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- oversize file warning -----------------------------------------------
 
     it("warns about large files (>25MB) but still processes them", async () => {

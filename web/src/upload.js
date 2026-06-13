@@ -649,13 +649,6 @@ export const UploadPage = (() => {
 
                 chunks.push(chunk.value);
                 totalBytes += chunk.value.byteLength;
-                // One byte yields at most one character, so bail before decoding
-                // once the byte count alone exceeds the text limit.
-                if (totalBytes > MAX_CSV_CHARS) {
-                    const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-                    await reader.cancel();
-                    throw new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`);
-                }
             }
 
             if (timedOut) {
@@ -671,6 +664,14 @@ export const UploadPage = (() => {
         if (hasReplacementChar(text)) {
             text = new TextDecoder("windows-1252").decode(bytes);
             usedFallback = true;
+        }
+        // Enforce the limit on decoded character count (not byte count), so
+        // multi-byte UTF-8 exports are accepted up to MAX_CSV_CHARS characters,
+        // matching the FileReader path. Peak memory stays bounded because file
+        // size is already capped at MAX_FILE_BYTES upstream.
+        if (text.length > MAX_CSV_CHARS) {
+            const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
+            throw new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`);
         }
         return { text, usedFallback };
     }

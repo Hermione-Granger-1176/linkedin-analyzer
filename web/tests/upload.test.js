@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MAX_CSV_CHARS } from "../src/constants.js";
+
 import { createCanvas, mockMatchMedia, setupDom } from "./helpers/dom.js";
 
 vi.mock("roughjs/bundled/rough.esm.js", () => ({
@@ -2010,6 +2012,25 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain(
             "decoded with a fallback",
         );
+    });
+
+    it("rejects a streamed file whose decoded length exceeds the character limit", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // One byte over the character limit: bytes (NUL) decode 1:1 to characters,
+        // so the post-decode check (not the byte count) is what trips.
+        const oversized = new Uint8Array(MAX_CSV_CHARS + 1);
+        const file = makeStreamFile("Messages.csv", [oversized]);
+        const event = new Event("drop");
+        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+        document.getElementById("multiDropZone").dispatchEvent(event);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+        ).toBe(false);
+        expect(document.getElementById("uploadHint").textContent).toContain("text limit");
     });
 
     // --- consumePendingFile by fileName (lines 564-568) ----------------------

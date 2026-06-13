@@ -304,7 +304,7 @@ diff-staged: ## Show staged changes
 
 # ─── Pull requests @pr ────────────────────────────────────────────────────────────
 
-.PHONY: pr pr-create pr-list pr-status pr-checks pr-diff pr-comments pr-comment pr-review-comments pr-reply pr-resolve pr-address pr-summary pr-merge pr-merge-admin pr-reviewers pr-label pr-close
+.PHONY: pr pr-create pr-edit pr-list pr-status pr-checks pr-diff pr-comments pr-comment pr-review-comments pr-reply pr-resolve pr-address pr-comments-list pr-comment-delete pr-summary pr-merge pr-merge-admin pr-reviewers pr-label pr-close
 
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
@@ -349,6 +349,13 @@ pr-resolve: ## Resolve a review thread (make pr-resolve thread=PRRT_...)
 pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT_... body="msg")
 	@test -n "$(thread)" -a -n "$(body)" || (printf 'Usage: make pr-address thread=PRRT_... body="Fixed in abc123"\n' >&2; exit 1)
 	@$(GH) address --thread "$(thread)" --body "$(body)"
+
+pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
+	@$(GH) list-comments $(if $(pr_num),--pr $(pr_num))
+
+pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete comment=PRRC_...)
+	@test -n "$(comment)" || (printf 'Usage: make pr-comment-delete comment=PRRC_...\n' >&2; exit 1)
+	@$(GH) delete-comment --comment "$(comment)"
 
 pr-summary: ## One-screen PR overview: state, CI rollup, open threads (make pr-summary [pr_num=N])
 	@$(GH) summary $(if $(pr_num),--pr $(pr_num))

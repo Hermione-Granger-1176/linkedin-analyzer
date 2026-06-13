@@ -10,7 +10,7 @@ WORKDIR /build
 COPY pyproject.toml README.md /build/
 COPY src /build/src
 
-RUN python -m pip install --upgrade pip build \
+RUN python -m pip install --upgrade pip==26.1.2 build==1.5.0 \
     && SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m build --wheel --outdir /dist
 
 FROM python:3.14-slim@sha256:c845af9399020c7e562969a13689e929074a10fd057acd1b1fad06a2fb068e97 AS runtime

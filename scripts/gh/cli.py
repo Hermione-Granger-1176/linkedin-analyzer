@@ -43,6 +43,21 @@ def _build_parser() -> argparse.ArgumentParser:
     address_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
     address_parser.add_argument("--body", required=True, help="Reply text")
 
+    list_comments_parser = subparsers.add_parser(
+        "list-comments", help="List individual review comments with node ids"
+    )
+    list_comments_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    list_comments_parser.add_argument(
+        "--json", action="store_true", dest="as_json", help="Emit machine-readable JSON"
+    )
+
+    delete_comment_parser = subparsers.add_parser(
+        "delete-comment", help="Delete a review comment by its node id"
+    )
+    delete_comment_parser.add_argument(
+        "--comment", required=True, help="Comment node id (PRRC_...)"
+    )
+
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
     summary_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
 
@@ -85,6 +100,23 @@ def _handle_address(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_list_comments(args: argparse.Namespace) -> int:
+    """List individual review comments as text or JSON."""
+    comments = pr_review.list_comments(args.pr)
+    if args.as_json:
+        print(json.dumps([asdict(comment) for comment in comments]))
+    else:
+        print(pr_review.format_comments(comments))
+    return 0
+
+
+def _handle_delete_comment(args: argparse.Namespace) -> int:
+    """Delete a single review comment by node id."""
+    pr_review.delete_review_comment(args.comment)
+    print(f"Deleted {args.comment}")
+    return 0
+
+
 def _handle_summary(args: argparse.Namespace) -> int:
     """Print the PR overview."""
     print(pr_review.pr_summary(args.pr))
@@ -102,6 +134,8 @@ COMMAND_HANDLERS = {
     "reply": _handle_reply,
     "resolve": _handle_resolve,
     "address": _handle_address,
+    "list-comments": _handle_list_comments,
+    "delete-comment": _handle_delete_comment,
     "summary": _handle_summary,
     "ci-failures": _handle_ci_failures,
 }

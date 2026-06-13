@@ -225,16 +225,19 @@ export const Storage = (() => {
      * @param {IDBDatabase} db - The shared database connection
      * @param {string} storeName - Name of the object store
      * @param {IDBTransactionMode} mode - Transaction mode ('readonly' or 'readwrite')
-     * @param {function(IDBObjectStore): *} callback - Function receiving the store
-     * @returns {Promise<*>} Resolves with the callback's return value on transaction complete
+     * @param {function(IDBObjectStore): void} callback - Performs the write on the store
+     * @returns {Promise<void>} Resolves when the transaction completes
      */
     function withStore(db, storeName, mode, callback) {
         return new Promise((resolve, reject) => {
             const tx = db.transaction(storeName, mode);
             const store = tx.objectStore(storeName);
-            const result = callback(store);
+            callback(store);
             const rejectFailure = () => reject(idbFailure(tx.error, "IndexedDB transaction failed"));
-            tx.oncomplete = () => resolve(result);
+            // Resolve void on completion so the IndexedDB path matches the memory
+            // fallback and the documented Promise<void> contract (rather than
+            // leaking the IDBRequest returned by store.put).
+            tx.oncomplete = () => resolve();
             tx.onerror = rejectFailure;
             tx.onabort = rejectFailure;
         });

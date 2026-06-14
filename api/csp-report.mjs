@@ -127,10 +127,12 @@ function parseCspReport(body) {
     return null;
 }
 
-// Real CSP keyword sources (the non-URL values browsers put in blocked-uri).
+// Genuine CSP tokens: directive names and the non-URL keyword sources browsers
+// put in blocked-uri (inline, eval, self, …) are all lowercase letters/hyphens.
 const CSP_KEYWORD = /^[a-z][a-z-]*$/;
-// Control characters and newlines, collapsed to spaces to defeat log injection.
-const CONTROL_CHARS = /[\u0000-\u001f\u007f]+/g;
+// Control characters, ASCII newlines, and the Unicode line/paragraph separators,
+// collapsed to spaces so an attacker cannot inject extra or multi-line log entries.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f\u2028\u2029]+/g;
 
 /**
  * Reduce an attacker-influenced field to a single safe log token: strip control
@@ -152,14 +154,17 @@ function sanitizeToken(value, maxLength) {
  * @returns {string} A summary like `CSP violation: img-src blocked evil.example`.
  */
 function summarizeReport(report) {
-    const directive = sanitizeToken(
+    const rawDirective = sanitizeToken(
         report["effective-directive"] ||
             report.effectiveDirective ||
             report["violated-directive"] ||
             report.violatedDirective ||
-            "unknown",
+            "",
         64,
     );
+    // Real directive names are lowercase letters/hyphens; reject anything else
+    // (junk, coerced objects, or a value sanitized down to empty) as "unknown".
+    const directive = CSP_KEYWORD.test(rawDirective) ? rawDirective : "unknown";
     const blockedUri = report["blocked-uri"] || report.blockedURL || "";
     let blocked = "(none)";
     if (typeof blockedUri === "string" && blockedUri) {

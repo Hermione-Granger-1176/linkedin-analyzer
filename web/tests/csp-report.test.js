@@ -238,6 +238,18 @@ describe("csp-report handler", () => {
         expect(res.statusCode).toBe(204);
     });
 
+    it("drops a reports-API array that has no csp-violation entry", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(['[{"type":"deprecation","body":{}}]']), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
     it("drops a JSON primitive body without forwarding", async () => {
         process.env.CSP_REPORT_URI = "https://collector.example/report";
         const fetchMock = vi.fn().mockResolvedValue({});
@@ -293,10 +305,12 @@ describe("csp-report handler", () => {
         );
 
         const summary = logSpy.mock.calls[0][0];
-        // Attacker-supplied path/query is replaced; the line stays single and clean.
-        expect(summary).toBe("CSP violation: img-src injected log line blocked (non-url)");
+        // The newline-bearing directive fails the keyword check (-> "unknown") and the
+        // path/query blocked-uri becomes "(non-url)"; the line stays single and clean.
+        expect(summary).toBe("CSP violation: unknown blocked (non-url)");
         expect(summary).not.toContain("secret");
         expect(summary).not.toContain("tracker.gif");
+        expect(summary).not.toContain("injected");
         expect(summary).not.toContain("\n");
         logSpy.mockRestore();
     });

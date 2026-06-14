@@ -859,6 +859,8 @@ describe("UploadPage", () => {
     // --- scheduleAnalyticsWorkerPrime idle path (setTimeout fallback) -------
 
     it("schedules prime via setTimeout when requestIdleCallback is unavailable", async () => {
+        // The idle prime path now runs only on a worker restart (the page load no
+        // longer primes; the dashboard reads the persisted analyticsBase directly).
         // Counter-advancing rAF so animations terminate without real time under fake timers.
         let rafCounter = 0;
         window.requestAnimationFrame = vi.fn((cb) => {
@@ -877,11 +879,10 @@ describe("UploadPage", () => {
         ({ Storage } = await import("../src/storage.js"));
         ({ UploadPage } = await import("../src/upload.js"));
 
-        Storage.getAllFiles.mockResolvedValue([
-            { type: "shares", rowCount: 1, text: "header\nrow", updatedAt: 50 },
-        ]);
+        const cachedFiles = [{ type: "shares", rowCount: 1, text: "header\nrow", updatedAt: 50 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getAnalytics.mockResolvedValue(null);
-        DataCache.get.mockImplementation(() => null);
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
 
         vi.useFakeTimers();
 
@@ -890,16 +891,18 @@ describe("UploadPage", () => {
         // Flush the restoreState async chain
         await vi.runAllTimersAsync();
 
+        // A worker-level error restarts the worker and re-primes it via the idle path.
+        workerInstance.listeners.error[0](new Event("error"));
+        await vi.runAllTimersAsync();
+
         // Advance past setTimeout(250ms) used for priming
         vi.advanceTimersByTime(300);
         await vi.runAllTimersAsync();
 
         // Worker should receive restoreFiles after the timer fires
-        if (workerInstance) {
-            const calls = workerInstance.postMessage.mock.calls;
-            const restoreCall = calls.find((c) => c[0] && c[0].type === "restoreFiles");
-            expect(restoreCall).toBeTruthy();
-        }
+        const calls = workerInstance.postMessage.mock.calls;
+        const restoreCall = calls.find((c) => c[0] && c[0].type === "restoreFiles");
+        expect(restoreCall).toBeTruthy();
 
         vi.useRealTimers();
     });
@@ -907,8 +910,8 @@ describe("UploadPage", () => {
     // --- scheduleAnalyticsWorkerPrime via requestIdleCallback ----------------
 
     it("schedules prime via requestIdleCallback when available", async () => {
-        // Use a deferred idle callback so we can verify the branch is taken
-        // and then fire it manually.
+        // The idle prime path now runs only on a worker restart. Use a deferred
+        // idle callback so we can verify the branch is taken and fire it manually.
         let idleCb = null;
         window.requestAnimationFrame = vi.fn((cb) => {
             cb(0);
@@ -929,13 +932,16 @@ describe("UploadPage", () => {
         ({ Storage } = await import("../src/storage.js"));
         ({ UploadPage } = await import("../src/upload.js"));
 
-        Storage.getAllFiles.mockResolvedValue([
-            { type: "shares", rowCount: 2, text: "head\nr1\nr2", updatedAt: 200 },
-        ]);
+        const cachedFiles = [{ type: "shares", rowCount: 2, text: "head\nr1\nr2", updatedAt: 200 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getAnalytics.mockResolvedValue(null);
-        DataCache.get.mockImplementation(() => null);
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
 
         UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // A worker-level error restarts the worker and schedules an idle re-prime.
+        workerInstance.listeners.error[0](new Event("error"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         // requestIdleCallback should have been called during scheduleAnalyticsWorkerPrime
@@ -948,11 +954,9 @@ describe("UploadPage", () => {
 
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        if (workerInstance) {
-            const calls = workerInstance.postMessage.mock.calls;
-            const restoreCall = calls.find((c) => c[0] && c[0].type === "restoreFiles");
-            expect(restoreCall).toBeTruthy();
-        }
+        const calls = workerInstance.postMessage.mock.calls;
+        const restoreCall = calls.find((c) => c[0] && c[0].type === "restoreFiles");
+        expect(restoreCall).toBeTruthy();
     });
 
     // --- scheduleAnalyticsWorkerPrime: same signature → no re-prime ----------
@@ -1028,6 +1032,137 @@ describe("UploadPage", () => {
 
         // Count should not have grown (same signature)
         expect(secondRestoreCount).toBe(firstRestoreCount);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("primes the worker with stored shares/comments before a new upload's addFile", async () => {
+        // WP5.3: the page load no longer primes the worker; instead an upload
+        // seeds the worker with the already-stored shares/comments first, so a
+        // new analytics file recomputes from the full set. The restoreFiles must
+        // therefore reach the worker before the addFile for the new upload.
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const cachedFiles = [
+            { type: "shares", rowCount: 2, text: "shares-head\nr1\nr2", updatedAt: 10 },
+            { type: "comments", rowCount: 3, text: "comments-head\nc1\nc2\nc3", updatedAt: 20 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        const restoreIndex = types.indexOf("restoreFiles");
+        const addIndex = types.indexOf("addFile");
+        // The pre-upload prime seeds existing shares+comments...
+        expect(restoreIndex).toBeGreaterThanOrEqual(0);
+        const restoreCall = workerInstance.postMessage.mock.calls[restoreIndex][0];
+        expect(restoreCall.payload.sharesCsv).toContain("shares-head");
+        expect(restoreCall.payload.commentsCsv).toContain("comments-head");
+        // ...and lands before the new file's addFile so the recompute sees both.
+        expect(addIndex).toBeGreaterThan(restoreIndex);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("loads stored files for priming when an upload races ahead of the cache", async () => {
+        // restoreState() is fired but not awaited in init(), so a fast upload can
+        // run before "storage:files" is cached. The prime must then read storage
+        // directly so the stored shares are still seeded before the new addFile.
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const storedFiles = [
+            { type: "shares", rowCount: 2, text: "shares-head\nr1\nr2", updatedAt: 10 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(storedFiles);
+        // Cache miss for "storage:files" forces the storage fallback in the prime.
+        DataCache.get.mockImplementation(() => null);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        const restoreIndex = types.indexOf("restoreFiles");
+        const addIndex = types.indexOf("addFile");
+        expect(restoreIndex).toBeGreaterThanOrEqual(0);
+        expect(workerInstance.postMessage.mock.calls[restoreIndex][0].payload.sharesCsv).toContain(
+            "shares-head",
+        );
+        expect(addIndex).toBeGreaterThan(restoreIndex);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("still uploads when priming's storage read fails", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        DataCache.get.mockImplementation(() => null);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Make the prime's storage fallback reject; the upload must still proceed.
+        Storage.getAllFiles.mockRejectedValueOnce(new Error("storage offline"));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        // No restoreFiles (prime failed), but the new file's addFile still goes out.
+        expect(types).toContain("addFile");
 
         globalThis.FileReader = originalFileReader;
     });
@@ -3148,55 +3283,7 @@ describe("UploadPage", () => {
         // No crash = pass
     });
 
-    // --- lines 796, 816: scheduleAnalyticsWorkerPrime / primeAnalyticsWorkerNow guards ---
-    // Line 796: primeTimerId is already set → early return (no double-schedule).
-    // Line 816: primeAnalyticsWorkerNow called with no worker → early return.
-
-    it("scheduleAnalyticsWorkerPrime skips scheduling when a timer is already pending", async () => {
-        // Remove requestIdleCallback to force setTimeout path
-        const savedRIC = window.requestIdleCallback;
-        window.requestIdleCallback = undefined;
-
-        vi.useFakeTimers();
-        let rafCounter = 0;
-        window.requestAnimationFrame = vi.fn((cb) => {
-            cb(rafCounter++ * 700);
-            return rafCounter;
-        });
-        window.cancelAnimationFrame = vi.fn();
-
-        setupUploadDom();
-        vi.resetModules();
-        ({ UploadPage } = await import("../src/upload.js"));
-        ({ Storage } = await import("../src/storage.js"));
-        ({ DataCache } = await import("../src/data-cache.js"));
-        ({ AppRouter } = await import("../src/router.js"));
-
-        Storage.getAllFiles.mockResolvedValue([
-            { type: "shares", name: "Shares.csv", rowCount: 1, text: "col\nval", updatedAt: 1 },
-        ]);
-        Storage.getAnalytics.mockResolvedValue(null);
-        DataCache.get.mockImplementation(() => null);
-
-        UploadPage.init();
-        await vi.runAllTimersAsync();
-
-        // First restoreState calls scheduleAnalyticsWorkerPrime with idle priority
-        // which sets primeTimerId. A second call with the same non-identical signature
-        // should hit line 796 (primeTimerId already set → return).
-        // Trigger it by calling onRouteChange while restorePromise is still active.
-        // The idle prime timer is now pending. Call onRouteChange again —
-        // syncStatusFromCache → restoreState → scheduleAnalyticsWorkerPrime with same
-        // shares file → primeTimerId set → skips (line 796).
-        // This is hard to observe directly; just verify no double postMessage fires.
-        const postCalls = workerInstance.postMessage.mock.calls.length;
-        await vi.runAllTimersAsync();
-        // No extra postMessages beyond the initial ones
-        expect(workerInstance.postMessage.mock.calls.length).toBeLessThanOrEqual(postCalls + 2);
-
-        vi.useRealTimers();
-        window.requestIdleCallback = savedRIC;
-    });
+    // --- primeAnalyticsWorkerNow guard: no worker → early return -------------
 
     it("primeAnalyticsWorkerNow returns early when worker is null", async () => {
         // Force Worker constructor to throw so worker stays null
@@ -3250,23 +3337,27 @@ describe("UploadPage", () => {
         ({ DataCache } = await import("../src/data-cache.js"));
         ({ AppRouter } = await import("../src/router.js"));
 
-        // Provide shares data so restoreState schedules a prime via setTimeout
-        Storage.getAllFiles.mockResolvedValue([
+        // Provide cached shares so a worker restart schedules a prime via setTimeout
+        const cachedFiles = [
             { type: "shares", name: "Shares.csv", rowCount: 1, text: "col\nval", updatedAt: 1 },
-        ]);
+        ];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getAnalytics.mockResolvedValue(null);
-        DataCache.get.mockImplementation(() => null);
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
         Storage.clearAll.mockResolvedValue();
 
         UploadPage.init();
-        // Let Promises resolve (restoreState) WITHOUT firing timers, so primeTimerId stays set
-        await Promise.resolve();
+        await vi.runAllTimersAsync();
+
+        // A worker restart schedules an idle (setTimeout) prime; don't fire it, so
+        // primeTimerId stays set for clearPrimeSchedule to cancel.
+        workerInstance.listeners.error[0](new Event("error"));
         await Promise.resolve();
         await Promise.resolve();
 
         const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
 
-        // clearAll → clearPrimeSchedule() → clearTimeout(primeTimerId) lines 831-832
+        // clearAll → clearPrimeSchedule() → clearTimeout(primeTimerId)
         document.getElementById("clearAllBtn").click();
         await vi.runAllTimersAsync();
 
@@ -3292,22 +3383,24 @@ describe("UploadPage", () => {
         ({ DataCache } = await import("../src/data-cache.js"));
         ({ AppRouter } = await import("../src/router.js"));
 
-        Storage.getAllFiles.mockResolvedValue([
+        const cachedFiles = [
             { type: "shares", name: "Shares.csv", rowCount: 1, text: "col\nval", updatedAt: 1 },
-        ]);
+        ];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getAnalytics.mockResolvedValue(null);
-        DataCache.get.mockImplementation(() => null);
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
         Storage.clearAll.mockResolvedValue();
 
         UploadPage.init();
-        // Let Promises resolve so restoreState sets primeIdleId = 42
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // A worker restart schedules an idle prime, setting primeIdleId = 42.
+        workerInstance.listeners.error[0](new Event("error"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         const cancelIdleSpy = vi.spyOn(window, "cancelIdleCallback");
 
-        // clearAll → clearPrimeSchedule → cancelIdleCallback(42) line 835
+        // clearAll → clearPrimeSchedule → cancelIdleCallback(42)
         document.getElementById("clearAllBtn").click();
         await new Promise((resolve) => setTimeout(resolve, 0));
 

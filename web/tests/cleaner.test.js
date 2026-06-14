@@ -547,4 +547,64 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
         expect(result.cleanedData[0].ShareCommentary).toBe("line one\nline two");
     });
+
+    // ── process() auto-detect prefix pre-pass (large files) ──────────────────
+    describe("auto-detect prefix pre-pass", () => {
+        const SHARES_HEADER = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility";
+
+        /**
+         * Build a shares CSV with enough rows to exceed the 64KB prefix
+         * threshold so process("auto") takes the prefix pre-pass fast path.
+         * @param {number} rows - Number of data rows to generate
+         * @returns {string}
+         */
+        function buildLargeSharesCsv(rows) {
+            const lines = [SHARES_HEADER];
+            for (let i = 0; i < rows; i += 1) {
+                lines.push(
+                    `2025-01-01 10:00:00 UTC,https://linkedin.com/in/post${i},Commentary number ${i} with padding text,,,MEMBER_NETWORK`,
+                );
+            }
+            return lines.join("\n");
+        }
+
+        it("detects a large file from its header prefix without full multi-type parsing", () => {
+            const csv = buildLargeSharesCsv(1200);
+            expect(csv.length).toBeGreaterThan(64 * 1024);
+
+            const result = LinkedInCleaner.process(csv, "auto");
+
+            expect(result.success).toBe(true);
+            expect(result.fileType).toBe("shares");
+            expect(result.detectedType).toBe("shares");
+            expect(result.rowCount).toBe(1200);
+        });
+
+        it("falls back to full detection when the prefix matches no known type", () => {
+            const lines = ["Alpha,Beta,Gamma"];
+            for (let i = 0; i < 1500; i += 1) {
+                lines.push(`value-${i},other-${i},extra-${i} with some padding text here`);
+            }
+            const csv = lines.join("\n");
+            expect(csv.length).toBeGreaterThan(64 * 1024);
+
+            const result = LinkedInCleaner.process(csv, "auto");
+
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(/auto-detect/i);
+        });
+
+        it("falls back when the prefix matches but the full file fails to parse", () => {
+            // The prefix (first 64KB) is clean shares rows, so it detects shares;
+            // a giant field placed past the prefix makes the full parse error, so
+            // the fast path is abandoned for full detection (which also errors).
+            const csv = `${buildLargeSharesCsv(1200)}\n2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,"${"x".repeat(200001)}",,,MEMBER_NETWORK`;
+            expect(csv.indexOf("x".repeat(200001))).toBeGreaterThan(64 * 1024);
+
+            const result = LinkedInCleaner.process(csv, "auto");
+
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(/too large/i);
+        });
+    });
 });

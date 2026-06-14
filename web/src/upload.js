@@ -8,7 +8,11 @@ import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
-import { parseAnalyticsWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
+import {
+    parseAnalyticsWorkerMessage,
+    parseStoredUploadFile,
+    toStoredFileMetadata,
+} from "./worker-contracts.js";
 
 export const UploadPage = (() => {
     "use strict";
@@ -283,8 +287,8 @@ export const UploadPage = (() => {
             await waitForSessionCleanup();
             updateOfflineBanner();
             const files = await Storage.getAllFiles();
-            DataCache.set("storage:files", files);
             const fileMap = getFileMap(files);
+            DataCache.set("storage:files", files.map(toStoredFileMetadata));
             // Intentionally do NOT prime the worker on load: the dashboard reads
             // the persisted analyticsBase directly and never needs the worker's
             // raw shares/comments. Only a fresh upload (which recomputes the base)
@@ -894,7 +898,7 @@ export const UploadPage = (() => {
         DataCache.invalidate("messages:");
 
         const files = await Storage.getAllFiles();
-        DataCache.set("storage:files", files);
+        DataCache.set("storage:files", files.map(toStoredFileMetadata));
         syncTypeSpecificFileCache(fileType, files);
 
         if (analyticsBase) {
@@ -923,7 +927,8 @@ export const UploadPage = (() => {
             return;
         }
 
-        DataCache.set(key, match);
+        // Cache metadata only; the messages/connections text is loaded on demand.
+        DataCache.set(key, toStoredFileMetadata(match));
     }
 
     /**
@@ -1216,33 +1221,39 @@ export const UploadPage = (() => {
     async function primeWorkerFromStoredFiles() {
         let cachedFiles = DataCache.get("storage:files");
         if (!cachedFiles) {
-            cachedFiles = await Storage.getAllFiles();
+            const files = await Storage.getAllFiles();
+            cachedFiles = files.map(toStoredFileMetadata);
             DataCache.set("storage:files", cachedFiles);
         }
-        scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
+        // Await the prime so its restoreFiles is posted (after loading the text
+        // from storage) before processFiles posts any addFile — preserving the
+        // "recompute from the full set" guarantee now that priming is async.
+        await scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
     }
 
     /**
      * Seed worker with existing shares/comments datasets for accurate recompute.
-     * Uses idle scheduling unless priority is immediate.
+     * Decides whether to prime from file metadata (presence + a row/updatedAt
+     * signature); the CSV text itself is loaded from storage only when the prime
+     * actually fires (see primeAnalyticsWorkerNow). Uses idle scheduling unless
+     * priority is immediate, in which case it returns the prime promise so callers
+     * can await the restoreFiles being posted.
      * @param {{shares: object|null, comments: object|null}} fileMap - Stored files map
      * @param {{priority?: 'idle'|'immediate'}} [options] - Scheduling options
-     * @returns {void}
+     * @returns {Promise<void>|void}
      */
     function scheduleAnalyticsWorkerPrime(fileMap, options) {
         if (!worker) {
-            return;
+            return undefined;
         }
 
         const sharesFile = fileMap.shares || null;
         const commentsFile = fileMap.comments || null;
-        const sharesCsv = sharesFile ? sharesFile.text : "";
-        const commentsCsv = commentsFile ? commentsFile.text : "";
-        if (!sharesCsv && !commentsCsv) {
+        if (!sharesFile && !commentsFile) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
             clearPrimeSchedule();
-            return;
+            return undefined;
         }
 
         const sharesStamp = sharesFile
@@ -1255,15 +1266,14 @@ export const UploadPage = (() => {
         if (signature === lastPrimedSignature) {
             pendingPrimePayload = null;
             clearPrimeSchedule();
-            return;
+            return undefined;
         }
 
-        pendingPrimePayload = { sharesCsv, commentsCsv, signature };
+        pendingPrimePayload = { signature };
         const priority = options && options.priority ? options.priority : "idle";
         if (priority === "immediate") {
             clearPrimeSchedule();
-            primeAnalyticsWorkerNow();
-            return;
+            return primeAnalyticsWorkerNow();
         }
 
         // Cancel any in-flight idle/timeout prime before scheduling a fresh one so a
@@ -1279,27 +1289,52 @@ export const UploadPage = (() => {
                 },
                 { timeout: 1500 },
             );
-            return;
+            return undefined;
         }
 
         primeTimerId = window.setTimeout(() => {
             primeTimerId = null;
             primeAnalyticsWorkerNow();
         }, 250);
+        return undefined;
     }
 
-    /** Prime analytics worker immediately with pending payload when available. */
-    function primeAnalyticsWorkerNow() {
+    /**
+     * Load the pending shares/comments text from storage and post it to the
+     * worker. Text is fetched here (not held in the file cache) so large exports
+     * stay in IndexedDB. Best-effort: a load failure is logged and skipped.
+     * @returns {Promise<void>}
+     */
+    async function primeAnalyticsWorkerNow() {
         if (!worker || !pendingPrimePayload) {
             return;
         }
-        const payload = pendingPrimePayload;
+        const { signature } = pendingPrimePayload;
         pendingPrimePayload = null;
-        lastPrimedSignature = payload.signature;
 
+        let sharesCsv = "";
+        let commentsCsv = "";
+        try {
+            const [sharesFile, commentsFile] = await Promise.all([
+                Storage.getFile("shares"),
+                Storage.getFile("comments"),
+            ]);
+            sharesCsv = sharesFile && sharesFile.text ? sharesFile.text : "";
+            commentsCsv = commentsFile && commentsFile.text ? commentsFile.text : "";
+        } catch (error) {
+            // Leave lastPrimedSignature unchanged so a later prime can retry.
+            captureError(error, { module: "upload", operation: "prime-load-text" });
+            return;
+        }
+
+        // The worker may have been torn down (clear/restart) during the async load.
+        if (!worker) {
+            return;
+        }
+        lastPrimedSignature = signature;
         worker.postMessage({
             type: "restoreFiles",
-            payload: { sharesCsv: payload.sharesCsv, commentsCsv: payload.commentsCsv },
+            payload: { sharesCsv, commentsCsv },
         });
     }
 

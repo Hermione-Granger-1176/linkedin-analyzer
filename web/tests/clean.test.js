@@ -31,7 +31,7 @@ vi.mock("../src/session.js", () => ({
 }));
 
 vi.mock("../src/storage.js", () => ({
-    Storage: { getAllFiles: vi.fn() },
+    Storage: { getAllFiles: vi.fn(), getFile: vi.fn() },
 }));
 
 vi.mock("../src/sentry.js", () => ({
@@ -77,6 +77,9 @@ describe("CleanPage", () => {
         ({ captureError } = await import("../src/sentry.js"));
 
         DataCache.get.mockReturnValue(null);
+        // renderPreview loads the selected file's text on demand; the parser is
+        // mocked, so the text content is irrelevant as long as the load resolves.
+        Storage.getFile.mockResolvedValue({ text: "csv" });
         LinkedInCleaner.process.mockReset();
         ExcelGenerator.generateAndDownload.mockReset();
         ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
@@ -377,6 +380,24 @@ describe("CleanPage", () => {
         expect(document.getElementById("cleanErrorText").textContent).toContain(
             "Unable to parse file",
         );
+        expect(captureError).toHaveBeenCalled();
+    });
+
+    it("shows load error state when the on-demand text read fails", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+        ]);
+        // The metadata loads, but loading the selected file's text for preview fails.
+        Storage.getFile.mockRejectedValue(new Error("idb-read-failed"));
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to load file",
+        );
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
         expect(captureError).toHaveBeenCalled();
     });
 });

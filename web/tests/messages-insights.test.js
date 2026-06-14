@@ -31,7 +31,7 @@ vi.mock("../src/session.js", () => ({
 }));
 
 vi.mock("../src/storage.js", () => ({
-    Storage: { getAllFiles: vi.fn() },
+    Storage: { getAllFiles: vi.fn(), getFile: vi.fn() },
 }));
 
 vi.mock("../src/cleaner.js", () => ({
@@ -175,6 +175,10 @@ describe("MessagesPage", () => {
         // override this before calling onRouteChange / loadData.
         Storage.getAllFiles.mockReset();
         Storage.getAllFiles.mockResolvedValue([]);
+        // loadData loads the messages/connections text on demand (caches hold
+        // metadata only); the parser is mocked, so any non-empty text resolves.
+        Storage.getFile.mockReset();
+        Storage.getFile.mockResolvedValue({ text: "csv-content" });
     });
 
     // -------------------------------------------------------------------------
@@ -1309,11 +1313,12 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "huge.csv",
-            text: "a".repeat(5 * 1024 * 1024 + 1),
             updatedAt: 150,
             rowCount: 100000,
         };
         DataCache.set("storage:file:messages", messagesFile);
+        // The cache holds metadata; the large text is loaded on demand from storage.
+        Storage.getFile.mockResolvedValue({ text: "a".repeat(5 * 1024 * 1024 + 1) });
 
         MessagesPage.init();
         MessagesPage.onRouteChange({});

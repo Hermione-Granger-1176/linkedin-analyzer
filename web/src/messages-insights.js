@@ -11,7 +11,11 @@ import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
 import { reportPerformanceMeasure } from "./telemetry.js";
-import { parseMessagesWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
+import {
+    parseMessagesWorkerMessage,
+    parseStoredUploadFile,
+    toStoredFileMetadata,
+} from "./worker-contracts.js";
 
 export const MessagesPage = (() => {
     "use strict";
@@ -385,7 +389,9 @@ export const MessagesPage = (() => {
 
             if (!messagesFile || !connectionsFile) {
                 if (!files) {
-                    files = await Storage.getAllFiles();
+                    // Cache metadata only; messages/connections text is loaded on
+                    // demand below so the large messages export isn't held in memory.
+                    files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
                     DataCache.set("storage:files", files);
                 }
                 if (!messagesFile) {
@@ -394,7 +400,7 @@ export const MessagesPage = (() => {
                         "messages",
                     );
                     if (messagesFile) {
-                        DataCache.set("storage:file:messages", messagesFile);
+                        DataCache.set("storage:file:messages", toStoredFileMetadata(messagesFile));
                     }
                 }
                 if (!connectionsFile) {
@@ -403,7 +409,10 @@ export const MessagesPage = (() => {
                         "connections",
                     );
                     if (connectionsFile) {
-                        DataCache.set("storage:file:connections", connectionsFile);
+                        DataCache.set(
+                            "storage:file:connections",
+                            toStoredFileMetadata(connectionsFile),
+                        );
                     }
                 }
             }
@@ -461,11 +470,18 @@ export const MessagesPage = (() => {
 
             await nextFrame();
 
+            // Load the CSV text on demand (caches hold metadata only) so the large
+            // messages export isn't retained in memory between visits.
+            const [messagesStored, connectionsStored] = await Promise.all([
+                Storage.getFile("messages"),
+                connectionsFile ? Storage.getFile("connections") : Promise.resolve(null),
+            ]);
+            const messagesText = messagesStored && messagesStored.text ? messagesStored.text : "";
+            const connectionsText =
+                connectionsStored && connectionsStored.text ? connectionsStored.text : "";
+
             markPerformance("messages:worker-parse:start");
-            const processed = await processFiles(
-                messagesFile.text,
-                connectionsFile ? connectionsFile.text : "",
-            );
+            const processed = await processFiles(messagesText, connectionsText);
             markPerformance("messages:worker-parse:end");
             measurePerformance(
                 "messages:worker-parse",

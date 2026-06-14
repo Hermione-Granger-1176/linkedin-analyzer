@@ -7,6 +7,7 @@ import { ExcelGenerator } from "./excel.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
+import { toStoredFileMetadata } from "./worker-contracts.js";
 
 export const CleanPage = (() => {
     "use strict";
@@ -109,7 +110,9 @@ export const CleanPage = (() => {
 
         let files = DataCache.get("storage:files") || null;
         if (!files) {
-            files = await Storage.getAllFiles();
+            // Cache metadata only; the selected file's text is loaded on demand in
+            // renderPreview so large exports aren't kept in memory.
+            files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
             DataCache.set("storage:files", files);
         }
 
@@ -211,8 +214,9 @@ export const CleanPage = (() => {
 
     /**
      * Process the selected file and render the preview table.
+     * @returns {Promise<void>}
      */
-    function renderPreview() {
+    async function renderPreview() {
         const type = getSelectedType();
         const file = storedFiles[type];
         if (!file) {
@@ -228,8 +232,17 @@ export const CleanPage = (() => {
         const fileUpdatedAt = file.updatedAt || 0;
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
+            let text;
             try {
-                const processed = LinkedInCleaner.process(file.text, type);
+                // The cached record is metadata only; load the CSV text on demand.
+                const stored = await Storage.getFile(type);
+                text = stored && stored.text ? stored.text : "";
+            } catch (error) {
+                handleParseError(error, "Unable to load file.", type, file.name || null);
+                return;
+            }
+            try {
+                const processed = LinkedInCleaner.process(text, type);
                 if (!processed.success) {
                     const message = processed.error || "Unable to parse file.";
                     handleParseError(new Error(message), message, type, file.name || null);

@@ -9,7 +9,11 @@ import { Session } from "./session.js";
 import { Storage } from "./storage.js";
 import { reportPerformanceMeasure } from "./telemetry.js";
 import { hideChartTooltip, showChartTooltip } from "./ui/chart-tooltip.js";
-import { parseConnectionsWorkerMessage, parseStoredUploadFile } from "./worker-contracts.js";
+import {
+    parseConnectionsWorkerMessage,
+    parseStoredUploadFile,
+    toStoredFileMetadata,
+} from "./worker-contracts.js";
 
 export const ConnectionsPage = (() => {
     "use strict";
@@ -313,14 +317,12 @@ export const ConnectionsPage = (() => {
     async function loadConnectionsFile() {
         const cacheKey = "storage:file:connections";
 
-        const cached = normalizeConnectionsFile(DataCache.get(cacheKey) || null, "cache");
-        if (cached) {
-            return cached;
-        }
-
+        // The cache holds metadata only, so always load the record (with text)
+        // from storage when parsing. This runs at most once per session (the
+        // dataReady guard skips reloads), so the large export isn't retained.
         const file = normalizeConnectionsFile(await Storage.getFile("connections"), "storage");
         if (file) {
-            DataCache.set(cacheKey, file);
+            DataCache.set(cacheKey, toStoredFileMetadata(file));
         }
         return file;
     }

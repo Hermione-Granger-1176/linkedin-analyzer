@@ -173,6 +173,27 @@ describe("csp-report handler", () => {
         expect(res.statusCode).toBe(204);
     });
 
+    it("accepts and preserves an allowlisted content-type that carries parameters", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: { "content-type": "Application/Reports+JSON; charset=utf-8" },
+                body: REPORTS_JSON_BODY,
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        // Matched case-insensitively with parameters stripped, but forwarded verbatim.
+        expect(init.headers["content-type"]).toBe("Application/Reports+JSON; charset=utf-8");
+        expect(res.statusCode).toBe(204);
+    });
+
     it("replaces a non-allowlisted content-type with the default when forwarding", async () => {
         process.env.CSP_REPORT_URI = "https://collector.example/report";
         const fetchMock = vi.fn().mockResolvedValue({});
@@ -227,6 +248,30 @@ describe("csp-report handler", () => {
 
         expect(fetchMock).not.toHaveBeenCalled();
         expect(res.statusCode).toBe(204);
+    });
+
+    it("summarizes a schemed blocked-uri by scheme only, never its content", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src",
+                        "blocked-uri": "data:image/png;base64,SECRETPAYLOAD",
+                    },
+                },
+            },
+            res,
+        );
+
+        const summary = logSpy.mock.calls[0][0];
+        expect(summary).toBe("CSP violation: img-src blocked data:");
+        expect(summary).not.toContain("SECRETPAYLOAD");
+        logSpy.mockRestore();
     });
 
     it("summarizes a non-URL blocked-uri keyword verbatim", async () => {

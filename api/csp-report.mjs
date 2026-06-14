@@ -144,7 +144,11 @@ function summarizeReport(report) {
     let blocked = "(none)";
     if (typeof blockedUri === "string" && blockedUri) {
         try {
-            blocked = new URL(blockedUri).host || blockedUri;
+            const url = new URL(blockedUri);
+            // Schemes like data:/blob: have no host; fall back to the scheme only
+            // (never the full URI, which could embed inline content) so the log
+            // line stays host-only.
+            blocked = url.host || url.protocol;
         } catch {
             // Keywords like "inline"/"eval" are not URLs; report them verbatim.
             blocked = blockedUri;
@@ -189,7 +193,13 @@ export default async function handler(req, res) {
     if (endpoint) {
         const rawContentType = req.headers["content-type"];
         const inboundType = Array.isArray(rawContentType) ? rawContentType[0] : rawContentType;
-        const contentType = ALLOWED_CONTENT_TYPES.has(inboundType)
+        // Match on the media type alone (case-insensitive, parameters stripped) so
+        // valid headers like "application/reports+json; charset=utf-8" are accepted,
+        // but preserve the original header when forwarding so upstream parsing of
+        // any charset parameter is unaffected.
+        const baseType =
+            typeof inboundType === "string" ? inboundType.split(";")[0].trim().toLowerCase() : "";
+        const contentType = ALLOWED_CONTENT_TYPES.has(baseType)
             ? inboundType
             : DEFAULT_CONTENT_TYPE;
         const controller = new AbortController();

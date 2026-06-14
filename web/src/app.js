@@ -195,6 +195,9 @@ function init() {
         const enable = () => {
             setTelemetryConsent(true);
             granted = true;
+            // Any explicit choice settles the prompt: the banner must not reappear
+            // later in the session (e.g. after a subsequent revoke).
+            bannerDismissed = true;
             initSentry();
             initTelemetry();
             render();
@@ -204,6 +207,7 @@ function init() {
             setTelemetryConsent(false);
             disableTelemetry();
             granted = false;
+            bannerDismissed = true;
             render();
         };
 

@@ -268,6 +268,27 @@ describe("app init wiring", () => {
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
+    it("does not re-show the banner after enabling and then revoking in one session", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        vi.resetModules();
+        await import("../src/app.js");
+
+        const banner = document.getElementById("telemetryBanner");
+        const toggle = document.getElementById("telemetryToggleBtn");
+        expect(banner.hidden).toBe(false);
+
+        toggle.click(); // enable
+        expect(banner.hidden).toBe(true);
+        toggle.click(); // revoke
+        // Revoking settles the prompt; it must not pop the banner back up.
+        expect(banner.hidden).toBe(true);
+        expect(document.getElementById("appFooter").hidden).toBe(false);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
     it("revokes diagnostics from the footer toggle when already granted", async () => {
         telemetryConsentGranted.mockReturnValue(true);
         const original = import.meta.env.VITE_SENTRY_DSN;

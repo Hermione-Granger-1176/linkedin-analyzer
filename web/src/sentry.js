@@ -21,7 +21,6 @@ const MAX_BREADCRUMBS = 20;
 // flushed as a single "session-metrics" event on visibility loss so Sentry quota
 // is spent once per session instead of once per web-vital/perf measure.
 let metricBuffer = new Map();
-let flushListenersAttached = false;
 
 /**
  * Check whether a context key can identify a local uploaded file.
@@ -177,20 +176,24 @@ export function initSentry() {
     attachMetricFlushListeners();
 }
 
+/** Flush buffered metrics when the page transitions to hidden. */
+function flushMetricsOnHidden() {
+    if (document.visibilityState === "hidden") {
+        flushMetrics();
+    }
+}
+
 /**
- * Attach one-time listeners that flush buffered metrics when the page is
- * backgrounded or unloaded. Registered once even if Sentry re-initializes.
+ * Attach listeners that flush buffered metrics when the page is backgrounded or
+ * unloaded. Idempotent via remove-before-add, so repeated initSentry() calls
+ * (e.g. re-enabling after a revoke) never stack duplicate listeners. flushMetrics
+ * is also atomic — it swaps the buffer out before sending — so even a stray double
+ * fire cannot emit a duplicate session-metrics event.
  */
 function attachMetricFlushListeners() {
-    if (flushListenersAttached) {
-        return;
-    }
-    flushListenersAttached = true;
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "hidden") {
-            flushMetrics();
-        }
-    });
+    document.removeEventListener("visibilitychange", flushMetricsOnHidden);
+    document.addEventListener("visibilitychange", flushMetricsOnHidden);
+    window.removeEventListener("pagehide", flushMetrics);
     window.addEventListener("pagehide", flushMetrics);
 }
 

@@ -47,7 +47,7 @@ After any rollback, confirm the active release in Sentry via the `release` tag a
 - Sentry captures:
   - unhandled runtime errors and rejections
   - page/module errors from guarded operations
-  - selected performance telemetry (`web-vitals` + custom performance measures)
+  - selected performance telemetry (`web-vitals` + custom performance measures), buffered per session and sent as a single numeric-only `session-metrics` event on page hide (rather than one event per measure) to conserve quota
 
 ### CSP violation reporting
 
@@ -62,7 +62,16 @@ The `Content-Security-Policy` header in `vercel.json` enforces a strict policy a
 - Create alerts for:
   - spike in `Unhandled error` events
   - spike in worker parse failures (`module` extra fields)
-  - regression in web-vitals (`web-vital:*` metric messages)
+  - regression in web-vitals (`metric:web-vital:*` extras on `session-metrics` events)
+
+### Observability blind spot (opt-in telemetry)
+
+Diagnostics are **off until the user explicitly grants consent** (telemetry banner / footer toggle), and consent can be revoked at any time. In practice most visitors never opt in, so:
+
+- Absence of Sentry events does **not** mean the absence of errors — it usually means no consenting users hit the path.
+- Error volume is a lower bound, not a true rate; do not size incident severity from event counts alone.
+- For a reproducible bug, prefer local reproduction with a matching fixture over waiting for telemetry to surface it.
+- CSP violations are the one signal that does not depend on consent: they flow through `/api/csp-report` regardless (see above).
 
 ## Security and Supply Chain
 

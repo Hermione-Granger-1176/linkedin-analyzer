@@ -124,7 +124,14 @@ describe("csp-report handler", () => {
         expect(res.statusCode).toBe(204);
     });
 
-    it("normalizes an array content-type header to a single value", async () => {
+    const REPORTS_JSON_BODY = JSON.stringify([
+        {
+            type: "csp-violation",
+            body: { effectiveDirective: "img-src", blockedURL: "https://evil.example/x.png" },
+        },
+    ]);
+
+    it("normalizes an array content-type header to a single allowlisted value", async () => {
         process.env.CSP_REPORT_URI = "https://collector.example/report";
         const fetchMock = vi.fn().mockResolvedValue({});
         vi.stubGlobal("fetch", fetchMock);
@@ -134,7 +141,7 @@ describe("csp-report handler", () => {
             {
                 method: "POST",
                 headers: { "content-type": ["application/reports+json", "application/csp-report"] },
-                body: "[]",
+                body: REPORTS_JSON_BODY,
             },
             res,
         );
@@ -144,22 +151,219 @@ describe("csp-report handler", () => {
         expect(res.statusCode).toBe(204);
     });
 
-    it("forwards a string body and preserves the request content-type", async () => {
+    it("forwards a Reporting-API string body and preserves an allowlisted content-type", async () => {
         process.env.CSP_REPORT_URI = "https://collector.example/report";
         const fetchMock = vi.fn().mockResolvedValue({});
         vi.stubGlobal("fetch", fetchMock);
 
         const res = mockResponse();
         await handler(
-            { method: "POST", headers: { "content-type": "application/reports+json" }, body: "[]" },
+            {
+                method: "POST",
+                headers: { "content-type": "application/reports+json" },
+                body: REPORTS_JSON_BODY,
+            },
             res,
         );
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [, init] = fetchMock.mock.calls[0];
-        expect(init.body).toBe("[]");
+        expect(init.body).toBe(REPORTS_JSON_BODY);
         expect(init.headers["content-type"]).toBe("application/reports+json");
         expect(res.statusCode).toBe(204);
+    });
+
+    it("accepts and preserves an allowlisted content-type that carries parameters", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: { "content-type": "Application/Reports+JSON; charset=utf-8" },
+                body: REPORTS_JSON_BODY,
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        // Matched case-insensitively with parameters stripped, but forwarded verbatim.
+        expect(init.headers["content-type"]).toBe("Application/Reports+JSON; charset=utf-8");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("replaces a non-allowlisted content-type with the default when forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: { "content-type": "text/plain" },
+                body: { "csp-report": { "violated-directive": "script-src" } },
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers["content-type"]).toBe("application/csp-report");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops a body that is not a CSP report without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: { unrelated: "payload" } }, res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops an unparseable JSON body without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(["not json at all"]), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops a reports-API array that has no csp-violation entry", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(['[{"type":"deprecation","body":{}}]']), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops a JSON primitive body without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(["42"]), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("summarizes a schemed blocked-uri by scheme only, never its content", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src",
+                        "blocked-uri": "data:image/png;base64,SECRETPAYLOAD",
+                    },
+                },
+            },
+            res,
+        );
+
+        const summary = logSpy.mock.calls[0][0];
+        expect(summary).toBe("CSP violation: img-src blocked data:");
+        expect(summary).not.toContain("SECRETPAYLOAD");
+        logSpy.mockRestore();
+    });
+
+    it("never logs a non-URL blocked-uri with a path, query, or newline", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src\ninjected log line",
+                        "blocked-uri": "evil.example/tracker.gif?u=secret",
+                    },
+                },
+            },
+            res,
+        );
+
+        const summary = logSpy.mock.calls[0][0];
+        // The newline-bearing directive fails the keyword check (-> "unknown") and the
+        // path/query blocked-uri becomes "(non-url)"; the line stays single and clean.
+        expect(summary).toBe("CSP violation: unknown blocked (non-url)");
+        expect(summary).not.toContain("secret");
+        expect(summary).not.toContain("tracker.gif");
+        expect(summary).not.toContain("injected");
+        expect(summary).not.toContain("\n");
+        logSpy.mockRestore();
+    });
+
+    it("summarizes a non-URL blocked-uri keyword verbatim", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "script-src-elem",
+                        "blocked-uri": "inline",
+                    },
+                },
+            },
+            res,
+        );
+
+        expect(logSpy.mock.calls[0][0]).toBe("CSP violation: script-src-elem blocked inline");
+        logSpy.mockRestore();
+    });
+
+    it("logs a host-only summary when no forwarding destination is configured", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src",
+                        "blocked-uri": "https://evil.example/tracker.gif?u=secret",
+                    },
+                },
+            },
+            res,
+        );
+
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        const summary = logSpy.mock.calls[0][0];
+        expect(summary).toContain("img-src");
+        expect(summary).toContain("evil.example");
+        // The path and query string (which could carry data) are never logged.
+        expect(summary).not.toContain("tracker.gif");
+        expect(summary).not.toContain("secret");
+
+        logSpy.mockRestore();
     });
 
     it("reads a streamed body and does not forward when no endpoint is configured", async () => {

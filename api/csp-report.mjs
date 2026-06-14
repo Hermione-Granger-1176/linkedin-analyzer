@@ -12,6 +12,13 @@
 
 const MAX_BODY_BYTES = 64 * 1024;
 
+// Content types a CSP report may legitimately carry. The browser sends
+// `application/csp-report` (report-uri) or `application/reports+json` (Reporting
+// API). We forward using one of these rather than echoing the inbound header, so
+// an attacker POSTing to this open endpoint cannot pick the upstream content type.
+const ALLOWED_CONTENT_TYPES = new Set(["application/csp-report", "application/reports+json"]);
+const DEFAULT_CONTENT_TYPE = "application/csp-report";
+
 // Cap how long we wait on the upstream collector. Forwarding is best-effort, and
 // the serverless function must still respond promptly, but it cannot truly
 // fire-and-forget (pending work may be frozen once the response is sent), so the
@@ -94,6 +101,90 @@ async function readReportBody(req, limit) {
 }
 
 /**
+ * Parse a request body and extract the CSP violation it describes, supporting
+ * both the legacy `report-uri` shape (`{"csp-report": {...}}`) and the Reporting
+ * API shape (an array of `{type: "csp-violation", body: {...}}` entries).
+ * @param {string} body - Raw request body text.
+ * @returns {object|null} The violation object, or null if the body is not a CSP report.
+ */
+function parseCspReport(body) {
+    let parsed;
+    try {
+        parsed = JSON.parse(body);
+    } catch {
+        return null;
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const report = parsed["csp-report"];
+        return report && typeof report === "object" ? report : null;
+    }
+    if (Array.isArray(parsed)) {
+        const entry = parsed.find(
+            (item) => item && item.type === "csp-violation" && item.body && typeof item.body === "object",
+        );
+        return entry ? entry.body : null;
+    }
+    return null;
+}
+
+// Genuine CSP tokens: directive names and the non-URL keyword sources browsers
+// put in blocked-uri (inline, eval, self, …) are all lowercase letters/hyphens.
+const CSP_KEYWORD = /^[a-z][a-z-]*$/;
+// Control characters, ASCII newlines, and the Unicode line/paragraph separators,
+// collapsed to spaces so an attacker cannot inject extra or multi-line log entries.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f\u2028\u2029]+/g;
+
+/**
+ * Reduce an attacker-influenced field to a single safe log token: strip control
+ * characters and newlines (no log injection / multi-line), trim, and bound length.
+ * @param {unknown} value - Raw field value.
+ * @param {number} maxLength - Maximum length to keep.
+ * @returns {string} The sanitized token.
+ */
+function sanitizeToken(value, maxLength) {
+    return String(value).replace(CONTROL_CHARS, " ").trim().slice(0, maxLength);
+}
+
+/**
+ * Build a single-line, host-only summary of a CSP violation for log search.
+ * This endpoint is public, so every field is treated as untrusted: the blocked
+ * value is reduced to a host, a scheme, or a known keyword — never a path/query —
+ * and all fields are stripped of newlines and length-bounded.
+ * @param {object} report - A CSP violation object (either report shape).
+ * @returns {string} A summary like `CSP violation: img-src blocked evil.example`.
+ */
+function summarizeReport(report) {
+    const rawDirective = sanitizeToken(
+        report["effective-directive"] ||
+            report.effectiveDirective ||
+            report["violated-directive"] ||
+            report.violatedDirective ||
+            "",
+        64,
+    );
+    // Real directive names are lowercase letters/hyphens; reject anything else
+    // (junk, coerced objects, or a value sanitized down to empty) as "unknown".
+    const directive = CSP_KEYWORD.test(rawDirective) ? rawDirective : "unknown";
+    const blockedUri = report["blocked-uri"] || report.blockedURL || "";
+    let blocked = "(none)";
+    if (typeof blockedUri === "string" && blockedUri) {
+        try {
+            const url = new URL(blockedUri);
+            // Schemes like data:/blob: have no host; fall back to the scheme only
+            // (never the full URI, which could embed inline content).
+            blocked = url.host || url.protocol;
+        } catch {
+            // Not a URL: only echo genuine CSP keywords (inline, eval, self, …).
+            // Anything else from this public endpoint becomes a placeholder so no
+            // attacker-supplied path/query reaches the log.
+            const token = sanitizeToken(blockedUri, 64);
+            blocked = CSP_KEYWORD.test(token) ? token : "(non-url)";
+        }
+    }
+    return `CSP violation: ${directive} blocked ${blocked}`;
+}
+
+/**
  * Vercel serverless handler that accepts and forwards CSP violation reports.
  * @param {object} req - Incoming request.
  * @param {object} res - Server response.
@@ -116,12 +207,28 @@ export default async function handler(req, res) {
         return;
     }
 
+    // Drop anything that is not a recognizable CSP report. The endpoint is open,
+    // so this prevents it from being used to relay arbitrary bodies upstream.
+    const report = body ? parseCspReport(body) : null;
+    if (!report) {
+        res.statusCode = 204;
+        res.end();
+        return;
+    }
+
     const endpoint = resolveReportEndpoint(process.env);
-    if (endpoint && body) {
+    if (endpoint) {
         const rawContentType = req.headers["content-type"];
-        const contentType =
-            (Array.isArray(rawContentType) ? rawContentType[0] : rawContentType) ||
-            "application/csp-report";
+        const inboundType = Array.isArray(rawContentType) ? rawContentType[0] : rawContentType;
+        // Match on the media type alone (case-insensitive, parameters stripped) so
+        // valid headers like "application/reports+json; charset=utf-8" are accepted,
+        // but preserve the original header when forwarding so upstream parsing of
+        // any charset parameter is unaffected.
+        const baseType =
+            typeof inboundType === "string" ? inboundType.split(";")[0].trim().toLowerCase() : "";
+        const contentType = ALLOWED_CONTENT_TYPES.has(baseType)
+            ? inboundType
+            : DEFAULT_CONTENT_TYPE;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT_MS);
         try {
@@ -138,6 +245,12 @@ export default async function handler(req, res) {
         } finally {
             clearTimeout(timeout);
         }
+    } else {
+        // With no forwarding destination, leave a one-line, host-only trace so
+        // violations remain searchable in Vercel logs. Uses console.error because
+        // it is the only console method the lint policy permits server-side and a
+        // CSP violation is a security-relevant signal worth surfacing.
+        console.error(summarizeReport(report));
     }
 
     res.statusCode = 204;

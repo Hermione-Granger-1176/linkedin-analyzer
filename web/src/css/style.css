@@ -1100,6 +1100,24 @@ button {
     gap: var(--space-sm);
 }
 
+.app-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm) var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    margin-top: var(--space-xl);
+    border-top: 2px solid var(--border-light);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    text-align: center;
+}
+
+.app-footer-note {
+    margin: 0;
+}
+
 .status-banner {
     position: fixed;
     left: var(--space-lg);

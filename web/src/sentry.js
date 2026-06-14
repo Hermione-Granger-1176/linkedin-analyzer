@@ -16,6 +16,12 @@ const NOISY_EVENT_PATTERNS = [
 const SENSITIVE_BREADCRUMB_CATEGORIES = new Set(["console", "ui.input", "ui.click"]);
 const MAX_BREADCRUMBS = 20;
 
+// Buffered metric datapoints for the current page lifecycle. Each entry holds the
+// latest numeric value and how many times the metric was recorded. The buffer is
+// flushed as a single "session-metrics" event on visibility loss so Sentry quota
+// is spent once per session instead of once per web-vital/perf measure.
+let metricBuffer = new Map();
+
 /**
  * Check whether a context key can identify a local uploaded file.
  * @param {string} key
@@ -157,7 +163,6 @@ export function initSentry() {
         /* v8 ignore next */
         environment: import.meta.env.MODE || "development",
         release: resolveRelease(),
-        tracesSampleRate: 0.1,
         sendDefaultPii: false,
         maxBreadcrumbs: MAX_BREADCRUMBS,
         beforeSend(event) {
@@ -168,6 +173,42 @@ export function initSentry() {
         },
     });
     sentryReady = true;
+    attachMetricFlushListeners();
+}
+
+/** Flush buffered metrics when the page transitions to hidden. */
+function flushMetricsOnHidden() {
+    if (document.visibilityState === "hidden") {
+        flushMetrics();
+    }
+}
+
+/**
+ * Attach listeners that flush buffered metrics when the page is backgrounded or
+ * unloaded. Idempotent via remove-before-add, so repeated initSentry() calls
+ * (e.g. re-enabling after a revoke) never stack duplicate listeners. flushMetrics
+ * is also atomic — it swaps the buffer out before sending — so even a stray double
+ * fire cannot emit a duplicate session-metrics event.
+ */
+function attachMetricFlushListeners() {
+    document.removeEventListener("visibilitychange", flushMetricsOnHidden);
+    document.addEventListener("visibilitychange", flushMetricsOnHidden);
+    window.removeEventListener("pagehide", flushMetrics);
+    window.addEventListener("pagehide", flushMetrics);
+}
+
+/**
+ * Stop sending telemetry after consent is revoked at runtime. Drops any buffered
+ * metrics and closes the Sentry client so later capture calls are no-ops.
+ */
+export function disableTelemetry() {
+    sentryReady = false;
+    metricBuffer = new Map();
+    try {
+        Sentry.close();
+    } catch {
+        // Ignore Sentry shutdown failures.
+    }
 }
 
 function hasTelemetryConsent() {
@@ -219,12 +260,15 @@ export function captureError(error, context) {
 }
 
 /**
- * Capture a lightweight metric datapoint for diagnostics.
+ * Buffer a lightweight numeric metric for the current session. Datapoints are
+ * aggregated locally and sent as one summary event on page hide (see
+ * `flushMetrics`) so each web-vital/perf measure no longer costs a Sentry event.
+ * Only the numeric value is retained — any string context is intentionally
+ * dropped so the summary payload can never carry user-derived text.
  * @param {string} name
  * @param {number} value
- * @param {object} [context]
  */
-export function captureMetric(name, value, context) {
+export function captureMetric(name, value) {
     if (!sentryReady || typeof name !== "string" || !name) {
         return;
     }
@@ -233,18 +277,40 @@ export function captureMetric(name, value, context) {
         return;
     }
 
+    const entry = metricBuffer.get(name);
+    if (entry) {
+        entry.value = value;
+        entry.count += 1;
+    } else {
+        metricBuffer.set(name, { value, count: 1 });
+    }
+}
+
+/**
+ * Send all buffered metrics as a single numeric-only "session-metrics" event and
+ * reset the buffer. Safe to call repeatedly: a no-op when nothing is buffered.
+ */
+export function flushMetrics() {
+    if (!sentryReady || metricBuffer.size === 0) {
+        return;
+    }
+
+    // Swap the buffer out before sending so metrics recorded during/after the
+    // flush start a fresh batch instead of being dropped or double-counted.
+    const buffered = metricBuffer;
+    metricBuffer = new Map();
+
     try {
         Sentry.withScope((scope) => {
-            scope.setTag("telemetry.type", "metric");
-            scope.setTag("metric.name", name);
+            scope.setTag("telemetry.type", "session-metrics");
             scope.setLevel("info");
-            scope.setExtra("metric.value", value);
-
-            if (context && typeof context === "object") {
-                setContextExtras(scope, context);
+            for (const [name, entry] of buffered) {
+                scope.setExtra(`metric:${name}`, entry.value);
+                if (entry.count > 1) {
+                    scope.setExtra(`metric:${name}:count`, entry.count);
+                }
             }
-
-            Sentry.captureMessage(`metric:${name}`);
+            Sentry.captureMessage("session-metrics");
         });
     } catch {
         // Ignore Sentry failures.

@@ -642,9 +642,7 @@ export const MessagesPage = (() => {
                     lastEntry.entryType === "measure" &&
                     Number.isFinite(lastEntry.duration)
                 ) {
-                    reportPerformanceMeasure(name, lastEntry.duration, {
-                        module: "messages-insights",
-                    });
+                    reportPerformanceMeasure(name, lastEntry.duration);
                 }
             }
         } catch {

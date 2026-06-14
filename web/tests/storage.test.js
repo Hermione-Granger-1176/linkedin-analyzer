@@ -263,7 +263,11 @@ describe("Storage", () => {
                 const request = indexedDB.deleteDatabase("linkedin-analyzer");
                 request.onsuccess = () => resolve();
                 request.onerror = () => reject(request.error);
-                request.onblocked = () => resolve();
+                // A blocked delete means a connection is still open, so the v2
+                // database is never rebuilt. Fail loudly instead of resolving
+                // and running the migration assertions against the stale v3 DB.
+                request.onblocked = () =>
+                    reject(new Error("deleteDatabase blocked: a connection is still open"));
             });
 
             // Build a legacy v2 database: a single "files" store with inline text.

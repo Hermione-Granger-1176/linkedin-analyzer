@@ -1999,6 +1999,91 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
+    it("shows the storage-error state when the stored messages text is missing", async () => {
+        globalThis.Worker = undefined;
+
+        buildDom();
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+
+        DataCache.set("storage:file:messages", {
+            type: "messages",
+            name: "messages.csv",
+            updatedAt: 150,
+            rowCount: 10,
+        });
+        // Metadata is present, but the underlying text record is gone.
+        Storage.getFile.mockResolvedValue({ type: "messages" });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        // The missing text routes to the storage-error path, not an empty parse.
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        const empty = document.getElementById("messagesEmpty");
+        expect(empty.hidden).toBe(false);
+        expect(empty.querySelector("p").textContent).toContain("Unable to load saved files");
+
+        globalThis.Worker = undefined;
+    });
+
+    it("flags a connection load error when the connections text record is missing", async () => {
+        globalThis.Worker = undefined;
+
+        buildDom();
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+        ({ MessagesAnalytics } = await import("../src/messages-analytics.js"));
+
+        const timestamp = new Date("2024-01-01").getTime();
+
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "messages", name: "m.csv", updatedAt: 240, rowCount: 1 },
+            { type: "connections", name: "Connections.csv", updatedAt: 240, rowCount: 1 },
+        ]);
+        // Messages text loads, but the connections text record is missing.
+        Storage.getFile.mockImplementation((type) =>
+            Promise.resolve(
+                type === "messages" ? { type: "messages", text: "csv" } : { type: "connections" },
+            ),
+        );
+
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
+        MessagesAnalytics.buildMessageState.mockReturnValue({
+            contacts: new Map([["c1", { name: "User", url: "", lastTimestamp: timestamp }]]),
+            events: [{ contactKey: "c1", timestamp }],
+            rowTimestamps: [timestamp],
+            skippedRows: 0,
+            talkedNameKeys: new Set(["user"]),
+            talkedUrlKeys: new Set(),
+            latestTimestamp: timestamp,
+        });
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        // The connections file metadata is present, so the missing text surfaces
+        // as a load error rather than silently dropping connection insights.
+        expect(document.getElementById("silentConnectionsList").innerHTML).toContain(
+            "Unable to load Connections.csv",
+        );
+
+        globalThis.Worker = undefined;
+    });
+
     // --- Range filter limits visible results --------------------------------
 
     it("filters top contacts to the selected time range", async () => {

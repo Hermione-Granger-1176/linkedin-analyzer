@@ -241,7 +241,14 @@ export const CleanPage = (() => {
                 if (getSelectedType() !== type) {
                     return;
                 }
-                text = stored && stored.text ? stored.text : "";
+                if (!stored || !stored.text) {
+                    // Metadata says the file exists but its text record is gone
+                    // (cleared in another tab or degraded persistence); report a
+                    // load failure rather than parsing an empty payload into a
+                    // misleading parse error.
+                    throw new Error("Stored file text record is missing.");
+                }
+                text = stored.text;
             } catch (error) {
                 handleParseError(error, "Unable to load file.", type, file.name || null);
                 return;

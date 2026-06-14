@@ -401,6 +401,25 @@ describe("CleanPage", () => {
         expect(captureError).toHaveBeenCalled();
     });
 
+    it("shows load error state when the stored text record is missing", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+        ]);
+        // Metadata is present, but the on-demand text load resolves without a
+        // text record (cleared in another tab / degraded persistence).
+        Storage.getFile.mockResolvedValue({ type: "shares" });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to load file",
+        );
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        expect(captureError).toHaveBeenCalled();
+    });
+
     it("abandons a stale preview render when the selection changes mid-load", async () => {
         Storage.getAllFiles.mockResolvedValue([
             { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },

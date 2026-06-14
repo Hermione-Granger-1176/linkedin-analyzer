@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@sentry/browser", () => ({
     init: vi.fn(),
@@ -20,6 +20,13 @@ describe("sentry", () => {
         vi.resetModules();
         vi.clearAllMocks();
         window.localStorage.clear();
+    });
+
+    afterEach(() => {
+        // Tests that drive the flush listeners shadow document.visibilityState with
+        // an own property; remove it so the JSDOM prototype getter is restored and
+        // no "hidden"/"visible" state leaks into later suites.
+        delete document.visibilityState;
     });
 
     it("does nothing when DSN is missing", async () => {

@@ -321,6 +321,13 @@ export const ConnectionsPage = (() => {
         // from storage when parsing. This runs at most once per session (the
         // dataReady guard skips reloads), so the large export isn't retained.
         const file = normalizeConnectionsFile(await Storage.getFile("connections"), "storage");
+        if (file && !file.text) {
+            // Metadata exists but the text record is gone (cleared in another
+            // tab / degraded persistence). Treat it as a load failure so the
+            // catch shows the storage-error UI, matching clean/messages, rather
+            // than the "not uploaded" empty state.
+            throw new Error("Stored connections text record is missing.");
+        }
         if (file) {
             DataCache.set(cacheKey, toStoredFileMetadata(file));
         }

@@ -116,6 +116,28 @@ describe("ConnectionsPage", () => {
         expect(document.getElementById("connectionsGrid").hidden).toBe(true);
     });
 
+    it("shows the storage-error state when the connections text record is missing", async () => {
+        // Metadata is present but the text record is gone (cleared in another
+        // tab / degraded persistence); this must surface as a load failure, not
+        // the "not uploaded" empty state.
+        Storage.getFile.mockResolvedValue({
+            type: "connections",
+            name: "Connections.csv",
+            rowCount: 5,
+            updatedAt: 10,
+        });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("connectionsEmpty").hidden).toBe(false);
+        expect(
+            document.getElementById("connectionsEmpty").querySelector("h2").textContent,
+        ).toContain("Storage error");
+    });
+
     it("initializes on route change when the page is not initialized yet", async () => {
         Storage.getFile.mockResolvedValue(null);
         DataCache.get.mockReturnValue(null);

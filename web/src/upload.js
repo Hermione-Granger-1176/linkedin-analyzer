@@ -1358,11 +1358,20 @@ export const UploadPage = (() => {
         if (!worker) {
             return;
         }
+        try {
+            worker.postMessage({
+                type: "restoreFiles",
+                payload: { sharesCsv, commentsCsv },
+            });
+        } catch (error) {
+            // postMessage can throw synchronously (DataCloneError / invalid
+            // state). Priming is best-effort, so swallow it (don't reject the
+            // serialized chain and stall the awaiting upload) and leave
+            // lastPrimedSignature unchanged so a later prime can retry.
+            captureError(error, { module: "upload", operation: "prime-post-message" });
+            return;
+        }
         lastPrimedSignature = signature;
-        worker.postMessage({
-            type: "restoreFiles",
-            payload: { sharesCsv, commentsCsv },
-        });
     }
 
     /** Clear all queued analytics prime timers and idle callbacks. */

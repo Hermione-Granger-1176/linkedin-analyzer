@@ -1179,6 +1179,54 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("keeps the upload working when the prime's postMessage throws", async () => {
+        // postMessage can throw synchronously (DataCloneError / invalid state).
+        // Priming is best-effort, so a failed restoreFiles post must not reject
+        // the serialized chain and stall the upload's awaited prime.
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        Storage.getFile.mockResolvedValue({ type: "shares", text: "shares-head\nr1", rowCount: 2 });
+        DataCache.get.mockImplementation((key) =>
+            key === "storage:files" ? cachedFiles : null,
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Throw only on the restoreFiles post so the addFile path is still live.
+        workerInstance.postMessage.mockImplementation((msg) => {
+            if (msg && msg.type === "restoreFiles") {
+                throw new Error("DataCloneError");
+            }
+        });
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        // The failed restore is swallowed and the upload still posts its addFile.
+        expect(types).toContain("addFile");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     it("loads stored files for priming when an upload races ahead of the cache", async () => {
         // restoreState() is fired but not awaited in init(), so a fast upload can
         // run before "storage:files" is cached. The prime must then read storage

@@ -433,7 +433,7 @@ export function parseStoredUploadFile(file) {
  * stays in IndexedDB and is loaded on demand so large exports aren't retained
  * in memory across the whole session.
  * @param {object} file - Stored file record
- * @returns {{type: string, name: string, rowCount: number, updatedAt: number, schemaVersion: number}}
+ * @returns {{type: string, name: string, rowCount: number, updatedAt: number}}
  */
 export function toStoredFileMetadata(file) {
     return {
@@ -441,6 +441,5 @@ export function toStoredFileMetadata(file) {
         name: file.name,
         rowCount: file.rowCount || 0,
         updatedAt: file.updatedAt || 0,
-        schemaVersion: file.schemaVersion,
     };
 }

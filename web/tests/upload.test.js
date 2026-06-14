@@ -32,6 +32,7 @@ vi.mock("../src/storage.js", () => ({
         isAvailable: true,
         onPersistenceLost: vi.fn(),
         getAllFiles: vi.fn(),
+        getFile: vi.fn(),
         getAnalytics: vi.fn(),
         saveFile: vi.fn(),
         saveAnalytics: vi.fn(),
@@ -161,6 +162,7 @@ describe("UploadPage", () => {
         // creates module-level singletons that persist across vi.resetModules(),
         // call history from previous tests would bleed through without this reset.
         Storage.getAllFiles.mockReset();
+        Storage.getFile.mockReset();
         Storage.getAnalytics.mockReset();
         Storage.saveFile.mockReset();
         Storage.saveAnalytics.mockReset();
@@ -175,6 +177,7 @@ describe("UploadPage", () => {
 
         // Restore default return values
         Storage.getAllFiles.mockResolvedValue([]);
+        Storage.getFile.mockResolvedValue(null);
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         Storage.saveFile.mockResolvedValue();
         Storage.saveAnalytics.mockResolvedValue();
@@ -1055,11 +1058,25 @@ describe("UploadPage", () => {
             };
         };
 
+        // The cache holds metadata only; the prime loads the CSV text on demand.
         const cachedFiles = [
-            { type: "shares", rowCount: 2, text: "shares-head\nr1\nr2", updatedAt: 10 },
-            { type: "comments", rowCount: 3, text: "comments-head\nc1\nc2\nc3", updatedAt: 20 },
+            { type: "shares", rowCount: 2, updatedAt: 10 },
+            { type: "comments", rowCount: 3, updatedAt: 20 },
         ];
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        Storage.getFile.mockImplementation((type) => {
+            if (type === "shares") {
+                return Promise.resolve({ type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 });
+            }
+            if (type === "comments") {
+                return Promise.resolve({
+                    type: "comments",
+                    text: "comments-head\nc1\nc2\nc3",
+                    rowCount: 3,
+                });
+            }
+            return Promise.resolve(null);
+        });
         DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
 
         UploadPage.init();
@@ -1074,13 +1091,138 @@ describe("UploadPage", () => {
         const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
         const restoreIndex = types.indexOf("restoreFiles");
         const addIndex = types.indexOf("addFile");
-        // The pre-upload prime seeds existing shares+comments...
+        // The pre-upload prime seeds existing shares+comments (text from storage)...
         expect(restoreIndex).toBeGreaterThanOrEqual(0);
         const restoreCall = workerInstance.postMessage.mock.calls[restoreIndex][0];
         expect(restoreCall.payload.sharesCsv).toContain("shares-head");
         expect(restoreCall.payload.commentsCsv).toContain("comments-head");
         // ...and lands before the new file's addFile so the recompute sees both.
         expect(addIndex).toBeGreaterThan(restoreIndex);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("serializes overlapping primes so restoreFiles stays ordered before addFile", async () => {
+        // A worker restart's idle re-prime can be mid text-load when a fresh
+        // upload's immediate prime fires. Both primes load shares/comments
+        // asynchronously; the serialization must keep their restoreFiles posts
+        // ordered so neither lands after the new file's addFile (which would
+        // revert the worker to the stored set).
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        DataCache.get.mockImplementation((key) =>
+            key === "storage:files" ? cachedFiles : null,
+        );
+
+        // The first shares load (the restart's idle prime) hangs until released;
+        // later loads resolve immediately so the upload's prime can finish.
+        let releaseFirstLoad;
+        let firstSharesLoad = true;
+        const sharesRecord = { type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 };
+        Storage.getFile.mockImplementation((type) => {
+            if (type !== "shares") {
+                return Promise.resolve(null);
+            }
+            if (firstSharesLoad) {
+                firstSharesLoad = false;
+                return new Promise((resolve) => {
+                    releaseFirstLoad = () => resolve(sharesRecord);
+                });
+            }
+            return Promise.resolve(sharesRecord);
+        });
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Crash the worker: restartWorker schedules an idle re-prime that fires
+        // synchronously and begins the hanging shares load.
+        workerInstance.listeners.error[0](new Event("error"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Upload while that idle prime is still loading; its immediate prime
+        // chains behind the in-flight one rather than racing it.
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The addFile must wait: the serialized primes have not finished loading.
+        let types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        expect(types).not.toContain("addFile");
+
+        releaseFirstLoad();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        const addIndex = types.indexOf("addFile");
+        const lastRestoreIndex = types.lastIndexOf("restoreFiles");
+        // Both primes posted, and every restoreFiles precedes the addFile.
+        expect(lastRestoreIndex).toBeGreaterThanOrEqual(0);
+        expect(addIndex).toBeGreaterThan(lastRestoreIndex);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("keeps the upload working when the prime's postMessage throws", async () => {
+        // postMessage can throw synchronously (DataCloneError / invalid state).
+        // Priming is best-effort, so a failed restoreFiles post must not reject
+        // the serialized chain and stall the upload's awaited prime.
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        Storage.getFile.mockResolvedValue({ type: "shares", text: "shares-head\nr1", rowCount: 2 });
+        DataCache.get.mockImplementation((key) =>
+            key === "storage:files" ? cachedFiles : null,
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Throw only on the restoreFiles post so the addFile path is still live.
+        workerInstance.postMessage.mockImplementation((msg) => {
+            if (msg && msg.type === "restoreFiles") {
+                throw new Error("DataCloneError");
+            }
+        });
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        // The failed restore is swallowed and the upload still posts its addFile.
+        expect(types).toContain("addFile");
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1103,10 +1245,13 @@ describe("UploadPage", () => {
             };
         };
 
-        const storedFiles = [
-            { type: "shares", rowCount: 2, text: "shares-head\nr1\nr2", updatedAt: 10 },
-        ];
+        const storedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
         Storage.getAllFiles.mockResolvedValue(storedFiles);
+        Storage.getFile.mockImplementation((type) =>
+            Promise.resolve(
+                type === "shares" ? { type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 } : null,
+            ),
+        );
         // Cache miss for "storage:files" forces the storage fallback in the prime.
         DataCache.get.mockImplementation(() => null);
 
@@ -1162,6 +1307,43 @@ describe("UploadPage", () => {
 
         const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
         // No restoreFiles (prime failed), but the new file's addFile still goes out.
+        expect(types).toContain("addFile");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("still uploads when loading the prime text from storage fails", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        // Cache hit with shares metadata, but the on-demand text load rejects, so
+        // primeAnalyticsWorkerNow swallows the error and no restoreFiles is posted.
+        const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+        Storage.getFile.mockRejectedValue(new Error("storage offline"));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        expect(types).not.toContain("restoreFiles");
         expect(types).toContain("addFile");
 
         globalThis.FileReader = originalFileReader;

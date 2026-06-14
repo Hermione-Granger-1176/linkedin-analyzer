@@ -31,7 +31,7 @@ vi.mock("../src/session.js", () => ({
 }));
 
 vi.mock("../src/storage.js", () => ({
-    Storage: { getAllFiles: vi.fn() },
+    Storage: { getAllFiles: vi.fn(), getFile: vi.fn() },
 }));
 
 vi.mock("../src/sentry.js", () => ({
@@ -77,6 +77,9 @@ describe("CleanPage", () => {
         ({ captureError } = await import("../src/sentry.js"));
 
         DataCache.get.mockReturnValue(null);
+        // renderPreview loads the selected file's text on demand; the parser is
+        // mocked, so the text content is irrelevant as long as the load resolves.
+        Storage.getFile.mockResolvedValue({ text: "csv" });
         LinkedInCleaner.process.mockReset();
         ExcelGenerator.generateAndDownload.mockReset();
         ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
@@ -378,5 +381,70 @@ describe("CleanPage", () => {
             "Unable to parse file",
         );
         expect(captureError).toHaveBeenCalled();
+    });
+
+    it("shows load error state when the on-demand text read fails", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+        ]);
+        // The metadata loads, but loading the selected file's text for preview fails.
+        Storage.getFile.mockRejectedValue(new Error("idb-read-failed"));
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to load file",
+        );
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        expect(captureError).toHaveBeenCalled();
+    });
+
+    it("shows load error state when the stored text record is missing", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+        ]);
+        // Metadata is present, but the on-demand text load resolves without a
+        // text record (cleared in another tab / degraded persistence).
+        Storage.getFile.mockResolvedValue({ type: "shares" });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to load file",
+        );
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        expect(captureError).toHaveBeenCalled();
+    });
+
+    it("abandons a stale preview render when the selection changes mid-load", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+            { type: "comments", updatedAt: 20, rowCount: 1, name: "Comments.csv" },
+        ]);
+        // Hold the on-demand text load open so we can switch the selection
+        // before it resolves, simulating an out-of-order UI update.
+        let resolveText;
+        Storage.getFile.mockReturnValue(
+            new Promise((resolve) => {
+                resolveText = resolve;
+            }),
+        );
+
+        await CleanPage.init();
+
+        // The user switches from the (checked) shares radio to comments while
+        // the shares text is still loading.
+        document.querySelector('input[value="shares"]').checked = false;
+        document.querySelector('input[value="comments"]').checked = true;
+
+        resolveText({ text: "csv" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The stale shares render must bail after the await instead of parsing.
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
     });
 });

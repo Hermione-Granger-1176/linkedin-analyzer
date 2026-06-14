@@ -107,7 +107,7 @@ describe("Storage", () => {
 
     it("ignores future-version file records during reads", async () => {
         const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("linkedin-analyzer", 2);
+            const request = indexedDB.open("linkedin-analyzer", 3);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -133,7 +133,7 @@ describe("Storage", () => {
 
     it("ignores future-version analytics records during reads", async () => {
         const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("linkedin-analyzer", 2);
+            const request = indexedDB.open("linkedin-analyzer", 3);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -157,7 +157,7 @@ describe("Storage", () => {
 
     it("reads legacy analytics records without wrapped data payload", async () => {
         const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("linkedin-analyzer", 2);
+            const request = indexedDB.open("linkedin-analyzer", 3);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -210,6 +210,20 @@ describe("Storage", () => {
             expect(reason.message).toBe("IndexedDB transaction failed");
         });
 
+        it("getFile rejects with an Error when the read transaction aborts", async () => {
+            await Storage.clearAll();
+            await Storage.saveFile("shares", { name: "x.csv", text: "a,b", rowCount: 1 });
+            abortNextTransaction();
+            // tx.error is null on an explicit abort, so getFile must still reject
+            // with a concrete Error (not null) for telemetry and callers.
+            let reason;
+            await Storage.getFile("shares").catch((error) => {
+                reason = error;
+            });
+            expect(reason).toBeInstanceOf(Error);
+            expect(reason.message).toBe("IndexedDB transaction failed");
+        });
+
         it("clearAll rejects with an Error when the clear transaction aborts", async () => {
             abortNextTransaction();
             let reason;
@@ -239,7 +253,9 @@ describe("Storage", () => {
             // A newer connection upgrading the DB would block unless our
             // versionchange handler closes the shared connection first.
             await new Promise((resolve, reject) => {
-                const request = indexedDB.open("linkedin-analyzer", 3);
+                // Open above the current schema version to force an upgrade, which
+                // fires versionchange on the shared connection.
+                const request = indexedDB.open("linkedin-analyzer", 4);
                 request.onupgradeneeded = () => {};
                 request.onsuccess = () => {
                     request.result.close();
@@ -249,6 +265,83 @@ describe("Storage", () => {
                     reject(new Error("upgrade blocked: shared connection was not closed"));
                 request.onerror = () => reject(request.error);
             });
+        });
+    });
+
+    // Runs last: it rebuilds the database from a legacy v2 shape, so it must not
+    // pollute the shared connection used by earlier tests.
+    describe("v2 to v3 migration", () => {
+        it("moves inline CSV text into the text store on upgrade", async () => {
+            // Drop the v3 database left by earlier tests so we can recreate a v2 one.
+            await new Promise((resolve, reject) => {
+                const request = indexedDB.deleteDatabase("linkedin-analyzer");
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+                // A blocked delete means a connection is still open, so the v2
+                // database is never rebuilt. Fail loudly instead of resolving
+                // and running the migration assertions against the stale v3 DB.
+                request.onblocked = () =>
+                    reject(new Error("deleteDatabase blocked: a connection is still open"));
+            });
+
+            // Build a legacy v2 database: a single "files" store with inline text.
+            await new Promise((resolve, reject) => {
+                const request = indexedDB.open("linkedin-analyzer", 2);
+                request.onupgradeneeded = () => {
+                    const db = request.result;
+                    db.createObjectStore("files", { keyPath: "type" });
+                    db.createObjectStore("analytics", { keyPath: "id" });
+                };
+                request.onsuccess = () => {
+                    const db = request.result;
+                    const tx = db.transaction("files", "readwrite");
+                    tx.objectStore("files").put({
+                        type: "messages",
+                        name: "messages.csv",
+                        text: "legacy-csv-text",
+                        rowCount: 5,
+                        updatedAt: 111,
+                        schemaVersion: 2,
+                    });
+                    tx.oncomplete = () => {
+                        db.close();
+                        resolve();
+                    };
+                    tx.onerror = () => reject(tx.error);
+                };
+                request.onerror = () => reject(request.error);
+            });
+
+            // A fresh Storage module opens at v3 and runs the upgrade migration.
+            vi.resetModules();
+            const { Storage: MigratedStorage } = await import("../src/storage.js");
+
+            // getAllFiles returns metadata only, and getFile still returns the text.
+            const all = await MigratedStorage.getAllFiles();
+            expect(all).toHaveLength(1);
+            expect(all[0].type).toBe("messages");
+            expect(all[0].rowCount).toBe(5);
+            expect(all[0].text).toBeUndefined();
+            const file = await MigratedStorage.getFile("messages");
+            expect(file.text).toBe("legacy-csv-text");
+
+            // Inspect the raw stores to prove the migration actually moved the text
+            // out of the metadata store (rather than getFile falling back to inline).
+            const rawDb = await new Promise((resolve, reject) => {
+                const request = indexedDB.open("linkedin-analyzer", 3);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            const [fileRecord, textRecord] = await new Promise((resolve, reject) => {
+                const tx = rawDb.transaction(["files", "fileTexts"], "readonly");
+                const fileRequest = tx.objectStore("files").get("messages");
+                const textRequest = tx.objectStore("fileTexts").get("messages");
+                tx.oncomplete = () => resolve([fileRequest.result, textRequest.result]);
+                tx.onerror = () => reject(tx.error);
+            });
+            rawDb.close();
+            expect(fileRecord.text).toBeUndefined();
+            expect(textRecord.text).toBe("legacy-csv-text");
         });
     });
 });

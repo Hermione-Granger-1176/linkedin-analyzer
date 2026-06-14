@@ -426,3 +426,20 @@ export function parseStoredUploadFile(file) {
         updatedAt: normalizeNumber(file.updatedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER),
     });
 }
+
+/**
+ * Strip the CSV text from a stored file record, keeping only the metadata the
+ * in-memory caches need (status, counts, dataset signatures). The full text
+ * stays in IndexedDB and is loaded on demand so large exports aren't retained
+ * in memory across the whole session.
+ * @param {object} file - Stored file record
+ * @returns {{type: string, name: string, rowCount: number, updatedAt: number}}
+ */
+export function toStoredFileMetadata(file) {
+    return {
+        type: file.type,
+        name: file.name,
+        rowCount: file.rowCount || 0,
+        updatedAt: file.updatedAt || 0,
+    };
+}

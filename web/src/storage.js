@@ -21,6 +21,26 @@ function normalizeStoredFile(record) {
     };
 }
 
+/**
+ * Normalize a stored file record to metadata only (no CSV text). Used by the
+ * metadata reads so large exports are never materialized just to list files.
+ * @param {object|null} record - Raw stored record
+ * @returns {object|null}
+ */
+function normalizeStoredFileMetadata(record) {
+    const normalized = normalizeStoredFile(record);
+    if (!normalized) {
+        return null;
+    }
+    return {
+        type: normalized.type,
+        name: normalized.name,
+        rowCount: normalized.rowCount,
+        updatedAt: normalized.updatedAt,
+        schemaVersion: normalized.schemaVersion,
+    };
+}
+
 function normalizeStoredAnalytics(record) {
     if (!record || typeof record !== "object") {
         return null;
@@ -59,8 +79,9 @@ export const Storage = (() => {
     "use strict";
 
     const DB_NAME = "linkedin-analyzer";
-    const DB_VERSION = 2;
+    const DB_VERSION = 3;
     const FILE_STORE = "files";
+    const FILE_TEXT_STORE = "fileTexts";
     const ANALYTICS_STORE = "analytics";
 
     /**
@@ -78,7 +99,9 @@ export const Storage = (() => {
             },
             getFile: (type) => Promise.resolve(normalizeStoredFile(memFiles.get(type) || null)),
             getAllFiles: () =>
-                Promise.resolve([...memFiles.values()].map(normalizeStoredFile).filter(Boolean)),
+                Promise.resolve(
+                    [...memFiles.values()].map(normalizeStoredFileMetadata).filter(Boolean),
+                ),
             saveAnalytics: (base) => {
                 memAnalytics = buildAnalyticsPayload(base);
                 return Promise.resolve();
@@ -155,6 +178,36 @@ export const Storage = (() => {
     }
 
     /**
+     * Move inline CSV text from existing (pre-v3) file records into the dedicated
+     * text store and strip it from the metadata store, so metadata reads no longer
+     * load text. Runs inside the versionchange transaction, so it is atomic with
+     * the rest of the upgrade — an interrupted upgrade rolls back and retries.
+     * @param {IDBTransaction|null} tx - The active versionchange transaction
+     */
+    function migrateInlineTextToTextStore(tx) {
+        /* v8 ignore next 3 */
+        if (!tx) {
+            return;
+        }
+        const fileStore = tx.objectStore(FILE_STORE);
+        const textStore = tx.objectStore(FILE_TEXT_STORE);
+        fileStore.openCursor().onsuccess = (event) => {
+            const cursor = /** @type {IDBRequest<IDBCursorWithValue>} */ (event.target).result;
+            if (!cursor) {
+                return;
+            }
+            const record = cursor.value;
+            if (record && typeof record.text === "string") {
+                textStore.put({ type: record.type, text: record.text });
+                const metadata = { ...record };
+                delete metadata.text;
+                cursor.update(metadata);
+            }
+            cursor.continue();
+        };
+    }
+
+    /**
      * Open the IndexedDB database, creating object stores on first run. The
      * resolved connection is memoized so every operation shares one connection;
      * an external version change closes it and drops the memo so the next call
@@ -168,14 +221,18 @@ export const Storage = (() => {
         dbPromise = new Promise((resolve, reject) => {
             const request = indexedDB.open(DB_NAME, DB_VERSION);
             request.onupgradeneeded = (event) => {
-                const db = /** @type {IDBOpenDBRequest} */ (event.target).result;
-                /* v8 ignore next 3 */
+                const target = /** @type {IDBOpenDBRequest} */ (event.target);
+                const db = target.result;
                 if (!db.objectStoreNames.contains(FILE_STORE)) {
                     db.createObjectStore(FILE_STORE, { keyPath: "type" });
                 }
                 /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
                     db.createObjectStore(ANALYTICS_STORE, { keyPath: "id" });
+                }
+                if (!db.objectStoreNames.contains(FILE_TEXT_STORE)) {
+                    db.createObjectStore(FILE_TEXT_STORE, { keyPath: "type" });
+                    migrateInlineTextToTextStore(target.transaction);
                 }
             };
             request.onerror = () => reject(request.error);
@@ -253,9 +310,17 @@ export const Storage = (() => {
         return runOp(
             () => memory.saveFile(type, data),
             (db) =>
-                withStore(db, FILE_STORE, "readwrite", (store) =>
-                    store.put(buildFilePayload(type, data)),
-                ),
+                new Promise((resolve, reject) => {
+                    const { text, ...metadata } = buildFilePayload(type, data);
+                    const tx = db.transaction([FILE_STORE, FILE_TEXT_STORE], "readwrite");
+                    tx.objectStore(FILE_STORE).put(metadata);
+                    tx.objectStore(FILE_TEXT_STORE).put({ type, text });
+                    const rejectFailure = () =>
+                        reject(idbFailure(tx.error, "IndexedDB transaction failed"));
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = rejectFailure;
+                    tx.onabort = rejectFailure;
+                }),
         );
     }
 
@@ -269,10 +334,31 @@ export const Storage = (() => {
             () => memory.getFile(type),
             (db) =>
                 new Promise((resolve, reject) => {
-                    const tx = db.transaction(FILE_STORE, "readonly");
-                    const request = tx.objectStore(FILE_STORE).get(type);
-                    request.onsuccess = () => resolve(normalizeStoredFile(request.result || null));
-                    request.onerror = () => reject(request.error);
+                    const tx = db.transaction([FILE_STORE, FILE_TEXT_STORE], "readonly");
+                    const metaRequest = tx.objectStore(FILE_STORE).get(type);
+                    const textRequest = tx.objectStore(FILE_TEXT_STORE).get(type);
+                    tx.oncomplete = () => {
+                        const metadata = metaRequest.result || null;
+                        if (!metadata) {
+                            resolve(null);
+                            return;
+                        }
+                        // Prefer the split text store; fall back to any inline text
+                        // on a record not yet migrated to v3.
+                        const textRecord = textRequest.result || null;
+                        const text =
+                            textRecord && typeof textRecord.text === "string"
+                                ? textRecord.text
+                                : metadata.text;
+                        resolve(normalizeStoredFile({ ...metadata, text }));
+                    };
+                    // tx.error is null on explicit aborts/quota, so wrap it in a
+                    // descriptive Error (matching the other transaction paths) so
+                    // callers and telemetry always get an actionable Error.
+                    const rejectFailure = () =>
+                        reject(idbFailure(tx.error, "IndexedDB transaction failed"));
+                    tx.onerror = rejectFailure;
+                    tx.onabort = rejectFailure;
                 }),
         );
     }
@@ -290,7 +376,11 @@ export const Storage = (() => {
                     const request = tx.objectStore(FILE_STORE).getAll();
                     /* v8 ignore next */
                     request.onsuccess = () =>
-                        resolve((request.result || []).map(normalizeStoredFile).filter(Boolean));
+                        resolve(
+                            (request.result || [])
+                                .map(normalizeStoredFileMetadata)
+                                .filter(Boolean),
+                        );
                     request.onerror = () => reject(request.error);
                 }),
         );
@@ -338,8 +428,12 @@ export const Storage = (() => {
             () => memory.clearAll(),
             (db) =>
                 new Promise((resolve, reject) => {
-                    const tx = db.transaction([FILE_STORE, ANALYTICS_STORE], "readwrite");
+                    const tx = db.transaction(
+                        [FILE_STORE, FILE_TEXT_STORE, ANALYTICS_STORE],
+                        "readwrite",
+                    );
                     tx.objectStore(FILE_STORE).clear();
+                    tx.objectStore(FILE_TEXT_STORE).clear();
                     tx.objectStore(ANALYTICS_STORE).clear();
                     const rejectFailure = () =>
                         reject(idbFailure(tx.error, "IndexedDB transaction failed"));

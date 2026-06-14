@@ -116,6 +116,28 @@ describe("ConnectionsPage", () => {
         expect(document.getElementById("connectionsGrid").hidden).toBe(true);
     });
 
+    it("shows the storage-error state when the connections text record is missing", async () => {
+        // Metadata is present but the text record is gone (cleared in another
+        // tab / degraded persistence); this must surface as a load failure, not
+        // the "not uploaded" empty state.
+        Storage.getFile.mockResolvedValue({
+            type: "connections",
+            name: "Connections.csv",
+            rowCount: 5,
+            updatedAt: 10,
+        });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("connectionsEmpty").hidden).toBe(false);
+        expect(
+            document.getElementById("connectionsEmpty").querySelector("h2").textContent,
+        ).toContain("Storage error");
+    });
+
     it("initializes on route change when the page is not initialized yet", async () => {
         Storage.getFile.mockResolvedValue(null);
         DataCache.get.mockReturnValue(null);
@@ -598,19 +620,31 @@ describe("ConnectionsPage", () => {
         );
     });
 
-    it("uses cached file from DataCache when available (line 287)", async () => {
-        const fileRecord = { text: "csv", type: "connections" };
-        DataCache.get.mockImplementation((key) =>
-            key === "storage:file:connections" ? fileRecord : null,
-        );
+    it("loads the connections text from storage and caches metadata only", async () => {
+        // The per-type cache holds metadata only, so the CSV text is always loaded
+        // from storage when parsing (the dataReady guard prevents redundant reads).
+        DataCache.get.mockImplementation(() => null);
+        DataCache.set.mockClear();
+        Storage.getFile.mockReset();
+        Storage.getFile.mockResolvedValue({
+            type: "connections",
+            text: "csv",
+            rowCount: 2,
+            updatedAt: 5,
+        });
 
-        const callsBefore = Storage.getFile.mock.calls.length;
         ConnectionsPage.init();
         await ConnectionsPage.onRouteChange({});
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Storage.getFile should NOT be called since DataCache had the data
-        expect(Storage.getFile.mock.calls.length).toBe(callsBefore);
+        // Text is loaded from storage (the cache can't provide it)...
+        expect(Storage.getFile).toHaveBeenCalledWith("connections");
+        // ...and the per-type cache is refreshed without the text.
+        const cacheSet = DataCache.set.mock.calls.find(
+            (call) => call[0] === "storage:file:connections",
+        );
+        expect(cacheSet).toBeTruthy();
+        expect(cacheSet[1].text).toBeUndefined();
     });
 
     it("tooltip is clamped to viewport when it would overflow right/bottom edges", async () => {

@@ -219,9 +219,18 @@ function init() {
             if (footer && toggleButton && statusLabel) {
                 const showFooter = offerTelemetry || granted;
                 footer.hidden = !showFooter;
-                statusLabel.textContent = granted
-                    ? "Diagnostics are on."
-                    : "Diagnostics are off.";
+                // Stored consent only means diagnostics are actually running when the
+                // build can send them (a DSN is present). If consent was carried
+                // forward into a build without one, say so rather than claim "on".
+                let statusText;
+                if (granted && !offerTelemetry) {
+                    statusText = "Diagnostics are on but unavailable in this build.";
+                } else if (granted) {
+                    statusText = "Diagnostics are on.";
+                } else {
+                    statusText = "Diagnostics are off.";
+                }
+                statusLabel.textContent = statusText;
                 toggleButton.textContent = granted
                     ? "Turn off diagnostics"
                     : "Turn on diagnostics";

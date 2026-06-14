@@ -268,6 +268,32 @@ describe("app init wiring", () => {
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
+    it("marks diagnostics unavailable when consent is stored but no DSN is built in", async () => {
+        telemetryConsentGranted.mockReturnValue(true);
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "";
+
+        vi.resetModules();
+        await import("../src/app.js");
+
+        // Footer still shows so stale consent can be cleared, but the label must not
+        // claim diagnostics are on when the build can never send them.
+        expect(document.getElementById("appFooter").hidden).toBe(false);
+        expect(document.getElementById("telemetryStatusLabel").textContent).toContain(
+            "unavailable",
+        );
+        const toggle = document.getElementById("telemetryToggleBtn");
+        expect(toggle.textContent).toContain("Turn off");
+
+        // Revoking the stale consent removes the footer entirely (nothing to offer).
+        toggle.click();
+        expect(setTelemetryConsent).toHaveBeenCalledWith(false);
+        expect(document.getElementById("appFooter").hidden).toBe(true);
+
+        telemetryConsentGranted.mockReturnValue(false);
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
     it("does not re-show the banner after enabling and then revoking in one session", async () => {
         const original = import.meta.env.VITE_SENTRY_DSN;
         import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";

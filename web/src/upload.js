@@ -95,6 +95,7 @@ export const UploadPage = (() => {
     let primeTimerId = null;
     let primeIdleId = null;
     let pendingPrimePayload = null;
+    let primeInFlight = null;
     let lastProgressPercent = 0;
     let storagePersistenceRequested = false;
     // Restart throttle: at most MAX_WORKER_RESTARTS within WORKER_RESTART_WINDOW_MS.
@@ -1300,18 +1301,44 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Load the pending shares/comments text from storage and post it to the
-     * worker. Text is fetched here (not held in the file cache) so large exports
-     * stay in IndexedDB. Best-effort: a load failure is logged and skipped.
+     * Capture the pending prime payload and queue its restoreFiles post. The
+     * async load + post is serialized through `primeInFlight` so concurrent
+     * primes (e.g. restartWorker's idle prime racing a pre-upload immediate
+     * prime) still emit their restoreFiles in invocation order. Without this a
+     * slow earlier prime could post after a later prime's addFile and revert the
+     * worker to the stored set, breaking the documented FIFO ordering. Callers
+     * await the returned promise to know the post (and any prior one) has run.
      * @returns {Promise<void>}
      */
-    async function primeAnalyticsWorkerNow() {
+    function primeAnalyticsWorkerNow() {
         if (!worker || !pendingPrimePayload) {
-            return;
+            return Promise.resolve();
         }
         const { signature } = pendingPrimePayload;
         pendingPrimePayload = null;
 
+        const previous = primeInFlight || Promise.resolve();
+        const run = previous.then(() => postPrimeToWorker(signature));
+        primeInFlight = run.finally(() => {
+            if (primeInFlight === run) {
+                primeInFlight = null;
+            }
+        });
+        return primeInFlight;
+    }
+
+    /**
+     * Load the captured shares/comments text from storage and post it to the
+     * worker. Text is fetched here (not held in the file cache) so large exports
+     * stay in IndexedDB. Best-effort: a load failure is logged and skipped. Runs
+     * inside the `primeInFlight` chain so posts stay ordered.
+     * @param {string} signature - Payload signature recorded once posted
+     * @returns {Promise<void>}
+     */
+    async function postPrimeToWorker(signature) {
+        if (!worker) {
+            return;
+        }
         let sharesCsv = "";
         let commentsCsv = "";
         try {

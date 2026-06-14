@@ -352,8 +352,13 @@ export const Storage = (() => {
                                 : metadata.text;
                         resolve(normalizeStoredFile({ ...metadata, text }));
                     };
-                    tx.onerror = () => reject(tx.error);
-                    tx.onabort = () => reject(tx.error);
+                    // tx.error is null on explicit aborts/quota, so wrap it in a
+                    // descriptive Error (matching the other transaction paths) so
+                    // callers and telemetry always get an actionable Error.
+                    const rejectFailure = () =>
+                        reject(idbFailure(tx.error, "IndexedDB transaction failed"));
+                    tx.onerror = rejectFailure;
+                    tx.onabort = rejectFailure;
                 }),
         );
     }

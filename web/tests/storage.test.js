@@ -210,6 +210,20 @@ describe("Storage", () => {
             expect(reason.message).toBe("IndexedDB transaction failed");
         });
 
+        it("getFile rejects with an Error when the read transaction aborts", async () => {
+            await Storage.clearAll();
+            await Storage.saveFile("shares", { name: "x.csv", text: "a,b", rowCount: 1 });
+            abortNextTransaction();
+            // tx.error is null on an explicit abort, so getFile must still reject
+            // with a concrete Error (not null) for telemetry and callers.
+            let reason;
+            await Storage.getFile("shares").catch((error) => {
+                reason = error;
+            });
+            expect(reason).toBeInstanceOf(Error);
+            expect(reason.message).toBe("IndexedDB transaction failed");
+        });
+
         it("clearAll rejects with an Error when the clear transaction aborts", async () => {
             abortNextTransaction();
             let reason;

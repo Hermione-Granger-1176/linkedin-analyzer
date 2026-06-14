@@ -400,4 +400,32 @@ describe("CleanPage", () => {
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
         expect(captureError).toHaveBeenCalled();
     });
+
+    it("abandons a stale preview render when the selection changes mid-load", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+            { type: "comments", updatedAt: 20, rowCount: 1, name: "Comments.csv" },
+        ]);
+        // Hold the on-demand text load open so we can switch the selection
+        // before it resolves, simulating an out-of-order UI update.
+        let resolveText;
+        Storage.getFile.mockReturnValue(
+            new Promise((resolve) => {
+                resolveText = resolve;
+            }),
+        );
+
+        await CleanPage.init();
+
+        // The user switches from the (checked) shares radio to comments while
+        // the shares text is still loading.
+        document.querySelector('input[value="shares"]').checked = false;
+        document.querySelector('input[value="comments"]').checked = true;
+
+        resolveText({ text: "csv" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The stale shares render must bail after the await instead of parsing.
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+    });
 });

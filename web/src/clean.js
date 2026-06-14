@@ -236,6 +236,11 @@ export const CleanPage = (() => {
             try {
                 // The cached record is metadata only; load the CSV text on demand.
                 const stored = await Storage.getFile(type);
+                // The selection may have changed while the text load was in
+                // flight; abandon this stale render so the newer one wins.
+                if (getSelectedType() !== type) {
+                    return;
+                }
                 text = stored && stored.text ? stored.text : "";
             } catch (error) {
                 handleParseError(error, "Unable to load file.", type, file.name || null);

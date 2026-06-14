@@ -1282,6 +1282,20 @@
             </section>
         </main>
 
+        <footer class="app-footer" id="appFooter" hidden>
+            <p class="app-footer-note">
+                <span id="telemetryStatusLabel" data-testid="telemetry-status"></span>
+                File contents never leave your browser.
+            </p>
+            <button
+                class="ghost-btn"
+                id="telemetryToggleBtn"
+                data-testid="telemetry-toggle"
+                type="button"
+                aria-pressed="false"
+            ></button>
+        </footer>
+
         <div class="status-banner" id="offlineBanner" hidden aria-live="polite">
             <p>You are offline. Your data stays local and can still be processed.</p>
         </div>

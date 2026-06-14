@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DomEvents } from "../src/dom-events.js";
 import { AppRouter } from "../src/router.js";
 import { ScreenManager } from "../src/screen-manager.js";
-import { initSentry, setTelemetryConsent, telemetryConsentGranted } from "../src/sentry.js";
+import {
+    disableTelemetry,
+    initSentry,
+    setTelemetryConsent,
+    telemetryConsentGranted,
+} from "../src/sentry.js";
 import { Session } from "../src/session.js";
 import { initTelemetry } from "../src/telemetry.js";
 import { Tutorial } from "../src/tutorial.js";
@@ -37,6 +42,7 @@ vi.mock("../src/screen-manager.js", () => ({
 }));
 vi.mock("../src/sentry.js", () => ({
     captureError: vi.fn(),
+    disableTelemetry: vi.fn(),
     initSentry: vi.fn(),
     setTelemetryConsent: vi.fn(),
     telemetryConsentGranted: vi.fn(() => false),
@@ -56,6 +62,9 @@ describe("app init wiring", () => {
             <div id="telemetryBanner" hidden></div>
             <button id="telemetryEnableBtn"></button>
             <button id="telemetryDismissBtn"></button>
+            <footer id="appFooter" hidden></footer>
+            <span id="telemetryStatusLabel"></span>
+            <button id="telemetryToggleBtn" aria-pressed="false"></button>
         `;
         vi.clearAllMocks();
     });
@@ -218,6 +227,68 @@ describe("app init wiring", () => {
         document.getElementById("telemetryDismissBtn").click();
         expect(document.getElementById("telemetryBanner").hidden).toBe(true);
 
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("shows the footer toggle in the off state when diagnostics are offered", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        vi.resetModules();
+        await import("../src/app.js");
+
+        const footer = document.getElementById("appFooter");
+        const toggle = document.getElementById("telemetryToggleBtn");
+        expect(footer.hidden).toBe(false);
+        expect(toggle.textContent).toContain("Turn on");
+        expect(toggle.getAttribute("aria-pressed")).toBe("false");
+        expect(document.getElementById("telemetryStatusLabel").textContent).toContain("off");
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("enables diagnostics from the footer toggle and reflects the on state", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        vi.resetModules();
+        await import("../src/app.js");
+
+        document.getElementById("telemetryToggleBtn").click();
+
+        expect(setTelemetryConsent).toHaveBeenCalledWith(true);
+        expect(initSentry).toHaveBeenCalled();
+        expect(initTelemetry).toHaveBeenCalled();
+        const toggle = document.getElementById("telemetryToggleBtn");
+        expect(toggle.textContent).toContain("Turn off");
+        expect(toggle.getAttribute("aria-pressed")).toBe("true");
+        // Enabling from the footer also clears the proactive banner.
+        expect(document.getElementById("telemetryBanner").hidden).toBe(true);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("revokes diagnostics from the footer toggle when already granted", async () => {
+        telemetryConsentGranted.mockReturnValue(true);
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        vi.resetModules();
+        await import("../src/app.js");
+
+        const toggle = document.getElementById("telemetryToggleBtn");
+        expect(toggle.textContent).toContain("Turn off");
+
+        toggle.click();
+
+        expect(setTelemetryConsent).toHaveBeenCalledWith(false);
+        expect(disableTelemetry).toHaveBeenCalled();
+        expect(toggle.textContent).toContain("Turn on");
+        expect(toggle.getAttribute("aria-pressed")).toBe("false");
+        // The footer stays visible after revoking so consent remains reversible.
+        expect(document.getElementById("appFooter").hidden).toBe(false);
+
+        telemetryConsentGranted.mockReturnValue(false);
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 

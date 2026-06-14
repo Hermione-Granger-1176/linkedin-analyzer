@@ -106,6 +106,52 @@ test("shows an error hint for malformed CSV uploads", async ({ page }) => {
     await expect(page.locator("#uploadHint")).toContainText("Could not auto-detect file type");
 });
 
+const TELEMETRY_CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
+
+test("telemetry consent: grant, dismiss, and revoke flow", async ({ page }) => {
+    // Force the diagnostics offer without baking a Sentry DSN into the build, so
+    // the banner/footer render but enabling never actually starts the SDK.
+    await page.addInitScript(() => {
+        window.__LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__ = true;
+    });
+    await page.goto("/#home");
+
+    const banner = page.locator("#telemetryBanner");
+    const toggle = page.getByTestId("telemetry-toggle");
+    const footer = page.locator("#appFooter");
+
+    // Banner prompts and the footer toggle starts in the off state.
+    await expect(banner).toBeVisible();
+    await expect(footer).toBeVisible();
+    await expect(toggle).toHaveText(/Turn on/);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    // Dismissing the banner leaves the footer control in place.
+    await page.locator("#telemetryDismissBtn").click();
+    await expect(banner).toBeHidden();
+    await expect(footer).toBeVisible();
+
+    // Enabling from the footer persists consent and flips the control on.
+    await toggle.click();
+    await expect(toggle).toHaveText(/Turn off/);
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(await page.evaluate((key) => localStorage.getItem(key), TELEMETRY_CONSENT_KEY)).toBe(
+        "granted",
+    );
+
+    // Consent survives a reload, and the banner no longer re-prompts.
+    await page.reload();
+    await expect(banner).toBeHidden();
+    await expect(toggle).toHaveText(/Turn off/);
+
+    // Revoking clears stored consent.
+    await toggle.click();
+    await expect(toggle).toHaveText(/Turn on/);
+    expect(
+        await page.evaluate((key) => localStorage.getItem(key), TELEMETRY_CONSENT_KEY),
+    ).toBeNull();
+});
+
 test("analytics screen has no critical accessibility violations", async ({ page }) => {
     await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV]);
     await waitForLoadedStatus(page, "sharesStatus");

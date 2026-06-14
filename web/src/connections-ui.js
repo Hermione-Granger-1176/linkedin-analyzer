@@ -535,9 +535,7 @@ export const ConnectionsPage = (() => {
                     lastEntry.entryType === "measure" &&
                     Number.isFinite(lastEntry.duration)
                 ) {
-                    reportPerformanceMeasure(name, lastEntry.duration, {
-                        module: "connections-ui",
-                    });
+                    reportPerformanceMeasure(name, lastEntry.duration);
                 }
             }
             /* v8 ignore next 3 */

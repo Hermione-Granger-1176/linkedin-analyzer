@@ -117,6 +117,10 @@ function hydrateAnalytics(base) {
 
 /**
  * Post an error message back to the main thread.
+ * `message` must be a static description (or an Error message from the parser /
+ * analytics engine, which never interpolate row/cell content) so the value that
+ * `analytics-ui` forwards to Sentry can never carry user data. `worker-contracts`
+ * additionally length-caps it on receipt.
  * @param {number} requestId - ID of the originating request
  * @param {string} message - Human-readable error description
  */

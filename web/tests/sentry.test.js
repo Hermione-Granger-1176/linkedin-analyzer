@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@sentry/browser", () => ({
     init: vi.fn(),
+    close: vi.fn(),
     captureException: vi.fn(),
     captureMessage: vi.fn(),
     withScope: vi.fn((callback) => {
@@ -268,7 +269,62 @@ describe("sentry", () => {
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
-    it("captures metric messages when Sentry is ready", async () => {
+    it("buffers metrics and flushes them as one numeric session-metrics event", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.captureMessage.mockClear();
+        const setExtra = vi.fn();
+        sentry.withScope.mockImplementationOnce((callback) => {
+            callback({ setExtra, setTag: vi.fn(), setLevel: vi.fn() });
+        });
+
+        const { initSentry, captureMetric, flushMetrics, setTelemetryConsent } = await import(
+            "../src/sentry.js"
+        );
+        setTelemetryConsent(true);
+        initSentry();
+
+        // Buffering does not send anything on its own.
+        captureMetric("web-vital:LCP", 2500);
+        captureMetric("web-vital:LCP", 2600);
+        captureMetric("perf:load", 123.4);
+        expect(sentry.captureMessage).not.toHaveBeenCalled();
+
+        flushMetrics();
+        expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
+        expect(sentry.captureMessage).toHaveBeenCalledWith("session-metrics");
+        // Latest value wins; repeated metrics carry a count.
+        expect(setExtra).toHaveBeenCalledWith("metric:web-vital:LCP", 2600);
+        expect(setExtra).toHaveBeenCalledWith("metric:web-vital:LCP:count", 2);
+        expect(setExtra).toHaveBeenCalledWith("metric:perf:load", 123.4);
+        // Only numeric extras are emitted.
+        for (const [, value] of setExtra.mock.calls) {
+            expect(typeof value).toBe("number");
+        }
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("flushMetrics is a no-op when nothing is buffered", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.captureMessage.mockClear();
+
+        const { initSentry, flushMetrics, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+        flushMetrics();
+
+        expect(sentry.captureMessage).not.toHaveBeenCalled();
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("flushes buffered metrics when the page is hidden", async () => {
         const original = import.meta.env.VITE_SENTRY_DSN;
         import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
 
@@ -278,41 +334,60 @@ describe("sentry", () => {
         const { initSentry, captureMetric, setTelemetryConsent } = await import("../src/sentry.js");
         setTelemetryConsent(true);
         initSentry();
-        captureMetric("perf:load", 123.4, { module: "unit-test" });
+        captureMetric("perf:load", 10);
 
-        expect(sentry.withScope).toHaveBeenCalledTimes(1);
-        expect(sentry.captureMessage).toHaveBeenCalledWith("metric:perf:load");
+        Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => "hidden",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        expect(sentry.captureMessage).toHaveBeenCalledWith("session-metrics");
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
-    it("omits filename-related context from metric extras", async () => {
+    it("does not flush on visibilitychange while the page stays visible", async () => {
         const original = import.meta.env.VITE_SENTRY_DSN;
         import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
 
         const sentry = await import("@sentry/browser");
-        const setExtra = vi.fn();
-        sentry.withScope.mockImplementationOnce((callback) => {
-            callback({
-                setExtra,
-                setTag: vi.fn(),
-                setLevel: vi.fn(),
-            });
-        });
+        sentry.captureMessage.mockClear();
 
-        const { initSentry, captureMetric, setTelemetryConsent } = await import(
+        const { initSentry, captureMetric, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+        captureMetric("perf:load", 10);
+
+        Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => "visible",
+        });
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        expect(sentry.captureMessage).not.toHaveBeenCalled();
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("re-initializing keeps a single flush batch", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.captureMessage.mockClear();
+
+        const { initSentry, captureMetric, flushMetrics, setTelemetryConsent } = await import(
             "../src/sentry.js"
         );
         setTelemetryConsent(true);
+        // A second init (e.g. re-enabling after revoke) must not duplicate flush wiring.
         initSentry();
-        captureMetric("upload:duration", 50, {
-            uploadedFilename: "private-shares.csv",
-            fileType: "shares",
-        });
+        initSentry();
+        captureMetric("perf:load", 10);
+        flushMetrics();
 
-        expect(setExtra).toHaveBeenCalledWith("metric.value", 50);
-        expect(setExtra).toHaveBeenCalledWith("fileType", "shares");
-        expect(setExtra).not.toHaveBeenCalledWith("uploadedFilename", expect.anything());
+        expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });
@@ -324,13 +399,50 @@ describe("sentry", () => {
         const sentry = await import("@sentry/browser");
         sentry.captureMessage.mockClear();
 
-        const { initSentry, captureMetric, setTelemetryConsent } = await import("../src/sentry.js");
+        const { initSentry, captureMetric, flushMetrics, setTelemetryConsent } = await import(
+            "../src/sentry.js"
+        );
         setTelemetryConsent(true);
         initSentry();
         captureMetric("", 123);
         captureMetric("perf:bad", Number.NaN);
+        flushMetrics();
 
         expect(sentry.captureMessage).not.toHaveBeenCalled();
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("stops capturing after telemetry is disabled at runtime", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.captureMessage.mockClear();
+        sentry.captureException.mockClear();
+
+        const {
+            initSentry,
+            captureMetric,
+            captureError,
+            disableTelemetry,
+            flushMetrics,
+            setTelemetryConsent,
+        } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+        captureMetric("perf:load", 10);
+
+        disableTelemetry();
+        expect(sentry.close).toHaveBeenCalled();
+
+        // Buffered metrics are dropped and later captures are no-ops.
+        flushMetrics();
+        captureMetric("perf:load", 20);
+        captureError(new Error("after-revoke"));
+        flushMetrics();
+        expect(sentry.captureMessage).not.toHaveBeenCalled();
+        expect(sentry.captureException).not.toHaveBeenCalled();
 
         import.meta.env.VITE_SENTRY_DSN = original;
     });

@@ -13,6 +13,7 @@ import { initRuntime } from "./runtime.js";
 import { ScreenManager } from "./screen-manager.js";
 import {
     captureError,
+    disableTelemetry,
     initSentry,
     setTelemetryConsent,
     telemetryConsentGranted,
@@ -87,7 +88,7 @@ function init() {
     Tutorial.init();
     registerRoutes();
     bindRouteLinks();
-    initTelemetryBanner(hasTelemetryConsent);
+    initConsentControls(hasTelemetryConsent);
 
     runSessionCleanup();
 
@@ -163,31 +164,81 @@ function init() {
         });
     }
 
-    function initTelemetryBanner(consentGranted) {
+    /**
+     * Wire the opt-in diagnostics banner and the persistent footer toggle.
+     * The banner is a one-time proactive prompt; the footer reflects the current
+     * consent state and lets the user enable or revoke diagnostics at any time.
+     * @param {boolean} consentGranted - Whether telemetry consent is already stored
+     */
+    function initConsentControls(consentGranted) {
         const banner = document.getElementById("telemetryBanner");
         const enableButton = document.getElementById("telemetryEnableBtn");
         const dismissButton = document.getElementById("telemetryDismissBtn");
+        const footer = document.getElementById("appFooter");
+        const toggleButton = document.getElementById("telemetryToggleBtn");
+        const statusLabel = document.getElementById("telemetryStatusLabel");
 
-        if (!banner || !enableButton || !dismissButton) {
-            return;
-        }
+        // Diagnostics are only meaningful when a Sentry DSN is built in. The test
+        // hook lets e2e exercise the consent flow without baking a DSN into the build.
+        const globalWindow =
+            /** @type {Window & { __LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__?: boolean }} */ (
+                window
+            );
+        const offerTelemetry =
+            Boolean(import.meta.env.VITE_SENTRY_DSN) ||
+            /* v8 ignore next */
+            Boolean(globalWindow.__LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__);
 
-        const shouldOfferTelemetry = Boolean(import.meta.env.VITE_SENTRY_DSN);
-        if (!shouldOfferTelemetry || consentGranted) {
-            banner.hidden = true;
-            return;
-        }
+        let granted = consentGranted;
+        let bannerDismissed = false;
 
-        banner.hidden = false;
-        enableButton.addEventListener("click", () => {
+        const enable = () => {
             setTelemetryConsent(true);
-            banner.hidden = true;
+            granted = true;
             initSentry();
             initTelemetry();
-        });
-        dismissButton.addEventListener("click", () => {
-            banner.hidden = true;
-        });
+            render();
+        };
+
+        const revoke = () => {
+            setTelemetryConsent(false);
+            disableTelemetry();
+            granted = false;
+            render();
+        };
+
+        /** Reflect the current consent state in the banner and footer. */
+        function render() {
+            if (banner) {
+                banner.hidden = !(offerTelemetry && !granted && !bannerDismissed);
+            }
+            if (footer && toggleButton && statusLabel) {
+                const showFooter = offerTelemetry || granted;
+                footer.hidden = !showFooter;
+                statusLabel.textContent = granted
+                    ? "Diagnostics are on."
+                    : "Diagnostics are off.";
+                toggleButton.textContent = granted
+                    ? "Turn off diagnostics"
+                    : "Turn on diagnostics";
+                toggleButton.setAttribute("aria-pressed", granted ? "true" : "false");
+            }
+        }
+
+        if (enableButton) {
+            enableButton.addEventListener("click", enable);
+        }
+        if (dismissButton) {
+            dismissButton.addEventListener("click", () => {
+                bannerDismissed = true;
+                render();
+            });
+        }
+        if (toggleButton) {
+            toggleButton.addEventListener("click", () => (granted ? revoke() : enable()));
+        }
+
+        render();
     }
 }
 

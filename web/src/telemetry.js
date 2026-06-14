@@ -5,12 +5,12 @@ import { captureError, captureMetric } from "./sentry.js";
 let telemetryInitialized = false;
 
 /**
- * Capture a duration measurement in milliseconds.
+ * Capture a duration measurement in milliseconds. The value is buffered numerically;
+ * the metric name carries enough context, so no string payload is attached.
  * @param {string} name
  * @param {number} durationMs
- * @param {object} [context]
  */
-export function reportPerformanceMeasure(name, durationMs, context) {
+export function reportPerformanceMeasure(name, durationMs) {
     if (typeof name !== "string" || !name) {
         return;
     }
@@ -19,10 +19,7 @@ export function reportPerformanceMeasure(name, durationMs, context) {
         return;
     }
 
-    captureMetric(`perf:${name}`, durationMs, {
-        unit: "ms",
-        ...(context && typeof context === "object" ? context : {}),
-    });
+    captureMetric(`perf:${name}`, durationMs);
 }
 
 /**
@@ -45,15 +42,7 @@ export function initTelemetry() {
         }
 
         const name = metric.name || "unknown";
-        const unit = name === "CLS" ? "" : "ms";
-
-        captureMetric(`web-vital:${name}`, value, {
-            unit,
-            id: metric.id || null,
-            rating: metric.rating || null,
-            delta: Number.isFinite(metric.delta) ? metric.delta : null,
-            navigationType: metric.navigationType || null,
-        });
+        captureMetric(`web-vital:${name}`, value);
     };
 
     try {

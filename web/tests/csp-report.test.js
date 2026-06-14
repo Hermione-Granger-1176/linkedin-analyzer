@@ -274,6 +274,33 @@ describe("csp-report handler", () => {
         logSpy.mockRestore();
     });
 
+    it("never logs a non-URL blocked-uri with a path, query, or newline", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src\ninjected log line",
+                        "blocked-uri": "evil.example/tracker.gif?u=secret",
+                    },
+                },
+            },
+            res,
+        );
+
+        const summary = logSpy.mock.calls[0][0];
+        // Attacker-supplied path/query is replaced; the line stays single and clean.
+        expect(summary).toBe("CSP violation: img-src injected log line blocked (non-url)");
+        expect(summary).not.toContain("secret");
+        expect(summary).not.toContain("tracker.gif");
+        expect(summary).not.toContain("\n");
+        logSpy.mockRestore();
+    });
+
     it("summarizes a non-URL blocked-uri keyword verbatim", async () => {
         const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 

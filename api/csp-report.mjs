@@ -127,31 +127,53 @@ function parseCspReport(body) {
     return null;
 }
 
+// Real CSP keyword sources (the non-URL values browsers put in blocked-uri).
+const CSP_KEYWORD = /^[a-z][a-z-]*$/;
+// Control characters and newlines, collapsed to spaces to defeat log injection.
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]+/g;
+
+/**
+ * Reduce an attacker-influenced field to a single safe log token: strip control
+ * characters and newlines (no log injection / multi-line), trim, and bound length.
+ * @param {unknown} value - Raw field value.
+ * @param {number} maxLength - Maximum length to keep.
+ * @returns {string} The sanitized token.
+ */
+function sanitizeToken(value, maxLength) {
+    return String(value).replace(CONTROL_CHARS, " ").trim().slice(0, maxLength);
+}
+
 /**
  * Build a single-line, host-only summary of a CSP violation for log search.
- * Never includes query strings or paths, so no user-derived data is logged.
+ * This endpoint is public, so every field is treated as untrusted: the blocked
+ * value is reduced to a host, a scheme, or a known keyword — never a path/query —
+ * and all fields are stripped of newlines and length-bounded.
  * @param {object} report - A CSP violation object (either report shape).
  * @returns {string} A summary like `CSP violation: img-src blocked evil.example`.
  */
 function summarizeReport(report) {
-    const directive =
+    const directive = sanitizeToken(
         report["effective-directive"] ||
-        report.effectiveDirective ||
-        report["violated-directive"] ||
-        report.violatedDirective ||
-        "unknown";
+            report.effectiveDirective ||
+            report["violated-directive"] ||
+            report.violatedDirective ||
+            "unknown",
+        64,
+    );
     const blockedUri = report["blocked-uri"] || report.blockedURL || "";
     let blocked = "(none)";
     if (typeof blockedUri === "string" && blockedUri) {
         try {
             const url = new URL(blockedUri);
             // Schemes like data:/blob: have no host; fall back to the scheme only
-            // (never the full URI, which could embed inline content) so the log
-            // line stays host-only.
+            // (never the full URI, which could embed inline content).
             blocked = url.host || url.protocol;
         } catch {
-            // Keywords like "inline"/"eval" are not URLs; report them verbatim.
-            blocked = blockedUri;
+            // Not a URL: only echo genuine CSP keywords (inline, eval, self, …).
+            // Anything else from this public endpoint becomes a placeholder so no
+            // attacker-supplied path/query reaches the log.
+            const token = sanitizeToken(blockedUri, 64);
+            blocked = CSP_KEYWORD.test(token) ? token : "(non-url)";
         }
     }
     return `CSP violation: ${directive} blocked ${blocked}`;

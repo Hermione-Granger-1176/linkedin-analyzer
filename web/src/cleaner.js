@@ -94,6 +94,14 @@ export const LinkedInCleaner = (() => {
         maxFieldChars: 200000,
     });
 
+    // Auto-detection only needs the header row, which sits at the top of the file
+    // (after at most a few skip rows). For large files, parse just this prefix to
+    // match a type, then full-parse the matched type once — instead of full-parsing
+    // the whole file up to three times (one per distinct option/skip-row combo).
+    // Files at or below this size skip the pre-pass and use the original full
+    // multi-type detection, so small uploads are unaffected.
+    const PREFIX_DETECT_CHARS = 64 * 1024;
+
     /** OWASP formula injection prefixes (= + - @ TAB CR LF). */
     const FORMULA_PREFIXES = new Set(["=", "+", "-", "@", "\t", "\r", "\n"]);
 
@@ -837,6 +845,34 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
+     * Cheaply detect a file's type from its header row by parsing only a prefix
+     * of the text. Returns the first supported type (in FILE_TYPES order) whose
+     * required columns are present, or null when no prefix match is found.
+     *
+     * A truncated tail can only corrupt the prefix's last row, never the header
+     * at the top, so a positive match is reliable; a null result falls back to
+     * full multi-type detection in the caller, which keeps behaviour identical.
+     * Uses a throwaway parse cache so truncated parses never poison the caller's
+     * full-parse cache.
+     * @param {string} csvText - Raw CSV text
+     * @returns {string|null} Detected file type, or null if unknown from the prefix
+     */
+    function detectTypeFromPrefix(csvText) {
+        const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
+        const prefixCache = new Map();
+        for (const type of FILE_TYPES) {
+            const parsed = parseCSV(prefix, type, prefixCache);
+            if (parsed.error) {
+                continue;
+            }
+            if (validateColumns(parsed.headers, type).valid) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Validate that required columns exist in the data
      * @param {string[]} headers - Array of column headers
      * @param {string} fileType - Supported file type
@@ -974,6 +1010,27 @@ export const LinkedInCleaner = (() => {
         const parseCache = new Map();
 
         if (fileType === "auto") {
+            // Fast path for large files: detect the type from a small prefix, then
+            // full-parse only the matched type once. Falls through to full
+            // multi-type detection on a prefix miss or if the matched type fails
+            // to parse/validate on the whole file, so the result is unchanged.
+            if (typeof csvText === "string" && csvText.length > PREFIX_DETECT_CHARS) {
+                const prefixType = detectTypeFromPrefix(csvText);
+                if (prefixType) {
+                    const parsed = parseCSV(csvText, prefixType, parseCache);
+                    if (!parsed.error && validateColumns(parsed.headers, prefixType).valid) {
+                        const cleanedData = cleanData(parsed.data, prefixType);
+                        return makeResult(true, null, {
+                            fileType: prefixType,
+                            detectedType: prefixType,
+                            headers: parsed.headers,
+                            cleanedData,
+                            rowCount: cleanedData.length,
+                        });
+                    }
+                }
+            }
+
             const matches = detectMatchingFileTypes(csvText, parseCache);
             if (matches.length) {
                 const selected = matches[0];

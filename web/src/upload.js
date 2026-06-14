@@ -283,7 +283,11 @@ export const UploadPage = (() => {
             const files = await Storage.getAllFiles();
             DataCache.set("storage:files", files);
             const fileMap = getFileMap(files);
-            scheduleAnalyticsWorkerPrime(fileMap, { priority: "idle" });
+            // Intentionally do NOT prime the worker on load: the dashboard reads
+            // the persisted analyticsBase directly and never needs the worker's
+            // raw shares/comments. Only a fresh upload (which recomputes the base)
+            // does, so priming is deferred to processFiles() — saving a redundant
+            // re-parse of shares+comments on every page load.
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
             // If a stale 24h session was just wiped, tell the user once rather than
@@ -434,6 +438,11 @@ export const UploadPage = (() => {
         if (activeJobs.size === 0) {
             showProgressOverlay();
         }
+        // Seed the worker with any already-stored shares/comments before sending
+        // the new file(s), so an added shares/comments file recomputes analytics
+        // from the full set rather than from the new file alone. Worker messages
+        // are FIFO, so this restoreFiles always lands before the addFile below.
+        primeWorkerFromCachedFiles();
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
@@ -1186,6 +1195,20 @@ export const UploadPage = (() => {
     }
 
     /**
+     * Prime the worker from the cached file snapshot when shares/comments exist.
+     * Used before an upload so a new analytics file recomputes from the full set;
+     * a no-op (via signature dedup) when the worker is already primed.
+     * @returns {void}
+     */
+    function primeWorkerFromCachedFiles() {
+        const cachedFiles = DataCache.get("storage:files");
+        if (!cachedFiles) {
+            return;
+        }
+        scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
+    }
+
+    /**
      * Seed worker with existing shares/comments datasets for accurate recompute.
      * Uses idle scheduling unless priority is immediate.
      * @param {{shares: object|null, comments: object|null}} fileMap - Stored files map
@@ -1229,9 +1252,10 @@ export const UploadPage = (() => {
             return;
         }
 
-        if (primeTimerId || primeIdleId) {
-            return;
-        }
+        // Cancel any in-flight idle/timeout prime before scheduling a fresh one so a
+        // repeated idle request can never leak a timer (the sole idle caller,
+        // restartWorker, already clears, but this keeps scheduling self-contained).
+        clearPrimeSchedule();
 
         if (typeof requestIdleCallback === "function") {
             primeIdleId = requestIdleCallback(

@@ -1085,6 +1085,88 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("loads stored files for priming when an upload races ahead of the cache", async () => {
+        // restoreState() is fired but not awaited in init(), so a fast upload can
+        // run before "storage:files" is cached. The prime must then read storage
+        // directly so the stored shares are still seeded before the new addFile.
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const storedFiles = [
+            { type: "shares", rowCount: 2, text: "shares-head\nr1\nr2", updatedAt: 10 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(storedFiles);
+        // Cache miss for "storage:files" forces the storage fallback in the prime.
+        DataCache.get.mockImplementation(() => null);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        const restoreIndex = types.indexOf("restoreFiles");
+        const addIndex = types.indexOf("addFile");
+        expect(restoreIndex).toBeGreaterThanOrEqual(0);
+        expect(workerInstance.postMessage.mock.calls[restoreIndex][0].payload.sharesCsv).toContain(
+            "shares-head",
+        );
+        expect(addIndex).toBeGreaterThan(restoreIndex);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("still uploads when priming's storage read fails", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        DataCache.get.mockImplementation(() => null);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Make the prime's storage fallback reject; the upload must still proceed.
+        Storage.getAllFiles.mockRejectedValueOnce(new Error("storage offline"));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        // No restoreFiles (prime failed), but the new file's addFile still goes out.
+        expect(types).toContain("addFile");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- Job timeout watchdog ------------------------------------------------
 
     it("restarts the worker and shows timeout hint when job times out", async () => {

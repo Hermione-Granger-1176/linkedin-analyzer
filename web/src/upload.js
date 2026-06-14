@@ -268,7 +268,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Restore upload status from IndexedDB and prime cache/worker on load.
+     * Restore upload status from IndexedDB and refresh the file cache on load.
+     * Does not prime the worker — that is deferred to the first upload (see
+     * processFiles); the dashboard reads the persisted analyticsBase directly.
      * @returns {Promise<void>}
      */
     async function restoreState() {
@@ -405,8 +407,9 @@ export const UploadPage = (() => {
     /**
      * Read CSV files and send them to the worker for processing.
      * @param {File[]} files - Selected files
+     * @returns {Promise<void>}
      */
-    function processFiles(files) {
+    async function processFiles(files) {
         const csvFiles = files.filter((file) => file.name.toLowerCase().endsWith(".csv"));
         if (!csvFiles.length) {
             setHint("Please upload CSV files.", true);
@@ -440,9 +443,16 @@ export const UploadPage = (() => {
         }
         // Seed the worker with any already-stored shares/comments before sending
         // the new file(s), so an added shares/comments file recomputes analytics
-        // from the full set rather than from the new file alone. Worker messages
-        // are FIFO, so this restoreFiles always lands before the addFile below.
-        primeWorkerFromCachedFiles();
+        // from the full set rather than from the new file alone. Awaiting here
+        // guarantees the restoreFiles is queued before the addFile messages below
+        // (worker messages are FIFO), even when an upload races ahead of the
+        // not-yet-awaited restoreState() on load.
+        try {
+            await primeWorkerFromStoredFiles();
+        } catch (error) {
+            // Priming is best-effort; a storage read failure must not block the upload.
+            captureError(error, { module: "upload", operation: "prime-before-upload" });
+        }
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
@@ -1195,15 +1205,19 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Prime the worker from the cached file snapshot when shares/comments exist.
-     * Used before an upload so a new analytics file recomputes from the full set;
-     * a no-op (via signature dedup) when the worker is already primed.
-     * @returns {void}
+     * Prime the worker with stored shares/comments before an upload so a new
+     * analytics file recomputes from the full set (a no-op via signature dedup
+     * when already primed). Reads the cached file snapshot, falling back to
+     * storage when the cache isn't populated yet — `restoreState()` is fired but
+     * not awaited in init(), so a fast upload can race ahead of it; loading here
+     * guarantees the prior shares/comments are seeded before the new addFile.
+     * @returns {Promise<void>}
      */
-    function primeWorkerFromCachedFiles() {
-        const cachedFiles = DataCache.get("storage:files");
+    async function primeWorkerFromStoredFiles() {
+        let cachedFiles = DataCache.get("storage:files");
         if (!cachedFiles) {
-            return;
+            cachedFiles = await Storage.getAllFiles();
+            DataCache.set("storage:files", cachedFiles);
         }
         scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
     }

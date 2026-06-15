@@ -203,6 +203,54 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsStatSentRatio").textContent).toBe("N/A");
     });
 
+    it("reloads outreach on re-entry so a later Messages upload appears without refresh", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        Storage.getOutreach.mockResolvedValue(null);
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("insightsAllTime").hidden).toBe(true);
+
+        // Leave Insights, "upload Messages" (outreach now stored), then return.
+        InsightsPage.onRouteLeave();
+        Storage.getOutreach.mockResolvedValue({
+            selfInitiated: 12,
+            replyRate: 0.25,
+            unansweredContacts: 3,
+            sentReceivedRatio: 2,
+        });
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("insightsAllTime").hidden).toBe(false);
+        expect(document.getElementById("insightsStatInitiated").textContent).toBe("12");
+    });
+
+    it("retries the outreach load after a storage error", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        Storage.getOutreach.mockRejectedValueOnce(new Error("idb down"));
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(document.getElementById("insightsAllTime").hidden).toBe(true);
+
+        // The error cleared the latch, so a subsequent entry retries and succeeds.
+        Storage.getOutreach.mockResolvedValue({
+            selfInitiated: 5,
+            replyRate: null,
+            unansweredContacts: 0,
+            sentReceivedRatio: null,
+        });
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("insightsStatInitiated").textContent).toBe("5");
+    });
+
     it("syncs range into router on button click", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);

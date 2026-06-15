@@ -58,7 +58,6 @@ export const InsightsPage = (() => {
         initialized = true;
         bindEvents();
         initWorker();
-        loadOutreach();
 
         DataCache.subscribe(handleCacheChange);
     }
@@ -75,6 +74,12 @@ export const InsightsPage = (() => {
         if (!initialized) {
             return;
         }
+
+        // Re-read the outreach summary on each route entry so stats saved after a
+        // later Messages upload appear without a refresh. The latch keeps this to
+        // one read per visit (filter changes re-enter here but find it loaded);
+        // onRouteLeave clears the latch so the next entry reloads.
+        loadOutreach();
 
         const range = parseRangeParam(params && params.range);
         applyRangeFromRoute(range);
@@ -95,6 +100,9 @@ export const InsightsPage = (() => {
     /** Cleanup when leaving route. */
     function onRouteLeave() {
         showInsightsLoading(false);
+        // Allow the next entry to reload outreach (e.g. after the user uploads
+        // Messages from another screen).
+        state.outreachLoaded = false;
     }
 
     /**
@@ -382,17 +390,17 @@ export const InsightsPage = (() => {
         if (state.outreachLoaded) {
             return;
         }
+        // Latch before the await so concurrent entries don't double-read; a load
+        // failure clears it again so a later entry can retry.
         state.outreachLoaded = true;
         try {
             state.outreach = await Storage.getOutreach();
         } catch (error) {
-            /* v8 ignore next 2 */
+            state.outreachLoaded = false;
             captureError(error, { module: "insights", operation: "load-outreach" });
             return;
         }
-        if (state.outreach) {
-            renderAllTime();
-        }
+        renderAllTime();
     }
 
     /**
@@ -545,9 +553,9 @@ export const InsightsPage = (() => {
         elements.insightsEmpty.hidden = false;
         elements.insightsGrid.hidden = true;
         elements.insightTip.hidden = true;
-        if (elements.allTime) {
-            elements.allTime.hidden = true;
-        }
+        // The All-time section is governed solely by renderAllTime (driven by
+        // data presence), so it can still surface lifetime outreach even when
+        // there are no shares/comments for the filtered cards.
     }
 
     /** Hide empty state and show insights grid. */

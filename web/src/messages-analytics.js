@@ -50,16 +50,16 @@ export const MessagesAnalytics = (() => {
             // Outreach tracking runs before the participant filter so that
             // self-sent messages whose only recipients are self/anonymous still
             // count toward sent totals and conversation initiation.
-            const senderName = cleanText(row.FROM);
-            const senderUrl = normalizeUrl(row["SENDER PROFILE URL"]);
-            const senderIsSelf = isSelfContact(senderName, senderUrl, context);
+            // Pass the raw sender fields straight to the helpers; each normalizes
+            // once internally, so pre-normalizing here would just repeat the work.
+            const senderIsSelf = isSelfContact(row.FROM, row["SENDER PROFILE URL"], context);
             // A non-self sender only counts as a real correspondent when it
             // survives the same filtering as participants (non-blank,
             // non-anonymous), so "LinkedIn Member" placeholders do not inflate
             // received totals or count as a reply.
             const senderContact = senderIsSelf
                 ? null
-                : sanitizeParticipant({ name: senderName, url: senderUrl }, context);
+                : sanitizeParticipant({ name: row.FROM, url: row["SENDER PROFILE URL"] }, context);
             const hasRealSender = Boolean(senderContact);
             if (senderIsSelf) {
                 sentMessages += 1;

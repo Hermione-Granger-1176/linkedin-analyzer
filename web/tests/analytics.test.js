@@ -776,14 +776,24 @@ describe("AnalyticsEngine network growth", () => {
 
     it("returns null when busy months do not outpace quiet ones", () => {
         // Quiet (low-post) months gain the most connections, so the busiest
-        // posting months bring no more than the quiet ones — the card would be
-        // misleading and must stay dormant.
+        // posting months bring no more than the quiet ones (and the correlation
+        // is negative) — the card would be misleading and must stay dormant.
         const specs = monthsRange(14, i =>
             i < 4
                 ? { posts: 1, connections: 20, topic: "x" }
                 : { posts: 10, connections: 1, topic: "x" }
         );
         const { shares, connections } = buildMonthly(specs);
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when the busiest-vs-quiet lift rounds below 2x", () => {
+        // Connections track posts perfectly (positive correlation) but the
+        // busiest months only edge out the quiet ones, so the multiplier rounds
+        // to 1x — too weak a headline to surface.
+        const { shares, connections } = buildMonthly(
+            monthsRange(14, i => ({ posts: i + 1, connections: 101 + i, topic: "x" }))
+        );
         expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
     });
 });
@@ -806,6 +816,31 @@ describe("AnalyticsEngine topic shift", () => {
         const specs = monthsRange(9, () => ({ posts: 3, topic: "excel" }));
         const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
         expect(allTimeView(analytics).topicShift).toBeNull();
+    });
+
+    it("omits topic shift under a topic or dimension filter", () => {
+        // The per-month topic mix is unfiltered, so a topic/day/hour/share-type
+        // filter must drop the focus-shift card rather than compare topics the
+        // active view has filtered out.
+        const specs = monthsRange(9, i => ({
+            posts: 3,
+            topic: i < 3 ? "excel" : i < 6 ? "data" : "ai"
+        }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        const baseFilters = {
+            timeRange: "all",
+            topic: "all",
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: "all",
+        };
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, topic: "ai" }).topicShift
+        ).toBeNull();
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, hour: "10" }).topicShift
+        ).toBeNull();
     });
 
     it("skips topic shift and ratio trend with too few months", () => {

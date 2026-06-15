@@ -679,10 +679,11 @@ export const AnalyticsEngine = (() => {
         const quietAvg = Math.round(average(quietMonths.map((entry) => entry.connections)));
         const topAvg = Math.round(average(topMonths.map((entry) => entry.connections)));
         const multiplier = quietAvg > 0 ? Math.round(topAvg / quietAvg) : 0;
-        // Only surface the card when the busiest months bring at least ~2x as
-        // many connections. A 0x/1x headline would misrepresent a flat or
-        // inverse relationship, so anything weaker keeps the card dormant.
-        if (multiplier < 2) {
+        // The card claims posting *grows* the network, so require a strictly
+        // positive overall correlation as well as a meaningful busiest-vs-quiet
+        // multiplier. A non-positive correlation or a 0x/1x headline would
+        // misrepresent a flat or inverse relationship, so either keeps it dormant.
+        if (correlation <= 0 || multiplier < 2) {
             return null;
         }
 
@@ -1063,6 +1064,11 @@ export const AnalyticsEngine = (() => {
             !filters.monthFocus &&
             !hasDay &&
             !hasHour;
+        // topicShift reads each month's unfiltered topic mix, so it is only
+        // coherent when no topic/share-type/day/hour filter is active. A time
+        // range merely selects which months to compare, which stays meaningful.
+        const topicComparable =
+            filters.topic === "all" && filters.shareType === "all" && !hasDay && !hasHour;
 
         return {
             timeline,
@@ -1074,7 +1080,7 @@ export const AnalyticsEngine = (() => {
             peakHour: { hour: peakHour.index, count: peakHour.value },
             peakDay: { dayIndex: peakDay.index, count: peakDay.value },
             trend,
-            topicShift: computeTopicShift(monthlyStats),
+            topicShift: topicComparable ? computeTopicShift(monthlyStats) : null,
             ratioTrend: computeRatioTrend(monthlyStats),
             // The network-growth correlation is computed once over the full
             // dataset overlap window, so it only belongs on the unfiltered

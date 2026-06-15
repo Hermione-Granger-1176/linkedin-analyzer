@@ -1054,6 +1054,16 @@ export const AnalyticsEngine = (() => {
         // Calculate trend
         const trend = computeTrendFromTimeline(timeline);
 
+        // The whole dataset is in view only when no time-range or dimension
+        // filter narrows it; the network-growth card is gated on this below.
+        const isFullDatasetView =
+            filters.timeRange === "all" &&
+            filters.topic === "all" &&
+            filters.shareType === "all" &&
+            !filters.monthFocus &&
+            !hasDay &&
+            !hasHour;
+
         return {
             timeline,
             timelineMax,
@@ -1066,7 +1076,11 @@ export const AnalyticsEngine = (() => {
             trend,
             topicShift: computeTopicShift(monthlyStats),
             ratioTrend: computeRatioTrend(monthlyStats),
-            networkGrowth: analytics.networkGrowth || null,
+            // The network-growth correlation is computed once over the full
+            // dataset overlap window, so it only belongs on the unfiltered
+            // all-time view. Surfacing it under a narrower range or a dimension
+            // filter would show numbers the active view cannot substantiate.
+            networkGrowth: isFullDatasetView ? analytics.networkGrowth || null : null,
             totals: {
                 posts,
                 comments,

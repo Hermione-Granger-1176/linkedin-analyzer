@@ -687,6 +687,34 @@ describe("AnalyticsEngine network growth", () => {
         expect(ids).toContain("network-growth");
     });
 
+    it("omits network growth from filtered or narrowed views", () => {
+        const specs = monthsRange(14, i =>
+            i < 4
+                ? { posts: 1, connections: 1, topic: "excel" }
+                : { posts: 10, connections: 20, topic: "ai" }
+        );
+        const { shares, comments, connections } = buildMonthly(specs);
+        const analytics = AnalyticsEngine.compute(shares, comments, connections);
+        expect(analytics.networkGrowth).not.toBeNull();
+
+        // The correlation is a full-dataset stat, so a narrower range or a
+        // dimension filter must drop it rather than show unsubstantiated numbers.
+        const baseFilters = {
+            timeRange: "all",
+            topic: "all",
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: "all",
+        };
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, timeRange: "3m" }).networkGrowth
+        ).toBeNull();
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, topic: "ai" }).networkGrowth
+        ).toBeNull();
+    });
+
     it("leaves networkGrowth null without connection data", () => {
         const { shares } = buildMonthly(monthsRange(14, () => ({ posts: 5, topic: "x" })));
         expect(AnalyticsEngine.compute(shares, []).networkGrowth).toBeNull();

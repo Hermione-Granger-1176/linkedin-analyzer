@@ -30,16 +30,44 @@ export const MessagesAnalytics = (() => {
         const rowTimestamps = [];
         const talkedNameKeys = new Set();
         const talkedUrlKeys = new Set();
+        // Outreach-funnel accumulators, filled in the same pass as the contact
+        // aggregates so large exports are not iterated (and re-parsed) twice.
+        const conversations = new Map();
+        const contactStats = new Map();
+        let sentMessages = 0;
+        let receivedMessages = 0;
 
         let latestTimestamp = 0;
         let skippedRows = 0;
-        safeRows.forEach(row => {
+        safeRows.forEach((row, index) => {
             const date = parseDateTime(row.DATE);
             if (!date) {
                 skippedRows += 1;
                 return;
             }
             const timestamp = date.getTime();
+
+            // Outreach tracking runs before the participant filter so that
+            // self-sent messages whose only recipients are self/anonymous still
+            // count toward sent totals and conversation initiation.
+            const senderName = cleanText(row.FROM);
+            const senderUrl = normalizeUrl(row["SENDER PROFILE URL"]);
+            const hasSender = Boolean(senderName || senderUrl);
+            const senderIsSelf = isSelfContact(senderName, senderUrl, context);
+            if (senderIsSelf) {
+                sentMessages += 1;
+            } else if (hasSender) {
+                receivedMessages += 1;
+            }
+            trackConversation(conversations, buildConversationKey(row, index), {
+                timestamp,
+                senderIsSelf,
+                hasSender
+            });
+            if (!senderIsSelf && hasSender) {
+                markOutreachContact(contactStats, { name: senderName, url: senderUrl }, "received");
+            }
+
             const participants = extractParticipantsFromRow(row, context);
             if (!participants.length) {
                 skippedRows += 1;
@@ -79,6 +107,12 @@ export const MessagesAnalytics = (() => {
                 }
 
                 events.push({ contactKey, timestamp });
+
+                // For a self-sent row the sender is self, so the non-self
+                // participants are exactly its recipients — mark each as outreach.
+                if (senderIsSelf) {
+                    markOutreachContact(contactStats, contact, "sent");
+                }
             });
 
             latestTimestamp = Math.max(latestTimestamp, timestamp);
@@ -92,56 +126,21 @@ export const MessagesAnalytics = (() => {
             talkedNameKeys,
             talkedUrlKeys,
             latestTimestamp,
-            outreach: buildOutreachStats(safeRows, context)
+            outreach: summarizeOutreach(conversations, contactStats, sentMessages, receivedMessages)
         };
     }
 
     /**
-     * Build outreach-funnel stats: who starts conversations, how often
-     * self-initiated outreach gets a reply, how many contacts never replied,
-     * and the sent-to-received message ratio.
-     * @param {object[]} rows - Cleaned message rows
-     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+     * Summarize the outreach-funnel accumulators built during the main pass:
+     * who starts conversations, how often self-initiated outreach gets a reply,
+     * how many contacts never replied, and the sent-to-received message ratio.
+     * @param {Map<string, object>} conversations - Per-conversation aggregates
+     * @param {Map<string, {sent: number, received: number}>} contactStats - Per-contact tallies
+     * @param {number} sent - Total messages sent by self
+     * @param {number} received - Total messages received from others
      * @returns {object}
      */
-    function buildOutreachStats(rows, context) {
-        const conversations = new Map();
-        const contactStats = new Map();
-        let sent = 0;
-        let received = 0;
-
-        rows.forEach((row, index) => {
-            const date = parseDateTime(row.DATE);
-            if (!date) {
-                return;
-            }
-            const timestamp = date.getTime();
-            const senderName = cleanText(row.FROM);
-            const senderUrl = normalizeUrl(row["SENDER PROFILE URL"]);
-            const hasSender = Boolean(senderName || senderUrl);
-            const senderIsSelf = isSelfContact(senderName, senderUrl, context);
-
-            if (senderIsSelf) {
-                sent += 1;
-            } else if (hasSender) {
-                received += 1;
-            }
-
-            trackConversation(conversations, buildConversationKey(row, index), {
-                timestamp,
-                senderIsSelf,
-                hasSender
-            });
-
-            if (senderIsSelf) {
-                extractRecipientContacts(row, context).forEach(contact => {
-                    markOutreachContact(contactStats, contact, "sent");
-                });
-            } else if (hasSender) {
-                markOutreachContact(contactStats, { name: senderName, url: senderUrl }, "received");
-            }
-        });
-
+    function summarizeOutreach(conversations, contactStats, sent, received) {
         let selfInitiated = 0;
         let selfInitiatedReplied = 0;
         conversations.forEach(conversation => {
@@ -214,42 +213,6 @@ export const MessagesAnalytics = (() => {
             (normalizedUrl && context.selfUrls.has(normalizedUrl))
             || (nameKey && context.selfNames.has(nameKey))
         );
-    }
-
-    /**
-     * Extract de-duplicated non-self recipient contacts from a message row.
-     * @param {object} row - Message row
-     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
-     * @returns {Array<{name: string, url: string}>}
-     */
-    function extractRecipientContacts(row, context) {
-        const contacts = [];
-        const seen = new Set();
-        const recipientUrls = normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
-        const recipientNames = parseRecipientNames(row.TO, recipientUrls.length);
-
-        const add = (name, url) => {
-            const sanitized = sanitizeParticipant({ name, url }, context);
-            if (!sanitized) {
-                return;
-            }
-            const key = buildContactKey(sanitized);
-            /* v8 ignore next 3 */
-            if (seen.has(key)) {
-                return;
-            }
-            seen.add(key);
-            contacts.push(sanitized);
-        };
-
-        if (recipientUrls.length) {
-            recipientUrls.forEach((url, index) => {
-                add(recipientNames[index] || recipientNames[0] || "", url);
-            });
-        } else {
-            recipientNames.forEach(name => add(name, ""));
-        }
-        return contacts;
     }
 
     /**

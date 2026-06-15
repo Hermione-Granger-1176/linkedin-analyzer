@@ -120,6 +120,8 @@ A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
 - `make audit-node` and `make audit-python` for the npm and Python dependency audits
 - `make check-overrides` to verify any future npm overrides remain necessary; the original overrides have been removed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
 
+If either audit job fails, a `report-failure` job opens (or comments on the existing) `dependency-audit`-labeled issue with a link to the run, so a scheduled failure is visible without watching the Actions tab.
+
 Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for Dependabot uv PRs through a validated artifact handoff.
@@ -138,6 +140,10 @@ Maintenance workflows also keep generated repository state current:
 - ESLint for linting
 - Vitest for tests
 - Vite for bundling
+
+### Tool pinning
+
+Most `devDependencies` track caret ranges, but `actionlint` is pinned to an exact version. It gates the workflow files in CI, and new patch releases can add lint rules; an exact pin keeps `make lint-workflows` reproducible so a tool bump that fails CI is always a deliberate, reviewed change rather than a surprise. Bump it like any other dependency when you want the newer rules.
 
 ## Testing
 

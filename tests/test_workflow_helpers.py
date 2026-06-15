@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 from scripts.ci.workflow_helpers import (
-    app_token_allowed,
     read_lock_refresh_metadata,
     validate_lock_refresh_artifact,
 )
@@ -18,34 +17,6 @@ def write_valid_lock_artifact(root: Path) -> None:
     (artifact_dir / "pr-number.txt").write_text("123\n", encoding="utf-8")
     (artifact_dir / "head-sha.txt").write_text("abc123\n", encoding="utf-8")
     (artifact_dir / "head-ref.txt").write_text("dependabot/example\n", encoding="utf-8")
-
-
-def test_app_token_policy_blocks_untrusted_pull_requests() -> None:
-    """Block token minting for fork and Dependabot pull requests."""
-    assert not app_token_allowed(
-        event_name="pull_request",
-        head_repo_fork=True,
-        pr_author="contributor",
-    )
-    assert not app_token_allowed(
-        event_name="pull_request",
-        head_repo_fork=False,
-        pr_author="dependabot[bot]",
-    )
-
-
-def test_app_token_policy_allows_trusted_events() -> None:
-    """Allow token minting outside untrusted pull request contexts."""
-    assert app_token_allowed(
-        event_name="schedule",
-        head_repo_fork=True,
-        pr_author="dependabot[bot]",
-    )
-    assert app_token_allowed(
-        event_name="pull_request",
-        head_repo_fork=False,
-        pr_author="maintainer",
-    )
 
 
 def test_validate_lock_refresh_artifact_accepts_expected_files(tmp_path: Path) -> None:

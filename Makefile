@@ -120,6 +120,9 @@ test-py: ## Run Python tests only (make test-py ARGS="-k name --no-cov" for a su
 test-js: ## Run JS unit tests only
 	$(NPM) run test
 
+test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick ARGS="analytics")
+	$(NPX) vitest run --config web/vitest.config.js $(ARGS)
+
 test-e2e: ## Run Playwright browser tests
 	$(NPM) run test:e2e
 

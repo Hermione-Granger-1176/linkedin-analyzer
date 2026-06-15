@@ -1098,6 +1098,62 @@ describe("UploadPage", () => {
         expect(restoreCall.payload.commentsCsv).toContain("comments-head");
         // ...and lands before the new file's addFile so the recompute sees both.
         expect(addIndex).toBeGreaterThan(restoreIndex);
+        // Connections always travels with the prime so the worker can correlate
+        // posting with network growth; none stored here, so it primes empty.
+        expect(restoreCall.payload).toHaveProperty("connectionsCsv", "");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("primes stored connections text alongside shares so the worker can correlate growth", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        const cachedFiles = [
+            { type: "shares", rowCount: 2, updatedAt: 10 },
+            { type: "connections", rowCount: 5, updatedAt: 30 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        Storage.getFile.mockImplementation((type) => {
+            if (type === "shares") {
+                return Promise.resolve({ type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 });
+            }
+            if (type === "connections") {
+                return Promise.resolve({
+                    type: "connections",
+                    text: "connections-head\nc1",
+                    rowCount: 5,
+                });
+            }
+            return Promise.resolve(null);
+        });
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const restoreCall = workerInstance.postMessage.mock.calls
+            .map((c) => c[0])
+            .find((m) => m && m.type === "restoreFiles");
+        expect(restoreCall).toBeDefined();
+        expect(restoreCall.payload.connectionsCsv).toContain("connections-head");
 
         globalThis.FileReader = originalFileReader;
     });

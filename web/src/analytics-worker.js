@@ -6,12 +6,13 @@ import { parseAnalyticsWorkerRequest } from "./worker-contracts.js";
 
 let sharesData = null;
 let commentsData = null;
+let connectionsData = null;
 let analytics = null;
 let viewCache = new Map();
 let currentRequestId = 0;
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
-const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments"]);
+const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments", "connections"]);
 const WORKER_REQUEST_TYPES = new Set(["addFile", "restoreFiles", "initBase", "view", "clear"]);
 
 /**
@@ -53,7 +54,7 @@ function getViewKey(filters) {
  * Clears the view cache since aggregates have changed.
  */
 function computeAnalytics() {
-    analytics = AnalyticsEngine.compute(sharesData, commentsData);
+    analytics = AnalyticsEngine.compute(sharesData, commentsData, connectionsData);
     viewCache = new Map();
 }
 
@@ -202,6 +203,9 @@ function handleAddFile(payload) {
         comments: () => {
             commentsData = processed.cleanedData;
         },
+        connections: () => {
+            connectionsData = processed.cleanedData;
+        },
     };
     const updateSource = updateSourceByType[fileType];
     if (updateSource) {
@@ -236,14 +240,15 @@ function handleAddFile(payload) {
 
 /**
  * Restore worker source datasets from persisted CSV texts.
- * @param {{sharesCsv?: string, commentsCsv?: string}} payload - Persisted analytics inputs
+ * @param {{sharesCsv?: string, commentsCsv?: string, connectionsCsv?: string}} payload - Persisted analytics inputs
  */
 function handleRestoreFiles(payload) {
-    const { sharesCsv = "", commentsCsv = "" } = payload || {};
+    const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
     const sourceCsvByType = {
         shares: sharesCsv,
         comments: commentsCsv,
+        connections: connectionsCsv,
     };
     const assignSourceByType = {
         shares: (cleanedData) => {
@@ -252,10 +257,14 @@ function handleRestoreFiles(payload) {
         comments: (cleanedData) => {
             commentsData = cleanedData;
         },
+        connections: (cleanedData) => {
+            connectionsData = cleanedData;
+        },
     };
 
     sharesData = null;
     commentsData = null;
+    connectionsData = null;
 
     ANALYTICS_SOURCE_TYPES.forEach((type) => {
         const csvText = sourceCsvByType[type];
@@ -273,7 +282,6 @@ function handleRestoreFiles(payload) {
     if (sharesData || commentsData) {
         computeAnalytics();
     } else {
-        /* v8 ignore next */
         resetAnalyticsState();
     }
 
@@ -360,6 +368,7 @@ function handleView(requestId, filters) {
 function handleClear() {
     sharesData = null;
     commentsData = null;
+    connectionsData = null;
     resetAnalyticsState();
     currentRequestId = 0;
     self.postMessage({ type: "cleared" });

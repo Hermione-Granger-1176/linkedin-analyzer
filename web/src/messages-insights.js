@@ -31,6 +31,15 @@ export const MessagesPage = (() => {
         "12m": 12,
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    // Zeroed outreach funnel used when a message state predates the field or
+    // carries no parseable messages.
+    const EMPTY_OUTREACH = Object.freeze({
+        selfInitiated: 0,
+        othersInitiated: 0,
+        replyRate: null,
+        unansweredContacts: 0,
+        sentReceivedRatio: null,
+    });
     // Worker watchdog scales with input size: a base allowance plus more time per
     // megabyte of CSV so large exports are not cut off prematurely.
     const WORKER_TIMEOUT_BASE_MS = 30000;
@@ -67,6 +76,10 @@ export const MessagesPage = (() => {
         msgStatContacts: document.getElementById("msgStatContacts"),
         msgStatConnected: document.getElementById("msgStatConnected"),
         msgStatFading: document.getElementById("msgStatFading"),
+        msgStatInitiated: document.getElementById("msgStatInitiated"),
+        msgStatReplyRate: document.getElementById("msgStatReplyRate"),
+        msgStatUnanswered: document.getElementById("msgStatUnanswered"),
+        msgStatSentRatio: document.getElementById("msgStatSentRatio"),
         messagesTip: document.getElementById("messagesTip"),
         messagesTipText: document.getElementById("messagesTipText"),
     };
@@ -747,6 +760,7 @@ export const MessagesPage = (() => {
             latestTimestamp: Number.isFinite(safePayload.latestTimestamp)
                 ? safePayload.latestTimestamp
                 : 0,
+            outreach: safePayload.outreach || null,
         };
     }
 
@@ -1039,7 +1053,38 @@ export const MessagesPage = (() => {
             hasConnections ? state.connectionState.list.length : 0,
             fadingConversations.length,
         );
+        renderOutreach(state.messageState.outreach);
         updateTip(topSummary.items, silentConnections, fadingConversations);
+    }
+
+    /**
+     * Render the outreach-funnel stat cards. Values are lifetime totals, so they
+     * do not change with the active time range.
+     * @param {object|null} outreach - Outreach stats from the message state
+     */
+    function renderOutreach(outreach) {
+        const safe = outreach || EMPTY_OUTREACH;
+        setStatText(elements.msgStatInitiated, String(safe.selfInitiated));
+        setStatText(
+            elements.msgStatReplyRate,
+            safe.replyRate === null ? "—" : `${Math.round(safe.replyRate * 100)}%`,
+        );
+        setStatText(elements.msgStatUnanswered, String(safe.unansweredContacts));
+        setStatText(
+            elements.msgStatSentRatio,
+            safe.sentReceivedRatio === null ? "—" : `${safe.sentReceivedRatio.toFixed(1)} : 1`,
+        );
+    }
+
+    /**
+     * Set an optional stat element's text, tolerating a missing node.
+     * @param {HTMLElement|null} element - Target stat node
+     * @param {string} text - Text to display
+     */
+    function setStatText(element, text) {
+        if (element) {
+            element.textContent = text;
+        }
     }
 
     /**

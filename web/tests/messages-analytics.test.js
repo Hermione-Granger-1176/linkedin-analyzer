@@ -29,6 +29,79 @@ describe("MessagesAnalytics", () => {
         expect(state.skippedRows).toBe(1);
     });
 
+    it("buildMessageState computes the outreach funnel", () => {
+        const msg = (conversationId, date, from, fromUrl, to, toUrl) => ({
+            "CONVERSATION ID": conversationId,
+            DATE: date,
+            FROM: from,
+            "SENDER PROFILE URL": fromUrl,
+            TO: to,
+            "RECIPIENT PROFILE URLS": toUrl,
+            CONTENT: "hi"
+        });
+        const me = "https://linkedin.com/in/me";
+        const alice = "https://linkedin.com/in/alice";
+        const bob = "https://linkedin.com/in/bob";
+        const carol = "https://linkedin.com/in/carol";
+
+        // Self (Me) appears on both sender and recipient sides so detection is stable.
+        const rows = [
+            msg("A", "2025-01-01 10:00:00", "Me", me, "Alice", alice), // self → Alice
+            msg("A", "2025-01-02 10:00:00", "Alice", alice, "Me", me), // Alice replies
+            msg("B", "2025-01-03 10:00:00", "Me", me, "Bob", bob), // self → Bob, no reply
+            msg("C", "2025-01-04 10:00:00", "Carol", carol, "Me", me), // Carol initiates
+            msg("C", "2025-01-05 10:00:00", "Me", me, "Carol", carol) // self replies
+        ];
+
+        const { outreach } = MessagesAnalytics.buildMessageState(rows);
+        expect(outreach.totalConversations).toBe(3);
+        expect(outreach.selfInitiated).toBe(2);
+        expect(outreach.othersInitiated).toBe(1);
+        expect(outreach.selfInitiatedReplied).toBe(1);
+        expect(outreach.replyRate).toBeCloseTo(0.5);
+        expect(outreach.unansweredContacts).toBe(1); // Bob never replied
+        expect(outreach.sent).toBe(3);
+        expect(outreach.received).toBe(2);
+        expect(outreach.sentReceivedRatio).toBeCloseTo(1.5);
+    });
+
+    it("buildMessageState reorders conversation start when an earlier message appears later", () => {
+        const me = "https://linkedin.com/in/me";
+        const dave = "https://linkedin.com/in/dave";
+        const alice = "https://linkedin.com/in/alice";
+        const base = (conversationId, date, from, fromUrl, to, toUrl) => ({
+            "CONVERSATION ID": conversationId,
+            DATE: date,
+            FROM: from,
+            "SENDER PROFILE URL": fromUrl,
+            TO: to,
+            "RECIPIENT PROFILE URLS": toUrl,
+            CONTENT: "hi"
+        });
+        const rows = [
+            // Establish Me as self via a balanced conversation.
+            base("A", "2025-02-10 10:00:00", "Me", me, "Alice", alice),
+            base("A", "2025-02-11 10:00:00", "Alice", alice, "Me", me),
+            // Conversation D: the self message is listed first but Dave's is earlier.
+            base("D", "2025-02-05 10:00:00", "Me", me, "Dave", dave),
+            base("D", "2025-02-01 10:00:00", "Dave", dave, "Me", me)
+        ];
+
+        const { outreach } = MessagesAnalytics.buildMessageState(rows);
+        // D's earliest message is Dave's, so it counts as other-initiated.
+        expect(outreach.selfInitiated).toBe(1);
+        expect(outreach.othersInitiated).toBe(1);
+    });
+
+    it("buildMessageState returns an empty outreach funnel without messages", () => {
+        const { outreach } = MessagesAnalytics.buildMessageState([]);
+        expect(outreach.totalConversations).toBe(0);
+        expect(outreach.selfInitiated).toBe(0);
+        expect(outreach.replyRate).toBeNull();
+        expect(outreach.sentReceivedRatio).toBeNull();
+        expect(outreach.unansweredContacts).toBe(0);
+    });
+
     it("buildConnectionState normalizes names and urls", () => {
         const rows = [
             {

@@ -596,3 +596,265 @@ describe("AnalyticsEngine", () => {
         expect(ids).toContain("trending-up");
     });
 });
+
+// ── WP6: network growth, topic shift, engagement shift, tiered cards ──────────
+
+/**
+ * Build shares/comments/connections rows from per-month specs.
+ * @param {Array<{month: string, posts?: number, comments?: number, connections?: number, topic?: string}>} specs
+ */
+function buildMonthly(specs) {
+    const shares = [];
+    const comments = [];
+    const connections = [];
+    specs.forEach(spec => {
+        const topic = spec.topic || "general";
+        for (let i = 0; i < (spec.posts || 0); i++) {
+            shares.push({
+                Date: `${spec.month}-05 09:00:00`,
+                ShareCommentary: `#${topic}`,
+                SharedUrl: "",
+                MediaUrl: ""
+            });
+        }
+        for (let i = 0; i < (spec.comments || 0); i++) {
+            comments.push({ Date: `${spec.month}-06 10:00:00`, Message: `#${topic}` });
+        }
+        for (let i = 0; i < (spec.connections || 0); i++) {
+            connections.push({ "Connected On": `${spec.month}-10` });
+        }
+    });
+    return { shares, comments, connections };
+}
+
+/**
+ * Build `count` consecutive month specs from 2023-01, merging perMonth(idx).
+ * @param {number} count
+ * @param {(index: number) => object} perMonth
+ */
+function monthsRange(count, perMonth) {
+    const specs = [];
+    for (let i = 0; i < count; i++) {
+        const year = 2023 + Math.floor(i / 12);
+        const month = String((i % 12) + 1).padStart(2, "0");
+        specs.push({ month: `${year}-${month}`, ...perMonth(i) });
+    }
+    return specs;
+}
+
+/** Build the all-time view for an analytics payload. */
+function allTimeView(analytics) {
+    return AnalyticsEngine.buildView(analytics, {
+        timeRange: "all",
+        topic: "all",
+        monthFocus: null,
+        day: null,
+        hour: null,
+        shareType: "all"
+    });
+}
+
+/** Minimal generateInsights view with overridable fields. */
+function insightView(overrides) {
+    return {
+        totals: { total: 20, posts: 10, comments: 2 },
+        peakHour: { hour: 10, count: 1 },
+        peakDay: { dayIndex: 0, count: 1 },
+        trend: null,
+        topics: [],
+        streaks: { current: 0, longest: 0 },
+        ...overrides
+    };
+}
+
+describe("AnalyticsEngine network growth", () => {
+    it("surfaces a network-growth insight from posting/connection correlation", () => {
+        const specs = monthsRange(14, i =>
+            i < 4
+                ? { posts: 1, connections: 1, topic: "excel" }
+                : { posts: 10, connections: 20, topic: "ai" }
+        );
+        const { shares, comments, connections } = buildMonthly(specs);
+        const analytics = AnalyticsEngine.compute(shares, comments, connections);
+
+        expect(analytics.networkGrowth).not.toBeNull();
+        expect(analytics.networkGrowth.multiplier).toBeGreaterThanOrEqual(2);
+        expect(analytics.networkGrowth.correlation).toBeGreaterThan(0);
+
+        const view = allTimeView(analytics);
+        expect(view.networkGrowth).toEqual(analytics.networkGrowth);
+        const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
+        expect(ids).toContain("network-growth");
+    });
+
+    it("leaves networkGrowth null without connection data", () => {
+        const { shares } = buildMonthly(monthsRange(14, () => ({ posts: 5, topic: "x" })));
+        expect(AnalyticsEngine.compute(shares, []).networkGrowth).toBeNull();
+    });
+
+    it("requires at least 12 overlapping months", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(6, i => ({ posts: i + 1, connections: i + 1, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when posting and connection ranges do not overlap", () => {
+        const { shares } = buildMonthly(monthsRange(13, () => ({ posts: 3, topic: "x" })));
+        const connections = [];
+        for (let i = 0; i < 13; i++) {
+            connections.push({ "Connected On": `2030-${String((i % 12) + 1).padStart(2, "0")}-10` });
+        }
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when posting volume is flat", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(13, i => ({ posts: 3, connections: i + 1, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when connection counts never vary", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(13, i => ({ posts: i + 1, connections: 3, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when quiet months gained no connections", () => {
+        const specs = monthsRange(14, i =>
+            i === 0 || i === 13
+                ? { posts: 10, connections: 20, topic: "x" }
+                : { posts: 1, connections: 0, topic: "x" }
+        );
+        const { shares, connections } = buildMonthly(specs);
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when there are no quiet months to compare", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(13, i => ({ posts: 5 + i, connections: 5 + i, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+});
+
+describe("AnalyticsEngine topic shift", () => {
+    it("reports a shift when the dominant topic changes across the range", () => {
+        const specs = monthsRange(9, i => ({
+            posts: 3,
+            topic: i < 3 ? "excel" : i < 6 ? "data" : "ai"
+        }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        const view = allTimeView(analytics);
+
+        expect(view.topicShift).toEqual({ from: "excel", to: "ai" });
+        const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
+        expect(ids).toContain("topic-shift");
+    });
+
+    it("reports no shift when the focus stays stable", () => {
+        const specs = monthsRange(9, () => ({ posts: 3, topic: "excel" }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        expect(allTimeView(analytics).topicShift).toBeNull();
+    });
+
+    it("skips topic shift and ratio trend with too few months", () => {
+        const specs = monthsRange(4, i => ({ posts: 3, topic: i < 2 ? "excel" : "ai" }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        const view = allTimeView(analytics);
+        expect(view.topicShift).toBeNull();
+        expect(view.ratioTrend).toBeNull();
+    });
+});
+
+describe("AnalyticsEngine engagement shift", () => {
+    it("flags a shift toward commenting", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 10, comments: 5, topic: "x" } : { posts: 2, comments: 10, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        const view = allTimeView(AnalyticsEngine.compute(data.shares, data.comments));
+
+        expect(view.ratioTrend.direction).toBe("more-engaging");
+        const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
+        expect(ids).toContain("engagement-shift");
+    });
+
+    it("flags a shift toward posting", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 2, comments: 10, topic: "x" } : { posts: 10, comments: 1, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend.direction).toBe(
+            "more-posting"
+        );
+    });
+
+    it("reports no shift when the ratio holds steady", () => {
+        const specs = monthsRange(8, () => ({ posts: 5, comments: 5, topic: "x" }));
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend).toBeNull();
+    });
+
+    it("reports no shift when the older period had no comments", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 5, comments: 0, topic: "x" } : { posts: 5, comments: 10, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend).toBeNull();
+    });
+
+    it("reports no shift when a half has no posts", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 0, comments: 5, topic: "x" } : { posts: 5, comments: 5, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend).toBeNull();
+    });
+});
+
+describe("AnalyticsEngine tiered insight cards", () => {
+    it("tiers the super-engager card by comment-to-post ratio", () => {
+        const titleAt = (posts, comments) =>
+            AnalyticsEngine.generateInsights(
+                insightView({ totals: { total: posts + comments, posts, comments } })
+            ).insights.find(i => i.id === "super-engager").title;
+
+        expect(titleAt(2, 6)).toBe("Super Engager");
+        expect(titleAt(2, 20)).toBe("Community Builder");
+        expect(titleAt(2, 50)).toBe("Engagement Machine");
+    });
+
+    it("tiers the streak card by streak length", () => {
+        const titleAt = current =>
+            AnalyticsEngine.generateInsights(
+                insightView({ streaks: { current, longest: current } })
+            ).insights.find(i => i.id === "streak").title;
+
+        expect(titleAt(7)).toBe("Consistency Streak");
+        expect(titleAt(30)).toBe("Streak Master");
+        expect(titleAt(100)).toBe("Unstoppable Streak");
+    });
+
+    it("emits network-growth, topic-shift and engagement-shift cards from view fields", () => {
+        const result = AnalyticsEngine.generateInsights(
+            insightView({
+                networkGrowth: { multiplier: 19, topAvg: 210, quietAvg: 11, correlation: 0.5, months: 24 },
+                topicShift: { from: "excel", to: "ai" },
+                ratioTrend: { direction: "more-posting", recentRatio: 0.2, priorRatio: 1 }
+            })
+        );
+
+        const growth = result.insights.find(i => i.id === "network-growth");
+        expect(growth.body).toContain("19x");
+        expect(growth.body).toContain("210");
+
+        const shift = result.insights.find(i => i.id === "topic-shift");
+        expect(shift.body).toContain("excel");
+        expect(shift.body).toContain("ai");
+
+        expect(result.insights.find(i => i.id === "engagement-shift").body).toContain("posting more");
+    });
+});

@@ -77,6 +77,10 @@ function buildDom(opts = {}) {
             <div class="stat-card"><span id="msgStatContacts"></span></div>
             <div class="stat-card"><span id="msgStatConnected"></span></div>
             <div class="stat-card"><span id="msgStatFading"></span></div>
+            <div class="stat-card"><span id="msgStatInitiated"></span></div>
+            <div class="stat-card"><span id="msgStatReplyRate"></span></div>
+            <div class="stat-card"><span id="msgStatUnanswered"></span></div>
+            <div class="stat-card"><span id="msgStatSentRatio"></span></div>
             <ul id="topContactsList"></ul>
             <ul id="silentConnectionsList"></ul>
             <ul id="fadingConversationsList"></ul>
@@ -115,6 +119,17 @@ function makeMessageState(overrides = {}) {
         talkedNameKeys: new Set(["ada lovelace"]),
         talkedUrlKeys: new Set(["https://linkedin.com/in/ada"]),
         latestTimestamp: timestamp,
+        outreach: {
+            totalConversations: 4,
+            selfInitiated: 3,
+            othersInitiated: 1,
+            selfInitiatedReplied: 2,
+            replyRate: 2 / 3,
+            unansweredContacts: 1,
+            sent: 9,
+            received: 5,
+            sentReceivedRatio: 1.8,
+        },
         ...overrides,
     };
 }
@@ -1410,6 +1425,52 @@ describe("MessagesPage", () => {
         // Should be plain text number, no asterisk element
         expect(statEl.querySelector(".stat-asterisk")).toBeNull();
         expect(statEl.textContent).toBe("1");
+
+        // Outreach funnel cards reflect the message state's lifetime totals.
+        expect(document.getElementById("msgStatInitiated").textContent).toBe("3");
+        expect(document.getElementById("msgStatReplyRate").textContent).toBe("67%");
+        expect(document.getElementById("msgStatUnanswered").textContent).toBe("1");
+        expect(document.getElementById("msgStatSentRatio").textContent).toBe("1.8 : 1");
+    });
+
+    it("renders an em dash for outreach ratios when there is no inbound data", async () => {
+        const messagesFile = {
+            type: "messages",
+            name: "noinbound.csv",
+            text: "x",
+            updatedAt: 160,
+            rowCount: 1,
+        };
+        DataCache.set("storage:file:messages", messagesFile);
+
+        const messageState = makeMessageState({
+            outreach: {
+                totalConversations: 0,
+                selfInitiated: 0,
+                othersInitiated: 0,
+                selfInitiatedReplied: 0,
+                replyRate: null,
+                unansweredContacts: 0,
+                sent: 0,
+                received: 0,
+                sentReceivedRatio: null,
+            },
+        });
+
+        const sig = `messages:${messagesFile.name}:${messagesFile.updatedAt}:${messagesFile.rowCount}|connections:none`;
+        DataCache.set(`messages:state:${sig}`, {
+            messageState,
+            connectionState: null,
+            connectionLoadError: null,
+            hasConnectionsFile: false,
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        expect(document.getElementById("msgStatReplyRate").textContent).toBe("—");
+        expect(document.getElementById("msgStatSentRatio").textContent).toBe("—");
     });
 
     // --- Stat-asterisk popup toggle & keyboard interactions ------------------

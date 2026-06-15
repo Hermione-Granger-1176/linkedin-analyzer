@@ -158,12 +158,17 @@ function parseRestoreFilesPayload(payload) {
 
     const sharesCsv = normalizeString(payload.sharesCsv, LIMITS.maxCsvChars + 1);
     const commentsCsv = normalizeString(payload.commentsCsv, LIMITS.maxCsvChars + 1);
+    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
 
-    if (sharesCsv.length > LIMITS.maxCsvChars || commentsCsv.length > LIMITS.maxCsvChars) {
+    if (
+        sharesCsv.length > LIMITS.maxCsvChars ||
+        commentsCsv.length > LIMITS.maxCsvChars ||
+        connectionsCsv.length > LIMITS.maxCsvChars
+    ) {
         return invalid("CSV payload exceeds allowed size");
     }
 
-    return valid({ sharesCsv, commentsCsv });
+    return valid({ sharesCsv, commentsCsv, connectionsCsv });
 }
 
 /**

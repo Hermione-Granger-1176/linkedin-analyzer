@@ -670,17 +670,22 @@ export const AnalyticsEngine = (() => {
             return null;
         }
 
-        const quietAvg = average(quietMonths.map((entry) => entry.connections));
-        const topAvg = average(topMonths.map((entry) => entry.connections));
-        if (quietAvg <= 0) {
+        // Round the averages first and derive the multiplier from those same
+        // displayed values, so the headline ratio always matches the "X vs Y"
+        // numbers shown in the card.
+        const quietAvg = Math.round(average(quietMonths.map((entry) => entry.connections)));
+        const topAvg = Math.round(average(topMonths.map((entry) => entry.connections)));
+        // Only surface the card when the busiest months genuinely bring more
+        // connections; equal or lower averages would make the copy misleading.
+        if (quietAvg <= 0 || topAvg <= quietAvg) {
             return null;
         }
 
         return {
             correlation: Math.round(correlation * 100) / 100,
             multiplier: Math.round(topAvg / quietAvg),
-            topAvg: Math.round(topAvg),
-            quietAvg: Math.round(quietAvg),
+            topAvg,
+            quietAvg,
             months: months.length,
         };
     }
@@ -1432,7 +1437,7 @@ export const AnalyticsEngine = (() => {
             insights.push({
                 id: "network-growth",
                 title: "Posting Grows Your Network",
-                body: `Your busiest posting months bring ${growth.multiplier}x more new connections (${growth.topAvg} vs ${growth.quietAvg} per month).`,
+                body: `Your busiest posting months bring ${growth.multiplier}x as many new connections (${growth.topAvg} vs ${growth.quietAvg} per month).`,
                 icon: "network",
                 accent: "accent-green",
             });

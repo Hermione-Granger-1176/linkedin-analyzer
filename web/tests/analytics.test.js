@@ -738,6 +738,19 @@ describe("AnalyticsEngine network growth", () => {
         );
         expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
     });
+
+    it("returns null when busy months do not outpace quiet ones", () => {
+        // Quiet (low-post) months gain the most connections, so the busiest
+        // posting months bring no more than the quiet ones — the card would be
+        // misleading and must stay dormant.
+        const specs = monthsRange(14, i =>
+            i < 4
+                ? { posts: 1, connections: 20, topic: "x" }
+                : { posts: 10, connections: 1, topic: "x" }
+        );
+        const { shares, connections } = buildMonthly(specs);
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
 });
 
 describe("AnalyticsEngine topic shift", () => {
@@ -848,7 +861,7 @@ describe("AnalyticsEngine tiered insight cards", () => {
         );
 
         const growth = result.insights.find(i => i.id === "network-growth");
-        expect(growth.body).toContain("19x");
+        expect(growth.body).toContain("19x as many");
         expect(growth.body).toContain("210");
 
         const shift = result.insights.find(i => i.id === "topic-shift");

@@ -1097,25 +1097,6 @@
                             </div>
                         </div>
 
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <p class="stat-value" id="msgStatInitiated">0</p>
-                                <p class="stat-label">Conversations you started</p>
-                            </div>
-                            <div class="stat-card">
-                                <p class="stat-value" id="msgStatReplyRate">—</p>
-                                <p class="stat-label">Reply rate to your outreach</p>
-                            </div>
-                            <div class="stat-card">
-                                <p class="stat-value" id="msgStatUnanswered">0</p>
-                                <p class="stat-label">Contacts who never replied</p>
-                            </div>
-                            <div class="stat-card">
-                                <p class="stat-value" id="msgStatSentRatio">—</p>
-                                <p class="stat-label">Messages sent vs received</p>
-                            </div>
-                        </div>
-
                         <div class="message-panels">
                             <section class="message-panel" data-accent="blue">
                                 <div class="message-panel-header">
@@ -1263,6 +1244,38 @@
                     </div>
 
                     <div class="insights-grid" id="insightsGrid"></div>
+
+                    <section class="all-time-section" id="insightsAllTime" hidden>
+                        <h2 class="all-time-title">All-time</h2>
+                        <p class="all-time-subtitle">
+                            Lifetime stats across your whole history. These do not
+                            change with the filters above.
+                        </p>
+                        <div class="stats-grid">
+                            <div class="stat-card" id="insightsNetworkGrowthCard" hidden>
+                                <p class="stat-value" id="insightsNetworkGrowthValue">N/A</p>
+                                <p class="stat-label">
+                                    more new connections in your busiest posting months
+                                </p>
+                            </div>
+                            <div class="stat-card" id="insightsOutreachInitiatedCard" hidden>
+                                <p class="stat-value" id="insightsStatInitiated">0</p>
+                                <p class="stat-label">Conversations you started</p>
+                            </div>
+                            <div class="stat-card" id="insightsOutreachReplyCard" hidden>
+                                <p class="stat-value" id="insightsStatReplyRate">N/A</p>
+                                <p class="stat-label">Reply rate to your outreach</p>
+                            </div>
+                            <div class="stat-card" id="insightsOutreachUnansweredCard" hidden>
+                                <p class="stat-value" id="insightsStatUnanswered">0</p>
+                                <p class="stat-label">Contacts who never replied</p>
+                            </div>
+                            <div class="stat-card" id="insightsOutreachRatioCard" hidden>
+                                <p class="stat-value" id="insightsStatSentRatio">N/A</p>
+                                <p class="stat-label">Messages sent vs received</p>
+                            </div>
+                        </div>
+                    </section>
 
                     <div class="insight-tip" id="insightTip" hidden>
                         <div class="insight-tip-icon" aria-hidden="true">

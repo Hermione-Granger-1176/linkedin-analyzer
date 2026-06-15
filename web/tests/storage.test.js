@@ -23,11 +23,33 @@ describe("Storage", () => {
         expect(analytics.months["2024-01"].total).toBe(1);
     });
 
+    it("saves and retrieves the outreach summary", async () => {
+        await Storage.saveOutreach({ selfInitiated: 4070, replyRate: 0.5 });
+        const outreach = await Storage.getOutreach();
+        expect(outreach.selfInitiated).toBe(4070);
+        expect(outreach.replyRate).toBe(0.5);
+    });
+
+    it("getOutreach returns null when no outreach stored", async () => {
+        await Storage.clearAll();
+        const outreach = await Storage.getOutreach();
+        expect(outreach).toBeNull();
+    });
+
+    it("keeps the outreach summary separate from the analytics base", async () => {
+        await Storage.saveAnalytics({ months: { "2024-01": { total: 1 } } });
+        await Storage.saveOutreach({ selfInitiated: 7 });
+        expect((await Storage.getAnalytics()).months["2024-01"].total).toBe(1);
+        expect((await Storage.getOutreach()).selfInitiated).toBe(7);
+    });
+
     it("clears data", async () => {
         await Storage.saveFile("comments", { name: "Comments.csv", text: "a,b", rowCount: 1 });
+        await Storage.saveOutreach({ selfInitiated: 1 });
         await Storage.clearAll();
         const files = await Storage.getAllFiles();
         expect(files.length).toBe(0);
+        expect(await Storage.getOutreach()).toBeNull();
     });
 
     it("getAnalytics returns null when no analytics stored", async () => {

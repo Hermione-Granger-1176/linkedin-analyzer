@@ -27,7 +27,7 @@ vi.mock("../src/session.js", () => ({
 }));
 
 vi.mock("../src/storage.js", () => ({
-    Storage: { getAnalytics: vi.fn() },
+    Storage: { getAnalytics: vi.fn(), getOutreach: vi.fn() },
 }));
 
 let InsightsPage;
@@ -58,6 +58,13 @@ describe("InsightsPage", () => {
         document.body.innerHTML = `
             <div id="insightsEmpty"><h2></h2><p></p></div>
             <div id="insightsGrid"></div>
+            <section id="insightsAllTime" hidden>
+                <div id="insightsNetworkGrowthCard" hidden><span id="insightsNetworkGrowthValue"></span></div>
+                <div id="insightsOutreachInitiatedCard" hidden><span id="insightsStatInitiated"></span></div>
+                <div id="insightsOutreachReplyCard" hidden><span id="insightsStatReplyRate"></span></div>
+                <div id="insightsOutreachUnansweredCard" hidden><span id="insightsStatUnanswered"></span></div>
+                <div id="insightsOutreachRatioCard" hidden><span id="insightsStatSentRatio"></span></div>
+            </section>
             <div id="insightTip" hidden><span id="insightTipText"></span></div>
             <div id="insightsTimeRangeButtons">
                 <button class="filter-btn" data-range="12m"></button>
@@ -72,6 +79,7 @@ describe("InsightsPage", () => {
         ({ LoadingOverlay } = await import("../src/loading-overlay.js"));
         ({ AppRouter } = await import("../src/router.js"));
         ({ Storage } = await import("../src/storage.js"));
+        Storage.getOutreach.mockResolvedValue(null);
     });
 
     it("shows empty state when analytics base is missing", async () => {
@@ -130,6 +138,69 @@ describe("InsightsPage", () => {
         expect(document.querySelectorAll(".insight-card").length).toBe(1);
         expect(document.getElementById("insightTip").hidden).toBe(false);
         expect(document.getElementById("insightTipText").textContent).toContain("Try sharing");
+        // No lifetime data delivered, so the All-time section stays hidden.
+        expect(document.getElementById("insightsAllTime").hidden).toBe(true);
+    });
+
+    it("renders the All-time section from networkGrowth and the stored outreach summary", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        Storage.getOutreach.mockResolvedValue({
+            selfInitiated: 4070,
+            replyRate: 0.5,
+            unansweredContacts: 2259,
+            sentReceivedRatio: 1.8,
+        });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        workerInstance.listeners.message[0]({
+            data: { type: "init", payload: { hasData: true } },
+        });
+        const viewRequestId = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "view",
+        )[0].requestId;
+        workerInstance.listeners.message[0]({
+            data: {
+                type: "view",
+                requestId: viewRequestId,
+                payload: {
+                    view: { networkGrowth: { multiplier: 15, topAvg: 206, quietAvg: 14 } },
+                    insights: { insights: [], tip: null },
+                },
+            },
+        });
+
+        expect(document.getElementById("insightsAllTime").hidden).toBe(false);
+        expect(document.getElementById("insightsNetworkGrowthCard").hidden).toBe(false);
+        expect(document.getElementById("insightsNetworkGrowthValue").textContent).toBe("15×");
+        expect(document.getElementById("insightsStatInitiated").textContent).toBe("4070");
+        expect(document.getElementById("insightsStatReplyRate").textContent).toBe("50%");
+        expect(document.getElementById("insightsStatUnanswered").textContent).toBe("2259");
+        expect(document.getElementById("insightsStatSentRatio").textContent).toBe("1.8 : 1");
+    });
+
+    it("shows N/A for outreach reply rate and ratio when they are null", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        Storage.getOutreach.mockResolvedValue({
+            selfInitiated: 0,
+            replyRate: null,
+            unansweredContacts: 0,
+            sentReceivedRatio: null,
+        });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Outreach loaded from storage; network-growth absent (no view yet).
+        expect(document.getElementById("insightsAllTime").hidden).toBe(false);
+        expect(document.getElementById("insightsNetworkGrowthCard").hidden).toBe(true);
+        expect(document.getElementById("insightsStatReplyRate").textContent).toBe("N/A");
+        expect(document.getElementById("insightsStatSentRatio").textContent).toBe("N/A");
     });
 
     it("syncs range into router on button click", async () => {

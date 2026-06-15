@@ -31,7 +31,7 @@ vi.mock("../src/session.js", () => ({
 }));
 
 vi.mock("../src/storage.js", () => ({
-    Storage: { getAllFiles: vi.fn(), getFile: vi.fn() },
+    Storage: { getAllFiles: vi.fn(), getFile: vi.fn(), saveOutreach: vi.fn() },
 }));
 
 vi.mock("../src/cleaner.js", () => ({
@@ -1425,52 +1425,54 @@ describe("MessagesPage", () => {
         // Should be plain text number, no asterisk element
         expect(statEl.querySelector(".stat-asterisk")).toBeNull();
         expect(statEl.textContent).toBe("1");
-
-        // Outreach funnel cards reflect the message state's lifetime totals.
-        expect(document.getElementById("msgStatInitiated").textContent).toBe("3");
-        expect(document.getElementById("msgStatReplyRate").textContent).toBe("67%");
-        expect(document.getElementById("msgStatUnanswered").textContent).toBe("1");
-        expect(document.getElementById("msgStatSentRatio").textContent).toBe("1.8 : 1");
     });
 
-    it("renders an em dash for outreach ratios when there is no inbound data", async () => {
+    it("persists the lifetime outreach summary for the Insights page", async () => {
+        globalThis.Worker = undefined;
+
+        buildDom();
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+        ({ MessagesAnalytics } = await import("../src/messages-analytics.js"));
+
         const messagesFile = {
             type: "messages",
-            name: "noinbound.csv",
-            text: "x",
-            updatedAt: 160,
+            name: "outreach.csv",
+            text: "csv",
+            updatedAt: 170,
             rowCount: 1,
         };
         DataCache.set("storage:file:messages", messagesFile);
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [{}] });
 
-        const messageState = makeMessageState({
-            outreach: {
-                totalConversations: 0,
-                selfInitiated: 0,
-                othersInitiated: 0,
-                selfInitiatedReplied: 0,
-                replyRate: null,
-                unansweredContacts: 0,
-                sent: 0,
-                received: 0,
-                sentReceivedRatio: null,
-            },
-        });
-
-        const sig = `messages:${messagesFile.name}:${messagesFile.updatedAt}:${messagesFile.rowCount}|connections:none`;
-        DataCache.set(`messages:state:${sig}`, {
-            messageState,
-            connectionState: null,
-            connectionLoadError: null,
-            hasConnectionsFile: false,
+        const outreach = {
+            totalConversations: 3,
+            selfInitiated: 3,
+            othersInitiated: 0,
+            selfInitiatedReplied: 2,
+            replyRate: 2 / 3,
+            unansweredContacts: 1,
+            sent: 9,
+            received: 5,
+            sentReceivedRatio: 1.8,
+        };
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState({ outreach }));
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
         });
 
         MessagesPage.init();
         MessagesPage.onRouteChange({});
         await tick();
 
-        expect(document.getElementById("msgStatReplyRate").textContent).toBe("—");
-        expect(document.getElementById("msgStatSentRatio").textContent).toBe("—");
+        expect(Storage.saveOutreach).toHaveBeenCalledWith(outreach);
+
+        globalThis.Worker = undefined;
     });
 
     // --- Stat-asterisk popup toggle & keyboard interactions ------------------

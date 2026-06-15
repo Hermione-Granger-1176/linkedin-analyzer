@@ -668,7 +668,7 @@ function insightView(overrides) {
 }
 
 describe("AnalyticsEngine network growth", () => {
-    it("surfaces a network-growth insight from posting/connection correlation", () => {
+    it("computes a network-growth summary from posting/connection correlation", () => {
         const specs = monthsRange(14, i =>
             i < 4
                 ? { posts: 1, connections: 1, topic: "excel" }
@@ -681,13 +681,15 @@ describe("AnalyticsEngine network growth", () => {
         expect(analytics.networkGrowth.multiplier).toBeGreaterThanOrEqual(2);
         expect(analytics.networkGrowth.correlation).toBeGreaterThan(0);
 
+        // It is a lifetime stat rendered in the All-time section, not one of the
+        // filter-driven cards, so generateInsights must not emit it.
         const view = allTimeView(analytics);
         expect(view.networkGrowth).toEqual(analytics.networkGrowth);
         const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
-        expect(ids).toContain("network-growth");
+        expect(ids).not.toContain("network-growth");
     });
 
-    it("omits network growth from filtered or narrowed views", () => {
+    it("carries the same networkGrowth value on filtered and narrowed views", () => {
         const specs = monthsRange(14, i =>
             i < 4
                 ? { posts: 1, connections: 1, topic: "excel" }
@@ -697,8 +699,8 @@ describe("AnalyticsEngine network growth", () => {
         const analytics = AnalyticsEngine.compute(shares, comments, connections);
         expect(analytics.networkGrowth).not.toBeNull();
 
-        // The correlation is a full-dataset stat, so a narrower range or a
-        // dimension filter must drop it rather than show unsubstantiated numbers.
+        // It is a lifetime value rendered apart from the filters, so it rides on
+        // every view unchanged rather than being recomputed per filter.
         const baseFilters = {
             timeRange: "all",
             topic: "all",
@@ -709,10 +711,10 @@ describe("AnalyticsEngine network growth", () => {
         };
         expect(
             AnalyticsEngine.buildView(analytics, { ...baseFilters, timeRange: "3m" }).networkGrowth
-        ).toBeNull();
+        ).toEqual(analytics.networkGrowth);
         expect(
             AnalyticsEngine.buildView(analytics, { ...baseFilters, topic: "ai" }).networkGrowth
-        ).toBeNull();
+        ).toEqual(analytics.networkGrowth);
     });
 
     it("leaves networkGrowth null without connection data", () => {
@@ -921,7 +923,7 @@ describe("AnalyticsEngine tiered insight cards", () => {
         expect(titleAt(100)).toBe("Unstoppable Streak");
     });
 
-    it("emits network-growth, topic-shift and engagement-shift cards from view fields", () => {
+    it("emits topic-shift and engagement-shift cards from view fields", () => {
         const result = AnalyticsEngine.generateInsights(
             insightView({
                 networkGrowth: { multiplier: 19, topAvg: 210, quietAvg: 11, correlation: 0.5, months: 24 },
@@ -930,9 +932,8 @@ describe("AnalyticsEngine tiered insight cards", () => {
             })
         );
 
-        const growth = result.insights.find(i => i.id === "network-growth");
-        expect(growth.body).toContain("19x as many");
-        expect(growth.body).toContain("210");
+        // network-growth is rendered in the All-time section, not as a card.
+        expect(result.insights.find(i => i.id === "network-growth")).toBeUndefined();
 
         const shift = result.insights.find(i => i.id === "topic-shift");
         expect(shift.body).toContain("excel");

@@ -1055,15 +1055,6 @@ export const AnalyticsEngine = (() => {
         // Calculate trend
         const trend = computeTrendFromTimeline(timeline);
 
-        // The whole dataset is in view only when no time-range or dimension
-        // filter narrows it; the network-growth card is gated on this below.
-        const isFullDatasetView =
-            filters.timeRange === "all" &&
-            filters.topic === "all" &&
-            filters.shareType === "all" &&
-            !filters.monthFocus &&
-            !hasDay &&
-            !hasHour;
         // topicShift reads each month's unfiltered topic mix, so it is only
         // coherent when no topic/share-type/day/hour filter is active. A time
         // range merely selects which months to compare, which stays meaningful.
@@ -1082,11 +1073,11 @@ export const AnalyticsEngine = (() => {
             trend,
             topicShift: topicComparable ? computeTopicShift(monthlyStats) : null,
             ratioTrend: computeRatioTrend(monthlyStats),
-            // The network-growth correlation is computed once over the full
-            // dataset overlap window, so it only belongs on the unfiltered
-            // all-time view. Surfacing it under a narrower range or a dimension
-            // filter would show numbers the active view cannot substantiate.
-            networkGrowth: isFullDatasetView ? analytics.networkGrowth || null : null,
+            // The network-growth correlation is a lifetime stat computed once over
+            // the full dataset overlap window. It is carried on every view (same
+            // value regardless of filters) and rendered in the All-time section,
+            // not as one of the filter-driven cards.
+            networkGrowth: analytics.networkGrowth || null,
             totals: {
                 posts,
                 comments,
@@ -1457,17 +1448,6 @@ export const AnalyticsEngine = (() => {
             accent: timeInsight.accent,
         });
 
-        if (view.networkGrowth) {
-            const growth = view.networkGrowth;
-            insights.push({
-                id: "network-growth",
-                title: "Posting Grows Your Network",
-                body: `Your busiest posting months bring ${growth.multiplier}x as many new connections (${growth.topAvg} vs ${growth.quietAvg} per month).`,
-                icon: "network",
-                accent: "accent-green",
-            });
-        }
-
         const TREND_INSIGHTS = {
             up: {
                 id: "trending-up",
@@ -1516,8 +1496,8 @@ export const AnalyticsEngine = (() => {
                 title: "Engagement Style Shift",
                 body:
                     view.ratioTrend.direction === "more-engaging"
-                        ? "You are commenting more and posting less than before — leaning into conversations."
-                        : "You are posting more and commenting less than before — leaning into creating.",
+                        ? "You are commenting more and posting less than before, leaning into conversations."
+                        : "You are posting more and commenting less than before, leaning into creating.",
                 icon: "scale",
                 accent: "accent-blue",
             });

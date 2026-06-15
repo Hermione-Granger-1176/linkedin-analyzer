@@ -31,15 +31,6 @@ export const MessagesPage = (() => {
         "12m": 12,
     });
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    // Zeroed outreach funnel used when a message state predates the field or
-    // carries no parseable messages.
-    const EMPTY_OUTREACH = Object.freeze({
-        selfInitiated: 0,
-        othersInitiated: 0,
-        replyRate: null,
-        unansweredContacts: 0,
-        sentReceivedRatio: null,
-    });
     // Worker watchdog scales with input size: a base allowance plus more time per
     // megabyte of CSV so large exports are not cut off prematurely.
     const WORKER_TIMEOUT_BASE_MS = 30000;
@@ -76,10 +67,6 @@ export const MessagesPage = (() => {
         msgStatContacts: document.getElementById("msgStatContacts"),
         msgStatConnected: document.getElementById("msgStatConnected"),
         msgStatFading: document.getElementById("msgStatFading"),
-        msgStatInitiated: document.getElementById("msgStatInitiated"),
-        msgStatReplyRate: document.getElementById("msgStatReplyRate"),
-        msgStatUnanswered: document.getElementById("msgStatUnanswered"),
-        msgStatSentRatio: document.getElementById("msgStatSentRatio"),
         messagesTip: document.getElementById("messagesTip"),
         messagesTipText: document.getElementById("messagesTipText"),
     };
@@ -533,6 +520,7 @@ export const MessagesPage = (() => {
             } else {
                 state.messageState = buildMessageState(messagesData);
             }
+            persistOutreach(state.messageState.outreach);
             if (!state.messageState.events.length) {
                 state.loadedSignature = signature;
                 setEmptyState(
@@ -1053,38 +1041,22 @@ export const MessagesPage = (() => {
             hasConnections ? state.connectionState.list.length : 0,
             fadingConversations.length,
         );
-        renderOutreach(state.messageState.outreach);
         updateTip(topSummary.items, silentConnections, fadingConversations);
     }
 
     /**
-     * Render the outreach-funnel stat cards. Values are lifetime totals, so they
-     * do not change with the active time range.
-     * @param {object|null} outreach - Outreach stats from the message state
+     * Best-effort persist of the lifetime outreach summary so the Insights page
+     * can show it without loading the message export. Runs once per dataset load
+     * (not per filter re-render) and never blocks the UI on a storage failure.
+     * @param {object|null} outreach - Outreach summary from the message state
      */
-    function renderOutreach(outreach) {
-        const safe = outreach || EMPTY_OUTREACH;
-        setStatText(elements.msgStatInitiated, String(safe.selfInitiated));
-        setStatText(
-            elements.msgStatReplyRate,
-            safe.replyRate === null ? "—" : `${Math.round(safe.replyRate * 100)}%`,
-        );
-        setStatText(elements.msgStatUnanswered, String(safe.unansweredContacts));
-        setStatText(
-            elements.msgStatSentRatio,
-            safe.sentReceivedRatio === null ? "—" : `${safe.sentReceivedRatio.toFixed(1)} : 1`,
-        );
-    }
-
-    /**
-     * Set an optional stat element's text, tolerating a missing node.
-     * @param {HTMLElement|null} element - Target stat node
-     * @param {string} text - Text to display
-     */
-    function setStatText(element, text) {
-        if (element) {
-            element.textContent = text;
+    function persistOutreach(outreach) {
+        if (!outreach) {
+            return;
         }
+        Promise.resolve(Storage.saveOutreach(outreach)).catch((error) => {
+            captureError(error, { module: "messages", operation: "persist-outreach" });
+        });
     }
 
     /**

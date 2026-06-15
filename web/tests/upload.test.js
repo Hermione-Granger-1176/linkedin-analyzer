@@ -1158,6 +1158,57 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("primes connections-only storage before the first shares upload", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        // Only a connections file is stored — no shares/comments yet. The prime
+        // must still post restoreFiles so the worker retains connections for the
+        // first shares upload's recompute instead of waiting for a re-upload.
+        const cachedFiles = [{ type: "connections", rowCount: 5, updatedAt: 30 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        Storage.getFile.mockImplementation((type) => {
+            if (type === "connections") {
+                return Promise.resolve({
+                    type: "connections",
+                    text: "connections-head\nc1",
+                    rowCount: 5,
+                });
+            }
+            return Promise.resolve(null);
+        });
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["col\nval"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const restoreCall = workerInstance.postMessage.mock.calls
+            .map((c) => c[0])
+            .find((m) => m && m.type === "restoreFiles");
+        expect(restoreCall).toBeDefined();
+        expect(restoreCall.payload.connectionsCsv).toContain("connections-head");
+        expect(restoreCall.payload.sharesCsv).toBe("");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     it("serializes overlapping primes so restoreFiles stays ordered before addFile", async () => {
         // A worker restart's idle re-prime can be mid text-load when a fresh
         // upload's immediate prime fires. Both primes load shares/comments

@@ -1250,14 +1250,17 @@ export const UploadPage = (() => {
 
         const sharesFile = fileMap.shares || null;
         const commentsFile = fileMap.comments || null;
-        if (!sharesFile && !commentsFile) {
+        const connectionsFile = fileMap.connections || null;
+        // Connections alone are worth priming: the worker retains the dataset so
+        // the first later shares/comments upload picks up the already-stored
+        // connections for the network-growth correlation without a re-upload.
+        if (!sharesFile && !commentsFile && !connectionsFile) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
             clearPrimeSchedule();
             return undefined;
         }
 
-        const connectionsFile = fileMap.connections || null;
         const sharesStamp = sharesFile
             ? `${sharesFile.updatedAt || 0}:${sharesFile.rowCount || 0}`
             : "-";

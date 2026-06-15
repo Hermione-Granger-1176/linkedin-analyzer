@@ -52,20 +52,27 @@ export const MessagesAnalytics = (() => {
             // count toward sent totals and conversation initiation.
             const senderName = cleanText(row.FROM);
             const senderUrl = normalizeUrl(row["SENDER PROFILE URL"]);
-            const hasSender = Boolean(senderName || senderUrl);
             const senderIsSelf = isSelfContact(senderName, senderUrl, context);
+            // A non-self sender only counts as a real correspondent when it
+            // survives the same filtering as participants (non-blank,
+            // non-anonymous), so "LinkedIn Member" placeholders do not inflate
+            // received totals or count as a reply.
+            const senderContact = senderIsSelf
+                ? null
+                : sanitizeParticipant({ name: senderName, url: senderUrl }, context);
+            const hasRealSender = Boolean(senderContact);
             if (senderIsSelf) {
                 sentMessages += 1;
-            } else if (hasSender) {
+            } else if (hasRealSender) {
                 receivedMessages += 1;
             }
             trackConversation(conversations, buildConversationKey(row, index), {
                 timestamp,
                 senderIsSelf,
-                hasSender
+                hasSender: hasRealSender
             });
-            if (!senderIsSelf && hasSender) {
-                markOutreachContact(contactStats, { name: senderName, url: senderUrl }, "received");
+            if (hasRealSender) {
+                markOutreachContact(contactStats, senderContact, "received");
             }
 
             const participants = extractParticipantsFromRow(row, context);

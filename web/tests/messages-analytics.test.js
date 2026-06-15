@@ -102,6 +102,36 @@ describe("MessagesAnalytics", () => {
         expect(outreach.unansweredContacts).toBe(0);
     });
 
+    it("buildMessageState excludes anonymous senders from outreach replies", () => {
+        const msg = (conversationId, date, from, fromUrl, to, toUrl) => ({
+            "CONVERSATION ID": conversationId,
+            DATE: date,
+            FROM: from,
+            "SENDER PROFILE URL": fromUrl,
+            TO: to,
+            "RECIPIENT PROFILE URLS": toUrl,
+            CONTENT: "hi"
+        });
+        const me = "https://linkedin.com/in/me";
+        const alice = "https://linkedin.com/in/alice";
+
+        // Self appears on both sides so self-detection is stable. The only
+        // inbound message is from an anonymous "LinkedIn Member", which must not
+        // count as a real reply or inflate the received tally.
+        const rows = [
+            msg("A", "2025-01-01 10:00:00", "Me", me, "Alice", alice),
+            msg("A", "2025-01-02 10:00:00", "LinkedIn Member", "", "Me", me),
+            msg("B", "2025-01-03 10:00:00", "Me", me, "Alice", alice)
+        ];
+
+        const { outreach } = MessagesAnalytics.buildMessageState(rows);
+        expect(outreach.received).toBe(0);
+        expect(outreach.selfInitiated).toBe(2);
+        expect(outreach.selfInitiatedReplied).toBe(0);
+        expect(outreach.replyRate).toBe(0);
+        expect(outreach.sentReceivedRatio).toBeNull();
+    });
+
     it("buildConnectionState normalizes names and urls", () => {
         const rows = [
             {

@@ -675,15 +675,17 @@ export const AnalyticsEngine = (() => {
         // numbers shown in the card.
         const quietAvg = Math.round(average(quietMonths.map((entry) => entry.connections)));
         const topAvg = Math.round(average(topMonths.map((entry) => entry.connections)));
-        // Only surface the card when the busiest months genuinely bring more
-        // connections; equal or lower averages would make the copy misleading.
-        if (quietAvg <= 0 || topAvg <= quietAvg) {
+        const multiplier = quietAvg > 0 ? Math.round(topAvg / quietAvg) : 0;
+        // Only surface the card when the busiest months bring at least ~2x as
+        // many connections. A 0x/1x headline would misrepresent a flat or
+        // inverse relationship, so anything weaker keeps the card dormant.
+        if (multiplier < 2) {
             return null;
         }
 
         return {
             correlation: Math.round(correlation * 100) / 100,
-            multiplier: Math.round(topAvg / quietAvg),
+            multiplier,
             topAvg,
             quietAvg,
             months: months.length,

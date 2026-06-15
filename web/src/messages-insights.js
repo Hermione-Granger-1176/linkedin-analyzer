@@ -520,7 +520,6 @@ export const MessagesPage = (() => {
             } else {
                 state.messageState = buildMessageState(messagesData);
             }
-            persistOutreach(state.messageState.outreach);
             if (!state.messageState.events.length) {
                 state.loadedSignature = signature;
                 setEmptyState(
@@ -530,6 +529,9 @@ export const MessagesPage = (() => {
                 showMessagesLoading(false);
                 return;
             }
+            // Persist only once the dataset is confirmed usable, so an empty
+            // parse can't overwrite a previously valid stored outreach summary.
+            persistOutreach(state.messageState.outreach);
 
             if (processed.connectionState) {
                 state.connectionState = hydrateConnectionState(processed.connectionState);

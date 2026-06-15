@@ -1372,6 +1372,7 @@ describe("MessagesPage", () => {
         DataCache.set("storage:file:messages", messagesFile);
 
         LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
+        Storage.saveOutreach.mockClear();
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map(),
@@ -1381,6 +1382,9 @@ describe("MessagesPage", () => {
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
             latestTimestamp: 0,
+            // An empty parse can still produce a zeroed outreach object; it must
+            // not overwrite a previously valid stored summary.
+            outreach: { selfInitiated: 0, replyRate: null, sentReceivedRatio: null },
         });
 
         MessagesPage.init();
@@ -1391,6 +1395,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesEmpty").querySelector("p").textContent).toContain(
             "no valid message rows",
         );
+        expect(Storage.saveOutreach).not.toHaveBeenCalled();
 
         globalThis.Worker = undefined;
     });

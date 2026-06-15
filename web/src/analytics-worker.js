@@ -50,8 +50,8 @@ function getViewKey(filters) {
 }
 
 /**
- * Recompute analytics aggregates from current shares and comments data.
- * Clears the view cache since aggregates have changed.
+ * Recompute analytics aggregates from the current shares, comments, and
+ * connections data. Clears the view cache since aggregates have changed.
  */
 function computeAnalytics() {
     analytics = AnalyticsEngine.compute(sharesData, commentsData, connectionsData);

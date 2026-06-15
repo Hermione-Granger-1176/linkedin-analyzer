@@ -487,10 +487,12 @@ export const AnalyticsEngine = (() => {
 
         const dayIndexData = Object.fromEntries(dayIndex);
 
-        const networkGrowth = computeNetworkGrowth(
-            monthIndex,
-            buildMonthlyConnections(connectionsData),
-        );
+        // Skip the full pass over connection rows entirely when there is no
+        // posting activity to correlate them against — the card cannot fire.
+        const networkGrowth =
+            monthIndex.size === 0
+                ? null
+                : computeNetworkGrowth(monthIndex, buildMonthlyConnections(connectionsData));
 
         return {
             months,
@@ -611,12 +613,13 @@ export const AnalyticsEngine = (() => {
      * the busiest posting months against quiet ones. Returns null unless there
      * are enough overlapping months and real posting variance, so the card only
      * fires when the relationship is meaningful.
-     * @param {Map<string, object>} monthIndex - Internal month buckets with post counts
+     * @param {Map<string, object>} monthIndex - Internal month buckets with post counts (non-empty)
      * @param {Map<string, number>} monthlyConnections - Monthly new-connection counts
      * @returns {{correlation: number, multiplier: number, topAvg: number, quietAvg: number, months: number}|null}
      */
     function computeNetworkGrowth(monthIndex, monthlyConnections) {
-        if (monthlyConnections.size === 0 || monthIndex.size === 0) {
+        // Callers only invoke this with a non-empty monthIndex.
+        if (monthlyConnections.size === 0) {
             return null;
         }
 

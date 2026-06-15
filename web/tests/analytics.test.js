@@ -692,6 +692,13 @@ describe("AnalyticsEngine network growth", () => {
         expect(AnalyticsEngine.compute(shares, []).networkGrowth).toBeNull();
     });
 
+    it("leaves networkGrowth null when there is no posting activity", () => {
+        const { connections } = buildMonthly(
+            monthsRange(14, i => ({ posts: 0, connections: i + 1, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute([], [], connections).networkGrowth).toBeNull();
+    });
+
     it("requires at least 12 overlapping months", () => {
         const { shares, connections } = buildMonthly(
             monthsRange(6, i => ({ posts: i + 1, connections: i + 1, topic: "x" }))

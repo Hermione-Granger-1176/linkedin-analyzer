@@ -110,7 +110,7 @@ dead-code-js: ## Detect unused JS code, exports, and deps (knip)
 
 # ─── Test @test ─────────────────────────────────────────────────────────────────────
 
-.PHONY: test test-py test-js test-e2e test-e2e-headed test-e2e-ui
+.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-headed test-e2e-ui
 
 test: test-py test-js ## Run non-browser Python and JS tests
 

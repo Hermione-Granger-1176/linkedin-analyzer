@@ -9,7 +9,7 @@ Command-line tool for cleaning LinkedIn CSV exports into formatted Excel files.
 pip install linkedin-analyzer
 
 # From source for development
-uv sync --all-extras --frozen
+uv sync --all-groups --frozen
 
 # Run the local CLI
 uv run linkedin-analyzer --help
@@ -82,6 +82,15 @@ linkedin-analyzer --log-format json all
 
 Choose `text` (default, human-readable) or `json` (structured, one object per line). Also configurable via the `LOG_FORMAT` environment variable. See [Operations and Deployment](operations.md) for production logging guidance.
 
+### Input encoding
+
+```bash
+linkedin-analyzer --encoding latin-1 shares
+linkedin-analyzer --encoding utf-8 all
+```
+
+Forces the encoding used to read input CSVs. When omitted, the encoding is auto-detected (see Cleaning Notes below). Pass this when characters look wrong, or when you already know the export's encoding. Like `--log-level` and `--log-format`, it is a global option and goes before the command.
+
 ### Custom paths for single-file commands
 
 ```bash
@@ -113,6 +122,7 @@ linkedin-analyzer all \
 - UTC timestamps are converted to local time where applicable.
 - NA-like values are treated as missing.
 - Rows missing required fields are dropped.
+- Encoding is auto-detected when `--encoding` is not set: UTF-8 (BOM-aware) is tried first, then Latin-1, which decodes any byte sequence. On the fallback the CLI logs a WARNING suggesting `--encoding`; pass it if characters look wrong.
 - Connections CSV skips the first 3 header rows before parsing.
 - Connections rows missing all of First Name, Last Name, and URL are dropped.
 

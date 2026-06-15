@@ -28,6 +28,24 @@ Two independent version identifiers exist by design:
 
 When cutting a release, the Git tag drives the PyPI and GHCR versions; set `VITE_APP_RELEASE` to the same tag/SHA so web telemetry lines up with the CLI release.
 
+## Cutting a Release
+
+Releases are tag-driven: pushing a GitHub Release publishes the PyPI package and the GHCR image from that tag. `hatch-vcs` derives the version from the tag, so there is no version number to hand-edit.
+
+1. **Roll the changelog.** Move the `## [Unreleased]` entries in `CHANGELOG.md` into a new `## [X.Y.Z]` section with the date. Keep web-only changes out (the changelog is Python-package-only). Leave a fresh empty `Unreleased` heading.
+2. **Confirm green CI on the release commit.** `publish.yml`'s `require-ci` job refuses to publish unless the tagged commit's latest `CI result` check concluded `success`. Merge to `main` and let CI finish first, then tag that commit.
+3. **Tag and create the GitHub Release.** Tag `vX.Y.Z` on the release commit and publish a GitHub Release (the workflow triggers on `release: published`). Mark pre-releases as **prerelease** so the floating `:latest` Docker tag is not re-pointed (`publish.yml` only adds `:latest` for non-prereleases; `:vX.Y.Z` and `:sha-<sha>` are always pushed).
+4. **Let the workflow self-verify.** `publish-pypi` builds, runs `twine check`, installs the wheel, and fails if `linkedin-analyzer --version` does not match the tag (minus the leading `v`); `publish-docker` repeats the version check on the built image and runs a Trivy HIGH/CRITICAL scan before pushing.
+5. **Set `VITE_APP_RELEASE`** on the next web build to the same tag/SHA so Sentry correlates web errors to the release (see Versioning above).
+
+Re-run-failed-jobs caveat: `gh-action-pypi-publish` runs with `skip-existing: true`, so if a later job (for example the Trivy scan) fails after PyPI already accepted the upload, you can safely re-run the failed jobs — the already-published distribution is skipped rather than erroring. PyPI versions are immutable; to fix a bad release, roll forward with a new patch tag (see Rollback).
+
+## Availability
+
+- The web app is a PWA: once a visitor has loaded it, the service worker (`web/src/sw.js`) serves the cached shell, so the app stays usable offline and during a brief Vercel outage. File processing is fully client-side, so a backend outage does not block cleaning or analysis of already-loaded data.
+- The only server-side surface is the `api/csp-report` function, which is best-effort and non-critical: if it is down, CSP reports are simply not collected and nothing user-facing breaks.
+- There is no built-in uptime monitor. If availability SLAs matter, point an external monitor (for example a simple HTTPS check) at the production URL; Vercel also exposes deployment/health status in its dashboard.
+
 ## Rollback
 
 Each release surface rolls back independently.

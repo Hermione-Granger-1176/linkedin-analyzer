@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Hermione-Granger-1176/linkedin-analyzer/security/policy
+    about: Do not open a public issue for security reports. Follow the security policy to disclose privately.
+  - name: Question or discussion
+    url: https://github.com/Hermione-Granger-1176/linkedin-analyzer/discussions
+    about: Ask a question or start a discussion instead of filing an issue.

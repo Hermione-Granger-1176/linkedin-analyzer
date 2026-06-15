@@ -13,15 +13,6 @@ import os
 import sys
 from pathlib import Path
 
-BOOL_LOOKUP = {
-    "true": True,
-    "1": True,
-    "yes": True,
-    "false": False,
-    "0": False,
-    "no": False,
-}
-
 LOCK_ARTIFACT_FILES = {
     "pr-number": Path(".artifacts/pr-number.txt"),
     "head-sha": Path(".artifacts/head-sha.txt"),
@@ -31,24 +22,6 @@ LOCK_ARTIFACT_REQUIRED_FILES = {
     "uv-lock": Path("uv.lock"),
     **LOCK_ARTIFACT_FILES,
 }
-
-
-def _parse_bool(value: str) -> bool:
-    """Parse a GitHub-style boolean string."""
-    normalized = value.strip().lower()
-    try:
-        return BOOL_LOOKUP[normalized]
-    except KeyError as exc:
-        raise ValueError(f"Invalid boolean value: {value}") from exc
-
-
-def app_token_allowed(*, event_name: str, head_repo_fork: bool, pr_author: str) -> bool:
-    """Return whether a workflow run may mint privileged GitHub App tokens."""
-    if event_name != "pull_request":
-        return True
-    if head_repo_fork:
-        return False
-    return pr_author != "dependabot[bot]"
 
 
 def reject_symlinks(root: Path) -> None:
@@ -107,13 +80,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Workflow helper commands")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    policy_parser = subparsers.add_parser(
-        "app-token-policy", help="Determine whether app-token actions are allowed"
-    )
-    policy_parser.add_argument("--event-name", required=True)
-    policy_parser.add_argument("--head-repo-fork", required=True)
-    policy_parser.add_argument("--pr-author", default="")
-
     metadata_parser = subparsers.add_parser(
         "read-lock-metadata", help="Read lock refresh metadata from an artifact tree"
     )
@@ -125,17 +91,6 @@ def _build_parser() -> argparse.ArgumentParser:
     artifact_parser.add_argument("--root", required=True)
 
     return parser
-
-
-def _handle_app_token_policy(args: argparse.Namespace) -> int:
-    """Print whether GitHub App token actions are allowed for the current event."""
-    allowed = app_token_allowed(
-        event_name=args.event_name,
-        head_repo_fork=_parse_bool(args.head_repo_fork),
-        pr_author=args.pr_author,
-    )
-    print(f"allowed={'true' if allowed else 'false'}")
-    return 0
 
 
 def _handle_read_lock_metadata(args: argparse.Namespace) -> int:
@@ -151,7 +106,6 @@ def _handle_validate_lock_artifact(args: argparse.Namespace) -> int:
 
 
 COMMAND_HANDLERS = {
-    "app-token-policy": _handle_app_token_policy,
     "read-lock-metadata": _handle_read_lock_metadata,
     "validate-lock-artifact": _handle_validate_lock_artifact,
 }

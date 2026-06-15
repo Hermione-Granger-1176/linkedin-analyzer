@@ -55,3 +55,29 @@ jobs:
           pip install uv
       - name: pip audit
         run: make audit-python
+
+  report-failure:
+    needs: [npm-audit, pip-audit]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the dependency-audit issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          label="dependency-audit"
+          gh label create "$label" -R "$REPO" --color B60205 \
+            --description "Scheduled dependency audit failures" 2>/dev/null || true
+          body="The scheduled dependency audit failed. Review the npm/pip audit and override checks: $RUN_URL"
+          number="$(gh issue list -R "$REPO" --state open --label "$label" \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPO" --body "$body"
+          else
+            gh issue create -R "$REPO" --title "Dependency audit failed" \
+              --label "$label" --body "$body"
+          fi

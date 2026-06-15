@@ -28,6 +28,12 @@ export const InsightsPage = (() => {
         analyticsReady: false,
         hasData: false,
         currentInsights: null,
+        // Lifetime values for the All-time section: networkGrowth rides on each
+        // view (same value regardless of filters); outreach is loaded once from
+        // storage since it is produced by the separate messages worker.
+        networkGrowth: null,
+        outreach: null,
+        outreachLoaded: false,
     };
 
     let elements = null;
@@ -69,6 +75,12 @@ export const InsightsPage = (() => {
             return;
         }
 
+        // Re-read the outreach summary on each route entry so stats saved after a
+        // later Messages upload appear without a refresh. The latch keeps this to
+        // one read per visit (filter changes re-enter here but find it loaded);
+        // onRouteLeave clears the latch so the next entry reloads.
+        loadOutreach();
+
         const range = parseRangeParam(params && params.range);
         applyRangeFromRoute(range);
 
@@ -88,6 +100,9 @@ export const InsightsPage = (() => {
     /** Cleanup when leaving route. */
     function onRouteLeave() {
         showInsightsLoading(false);
+        // Allow the next entry to reload outreach (e.g. after the user uploads
+        // Messages from another screen).
+        state.outreachLoaded = false;
     }
 
     /**
@@ -102,6 +117,17 @@ export const InsightsPage = (() => {
             insightsGrid: document.getElementById("insightsGrid"),
             insightTip: document.getElementById("insightTip"),
             insightTipText: document.getElementById("insightTipText"),
+            allTime: document.getElementById("insightsAllTime"),
+            networkGrowthCard: document.getElementById("insightsNetworkGrowthCard"),
+            networkGrowthValue: document.getElementById("insightsNetworkGrowthValue"),
+            outreachInitiatedCard: document.getElementById("insightsOutreachInitiatedCard"),
+            statInitiated: document.getElementById("insightsStatInitiated"),
+            outreachReplyCard: document.getElementById("insightsOutreachReplyCard"),
+            statReplyRate: document.getElementById("insightsStatReplyRate"),
+            outreachUnansweredCard: document.getElementById("insightsOutreachUnansweredCard"),
+            statUnanswered: document.getElementById("insightsStatUnanswered"),
+            outreachRatioCard: document.getElementById("insightsOutreachRatioCard"),
+            statSentRatio: document.getElementById("insightsStatSentRatio"),
         };
     }
 
@@ -267,10 +293,114 @@ export const InsightsPage = (() => {
      */
     function applyWorkerInsightsPayload(payload) {
         state.currentInsights = payload.insights || null;
+        // networkGrowth is a lifetime value carried identically on every view.
+        state.networkGrowth = (payload.view && payload.view.networkGrowth) || null;
         if (state.currentInsights) {
             renderInsights(state.currentInsights);
         }
+        renderAllTime();
         showInsightsLoading(false);
+    }
+
+    /**
+     * Render the All-time section from the lifetime networkGrowth (carried on
+     * the view) and the persisted outreach summary. Each card hides when its
+     * data is absent, and the whole section hides when neither is available.
+     */
+    function renderAllTime() {
+        if (!elements.allTime) {
+            return;
+        }
+        const growth = state.networkGrowth;
+        const outreach = state.outreach;
+
+        toggleStatCard(
+            elements.networkGrowthCard,
+            elements.networkGrowthValue,
+            growth ? `${growth.multiplier}×` : null,
+        );
+        toggleStatCard(
+            elements.outreachInitiatedCard,
+            elements.statInitiated,
+            outreach ? String(outreach.selfInitiated) : null,
+        );
+        toggleStatCard(
+            elements.outreachReplyCard,
+            elements.statReplyRate,
+            outreach ? formatReplyRate(outreach.replyRate) : null,
+        );
+        toggleStatCard(
+            elements.outreachUnansweredCard,
+            elements.statUnanswered,
+            outreach ? String(outreach.unansweredContacts) : null,
+        );
+        toggleStatCard(
+            elements.outreachRatioCard,
+            elements.statSentRatio,
+            outreach ? formatSentRatio(outreach.sentReceivedRatio) : null,
+        );
+
+        elements.allTime.hidden = !growth && !outreach;
+    }
+
+    /**
+     * Show a stat card with the given value, or hide it when value is null.
+     * @param {HTMLElement|null} card - Stat card container
+     * @param {HTMLElement|null} valueEl - Value node within the card
+     * @param {string|null} value - Display value, or null to hide the card
+     */
+    function toggleStatCard(card, valueEl, value) {
+        if (!card || !valueEl) {
+            return;
+        }
+        if (value === null) {
+            card.hidden = true;
+            return;
+        }
+        valueEl.textContent = value;
+        card.hidden = false;
+    }
+
+    /**
+     * Format an outreach reply rate as a percentage, or "N/A" when there were no
+     * self-initiated conversations to measure.
+     * @param {number|null} replyRate - Fraction in [0, 1] or null
+     * @returns {string}
+     */
+    function formatReplyRate(replyRate) {
+        return replyRate === null ? "N/A" : `${Math.round(replyRate * 100)}%`;
+    }
+
+    /**
+     * Format a sent-to-received ratio, or "N/A" when nothing was received.
+     * @param {number|null} ratio - Sent/received ratio or null
+     * @returns {string}
+     */
+    function formatSentRatio(ratio) {
+        return ratio === null ? "N/A" : `${ratio.toFixed(1)} : 1`;
+    }
+
+    /**
+     * Load the persisted outreach summary once. It is produced by the messages
+     * worker (a different page), so the Insights page reads the small stored
+     * summary rather than re-parsing the message export. Best-effort.
+     * @returns {Promise<void>}
+     */
+    async function loadOutreach() {
+        if (state.outreachLoaded) {
+            return;
+        }
+        // Latch before the await so concurrent entries don't double-read; a load
+        // failure clears it again so a later entry can retry.
+        state.outreachLoaded = true;
+        try {
+            state.outreach = await Storage.getOutreach();
+        } catch (error) {
+            state.outreachLoaded = false;
+            captureError(error, { module: "insights", operation: "load-outreach" });
+            return;
+        }
+        renderAllTime();
     }
 
     /**
@@ -423,6 +553,9 @@ export const InsightsPage = (() => {
         elements.insightsEmpty.hidden = false;
         elements.insightsGrid.hidden = true;
         elements.insightTip.hidden = true;
+        // The All-time section is governed solely by renderAllTime (driven by
+        // data presence), so it can still surface lifetime outreach even when
+        // there are no shares/comments for the filtered cards.
     }
 
     /** Hide empty state and show insights grid. */
@@ -526,6 +659,8 @@ export const InsightsPage = (() => {
             trophy: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><path d=\"M20 12 H44 V24 C44 32 38 38 32 38 C26 38 20 32 20 24 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M16 12 H8 C8 24 14 30 20 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M48 12 H56 C56 24 50 30 44 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M28 38 V48 H36 V38\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M24 52 H40\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",
             calendar: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><rect x=\"12\" y=\"16\" width=\"40\" height=\"36\" rx=\"4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M12 26 H52\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M22 12 V20 M42 12 V20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M22 36 L28 42 L40 30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",
             flame: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><path d=\"M32 10 C36 18 26 22 30 30 C32 34 40 34 40 42 C40 50 34 54 32 54 C26 54 22 48 22 42 C22 34 28 30 26 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",
+            compass: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><circle cx=\"32\" cy=\"32\" r=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M40 24 L34 34 L24 40 L30 30 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",
+            scale: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><path d=\"M32 12 V52 M18 52 H46\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M14 20 H50 M14 20 L8 34 H20 Z M50 20 L44 34 H56 Z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",
         };
         return icons[name] || icons.calendar;
     }

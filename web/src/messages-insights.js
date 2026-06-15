@@ -529,6 +529,9 @@ export const MessagesPage = (() => {
                 showMessagesLoading(false);
                 return;
             }
+            // Persist only once the dataset is confirmed usable, so an empty
+            // parse can't overwrite a previously valid stored outreach summary.
+            persistOutreach(state.messageState.outreach);
 
             if (processed.connectionState) {
                 state.connectionState = hydrateConnectionState(processed.connectionState);
@@ -747,6 +750,7 @@ export const MessagesPage = (() => {
             latestTimestamp: Number.isFinite(safePayload.latestTimestamp)
                 ? safePayload.latestTimestamp
                 : 0,
+            outreach: safePayload.outreach || null,
         };
     }
 
@@ -1040,6 +1044,21 @@ export const MessagesPage = (() => {
             fadingConversations.length,
         );
         updateTip(topSummary.items, silentConnections, fadingConversations);
+    }
+
+    /**
+     * Best-effort persist of the lifetime outreach summary so the Insights page
+     * can show it without loading the message export. Runs once per dataset load
+     * (not per filter re-render) and never blocks the UI on a storage failure.
+     * @param {object|null} outreach - Outreach summary from the message state
+     */
+    function persistOutreach(outreach) {
+        if (!outreach) {
+            return;
+        }
+        Promise.resolve(Storage.saveOutreach(outreach)).catch((error) => {
+            captureError(error, { module: "messages", operation: "persist-outreach" });
+        });
     }
 
     /**

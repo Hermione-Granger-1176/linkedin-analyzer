@@ -57,7 +57,7 @@ describe("worker contracts", () => {
     it("normalizes analytics restore/init/view/clear requests", () => {
         const restore = parseAnalyticsWorkerRequest({
             type: "restoreFiles",
-            payload: { sharesCsv: 99, commentsCsv: "comments" },
+            payload: { sharesCsv: 99, commentsCsv: "comments", connectionsCsv: "connections" },
         });
         const initBase = parseAnalyticsWorkerRequest({
             type: "initBase",
@@ -73,6 +73,7 @@ describe("worker contracts", () => {
         expect(restore.valid).toBe(true);
         expect(restore.value.payload.sharesCsv).toBe("");
         expect(restore.value.payload.commentsCsv).toBe("comments");
+        expect(restore.value.payload.connectionsCsv).toBe("connections");
 
         expect(initBase.valid).toBe(true);
         expect(initBase.value.payload).toEqual({ fromCache: true });
@@ -116,11 +117,17 @@ describe("worker contracts", () => {
             type: "restoreFiles",
             payload: { sharesCsv: getOversizeCsv(), commentsCsv: "" },
         });
+        const oversizeConnections = parseAnalyticsWorkerRequest({
+            type: "restoreFiles",
+            payload: { sharesCsv: "", commentsCsv: "", connectionsCsv: getOversizeCsv() },
+        });
 
         expect(invalidEnvelope.valid).toBe(false);
         expect(invalidRestore.valid).toBe(false);
         expect(oversizeRestore.valid).toBe(false);
         expect(oversizeRestore.error).toContain("exceeds");
+        expect(oversizeConnections.valid).toBe(false);
+        expect(oversizeConnections.error).toContain("exceeds");
         expect(invalidAddFilePayload.valid).toBe(false);
         expect(missingFileName.valid).toBe(false);
         expect(oversizeCsv.valid).toBe(false);

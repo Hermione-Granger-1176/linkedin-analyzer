@@ -31,7 +31,7 @@ vi.mock("../src/session.js", () => ({
 }));
 
 vi.mock("../src/storage.js", () => ({
-    Storage: { getAllFiles: vi.fn(), getFile: vi.fn() },
+    Storage: { getAllFiles: vi.fn(), getFile: vi.fn(), saveOutreach: vi.fn() },
 }));
 
 vi.mock("../src/cleaner.js", () => ({
@@ -77,6 +77,10 @@ function buildDom(opts = {}) {
             <div class="stat-card"><span id="msgStatContacts"></span></div>
             <div class="stat-card"><span id="msgStatConnected"></span></div>
             <div class="stat-card"><span id="msgStatFading"></span></div>
+            <div class="stat-card"><span id="msgStatInitiated"></span></div>
+            <div class="stat-card"><span id="msgStatReplyRate"></span></div>
+            <div class="stat-card"><span id="msgStatUnanswered"></span></div>
+            <div class="stat-card"><span id="msgStatSentRatio"></span></div>
             <ul id="topContactsList"></ul>
             <ul id="silentConnectionsList"></ul>
             <ul id="fadingConversationsList"></ul>
@@ -115,6 +119,17 @@ function makeMessageState(overrides = {}) {
         talkedNameKeys: new Set(["ada lovelace"]),
         talkedUrlKeys: new Set(["https://linkedin.com/in/ada"]),
         latestTimestamp: timestamp,
+        outreach: {
+            totalConversations: 4,
+            selfInitiated: 3,
+            othersInitiated: 1,
+            selfInitiatedReplied: 2,
+            replyRate: 2 / 3,
+            unansweredContacts: 1,
+            sent: 9,
+            received: 5,
+            sentReceivedRatio: 1.8,
+        },
         ...overrides,
     };
 }
@@ -1357,6 +1372,7 @@ describe("MessagesPage", () => {
         DataCache.set("storage:file:messages", messagesFile);
 
         LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
+        Storage.saveOutreach.mockClear();
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map(),
@@ -1366,6 +1382,9 @@ describe("MessagesPage", () => {
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
             latestTimestamp: 0,
+            // An empty parse can still produce a zeroed outreach object; it must
+            // not overwrite a previously valid stored summary.
+            outreach: { selfInitiated: 0, replyRate: null, sentReceivedRatio: null },
         });
 
         MessagesPage.init();
@@ -1376,6 +1395,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesEmpty").querySelector("p").textContent).toContain(
             "no valid message rows",
         );
+        expect(Storage.saveOutreach).not.toHaveBeenCalled();
 
         globalThis.Worker = undefined;
     });
@@ -1410,6 +1430,54 @@ describe("MessagesPage", () => {
         // Should be plain text number, no asterisk element
         expect(statEl.querySelector(".stat-asterisk")).toBeNull();
         expect(statEl.textContent).toBe("1");
+    });
+
+    it("persists the lifetime outreach summary for the Insights page", async () => {
+        globalThis.Worker = undefined;
+
+        buildDom();
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+        ({ MessagesAnalytics } = await import("../src/messages-analytics.js"));
+
+        const messagesFile = {
+            type: "messages",
+            name: "outreach.csv",
+            text: "csv",
+            updatedAt: 170,
+            rowCount: 1,
+        };
+        DataCache.set("storage:file:messages", messagesFile);
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [{}] });
+
+        const outreach = {
+            totalConversations: 3,
+            selfInitiated: 3,
+            othersInitiated: 0,
+            selfInitiatedReplied: 2,
+            replyRate: 2 / 3,
+            unansweredContacts: 1,
+            sent: 9,
+            received: 5,
+            sentReceivedRatio: 1.8,
+        };
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState({ outreach }));
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        expect(Storage.saveOutreach).toHaveBeenCalledWith(outreach);
+
+        globalThis.Worker = undefined;
     });
 
     // --- Stat-asterisk popup toggle & keyboard interactions ------------------

@@ -30,16 +30,51 @@ export const MessagesAnalytics = (() => {
         const rowTimestamps = [];
         const talkedNameKeys = new Set();
         const talkedUrlKeys = new Set();
+        // Outreach-funnel accumulators, filled in the same pass as the contact
+        // aggregates so large exports are not iterated (and re-parsed) twice.
+        const conversations = new Map();
+        const contactStats = new Map();
+        let sentMessages = 0;
+        let receivedMessages = 0;
 
         let latestTimestamp = 0;
         let skippedRows = 0;
-        safeRows.forEach(row => {
+        safeRows.forEach((row, index) => {
             const date = parseDateTime(row.DATE);
             if (!date) {
                 skippedRows += 1;
                 return;
             }
             const timestamp = date.getTime();
+
+            // Outreach tracking runs before the participant filter so that
+            // self-sent messages whose only recipients are self/anonymous still
+            // count toward sent totals and conversation initiation.
+            // Pass the raw sender fields straight to the helpers; each normalizes
+            // once internally, so pre-normalizing here would just repeat the work.
+            const senderIsSelf = isSelfContact(row.FROM, row["SENDER PROFILE URL"], context);
+            // A non-self sender only counts as a real correspondent when it
+            // survives the same filtering as participants (non-blank,
+            // non-anonymous), so "LinkedIn Member" placeholders do not inflate
+            // received totals or count as a reply.
+            const senderContact = senderIsSelf
+                ? null
+                : sanitizeParticipant({ name: row.FROM, url: row["SENDER PROFILE URL"] }, context);
+            const hasRealSender = Boolean(senderContact);
+            if (senderIsSelf) {
+                sentMessages += 1;
+            } else if (hasRealSender) {
+                receivedMessages += 1;
+            }
+            trackConversation(conversations, buildConversationKey(row, index), {
+                timestamp,
+                senderIsSelf,
+                hasSender: hasRealSender
+            });
+            if (hasRealSender) {
+                markOutreachContact(contactStats, senderContact, "received");
+            }
+
             const participants = extractParticipantsFromRow(row, context);
             if (!participants.length) {
                 skippedRows += 1;
@@ -79,6 +114,12 @@ export const MessagesAnalytics = (() => {
                 }
 
                 events.push({ contactKey, timestamp });
+
+                // For a self-sent row the sender is self, so the non-self
+                // participants are exactly its recipients — mark each as outreach.
+                if (senderIsSelf) {
+                    markOutreachContact(contactStats, contact, "sent");
+                }
             });
 
             latestTimestamp = Math.max(latestTimestamp, timestamp);
@@ -91,8 +132,110 @@ export const MessagesAnalytics = (() => {
             skippedRows,
             talkedNameKeys,
             talkedUrlKeys,
-            latestTimestamp
+            latestTimestamp,
+            outreach: summarizeOutreach(conversations, contactStats, sentMessages, receivedMessages)
         };
+    }
+
+    /**
+     * Summarize the outreach-funnel accumulators built during the main pass:
+     * who starts conversations, how often self-initiated outreach gets a reply,
+     * how many contacts never replied, and the sent-to-received message ratio.
+     * @param {Map<string, object>} conversations - Per-conversation aggregates
+     * @param {Map<string, {sent: number, received: number}>} contactStats - Per-contact tallies
+     * @param {number} sent - Total messages sent by self
+     * @param {number} received - Total messages received from others
+     * @returns {object}
+     */
+    function summarizeOutreach(conversations, contactStats, sent, received) {
+        let selfInitiated = 0;
+        let selfInitiatedReplied = 0;
+        conversations.forEach(conversation => {
+            if (!conversation.startedBySelf) {
+                return;
+            }
+            selfInitiated += 1;
+            if (conversation.gotReply) {
+                selfInitiatedReplied += 1;
+            }
+        });
+
+        let unansweredContacts = 0;
+        contactStats.forEach(entry => {
+            if (entry.sent > 0 && entry.received === 0) {
+                unansweredContacts += 1;
+            }
+        });
+
+        const totalConversations = conversations.size;
+        return {
+            totalConversations,
+            selfInitiated,
+            othersInitiated: totalConversations - selfInitiated,
+            selfInitiatedReplied,
+            replyRate: selfInitiated > 0 ? selfInitiatedReplied / selfInitiated : null,
+            unansweredContacts,
+            sent,
+            received,
+            sentReceivedRatio: received > 0 ? sent / received : null
+        };
+    }
+
+    /**
+     * Update a conversation aggregate with one message's sender/timestamp.
+     * @param {Map<string, object>} conversations - Conversation aggregates
+     * @param {string} conversationKey - Conversation identifier
+     * @param {{timestamp: number, senderIsSelf: boolean, hasSender: boolean}} message - Message facts
+     */
+    function trackConversation(conversations, conversationKey, message) {
+        const existing = conversations.get(conversationKey);
+        if (!existing) {
+            conversations.set(conversationKey, {
+                firstTimestamp: message.timestamp,
+                startedBySelf: message.senderIsSelf,
+                gotReply: !message.senderIsSelf && message.hasSender
+            });
+            return;
+        }
+        if (message.timestamp < existing.firstTimestamp) {
+            existing.firstTimestamp = message.timestamp;
+            existing.startedBySelf = message.senderIsSelf;
+        }
+        if (!message.senderIsSelf && message.hasSender) {
+            existing.gotReply = true;
+        }
+    }
+
+    /**
+     * Determine whether a name/url pair refers to the detected self.
+     * @param {string} name - Raw sender/recipient name
+     * @param {string} url - Raw sender/recipient URL
+     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+     * @returns {boolean}
+     */
+    function isSelfContact(name, url, context) {
+        const nameKey = normalizeName(name);
+        const normalizedUrl = normalizeUrl(url);
+        return Boolean(
+            (normalizedUrl && context.selfUrls.has(normalizedUrl))
+            || (nameKey && context.selfNames.has(nameKey))
+        );
+    }
+
+    /**
+     * Increment a contact's sent/received tally.
+     * @param {Map<string, {sent: number, received: number}>} stats - Per-contact tallies
+     * @param {{name: string, url: string}} contact - Contact
+     * @param {'sent'|'received'} direction - Message direction
+     */
+    function markOutreachContact(stats, contact, direction) {
+        const key = buildContactKey(contact);
+        const entry = stats.get(key);
+        if (entry) {
+            entry[direction] += 1;
+            return;
+        }
+        stats.set(key, { sent: 0, received: 0, [direction]: 1 });
     }
 
     /**

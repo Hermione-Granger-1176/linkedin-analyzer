@@ -70,6 +70,7 @@ function serializeMessageState(state) {
         talkedNameKeys: Array.from(state.talkedNameKeys),
         talkedUrlKeys: Array.from(state.talkedUrlKeys),
         latestTimestamp: state.latestTimestamp,
+        outreach: state.outreach,
     };
 }
 

@@ -75,6 +75,15 @@ function buildAnalyticsPayload(base) {
     };
 }
 
+function buildOutreachPayload(outreach) {
+    return {
+        id: "outreach",
+        updatedAt: Date.now(),
+        schemaVersion: ANALYTICS_SCHEMA_VERSION,
+        data: outreach,
+    };
+}
+
 export const Storage = (() => {
     "use strict";
 
@@ -92,6 +101,7 @@ export const Storage = (() => {
     function createMemoryStore() {
         const memFiles = new Map();
         let memAnalytics = null;
+        let memOutreach = null;
         return {
             saveFile: (type, data) => {
                 memFiles.set(type, buildFilePayload(type, data));
@@ -107,9 +117,15 @@ export const Storage = (() => {
                 return Promise.resolve();
             },
             getAnalytics: () => Promise.resolve(normalizeStoredAnalytics(memAnalytics)),
+            saveOutreach: (outreach) => {
+                memOutreach = buildOutreachPayload(outreach);
+                return Promise.resolve();
+            },
+            getOutreach: () => Promise.resolve(normalizeStoredAnalytics(memOutreach)),
             clearAll: () => {
                 memFiles.clear();
                 memAnalytics = null;
+                memOutreach = null;
                 return Promise.resolve();
             },
         };
@@ -420,6 +436,41 @@ export const Storage = (() => {
     }
 
     /**
+     * Persist the lifetime outreach-funnel summary so the Insights page can show
+     * it without loading the message export. The payload is a small numeric
+     * object, shares the analytics store, and is keyed separately from "base".
+     * @param {object} outreach - Outreach summary from the messages worker
+     * @returns {Promise<void>}
+     */
+    function saveOutreach(outreach) {
+        return runOp(
+            () => memory.saveOutreach(outreach),
+            (db) =>
+                withStore(db, ANALYTICS_STORE, "readwrite", (store) =>
+                    store.put(buildOutreachPayload(outreach)),
+                ),
+        );
+    }
+
+    /**
+     * Retrieve the stored outreach-funnel summary.
+     * @returns {Promise<object|null>} The outreach summary, or null if not stored
+     */
+    function getOutreach() {
+        return runOp(
+            () => memory.getOutreach(),
+            (db) =>
+                new Promise((resolve, reject) => {
+                    const tx = db.transaction(ANALYTICS_STORE, "readonly");
+                    const request = tx.objectStore(ANALYTICS_STORE).get("outreach");
+                    request.onsuccess = () =>
+                        resolve(normalizeStoredAnalytics(request.result || null));
+                    request.onerror = () => reject(request.error);
+                }),
+        );
+    }
+
+    /**
      * Clear all stored files and analytics data.
      * @returns {Promise<void>}
      */
@@ -452,6 +503,8 @@ export const Storage = (() => {
         getAllFiles,
         saveAnalytics,
         getAnalytics,
+        saveOutreach,
+        getOutreach,
         clearAll,
     };
 })();

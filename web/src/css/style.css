@@ -1170,6 +1170,25 @@ button {
     color: var(--text-secondary);
 }
 
+/* Lifetime/all-time stats live in their own zone below the filtered cards, set
+   apart by a divider so it is clear the filters above do not apply to them. */
+.all-time-section {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+    border-top: 2px dashed var(--border-light);
+}
+
+.all-time-title {
+    margin-bottom: var(--space-xs);
+    color: var(--text-primary);
+}
+
+.all-time-subtitle {
+    margin-bottom: var(--space-lg);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
 .stat-asterisk {
     cursor: help;
     color: var(--accent-red);

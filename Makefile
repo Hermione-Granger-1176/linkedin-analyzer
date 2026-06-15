@@ -110,7 +110,7 @@ dead-code-js: ## Detect unused JS code, exports, and deps (knip)
 
 # ─── Test @test ─────────────────────────────────────────────────────────────────────
 
-.PHONY: test test-py test-js test-e2e test-e2e-headed test-e2e-ui
+.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-headed test-e2e-ui
 
 test: test-py test-js ## Run non-browser Python and JS tests
 
@@ -119,6 +119,9 @@ test-py: ## Run Python tests only (make test-py ARGS="-k name --no-cov" for a su
 
 test-js: ## Run JS unit tests only
 	$(NPM) run test
+
+test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick ARGS="analytics")
+	$(NPX) vitest run --config web/vitest.config.js $(ARGS)
 
 test-e2e: ## Run Playwright browser tests
 	$(NPM) run test:e2e

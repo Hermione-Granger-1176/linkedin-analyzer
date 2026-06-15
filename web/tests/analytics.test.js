@@ -596,3 +596,349 @@ describe("AnalyticsEngine", () => {
         expect(ids).toContain("trending-up");
     });
 });
+
+// ── WP6: network growth, topic shift, engagement shift, tiered cards ──────────
+
+/**
+ * Build shares/comments/connections rows from per-month specs.
+ * @param {Array<{month: string, posts?: number, comments?: number, connections?: number, topic?: string}>} specs
+ */
+function buildMonthly(specs) {
+    const shares = [];
+    const comments = [];
+    const connections = [];
+    specs.forEach(spec => {
+        const topic = spec.topic || "general";
+        for (let i = 0; i < (spec.posts || 0); i++) {
+            shares.push({
+                Date: `${spec.month}-05 09:00:00`,
+                ShareCommentary: `#${topic}`,
+                SharedUrl: "",
+                MediaUrl: ""
+            });
+        }
+        for (let i = 0; i < (spec.comments || 0); i++) {
+            comments.push({ Date: `${spec.month}-06 10:00:00`, Message: `#${topic}` });
+        }
+        for (let i = 0; i < (spec.connections || 0); i++) {
+            connections.push({ "Connected On": `${spec.month}-10` });
+        }
+    });
+    return { shares, comments, connections };
+}
+
+/**
+ * Build `count` consecutive month specs from 2023-01, merging perMonth(idx).
+ * @param {number} count
+ * @param {(index: number) => object} perMonth
+ */
+function monthsRange(count, perMonth) {
+    const specs = [];
+    for (let i = 0; i < count; i++) {
+        const year = 2023 + Math.floor(i / 12);
+        const month = String((i % 12) + 1).padStart(2, "0");
+        specs.push({ month: `${year}-${month}`, ...perMonth(i) });
+    }
+    return specs;
+}
+
+/** Build the all-time view for an analytics payload. */
+function allTimeView(analytics) {
+    return AnalyticsEngine.buildView(analytics, {
+        timeRange: "all",
+        topic: "all",
+        monthFocus: null,
+        day: null,
+        hour: null,
+        shareType: "all"
+    });
+}
+
+/** Minimal generateInsights view with overridable fields. */
+function insightView(overrides) {
+    return {
+        totals: { total: 20, posts: 10, comments: 2 },
+        peakHour: { hour: 10, count: 1 },
+        peakDay: { dayIndex: 0, count: 1 },
+        trend: null,
+        topics: [],
+        streaks: { current: 0, longest: 0 },
+        ...overrides
+    };
+}
+
+describe("AnalyticsEngine network growth", () => {
+    it("computes a network-growth summary from posting/connection correlation", () => {
+        const specs = monthsRange(14, i =>
+            i < 4
+                ? { posts: 1, connections: 1, topic: "excel" }
+                : { posts: 10, connections: 20, topic: "ai" }
+        );
+        const { shares, comments, connections } = buildMonthly(specs);
+        const analytics = AnalyticsEngine.compute(shares, comments, connections);
+
+        expect(analytics.networkGrowth).not.toBeNull();
+        expect(analytics.networkGrowth.multiplier).toBeGreaterThanOrEqual(2);
+        expect(analytics.networkGrowth.correlation).toBeGreaterThan(0);
+
+        // It is a lifetime stat rendered in the All-time section, not one of the
+        // filter-driven cards, so generateInsights must not emit it.
+        const view = allTimeView(analytics);
+        expect(view.networkGrowth).toEqual(analytics.networkGrowth);
+        const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
+        expect(ids).not.toContain("network-growth");
+    });
+
+    it("carries the same networkGrowth value on filtered and narrowed views", () => {
+        const specs = monthsRange(14, i =>
+            i < 4
+                ? { posts: 1, connections: 1, topic: "excel" }
+                : { posts: 10, connections: 20, topic: "ai" }
+        );
+        const { shares, comments, connections } = buildMonthly(specs);
+        const analytics = AnalyticsEngine.compute(shares, comments, connections);
+        expect(analytics.networkGrowth).not.toBeNull();
+
+        // It is a lifetime value rendered apart from the filters, so it rides on
+        // every view unchanged rather than being recomputed per filter.
+        const baseFilters = {
+            timeRange: "all",
+            topic: "all",
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: "all",
+        };
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, timeRange: "3m" }).networkGrowth
+        ).toEqual(analytics.networkGrowth);
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, topic: "ai" }).networkGrowth
+        ).toEqual(analytics.networkGrowth);
+    });
+
+    it("leaves networkGrowth null without connection data", () => {
+        const { shares } = buildMonthly(monthsRange(14, () => ({ posts: 5, topic: "x" })));
+        expect(AnalyticsEngine.compute(shares, []).networkGrowth).toBeNull();
+    });
+
+    it("leaves networkGrowth null when there is no posting activity", () => {
+        const { connections } = buildMonthly(
+            monthsRange(14, i => ({ posts: 0, connections: i + 1, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute([], [], connections).networkGrowth).toBeNull();
+    });
+
+    it("requires at least 12 overlapping months", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(6, i => ({ posts: i + 1, connections: i + 1, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when posting and connection ranges do not overlap", () => {
+        const { shares } = buildMonthly(monthsRange(13, () => ({ posts: 3, topic: "x" })));
+        const connections = [];
+        for (let i = 0; i < 13; i++) {
+            connections.push({ "Connected On": `2030-${String((i % 12) + 1).padStart(2, "0")}-10` });
+        }
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when posting volume is flat", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(13, i => ({ posts: 3, connections: i + 1, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when connection counts never vary", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(13, i => ({ posts: i + 1, connections: 3, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when quiet months gained no connections", () => {
+        const specs = monthsRange(14, i =>
+            i === 0 || i === 13
+                ? { posts: 10, connections: 20, topic: "x" }
+                : { posts: 1, connections: 0, topic: "x" }
+        );
+        const { shares, connections } = buildMonthly(specs);
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when there are no quiet months to compare", () => {
+        const { shares, connections } = buildMonthly(
+            monthsRange(13, i => ({ posts: 5 + i, connections: 5 + i, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when busy months do not outpace quiet ones", () => {
+        // Quiet (low-post) months gain the most connections, so the busiest
+        // posting months bring no more than the quiet ones (and the correlation
+        // is negative) — the card would be misleading and must stay dormant.
+        const specs = monthsRange(14, i =>
+            i < 4
+                ? { posts: 1, connections: 20, topic: "x" }
+                : { posts: 10, connections: 1, topic: "x" }
+        );
+        const { shares, connections } = buildMonthly(specs);
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null when the busiest-vs-quiet lift rounds below 2x", () => {
+        // Connections track posts perfectly (positive correlation) but the
+        // busiest months only edge out the quiet ones, so the multiplier rounds
+        // to 1x — too weak a headline to surface.
+        const { shares, connections } = buildMonthly(
+            monthsRange(14, i => ({ posts: i + 1, connections: 101 + i, topic: "x" }))
+        );
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+});
+
+describe("AnalyticsEngine topic shift", () => {
+    it("reports a shift when the dominant topic changes across the range", () => {
+        const specs = monthsRange(9, i => ({
+            posts: 3,
+            topic: i < 3 ? "excel" : i < 6 ? "data" : "ai"
+        }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        const view = allTimeView(analytics);
+
+        expect(view.topicShift).toEqual({ from: "excel", to: "ai" });
+        const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
+        expect(ids).toContain("topic-shift");
+    });
+
+    it("reports no shift when the focus stays stable", () => {
+        const specs = monthsRange(9, () => ({ posts: 3, topic: "excel" }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        expect(allTimeView(analytics).topicShift).toBeNull();
+    });
+
+    it("omits topic shift under a topic or dimension filter", () => {
+        // The per-month topic mix is unfiltered, so a topic/day/hour/share-type
+        // filter must drop the focus-shift card rather than compare topics the
+        // active view has filtered out.
+        const specs = monthsRange(9, i => ({
+            posts: 3,
+            topic: i < 3 ? "excel" : i < 6 ? "data" : "ai"
+        }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        const baseFilters = {
+            timeRange: "all",
+            topic: "all",
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: "all",
+        };
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, topic: "ai" }).topicShift
+        ).toBeNull();
+        expect(
+            AnalyticsEngine.buildView(analytics, { ...baseFilters, hour: "10" }).topicShift
+        ).toBeNull();
+    });
+
+    it("skips topic shift and ratio trend with too few months", () => {
+        const specs = monthsRange(4, i => ({ posts: 3, topic: i < 2 ? "excel" : "ai" }));
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        const view = allTimeView(analytics);
+        expect(view.topicShift).toBeNull();
+        expect(view.ratioTrend).toBeNull();
+    });
+});
+
+describe("AnalyticsEngine engagement shift", () => {
+    it("flags a shift toward commenting", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 10, comments: 5, topic: "x" } : { posts: 2, comments: 10, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        const view = allTimeView(AnalyticsEngine.compute(data.shares, data.comments));
+
+        expect(view.ratioTrend.direction).toBe("more-engaging");
+        const ids = AnalyticsEngine.generateInsights(view).insights.map(i => i.id);
+        expect(ids).toContain("engagement-shift");
+    });
+
+    it("flags a shift toward posting", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 2, comments: 10, topic: "x" } : { posts: 10, comments: 1, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend.direction).toBe(
+            "more-posting"
+        );
+    });
+
+    it("reports no shift when the ratio holds steady", () => {
+        const specs = monthsRange(8, () => ({ posts: 5, comments: 5, topic: "x" }));
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend).toBeNull();
+    });
+
+    it("reports no shift when the older period had no comments", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 5, comments: 0, topic: "x" } : { posts: 5, comments: 10, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend).toBeNull();
+    });
+
+    it("reports no shift when a half has no posts", () => {
+        const specs = monthsRange(8, i =>
+            i < 4 ? { posts: 0, comments: 5, topic: "x" } : { posts: 5, comments: 5, topic: "x" }
+        );
+        const data = buildMonthly(specs);
+        expect(allTimeView(AnalyticsEngine.compute(data.shares, data.comments)).ratioTrend).toBeNull();
+    });
+});
+
+describe("AnalyticsEngine tiered insight cards", () => {
+    it("tiers the super-engager card by comment-to-post ratio", () => {
+        const titleAt = (posts, comments) =>
+            AnalyticsEngine.generateInsights(
+                insightView({ totals: { total: posts + comments, posts, comments } })
+            ).insights.find(i => i.id === "super-engager").title;
+
+        expect(titleAt(2, 6)).toBe("Super Engager");
+        expect(titleAt(2, 20)).toBe("Community Builder");
+        expect(titleAt(2, 50)).toBe("Engagement Machine");
+    });
+
+    it("tiers the streak card by streak length", () => {
+        const titleAt = current =>
+            AnalyticsEngine.generateInsights(
+                insightView({ streaks: { current, longest: current } })
+            ).insights.find(i => i.id === "streak").title;
+
+        expect(titleAt(7)).toBe("Consistency Streak");
+        expect(titleAt(30)).toBe("Streak Master");
+        expect(titleAt(100)).toBe("Unstoppable Streak");
+    });
+
+    it("emits topic-shift and engagement-shift cards from view fields", () => {
+        const result = AnalyticsEngine.generateInsights(
+            insightView({
+                networkGrowth: { multiplier: 19, topAvg: 210, quietAvg: 11, correlation: 0.5, months: 24 },
+                topicShift: { from: "excel", to: "ai" },
+                ratioTrend: { direction: "more-posting", recentRatio: 0.2, priorRatio: 1 }
+            })
+        );
+
+        // network-growth is rendered in the All-time section, not as a card.
+        expect(result.insights.find(i => i.id === "network-growth")).toBeUndefined();
+
+        const shift = result.insights.find(i => i.id === "topic-shift");
+        expect(shift.body).toContain("excel");
+        expect(shift.body).toContain("ai");
+
+        expect(result.insights.find(i => i.id === "engagement-shift").body).toContain("posting more");
+    });
+});

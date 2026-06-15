@@ -1239,7 +1239,7 @@ export const UploadPage = (() => {
      * actually fires (see primeAnalyticsWorkerNow). Uses idle scheduling unless
      * priority is immediate, in which case it returns the prime promise so callers
      * can await the restoreFiles being posted.
-     * @param {{shares: object|null, comments: object|null}} fileMap - Stored files map
+     * @param {{shares: object|null, comments: object|null, connections?: object|null}} fileMap - Stored files map
      * @param {{priority?: 'idle'|'immediate'}} [options] - Scheduling options
      * @returns {Promise<void>|void}
      */
@@ -1250,7 +1250,11 @@ export const UploadPage = (() => {
 
         const sharesFile = fileMap.shares || null;
         const commentsFile = fileMap.comments || null;
-        if (!sharesFile && !commentsFile) {
+        const connectionsFile = fileMap.connections || null;
+        // Connections alone are worth priming: the worker retains the dataset so
+        // the first later shares/comments upload picks up the already-stored
+        // connections for the network-growth correlation without a re-upload.
+        if (!sharesFile && !commentsFile && !connectionsFile) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
             clearPrimeSchedule();
@@ -1263,7 +1267,12 @@ export const UploadPage = (() => {
         const commentsStamp = commentsFile
             ? `${commentsFile.updatedAt || 0}:${commentsFile.rowCount || 0}`
             : "-";
-        const signature = `${sharesStamp}|${commentsStamp}`;
+        // Connections feeds the network-growth correlation, so a connections-only
+        // change must still invalidate the signature and force a re-prime.
+        const connectionsStamp = connectionsFile
+            ? `${connectionsFile.updatedAt || 0}:${connectionsFile.rowCount || 0}`
+            : "-";
+        const signature = `${sharesStamp}|${commentsStamp}|${connectionsStamp}`;
         if (signature === lastPrimedSignature) {
             pendingPrimePayload = null;
             clearPrimeSchedule();
@@ -1341,13 +1350,18 @@ export const UploadPage = (() => {
         }
         let sharesCsv = "";
         let commentsCsv = "";
+        let connectionsCsv = "";
         try {
-            const [sharesFile, commentsFile] = await Promise.all([
+            // Connections feeds the posting-vs-network-growth correlation, so it
+            // primes alongside shares/comments even though it is not a posting source.
+            const [sharesFile, commentsFile, connectionsFile] = await Promise.all([
                 Storage.getFile("shares"),
                 Storage.getFile("comments"),
+                Storage.getFile("connections"),
             ]);
             sharesCsv = sharesFile && sharesFile.text ? sharesFile.text : "";
             commentsCsv = commentsFile && commentsFile.text ? commentsFile.text : "";
+            connectionsCsv = connectionsFile && connectionsFile.text ? connectionsFile.text : "";
         } catch (error) {
             // Leave lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-load-text" });
@@ -1361,7 +1375,7 @@ export const UploadPage = (() => {
         try {
             worker.postMessage({
                 type: "restoreFiles",
-                payload: { sharesCsv, commentsCsv },
+                payload: { sharesCsv, commentsCsv, connectionsCsv },
             });
         } catch (error) {
             // postMessage can throw synchronously (DataCloneError / invalid

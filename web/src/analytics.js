@@ -223,6 +223,29 @@ export const AnalyticsEngine = (() => {
         "Dec",
     ];
     const WEEKLY_TIME_RANGES = new Set(["1m", "3m"]);
+    // Minimum overlapping months of posting + connection data before the
+    // network-growth correlation card is trustworthy enough to show.
+    const MIN_GROWTH_MONTHS = 12;
+    // Number of top-posting months averaged for the network-growth comparison.
+    const GROWTH_TOP_MONTHS = 10;
+    // Months with this many posts or fewer count as "quiet" for the comparison.
+    const GROWTH_QUIET_MAX_POSTS = 2;
+    // A focus shift / engagement-style card needs at least this many active
+    // months so the first/last buckets are not built from a single data point.
+    const MIN_SHIFT_MONTHS = 6;
+    // Comment-to-post ratio tiers, highest threshold first so `find` matches the
+    // strongest tier a value qualifies for.
+    const ENGAGER_TIERS = Object.freeze([
+        { min: 25, title: "Engagement Machine", note: "Conversations are clearly your superpower." },
+        { min: 10, title: "Community Builder", note: "You invest heavily in other people's posts." },
+        { min: 3, title: "Super Engager", note: "You build community." },
+    ]);
+    // Activity-streak tiers, highest threshold first.
+    const STREAK_TIERS = Object.freeze([
+        { min: 100, title: "Unstoppable Streak" },
+        { min: 30, title: "Streak Master" },
+        { min: 7, title: "Consistency Streak" },
+    ]);
     const SHARE_TYPE_MAP = Object.freeze({ text: "textOnly", links: "links", media: "media" });
     const DIMENSION_COUNT_BY_KEY = Object.freeze({
         both: (bucket, filters) =>
@@ -322,9 +345,10 @@ export const AnalyticsEngine = (() => {
      * This creates an indexed structure that allows fast filter lookups.
      * @param {object[]|null|undefined} sharesData - Cleaned shares rows
      * @param {object[]|null|undefined} commentsData - Cleaned comments rows
+     * @param {object[]|null|undefined} connectionsData - Cleaned connections rows
      * @returns {object} Analytics aggregates and indices
      */
-    function compute(sharesData, commentsData) {
+    function compute(sharesData, commentsData, connectionsData) {
         // Pre-aggregated indices
         const monthIndex = new Map(); // monthKey -> { posts, comments, topics: Map, days: Map, hours: Map, shareTypes: Map }
         const activeDays = new Set();
@@ -463,17 +487,212 @@ export const AnalyticsEngine = (() => {
 
         const dayIndexData = Object.fromEntries(dayIndex);
 
+        // Skip the full pass over connection rows entirely when there is no
+        // posting activity to correlate them against — the card cannot fire.
+        const networkGrowth =
+            monthIndex.size === 0
+                ? null
+                : computeNetworkGrowth(monthIndex, buildMonthlyConnections(connectionsData));
+
         return {
             months,
             dayIndex: dayIndexData,
             activeDays: Array.from(activeDays),
             latestTimestamp: latestTimestamp || null,
             earliestTimestamp: earliestTimestamp === Infinity ? null : earliestTimestamp,
+            networkGrowth,
             totals: {
                 posts: totalPosts,
                 comments: totalComments,
                 total: totalPosts + totalComments,
             },
+        };
+    }
+
+    /**
+     * Bucket cleaned connection rows into "YYYY-MM" -> new-connection counts.
+     * The cleaner emits "Connected On" as an ISO "YYYY-MM-DD" string, so the
+     * month key is just the first seven characters once both parts are present.
+     * @param {object[]|null|undefined} connectionsData - Cleaned connections rows
+     * @returns {Map<string, number>} Monthly new-connection counts
+     */
+    function buildMonthlyConnections(connectionsData) {
+        const monthly = new Map();
+        if (!Array.isArray(connectionsData)) {
+            return monthly;
+        }
+        for (const row of connectionsData) {
+            const value = row && row["Connected On"];
+            if (!value || typeof value !== "string") {
+                continue;
+            }
+            const [year, month] = value.split("-");
+            if (!year || !month) {
+                continue;
+            }
+            const monthKey = `${year}-${month}`;
+            monthly.set(monthKey, (monthly.get(monthKey) || 0) + 1);
+        }
+        return monthly;
+    }
+
+    /**
+     * Enumerate inclusive "YYYY-MM" month keys between two keys.
+     * @param {string} startKey - First month key, "YYYY-MM"
+     * @param {string} endKey - Last month key, "YYYY-MM"
+     * @returns {string[]} Contiguous month keys, oldest first
+     */
+    function enumerateMonths(startKey, endKey) {
+        const [startYear, startMonth] = startKey.split("-").map(Number);
+        const [endYear, endMonth] = endKey.split("-").map(Number);
+        const keys = [];
+        let year = startYear;
+        let month = startMonth;
+        while (year < endYear || (year === endYear && month <= endMonth)) {
+            keys.push(`${year}-${String(month).padStart(2, "0")}`);
+            month += 1;
+            if (month > 12) {
+                month = 1;
+                year += 1;
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * Compute the Pearson correlation coefficient of two equal-length series.
+     * @param {number[]} xs - First series
+     * @param {number[]} ys - Second series
+     * @returns {number|null} Correlation in [-1, 1], or null when undefined
+     */
+    function pearson(xs, ys) {
+        const n = xs.length;
+        /* v8 ignore next 3 */
+        if (n < 2) {
+            return null;
+        }
+        let sumX = 0;
+        let sumY = 0;
+        let sumXX = 0;
+        let sumYY = 0;
+        let sumXY = 0;
+        for (let i = 0; i < n; i++) {
+            const x = xs[i];
+            const y = ys[i];
+            sumX += x;
+            sumY += y;
+            sumXX += x * x;
+            sumYY += y * y;
+            sumXY += x * y;
+        }
+        const covariance = n * sumXY - sumX * sumY;
+        const varianceX = n * sumXX - sumX * sumX;
+        const varianceY = n * sumYY - sumY * sumY;
+        const denominator = Math.sqrt(varianceX * varianceY);
+        if (denominator === 0) {
+            return null;
+        }
+        return covariance / denominator;
+    }
+
+    /**
+     * Average a numeric array, treating an empty array as 0.
+     * @param {number[]} values - Numbers to average
+     * @returns {number} Arithmetic mean
+     */
+    function average(values) {
+        if (!values.length) {
+            /* v8 ignore next */
+            return 0;
+        }
+        return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    /**
+     * Correlate monthly posting volume with new-connection counts and compare
+     * the busiest posting months against quiet ones. Returns null unless there
+     * are enough overlapping months and real posting variance, so the card only
+     * fires when the relationship is meaningful.
+     * @param {Map<string, object>} monthIndex - Internal month buckets with post counts (non-empty)
+     * @param {Map<string, number>} monthlyConnections - Monthly new-connection counts
+     * @returns {{correlation: number, multiplier: number, topAvg: number, quietAvg: number, months: number}|null}
+     */
+    function computeNetworkGrowth(monthIndex, monthlyConnections) {
+        // Callers only invoke this with a non-empty monthIndex.
+        if (monthlyConnections.size === 0) {
+            return null;
+        }
+
+        const postKeys = Array.from(monthIndex.keys()).sort();
+        const connectionKeys = Array.from(monthlyConnections.keys()).sort();
+        // The overlap is the later of the two start months to the earlier of the
+        // two end months — the window where both series have real coverage.
+        const start =
+            postKeys[0] > connectionKeys[0] ? postKeys[0] : connectionKeys[0];
+        const lastPost = postKeys[postKeys.length - 1];
+        const lastConnection = connectionKeys[connectionKeys.length - 1];
+        const end = lastPost < lastConnection ? lastPost : lastConnection;
+        if (start > end) {
+            return null;
+        }
+
+        const months = enumerateMonths(start, end);
+        if (months.length < MIN_GROWTH_MONTHS) {
+            return null;
+        }
+
+        const entries = months.map((monthKey) => {
+            const bucket = monthIndex.get(monthKey);
+            return {
+                posts: bucket ? bucket.posts : 0,
+                connections: monthlyConnections.get(monthKey) || 0,
+            };
+        });
+
+        const posts = entries.map((entry) => entry.posts);
+        // Without posting variance the correlation is undefined and the
+        // top-vs-quiet comparison is meaningless, so require a real spread.
+        if (Math.max(...posts) === Math.min(...posts)) {
+            return null;
+        }
+
+        const correlation = pearson(
+            posts,
+            entries.map((entry) => entry.connections),
+        );
+        if (correlation === null) {
+            return null;
+        }
+
+        const quietMonths = entries.filter((entry) => entry.posts <= GROWTH_QUIET_MAX_POSTS);
+        const topMonths = entries
+            .slice()
+            .sort((a, b) => b.posts - a.posts)
+            .slice(0, GROWTH_TOP_MONTHS);
+        if (!quietMonths.length || !topMonths.length) {
+            return null;
+        }
+
+        // Round the averages first and derive the multiplier from those same
+        // displayed values, so the headline ratio always matches the "X vs Y"
+        // numbers shown in the card.
+        const quietAvg = Math.round(average(quietMonths.map((entry) => entry.connections)));
+        const topAvg = Math.round(average(topMonths.map((entry) => entry.connections)));
+        const multiplier = quietAvg > 0 ? Math.round(topAvg / quietAvg) : 0;
+        // The card claims posting *grows* the network, so require a strictly
+        // positive overall correlation as well as a meaningful busiest-vs-quiet
+        // multiplier. A non-positive correlation or a 0x/1x headline would
+        // misrepresent a flat or inverse relationship, so either keeps it dormant.
+        if (correlation <= 0 || multiplier < 2) {
+            return null;
+        }
+
+        return {
+            correlation: Math.round(correlation * 100) / 100,
+            multiplier,
+            topAvg,
+            quietAvg,
+            months: months.length,
         };
     }
 
@@ -726,6 +945,9 @@ export const AnalyticsEngine = (() => {
         const timeline = [];
         let timelineMax = 1;
         const monthMeta = {};
+        // Per-included-month posts/comments/topics, used after the loop to derive
+        // the topic-shift and engagement-style cards over the active range.
+        const monthlyStats = [];
         const useWeeklyTimeline = Boolean(dayIndex) && WEEKLY_TIME_RANGES.has(filters.timeRange);
         const hasDay = filters.day !== null && filters.day !== undefined;
         const hasHour = filters.hour !== null && filters.hour !== undefined;
@@ -768,6 +990,13 @@ export const AnalyticsEngine = (() => {
 
             posts += monthPosts;
             comments += monthComments;
+
+            monthlyStats.push({
+                key: monthKey,
+                posts: monthPosts,
+                comments: monthComments,
+                topics: bucket.topics,
+            });
 
             // Aggregate heatmap
             for (let d = 0; d < 7; d++) {
@@ -826,6 +1055,12 @@ export const AnalyticsEngine = (() => {
         // Calculate trend
         const trend = computeTrendFromTimeline(timeline);
 
+        // topicShift reads each month's unfiltered topic mix, so it is only
+        // coherent when no topic/share-type/day/hour filter is active. A time
+        // range merely selects which months to compare, which stays meaningful.
+        const topicComparable =
+            filters.topic === "all" && filters.shareType === "all" && !hasDay && !hasHour;
+
         return {
             timeline,
             timelineMax,
@@ -836,12 +1071,105 @@ export const AnalyticsEngine = (() => {
             peakHour: { hour: peakHour.index, count: peakHour.value },
             peakDay: { dayIndex: peakDay.index, count: peakDay.value },
             trend,
+            topicShift: topicComparable ? computeTopicShift(monthlyStats) : null,
+            ratioTrend: computeRatioTrend(monthlyStats),
+            // The network-growth correlation is a lifetime stat computed once over
+            // the full dataset overlap window. It is carried on every view (same
+            // value regardless of filters) and rendered in the All-time section,
+            // not as one of the filter-driven cards.
+            networkGrowth: analytics.networkGrowth || null,
             totals: {
                 posts,
                 comments,
                 total: posts + comments,
             },
         };
+    }
+
+    /**
+     * Find the most frequent topic across a slice of monthly stats.
+     * @param {Array<{topics: object}>} monthlyStats - Per-month stats slice
+     * @returns {string|null} Top topic token, or null when none
+     */
+    function topTopicOf(monthlyStats) {
+        const counts = new Map();
+        for (const month of monthlyStats) {
+            for (const [topic, count] of Object.entries(month.topics || {})) {
+                counts.set(topic, (counts.get(topic) || 0) + count);
+            }
+        }
+        let bestTopic = null;
+        let bestCount = 0;
+        for (const [topic, count] of counts) {
+            if (count > bestCount) {
+                bestTopic = topic;
+                bestCount = count;
+            }
+        }
+        return bestTopic;
+    }
+
+    /**
+     * Detect whether the dominant topic changed from the first third of the
+     * active range to the last third. Returns null when the range is too short
+     * or the top topic is unchanged.
+     * @param {Array<{topics: object}>} monthlyStats - Per-month stats, oldest first
+     * @returns {{from: string, to: string}|null}
+     */
+    function computeTopicShift(monthlyStats) {
+        if (monthlyStats.length < MIN_SHIFT_MONTHS) {
+            return null;
+        }
+        const third = Math.floor(monthlyStats.length / 3);
+        const firstTop = topTopicOf(monthlyStats.slice(0, third));
+        const lastTop = topTopicOf(monthlyStats.slice(monthlyStats.length - third));
+        if (!firstTop || !lastTop || firstTop === lastTop) {
+            return null;
+        }
+        return { from: firstTop, to: lastTop };
+    }
+
+    /**
+     * Sum a numeric field across monthly stats.
+     * @param {Array<object>} monthlyStats - Per-month stats slice
+     * @param {string} field - Field name to sum
+     * @returns {number}
+     */
+    function sumField(monthlyStats, field) {
+        return monthlyStats.reduce((sum, month) => sum + month[field], 0);
+    }
+
+    /**
+     * Detect a shift in comment-to-post ratio between the older and recent
+     * halves of the active range. Returns null when there is too little data or
+     * the ratio holds steady.
+     * @param {Array<{posts: number, comments: number}>} monthlyStats - Per-month stats, oldest first
+     * @returns {{direction: string, recentRatio: number, priorRatio: number}|null}
+     */
+    function computeRatioTrend(monthlyStats) {
+        if (monthlyStats.length < MIN_SHIFT_MONTHS) {
+            return null;
+        }
+        const half = Math.floor(monthlyStats.length / 2);
+        const older = monthlyStats.slice(0, half);
+        const recent = monthlyStats.slice(monthlyStats.length - half);
+        const olderPosts = sumField(older, "posts");
+        const recentPosts = sumField(recent, "posts");
+        if (olderPosts === 0 || recentPosts === 0) {
+            return null;
+        }
+        const priorRatio = sumField(older, "comments") / olderPosts;
+        const recentRatio = sumField(recent, "comments") / recentPosts;
+        if (priorRatio === 0) {
+            return null;
+        }
+        if (recentRatio >= priorRatio * 1.5) {
+            return { direction: "more-engaging", recentRatio, priorRatio };
+        }
+        if (recentRatio <= priorRatio * 0.6) {
+            return { direction: "more-posting", recentRatio, priorRatio };
+        }
+        return null;
     }
 
     /**
@@ -1152,6 +1480,29 @@ export const AnalyticsEngine = (() => {
             }
         }
 
+        if (view.topicShift) {
+            insights.push({
+                id: "topic-shift",
+                title: "Focus Shift",
+                body: `Your focus shifted from ${view.topicShift.from} to ${view.topicShift.to}.`,
+                icon: "compass",
+                accent: "accent-purple",
+            });
+        }
+
+        if (view.ratioTrend) {
+            insights.push({
+                id: "engagement-shift",
+                title: "Engagement Style Shift",
+                body:
+                    view.ratioTrend.direction === "more-engaging"
+                        ? "You are commenting more and posting less than before, leaning into conversations."
+                        : "You are posting more and commenting less than before, leaning into creating.",
+                icon: "scale",
+                accent: "accent-blue",
+            });
+        }
+
         if (view.totals.total < 12) {
             insights.push({
                 id: "quiet-stretch",
@@ -1163,11 +1514,12 @@ export const AnalyticsEngine = (() => {
         }
 
         const ratio = view.totals.posts ? view.totals.comments / view.totals.posts : 0;
-        if (ratio >= 3) {
+        const engagerTier = ENGAGER_TIERS.find((tier) => ratio >= tier.min);
+        if (engagerTier) {
             insights.push({
                 id: "super-engager",
-                title: "Super Engager",
-                body: `You comment ${ratio.toFixed(1)}x more than you post. You build community.`,
+                title: engagerTier.title,
+                body: `You comment ${ratio.toFixed(1)}x more than you post. ${engagerTier.note}`,
                 icon: "handshake",
                 accent: "accent-green",
             });
@@ -1184,10 +1536,11 @@ export const AnalyticsEngine = (() => {
             });
         }
 
-        if (view.streaks.current >= 7) {
+        const streakTier = STREAK_TIERS.find((tier) => view.streaks.current >= tier.min);
+        if (streakTier) {
             insights.push({
                 id: "streak",
-                title: "Consistency Streak",
+                title: streakTier.title,
                 body: `You have a ${view.streaks.current}-day activity streak going.`,
                 icon: "flame",
                 accent: "accent-red",

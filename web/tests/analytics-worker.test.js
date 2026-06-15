@@ -436,6 +436,21 @@ describe("handleAddFile", () => {
         expect(processed.payload.error).toBeTruthy();
     });
 
+    it("recomputes analytics and posts a base for a connections file", () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+
+        mockCleanerSuccess("connections");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+
+        handleAddFile({ csvText: "header\nrow1", fileName: "connections.csv" });
+
+        expect(AnalyticsEngine.compute).toHaveBeenCalled();
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload.fileType).toBe("connections");
+        expect(processed.payload.analyticsBase).not.toBeNull();
+    });
+
     it("posts fileProcessed with error for unknown fileType", () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
@@ -498,6 +513,28 @@ describe("handleRestoreFiles", () => {
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
+        expect(restored.payload.hasData).toBe(true);
+    });
+
+    it("restores connections csv into the analytics source set", () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+
+        LinkedInCleaner.process.mockImplementation((csv, type) => {
+            if (type === "shares") {
+                return { success: true, fileType: "shares", cleanedData: [{ Date: "2025-01-02 09:00" }], rowCount: 1 };
+            }
+            if (type === "connections") {
+                return { success: true, fileType: "connections", cleanedData: [{ "Connected On": "2025-01-10" }], rowCount: 1 };
+            }
+            return { success: false };
+        });
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+
+        handleRestoreFiles({ sharesCsv: "s", commentsCsv: "", connectionsCsv: "c" });
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("c", "connections");
+        const restored = messages.find((m) => m.type === "restored");
         expect(restored.payload.hasData).toBe(true);
     });
 

@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Default local and CI Python to 3.14 to match the container runtime; compatibility matrix now covers 3.11/3.12/3.13.
+- Move development dependencies from the `dev` optional-dependency extra to a PEP 735 `[dependency-groups]` table. The published package no longer advertises a `[dev]` extra; install dev tooling from source with `uv sync --all-groups`.
 - Log how many rows each cleaning step drops (blank, missing required values, or all-optional-empty) so silent row loss is visible.
 - Point the Latin-1 decode-fallback warning at the `--encoding` flag when characters may look wrong.
 

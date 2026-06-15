@@ -1,5 +1,7 @@
 # Project Structure
 
+The tree below highlights the key directories and modules; it is a map, not an exhaustive file index. When in doubt, trust the directory layout over any single file line, and let the tooling configs discover sources from their roots (see CLAUDE.md rule 5).
+
 ```text
 linkedin-analyzer/
 ├── web/                                # Web app (SPA)
@@ -23,6 +25,7 @@ linkedin-analyzer/
 │   │   │   ├── screens.css             # Screen transitions + page animation rules
 │   │   │   ├── sketch.css              # Hand-drawn effects
 │   │   │   └── tutorial.css            # Tutorial overlays, popovers, and mini tips
+│   │   ├── constants.js                # Shared cross-module constants
 │   │   ├── dom-events.js               # Delegated DOM event target helpers
 │   │   ├── runtime.js                  # Global error handler
 │   │   ├── sentry.js                   # Sentry error reporting integration
@@ -30,6 +33,7 @@ linkedin-analyzer/
 │   │   ├── session.js                  # Session management
 │   │   ├── theme.js                    # Theme toggle
 │   │   ├── decorations.js              # Background doodles (Rough.js)
+│   │   ├── avatar.js                   # Deterministic contact avatar generation
 │   │   ├── storage.js                  # IndexedDB helpers
 │   │   ├── data-cache.js               # In-memory cache across route switches
 │   │   ├── router.js                   # Hash router + shared query params
@@ -53,9 +57,10 @@ linkedin-analyzer/
 │   │   ├── tutorial.js                 # Tutorial engine
 │   │   ├── charts.js                   # Canvas chart rendering (incl. PNG export)
 │   │   ├── worker-contracts.js         # Shared worker message contracts
-│   │   ├── ui/                         # Reusable UI modules
+│   │   ├── ui/                         # Reusable UI modules (e.g. chart-tooltip.js)
 │   │   └── sw.js                       # Service Worker for PWA offline caching
-│   └── tests/                          # Web tests
+│   ├── tests/                          # Vitest unit tests
+│   └── e2e/                            # Playwright browser tests
 │
 ├── src/linkedin_analyzer/              # Python package
 │   ├── __init__.py                     # Package exports

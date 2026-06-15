@@ -22,10 +22,10 @@ GH = PYTHONPATH=. $(VENV_PYTHON) -m scripts.gh.cli
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
-.PHONY: install node-install setup-base setup setup-all setup-ci
+.PHONY: install node-install setup-base setup setup-all setup-ci setup-playwright setup-playwright-ci
 
 install: ## Install locked Python deps into the uv-managed virtual environment
-	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-extras --frozen --python $(PYTHON)
+	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-groups --frozen --python $(PYTHON)
 
 node-install: ## Install locked Node deps
 	$(NPM) ci
@@ -34,10 +34,14 @@ setup-base: install node-install ## Install Python and Node deps
 
 setup: setup-base ## Install Python and Node deps (fast, no browsers)
 
-setup-all: setup-base ## Full local setup including Playwright browsers
+setup-all: setup-base setup-playwright ## Full local setup including Playwright browsers
+
+setup-ci: setup-base setup-playwright-ci ## CI setup including Playwright browsers and system deps
+
+setup-playwright: ## Install Playwright browsers (no system deps)
 	$(NPX) playwright install $(PLAYWRIGHT_BROWSERS)
 
-setup-ci: setup-base ## CI setup including Playwright browsers and system deps
+setup-playwright-ci: ## Install Playwright browsers with system deps
 	$(NPX) playwright install --with-deps $(PLAYWRIGHT_BROWSERS)
 
 # ─── Lint @lint ─────────────────────────────────────────────────────────────────────
@@ -185,7 +189,7 @@ audit-node: ## Run npm audit
 	$(NPM) audit --audit-level=high
 
 audit-python: ## Run pip-audit against the frozen uv lock export
-	$(UV) export --all-extras --frozen --no-emit-project --format requirements.txt --output-file /tmp/linkedin-analyzer-requirements.txt
+	$(UV) export --all-groups --frozen --no-emit-project --format requirements.txt --output-file /tmp/linkedin-analyzer-requirements.txt
 	$(UV) run --with pip-audit pip-audit --strict -r /tmp/linkedin-analyzer-requirements.txt
 
 # ─── Dependency maintenance @deps ──────────────────────────────────────────────────

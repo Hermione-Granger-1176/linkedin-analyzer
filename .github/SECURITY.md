@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are applied to the latest commit on `main`.
+Security fixes are applied to the latest commit on `main` and the latest release on PyPI. Before reporting, upgrade to the latest release (or `main` for the web app) to confirm the issue is not already fixed.
 
 ## Reporting a Vulnerability
 

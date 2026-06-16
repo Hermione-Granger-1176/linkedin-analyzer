@@ -45,7 +45,7 @@ export function isRowEmpty(row) {
 /**
  * Parse CSV into rows with support for quoted fields, escaped quotes, and newlines.
  * @param {string} csvText
- * @param {{delimiter: string, quote: string, escape: string}} options
+ * @param {{delimiter: string, quote: string, escape: string|null}} options
  * @returns {{rows: string[][], error: string|null}}
  */
 export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {

@@ -23,6 +23,7 @@ export const InsightsPage = (() => {
 
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
+    /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,

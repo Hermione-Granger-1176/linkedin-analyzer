@@ -37,6 +37,42 @@ export const MessagesPage = (() => {
     // page, so the main-thread fallback is skipped in favor of an empty state.
     const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
+    /**
+     * @typedef {object} MessageContact
+     * @property {string} key
+     * @property {string} name
+     * @property {string} url
+     * @property {number} count
+     * @property {number} lastTimestamp
+     */
+
+    /**
+     * @typedef {object} MessageState
+     * @property {Map<string, MessageContact>} contacts
+     * @property {Array<{contactKey: string, timestamp: number}>} events
+     * @property {number[]} rowTimestamps
+     * @property {number} skippedRows
+     * @property {Set<string>} talkedNameKeys
+     * @property {Set<string>} talkedUrlKeys
+     * @property {number} latestTimestamp
+     * @property {object|null} outreach
+     */
+
+    /**
+     * @typedef {object} Connection
+     * @property {string} name
+     * @property {string} nameKey
+     * @property {string} url
+     * @property {string} company
+     * @property {string} position
+     * @property {number|null} connectedOnTimestamp
+     */
+
+    /**
+     * @typedef {{list: Connection[], byUrl: Map<string, Connection>, byName: Map<string, Connection>}} ConnectionState
+     */
+
+    /** @type {{timeRangeButtons: NodeListOf<Element>, resetFiltersBtn: HTMLElement | null, topContactsExportBtn: HTMLButtonElement | null, silentConnectionsExportBtn: HTMLButtonElement | null, fadingConversationsExportBtn: HTMLButtonElement | null, messagesEmpty: HTMLElement | null, messagesLayout: HTMLElement | null, topContactsList: HTMLElement | null, silentConnectionsList: HTMLElement | null, fadingConversationsList: HTMLElement | null, msgStatMessages: HTMLElement | null, msgStatContacts: HTMLElement | null, msgStatConnected: HTMLElement | null, msgStatFading: HTMLElement | null, messagesTip: HTMLElement | null, messagesTipText: HTMLElement | null}} */
     const elements = {
         timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
         resetFiltersBtn: document.getElementById("messagesResetFiltersBtn"),
@@ -62,6 +98,7 @@ export const MessagesPage = (() => {
         messagesTipText: document.getElementById("messagesTipText"),
     };
 
+    /** @type {{filters: {timeRange: string}, messageState: MessageState | null, connectionState: ConnectionState | null, hasConnectionsFile: boolean, connectionLoadError: string | null, loadedSignature: string | null, totalInputRows: number, currentLists: {topContacts: object[], silentConnections: object[], fadingConversations: object[]}}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         messageState: null,
@@ -128,7 +165,9 @@ export const MessagesPage = (() => {
                 button.classList.contains("active") ? "true" : "false",
             );
         });
-        elements.resetFiltersBtn.addEventListener("click", resetFilters);
+        if (elements.resetFiltersBtn) {
+            elements.resetFiltersBtn.addEventListener("click", resetFilters);
+        }
         if (elements.topContactsExportBtn) {
             elements.topContactsExportBtn.addEventListener("click", exportTopContacts);
         }
@@ -647,11 +686,11 @@ export const MessagesPage = (() => {
     /**
      * Build message analytics state from cleaned rows.
      * @param {object[]} rows - Cleaned message rows
-     * @returns {object}
+     * @returns {MessageState}
      */
     function buildMessageState(rows) {
         markPerformance("messages:build-state:start");
-        const result = MessagesAnalytics.buildMessageState(rows);
+        const result = /** @type {MessageState} */ (MessagesAnalytics.buildMessageState(rows));
         markPerformance("messages:build-state:end");
         measurePerformance(
             "messages:build-state",
@@ -664,11 +703,13 @@ export const MessagesPage = (() => {
     /**
      * Build connections lookup state from cleaned rows.
      * @param {object[]} rows - Cleaned connections rows
-     * @returns {{list: object[], byUrl: Map<string, object>, byName: Map<string, object>}}
+     * @returns {ConnectionState}
      */
     function buildConnectionState(rows) {
         markPerformance("messages:build-connections:start");
-        const result = MessagesAnalytics.buildConnectionState(rows);
+        const result = /** @type {ConnectionState} */ (
+            MessagesAnalytics.buildConnectionState(rows)
+        );
         markPerformance("messages:build-connections:end");
         measurePerformance(
             "messages:build-connections",
@@ -681,10 +722,11 @@ export const MessagesPage = (() => {
     /**
      * Rehydrate message state from worker payload.
      * @param {object|null} payload - Worker payload
-     * @returns {object}
+     * @returns {MessageState}
      */
     function hydrateMessageState(payload) {
         const safePayload = payload || {};
+        /** @type {Map<string, MessageContact>} */
         const contacts = new Map();
         const contactList = Array.isArray(safePayload.contacts) ? safePayload.contacts : [];
         contactList.forEach((contact) => {
@@ -990,7 +1032,7 @@ export const MessagesPage = (() => {
 
         updateStats(
             topSummary,
-            hasConnections ? state.connectionState.list.length : 0,
+            hasConnections ? (state.connectionState?.list.length ?? 0) : 0,
             fadingConversations.length,
         );
         updateTip(topSummary.items, silentConnections, fadingConversations);
@@ -1016,8 +1058,12 @@ export const MessagesPage = (() => {
      * @param {object[]} items - Top contacts
      */
     function renderTopContacts(items) {
+        const listElement = elements.topContactsList;
+        if (!listElement) {
+            return;
+        }
         if (!items.length) {
-            renderEmptyList(elements.topContactsList, "No conversations in this range yet.");
+            renderEmptyList(listElement, "No conversations in this range yet.");
             return;
         }
 
@@ -1032,7 +1078,7 @@ export const MessagesPage = (() => {
                 }),
             );
         });
-        elements.topContactsList.replaceChildren(fragment);
+        listElement.replaceChildren(fragment);
     }
 
     /**
@@ -1040,15 +1086,19 @@ export const MessagesPage = (() => {
      * @param {object[]} items - Silent connection rows
      */
     function renderSilentConnections(items) {
+        const listElement = elements.silentConnectionsList;
+        if (!listElement) {
+            return;
+        }
         const unavailableReason = getConnectionsUnavailableMessage("silent");
         if (unavailableReason) {
-            renderEmptyList(elements.silentConnectionsList, unavailableReason);
+            renderEmptyList(listElement, unavailableReason);
             return;
         }
 
         if (!items.length) {
             renderEmptyList(
-                elements.silentConnectionsList,
+                listElement,
                 "Great job — every connection has at least one message.",
             );
             return;
@@ -1069,7 +1119,7 @@ export const MessagesPage = (() => {
                 }),
             );
         });
-        elements.silentConnectionsList.replaceChildren(fragment);
+        listElement.replaceChildren(fragment);
     }
 
     /**
@@ -1077,15 +1127,19 @@ export const MessagesPage = (() => {
      * @param {object[]} items - Fading conversation rows
      */
     function renderFadingConversations(items) {
+        const listElement = elements.fadingConversationsList;
+        if (!listElement) {
+            return;
+        }
         const unavailableReason = getConnectionsUnavailableMessage("fading");
         if (unavailableReason) {
-            renderEmptyList(elements.fadingConversationsList, unavailableReason);
+            renderEmptyList(listElement, unavailableReason);
             return;
         }
 
         if (!items.length) {
             renderEmptyList(
-                elements.fadingConversationsList,
+                listElement,
                 "No fading conversations in your connected network.",
             );
             return;
@@ -1102,7 +1156,7 @@ export const MessagesPage = (() => {
                 }),
             );
         });
-        elements.fadingConversationsList.replaceChildren(fragment);
+        listElement.replaceChildren(fragment);
     }
 
     /**
@@ -1173,13 +1227,22 @@ export const MessagesPage = (() => {
      * @param {number} fadingCount - Number of fading conversations
      */
     function updateStats(topSummary, totalConnections, fadingCount) {
-        const card = elements.msgStatMessages.closest(".stat-card");
+        const {
+            msgStatMessages,
+            msgStatContacts,
+            msgStatConnected,
+            msgStatFading,
+        } = elements;
+        if (!msgStatMessages || !msgStatContacts || !msgStatConnected || !msgStatFading) {
+            return;
+        }
+        const card = msgStatMessages.closest(".stat-card");
         if (card) {
             card.classList.remove("popup-active");
         }
 
         const skipped = state.messageState ? state.messageState.skippedRows : 0;
-        elements.msgStatMessages.replaceChildren(
+        msgStatMessages.replaceChildren(
             document.createTextNode(String(topSummary.totalRows)),
         );
 
@@ -1202,8 +1265,8 @@ export const MessagesPage = (() => {
             popup.setAttribute("aria-hidden", "true");
             popup.textContent = msg;
 
-            elements.msgStatMessages.appendChild(asterisk);
-            elements.msgStatMessages.appendChild(popup);
+            msgStatMessages.appendChild(asterisk);
+            msgStatMessages.appendChild(popup);
 
             function showPopup() {
                 popup.classList.add("visible");
@@ -1246,9 +1309,9 @@ export const MessagesPage = (() => {
             });
             asterisk.addEventListener("focusout", hidePopup);
         }
-        elements.msgStatContacts.textContent = String(topSummary.totalPeople);
-        elements.msgStatConnected.textContent = String(totalConnections);
-        elements.msgStatFading.textContent = String(fadingCount);
+        msgStatContacts.textContent = String(topSummary.totalPeople);
+        msgStatConnected.textContent = String(totalConnections);
+        msgStatFading.textContent = String(fadingCount);
     }
 
     /**
@@ -1258,13 +1321,17 @@ export const MessagesPage = (() => {
      * @param {object[]} fadingConversations - Fading conversations list
      */
     function updateTip(topContacts, silentConnections, fadingConversations) {
-        const tipText = buildTipText(topContacts, silentConnections, fadingConversations);
-        if (!tipText) {
-            elements.messagesTip.hidden = true;
+        const { messagesTip, messagesTipText } = elements;
+        if (!messagesTip || !messagesTipText) {
             return;
         }
-        elements.messagesTipText.textContent = tipText;
-        elements.messagesTip.hidden = false;
+        const tipText = buildTipText(topContacts, silentConnections, fadingConversations);
+        if (!tipText) {
+            messagesTip.hidden = true;
+            return;
+        }
+        messagesTipText.textContent = tipText;
+        messagesTip.hidden = false;
     }
 
     /**
@@ -1467,24 +1534,34 @@ export const MessagesPage = (() => {
      * @param {string} message - Empty state message
      */
     function setEmptyState(title, message) {
-        const heading = elements.messagesEmpty.querySelector("h2");
-        const text = elements.messagesEmpty.querySelector("p");
+        const { messagesEmpty, messagesLayout } = elements;
+        if (!messagesEmpty || !messagesLayout) {
+            return;
+        }
+        const heading = messagesEmpty.querySelector("h2");
+        const text = messagesEmpty.querySelector("p");
         if (heading) {
             heading.textContent = title;
         }
         if (text) {
             text.textContent = message;
         }
-        elements.messagesEmpty.hidden = false;
-        elements.messagesLayout.hidden = true;
-        elements.messagesTip.hidden = true;
+        messagesEmpty.hidden = false;
+        messagesLayout.hidden = true;
+        if (elements.messagesTip) {
+            elements.messagesTip.hidden = true;
+        }
         updateExportButtonStates();
     }
 
     /** Hide empty state and show layout. */
     function hideEmptyState() {
-        elements.messagesEmpty.hidden = true;
-        elements.messagesLayout.hidden = false;
+        const { messagesEmpty, messagesLayout } = elements;
+        if (!messagesEmpty || !messagesLayout) {
+            return;
+        }
+        messagesEmpty.hidden = true;
+        messagesLayout.hidden = false;
     }
 
     /**
@@ -1502,9 +1579,15 @@ export const MessagesPage = (() => {
 
     /** Render temporary skeleton rows while loading data. */
     function renderLoadingSkeleton() {
-        elements.messagesEmpty.hidden = true;
-        elements.messagesLayout.hidden = false;
-        elements.messagesTip.hidden = true;
+        const { messagesEmpty, messagesLayout } = elements;
+        if (!messagesEmpty || !messagesLayout) {
+            return;
+        }
+        messagesEmpty.hidden = true;
+        messagesLayout.hidden = false;
+        if (elements.messagesTip) {
+            elements.messagesTip.hidden = true;
+        }
 
         const skeletonItem = `
             <li class="message-item skeleton-row">
@@ -1517,9 +1600,15 @@ export const MessagesPage = (() => {
             </li>
         `;
 
-        elements.topContactsList.innerHTML = skeletonItem.repeat(3);
-        elements.silentConnectionsList.innerHTML = skeletonItem.repeat(3);
-        elements.fadingConversationsList.innerHTML = skeletonItem.repeat(3);
+        if (elements.topContactsList) {
+            elements.topContactsList.innerHTML = skeletonItem.repeat(3);
+        }
+        if (elements.silentConnectionsList) {
+            elements.silentConnectionsList.innerHTML = skeletonItem.repeat(3);
+        }
+        if (elements.fadingConversationsList) {
+            elements.fadingConversationsList.innerHTML = skeletonItem.repeat(3);
+        }
     }
 
     return {

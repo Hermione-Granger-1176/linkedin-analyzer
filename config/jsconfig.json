@@ -9,6 +9,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "types": ["vite/client"],
     "strict": false,
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "noImplicitAny": false,
     "paths": {

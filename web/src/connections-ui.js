@@ -36,6 +36,7 @@ export const ConnectionsPage = (() => {
     const WORKER_TIMEOUT_MS = 30000;
     const TOP_N = 10;
 
+    /** @type {{filters: {timeRange: string}, dataReady: boolean, hasData: boolean, allRows: Array<{connectedOn: number, company: string, position: string}>|null, allTimeline: Array<object>|null, workerStats: {total?: number, networkAgeMonths?: number}|null, currentView: object|null}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         dataReady: false,

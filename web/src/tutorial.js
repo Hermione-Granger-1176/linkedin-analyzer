@@ -71,6 +71,7 @@ export const Tutorial = (() => {
         },
     ]);
 
+    /** @type {{initialized: boolean, active: boolean, routeName: string, steps: object[], renderableIndices: number[], currentIndex: number, retryCount: number, token: number, autoTimer: number, retryTimer: number, highlightedTarget: HTMLElement | null, highlightedStyle: {position: string, zIndex: string} | null, previousFocus: HTMLElement | null, miniTipsRoute: string, miniTipTimer: number, miniTipRetryTimer: number, miniTipRetryCount: number, miniTipEntries: Array<{node: HTMLElement, tip: object, routeName: string, tipId: string, placement: string | undefined, target: Element | null}>}} */
     const state = {
         initialized: false,
         active: false,
@@ -92,6 +93,7 @@ export const Tutorial = (() => {
         miniTipEntries: [],
     };
 
+    /** @type {{root: HTMLDivElement | null, overlay: HTMLDivElement | null, spotlight: HTMLDivElement | null, pointer: SVGSVGElement | null, pointerMainPath: SVGPathElement | null, pointerEchoPath: SVGPathElement | null, pointerHeadPath: SVGPathElement | null, popover: HTMLElement | null, title: HTMLHeadingElement | null, body: HTMLParagraphElement | null, counter: HTMLSpanElement | null, dots: HTMLDivElement | null, backButton: HTMLButtonElement | null, nextButton: HTMLButtonElement | null, skipButton: HTMLButtonElement | null, miniTipsLayer: HTMLDivElement | null}} */
     const ui = {
         root: null,
         overlay: null,
@@ -226,10 +228,13 @@ export const Tutorial = (() => {
         state.currentIndex = -1;
         state.retryCount = 0;
         state.token += 1;
-        state.previousFocus = document.activeElement;
+        state.previousFocus = /** @type {HTMLElement | null} */ (document.activeElement);
 
         clearMiniTips();
 
+        if (!ui.root || !ui.popover) {
+            return false;
+        }
         ui.root.hidden = false;
         ui.root.setAttribute("aria-hidden", "false");
         ui.popover.hidden = false;
@@ -374,6 +379,9 @@ export const Tutorial = (() => {
 
     /** Attach event handlers for controls, keyboard, and layout updates. */
     function bindEvents() {
+        if (!ui.backButton || !ui.nextButton || !ui.skipButton || !ui.popover) {
+            return;
+        }
         ui.backButton.addEventListener("click", handleBackClick);
         ui.nextButton.addEventListener("click", handleNextClick);
         ui.skipButton.addEventListener("click", handleSkipClick);
@@ -555,7 +563,7 @@ export const Tutorial = (() => {
         if (!state.active) {
             return;
         }
-        if (ui.popover && ui.popover.contains(event.target)) {
+        if (ui.popover && ui.popover.contains(/** @type {Node | null} */ (event.target))) {
             return;
         }
         event.preventDefault();
@@ -746,6 +754,16 @@ export const Tutorial = (() => {
         if (!state.active) {
             return;
         }
+        if (
+            !ui.title ||
+            !ui.body ||
+            !ui.backButton ||
+            !ui.skipButton ||
+            !ui.nextButton ||
+            !ui.popover
+        ) {
+            return;
+        }
 
         const step = getCurrentStep();
         const title = step.title || step.heading || "Quick tour";
@@ -785,6 +803,9 @@ export const Tutorial = (() => {
 
     /** Render step counter and dot navigation. */
     function renderProgress() {
+        if (!ui.counter || !ui.dots) {
+            return;
+        }
         const visibleIndices = state.renderableIndices.length
             ? state.renderableIndices
             : computeRenderableIndices();
@@ -794,7 +815,8 @@ export const Tutorial = (() => {
 
         ui.counter.textContent = `Step ${currentNumber} of ${total}`;
 
-        ui.dots.innerHTML = "";
+        const dots = ui.dots;
+        dots.innerHTML = "";
         visibleIndices.forEach((index, dotIndex) => {
             const dot = document.createElement("button");
             dot.type = "button";
@@ -804,7 +826,7 @@ export const Tutorial = (() => {
             if (index === state.currentIndex) {
                 dot.classList.add("is-active");
             }
-            ui.dots.appendChild(dot);
+            dots.appendChild(dot);
         });
     }
 
@@ -913,7 +935,7 @@ export const Tutorial = (() => {
     /**
      * Check if a target is visible enough for spotlighting.
      * @param {Element|null} element - DOM element
-     * @returns {boolean}
+     * @returns {element is HTMLElement}
      */
     function isElementVisible(element) {
         if (!(element instanceof HTMLElement)) {
@@ -942,6 +964,9 @@ export const Tutorial = (() => {
      * @param {object} step - Step config
      */
     function updateGeometry(target, step) {
+        if (!ui.spotlight || !ui.popover) {
+            return;
+        }
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         const placement = String((step && step.placement) || "auto").toLowerCase();
@@ -1008,6 +1033,9 @@ export const Tutorial = (() => {
      * @param {object} step - Step config
      */
     function updatePointer(targetRect, popPosition, popRect, placement, step) {
+        if (!ui.pointer || !ui.pointerMainPath || !ui.pointerEchoPath || !ui.pointerHeadPath) {
+            return;
+        }
         if (!targetRect || placement === "center") {
             ui.pointer.style.display = "none";
             return;
@@ -1140,11 +1168,13 @@ export const Tutorial = (() => {
         state.miniTipRetryCount = 0;
 
         setHighlightedTarget(null);
-        ui.root.hidden = true;
-        ui.root.setAttribute("aria-hidden", "true");
-        ui.popover.hidden = true;
-        ui.pointer.style.display = "none";
-        ui.spotlight.style.display = "none";
+        if (ui.root && ui.popover && ui.pointer && ui.spotlight) {
+            ui.root.hidden = true;
+            ui.root.setAttribute("aria-hidden", "true");
+            ui.popover.hidden = true;
+            ui.pointer.style.display = "none";
+            ui.spotlight.style.display = "none";
+        }
         document.body.classList.remove("tutorial-open");
 
         state.active = false;
@@ -1188,6 +1218,7 @@ export const Tutorial = (() => {
             return;
         }
 
+        const miniTipsLayer = ui.miniTipsLayer;
         tips.forEach((tip, index) => {
             const tipId = String(tip.id || tip.key || `${routeName}-${index + 1}`);
             if (isMiniTipDismissed(routeName, tipId)) {
@@ -1200,7 +1231,7 @@ export const Tutorial = (() => {
             }
 
             const node = buildMiniTipNode(routeName, tipId, tip);
-            ui.miniTipsLayer.appendChild(node);
+            miniTipsLayer.appendChild(node);
             state.miniTipEntries.push({
                 node,
                 tip,
@@ -1395,6 +1426,9 @@ export const Tutorial = (() => {
      * @param {KeyboardEvent} event - Key event
      */
     function trapFocus(event) {
+        if (!ui.popover) {
+            return;
+        }
         const focusable = getFocusableElements(ui.popover);
         if (!focusable.length) {
             event.preventDefault();
@@ -1774,7 +1808,7 @@ export const Tutorial = (() => {
 
     /**
      * Normalize route names.
-     * @param {string} value - Raw route
+     * @param {string | null | undefined} value - Raw route
      * @returns {string}
      */
     function normalizeRouteName(value) {

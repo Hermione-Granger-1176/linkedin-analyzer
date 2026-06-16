@@ -219,30 +219,34 @@ export const UploadPage = (() => {
 
     /** Attach event listeners for drag/drop, file input, and buttons. */
     function bindEvents() {
-        elements.dropZone.addEventListener("click", () => elements.fileInput.click());
-        elements.dropZone.addEventListener("keydown", (event) => {
+        const { dropZone, fileInput, openAnalyticsBtn, clearAllBtn } = elements;
+        if (!dropZone || !fileInput || !openAnalyticsBtn || !clearAllBtn) {
+            return;
+        }
+        dropZone.addEventListener("click", () => fileInput.click());
+        dropZone.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                elements.fileInput.click();
+                fileInput.click();
             }
         });
-        elements.fileInput.addEventListener("change", handleFileInput);
-        elements.dropZone.addEventListener("dragover", handleDragOver);
-        elements.dropZone.addEventListener("dragleave", handleDragLeave);
-        elements.dropZone.addEventListener("drop", handleDrop);
+        fileInput.addEventListener("change", handleFileInput);
+        dropZone.addEventListener("dragover", handleDragOver);
+        dropZone.addEventListener("dragleave", handleDragLeave);
+        dropZone.addEventListener("drop", handleDrop);
 
         window.addEventListener("dragover", (event) => event.preventDefault());
         window.addEventListener("drop", (event) => event.preventDefault());
 
-        elements.openAnalyticsBtn.addEventListener("click", () => {
-            if (elements.openAnalyticsBtn.disabled) {
+        openAnalyticsBtn.addEventListener("click", () => {
+            if (openAnalyticsBtn.disabled) {
                 return;
             }
 
             AppRouter.navigate("analytics", undefined, { replaceHistory: false });
         });
 
-        elements.clearAllBtn.addEventListener("click", async () => {
+        clearAllBtn.addEventListener("click", async () => {
             try {
                 await Storage.clearAll();
                 clearPrimeSchedule();
@@ -368,7 +372,7 @@ export const UploadPage = (() => {
      */
     function handleDragOver(event) {
         event.preventDefault();
-        elements.dropZone.classList.add("drag-over");
+        elements.dropZone?.classList.add("drag-over");
     }
 
     /**
@@ -377,7 +381,7 @@ export const UploadPage = (() => {
      */
     function handleDragLeave(event) {
         event.preventDefault();
-        elements.dropZone.classList.remove("drag-over");
+        elements.dropZone?.classList.remove("drag-over");
     }
 
     /**
@@ -386,7 +390,7 @@ export const UploadPage = (() => {
      */
     function handleDrop(event) {
         event.preventDefault();
-        elements.dropZone.classList.remove("drag-over");
+        elements.dropZone?.classList.remove("drag-over");
         const files = Array.from(event.dataTransfer?.files || []);
         if (files.length) {
             processFiles(files);
@@ -997,8 +1001,8 @@ export const UploadPage = (() => {
 
     /**
      * Update a single file type's status indicator and label.
-     * @param {HTMLElement} statusItem - The .file-status-item element
-     * @param {HTMLElement} statusLabel - The status text element
+     * @param {HTMLElement|null} statusItem - The .file-status-item element
+     * @param {HTMLElement|null} statusLabel - The status text element
      * @param {object|null} fileData - Stored file record, or null if not uploaded
      */
     function updateFileStatus(statusItem, statusLabel, fileData) {
@@ -1020,12 +1024,14 @@ export const UploadPage = (() => {
      */
     function updateStatus({ fileMap, analyticsReady }) {
         STATUS_ITEMS.forEach(({ type, item, label }) => {
-            updateFileStatus(/** @type {HTMLElement} */ (item), label, fileMap[type]);
+            updateFileStatus(/** @type {HTMLElement|null} */ (item), label, fileMap[type]);
         });
 
         const hasAny = TRACKED_TYPES.some((type) => Boolean(fileMap[type]));
         const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
-        elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
+        if (elements.openAnalyticsBtn) {
+            elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
+        }
         setHint(getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady), false);
     }
 
@@ -1275,6 +1281,9 @@ export const UploadPage = (() => {
      * @param {boolean} isError - Whether the hint is an error
      */
     function setHint(message, isError) {
+        if (!elements.uploadHint) {
+            return;
+        }
         elements.uploadHint.textContent = message;
         elements.uploadHint.classList.toggle("is-error", Boolean(isError));
     }
@@ -1347,6 +1356,9 @@ export const UploadPage = (() => {
 
     /** Show the progress overlay and start animation. */
     function showProgressOverlay() {
+        if (!elements.progressOverlay) {
+            return;
+        }
         progressSessionId += 1;
         const sessionId = progressSessionId;
         elements.progressOverlay.hidden = false;
@@ -1368,7 +1380,8 @@ export const UploadPage = (() => {
 
     /** Animate progress to 100% then hide the overlay. */
     function hideProgressOverlay() {
-        if (elements.progressOverlay.hidden) {
+        const { progressOverlay } = elements;
+        if (!progressOverlay || progressOverlay.hidden) {
             return;
         }
         const sessionId = progressSessionId;
@@ -1379,7 +1392,7 @@ export const UploadPage = (() => {
                 if (sessionId !== progressSessionId) {
                     return;
                 }
-                elements.progressOverlay.hidden = true;
+                progressOverlay.hidden = true;
             },
             sessionId,
         );
@@ -1533,7 +1546,9 @@ export const UploadPage = (() => {
             });
         }
 
-        elements.progressPercent.textContent = `${Math.round(value * 100)}%`;
+        if (elements.progressPercent) {
+            elements.progressPercent.textContent = `${Math.round(value * 100)}%`;
+        }
     }
 
     return {

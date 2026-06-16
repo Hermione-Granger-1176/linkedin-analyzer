@@ -49,6 +49,10 @@ export const SketchCharts = (() => {
         canvas.width = rect.width * ratio;
         canvas.height = rect.height * ratio;
         const ctx = canvas.getContext("2d");
+        /* v8 ignore next */
+        if (!ctx) {
+            return null;
+        }
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         return { ctx, width: rect.width, height: rect.height };
     }
@@ -683,7 +687,12 @@ export const SketchCharts = (() => {
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
-        tempCanvas.getContext("2d").drawImage(canvas, 0, 0);
+        const tempCtx = tempCanvas.getContext("2d");
+        /* v8 ignore next */
+        if (!tempCtx) {
+            return;
+        }
+        tempCtx.drawImage(canvas, 0, 0);
 
         // Restore on-screen canvas synchronously — no async gap
         redraw();

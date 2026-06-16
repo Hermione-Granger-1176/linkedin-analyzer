@@ -22,18 +22,33 @@ export const CleanPage = (() => {
         none: () => "Upload LinkedIn CSV files to start cleaning.",
     });
 
+    // These nodes are part of the static page shell rendered in index.html, so
+    // each lookup is annotated as a non-null element; a missing node is a build
+    // error rather than a runtime state worth guarding on every read.
     const elements = {
-        cleanEmpty: document.getElementById("cleanEmpty"),
-        cleanPanel: document.getElementById("cleanPanel"),
-        cleanerHint: document.getElementById("cleanerHint"),
-        cleanPreviewSection: document.getElementById("cleanPreviewSection"),
-        cleanPreviewTable: document.getElementById("cleanPreviewTable"),
-        cleanFileInfo: document.getElementById("cleanFileInfo"),
-        cleanPreviewNote: document.getElementById("cleanPreviewNote"),
-        cleanDownloadSection: document.getElementById("cleanDownloadSection"),
-        cleanDownloadBtn: document.getElementById("cleanDownloadBtn"),
-        cleanErrorMessage: document.getElementById("cleanErrorMessage"),
-        cleanErrorText: document.getElementById("cleanErrorText"),
+        cleanEmpty: /** @type {HTMLElement} */ (document.getElementById("cleanEmpty")),
+        cleanPanel: /** @type {HTMLElement} */ (document.getElementById("cleanPanel")),
+        cleanerHint: /** @type {HTMLElement} */ (document.getElementById("cleanerHint")),
+        cleanPreviewSection: /** @type {HTMLElement} */ (
+            document.getElementById("cleanPreviewSection")
+        ),
+        cleanPreviewTable: /** @type {HTMLElement} */ (
+            document.getElementById("cleanPreviewTable")
+        ),
+        cleanFileInfo: /** @type {HTMLElement} */ (document.getElementById("cleanFileInfo")),
+        cleanPreviewNote: /** @type {HTMLElement} */ (
+            document.getElementById("cleanPreviewNote")
+        ),
+        cleanDownloadSection: /** @type {HTMLElement} */ (
+            document.getElementById("cleanDownloadSection")
+        ),
+        cleanDownloadBtn: /** @type {HTMLElement} */ (
+            document.getElementById("cleanDownloadBtn")
+        ),
+        cleanErrorMessage: /** @type {HTMLElement} */ (
+            document.getElementById("cleanErrorMessage")
+        ),
+        cleanErrorText: /** @type {HTMLElement} */ (document.getElementById("cleanErrorText")),
         cleanFileTypeInputs: document.querySelectorAll('input[name="cleanFileType"]'),
     };
 
@@ -290,7 +305,9 @@ export const CleanPage = (() => {
         const label = FILE_TYPE_LABELS[fileType] || fileType;
         elements.cleanFileInfo.textContent = `${label} - ${result.rowCount} rows`;
 
-        const thead = elements.cleanPreviewTable.querySelector("thead");
+        const thead = /** @type {HTMLElement} */ (
+            elements.cleanPreviewTable.querySelector("thead")
+        );
         const headerRow = document.createElement("tr");
         headers.forEach((header) => {
             const cell = document.createElement("th");
@@ -299,7 +316,9 @@ export const CleanPage = (() => {
         });
         thead.replaceChildren(headerRow);
 
-        const tbody = elements.cleanPreviewTable.querySelector("tbody");
+        const tbody = /** @type {HTMLElement} */ (
+            elements.cleanPreviewTable.querySelector("tbody")
+        );
         const previewRows = result.cleanedData.slice(0, PREVIEW_ROW_LIMIT);
         const bodyFragment = document.createDocumentFragment();
         previewRows.forEach((row) => {

@@ -71,7 +71,7 @@ export const MessagesAnalytics = (() => {
                 senderIsSelf,
                 hasSender: hasRealSender
             });
-            if (hasRealSender) {
+            if (senderContact) {
                 markOutreachContact(contactStats, senderContact, "received");
             }
 

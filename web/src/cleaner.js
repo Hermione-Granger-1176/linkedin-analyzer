@@ -99,13 +99,13 @@ export const LinkedInCleaner = (() => {
      */
     function parseCSV(csvText, fileType = "auto", parseCache = null) {
         const cacheKey = parseCache ? getParseCacheKey(fileType) : null;
-        if (cacheKey && parseCache.has(cacheKey)) {
+        if (parseCache && cacheKey && parseCache.has(cacheKey)) {
             return parseCache.get(cacheKey);
         }
 
         if (typeof csvText !== "string" || !csvText.trim()) {
             const emptyResult = { headers: [], data: [], error: EMPTY_CSV_ERROR };
-            if (cacheKey) {
+            if (parseCache && cacheKey) {
                 parseCache.set(cacheKey, emptyResult);
             }
             return emptyResult;
@@ -118,7 +118,7 @@ export const LinkedInCleaner = (() => {
         }
         if (error) {
             const errorResult = { headers: [], data: [], error };
-            if (cacheKey) {
+            if (parseCache && cacheKey) {
                 parseCache.set(cacheKey, errorResult);
             }
             return errorResult;
@@ -126,7 +126,7 @@ export const LinkedInCleaner = (() => {
 
         if (!rows.length) {
             const emptyRowsResult = { headers: [], data: [], error: EMPTY_CSV_ERROR };
-            if (cacheKey) {
+            if (parseCache && cacheKey) {
                 parseCache.set(cacheKey, emptyRowsResult);
             }
             return emptyRowsResult;
@@ -141,7 +141,7 @@ export const LinkedInCleaner = (() => {
                 data: [],
                 error: "CSV file has no header rows after skip.",
             };
-            if (cacheKey) {
+            if (parseCache && cacheKey) {
                 parseCache.set(cacheKey, skipResult);
             }
             return skipResult;
@@ -150,7 +150,7 @@ export const LinkedInCleaner = (() => {
         const headers = normalizeHeaders(rowsAfterSkip[0]);
         if (!headers.length || headers.every((header) => header === "")) {
             const headerResult = { headers: [], data: [], error: "Could not parse CSV headers" };
-            if (cacheKey) {
+            if (parseCache && cacheKey) {
                 parseCache.set(cacheKey, headerResult);
             }
             return headerResult;
@@ -174,7 +174,7 @@ export const LinkedInCleaner = (() => {
         }
 
         const result = { headers, data, error: null };
-        if (cacheKey) {
+        if (parseCache && cacheKey) {
             parseCache.set(cacheKey, result);
         }
         return result;

@@ -326,17 +326,19 @@ export const Storage = (() => {
         return runOp(
             () => memory.saveFile(type, data),
             (db) =>
-                new Promise((resolve, reject) => {
-                    const { text, ...metadata } = buildFilePayload(type, data);
-                    const tx = db.transaction([FILE_STORE, FILE_TEXT_STORE], "readwrite");
-                    tx.objectStore(FILE_STORE).put(metadata);
-                    tx.objectStore(FILE_TEXT_STORE).put({ type, text });
-                    const rejectFailure = () =>
-                        reject(idbFailure(tx.error, "IndexedDB transaction failed"));
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = rejectFailure;
-                    tx.onabort = rejectFailure;
-                }),
+                /** @type {Promise<void>} */ (
+                    new Promise((resolve, reject) => {
+                        const { text, ...metadata } = buildFilePayload(type, data);
+                        const tx = db.transaction([FILE_STORE, FILE_TEXT_STORE], "readwrite");
+                        tx.objectStore(FILE_STORE).put(metadata);
+                        tx.objectStore(FILE_TEXT_STORE).put({ type, text });
+                        const rejectFailure = () =>
+                            reject(idbFailure(tx.error, "IndexedDB transaction failed"));
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = rejectFailure;
+                        tx.onabort = rejectFailure;
+                    })
+                ),
         );
     }
 
@@ -478,20 +480,22 @@ export const Storage = (() => {
         return runOp(
             () => memory.clearAll(),
             (db) =>
-                new Promise((resolve, reject) => {
-                    const tx = db.transaction(
-                        [FILE_STORE, FILE_TEXT_STORE, ANALYTICS_STORE],
-                        "readwrite",
-                    );
-                    tx.objectStore(FILE_STORE).clear();
-                    tx.objectStore(FILE_TEXT_STORE).clear();
-                    tx.objectStore(ANALYTICS_STORE).clear();
-                    const rejectFailure = () =>
-                        reject(idbFailure(tx.error, "IndexedDB transaction failed"));
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = rejectFailure;
-                    tx.onabort = rejectFailure;
-                }),
+                /** @type {Promise<void>} */ (
+                    new Promise((resolve, reject) => {
+                        const tx = db.transaction(
+                            [FILE_STORE, FILE_TEXT_STORE, ANALYTICS_STORE],
+                            "readwrite",
+                        );
+                        tx.objectStore(FILE_STORE).clear();
+                        tx.objectStore(FILE_TEXT_STORE).clear();
+                        tx.objectStore(ANALYTICS_STORE).clear();
+                        const rejectFailure = () =>
+                            reject(idbFailure(tx.error, "IndexedDB transaction failed"));
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = rejectFailure;
+                        tx.onabort = rejectFailure;
+                    })
+                ),
         );
     }
 

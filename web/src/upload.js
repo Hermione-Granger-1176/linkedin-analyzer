@@ -2,12 +2,19 @@
 
 import rough from "roughjs/bundled/rough.esm.js";
 
-import { MAX_CSV_CHARS, SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
+import { SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
+import { concatChunks, decodeBytes, isQuotaExceededError } from "./upload-decode.js";
+import {
+    createEmptyFileMap,
+    getTypeSpecificFileCacheKey,
+    getUploadHint,
+    hasAnalyticsMonths,
+} from "./upload-state.js";
 import {
     parseAnalyticsWorkerMessage,
     parseStoredUploadFile,
@@ -19,16 +26,6 @@ export const UploadPage = (() => {
 
     const TRACKED_TYPES = Object.freeze(["shares", "comments", "messages", "connections"]);
     const TRACKED_TYPES_SET = new Set(TRACKED_TYPES);
-    const UPLOAD_HINT_BY_STATE = Object.freeze({
-        "0-0-0": "Upload at least one file to start.",
-        "0-0-1": "Upload at least one file to start.",
-        "0-1-0": "Upload at least one file to start.",
-        "0-1-1": "Upload at least one file to start.",
-        "1-1-0": "Processing analytics in the background.",
-        "1-1-1": "Analytics are ready. Open the dashboard.",
-        "1-0-0": "Files loaded. Open Messages tab for conversation insights.",
-        "1-0-1": "Files loaded. Open Messages tab for conversation insights.",
-    });
 
     const elements = {
         dropZone: document.getElementById("multiDropZone"),
@@ -566,39 +563,6 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and only
-     * falls back to windows-1252 on a genuine decode error — mirroring the CLI's
-     * latin-1 retry and avoiding false positives on files that legitimately
-     * contain U+FFFD. Enforces the character limit after decoding.
-     * @param {Uint8Array} bytes - Raw file bytes
-     * @param {string} fileName - Original file name, used in error messages
-     * @returns {{text: string, usedFallback: boolean}}
-     */
-    function decodeBytes(bytes, fileName) {
-        if (typeof TextDecoder === "undefined") {
-            // The streaming path already routes around a missing TextDecoder; the
-            // FileReader path lands here, so fail with a clear, user-facing error
-            // instead of a bare ReferenceError from `new TextDecoder(...)`.
-            throw new Error(
-                `Cannot read "${fileName}": your browser is missing required text-decoding support. Please use a newer browser.`,
-            );
-        }
-        let text;
-        let usedFallback = false;
-        try {
-            text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-        } catch {
-            text = new TextDecoder("windows-1252").decode(bytes);
-            usedFallback = true;
-        }
-        if (text.length > MAX_CSV_CHARS) {
-            const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-            throw new Error(`"${fileName}" exceeds the ${maxMb}MB text limit.`);
-        }
-        return { text, usedFallback };
-    }
-
-    /**
      * Read a File as text via FileReader, decoding the raw bytes so UTF-8
      * validity is checked directly rather than inferred from the output.
      * @param {File} file - Uploaded file
@@ -700,22 +664,6 @@ export const UploadPage = (() => {
         // windows-1252 fallback and the character-count limit applied after
         // decoding. Peak memory stays bounded by the upstream MAX_FILE_BYTES cap.
         return decodeBytes(concatChunks(chunks, totalBytes), file.name);
-    }
-
-    /**
-     * Concatenate decoded stream chunks into a single byte array.
-     * @param {Uint8Array[]} chunks - Collected stream chunks
-     * @param {number} totalBytes - Sum of all chunk byte lengths
-     * @returns {Uint8Array}
-     */
-    function concatChunks(chunks, totalBytes) {
-        const bytes = new Uint8Array(totalBytes);
-        let offset = 0;
-        for (const chunk of chunks) {
-            bytes.set(chunk, offset);
-            offset += chunk.byteLength;
-        }
-        return bytes;
     }
 
     /**
@@ -827,30 +775,6 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Detect a storage quota error, walking the `cause` chain since Storage wraps
-     * the native DOMException inside a descriptive Error.
-     * @param {unknown} error - The caught error
-     * @returns {boolean}
-     */
-    function isQuotaExceededError(error) {
-        let current = error;
-        for (let depth = 0; current && depth < 10; depth += 1) {
-            const candidate = /** @type {{name?: string, code?: number, cause?: unknown}} */ (
-                current
-            );
-            if (
-                candidate.name === "QuotaExceededError" ||
-                candidate.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
-                candidate.code === 22
-            ) {
-                return true;
-            }
-            current = candidate.cause;
-        }
-        return false;
-    }
-
-    /**
      * Handle incremental worker progress updates.
      * @param {{jobId?: string|null, percent?: number}} payload - Progress payload
      */
@@ -930,22 +854,6 @@ export const UploadPage = (() => {
 
         // Cache metadata only; the messages/connections text is loaded on demand.
         DataCache.set(key, toStoredFileMetadata(match));
-    }
-
-    /**
-     * Resolve per-file cache key for messages/connections datasets.
-     * @param {string} fileType - Processed file type
-     * @returns {string|null}
-     */
-    function getTypeSpecificFileCacheKey(fileType) {
-        switch (fileType) {
-            case "messages":
-                return "storage:file:messages";
-            case "connections":
-                return "storage:file:connections";
-            default:
-                return null;
-        }
     }
 
     /**
@@ -1122,21 +1030,6 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Resolve current upload hint message.
-     * @param {boolean} hasAny - Whether any tracked file exists
-     * @param {boolean} hasAnalyticsFiles - Whether shares/comments exist
-     * @param {boolean} analyticsReady - Whether analytics base is available
-     * @returns {string}
-     */
-    function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
-        const stateKey = `${hasAny ? 1 : 0}-${hasAnalyticsFiles ? 1 : 0}-${analyticsReady ? 1 : 0}`;
-        return (
-            UPLOAD_HINT_BY_STATE[stateKey] ||
-            "Files loaded. Open Messages tab for conversation insights."
-        );
-    }
-
-    /**
      * Build a fixed file map for all tracked types.
      * @param {object[]} files - Stored file records
      * @returns {{shares: object|null, comments: object|null, messages: object|null, connections: object|null}}
@@ -1162,19 +1055,6 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Create an empty file map.
-     * @returns {{shares: null, comments: null, messages: null, connections: null}}
-     */
-    function createEmptyFileMap() {
-        return {
-            shares: null,
-            comments: null,
-            messages: null,
-            connections: null,
-        };
-    }
-
-    /**
      * Check whether analytics aggregates are available in storage.
      * @returns {Promise<boolean>}
      */
@@ -1197,17 +1077,6 @@ export const UploadPage = (() => {
             return null;
         }
         return hasAnalyticsMonths(analyticsBase);
-    }
-
-    /**
-     * Check whether analytics base contains at least one month bucket.
-     * @param {object|null} analyticsBase - Analytics aggregate base
-     * @returns {boolean}
-     */
-    function hasAnalyticsMonths(analyticsBase) {
-        return Boolean(
-            analyticsBase && analyticsBase.months && Object.keys(analyticsBase.months).length,
-        );
     }
 
     /**

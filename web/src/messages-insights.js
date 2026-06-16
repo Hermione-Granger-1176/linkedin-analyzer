@@ -6,6 +6,15 @@ import { DataCache } from "./data-cache.js";
 import { ExcelGenerator } from "./excel.js";
 import { LoadingOverlay } from "./loading-overlay.js";
 import { MessagesAnalytics } from "./messages-analytics.js";
+import {
+    buildDataSignature,
+    computeWorkerTimeout,
+    DEFAULT_TIME_RANGE,
+    formatShortDate,
+    getRangeStart,
+    MS_PER_DAY,
+    parseRangeParam,
+} from "./messages-format.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
@@ -22,29 +31,11 @@ export const MessagesPage = (() => {
 
     /** @type {{ timeRange: string }} */
     const FILTER_DEFAULTS = Object.freeze({
-        timeRange: "12m",
+        timeRange: DEFAULT_TIME_RANGE,
     });
-    const RANGE_MONTHS = Object.freeze({
-        "1m": 1,
-        "3m": 3,
-        "6m": 6,
-        "12m": 12,
-    });
-    const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    // Worker watchdog scales with input size: a base allowance plus more time per
-    // megabyte of CSV so large exports are not cut off prematurely.
-    const WORKER_TIMEOUT_BASE_MS = 30000;
-    const WORKER_TIMEOUT_PER_MB_MS = 5000;
-    const BYTES_PER_MB = 1024 * 1024;
     // Above this combined CSV size, re-parsing on the UI thread would freeze the
     // page, so the main-thread fallback is skipped in favor of an empty state.
     const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
-
-    const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-    });
 
     const elements = {
         timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
@@ -117,7 +108,7 @@ export const MessagesPage = (() => {
             return;
         }
 
-        const nextRange = parseRangeParam(params && params.range);
+        const nextRange = parseRangeParam(params && params.range, FILTER_DEFAULTS.timeRange);
         applyRangeFromRoute(nextRange);
         loadData();
     }
@@ -220,17 +211,6 @@ export const MessagesPage = (() => {
             };
         }
         return processFilesOnMainThread(messagesCsv, connectionsCsv);
-    }
-
-    /**
-     * Compute a size-scaled worker watchdog timeout.
-     * @param {string} messagesCsv - Raw messages CSV text
-     * @param {string} connectionsCsv - Raw connections CSV text
-     * @returns {number} Timeout in milliseconds
-     */
-    function computeWorkerTimeout(messagesCsv, connectionsCsv) {
-        const megabytes = (messagesCsv.length + connectionsCsv.length) / BYTES_PER_MB;
-        return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
     }
 
     /**
@@ -593,26 +573,6 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Build a cache signature from uploaded file metadata.
-     * @param {object|null} messagesFile - Stored messages file
-     * @param {object|null} connectionsFile - Stored connections file
-     * @returns {string}
-     */
-    function buildDataSignature(messagesFile, connectionsFile) {
-        const toPart = (file, type) => {
-            if (!file) {
-                return `${type}:none`;
-            }
-            const updatedAt = file.updatedAt || 0;
-            const rowCount = file.rowCount || 0;
-            const name = file.name || "unknown";
-            return `${type}:${name}:${updatedAt}:${rowCount}`;
-        };
-
-        return [toPart(messagesFile, "messages"), toPart(connectionsFile, "connections")].join("|");
-    }
-
-    /**
      * Read computed analytics state from in-memory cache.
      * @param {string} signature - Dataset signature
      * @returns {object|null}
@@ -821,16 +781,6 @@ export const MessagesPage = (() => {
             button.classList.toggle("active", isActive);
             button.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
-    }
-
-    /**
-     * Parse route range query value.
-     * @param {string} value - Raw route value
-     * @returns {string}
-     */
-    function parseRangeParam(value) {
-        const range = String(value || "").toLowerCase();
-        return RANGE_MONTHS[range] || range === "all" ? range : FILTER_DEFAULTS.timeRange;
     }
 
     /**
@@ -1494,32 +1444,6 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Get range start timestamp from the selected range.
-     * @param {string} range - Range key
-     * @param {number} latestTimestamp - Latest message timestamp
-     * @returns {number|null}
-     */
-    function getRangeStart(range, latestTimestamp) {
-        if (range === "all") {
-            return null;
-        }
-        const months = RANGE_MONTHS[range];
-        if (!months || !latestTimestamp) {
-            return null;
-        }
-        const latestDate = new Date(latestTimestamp);
-        return new Date(
-            latestDate.getFullYear(),
-            latestDate.getMonth() - (months - 1),
-            1,
-            0,
-            0,
-            0,
-            0,
-        ).getTime();
-    }
-
-    /**
      * Trim any value into a string.
      * @param {unknown} value - Raw value
      * @returns {string}
@@ -1535,15 +1459,6 @@ export const MessagesPage = (() => {
      */
     function normalizeName(value) {
         return MessagesAnalytics.normalizeName(value);
-    }
-
-    /**
-     * Format timestamp as human-readable date.
-     * @param {number} timestamp - Timestamp in milliseconds
-     * @returns {string}
-     */
-    function formatShortDate(timestamp) {
-        return SHORT_DATE_FORMATTER.format(new Date(timestamp));
     }
 
     /**

@@ -220,7 +220,10 @@ export const UploadPage = (() => {
     /** Attach event listeners for drag/drop, file input, and buttons. */
     function bindEvents() {
         const { dropZone, fileInput, openAnalyticsBtn, clearAllBtn } = elements;
-        if (!dropZone || !fileInput || !openAnalyticsBtn || !clearAllBtn) {
+        // Match init()'s contract: only dropZone/fileInput are required for uploads.
+        // The optional buttons are guarded individually below so a missing button
+        // never disables drag/drop or the file input.
+        if (!dropZone || !fileInput) {
             return;
         }
         dropZone.addEventListener("click", () => fileInput.click());
@@ -238,35 +241,39 @@ export const UploadPage = (() => {
         window.addEventListener("dragover", (event) => event.preventDefault());
         window.addEventListener("drop", (event) => event.preventDefault());
 
-        openAnalyticsBtn.addEventListener("click", () => {
-            if (openAnalyticsBtn.disabled) {
-                return;
-            }
-
-            AppRouter.navigate("analytics", undefined, { replaceHistory: false });
-        });
-
-        clearAllBtn.addEventListener("click", async () => {
-            try {
-                await Storage.clearAll();
-                clearPrimeSchedule();
-                pendingPrimePayload = null;
-                if (worker) {
-                    worker.postMessage({ type: "clear" });
+        if (openAnalyticsBtn) {
+            openAnalyticsBtn.addEventListener("click", () => {
+                if (openAnalyticsBtn.disabled) {
+                    return;
                 }
-                DataCache.clear();
-                DataCache.notify({ type: "storageCleared" });
-                lastPrimedSignature = null;
-                resetProcessingState();
-                updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
-            } catch (error) {
-                captureError(error, {
-                    module: "upload",
-                    operation: "clear-all",
-                });
-                setHint("Unable to clear stored data. Please try again.", true);
-            }
-        });
+
+                AppRouter.navigate("analytics", undefined, { replaceHistory: false });
+            });
+        }
+
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener("click", async () => {
+                try {
+                    await Storage.clearAll();
+                    clearPrimeSchedule();
+                    pendingPrimePayload = null;
+                    if (worker) {
+                        worker.postMessage({ type: "clear" });
+                    }
+                    DataCache.clear();
+                    DataCache.notify({ type: "storageCleared" });
+                    lastPrimedSignature = null;
+                    resetProcessingState();
+                    updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
+                } catch (error) {
+                    captureError(error, {
+                        module: "upload",
+                        operation: "clear-all",
+                    });
+                    setHint("Unable to clear stored data. Please try again.", true);
+                }
+            });
+        }
 
         window.addEventListener("resize", () => drawProgressBar(progressValue));
         window.addEventListener("online", updateOfflineBanner);

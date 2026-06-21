@@ -246,7 +246,9 @@ button {
 .screen-header .title::before {
     left: 0;
     transform: none;
-    width: 70%;
+    /* Fixed length so the underline stays consistent across pages instead of
+       tracking the per-page title/subtitle width. */
+    width: clamp(190px, 22vw, 290px);
 }
 
 .screen-header--center .title::before {

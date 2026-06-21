@@ -5,7 +5,8 @@ import { LoadingOverlay } from "./loading-overlay.js";
 export const ScreenManager = (() => {
     "use strict";
 
-    const TRANSITION_DURATION_MS = 350;
+    /* Keep in sync with the CSS --screen-transition value in css/variables.css. */
+    const TRANSITION_DURATION_MS = 50;
 
     const routes = new Map();
     let currentRouteName = null;
@@ -95,30 +96,43 @@ export const ScreenManager = (() => {
     }
 
     /**
-     * Transition between route screens using existing CSS classes.
+     * Run a callback for every registered screen element that currently exists.
+     * @param {(screen: HTMLElement) => void} fn - Callback per screen element
+     */
+    function forEachScreenElement(fn) {
+        routes.forEach(route => {
+            const screen = document.getElementById(route.screenId);
+            if (screen) {
+                fn(screen);
+            }
+        });
+    }
+
+    /**
+     * Transition between route screens. Only the incoming screen is ever painted:
+     * every other screen is reset to its hidden base state synchronously, so a fast
+     * switch can never leave the previous page overlaid on the new one.
      * @param {HTMLElement|null} previousScreen - Previous screen
      * @param {HTMLElement|null} nextScreen - Next screen
      */
     function switchScreens(previousScreen, nextScreen) {
+        if (!nextScreen) {
+            /* Target DOM element is missing; leave the current screen visible rather
+               than sweeping it away and blanking the app. */
+            return;
+        }
+
         const token = ++transitionToken;
         const isInitialMount = !previousScreen;
 
-        if (previousScreen && previousScreen !== nextScreen) {
-            previousScreen.classList.remove("enter");
-            previousScreen.classList.remove("active");
-            previousScreen.classList.add("exit");
-            setTimeout(() => {
-                if (token !== transitionToken) {
-                    return;
-                }
-                previousScreen.classList.remove("exit");
-                previousScreen.classList.remove("is-loading");
-            }, TRANSITION_DURATION_MS);
-        }
-
-        if (!nextScreen) {
-            return;
-        }
+        /* Strip transition classes from the outgoing screen and from any screen left
+           mid-transition by a superseded switch. is-loading is left to LoadingOverlay,
+           which only marks the active screen. */
+        forEachScreenElement(screen => {
+            if (screen !== nextScreen) {
+                screen.classList.remove("active", "enter", "exit");
+            }
+        });
 
         nextScreen.classList.add("active");
         nextScreen.classList.remove("exit");

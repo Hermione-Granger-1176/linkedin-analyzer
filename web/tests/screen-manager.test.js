@@ -148,10 +148,7 @@ describe("ScreenManager", () => {
         expect(document.querySelector('.top-link[data-route="home"]').getAttribute("aria-current")).toBeNull();
     });
 
-    it("transition cleanup runs after TRANSITION_DURATION_MS when switching routes", () => {
-        vi.useFakeTimers();
-        window.requestAnimationFrame = (cb) => { cb(0); return 0; };
-
+    it("hides the previous screen immediately when switching routes", () => {
         const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
         ScreenManager.register("home", { screenId: "screen-home", controller });
         ScreenManager.register("about", { screenId: "screen-about", controller });
@@ -160,14 +157,49 @@ describe("ScreenManager", () => {
         ScreenManager.activate("about", {});
 
         const prevScreen = document.getElementById("screen-home");
-        expect(prevScreen.classList.contains("exit")).toBe(true);
-
-        vi.advanceTimersByTime(400);
-
+        expect(prevScreen.classList.contains("active")).toBe(false);
+        expect(prevScreen.classList.contains("enter")).toBe(false);
         expect(prevScreen.classList.contains("exit")).toBe(false);
         expect(prevScreen.classList.contains("is-loading")).toBe(false);
+    });
 
-        vi.useRealTimers();
+    it("never leaves a stranded screen visible across rapid switches", () => {
+        document.body.insertAdjacentHTML("beforeend",
+            `<section id="screen-analytics" class="screen" tabindex="-1"><h1 tabindex="-1">Analytics</h1></section>
+             <section id="screen-connections" class="screen" tabindex="-1"><h1 tabindex="-1">Connections</h1></section>`);
+
+        const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
+        ScreenManager.register("home", { screenId: "screen-home", controller });
+        ScreenManager.register("analytics", { screenId: "screen-analytics", controller });
+        ScreenManager.register("connections", { screenId: "screen-connections", controller });
+
+        ScreenManager.activate("home", {});
+        ScreenManager.activate("analytics", {});
+        ScreenManager.activate("connections", {});
+
+        for (const id of ["screen-home", "screen-analytics"]) {
+            const screen = document.getElementById(id);
+            expect(screen.classList.contains("active")).toBe(false);
+            expect(screen.classList.contains("enter")).toBe(false);
+            expect(screen.classList.contains("exit")).toBe(false);
+            expect(screen.classList.contains("is-loading")).toBe(false);
+        }
+        expect(document.getElementById("screen-connections").classList.contains("active")).toBe(true);
+    });
+
+    it("preserves the is-loading class on the incoming screen", () => {
+        const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
+        ScreenManager.register("home", { screenId: "screen-home", controller });
+        ScreenManager.register("about", { screenId: "screen-about", controller });
+
+        ScreenManager.activate("home", {});
+
+        const nextScreen = document.getElementById("screen-about");
+        nextScreen.classList.add("is-loading");
+        ScreenManager.activate("about", {});
+
+        expect(nextScreen.classList.contains("active")).toBe(true);
+        expect(nextScreen.classList.contains("is-loading")).toBe(true);
     });
 
     it("enter class is added and then removed on next screen after transition", () => {

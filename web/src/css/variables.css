@@ -85,6 +85,8 @@
     /* Transitions */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
+    /* Screen swap duration. Keep in sync with TRANSITION_DURATION_MS in screen-manager.js. */
+    --screen-transition: 50ms;
 }
 
 /* Dark Theme */

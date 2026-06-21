@@ -12,15 +12,7 @@
 }
 
 .screen.enter {
-    animation: screen-in 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.screen.exit {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 0;
-    animation: screen-out 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation: screen-in var(--screen-transition) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .screen .screen-inner {
@@ -36,22 +28,11 @@
 @keyframes screen-in {
     from {
         opacity: 0;
-        transform: translateX(40px);
+        transform: translateX(12px);
     }
     to {
         opacity: 1;
         transform: translateX(0);
-    }
-}
-
-@keyframes screen-out {
-    from {
-        opacity: 1;
-        transform: translateX(0);
-    }
-    to {
-        opacity: 0;
-        transform: translateX(-40px);
     }
 }
 
@@ -109,7 +90,6 @@
 
 @media (prefers-reduced-motion: reduce) {
     .screen.enter,
-    .screen.exit,
     .chart-card,
     .upload-status-card,
     .insight-card,

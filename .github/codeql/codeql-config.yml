@@ -1,0 +1,9 @@
+name: "CodeQL config"
+
+# Test code is not shipped and does not need security analysis. Excluding it also
+# avoids CodeQL JS extractor parse-error diagnostics on Vitest files that assign to
+# `import.meta.env` (a construct the bundled extractor's parser rejects).
+paths-ignore:
+  - web/tests
+  - web/e2e
+  - tests

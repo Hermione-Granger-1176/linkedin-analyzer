@@ -187,7 +187,7 @@ describe("ScreenManager", () => {
         expect(document.getElementById("screen-connections").classList.contains("active")).toBe(true);
     });
 
-    it("does not keep the worker-busy class off the incoming screen", () => {
+    it("preserves the is-loading class on the incoming screen", () => {
         const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
         ScreenManager.register("home", { screenId: "screen-home", controller });
         ScreenManager.register("about", { screenId: "screen-about", controller });

@@ -116,6 +116,12 @@ export const ScreenManager = (() => {
      * @param {HTMLElement|null} nextScreen - Next screen
      */
     function switchScreens(previousScreen, nextScreen) {
+        if (!nextScreen) {
+            /* Target DOM element is missing; leave the current screen visible rather
+               than sweeping it away and blanking the app. */
+            return;
+        }
+
         const token = ++transitionToken;
         const isInitialMount = !previousScreen;
 
@@ -127,10 +133,6 @@ export const ScreenManager = (() => {
                 screen.classList.remove("active", "enter", "exit");
             }
         });
-
-        if (!nextScreen) {
-            return;
-        }
 
         nextScreen.classList.add("active");
         nextScreen.classList.remove("exit");

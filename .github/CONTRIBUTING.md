@@ -20,14 +20,14 @@ cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed for opt-in
 4. Install git hooks:
 
 ```bash
-uvx pre-commit install
+make install-hooks
 ```
 
 See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 
 ## Running locally
 
-- CLI: `uv run linkedin-analyzer --help`
+- CLI: `make run-cli args="--help"`
 - Web app: `make web`
 
 ## Checks

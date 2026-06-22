@@ -694,7 +694,7 @@ export const SketchCharts = (() => {
         }
         tempCtx.drawImage(canvas, 0, 0);
 
-        // Restore on-screen canvas synchronously — no async gap
+        // Restore on-screen canvas synchronously, no async gap
         redraw();
 
         // Export from the detached temp canvas (immune to further redraws)

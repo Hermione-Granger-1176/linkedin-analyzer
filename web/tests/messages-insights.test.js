@@ -186,7 +186,7 @@ describe("MessagesPage", () => {
                 .toLowerCase(),
         );
 
-        // Ensure a clean default for every test — tests that need specific files
+        // Ensure a clean default for every test, tests that need specific files
         // override this before calling onRouteChange / loadData.
         Storage.getAllFiles.mockReset();
         Storage.getAllFiles.mockResolvedValue([]);
@@ -394,7 +394,7 @@ describe("MessagesPage", () => {
     });
 
     // -------------------------------------------------------------------------
-    // New tests — uncovered paths
+    // New tests, uncovered paths
     // -------------------------------------------------------------------------
 
     // --- onRouteLeave hides loading overlay -----------------------------------
@@ -411,7 +411,7 @@ describe("MessagesPage", () => {
         document.body.innerHTML = "";
         vi.resetModules();
         const { MessagesPage: MI } = await import("../src/messages-insights.js");
-        // init() should return early — calling onRouteLeave should not throw
+        // init() should return early, calling onRouteLeave should not throw
         MI.onRouteLeave();
     });
 
@@ -420,7 +420,7 @@ describe("MessagesPage", () => {
     it("does not reinitialize when called twice", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
         MessagesPage.init();
-        MessagesPage.init(); // second call must be a no-op — no exception
+        MessagesPage.init(); // second call must be a no-op, no exception
         MessagesPage.onRouteChange({});
         await tick();
         // No messages file → empty state is shown
@@ -433,7 +433,7 @@ describe("MessagesPage", () => {
 
     it("onRouteChange initializes page when not yet initialized", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
-        // Do NOT call init() — let onRouteChange do it
+        // Do NOT call init(), let onRouteChange do it
         MessagesPage.onRouteChange({});
         await tick();
         // No messages file → empty state shown
@@ -954,7 +954,7 @@ describe("MessagesPage", () => {
         ({ Storage } = await import("../src/storage.js"));
 
         Storage.getAllFiles.mockResolvedValue([]);
-        // "all" is a valid range value — no button should show active for "all"
+        // "all" is a valid range value, no button should show active for "all"
         MessagesPage.onRouteChange({ range: "all" });
         await tick();
         // Without a messages file the page shows the empty state (that's correct)
@@ -974,7 +974,7 @@ describe("MessagesPage", () => {
         ({ Storage } = await import("../src/storage.js"));
         ({ AppRouter } = await import("../src/router.js"));
 
-        // Route is not "messages" — syncRouteRange should short-circuit
+        // Route is not "messages", syncRouteRange should short-circuit
         AppRouter.getCurrentRoute.mockReturnValue({ name: "analytics" });
         Storage.getAllFiles.mockResolvedValue([]);
 
@@ -985,7 +985,7 @@ describe("MessagesPage", () => {
         // Clear any calls made during init/onRouteChange
         AppRouter.setParams.mockClear();
 
-        // Click a range button — syncRouteRange should short-circuit
+        // Click a range button, syncRouteRange should short-circuit
         const btn6m = document.querySelector('[data-range="6m"]');
         btn6m.click();
         expect(AppRouter.setParams).not.toHaveBeenCalled();
@@ -995,7 +995,7 @@ describe("MessagesPage", () => {
 
     it("hydrateMessageState reconstructs Maps and Sets from worker payload", async () => {
         // Simulate a worker returning a pre-serialised messageState payload
-        // (arrays instead of Map/Set — as the worker would send over postMessage)
+        // (arrays instead of Map/Set, as the worker would send over postMessage)
         let workerMsgHandler = null;
         const mockWorker = {
             postMessage: vi.fn(),
@@ -1141,7 +1141,7 @@ describe("MessagesPage", () => {
 
         await tick();
 
-        // Main-thread fallback was used — Ada should be in the list
+        // Main-thread fallback was used, Ada should be in the list
         expect(document.getElementById("topContactsList").innerHTML).toContain("Ada");
     });
 
@@ -1222,7 +1222,7 @@ describe("MessagesPage", () => {
         vi.useRealTimers();
     });
 
-    // --- Worker unavailable (no Worker global) — main-thread path ------------
+    // --- Worker unavailable (no Worker global), main-thread path ------------
 
     it("parses on main thread when Worker is unavailable", async () => {
         globalThis.Worker = undefined;
@@ -1376,7 +1376,7 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map(),
-            events: [], // empty — triggers the "No usable rows" path
+            events: [], // empty, triggers the "No usable rows" path
             rowTimestamps: [],
             skippedRows: 0,
             talkedNameKeys: new Set(),
@@ -1821,7 +1821,7 @@ describe("MessagesPage", () => {
 
         const firstHtml = document.getElementById("topContactsList").innerHTML;
 
-        // Second route change — same signature, cached state reused
+        // Second route change, same signature, cached state reused
         MessagesPage.onRouteChange({});
         await tick();
 
@@ -1854,7 +1854,7 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([
-                // url is empty — forces name-key lookup in findMatchingConnection
+                // url is empty, forces name-key lookup in findMatchingConnection
                 ["c1", { name: "Name Match", url: "", lastTimestamp: oldTs }],
             ]),
             events: [{ contactKey: "c1", timestamp: oldTs }],
@@ -2023,7 +2023,7 @@ describe("MessagesPage", () => {
 
         // DataCache._values is empty (cleared in beforeEach), so DataCache.get()
         // returns undefined (falsy) for all keys, which causes loadData() to call
-        // Storage.getAllFiles — no need for a blanket mockReturnValue(null) override.
+        // Storage.getAllFiles, no need for a blanket mockReturnValue(null) override.
 
         Storage.getAllFiles.mockResolvedValue([
             { type: "messages", name: "connerr.csv", text: "csv", updatedAt: 220, rowCount: 1 },
@@ -2208,7 +2208,7 @@ describe("MessagesPage", () => {
         MessagesPage.onRouteChange({});
         await tick();
 
-        // Switch to 1m — rangeStart becomes 2024-06-01 00:00:00
+        // Switch to 1m, rangeStart becomes 2024-06-01 00:00:00
         // Old Contact (2023-12-01) should NOT appear; Recent Contact (2024-06-10) SHOULD
         document.querySelector('[data-range="1m"]').click();
 
@@ -2382,7 +2382,7 @@ describe("MessagesPage", () => {
                             talkedUrlKeys: [],
                             latestTimestamp: now,
                         },
-                        // Connection with no URL — will be keyed by nameKey only
+                        // Connection with no URL, will be keyed by nameKey only
                         connectionState: {
                             list: [
                                 {
@@ -2481,7 +2481,7 @@ describe("MessagesPage", () => {
         MessagesPage.onRouteChange({});
         await tick();
 
-        // Send a message with wrong requestId — should be silently ignored
+        // Send a message with wrong requestId, should be silently ignored
         if (workerMsgHandler) {
             workerMsgHandler({
                 data: {
@@ -2504,7 +2504,7 @@ describe("MessagesPage", () => {
         vi.resetModules();
         const { MessagesPage: MI } = await import("../src/messages-insights.js");
         // onRouteChange should call init() which returns early due to missing elements,
-        // and then onRouteChange itself returns early — no exception should be thrown.
+        // and then onRouteChange itself returns early, no exception should be thrown.
         MI.onRouteChange({});
         // passes if no exception is thrown
     });
@@ -2585,7 +2585,7 @@ describe("MessagesPage", () => {
             name: "Alpha Connect",
             url: "https://li.com/alpha",
             nameKey: "alpha connect",
-            connectedOnTimestamp: ts1, // older — should sort first
+            connectedOnTimestamp: ts1, // older, should sort first
         };
         const messageState = {
             contacts: new Map(),
@@ -2710,7 +2710,7 @@ describe("MessagesPage", () => {
 
     it('getRangeStart returns null for "all" range (shows all contacts)', async () => {
         const latest = new Date("2024-01-15").getTime();
-        const old = new Date("2020-06-01").getTime(); // very old — filtered by 12m but not 'all'
+        const old = new Date("2020-06-01").getTime(); // very old, filtered by 12m but not 'all'
 
         const messagesFile = {
             type: "messages",
@@ -2764,7 +2764,7 @@ describe("MessagesPage", () => {
         await tick();
         expect(document.getElementById("topContactsList").innerHTML).not.toContain("Old Timer");
 
-        // Click 'all' button — old timer SHOULD appear now
+        // Click 'all' button, old timer SHOULD appear now
         document.querySelector('[data-range="all"]').click();
         expect(document.getElementById("topContactsList").innerHTML).toContain("Old Timer");
     });
@@ -2817,8 +2817,8 @@ describe("MessagesPage", () => {
                         totalInputRows: 2,
                         messageState: {
                             contacts: [
-                                null, // null entry — should be skipped
-                                { key: "", name: "No Key User" }, // empty key — should be skipped
+                                null, // null entry, should be skipped
+                                { key: "", name: "No Key User" }, // empty key, should be skipped
                                 { key: "c1", name: "Valid User", url: "", lastTimestamp: now },
                             ],
                             events: [{ contactKey: "c1", timestamp: now }],

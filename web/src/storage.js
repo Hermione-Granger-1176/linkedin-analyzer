@@ -197,7 +197,7 @@ export const Storage = (() => {
      * Move inline CSV text from existing (pre-v3) file records into the dedicated
      * text store and strip it from the metadata store, so metadata reads no longer
      * load text. Runs inside the versionchange transaction, so it is atomic with
-     * the rest of the upgrade — an interrupted upgrade rolls back and retries.
+     * the rest of the upgrade. An interrupted upgrade rolls back and retries.
      * @param {IDBTransaction|null} tx - The active versionchange transaction
      */
     function migrateInlineTextToTextStore(tx) {

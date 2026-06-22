@@ -123,7 +123,7 @@ describe("telemetry", () => {
 
         initTelemetry();
 
-        // Metrics carry only a name and a numeric value — no string context payload.
+        // Metrics carry only a name and a numeric value, no string context payload.
         expect(sentry.captureMetric).toHaveBeenCalledWith("web-vital:CLS", 0.12);
         expect(sentry.captureMetric).toHaveBeenCalledWith("web-vital:LCP", 2500);
         for (const call of sentry.captureMetric.mock.calls) {

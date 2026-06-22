@@ -282,7 +282,7 @@ export const UploadPage = (() => {
 
     /**
      * Restore upload status from IndexedDB and refresh the file cache on load.
-     * Does not prime the worker — that is deferred to the first upload (see
+     * Does not prime the worker. That is deferred to the first upload (see
      * processFiles); the dashboard reads the persisted analyticsBase directly.
      * @returns {Promise<void>}
      */
@@ -301,7 +301,7 @@ export const UploadPage = (() => {
             // Intentionally do NOT prime the worker on load: the dashboard reads
             // the persisted analyticsBase directly and never needs the worker's
             // raw shares/comments. Only a fresh upload (which recomputes the base)
-            // does, so priming is deferred to processFiles() — saving a redundant
+            // does, so priming is deferred to processFiles(), saving a redundant
             // re-parse of shares+comments on every page load.
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
@@ -714,7 +714,7 @@ export const UploadPage = (() => {
                 });
                 // A payload-level error reports a single failed job. Complete just
                 // that job (falling back to the first active one) instead of
-                // resetting every in-flight upload — only a worker-level `error`
+                // resetting every in-flight upload. Only a worker-level `error`
                 // event (handleWorkerError) wipes all processing state.
                 completeJob(payload.jobId || null, payload.fileName || "");
                 return;
@@ -758,7 +758,7 @@ export const UploadPage = (() => {
             updateStatus({ fileMap, analyticsReady });
             setHint(
                 pending.usedFallback
-                    ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a fallback — double-check accented names."
+                    ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a fallback. Double-check accented names."
                     : "File loaded successfully.",
                 false,
             );
@@ -1096,7 +1096,7 @@ export const UploadPage = (() => {
      * Prime the worker with stored shares/comments before an upload so a new
      * analytics file recomputes from the full set (a no-op via signature dedup
      * when already primed). Reads the cached file snapshot, falling back to
-     * storage when the cache isn't populated yet — `restoreState()` is fired but
+     * storage when the cache isn't populated yet. `restoreState()` is fired but
      * not awaited in init(), so a fast upload can race ahead of it; loading here
      * guarantees the prior shares/comments are seeded before the new addFile.
      * @returns {Promise<void>}
@@ -1109,7 +1109,7 @@ export const UploadPage = (() => {
             DataCache.set("storage:files", cachedFiles);
         }
         // Await the prime so its restoreFiles is posted (after loading the text
-        // from storage) before processFiles posts any addFile — preserving the
+        // from storage) before processFiles posts any addFile, preserving the
         // "recompute from the full set" guarantee now that priming is async.
         await scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
     }

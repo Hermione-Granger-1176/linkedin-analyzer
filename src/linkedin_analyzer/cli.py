@@ -92,7 +92,7 @@ def configure_logging(level: str, log_format: str = "text") -> None:
 
     Args:
         level: Logging level name (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_format: Output format — "text" for human-readable, "json" for structured
+        log_format: Output format: "text" for human-readable, "json" for structured
     """
     handler = logging.StreamHandler()
     formatters = {

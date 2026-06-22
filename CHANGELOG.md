@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-This changelog tracks the `linkedin-analyzer` Python package — the CLI published to PyPI and the container image that ships it. Web app changes are intentionally out of scope.
+This changelog tracks the `linkedin-analyzer` Python package, including the CLI published to PyPI and the container image that ships it. Web app changes are intentionally out of scope.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -11,12 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Read non-UTF-8 CSV exports: input encoding is auto-detected (UTF-8 BOM-aware, then Latin-1), with a global `--encoding` flag to force a specific encoding.
-- Python 3.14 to the supported classifiers, with documentation for 3.11–3.13 development under uv.
+- Python 3.14 to the supported classifiers, with documentation for Python 3.11-3.13 development under uv.
 
 ### Changed
 
 - Default local and CI Python to 3.14 to match the container runtime; compatibility matrix now covers 3.11/3.12/3.13.
-- Move development dependencies from the `dev` optional-dependency extra to a PEP 735 `[dependency-groups]` table. The published package no longer advertises a `[dev]` extra; install dev tooling from source with `uv sync --all-groups`.
+- Move development dependencies from the `dev` optional-dependency extra to a PEP 735 `[dependency-groups]` table. The published package no longer advertises a `[dev]` extra; install dev tooling from source with `make install`.
 - Log how many rows each cleaning step drops (blank, missing required values, or all-optional-empty) so silent row loss is visible.
 - Point the Latin-1 decode-fallback warning at the `--encoding` flag when characters may look wrong.
 

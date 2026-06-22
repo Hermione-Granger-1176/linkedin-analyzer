@@ -11,7 +11,7 @@ import { MAX_CSV_CHARS } from "./constants.js";
 
 /**
  * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and only
- * falls back to windows-1252 on a genuine decode error — mirroring the CLI's
+ * falls back to windows-1252 on a genuine decode error, mirroring the CLI's
  * latin-1 retry and avoiding false positives on files that legitimately
  * contain U+FFFD. Enforces the character limit after decoding.
  * @param {Uint8Array} bytes - Raw file bytes

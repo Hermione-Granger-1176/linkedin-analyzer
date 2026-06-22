@@ -39,7 +39,7 @@
 }
 
 /* tabindex="-1" elements receive only programmatic focus (never keyboard-tabbed),
-   so suppress the visible ring — the .focus() call still fires for screen readers */
+   so suppress the visible ring. The .focus() call still fires for screen readers */
 [tabindex="-1"]:focus-visible {
     box-shadow: none;
 }
@@ -233,7 +233,7 @@
     border-radius: 0 0 4px 4px;
 }
 
-/* Selection styling — dark text keeps contrast on the yellow highlight */
+/* Selection styling: dark text keeps contrast on the yellow highlight */
 ::selection {
     background: var(--accent-yellow);
     color: var(--selection-text);

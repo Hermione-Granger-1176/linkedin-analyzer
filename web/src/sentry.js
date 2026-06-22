@@ -187,7 +187,7 @@ function flushMetricsOnHidden() {
  * Attach listeners that flush buffered metrics when the page is backgrounded or
  * unloaded. Idempotent via remove-before-add, so repeated initSentry() calls
  * (e.g. re-enabling after a revoke) never stack duplicate listeners. flushMetrics
- * is also atomic — it swaps the buffer out before sending — so even a stray double
+ * is also atomic (it swaps the buffer out before sending) so even a stray double
  * fire cannot emit a duplicate session-metrics event.
  */
 function attachMetricFlushListeners() {
@@ -263,7 +263,7 @@ export function captureError(error, context) {
  * Buffer a lightweight numeric metric for the current session. Datapoints are
  * aggregated locally and sent as one summary event on page hide (see
  * `flushMetrics`) so each web-vital/perf measure no longer costs a Sentry event.
- * Only the numeric value is retained — any string context is intentionally
+ * Only the numeric value is retained. Any string context is intentionally
  * dropped so the summary payload can never carry user-derived text.
  * @param {string} name
  * @param {number} value

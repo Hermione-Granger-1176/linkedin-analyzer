@@ -7,6 +7,7 @@
 # `make install PYTHON=3.12` (see docs/development.md).
 PYTHON              ?= 3.14
 UV                  ?= uv
+UVX                 ?= uvx
 VENV                ?= .venv
 VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
@@ -22,13 +23,16 @@ GH = PYTHONPATH=. $(VENV_PYTHON) -m scripts.gh.cli
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
-.PHONY: install node-install setup-base setup setup-all setup-ci setup-playwright setup-playwright-ci
+.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci setup-playwright setup-playwright-ci
 
 install: ## Install locked Python deps into the uv-managed virtual environment
 	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-groups --frozen --python $(PYTHON)
 
 node-install: ## Install locked Node deps
 	$(NPM) ci
+
+install-hooks: ## Install local pre-commit Git hooks
+	$(UVX) pre-commit install
 
 setup-base: install node-install ## Install Python and Node deps
 

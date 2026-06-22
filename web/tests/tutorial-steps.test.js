@@ -65,7 +65,7 @@ function assertMiniTipShape(tip, route) {
 }
 
 // ---------------------------------------------------------------------------
-// TutorialSteps — module-level
+// TutorialSteps, module-level
 // ---------------------------------------------------------------------------
 
 describe("TutorialSteps", () => {
@@ -110,7 +110,7 @@ describe("TutorialSteps", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TutorialSteps — per-route entry counts
+// TutorialSteps, per-route entry counts
 // ---------------------------------------------------------------------------
 
 describe("TutorialSteps entry counts", () => {
@@ -140,7 +140,7 @@ describe("TutorialSteps entry counts", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TutorialSteps — per-route shape checks
+// TutorialSteps, per-route shape checks
 // ---------------------------------------------------------------------------
 
 describe("TutorialSteps step shapes", () => {
@@ -164,7 +164,7 @@ describe("TutorialSteps step shapes", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TutorialSteps — spot-check known step content
+// TutorialSteps, spot-check known step content
 // ---------------------------------------------------------------------------
 
 describe("TutorialSteps known content", () => {
@@ -213,7 +213,7 @@ describe("TutorialSteps known content", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TutorialMiniTips — module-level
+// TutorialMiniTips, module-level
 // ---------------------------------------------------------------------------
 
 describe("TutorialMiniTips", () => {
@@ -261,7 +261,7 @@ describe("TutorialMiniTips", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TutorialMiniTips — per-route shape checks
+// TutorialMiniTips, per-route shape checks
 // ---------------------------------------------------------------------------
 
 describe("TutorialMiniTips step shapes", () => {
@@ -289,7 +289,7 @@ describe("TutorialMiniTips step shapes", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TutorialMiniTips — spot-check known tip content
+// TutorialMiniTips, spot-check known tip content
 // ---------------------------------------------------------------------------
 
 describe("TutorialMiniTips known content", () => {

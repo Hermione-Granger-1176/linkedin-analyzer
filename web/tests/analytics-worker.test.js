@@ -237,7 +237,7 @@ describe("handleInitBase", () => {
         stored.activeDays = ["2025-01-02"];
         handleInitBase(stored);
 
-        // First view request — should call buildView
+        // First view request, should call buildView
         AnalyticsEngine.buildView.mockClear();
         handleView(1, {});
         expect(AnalyticsEngine.buildView).toHaveBeenCalledTimes(1);
@@ -333,7 +333,7 @@ describe("handleView", () => {
         expect(errMsg.requestId).toBe(5);
     });
 
-    it("tracks the most recent requestId — each call sets currentRequestId", () => {
+    it("tracks the most recent requestId, each call sets currentRequestId", () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -767,7 +767,7 @@ describe("hydrateAnalytics via initBase/view round-trip", () => {
 
         const viewMsg = messages.find((m) => m.type === "view");
         expect(viewMsg).toBeDefined();
-        // AnalyticsEngine.buildView was called — hydration succeeded
+        // AnalyticsEngine.buildView was called, hydration succeeded
         expect(AnalyticsEngine.buildView).toHaveBeenCalledTimes(1);
         // Verify the first argument passed to buildView has months with Set activeDays
         const analyticsArg = AnalyticsEngine.buildView.mock.calls[0][0];

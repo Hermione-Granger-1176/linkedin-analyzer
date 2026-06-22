@@ -9,10 +9,10 @@ Command-line tool for cleaning LinkedIn CSV exports into formatted Excel files.
 pip install linkedin-analyzer
 
 # From source for development
-uv sync --all-groups --frozen
+make install
 
 # Run the local CLI
-uv run linkedin-analyzer --help
+make run-cli args="--help"
 ```
 
 ## Commands

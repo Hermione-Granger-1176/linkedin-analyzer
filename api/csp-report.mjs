@@ -4,7 +4,7 @@
 // + `Reporting-Endpoints` in vercel.json). Keeping the endpoint same-origin means
 // vercel.json never has to embed a Sentry org/project, and the forwarding secret
 // stays server-side. CSP reports contain only violation metadata (blocked URI,
-// violated directive, document URI) — never uploaded file contents — so this
+// violated directive, document URI), never uploaded file contents, so this
 // endpoint does not weaken the app's "data stays local" guarantee.
 //
 // Forwarding is opt-in and graceful: with no destination configured the function
@@ -148,7 +148,7 @@ function sanitizeToken(value, maxLength) {
 /**
  * Build a single-line, host-only summary of a CSP violation for log search.
  * This endpoint is public, so every field is treated as untrusted: the blocked
- * value is reduced to a host, a scheme, or a known keyword — never a path/query —
+ * value is reduced to a host, a scheme, or a known keyword (never a path/query),
  * and all fields are stripped of newlines and length-bounded.
  * @param {object} report - A CSP violation object (either report shape).
  * @returns {string} A summary like `CSP violation: img-src blocked evil.example`.

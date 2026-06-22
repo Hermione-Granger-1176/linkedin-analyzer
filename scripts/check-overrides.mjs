@@ -8,7 +8,7 @@
  * and `npm audit`, then reports whether everything passes without
  * overrides.  If it does, the overrides are stale and can be removed.
  *
- * This script is fully generic — it reads overrides dynamically from
+ * This script is fully generic. It reads overrides dynamically from
  * package.json.  No package names or versions are hardcoded.
  *
  * Flags:
@@ -16,8 +16,8 @@
  *           lockfile.  Without this flag the script only reports.
  *
  * Exit codes:
- *   0 — overrides are still needed, or none exist, or --fix succeeded
- *   1 — overrides are stale and --fix was not requested
+ *   0: overrides are still needed, or none exist, or --fix succeeded
+ *   1: overrides are stale and --fix was not requested
  */
 
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -33,7 +33,7 @@ const overrides = pkg.overrides ?? {};
 const names = Object.keys(overrides);
 
 if (names.length === 0) {
-    console.log("No overrides in package.json — nothing to check.");
+    console.log("No overrides in package.json. Nothing to check.");
     process.exit(0);
 }
 
@@ -114,7 +114,7 @@ if (allResult.ok) {
 }
 
 /* ------------------------------------------------------------------ */
-/* 2. Not all removable — test each override individually              */
+/* 2. Not all removable: test each override individually              */
 /* ------------------------------------------------------------------ */
 console.log("\u2717 Cannot remove all overrides at once. Testing individually...\n");
 
@@ -124,11 +124,11 @@ const needed = [];
 for (const name of names) {
     const result = testWithout([name]);
     if (result.ok) {
-        console.log(`  \u2713 ${name} — no longer needed`);
+        console.log(`  \u2713 ${name}: no longer needed`);
         removable.push(name);
     } else {
         const reason = result.phase === "install" ? "peer dep conflict" : "audit failure";
-        console.log(`  \u2717 ${name} — still needed (${reason})`);
+        console.log(`  \u2717 ${name}: still needed (${reason})`);
         needed.push(name);
     }
 }

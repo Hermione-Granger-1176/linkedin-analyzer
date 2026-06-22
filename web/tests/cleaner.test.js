@@ -160,7 +160,7 @@ describe("LinkedInCleaner", () => {
     });
 
     it('returns "does not appear to be" error when selected type has no matching headers', () => {
-        // A CSV with completely unknown columns — selectedType != 'auto',
+        // A CSV with completely unknown columns, selectedType != 'auto',
         // detectFileType returns null (no known type matches), so the error branch fires
         const csv = ["Unknown,Column,Headers", "a,b,c"].join("\n");
 
@@ -200,7 +200,7 @@ describe("LinkedInCleaner", () => {
     });
 
     it("cleanDate returns raw value when date has no time component", () => {
-        // Date without time — falls through to partial parse return
+        // Date without time, falls through to partial parse return
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
             "2025-01-01,https://linkedin.com/in/post,Hello,,,MEMBER_NETWORK",
@@ -249,7 +249,7 @@ describe("LinkedInCleaner", () => {
     // ── Date parsing edge cases in cleanDate ────────────────────────────────
 
     it("returns raw value when date format has no time part", () => {
-        // A date without a time component — cleanDate should return as-is
+        // A date without a time component, cleanDate should return as-is
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
             "2025-01-01,https://linkedin.com/in/post,Hello world,,,MEMBER_NETWORK",
@@ -285,7 +285,7 @@ describe("LinkedInCleaner", () => {
     // ── CRLF inside quoted field ───────────────────────────────────
 
     it("handles bare \\r (without \\n) inside a quoted CSV field", () => {
-        // A quoted field with \r NOT followed by \n — triggers the `else` branch in
+        // A quoted field with \r NOT followed by \n, triggers the `else` branch in
         // CSV_PARSE_STATE.INSIDE_QUOTES case '\r'
         const csv =
             'CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS\r\nabc,Ada,Bob,2025-01-01 10:00:00 UTC,"Line1\rLine2",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/bob';

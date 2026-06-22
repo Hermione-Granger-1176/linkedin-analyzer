@@ -135,7 +135,7 @@ describe("SketchCharts", () => {
         // translate/rotate must have been called for the year label drawing
         expect(ctx.translate).toHaveBeenCalled();
         expect(ctx.rotate).toHaveBeenCalled();
-        // The canvas should have registered items — use center of first slice:
+        // The canvas should have registered items, use center of first slice:
         // padding.left=40, sliceWidth=748/24≈31.2, first item center x≈55.6
         const firstItem = SketchCharts.getItemAt(canvas, 55, 100);
         expect(firstItem).toBeTruthy();

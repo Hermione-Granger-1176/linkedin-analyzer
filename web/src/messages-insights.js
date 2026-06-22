@@ -1099,7 +1099,7 @@ export const MessagesPage = (() => {
         if (!items.length) {
             renderEmptyList(
                 listElement,
-                "Great job — every connection has at least one message.",
+                "Great job. Every connection has at least one message.",
             );
             return;
         }

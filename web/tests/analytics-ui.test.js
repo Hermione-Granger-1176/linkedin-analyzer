@@ -920,7 +920,7 @@ describe("AnalyticsPage", () => {
     it("onRouteChange returns early when init fails (no analyticsGrid) (lines 136-139)", async () => {
         // Remove required elements so init() fails
         document.body.innerHTML = '<div id="analyticsEmpty"><h2></h2><p></p></div>';
-        // onRouteChange should not throw — just return early
+        // onRouteChange should not throw, just return early
         expect(() => AnalyticsPage.onRouteChange({})).not.toThrow();
     });
 
@@ -1125,7 +1125,7 @@ describe("AnalyticsPage", () => {
         await AnalyticsPage.onRouteChange({});
         await vi.advanceTimersByTimeAsync(0);
 
-        // Worker has not responded — advance past timeout
+        // Worker has not responded, advance past timeout
         vi.advanceTimersByTime(30001);
 
         const emptyEl = document.getElementById("analyticsEmpty");

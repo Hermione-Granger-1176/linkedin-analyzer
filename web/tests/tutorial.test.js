@@ -5,7 +5,7 @@
  * import in beforeEach gives every test a fresh instance.
  *
  * Static imports MUST be at top (Vitest hoisting requirement).
- * vi.mock() calls follow immediately — they are hoisted above imports at
+ * vi.mock() calls follow immediately, they are hoisted above imports at
  * compile time regardless of their textual position.
  */
 
@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockMatchMedia, resetDom } from "./helpers/dom.js";
 
 // ---------------------------------------------------------------------------
-// Module mocks — hoisted above imports by Vitest
+// Module mocks, hoisted above imports by Vitest
 // ---------------------------------------------------------------------------
 
 vi.mock("../src/router.js", () => ({
@@ -35,7 +35,7 @@ vi.mock("../src/screen-manager.js", () => ({
     },
 }));
 
-// Tutorial steps — simple steps referencing elements the tests build
+// Tutorial steps, simple steps referencing elements the tests build
 vi.mock("../src/tutorial-steps.js", () => ({
     TutorialSteps: {
         home: [
@@ -86,13 +86,13 @@ vi.mock("../src/tutorial-steps.js", () => ({
                 allowNext: true,
             },
         ],
-        // A route with a step that has NO target — always considered renderable
+        // A route with a step that has NO target, always considered renderable
         notargets: [
             {
                 id: "notargets-step-1",
                 route: "notargets",
                 title: "No Target Step",
-                body: "This step has no target selector — center mode",
+                body: "This step has no target selector, center mode",
                 // deliberate: no target/selector/el fields
                 placement: "center",
             },
@@ -371,7 +371,7 @@ beforeEach(async () => {
         value: 768,
     });
 
-    // jsdom does not implement scrollIntoView — stub it out
+    // jsdom does not implement scrollIntoView, stub it out
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
     // jsdom returns all-zero from getBoundingClientRect. Tutorial's isElementVisible
@@ -407,7 +407,7 @@ afterEach(() => {
 });
 
 // ===========================================================================
-// Tutorial.init() — idempotent shell initialization
+// Tutorial.init(), idempotent shell initialization
 // ===========================================================================
 
 describe("Tutorial.init()", () => {
@@ -418,7 +418,7 @@ describe("Tutorial.init()", () => {
         expect(document.querySelector(".tutorial-mini-layer")).not.toBeNull();
     });
 
-    it("is idempotent — second call does not duplicate DOM", () => {
+    it("is idempotent, second call does not duplicate DOM", () => {
         Tutorial.init();
         Tutorial.init();
         expect(document.querySelectorAll(".tutorial-layer").length).toBe(1);
@@ -472,7 +472,7 @@ describe("Tutorial.isComplete()", () => {
 });
 
 // ===========================================================================
-// Tutorial.start() — direct start
+// Tutorial.start(), direct start
 // ===========================================================================
 
 describe("Tutorial.start()", () => {
@@ -535,7 +535,7 @@ describe("Tutorial.start()", () => {
         expect(document.querySelector(".tutorial-counter").textContent).toMatch(/Step 1 of/);
     });
 
-    it("renders dot navigation buttons — one per visible step", () => {
+    it("renders dot navigation buttons, one per visible step", () => {
         buildHomeTargets();
         Tutorial.start("home");
 
@@ -566,7 +566,7 @@ describe("Tutorial.start()", () => {
     });
 
     it("starts a step that has no target selector (no-target step, renderable)", () => {
-        // The 'notargets' route has a step with no target field — hasStepTarget
+        // The 'notargets' route has a step with no target field, hasStepTarget
         // returns false, so it is always considered renderable by findRenderableStepIndex.
         const result = Tutorial.start("notargets");
         expect(result).toBe(true);
@@ -589,7 +589,7 @@ describe("Tutorial.start()", () => {
 });
 
 // ===========================================================================
-// scheduleInitialRetry — retry when step element not immediately available
+// scheduleInitialRetry, retry when step element not immediately available
 // Only triggered when start() is called with { auto: true }
 // ===========================================================================
 
@@ -599,7 +599,7 @@ describe("scheduleInitialRetry", () => {
         // start() with auto:true → moveToStep(0,1,true) → scheduleInitialRetry() → true
         const result = Tutorial.start("home", { auto: true });
         expect(result).toBe(true);
-        // Tutorial should now be in "pending retry" state — not yet open
+        // Tutorial should now be in "pending retry" state, not yet open
         // (It set active=true but currentIndex=-1 and no DOM shown yet)
     });
 
@@ -634,7 +634,7 @@ describe("scheduleInitialRetry", () => {
 
         Tutorial.start("home", { auto: true }); // no targets
 
-        // Cancel by calling onRouteChange to a different route — increments token
+        // Cancel by calling onRouteChange to a different route, increments token
         Tutorial.onRouteChange("analytics");
 
         expect(() => vi.runAllTimers()).not.toThrow();
@@ -935,7 +935,7 @@ describe("keyboard shortcuts", () => {
 });
 
 // ===========================================================================
-// Tab focus trapping — trapFocus branches
+// Tab focus trapping, trapFocus branches
 // ===========================================================================
 
 describe("focus trap (Tab key)", () => {
@@ -1001,7 +1001,7 @@ describe("focus trap (Tab key)", () => {
         const buttons = Array.from(popover.querySelectorAll("button:not([disabled])"));
         // Navigate to step 2 to have more buttons visible (back, next, skip)
         if (buttons.length > 1) {
-            // Focus the first button (not last) and Tab forward — no wrapping needed
+            // Focus the first button (not last) and Tab forward, no wrapping needed
             buttons[0].focus();
             expect(() => fireTab(false)).not.toThrow();
         }
@@ -1045,7 +1045,7 @@ describe("dot navigation", () => {
         document.querySelector(".tutorial-btn-skip").click(); // close
         expect(document.body.classList.contains("tutorial-open")).toBe(false);
 
-        // Dispatch a click on the popover area — should not throw
+        // Dispatch a click on the popover area, should not throw
         const popover = document.querySelector(".tutorial-popover");
         if (popover) {
             popover.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -1193,7 +1193,7 @@ describe("restart button", () => {
 
         const btn = document.createElement("button");
         btn.setAttribute("data-tutorial-action", "restart");
-        // No data-tutorial-route — falls back to ScreenManager.getCurrentRouteName()
+        // No data-tutorial-route, falls back to ScreenManager.getCurrentRouteName()
         document.body.appendChild(btn);
 
         btn.click();
@@ -1396,7 +1396,7 @@ describe("renderMiniTips", () => {
 
         expect(document.querySelectorAll(".tutorial-mini-tip").length).toBeGreaterThan(0);
 
-        // Switch routes — mini-tips for old route should be cleared
+        // Switch routes, mini-tips for old route should be cleared
         markRouteComplete("analytics");
         Tutorial.onRouteChange("analytics");
 
@@ -1450,7 +1450,7 @@ describe("prefers-reduced-motion", () => {
 });
 
 // ===========================================================================
-// handleViewportChange — resize / scroll events
+// handleViewportChange, resize / scroll events
 // ===========================================================================
 
 describe("handleViewportChange", () => {
@@ -1479,7 +1479,7 @@ describe("handleViewportChange", () => {
 });
 
 // ===========================================================================
-// handleScrollLock — wheel / touchmove prevention
+// handleScrollLock, wheel / touchmove prevention
 // ===========================================================================
 
 describe("handleScrollLock", () => {
@@ -1555,7 +1555,7 @@ describe("loading overlay interaction", () => {
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 
-    it("contentLoadingOverlay hidden=false blocks tutorial — hides it to unblock", async () => {
+    it("contentLoadingOverlay hidden=false blocks tutorial, hides it to unblock", async () => {
         vi.useFakeTimers();
         const { LoadingOverlay } = await import("../src/loading-overlay.js");
         LoadingOverlay.isActive.mockReturnValue(false);
@@ -1573,14 +1573,14 @@ describe("loading overlay interaction", () => {
         // Hide the overlay so the retry succeeds on next fire
         overlay.hidden = true;
 
-        // Run all timers — the retries eventually succeed now that overlay is hidden
+        // Run all timers, the retries eventually succeed now that overlay is hidden
         vi.runAllTimers();
 
         // Tutorial should have opened once overlay was hidden
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 
-    it("progressOverlay hidden=false blocks tutorial — hides it to unblock", async () => {
+    it("progressOverlay hidden=false blocks tutorial, hides it to unblock", async () => {
         vi.useFakeTimers();
         const { LoadingOverlay } = await import("../src/loading-overlay.js");
         LoadingOverlay.isActive.mockReturnValue(false);
@@ -1684,7 +1684,7 @@ describe("miscellaneous edge cases", () => {
         Tutorial.onRouteChange("home"); // cancelPendingAutoStart then new timer
         vi.advanceTimersByTime(3000);
 
-        // Tutorial should still open — exactly once
+        // Tutorial should still open, exactly once
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
         expect(document.querySelectorAll(".tutorial-layer").length).toBe(1);
     });
@@ -1713,7 +1713,7 @@ describe("miscellaneous edge cases", () => {
             throw new Error("Storage quota exceeded");
         });
 
-        // isComplete uses getStorageValue internally — should not throw
+        // isComplete uses getStorageValue internally, should not throw
         expect(() => Tutorial.isComplete("home")).not.toThrow();
         expect(Tutorial.isComplete("home")).toBe(false);
     });
@@ -1726,7 +1726,7 @@ describe("miscellaneous edge cases", () => {
         buildHomeTargets();
         Tutorial.start("home");
 
-        // Skip triggers setStorageValue — should not throw even if storage fails
+        // Skip triggers setStorageValue, should not throw even if storage fails
         expect(() => document.querySelector(".tutorial-btn-skip").click()).not.toThrow();
     });
 
@@ -1736,7 +1736,7 @@ describe("miscellaneous edge cases", () => {
         });
 
         markRouteComplete("home");
-        // reset() calls removeStorageValue — should not throw
+        // reset() calls removeStorageValue, should not throw
         expect(() => Tutorial.reset("home")).not.toThrow();
     });
 
@@ -1762,7 +1762,7 @@ describe("miscellaneous edge cases", () => {
 });
 
 // ===========================================================================
-// positionMiniTip — rendering and positioning
+// positionMiniTip, rendering and positioning
 // ===========================================================================
 
 describe("positionMiniTip rendering", () => {
@@ -1800,7 +1800,7 @@ describe("positionMiniTip rendering", () => {
 
         expect(document.querySelector(".tutorial-mini-tip")).not.toBeNull();
 
-        // Trigger viewport change — positionMiniTips should re-run
+        // Trigger viewport change, positionMiniTips should re-run
         expect(() => window.dispatchEvent(new Event("resize"))).not.toThrow();
     });
 
@@ -1829,7 +1829,7 @@ describe("positionMiniTip rendering", () => {
 });
 
 // ===========================================================================
-// Geometry — resolvePlacement and calculatePopoverPosition branches
+// Geometry, resolvePlacement and calculatePopoverPosition branches
 // ===========================================================================
 
 describe("geometry: resolvePlacement and calculatePopoverPosition", () => {
@@ -1840,7 +1840,7 @@ describe("geometry: resolvePlacement and calculatePopoverPosition", () => {
      */
 
     it('placement "bottom" is covered by the default home step', () => {
-        // Target well within viewport — no scroll needed — placement='bottom' active
+        // Target well within viewport, no scroll needed, placement='bottom' active
         addTarget("step-target-1", {
             left: 400,
             top: 200,
@@ -1874,13 +1874,13 @@ describe("geometry: resolvePlacement and calculatePopoverPosition", () => {
         // Trigger a resize which queues requestAnimationFrame → updateCurrentStepGeometry
         window.dispatchEvent(new Event("resize"));
 
-        // No assertion on exact position — just verify no error thrown
+        // No assertion on exact position, just verify no error thrown
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 });
 
 // ===========================================================================
-// scheduleMiniTipRetry — retry when all tips have no visible target
+// scheduleMiniTipRetry, retry when all tips have no visible target
 // ===========================================================================
 
 describe("scheduleMiniTipRetry", () => {
@@ -1888,7 +1888,7 @@ describe("scheduleMiniTipRetry", () => {
         vi.useFakeTimers();
 
         // Use analytics route where the mini-tip target is '#analytics-mini-target'
-        // Don't build the target yet — renderMiniTips will find nothing and schedule retry
+        // Don't build the target yet, renderMiniTips will find nothing and schedule retry
         const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("analytics");
@@ -1905,7 +1905,7 @@ describe("scheduleMiniTipRetry", () => {
         // Now add the target before the first retry fires (within 300ms window)
         addTarget("analytics-mini-target");
 
-        // Advance past the retry interval — retry fires, finds target, renders tip
+        // Advance past the retry interval, retry fires, finds target, renders tip
         vi.advanceTimersByTime(400);
 
         // Retry should have rendered the tip
@@ -1915,14 +1915,14 @@ describe("scheduleMiniTipRetry", () => {
     it("does not retry more than MINI_TIP_RETRY_MAX (8) times", () => {
         vi.useFakeTimers();
 
-        // No target at all — all retries will fail
+        // No target at all, all retries will fail
         const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("analytics");
 
         Tutorial.onRouteChange("analytics");
 
-        // Run all possible timers — should exhaust retries without throwing
+        // Run all possible timers, should exhaust retries without throwing
         expect(() => vi.runAllTimers()).not.toThrow();
         expect(document.querySelector(".tutorial-mini-tip")).toBeNull();
     });
@@ -1938,7 +1938,7 @@ describe("scheduleMiniTipRetry", () => {
 
         vi.advanceTimersByTime(2500); // past initial delay → retrying
 
-        // Start tutorial for home — makes state.active=true
+        // Start tutorial for home, makes state.active=true
         buildHomeTargets();
         Tutorial.start("home");
 
@@ -1966,7 +1966,7 @@ describe("scheduleMiniTipRetry", () => {
 });
 
 // ===========================================================================
-// shouldScheduleMiniTips — cooldown check
+// shouldScheduleMiniTips, cooldown check
 // ===========================================================================
 
 describe("shouldScheduleMiniTips cooldown", () => {
@@ -1987,7 +1987,7 @@ describe("shouldScheduleMiniTips cooldown", () => {
         Tutorial.onRouteChange("home");
         vi.advanceTimersByTime(5000);
 
-        // Cooldown prevents showing — getMiniTipCooldownMs(2) = 30000+2*2500=35000ms
+        // Cooldown prevents showing, getMiniTipCooldownMs(2) = 30000+2*2500=35000ms
         // Date.now() - justShownAt is ~0ms << 35000ms → returns false
         expect(document.querySelectorAll(".tutorial-mini-tip").length).toBe(0);
     });
@@ -2070,7 +2070,7 @@ describe("resolvePlacement auto algorithm", () => {
     });
 
     it("resolves to left when right has no room either", () => {
-        // Target fills right edge — room right is small, but left has space
+        // Target fills right edge, room right is small, but left has space
         addTarget("autoplace-target", {
             left: 900,
             top: 300,
@@ -2084,7 +2084,7 @@ describe("resolvePlacement auto algorithm", () => {
     });
 
     it("falls back to bottom vs top comparison when no clear quadrant", () => {
-        // Target fills most of the viewport — no clear room in any direction
+        // Target fills most of the viewport, no clear room in any direction
         addTarget("autoplace-target", {
             left: 10,
             top: 10,
@@ -2112,13 +2112,13 @@ describe("resolvePointerVariant with explicit arrowStyle", () => {
             width: 100,
             height: 40,
         });
-        // Should open without throwing — exercises the preferredName lookup path
+        // Should open without throwing, exercises the preferredName lookup path
         expect(() => Tutorial.start("arrowstyle")).not.toThrow();
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 
     it("falls back to hash-based variant when arrowStyle name does not match", () => {
-        // 'simple' may or may not be in ARROW_VARIANTS — either path is fine
+        // 'simple' may or may not be in ARROW_VARIANTS, either path is fine
         // What matters is the code runs the lookup branch
         addTarget("arrowstyle-target", {
             left: 100,
@@ -2182,14 +2182,14 @@ describe("resolveElementReference with Element reference", () => {
     it("resolves to an Element reference passed directly as target", () => {
         // The eltarget route uses '#eltarget-elem' which resolves via querySelector.
         // This tests the string path. To test Element-instance path we need to
-        // inject an Element directly — we can do this by patching the step at runtime.
+        // inject an Element directly, we can do this by patching the step at runtime.
         const el = document.createElement("div");
         el.id = "eltarget-elem-direct";
         document.body.appendChild(el);
         makeVisible(el, { left: 200, top: 200, right: 300, bottom: 240, width: 100, height: 40 });
 
         // We cannot inject into the frozen mock at runtime, but we CAN use eltarget
-        // route with '#eltarget-elem' selector — add the element with that id
+        // route with '#eltarget-elem' selector, add the element with that id
         const elById = document.createElement("div");
         elById.id = "eltarget-elem";
         document.body.appendChild(elById);
@@ -2301,7 +2301,7 @@ describe("isElementVisible with non-visible computed styles", () => {
 });
 
 // ===========================================================================
-// isViewportPinned — fixed/sticky position (line 1718)
+// isViewportPinned, fixed/sticky position (line 1718)
 // ensureTargetInView when target is viewport-pinned (lines 546, 557-558)
 // ===========================================================================
 
@@ -2446,7 +2446,7 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
 
         Tutorial.onRouteChange("home"); // schedules mini-tip timer
 
-        // Change route before timer fires — increments token, making old token stale
+        // Change route before timer fires, increments token, making old token stale
         Tutorial.onRouteChange("analytics");
 
         vi.advanceTimersByTime(5000); // timer fires but canStartMiniTips → false
@@ -2561,7 +2561,7 @@ describe("localStorage error resilience", () => {
 });
 
 // ===========================================================================
-// Handler guard returns — allowBack=false, handleDotClick NaN index,
+// Handler guard returns, allowBack=false, handleDotClick NaN index,
 // handleSkipClick allowSkip=false, shouldUseNativeEnter null target (lines 368, 425, 444, 583)
 // ===========================================================================
 

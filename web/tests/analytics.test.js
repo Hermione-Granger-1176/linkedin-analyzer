@@ -273,7 +273,7 @@ describe("AnalyticsEngine", () => {
     // ── buildWeeklyTimeline with hour filter active (lines 675-679) ───────────
 
     it("buildView weekly timeline with hour filter applies hourRatio (lines 675-679)", () => {
-        // Two posts in the same week — one at hour 9, one at hour 14
+        // Two posts in the same week, one at hour 9, one at hour 14
         const shares = [
             {
                 Date: "2025-02-03 09:00:00",
@@ -311,7 +311,7 @@ describe("AnalyticsEngine", () => {
         view.timeline.forEach(entry => expect(typeof entry.value).toBe("number"));
     });
 
-    // ── computeTrendFromTimeline — older === 0 branch (line 805) ─────────────
+    // ── computeTrendFromTimeline, older === 0 branch (line 805) ─────────────
 
     it("computeTrendFromTimeline returns flat trend when both halves are zero", () => {
         // Two-point timeline with all zeros → older === 0 AND recent === 0
@@ -342,7 +342,7 @@ describe("AnalyticsEngine", () => {
         expect(["up", "flat"]).toContain(view.trend.direction);
     });
 
-    // ── generateInsights — quiet-stretch insight (line 858) ──────────────────
+    // ── generateInsights, quiet-stretch insight (line 858) ──────────────────
 
     it("generateInsights adds quiet-stretch insight when total < 12 (line 858)", () => {
         const view = {
@@ -779,7 +779,7 @@ describe("AnalyticsEngine network growth", () => {
     it("returns null when busy months do not outpace quiet ones", () => {
         // Quiet (low-post) months gain the most connections, so the busiest
         // posting months bring no more than the quiet ones (and the correlation
-        // is negative) — the card would be misleading and must stay dormant.
+        // is negative), the card would be misleading and must stay dormant.
         const specs = monthsRange(14, i =>
             i < 4
                 ? { posts: 1, connections: 20, topic: "x" }
@@ -792,7 +792,7 @@ describe("AnalyticsEngine network growth", () => {
     it("returns null when the busiest-vs-quiet lift rounds below 2x", () => {
         // Connections track posts perfectly (positive correlation) but the
         // busiest months only edge out the quiet ones, so the multiplier rounds
-        // to 1x — too weak a headline to surface.
+        // to 1x, too weak a headline to surface.
         const { shares, connections } = buildMonthly(
             monthsRange(14, i => ({ posts: i + 1, connections: 101 + i, topic: "x" }))
         );

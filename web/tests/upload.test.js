@@ -123,13 +123,13 @@ describe("UploadPage", () => {
         canvas.id = "progressCanvas";
 
         Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true });
-        // Time-advancing sync rAF — each call moves the virtual clock forward so
+        // Time-advancing sync rAF, each call moves the virtual clock forward so
         // animateProgressTo() eases to completion and stops.
         window.requestAnimationFrame = makeSyncRaf(20);
         window.cancelAnimationFrame = vi.fn((id) => {
             /* no-op for sync rAF */
         });
-        // Synchronous idle callback — fires immediately and never re-schedules.
+        // Synchronous idle callback, fires immediately and never re-schedules.
         // This prevents pending setTimeout chains from leaking between tests.
         window.requestIdleCallback = vi.fn((cb) => {
             cb();
@@ -410,7 +410,7 @@ describe("UploadPage", () => {
     });
 
     // -------------------------------------------------------------------------
-    // New tests — uncovered paths
+    // New tests, uncovered paths
     // -------------------------------------------------------------------------
 
     // --- Worker error event (handleWorkerError) ------------------------------
@@ -688,7 +688,7 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // No active jobs — progress message should be silently ignored
+        // No active jobs, progress message should be silently ignored
         await workerInstance.listeners.message[0]({
             data: { type: "progress", payload: { percent: 0.3 } },
         });
@@ -784,7 +784,7 @@ describe("UploadPage", () => {
                     fileType: "messages",
                     fileName: "Messages.csv",
                     rowCount: 1,
-                    jobId: null, // no jobId — resolved via fileName fallback
+                    jobId: null, // no jobId, resolved via fileName fallback
                     analyticsBase: null,
                 },
             },
@@ -921,7 +921,7 @@ describe("UploadPage", () => {
             return 0;
         });
         window.cancelAnimationFrame = vi.fn();
-        // Deferred idle callback — stores cb without calling it immediately
+        // Deferred idle callback, stores cb without calling it immediately
         window.requestIdleCallback = vi.fn((cb) => {
             idleCb = cb;
             return 1;
@@ -1010,7 +1010,7 @@ describe("UploadPage", () => {
             (c) => c[0] && c[0].type === "restoreFiles",
         ).length;
 
-        // Second upload with same signature — should not add another restoreFiles
+        // Second upload with same signature, should not add another restoreFiles
         Object.defineProperty(input, "files", { value: [file], configurable: true });
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1173,7 +1173,7 @@ describe("UploadPage", () => {
             };
         };
 
-        // Only a connections file is stored — no shares/comments yet. The prime
+        // Only a connections file is stored, no shares/comments yet. The prime
         // must still post restoreFiles so the worker retains connections for the
         // first shares upload's recompute instead of waiting for a re-upload.
         const cachedFiles = [{ type: "connections", rowCount: 5, updatedAt: 30 }];
@@ -2105,7 +2105,7 @@ describe("UploadPage", () => {
 
     // --- init() is idempotent ------------------------------------------------
 
-    it("init() is idempotent — calling twice does not duplicate listeners", async () => {
+    it("init() is idempotent, calling twice does not duplicate listeners", async () => {
         UploadPage.init();
         UploadPage.init(); // second call must be no-op
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2595,7 +2595,7 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Worker sends back fileProcessed with jobId: null — consumePendingFile
+        // Worker sends back fileProcessed with jobId: null, consumePendingFile
         // must match by fileName.
         Storage.getAllFiles.mockResolvedValue([
             { type: "connections", name: "Connections.csv", rowCount: 5, updatedAt: 400 },
@@ -2650,7 +2650,7 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Now trigger worker error — should call resetProcessingState which calls
+        // Now trigger worker error, should call resetProcessingState which calls
         // clearAllJobTimeouts (exercising the forEach callback with active timeouts)
         workerInstance.listeners.error[0](new Event("error"));
 
@@ -2892,7 +2892,7 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await vi.runAllTimersAsync();
 
-        // First fileProcessed (no analyticsBase) — schedules idle/setTimeout prime
+        // First fileProcessed (no analyticsBase), schedules idle/setTimeout prime
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -2901,13 +2901,13 @@ describe("UploadPage", () => {
                     fileName: "Shares.csv",
                     rowCount: 1,
                     jobId: null,
-                    // No analyticsBase — doesn't trigger immediate
+                    // No analyticsBase, doesn't trigger immediate
                 },
             },
         });
         await vi.runAllTimersAsync();
 
-        // Second upload of same file with analyticsBase — triggers immediate prime
+        // Second upload of same file with analyticsBase, triggers immediate prime
         // which calls clearPrimeSchedule() while primeTimerId is set
         Object.defineProperty(input, "files", { value: [file], configurable: true });
         input.dispatchEvent(new Event("change"));
@@ -3145,7 +3145,7 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Trigger fileProcessed — should use cached files from DataCache
+        // Trigger fileProcessed, should use cached files from DataCache
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -3160,7 +3160,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         // Storage.getAllFiles should NOT have been called during getStoredFilesSnapshot
-        // (cache was used instead) — just verify no errors occurred
+        // (cache was used instead), just verify no errors occurred
         expect(document.getElementById("uploadHint").textContent).toBeTruthy();
 
         globalThis.FileReader = originalFileReader;
@@ -3258,7 +3258,7 @@ describe("UploadPage", () => {
         btn.disabled = true;
 
         // Use a plain Event (not MouseEvent) so jsdom still delivers it even though
-        // the button is disabled — disabled only suppresses MouseEvent click delivery.
+        // the button is disabled, disabled only suppresses MouseEvent click delivery.
         btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -3318,9 +3318,9 @@ describe("UploadPage", () => {
             banner.remove();
         }
 
-        // Fire offline event — should not throw even though element is gone
+        // Fire offline event, should not throw even though element is gone
         window.dispatchEvent(new Event("offline"));
-        // No assertion needed — absence of error is the pass condition
+        // No assertion needed, absence of error is the pass condition
     });
 
     // --- line 391: default case in worker message switch ----------------------
@@ -3357,7 +3357,7 @@ describe("UploadPage", () => {
             };
         };
 
-        // getAllFiles returns an empty list — no messages file present
+        // getAllFiles returns an empty list, no messages file present
         Storage.getAllFiles.mockResolvedValue([]);
 
         UploadPage.init();
@@ -3458,7 +3458,7 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // No pending files — jobId null, fileName ''
+        // No pending files, jobId null, fileName ''
         // handleFileProcessedMessage → consumePendingFile(null,'') → line 560-561 → null
         // → completeJob branch at line 412-414 runs, no error
         await workerInstance.listeners.message[0]({
@@ -3736,17 +3736,17 @@ describe("UploadPage", () => {
         const file1 = new File(["col\nval"], "Shares.csv", { type: "text/csv" });
         const file2 = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
 
-        // First upload — starts overlay (session 1)
+        // First upload, starts overlay (session 1)
         Object.defineProperty(input, "files", { value: [file1], configurable: true });
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Second upload — increments progressSessionId (session 2) mid-animation
+        // Second upload, increments progressSessionId (session 2) mid-animation
         Object.defineProperty(input, "files", { value: [file2], configurable: true });
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Complete file1 — hideProgressOverlay tries to animate but session is now 2
+        // Complete file1, hideProgressOverlay tries to animate but session is now 2
         // so the callback at line 935 checks sessionId !== progressSessionId → return
         await workerInstance.listeners.message[0]({
             data: {
@@ -3804,7 +3804,7 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Upload second file immediately — session increments, making session 1 stale
+        // Upload second file immediately, session increments, making session 1 stale
         const file2 = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
         Object.defineProperty(input, "files", { value: [file2], configurable: true });
         input.dispatchEvent(new Event("change"));
@@ -3855,7 +3855,7 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Worker immediately completes the job — activeJobs becomes empty
+        // Worker immediately completes the job, activeJobs becomes empty
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",

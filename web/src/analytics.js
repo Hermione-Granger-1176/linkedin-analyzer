@@ -488,7 +488,7 @@ export const AnalyticsEngine = (() => {
         const dayIndexData = Object.fromEntries(dayIndex);
 
         // Skip the full pass over connection rows entirely when there is no
-        // posting activity to correlate them against — the card cannot fire.
+        // posting activity to correlate them against, so the card cannot fire.
         const networkGrowth =
             monthIndex.size === 0
                 ? null
@@ -626,7 +626,7 @@ export const AnalyticsEngine = (() => {
         const postKeys = Array.from(monthIndex.keys()).sort();
         const connectionKeys = Array.from(monthlyConnections.keys()).sort();
         // The overlap is the later of the two start months to the earlier of the
-        // two end months — the window where both series have real coverage.
+        // two end months, the window where both series have real coverage.
         const start =
             postKeys[0] > connectionKeys[0] ? postKeys[0] : connectionKeys[0];
         const lastPost = postKeys[postKeys.length - 1];

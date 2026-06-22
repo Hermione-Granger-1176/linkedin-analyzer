@@ -244,7 +244,7 @@ describe("CleanPage", () => {
     it("onRouteChange calls init when not yet initialized (lines 73-75)", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
 
-        // onRouteChange before init() — should call init internally
+        // onRouteChange before init(), should call init internally
         await CleanPage.onRouteChange();
 
         expect(document.getElementById("cleanEmpty").hidden).toBe(false);

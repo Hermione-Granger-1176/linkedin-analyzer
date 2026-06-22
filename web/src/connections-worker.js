@@ -139,7 +139,7 @@ function buildGrowthTimeline(rows) {
 
 /**
  * Compute high-level stats that feed the dashboard stat cards.
- * Only total and networkAgeMonths are used by the UI — the UI recomputes
+ * Only total and networkAgeMonths are used by the UI. The UI recomputes
  * filtered stats (recent adds, top company) client-side.
  *
  * @param {object[]} rows - Cleaned connection rows

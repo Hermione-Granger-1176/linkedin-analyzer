@@ -25,7 +25,7 @@ export const LinkedInCleaner = (() => {
 
     // Auto-detection only needs the header row, which sits at the top of the file
     // (after at most a few skip rows). For large files, parse just this prefix to
-    // match a type, then full-parse the matched type once — instead of full-parsing
+    // match a type, then full-parse the matched type once, instead of full-parsing
     // the whole file up to three times (one per distinct option/skip-row combo).
     // Files at or below this size skip the pre-pass and use the original full
     // multi-type detection, so small uploads are unaffected.

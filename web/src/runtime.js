@@ -102,7 +102,7 @@ export function initRuntime() {
     window.addEventListener("error", handleError);
     window.addEventListener("unhandledrejection", handleRejection);
 
-    /* Chart PNG export — delegated handler for .chart-export-btn buttons */
+    /* Chart PNG export: delegated handler for .chart-export-btn buttons */
     document.addEventListener("click", (event) => {
         const btn = /** @type {HTMLElement|null} */ (DomEvents.closest(event, ".chart-export-btn"));
         if (!btn) {

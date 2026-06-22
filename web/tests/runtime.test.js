@@ -52,7 +52,7 @@ describe("runtime", () => {
     });
 
     it("ignores export click when canvasId is empty (line 112)", () => {
-        // A button with an empty data-export-canvas attribute — canvasId is '' (falsy),
+        // A button with an empty data-export-canvas attribute, canvasId is '' (falsy),
         // so the early return on line 111-113 fires before looking up the canvas.
         document.body.innerHTML =
             '<button class="chart-export-btn" data-export-canvas=""></button>';
@@ -83,7 +83,7 @@ describe("runtime", () => {
     it("handleError shows banner even when event has no error property (lines 81-82)", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         initRuntime();
-        // Dispatch an ErrorEvent without an .error property — event.error is null
+        // Dispatch an ErrorEvent without an .error property, event.error is null
         // → line 81's ternary takes the false branch (error = event), line 82 still true
         const event = new Event("error");
         window.dispatchEvent(event);

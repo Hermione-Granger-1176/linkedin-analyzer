@@ -116,7 +116,7 @@ export const MessagesAnalytics = (() => {
                 events.push({ contactKey, timestamp });
 
                 // For a self-sent row the sender is self, so the non-self
-                // participants are exactly its recipients — mark each as outreach.
+                // participants are exactly its recipients, so mark each as outreach.
                 if (senderIsSelf) {
                     markOutreachContact(contactStats, contact, "sent");
                 }

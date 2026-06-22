@@ -41,7 +41,12 @@ linkedin-analyzer/
 │   │   ├── loading-overlay.js          # Shared loading overlay manager
 │   │   ├── app.js                      # SPA bootstrap wiring
 │   │   ├── upload.js                   # Home/upload logic
+│   │   ├── upload-decode.js            # Byte-decoding and storage-error helpers
+│   │   ├── upload-state.js             # File-state and hint helpers
 │   │   ├── cleaner.js                  # CSV cleaning logic
+│   │   ├── cleaner-configs.js          # Per-file-type cleaner configuration
+│   │   ├── csv-parser.js               # Low-level CSV parsing primitives
+│   │   ├── field-cleaners.js           # Field-level cleaning primitives
 │   │   ├── clean.js                    # Clean screen UI logic
 │   │   ├── excel.js                    # Excel generation (write-excel-file)
 │   │   ├── analytics.js                # Analytics engine
@@ -51,9 +56,11 @@ linkedin-analyzer/
 │   │   ├── connections-ui.js           # Connections screen controller
 │   │   ├── messages-worker.js          # Worker for messages/connections parsing
 │   │   ├── messages-analytics.js       # Messages analytics computations
+│   │   ├── messages-format.js          # Formatting, range, and signature helpers
 │   │   ├── messages-insights.js        # Messages screen controller
 │   │   ├── insights-ui.js              # Insights screen controller
 │   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
+│   │   ├── tutorial-geometry.js        # Geometry and math helpers for the overlay
 │   │   ├── tutorial.js                 # Tutorial engine
 │   │   ├── charts.js                   # Canvas chart rendering (incl. PNG export)
 │   │   ├── worker-contracts.js         # Shared worker message contracts

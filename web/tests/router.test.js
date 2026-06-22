@@ -146,7 +146,7 @@ describe("AppRouter navigation", () => {
             sharedParams: ["myuniquetimeframe"],
             defaultParams: { myuniquetimeframe: "12m" }
         });
-        // Navigate without providing the param — default should be applied
+        // Navigate without providing the param, default should be applied
         AppRouter.navigate("myroute", {}, { replaceHistory: true });
         const parsed = AppRouter.parseHash(window.location.hash);
         expect(parsed.name).toBe("myroute");

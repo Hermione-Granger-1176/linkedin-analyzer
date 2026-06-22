@@ -19,7 +19,7 @@
 }
 
 :root {
-    /* Light Theme (Default) — warm, doodly, marker-on-paper */
+    /* Light Theme (Default): warm, doodly, marker-on-paper */
     --bg-primary: rgba(255, 253, 247, 1);
     --bg-secondary: rgba(253, 250, 245, 1);
     --bg-tertiary: rgba(255, 248, 230, 1);
@@ -30,7 +30,7 @@
     --border-color: rgba(68, 64, 60, 1);
     --border-light: rgba(214, 211, 209, 1);
 
-    /* Accent Colors — doodle marker palette */
+    /* Accent Colors: doodle marker palette */
     --accent-blue: rgba(66, 133, 244, 1);
     --accent-blue-contrast: rgba(30, 82, 175, 1);
     --accent-blue-light: rgba(210, 227, 252, 1);
@@ -71,7 +71,7 @@
     --decoration-yellow: rgba(251, 188, 5, 0.1);
     --decoration-purple: rgba(155, 81, 224, 0.1);
 
-    /* Shadows — warm brown pencil-on-paper feel */
+    /* Shadows: warm brown pencil-on-paper feel */
     --shadow-sm: 2px 2px 0 rgba(87, 65, 47, 0.08);
     --shadow-md: 4px 4px 0 rgba(87, 65, 47, 0.08);
     --shadow-lg: 6px 6px 0 rgba(87, 65, 47, 0.12);
@@ -101,7 +101,7 @@
     --border-color: rgba(156, 142, 130, 1);
     --border-light: rgba(87, 83, 78, 1);
 
-    /* Softer accent colors — marker under warm light */
+    /* Softer accent colors: marker under warm light */
     --accent-blue: rgba(124, 196, 250, 1);
     --accent-blue-contrast: rgba(165, 216, 255, 1);
     --accent-blue-light: rgba(40, 68, 92, 1);
@@ -142,7 +142,7 @@
     --decoration-yellow: rgba(240, 206, 82, 0.1);
     --decoration-purple: rgba(197, 156, 219, 0.1);
 
-    /* Shadows — warm near-black, slightly stronger */
+    /* Shadows: warm near-black, slightly stronger */
     --shadow-sm: 2px 2px 0 rgba(10, 8, 6, 0.35);
     --shadow-md: 4px 4px 0 rgba(10, 8, 6, 0.35);
     --shadow-lg: 6px 6px 0 rgba(10, 8, 6, 0.45);

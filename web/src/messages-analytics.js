@@ -615,7 +615,9 @@ export const MessagesAnalytics = (() => {
 
         const parsed = new Date(year, month - 1, day, hour, minute, second);
         /* v8 ignore next */
-        if (Number.isNaN(parsed.getTime())) { return null; }
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
         return parsed;
     }
 
@@ -632,7 +634,9 @@ export const MessagesAnalytics = (() => {
         }
         const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
         /* v8 ignore next */
-        if (Number.isNaN(parsed.getTime())) { return null; }
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
         return parsed;
     }
 

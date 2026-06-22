@@ -6,7 +6,7 @@
 - Node.js 22.13.x or 24+
 - uv
 
-The project supports Python 3.11–3.14. 3.14 is the default for local development, the container image, and the primary CI quality gate; 3.11–3.13 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against 3.11, 3.12, or 3.13.
+The project supports Python 3.11-3.14. Python 3.14 is the default for local development, the container image, and the primary CI quality gate. Python 3.11-3.13 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against Python 3.11, 3.12, or 3.13.
 
 ## Initial setup
 
@@ -35,7 +35,7 @@ The `make install` target builds the `.venv` against the interpreter named by th
 # Build the .venv against a specific Python (uv fetches it if missing)
 rm -rf .venv && make install PYTHON=3.12
 
-# Subsequent targets use that .venv directly — no override needed
+# Subsequent targets use that .venv directly. No override is needed.
 make test-py
 make typecheck-py
 ```
@@ -46,7 +46,7 @@ make typecheck-py
 rm -rf .venv && make install
 ```
 
-You can also point `PYTHON` at an explicit interpreter name on your `PATH` (for example `make install PYTHON=python3.11`). The lockfile (`uv.lock`) is universal and resolves across 3.11–3.14, so no lock changes are needed to switch versions. Type checking (`mypy`) and linting (`ruff`) always target the 3.11 floor regardless of the interpreter you run, so newer-only syntax is caught early.
+You can also point `PYTHON` at an explicit interpreter name on your `PATH` (for example `make install PYTHON=python3.11`). The lockfile (`uv.lock`) is universal and resolves across Python 3.11-3.14, so no lock changes are needed to switch versions. Type checking (`mypy`) and linting (`ruff`) always target the Python 3.11 floor regardless of the interpreter you run, so newer-only syntax is caught early.
 
 ## Web App
 

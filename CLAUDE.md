@@ -4,11 +4,11 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Rules
 
-1. **The Makefile is the only interface.** Never run `.venv/bin/*`, `pytest`, `ruff`, `mypy`, `npm run`, `npx`, `vite`, `playwright`, or `gh` directly. Always use `make <target>`. If unsure what's available, run `make help` first — the list is auto-generated from the Makefile.
-2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make ci-failures` over raw `gh`. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one) — no `databaseId` lookup needed. The PR number is auto-detected from the current branch (override with `pr_num=N`). Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
+1. **The Makefile is the only interface.** Never run `.venv/bin/*`, `pytest`, `ruff`, `mypy`, `npm run`, `npx`, `vite`, `playwright`, or `gh` directly. Always use `make <target>`. If unsure what's available, run `make help` first. The list is auto-generated from the Makefile.
+2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make ci-failures` over raw `gh`. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one). No `databaseId` lookup is needed. The PR number is auto-detected from the current branch (override with `pr_num=N`). Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
 3. **If a target is missing, add it.** Put `## description` after the target name in the Makefile and it appears in `make help` automatically.
 4. **Each tool has one config file.** To change what gets linted/tested/typed, edit that tool's config, nowhere else. See the tool configuration table below.
-5. **Configs auto-discover from roots; never enumerate files.** Point tools at directory roots or globs (like coverage's `source = ["src/linkedin_analyzer"]`) so new files are covered automatically. Don't list individual source files — that rots the day someone adds a file and forgets. Tool _config-file_ location pointers (e.g. knip's `vite.config`) are fine; per-file source lists are not.
+5. **Configs auto-discover from roots; never enumerate files.** Point tools at directory roots or globs (like coverage's `source = ["src/linkedin_analyzer"]`) so new files are covered automatically. Don't list individual source files. That rots the day someone adds a file and forgets. Tool _config-file_ location pointers (e.g. knip's `vite.config`) are fine; per-file source lists are not.
 6. **Read before acting.** Read the Makefile and existing code before proposing changes.
 7. **Don't run auto-fix commands** (`make fmt`, `make lock`, etc.) unless the user asks.
 8. **Don't commit, push, or open/merge PRs unless asked.** Make and verify changes in the working tree and stop there; the user decides when to commit and push. For small tooling/doc tweaks, fold them into the current in-progress branch instead of opening a separate PR.
@@ -16,9 +16,9 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Structure
 
-- `src/linkedin_analyzer/`: Python package — `cli.py`, `core/` (text, types, paths, cleaner, excel), `cleaners/` (comments, connections, messages, shares)
-- `web/`: Vite SPA — `src/` (router, screens, cleaner, storage, telemetry, sentry), `index.html` shell, `tests/` (Vitest unit), `e2e/` (Playwright), `vite.config.js`, `vitest.config.js`
-- `api/`: Vercel Serverless Functions — `csp-report.mjs` collects CSP violation reports
+- `src/linkedin_analyzer/`: Python package with `cli.py`, `core/` (text, types, paths, cleaner, excel), and `cleaners/` (comments, connections, messages, shares)
+- `web/`: Vite SPA with `src/` (router, screens, cleaner, storage, telemetry, sentry), the `index.html` shell, `tests/` (Vitest unit), `e2e/` (Playwright), `vite.config.js`, and `vitest.config.js`
+- `api/`: Vercel Serverless Functions. `csp-report.mjs` collects CSP violation reports.
 - `tests/`: Python tests
 - `scripts/`: repo tooling
 - `config/`: shared JS/web tool configs (eslint, prettier, playwright, jsconfig)

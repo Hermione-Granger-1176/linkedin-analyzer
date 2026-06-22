@@ -93,6 +93,7 @@ linkedin-analyzer/
 ├── config/                             # Tooling config moved out of repo root
 │   ├── eslint.config.mjs               # ESLint flat config
 │   ├── jsconfig.json                   # Web JavaScript type-check config
+│   ├── knip.json                       # JavaScript dead-code config
 │   ├── playwright.config.js            # Playwright browser test config
 │   ├── prettierignore                  # Prettier ignore rules
 │   └── prettierrc.json                 # Prettier formatting rules

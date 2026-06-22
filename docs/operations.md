@@ -9,12 +9,12 @@
 ## Web Deployment (Vercel)
 
 1. Connect the repository in Vercel.
-2. Build command: `npm run build`
+2. Build command: `npm run build`, as configured in `vercel.json`. Use `make web-build` for local builds.
 3. Output directory: `web/dist`
 4. Add environment variables:
    - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended, e.g. commit SHA)
-   - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables CSP report forwarding — see [CSP violation reporting](#csp-violation-reporting))
+   - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables CSP report forwarding; see [CSP violation reporting](#csp-violation-reporting))
 5. Verify custom headers from `vercel.json` are applied after deploy.
 
 The `api/csp-report` Serverless Function deploys automatically from the `api/` directory; no extra Vercel configuration is required.
@@ -23,8 +23,8 @@ The `api/csp-report` Serverless Function deploys automatically from the `api/` d
 
 Two independent version identifiers exist by design:
 
-- **Python CLI / Docker image** — derived from the Git tag at build time via `hatch-vcs` (`pyproject.toml`, `[tool.hatch.version] source = "vcs"`). Tagging a release is the single source of truth; do not hand-edit a version.
-- **Web app** — `package.json` `version` is cosmetic only. The value that matters in production is `VITE_APP_RELEASE` (recommended: the commit SHA or release tag), which is what Sentry correlates errors against. Set it per build rather than relying on `package.json`.
+- **Python CLI / Docker image:** Derived from the Git tag at build time via `hatch-vcs` (`pyproject.toml`, `[tool.hatch.version] source = "vcs"`). Tagging a release is the single source of truth; do not hand-edit a version.
+- **Web app:** The `package.json` `version` is cosmetic only. The value that matters in production is `VITE_APP_RELEASE` (recommended: the commit SHA or release tag), which is what Sentry correlates errors against. Set it per build rather than relying on `package.json`.
 
 When cutting a release, the Git tag drives the PyPI and GHCR versions; set `VITE_APP_RELEASE` to the same tag/SHA so web telemetry lines up with the CLI release.
 
@@ -38,7 +38,7 @@ Releases are tag-driven: pushing a GitHub Release publishes the PyPI package and
 4. **Let the workflow self-verify.** `publish-pypi` builds, runs `twine check`, installs the wheel, and fails if `linkedin-analyzer --version` does not match the tag (minus the leading `v`); `publish-docker` repeats the version check on the built image and runs a Trivy HIGH/CRITICAL scan before pushing.
 5. **Set `VITE_APP_RELEASE`** on the next web build to the same tag/SHA so Sentry correlates web errors to the release (see Versioning above).
 
-Re-run-failed-jobs caveat: `gh-action-pypi-publish` runs with `skip-existing: true`, so if a later job (for example the Trivy scan) fails after PyPI already accepted the upload, you can safely re-run the failed jobs — the already-published distribution is skipped rather than erroring. PyPI versions are immutable; to fix a bad release, roll forward with a new patch tag (see Rollback).
+Re-run-failed-jobs caveat: `gh-action-pypi-publish` runs with `skip-existing: true`, so if a later job (for example the Trivy scan) fails after PyPI already accepted the upload, you can safely re-run the failed jobs. The already-published distribution is skipped rather than erroring. PyPI versions are immutable; to fix a bad release, roll forward with a new patch tag (see Rollback).
 
 ## Availability
 
@@ -50,9 +50,9 @@ Re-run-failed-jobs caveat: `gh-action-pypi-publish` runs with `skip-existing: tr
 
 Each release surface rolls back independently.
 
-- **Web app (Vercel)** — In the Vercel dashboard, open the project's Deployments, find the last known-good deployment, and use **Promote to Production** (or `vercel rollback <deployment-url>`). The PWA service worker auto-refreshes clients to the promoted build; a hard reload forces it immediately.
-- **PyPI (CLI)** — Releases are immutable and a version cannot be re-uploaded. Roll forward by tagging a new patch release that reverts the offending change. If a release is actively harmful, `yank` it on PyPI so pip stops resolving to it while leaving existing pins working.
-- **GHCR (container)** — Re-point `latest` by pushing the prior good tag, or instruct consumers to pin the previous immutable `:<version>` / `:sha-<sha>` tag (both are published by `publish.yml`).
+- **Web app (Vercel):** In the Vercel dashboard, open the project's Deployments, find the last known-good deployment, and use **Promote to Production** (or `vercel rollback <deployment-url>`). The PWA service worker auto-refreshes clients to the promoted build; a hard reload forces it immediately.
+- **PyPI (CLI):** Releases are immutable and a version cannot be re-uploaded. Roll forward by tagging a new patch release that reverts the offending change. If a release is actively harmful, `yank` it on PyPI so pip stops resolving to it while leaving existing pins working.
+- **GHCR (container):** Re-point `latest` by pushing the prior good tag, or instruct consumers to pin the previous immutable `:<version>` / `:sha-<sha>` tag (both are published by `publish.yml`).
 
 After any rollback, confirm the active release in Sentry via the `release` tag and open a follow-up to roll forward with a fix.
 
@@ -72,7 +72,7 @@ After any rollback, confirm the active release in Sentry via the `release` tag a
 The `Content-Security-Policy` header in `vercel.json` enforces a strict policy and reports violations via `report-uri` / `report-to` to the first-party endpoint `/api/csp-report` (`Reporting-Endpoints: csp-endpoint`). Keeping the endpoint same-origin means `vercel.json` never embeds a Sentry org/project and the forwarding secret stays server-side.
 
 - The collector (`api/csp-report.mjs`) forwards reports only when `CSP_REPORT_URI` (explicit collector URL) or `SENTRY_DSN` (server-side DSN) is configured; with neither set it accepts and drops reports so the policy stays valid.
-- Reports contain only violation metadata (blocked URI, violated directive, document URI) — never uploaded file contents — so this does not change the app's local-only data guarantee.
+- Reports contain only violation metadata (blocked URI, violated directive, document URI), never uploaded file contents, so this does not change the app's local-only data guarantee.
 - To verify after deploy, load the site and confirm there are no unexpected CSP violations in the browser console; if forwarding is configured, confirm a test violation reaches the collector.
 
 ### Recommended alerting
@@ -86,7 +86,7 @@ The `Content-Security-Policy` header in `vercel.json` enforces a strict policy a
 
 Diagnostics are **off until the user explicitly grants consent** (telemetry banner / footer toggle), and consent can be revoked at any time. In practice most visitors never opt in, so:
 
-- Absence of Sentry events does **not** mean the absence of errors — it usually means no consenting users hit the path.
+- Absence of Sentry events does **not** mean the absence of errors. It usually means no consenting users hit the path.
 - Error volume is a lower bound, not a true rate; do not size incident severity from event counts alone.
 - For a reproducible bug, prefer local reproduction with a matching fixture over waiting for telemetry to surface it.
 - CSP violations are the one signal that does not depend on consent: they flow through `/api/csp-report` regardless (see above).
@@ -127,7 +127,7 @@ If they are missing, the action-SHA refresh workflow records a skipped summary i
 | --- | --- | --- |
 | `LINKEDIN_ANALYZER_DATA_DIR` | `data` | Base directory for input/output file paths |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
-| `LOG_FORMAT` | `text` | Log output format — `text` for human-readable, `json` for structured JSON |
+| `LOG_FORMAT` | `text` | Log output format: `text` for human-readable, `json` for structured JSON |
 
 ### Structured JSON logging
 

@@ -28,21 +28,21 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards, relations
 
 ## Quick start
 
-**Development** — Install locked Python and Node dependencies:
+**Development:** Install locked Python and Node dependencies:
 
 ```bash
 # Requires Python 3.11+, uv, and Node.js 22.13.x or 24+
 make setup
 ```
 
-**Web** — Run the Vite dev server and open the local URL:
+**Web:** Run the Vite dev server and open the local URL:
 
 ```bash
 cp .env.example .env  # optional; set VITE_SENTRY_DSN + VITE_APP_RELEASE for opt-in diagnostics
 make web
 ```
 
-**CLI** — For automation:
+**CLI:** For automation:
 
 ```bash
 pip install linkedin-analyzer
@@ -53,7 +53,7 @@ linkedin-analyzer connections
 linkedin-analyzer all
 ```
 
-**Container** — Run the published CLI image:
+**Container:** Run the published CLI image:
 
 ```bash
 docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-analyzer:latest --version

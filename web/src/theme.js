@@ -8,7 +8,9 @@ export const Theme = (() => {
     /** Initialize theme toggle and system preference listeners. */
     function init() {
         const toggle = document.getElementById("themeToggle");
-        if (!toggle) {return;}
+        if (!toggle) {
+            return;
+        }
 
         const savedTheme = getStoredTheme();
         const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;

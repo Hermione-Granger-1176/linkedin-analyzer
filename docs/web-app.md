@@ -164,7 +164,7 @@ Deploy `web/dist/` to any static host (Vercel, Netlify, GitHub Pages). The first
 
 Recommended production setup:
 
-1. Build with `npm run build`
+1. Build locally with `make web-build`
 2. Publish the `web/dist/` output
 3. Set environment variables:
    - `VITE_SENTRY_DSN` (optional; only used after user opt-in)

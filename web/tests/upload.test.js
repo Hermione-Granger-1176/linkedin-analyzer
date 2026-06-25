@@ -1878,7 +1878,7 @@ describe("UploadPage", () => {
         Object.defineProperty(file, "stream", {
             value: () => ({
                 getReader: () => ({
-                    read: () => Promise.reject("read failed"),
+                    read: () => ({ then: (_resolve, reject) => reject("read failed") }),
                     cancel: () => Promise.resolve(),
                 }),
             }),

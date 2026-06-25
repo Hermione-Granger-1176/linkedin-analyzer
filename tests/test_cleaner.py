@@ -136,6 +136,32 @@ class TestRunCleaner:
         assert result.success is False
         assert calls[0]["nrows"] == 3
 
+    def test_row_count_limit_preserves_stricter_configured_nrows(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[dict[str, Any]] = []
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nAda\nGrace\n")
+
+        def fake_read_csv(_input_path: Path, **kwargs: Any) -> pd.DataFrame:
+            calls.append(kwargs)
+            return pd.DataFrame({"Name": ["Ada"]})
+
+        monkeypatch.setattr(pd, "read_csv", fake_read_csv)
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+            csv_kwargs={"nrows": 1},
+            max_rows=2,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        assert calls[0]["nrows"] == 1
+
     def test_zero_row_count_limit_disables_check(self, tmp_path: Path) -> None:
         input_path = tmp_path / "test.csv"
         output_path = tmp_path / "test.xlsx"

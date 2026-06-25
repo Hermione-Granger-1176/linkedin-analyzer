@@ -150,10 +150,8 @@ def _apply_row_read_limit(csv_kwargs: dict[str, Any], max_rows: int) -> None:
     read_limit = max_rows + 1
     existing_nrows = csv_kwargs.get("nrows")
     if isinstance(existing_nrows, int):
-        csv_kwargs["nrows"] = min(existing_nrows, read_limit)
-        return
-    if existing_nrows is None:
-        csv_kwargs["nrows"] = read_limit
+        read_limit = min(existing_nrows, read_limit)
+    csv_kwargs["nrows"] = read_limit
 
 
 def run_cleaner(config: CleanerConfig) -> CleanerResult:

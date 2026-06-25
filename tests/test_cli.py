@@ -95,8 +95,16 @@ class TestParseArgs:
 
     def test_resource_limit_defaults(self) -> None:
         args = parse_args(["shares"])
-        assert args.max_input_bytes == 104857600
-        assert args.max_rows == 1000000
+        assert args.max_input_bytes == cli.DEFAULT_MAX_INPUT_BYTES
+        assert args.max_rows == cli.DEFAULT_MAX_ROWS
+
+    def test_resource_limit_help_uses_default_constants(self) -> None:
+        help_text = " ".join(cli._build_parser().format_help().split())
+
+        assert f"default: {cli.DEFAULT_MAX_INPUT_BYTES}" in help_text
+        assert "LINKEDIN_ANALYZER_MAX_INPUT_BYTES" in help_text
+        assert f"default: {cli.DEFAULT_MAX_ROWS}" in help_text
+        assert "LINKEDIN_ANALYZER_MAX_ROWS" in help_text
 
     def test_resource_limit_args(self) -> None:
         args = parse_args(["--max-input-bytes", "123", "--max-rows", "0", "shares"])
@@ -120,8 +128,8 @@ class TestParseArgs:
 
         args = parse_args(["shares"])
 
-        assert args.max_input_bytes == 104857600
-        assert args.max_rows == 1000000
+        assert args.max_input_bytes == cli.DEFAULT_MAX_INPUT_BYTES
+        assert args.max_rows == cli.DEFAULT_MAX_ROWS
 
     def test_rejects_negative_resource_limits(self) -> None:
         try:

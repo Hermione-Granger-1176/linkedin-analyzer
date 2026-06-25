@@ -17,6 +17,11 @@ from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 LOG = logging.getLogger(__name__)
 
 
+def _byte_unit(value: int) -> str:
+    """Return a singular or plural byte unit."""
+    return "byte" if value == 1 else "bytes"
+
+
 def _read_csv_with_fallback(
     input_path: Path,
     csv_kwargs: dict[str, Any],
@@ -191,7 +196,8 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
                 output_path=output_path,
                 error=(
                     "Input file is too large: "
-                    f"{input_size} bytes exceeds limit of {config.max_input_bytes} bytes"
+                    f"{input_size} {_byte_unit(input_size)} exceeds limit of "
+                    f"{config.max_input_bytes} {_byte_unit(config.max_input_bytes)}"
                 ),
             )
 

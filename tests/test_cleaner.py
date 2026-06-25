@@ -75,7 +75,7 @@ class TestRunCleaner:
         result = run_cleaner(config)
 
         assert result.success is False
-        assert result.error == "Input file is too large: 9 bytes exceeds limit of 1 bytes"
+        assert result.error == "Input file is too large: 9 bytes exceeds limit of 1 byte"
         assert not output_path.exists()
 
     def test_zero_input_file_size_limit_disables_check(self, tmp_path: Path) -> None:

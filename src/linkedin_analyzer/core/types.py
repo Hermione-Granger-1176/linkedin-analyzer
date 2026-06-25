@@ -105,8 +105,9 @@ class CleanerResult:
     def __str__(self) -> str:
         """Return a human-readable summary of the result."""
         if self.success:
+            row_unit = "row" if self.rows_processed == 1 else "rows"
             return (
                 "Successfully processed "
-                f"{self.rows_processed} rows: {self.input_path} -> {self.output_path}"
+                f"{self.rows_processed} {row_unit}: {self.input_path} -> {self.output_path}"
             )
         return f"Failed to process {self.input_path}: {self.error}"

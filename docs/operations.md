@@ -82,8 +82,8 @@ After any rollback, confirm the active release in Sentry via the `release` tag a
 
 The `Content-Security-Policy` header in `vercel.json` enforces a strict policy and reports violations via `report-uri` / `report-to` to the first-party endpoint `/api/csp-report` (`Reporting-Endpoints: csp-endpoint`). Keeping the endpoint same-origin means `vercel.json` never embeds a Sentry org/project and the forwarding secret stays server-side.
 
-- The collector (`api/csp-report.mjs`) forwards reports only when `CSP_REPORT_URI` (explicit collector URL) or `SENTRY_DSN` (server-side DSN) is configured; with neither set it accepts and drops reports so the policy stays valid.
-- The collector has a per-instance report guard controlled by `CSP_REPORT_MAX_PER_MINUTE`; it defaults to 120 valid CSP reports per minute and returns 204 without forwarding or logging reports over the cap.
+- The collector (`api/csp-report.mjs`) forwards reports only when `CSP_REPORT_URI` (explicit collector URL) or `SENTRY_DSN` (server-side DSN) is configured; with neither set it accepts reports without forwarding them and logs a host-only summary so the policy stays valid and violations remain searchable.
+- The collector has a per-instance report guard controlled by `CSP_REPORT_MAX_PER_MINUTE`; it defaults to 120 valid CSP reports per minute and returns 204 without forwarding reports over the cap. It logs one notice when the cap is first reached in each window.
 - Reports contain only violation metadata (blocked URI, violated directive, document URI), never uploaded file contents, so this does not change the app's local-only data guarantee.
 - To verify after deploy, run `make web-smoke url=https://your-production-domain.example`, load the site, and confirm there are no unexpected CSP violations in the browser console. If forwarding is configured, confirm a test violation reaches the collector.
 

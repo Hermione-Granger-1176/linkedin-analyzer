@@ -243,7 +243,7 @@ Examples:
         ),
         help=(
             "Maximum input CSV size in bytes, or 0 to disable "
-            "(default: 104857600, env: LINKEDIN_ANALYZER_MAX_INPUT_BYTES)"
+            f"(default: {DEFAULT_MAX_INPUT_BYTES}, env: LINKEDIN_ANALYZER_MAX_INPUT_BYTES)"
         ),
     )
     parser.add_argument(
@@ -252,7 +252,7 @@ Examples:
         default=_env_non_negative_int("LINKEDIN_ANALYZER_MAX_ROWS", DEFAULT_MAX_ROWS),
         help=(
             "Maximum parsed row count, or 0 to disable "
-            "(default: 1000000, env: LINKEDIN_ANALYZER_MAX_ROWS)"
+            f"(default: {DEFAULT_MAX_ROWS}, env: LINKEDIN_ANALYZER_MAX_ROWS)"
         ),
     )
 

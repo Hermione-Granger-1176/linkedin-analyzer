@@ -68,6 +68,10 @@ export const CleanPage = (() => {
 
     let initialized = false;
 
+    function formatRows(count) {
+        return `${count} ${count === 1 ? "row" : "rows"}`;
+    }
+
     /**
      * Initialize the clean page: load files, bind events, update view.
      */
@@ -303,7 +307,7 @@ export const CleanPage = (() => {
         const headers = config.columns.map((column) => column.name);
         /* v8 ignore next */
         const label = FILE_TYPE_LABELS[fileType] || fileType;
-        elements.cleanFileInfo.textContent = `${label} - ${result.rowCount} rows`;
+        elements.cleanFileInfo.textContent = `${label} - ${formatRows(result.rowCount)}`;
 
         const thead = /** @type {HTMLElement} */ (
             elements.cleanPreviewTable.querySelector("thead")
@@ -337,8 +341,8 @@ export const CleanPage = (() => {
 
         elements.cleanPreviewNote.textContent =
             result.rowCount > PREVIEW_ROW_LIMIT
-                ? `Showing first ${PREVIEW_ROW_LIMIT} of ${result.rowCount} rows`
-                : `Showing all ${result.rowCount} rows`;
+                ? `Showing first ${PREVIEW_ROW_LIMIT} of ${formatRows(result.rowCount)}`
+                : `Showing all ${formatRows(result.rowCount)}`;
 
         elements.cleanPreviewSection.hidden = false;
     }

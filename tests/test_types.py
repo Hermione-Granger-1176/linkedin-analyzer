@@ -177,6 +177,16 @@ class TestCleanerResult:
         assert "input.csv" in result_str
         assert "output.xlsx" in result_str
 
+    def test_str_success_singular_row(self) -> None:
+        result = CleanerResult(
+            success=True,
+            rows_processed=1,
+            input_path=Path("input.csv"),
+            output_path=Path("output.xlsx"),
+        )
+
+        assert str(result).startswith("Successfully processed 1 row:")
+
     def test_str_failure(self) -> None:
         result = CleanerResult(
             success=False,

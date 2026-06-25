@@ -93,6 +93,41 @@ class TestParseArgs:
         args = parse_args(["--encoding", "latin-1", "shares"])
         assert args.encoding == "latin-1"
 
+    def test_resource_limit_defaults(self) -> None:
+        args = parse_args(["shares"])
+        assert args.max_input_bytes == 104857600
+        assert args.max_rows == 1000000
+
+    def test_resource_limit_args(self) -> None:
+        args = parse_args(["--max-input-bytes", "123", "--max-rows", "0", "shares"])
+        assert args.max_input_bytes == 123
+        assert args.max_rows == 0
+
+    def test_resource_limit_env_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LINKEDIN_ANALYZER_MAX_INPUT_BYTES", "456")
+        monkeypatch.setenv("LINKEDIN_ANALYZER_MAX_ROWS", "789")
+
+        args = parse_args(["shares"])
+
+        assert args.max_input_bytes == 456
+        assert args.max_rows == 789
+
+    def test_rejects_negative_resource_limits(self) -> None:
+        try:
+            parse_args(["--max-input-bytes", "-1", "shares"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("negative max input bytes should fail parsing")
+
+    def test_rejects_non_integer_resource_limits(self) -> None:
+        try:
+            parse_args(["--max-rows", "many", "shares"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("non-integer max rows should fail parsing")
+
 
 class TestJsonFormatter:
     """Tests for structured JSON logging."""

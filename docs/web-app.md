@@ -132,11 +132,11 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Analytics computation runs in `analytics-worker.js`.
 - Connections parsing runs in `connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `messages-worker.js` with safe fallback.
-- IndexedDB stores raw files and analytics base when available; an in-memory fallback keeps the app functional but does not persist data across reloads.
+- IndexedDB stores raw CSV text and analytics base when available so uploads can be restored after reloads; an in-memory fallback keeps the app functional but does not persist data across reloads.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
 - Service worker caches navigation with NetworkFirst, scripts/styles with StaleWhileRevalidate, and fonts/images with CacheFirst (30-day TTL) to auto-refresh users onto newer builds.
-- **Clear All** removes stored uploads/analytics from IndexedDB and clears in-memory cache.
+- **Clear data** removes stored uploads/analytics from IndexedDB and clears in-memory cache.
 - Fonts are self-hosted (no external Google Fonts dependency).
 
 ## Privacy
@@ -144,7 +144,10 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 Your file contents stay in your browser unless you explicitly enable diagnostics.
 
 - Processing is local JavaScript only.
+- Raw CSV data may be saved in this browser's IndexedDB for upload restore and analytics views.
 - Data persistence uses browser IndexedDB when available, with an in-memory fallback when IndexedDB is unavailable.
+- **Clear data** removes saved uploads and cached analytics from this device.
+- Stale uploads are cleared by the session TTL sweep when the app next runs cleanup.
 - Theme preference is persisted across sessions.
 - Tutorial and mini-tip onboarding state is preserved in `localStorage` (versioned keys).
 - No backend API calls for file content.

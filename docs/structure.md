@@ -173,7 +173,7 @@ linkedin-analyzer/
 ## Data Flow (Web)
 
 1. User uploads CSV files on `#home`.
-2. Raw CSV text is stored via `storage.js` in IndexedDB when available, with an in-memory fallback otherwise.
+2. Raw CSV text is stored via `storage.js` in IndexedDB for restore when available, with an in-memory fallback otherwise.
 3. On startup, a non-blocking TTL sweep clears stale session data while caches hydrate. Screens wait for cleanup to finish before loading stored data.
 4. Analytics and Insights aggregates are prepared in `analytics-worker.js` on a scheduled prime; connections analytics in `connections-worker.js`.
 5. Screen controllers load cached/persisted data through `data-cache.js` and `storage.js`.

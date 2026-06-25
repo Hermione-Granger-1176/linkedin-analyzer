@@ -101,21 +101,22 @@ docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-
 
 ## Features
 
-| Feature              | Detail                                                    |
-| -------------------- | --------------------------------------------------------- |
-| **100% client-side** | File contents stay local in your browser                  |
-| **Light/dark theme** | Hand-drawn sketch aesthetic                               |
-| **Guided tutorials** | Per-page tutorials                                        |
-| **Analytics**        | Timeline, topics, heatmap                                 |
-| **Messages view**    | Top contacts, silent connections, fading chats            |
-| **SPA routing**      | Hash routes with URL-synced filters                       |
-| **Excel export**     | Formatted .xlsx with proper columns                       |
-| **Connections**      | Network growth, top companies, top positions              |
-| **Chart export**     | Download any chart as PNG                                 |
-| **PWA-ready**        | Installable with auto-refreshing service worker caching   |
-| **Session cleanup**  | Stale uploads and cached analytics cleared asynchronously |
-| **Social previews**  | Open Graph and Twitter Card meta tags                     |
-| **Type-safe CLI**    | Strict mypy, high test coverage (100% threshold)          |
+| Feature              | Detail                                                     |
+| -------------------- | ---------------------------------------------------------- |
+| **100% client-side** | File contents stay local in your browser                   |
+| **Local restore**    | Raw CSV data may be saved in browser storage until cleared |
+| **Light/dark theme** | Hand-drawn sketch aesthetic                                |
+| **Guided tutorials** | Per-page tutorials                                         |
+| **Analytics**        | Timeline, topics, heatmap                                  |
+| **Messages view**    | Top contacts, silent connections, fading chats             |
+| **SPA routing**      | Hash routes with URL-synced filters                        |
+| **Excel export**     | Formatted .xlsx with proper columns                        |
+| **Connections**      | Network growth, top companies, top positions               |
+| **Chart export**     | Download any chart as PNG                                  |
+| **PWA-ready**        | Installable with auto-refreshing service worker caching    |
+| **Session cleanup**  | Stale uploads and cached analytics cleared asynchronously  |
+| **Social previews**  | Open Graph and Twitter Card meta tags                      |
+| **Type-safe CLI**    | Strict mypy, high test coverage (100% threshold)           |
 
 <br>
 

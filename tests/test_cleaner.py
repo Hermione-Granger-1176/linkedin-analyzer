@@ -61,6 +61,109 @@ class TestRunCleaner:
         assert result.success is False
         assert "does not exist" in (result.error or "")
 
+    def test_input_file_size_limit_returns_clear_error(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nAda\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+            max_input_bytes=1,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert result.error == "Input file is too large: 9 bytes exceeds limit of 1 bytes"
+        assert not output_path.exists()
+
+    def test_zero_input_file_size_limit_disables_check(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nAda\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+            max_input_bytes=0,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        assert output_path.exists()
+
+    def test_row_count_limit_returns_clear_error(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nAda\nGrace\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+            max_rows=1,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert result.error == "Input CSV has too many rows: 2 exceeds limit of 1"
+
+    def test_zero_row_count_limit_disables_check(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nAda\nGrace\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+            max_rows=0,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        assert result.rows_processed == 2
+
+    def test_negative_resource_limit_returns_clear_error(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nAda\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+            max_rows=-1,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert result.error == "max_rows must be a non-negative integer"
+
+    def test_input_stat_failure_returns_clear_error(self, tmp_path: Path) -> None:
+        class BadStatPath:
+            def exists(self) -> bool:
+                return True
+
+            def stat(self) -> object:
+                raise OSError("stat failed")
+
+            def __str__(self) -> str:
+                return "bad.csv"
+
+        output_path = tmp_path / "test.xlsx"
+        config = CleanerConfig(
+            input_path=BadStatPath(),  # type: ignore[arg-type]
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", required=True),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert result.error == "stat failed"
+
     def test_successful_clean(self, tmp_path: Path) -> None:
         # Create test CSV
         input_path = tmp_path / "test.csv"

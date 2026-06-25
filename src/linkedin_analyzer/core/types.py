@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 from openpyxl.utils import get_column_letter
 
+from linkedin_analyzer.core.limits import DEFAULT_MAX_INPUT_BYTES, DEFAULT_MAX_ROWS
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -48,6 +50,8 @@ class CleanerConfig:
         required_row_columns: Columns that must contain row values after header validation
         drop_if_all_missing: Drop rows when all these columns are missing
         encoding: Explicit input CSV encoding; when None, decoding is auto-detected
+        max_input_bytes: Maximum input CSV size in bytes; 0 disables the limit
+        max_rows: Maximum parsed row count; 0 disables the limit
     """
 
     input_path: Path
@@ -58,6 +62,8 @@ class CleanerConfig:
     required_row_columns: tuple[str, ...] = ()
     drop_if_all_missing: tuple[str, ...] = ()
     encoding: str | None = None
+    max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES
+    max_rows: int = DEFAULT_MAX_ROWS
 
     @property
     def required_columns(self) -> list[str]:

@@ -130,6 +130,13 @@ def _write_excel_atomic(df: pd.DataFrame, output_path: Path, config: CleanerConf
         raise
 
 
+def _limit_error(name: str, value: int) -> str | None:
+    """Return an error when a resource limit is negative."""
+    if value < 0:
+        return f"{name} must be a non-negative integer"
+    return None
+
+
 def run_cleaner(config: CleanerConfig) -> CleanerResult:
     """Execute a cleaning operation.
 
@@ -151,6 +158,43 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             error=f"Input file does not exist: {input_path}",
         )
 
+    for name, value in (
+        ("max_input_bytes", config.max_input_bytes),
+        ("max_rows", config.max_rows),
+    ):
+        error = _limit_error(name, value)
+        if error:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error=error,
+            )
+
+    if config.max_input_bytes > 0:
+        try:
+            input_size = input_path.stat().st_size
+        except OSError as e:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error=str(e),
+            )
+        if input_size > config.max_input_bytes:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error=(
+                    "Input file is too large: "
+                    f"{input_size} bytes exceeds limit of {config.max_input_bytes} bytes"
+                ),
+            )
+
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         LOG.info("Reading %s", input_path)
@@ -159,6 +203,10 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             csv_kwargs.setdefault("skiprows", config.skiprows)
         df = _read_csv_with_fallback(input_path, csv_kwargs, config.encoding)
         LOG.info("Found %d rows", len(df))
+        if config.max_rows > 0 and len(df) > config.max_rows:
+            raise ValueError(
+                f"Input CSV has too many rows: {len(df)} exceeds limit of {config.max_rows}"
+            )
 
         df = df.rename(columns=lambda name: str(name).strip().lstrip("\ufeff"))
         duplicate_columns = [str(name) for name in df.columns[df.columns.duplicated()].unique()]

@@ -270,7 +270,13 @@
                                 >
                                     Open Analytics
                                 </button>
-                                <button class="reset-btn" id="clearAllBtn">Clear data</button>
+                                <button
+                                    class="reset-btn"
+                                    id="clearAllBtn"
+                                    title="Remove saved uploads and cached analytics from this device"
+                                >
+                                    Clear data
+                                </button>
                             </div>
                         </div>
                     </section>
@@ -446,8 +452,8 @@
                     </section>
 
                     <p class="privacy-footnote">
-                        Your files stay in your browser. Optional diagnostics can be enabled
-                        separately.
+                        Your files stay in this browser. Saved uploads can be cleared with Clear
+                        data.
                     </p>
                 </div>
             </section>
@@ -633,8 +639,8 @@
                     </div>
 
                     <p class="privacy-footnote">
-                        Your files stay in your browser. Optional diagnostics can be enabled
-                        separately.
+                        Your files stay in this browser. Saved uploads can be cleared with Clear
+                        data.
                     </p>
                 </div>
             </section>
@@ -831,8 +837,8 @@
                     </div>
 
                     <p class="privacy-footnote">
-                        Your files stay in your browser. Optional diagnostics can be enabled
-                        separately.
+                        Your files stay in this browser. Saved uploads can be cleared with Clear
+                        data.
                     </p>
                 </div>
             </section>
@@ -1012,8 +1018,8 @@
                     </div>
 
                     <p class="privacy-footnote">
-                        Your files stay in your browser. Optional diagnostics can be enabled
-                        separately.
+                        Your files stay in this browser. Saved uploads can be cleared with Clear
+                        data.
                     </p>
                 </div>
             </section>
@@ -1178,8 +1184,8 @@
                     </div>
 
                     <p class="privacy-footnote">
-                        Your files stay in your browser. Optional diagnostics can be enabled
-                        separately.
+                        Your files stay in this browser. Saved uploads can be cleared with Clear
+                        data.
                     </p>
                 </div>
             </section>
@@ -1308,8 +1314,8 @@
                     </div>
 
                     <p class="privacy-footnote">
-                        Your files stay in your browser. Optional diagnostics can be enabled
-                        separately.
+                        Your files stay in this browser. Saved uploads can be cleared with Clear
+                        data.
                     </p>
                 </div>
             </section>
@@ -1318,7 +1324,8 @@
         <footer class="app-footer" id="appFooter" hidden>
             <p class="app-footer-note">
                 <span id="telemetryStatusLabel" data-testid="telemetry-status"></span>
-                File contents never leave your browser.
+                File contents never leave this browser. Clear data removes saved uploads from this
+                device.
             </p>
             <button
                 class="ghost-btn"
@@ -1336,7 +1343,7 @@
         <div class="status-banner" id="telemetryBanner" hidden aria-live="polite">
             <p>
                 Optional diagnostics are available to help improve reliability. File contents stay
-                local.
+                local, and saved uploads remain in this browser.
             </p>
             <div class="action-buttons">
                 <button class="ghost-btn" id="telemetryDismissBtn" type="button">Dismiss</button>
@@ -1378,7 +1385,7 @@
         <div class="progress-overlay" id="progressOverlay" hidden>
             <div class="progress-card">
                 <h2>Processing your data</h2>
-                <p>Everything stays in your browser.</p>
+                <p>Everything stays in this browser.</p>
                 <div class="progress-canvas-wrap">
                     <canvas id="progressCanvas"></canvas>
                 </div>

@@ -12,6 +12,7 @@ VENV                ?= .venv
 VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
 NPX                 ?= npx
+NODE                ?= node
 PY_PATHS            := src/ tests/ scripts/ci/ scripts/gh/
 PY_TYPE_PATHS       := src/ scripts/ci/ scripts/gh/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
@@ -142,7 +143,7 @@ test-e2e-ui: ## Run Playwright UI mode
 
 # ─── Web @web ──────────────────────────────────────────────────────────────────────
 
-.PHONY: web web-preview web-lint web-format-check web-typecheck web-test web-build web-size-check web-build-size web-e2e
+.PHONY: web web-preview web-lint web-format-check web-typecheck web-test web-build web-size-check web-build-size web-smoke web-e2e
 
 web: ## Start the Vite dev server
 	$(NPM) run dev
@@ -165,6 +166,10 @@ web-size-check: ## Enforce web bundle size budgets
 	$(NPM) run size:check
 
 web-build-size: web-build web-size-check ## Build web and enforce size budgets
+
+web-smoke: ## Smoke-check a deployed web app (make web-smoke url=https://example.com)
+	@test -n "$(url)" || (printf 'Usage: make web-smoke url=https://example.com\n' >&2; exit 1)
+	$(NODE) scripts/web-smoke.mjs "$(url)"
 
 web-e2e: test-e2e ## Alias for test-e2e
 

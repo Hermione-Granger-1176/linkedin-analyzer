@@ -15,9 +15,20 @@
    - `VITE_SENTRY_DSN` (optional; only used after user opt-in)
    - `VITE_APP_RELEASE` (recommended, e.g. commit SHA)
    - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables CSP report forwarding; see [CSP violation reporting](#csp-violation-reporting))
+   - `CSP_REPORT_MAX_PER_MINUTE` (optional, server-side only; defaults to 120, use 0 to disable the per-instance CSP report guard)
 5. Verify custom headers from `vercel.json` are applied after deploy.
 
 The `api/csp-report` Serverless Function deploys automatically from the `api/` directory; no extra Vercel configuration is required.
+
+## Post-Deploy Smoke Check
+
+Run the lightweight smoke check after each production deploy:
+
+```bash
+make web-smoke url=https://your-production-domain.example
+```
+
+The check uses HTTP only, so it does not install or run Playwright. It verifies that the app shell loads, key security headers are present, and `/api/csp-report` accepts a minimal CSP report with HTTP 204.
 
 ## Versioning
 
@@ -72,8 +83,9 @@ After any rollback, confirm the active release in Sentry via the `release` tag a
 The `Content-Security-Policy` header in `vercel.json` enforces a strict policy and reports violations via `report-uri` / `report-to` to the first-party endpoint `/api/csp-report` (`Reporting-Endpoints: csp-endpoint`). Keeping the endpoint same-origin means `vercel.json` never embeds a Sentry org/project and the forwarding secret stays server-side.
 
 - The collector (`api/csp-report.mjs`) forwards reports only when `CSP_REPORT_URI` (explicit collector URL) or `SENTRY_DSN` (server-side DSN) is configured; with neither set it accepts and drops reports so the policy stays valid.
+- The collector has a per-instance report guard controlled by `CSP_REPORT_MAX_PER_MINUTE`; it defaults to 120 valid CSP reports per minute and returns 204 without forwarding or logging reports over the cap.
 - Reports contain only violation metadata (blocked URI, violated directive, document URI), never uploaded file contents, so this does not change the app's local-only data guarantee.
-- To verify after deploy, load the site and confirm there are no unexpected CSP violations in the browser console; if forwarding is configured, confirm a test violation reaches the collector.
+- To verify after deploy, run `make web-smoke url=https://your-production-domain.example`, load the site, and confirm there are no unexpected CSP violations in the browser console. If forwarding is configured, confirm a test violation reaches the collector.
 
 ### Recommended alerting
 
@@ -126,6 +138,8 @@ If they are missing, the action-SHA refresh workflow records a skipped summary i
 | Variable | Default | Description |
 | --- | --- | --- |
 | `LINKEDIN_ANALYZER_DATA_DIR` | `data` | Base directory for input/output file paths |
+| `LINKEDIN_ANALYZER_MAX_INPUT_BYTES` | `104857600` | Maximum input CSV size in bytes; `0` disables the limit |
+| `LINKEDIN_ANALYZER_MAX_ROWS` | `1000000` | Maximum parsed row count; `0` disables the limit |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `LOG_FORMAT` | `text` | Log output format: `text` for human-readable, `json` for structured JSON |
 

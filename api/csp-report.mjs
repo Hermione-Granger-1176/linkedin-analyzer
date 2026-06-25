@@ -84,13 +84,14 @@ export function resolveReportEndpoint(env) {
  */
 export function resolveReportMaxPerMinute(env) {
     const rawLimit = env && env.CSP_REPORT_MAX_PER_MINUTE;
-    if (rawLimit === undefined || rawLimit === "") {
+    if (rawLimit === undefined) {
         return DEFAULT_REPORT_MAX_PER_MINUTE;
     }
-    const parsed = Number.parseInt(rawLimit, 10);
-    if (!Number.isFinite(parsed) || parsed < 0) {
+    const trimmedLimit = rawLimit.trim();
+    if (!/^\d+$/.test(trimmedLimit)) {
         return DEFAULT_REPORT_MAX_PER_MINUTE;
     }
+    const parsed = Number(trimmedLimit);
     return parsed;
 }
 

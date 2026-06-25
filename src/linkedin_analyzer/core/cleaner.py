@@ -142,6 +142,20 @@ def _limit_error(name: str, value: int) -> str | None:
     return None
 
 
+def _apply_row_read_limit(csv_kwargs: dict[str, Any], max_rows: int) -> None:
+    """Bound CSV parsing to one row past the configured row limit."""
+    if max_rows <= 0:
+        return
+
+    read_limit = max_rows + 1
+    existing_nrows = csv_kwargs.get("nrows")
+    if isinstance(existing_nrows, int):
+        csv_kwargs["nrows"] = min(existing_nrows, read_limit)
+        return
+    if existing_nrows is None:
+        csv_kwargs["nrows"] = read_limit
+
+
 def run_cleaner(config: CleanerConfig) -> CleanerResult:
     """Execute a cleaning operation.
 
@@ -207,6 +221,7 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         csv_kwargs: dict[str, Any] = dict(config.csv_kwargs)
         if config.skiprows:
             csv_kwargs.setdefault("skiprows", config.skiprows)
+        _apply_row_read_limit(csv_kwargs, config.max_rows)
         df = _read_csv_with_fallback(input_path, csv_kwargs, config.encoding)
         LOG.info("Found %d rows", len(df))
         if config.max_rows > 0 and len(df) > config.max_rows:

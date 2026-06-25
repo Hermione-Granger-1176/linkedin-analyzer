@@ -112,12 +112,15 @@ describe("resolveReportMaxPerMinute", () => {
 
     it("uses a configured non-negative cap", () => {
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "2" })).toBe(2);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: " 2 " })).toBe(2);
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "0" })).toBe(0);
     });
 
     it("falls back to the default for invalid caps", () => {
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "-1" })).toBe(120);
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "oops" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "12oops" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "" })).toBe(120);
     });
 });
 

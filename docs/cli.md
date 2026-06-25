@@ -91,6 +91,20 @@ linkedin-analyzer --encoding utf-8 all
 
 Forces the encoding used to read input CSVs. When omitted, the encoding is auto-detected (see Cleaning Notes below). Pass this when characters look wrong, or when you already know the export's encoding. Like `--log-level` and `--log-format`, it is a global option and goes before the command.
 
+### Resource limits
+
+```bash
+linkedin-analyzer --max-input-bytes 104857600 --max-rows 1000000 shares
+linkedin-analyzer --max-input-bytes 0 --max-rows 0 all
+```
+
+By default, the CLI rejects input files larger than 104857600 bytes and CSVs with more than 1000000 parsed rows. Pass `0` to disable either limit. These are global options and go before the command.
+
+Environment defaults:
+
+- `LINKEDIN_ANALYZER_MAX_INPUT_BYTES`
+- `LINKEDIN_ANALYZER_MAX_ROWS`
+
 ### Custom paths for single-file commands
 
 ```bash

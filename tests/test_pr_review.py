@@ -349,6 +349,32 @@ def test_resolve_repo_handles_ssh_remote_with_port() -> None:
     assert gh_runner.resolve_repo(run_fn=runner) == "octo/Hello"
 
 
+def test_resolve_repo_ignores_non_github_remote() -> None:
+    """Do not treat a non-GitHub origin path as a GitHub owner/name slug."""
+    runner = FakeGh(
+        [
+            (has("repo", "view"), completed_process(1, "", "no repo")),
+            (has("remote"), completed_process(0, "https://gitlab.example/octo/Hello.git\n")),
+        ]
+    )
+
+    with pytest.raises(GhError):
+        gh_runner.resolve_repo(run_fn=runner)
+
+
+def test_resolve_repo_ignores_github_lookalike_host() -> None:
+    """Reject origins whose host merely contains github.com as a substring."""
+    runner = FakeGh(
+        [
+            (has("repo", "view"), completed_process(1, "", "no repo")),
+            (has("remote"), completed_process(0, "https://github.com.evil/octo/Hello.git\n")),
+        ]
+    )
+
+    with pytest.raises(GhError):
+        gh_runner.resolve_repo(run_fn=runner)
+
+
 def test_resolve_repo_falls_back_when_key_missing() -> None:
     """A repo-view payload without nameWithOwner still falls back to the remote."""
     runner = FakeGh(

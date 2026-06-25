@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
+from linkedin_analyzer.core.limits import DEFAULT_MAX_INPUT_BYTES, DEFAULT_MAX_ROWS
 from linkedin_analyzer.core.paths import DEFAULT_COMMENTS_INPUT, DEFAULT_COMMENTS_OUTPUT
 from linkedin_analyzer.core.text import clean_comments_message, clean_date
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
@@ -52,6 +53,8 @@ def clean_comments(
     input_path: Path | None = None,
     output_path: Path | None = None,
     encoding: str | None = None,
+    max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
+    max_rows: int = DEFAULT_MAX_ROWS,
 ) -> CleanerResult:
     """Clean a Comments CSV file and export to Excel.
 
@@ -59,6 +62,8 @@ def clean_comments(
         input_path: Path to input CSV file (default: Comments.csv)
         output_path: Path to output Excel file (default: Comments.xlsx)
         encoding: Explicit input CSV encoding; when None, decoding is auto-detected
+        max_input_bytes: Maximum input CSV size in bytes; 0 disables the limit
+        max_rows: Maximum parsed row count; 0 disables the limit
 
     Returns:
         CleanerResult with operation status and details
@@ -67,5 +72,7 @@ def clean_comments(
         input_path=input_path or DEFAULT_INPUT,
         output_path=output_path or DEFAULT_OUTPUT,
         encoding=encoding,
+        max_input_bytes=max_input_bytes,
+        max_rows=max_rows,
     )
     return run_cleaner(config)

@@ -79,6 +79,35 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
+     * Find duplicate header names after normalization, preserving header order.
+     * @param {string[]} headers - Normalized headers
+     * @returns {string[]} Duplicate header names
+     */
+    function findDuplicateHeaders(headers) {
+        const seen = new Set();
+        const duplicateSet = new Set();
+        const duplicates = [];
+        for (const header of headers) {
+            if (seen.has(header) && !duplicateSet.has(header)) {
+                duplicateSet.add(header);
+                duplicates.push(header);
+            }
+            seen.add(header);
+        }
+        return duplicates;
+    }
+
+    /**
+     * Build the duplicate-header error used by the Python cleaner.
+     * @param {string[]} headers - Duplicate normalized header names
+     * @returns {string} User-facing error message
+     */
+    function buildDuplicateHeadersError(headers) {
+        const labels = headers.map((header) => (header === "" ? "(blank)" : header));
+        return `Duplicate columns after header normalization: ${labels.join(", ")}`;
+    }
+
+    /**
      * Build parse cache key from file type options.
      * @param {string} fileType - Target file type
      * @returns {string}
@@ -154,6 +183,19 @@ export const LinkedInCleaner = (() => {
                 parseCache.set(cacheKey, headerResult);
             }
             return headerResult;
+        }
+
+        const duplicateHeaders = findDuplicateHeaders(headers);
+        if (duplicateHeaders.length) {
+            const duplicateResult = {
+                headers: [],
+                data: [],
+                error: buildDuplicateHeadersError(duplicateHeaders),
+            };
+            if (parseCache && cacheKey) {
+                parseCache.set(cacheKey, duplicateResult);
+            }
+            return duplicateResult;
         }
 
         const headerCount = headers.length;

@@ -15,6 +15,7 @@ from linkedin_analyzer.cleaners.comments import clean_comments
 from linkedin_analyzer.cleaners.connections import clean_connections
 from linkedin_analyzer.cleaners.messages import clean_messages
 from linkedin_analyzer.cleaners.shares import clean_shares
+from linkedin_analyzer.core.limits import DEFAULT_MAX_INPUT_BYTES, DEFAULT_MAX_ROWS
 from linkedin_analyzer.core.paths import (
     DEFAULT_COMMENTS_INPUT,
     DEFAULT_COMMENTS_OUTPUT,
@@ -61,6 +62,28 @@ SINGLE_COMMAND_SPECS = (
 )
 
 ALL_COMMAND_NAMES = tuple(spec[0] for spec in SINGLE_COMMAND_SPECS)
+
+
+def _non_negative_int(value: str) -> int:
+    """Parse a non-negative integer command-line option."""
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a non-negative integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
+    return parsed
+
+
+def _env_non_negative_int(name: str, default: int) -> int:
+    """Parse a non-negative integer environment default, or fall back."""
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        return _non_negative_int(raw_value)
+    except argparse.ArgumentTypeError:
+        return default
 
 
 class JsonFormatter(logging.Formatter):
@@ -211,6 +234,27 @@ Examples:
         default=None,
         help="Input CSV encoding (default: auto-detect UTF-8, then Latin-1)",
     )
+    parser.add_argument(
+        "--max-input-bytes",
+        type=_non_negative_int,
+        default=_env_non_negative_int(
+            "LINKEDIN_ANALYZER_MAX_INPUT_BYTES",
+            DEFAULT_MAX_INPUT_BYTES,
+        ),
+        help=(
+            "Maximum input CSV size in bytes, or 0 to disable "
+            f"(default: {DEFAULT_MAX_INPUT_BYTES}, env: LINKEDIN_ANALYZER_MAX_INPUT_BYTES)"
+        ),
+    )
+    parser.add_argument(
+        "--max-rows",
+        type=_non_negative_int,
+        default=_env_non_negative_int("LINKEDIN_ANALYZER_MAX_ROWS", DEFAULT_MAX_ROWS),
+        help=(
+            "Maximum parsed row count, or 0 to disable "
+            f"(default: {DEFAULT_MAX_ROWS}, env: LINKEDIN_ANALYZER_MAX_ROWS)"
+        ),
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -282,7 +326,12 @@ def run_all(args: argparse.Namespace) -> int:
     exit_code = 0
     for label, cleaner, input_path, output_path in tasks:
         LOG.info("Processing %s...", label)
-        result = cleaner(input_path=input_path, output_path=output_path, encoding=args.encoding)
+        result = cleaner(
+            input_path=input_path,
+            output_path=output_path,
+            encoding=args.encoding,
+            **_cleaner_limit_kwargs(args),
+        )
         if _handle_result(result) != 0:
             exit_code = 1
 
@@ -311,8 +360,21 @@ def _run_single_cleaner(
     cleaner: Callable[..., CleanerResult],
 ) -> int:
     """Run one cleaner function with standard CLI arguments."""
-    result = cleaner(input_path=args.input, output_path=args.output, encoding=args.encoding)
+    result = cleaner(
+        input_path=args.input,
+        output_path=args.output,
+        encoding=args.encoding,
+        **_cleaner_limit_kwargs(args),
+    )
     return _handle_result(result)
+
+
+def _cleaner_limit_kwargs(args: argparse.Namespace) -> dict[str, int]:
+    """Return resource limit kwargs from parsed arguments."""
+    return {
+        "max_input_bytes": getattr(args, "max_input_bytes", DEFAULT_MAX_INPUT_BYTES),
+        "max_rows": getattr(args, "max_rows", DEFAULT_MAX_ROWS),
+    }
 
 
 def _get_cleaner(command_name: str) -> Callable[..., CleanerResult]:

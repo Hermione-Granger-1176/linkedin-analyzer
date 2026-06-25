@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import handler, { resolveReportEndpoint, sentryReportUriFromDsn } from "../../api/csp-report.mjs";
+import handler, {
+    resetReportRateLimitForTests,
+    resolveReportEndpoint,
+    resolveReportMaxPerMinute,
+    sentryReportUriFromDsn,
+    shouldDropReportForRateLimit,
+} from "../../api/csp-report.mjs";
 
 /**
  * Build a mock request whose body is delivered as an async stream of chunks.
@@ -42,7 +48,9 @@ function mockResponse() {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    resetReportRateLimitForTests();
     delete process.env.CSP_REPORT_URI;
+    delete process.env.CSP_REPORT_MAX_PER_MINUTE;
     delete process.env.SENTRY_DSN;
 });
 
@@ -97,6 +105,62 @@ describe("resolveReportEndpoint", () => {
     });
 });
 
+describe("resolveReportMaxPerMinute", () => {
+    it("uses the default cap when unset", () => {
+        expect(resolveReportMaxPerMinute({})).toBe(120);
+    });
+
+    it("uses a configured non-negative cap", () => {
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "2" })).toBe(2);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: " 2 " })).toBe(2);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "0" })).toBe(0);
+    });
+
+    it("falls back to the default for invalid caps", () => {
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "-1" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "oops" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "12oops" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "9007199254740992" })).toBe(
+            120,
+        );
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "9".repeat(400) })).toBe(
+            120,
+        );
+    });
+});
+
+describe("shouldDropReportForRateLimit", () => {
+    it("allows reports below the cap and drops reports above it", () => {
+        const logFn = vi.fn();
+        const env = { CSP_REPORT_MAX_PER_MINUTE: "1" };
+
+        expect(shouldDropReportForRateLimit(env, 1000, logFn)).toBe(false);
+        expect(shouldDropReportForRateLimit(env, 1001, logFn)).toBe(true);
+        expect(shouldDropReportForRateLimit(env, 1002, logFn)).toBe(true);
+
+        expect(logFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("resets the cap after the window", () => {
+        const logFn = vi.fn();
+        const env = { CSP_REPORT_MAX_PER_MINUTE: "1" };
+
+        expect(shouldDropReportForRateLimit(env, 1000, logFn)).toBe(false);
+        expect(shouldDropReportForRateLimit(env, 1001, logFn)).toBe(true);
+        expect(shouldDropReportForRateLimit(env, 61000, logFn)).toBe(false);
+    });
+
+    it("disables the guard when configured to zero", () => {
+        const logFn = vi.fn();
+        const env = { CSP_REPORT_MAX_PER_MINUTE: "0" };
+
+        expect(shouldDropReportForRateLimit(env, 1000, logFn)).toBe(false);
+        expect(shouldDropReportForRateLimit(env, 1001, logFn)).toBe(false);
+        expect(logFn).not.toHaveBeenCalled();
+    });
+});
+
 describe("csp-report handler", () => {
     it("rejects non-POST methods with 405", async () => {
         const res = mockResponse();
@@ -122,6 +186,26 @@ describe("csp-report handler", () => {
         expect(init.body).toBe(JSON.stringify(report));
         expect(init.headers["content-type"]).toBe("application/csp-report");
         expect(res.statusCode).toBe(204);
+    });
+
+    it("drops valid CSP reports over the configured rate cap without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        process.env.CSP_REPORT_MAX_PER_MINUTE = "1";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const report = { "csp-report": { "violated-directive": "style-src-attr" } };
+        const first = mockResponse();
+        const second = mockResponse();
+        await handler({ method: "POST", headers: {}, body: report }, first);
+        await handler({ method: "POST", headers: {}, body: report }, second);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(first.statusCode).toBe(204);
+        expect(second.statusCode).toBe(204);
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        logSpy.mockRestore();
     });
 
     const REPORTS_JSON_BODY = JSON.stringify([

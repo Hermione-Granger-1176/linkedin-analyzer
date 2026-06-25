@@ -329,7 +329,22 @@ describe("CleanPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         const note = document.getElementById("cleanPreviewNote").textContent;
-        expect(note).toContain("Showing all");
+        expect(note).toBe("Showing all 3 rows");
+    });
+
+    it('uses singular "row" in preview text for one row', async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 1 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "A", Link: "https://a.com" }],
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanFileInfo").textContent).toBe("Shares - 1 row");
+        expect(document.getElementById("cleanPreviewNote").textContent).toBe("Showing all 1 row");
     });
 
     it("truncates long cell values in the preview table", async () => {

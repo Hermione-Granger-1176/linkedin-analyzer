@@ -1547,6 +1547,8 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
+        expect(document.getElementById("sharesStatus").textContent).toBe("5 rows loaded");
+        expect(document.getElementById("commentsStatus").textContent).toBe("3 rows loaded");
         expect(
             document
                 .querySelector('.file-status-item[data-file="shares"]')
@@ -1584,6 +1586,8 @@ describe("UploadPage", () => {
 
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("messagesStatus").textContent).toBe("1 row loaded");
 
         // Simulate cached state available for next call
         DataCache.get.mockImplementation((key) => {
@@ -1862,6 +1866,34 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("falls back when streaming file read rejects with a non-error value", async () => {
+        const originalReadableStream = globalThis.ReadableStream;
+        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["bad"], "Messages.csv", { type: "text/csv" });
+        Object.defineProperty(file, "size", { value: 6 * 1024 * 1024 });
+        Object.defineProperty(file, "stream", {
+            value: () => ({
+                getReader: () => ({
+                    read: () => ({ then: (_resolve, reject) => reject("read failed") }),
+                    cancel: () => Promise.resolve(),
+                }),
+            }),
+        });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
+
+        globalThis.ReadableStream = originalReadableStream;
+    });
+
     // --- oversize file warning -----------------------------------------------
 
     it("warns about large files (>25MB) but still processes them", async () => {
@@ -1892,7 +1924,7 @@ describe("UploadPage", () => {
 
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(document.getElementById("uploadHint").textContent).toContain("large");
+        expect(document.getElementById("uploadHint").textContent).toContain("25MB+");
 
         globalThis.FileReader = originalFileReader;
     });

@@ -24,6 +24,12 @@ const DEFAULT_CONTENT_TYPE = "application/csp-report";
 // fire-and-forget (pending work may be frozen once the response is sent), so the
 // request is awaited with a bounded timeout instead.
 const FORWARD_TIMEOUT_MS = 2000;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const DEFAULT_REPORT_MAX_PER_MINUTE = 120;
+
+let rateWindowStartedAt = 0;
+let rateWindowCount = 0;
+let rateWindowNoticeLogged = false;
 
 /**
  * Build an Error carrying an HTTP status code for the handler to surface.
@@ -69,6 +75,65 @@ export function resolveReportEndpoint(env) {
         return sentryReportUriFromDsn(env.SENTRY_DSN);
     }
     return null;
+}
+
+/**
+ * Resolve the per-instance CSP report cap from server-side env vars.
+ * @param {Record<string, string | undefined>|undefined} env - Environment variables.
+ * @returns {number} Maximum reports per minute; 0 disables the guard.
+ */
+export function resolveReportMaxPerMinute(env) {
+    const rawLimit = env && env.CSP_REPORT_MAX_PER_MINUTE;
+    if (rawLimit === undefined) {
+        return DEFAULT_REPORT_MAX_PER_MINUTE;
+    }
+    const trimmedLimit = rawLimit.trim();
+    if (!/^\d+$/.test(trimmedLimit)) {
+        return DEFAULT_REPORT_MAX_PER_MINUTE;
+    }
+    const parsed = Number(trimmedLimit);
+    if (!Number.isSafeInteger(parsed)) {
+        return DEFAULT_REPORT_MAX_PER_MINUTE;
+    }
+    return parsed;
+}
+
+/**
+ * Reset in-memory rate state for deterministic tests.
+ * @returns {void}
+ */
+export function resetReportRateLimitForTests() {
+    rateWindowStartedAt = 0;
+    rateWindowCount = 0;
+    rateWindowNoticeLogged = false;
+}
+
+/**
+ * Return whether this valid CSP report should be dropped by the local rate guard.
+ * @param {Record<string, string | undefined>|undefined} env - Environment variables.
+ * @param {number} [now=Date.now()] - Current timestamp in milliseconds.
+ * @param {(message: string) => void} [logFn=console.error] - Notice logger.
+ * @returns {boolean} True when the report should be dropped.
+ */
+export function shouldDropReportForRateLimit(env, now = Date.now(), logFn = console.error) {
+    const limit = resolveReportMaxPerMinute(env);
+    if (limit === 0) {
+        return false;
+    }
+    if (!rateWindowStartedAt || now - rateWindowStartedAt >= RATE_LIMIT_WINDOW_MS) {
+        rateWindowStartedAt = now;
+        rateWindowCount = 0;
+        rateWindowNoticeLogged = false;
+    }
+    if (rateWindowCount >= limit) {
+        if (!rateWindowNoticeLogged) {
+            logFn("CSP report rate limit reached; dropping reports for this window.");
+            rateWindowNoticeLogged = true;
+        }
+        return true;
+    }
+    rateWindowCount += 1;
+    return false;
 }
 
 /**
@@ -211,6 +276,12 @@ export default async function handler(req, res) {
     // so this prevents it from being used to relay arbitrary bodies upstream.
     const report = body ? parseCspReport(body) : null;
     if (!report) {
+        res.statusCode = 204;
+        res.end();
+        return;
+    }
+
+    if (shouldDropReportForRateLimit(process.env)) {
         res.statusCode = 204;
         res.end();
         return;

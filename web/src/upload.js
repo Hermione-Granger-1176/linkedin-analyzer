@@ -78,6 +78,14 @@ export const UploadPage = (() => {
     const FILE_READ_TIMEOUT_MS = 30000;
     const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
+    function formatRows(count) {
+        return `${count} ${count === 1 ? "row" : "rows"}`;
+    }
+
+    function toErrorMessage(error, fallback) {
+        return error instanceof Error && error.message ? error.message : fallback;
+    }
+
     let worker = null;
     const pendingFiles = new Map();
     const activeJobs = new Set();
@@ -442,7 +450,11 @@ export const UploadPage = (() => {
 
         const oversizeFiles = acceptedFiles.filter((file) => file.size > LARGE_FILE_WARNING_BYTES);
         if (oversizeFiles.length) {
-            setHint("Some files are large (25MB+). Processing may take longer than usual.", false);
+            const warningMb = Math.round(LARGE_FILE_WARNING_BYTES / (1024 * 1024));
+            setHint(
+                `Some files are large (${warningMb}MB+). Processing may take longer than usual.`,
+                false,
+            );
         }
         if (!worker) {
             setHint("Workers are unavailable. Open this page from a local server.", true);
@@ -491,12 +503,7 @@ export const UploadPage = (() => {
                         fileSize: file.size,
                     });
                     completeJob(jobId, file.name);
-                    setHint(
-                        error && error.message
-                            ? error.message
-                            : "Error reading file. Please try again.",
-                        true,
-                    );
+                    setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
                 });
         });
     }
@@ -1018,7 +1025,7 @@ export const UploadPage = (() => {
         }
         if (fileData) {
             statusItem.classList.add("is-ready");
-            statusLabel.textContent = `${fileData.rowCount} rows loaded`;
+            statusLabel.textContent = `${formatRows(fileData.rowCount)} loaded`;
         } else {
             statusItem.classList.remove("is-ready");
             statusLabel.textContent = "Not uploaded";

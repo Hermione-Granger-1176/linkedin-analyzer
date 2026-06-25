@@ -43,6 +43,41 @@ describe("LinkedInCleaner", () => {
         expect(result.error).toMatch(/auto-detect/i);
     });
 
+    it("rejects exact duplicate headers before building rows", () => {
+        const csv = [
+            "Date,ShareLink,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+            "2025-01-01,https://linkedin.com/one,https://linkedin.com/two,Hello,,,PUBLIC",
+        ].join("\n");
+
+        const result = LinkedInCleaner.process(csv, "shares");
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe("Duplicate columns after header normalization: ShareLink");
+    });
+
+    it("rejects duplicate headers after BOM and whitespace normalization", () => {
+        const csv = [
+            "\uFEFFDate, Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+            "2025-01-01,2025-01-02,https://linkedin.com/post,Hello,,,PUBLIC",
+        ].join("\n");
+
+        const result = LinkedInCleaner.process(csv, "shares");
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe("Duplicate columns after header normalization: Date");
+    });
+
+    it("rejects duplicate blank headers after normalization", () => {
+        const csv = [
+            "Date,, ,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
+            "2025-01-01,one,two,https://linkedin.com/post,Hello,,,PUBLIC",
+        ].join("\n");
+
+        const result = LinkedInCleaner.parseCSV(csv, "shares");
+
+        expect(result.error).toBe("Duplicate columns after header normalization: (blank)");
+    });
+
     it("cleans connections long month names", () => {
         const csv = [
             "Notes:",

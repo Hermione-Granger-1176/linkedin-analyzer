@@ -7,43 +7,45 @@ repos:
       - id: check-merge-conflict
       - id: check-yaml
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.4
-    hooks:
-      - id: ruff
-        args: ["src/", "tests/", "scripts/ci/", "scripts/gh/"]
-      - id: ruff-format
-        args: ["src/", "tests/", "scripts/ci/", "scripts/gh/"]
-
   - repo: local
     hooks:
-      - id: mypy
-        name: mypy
-        entry: .venv/bin/mypy src/ scripts/ci/ scripts/gh/
+      - id: lint-py
+        name: lint-py
+        entry: make lint-py
         language: system
         pass_filenames: false
-      - id: pytest
-        name: pytest
-        entry: .venv/bin/pytest tests/ -v
+      - id: format-py-check
+        name: format-py-check
+        entry: make format-py-check
+        language: system
+        pass_filenames: false
+      - id: typecheck-py
+        name: typecheck-py
+        entry: make typecheck-py
         language: system
         pass_filenames: false
       - id: eslint
         name: eslint
-        entry: npm run lint
+        entry: make lint-js
         language: system
         pass_filenames: false
       - id: prettier-check
         name: prettier-check
-        entry: npm run format:check
+        entry: make format-js-check
         language: system
         pass_filenames: false
       - id: web-typecheck
         name: web-typecheck
-        entry: npm run typecheck:web
+        entry: make typecheck-web
+        language: system
+        pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: make test-py
         language: system
         pass_filenames: false
       - id: node-test
         name: node-test
-        entry: npm run test
+        entry: make test-js
         language: system
         pass_filenames: false

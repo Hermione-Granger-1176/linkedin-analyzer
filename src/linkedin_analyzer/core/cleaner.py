@@ -17,6 +17,11 @@ from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 LOG = logging.getLogger(__name__)
 
 
+def _byte_unit(value: int) -> str:
+    """Return a singular or plural byte unit."""
+    return "byte" if value == 1 else "bytes"
+
+
 def _read_csv_with_fallback(
     input_path: Path,
     csv_kwargs: dict[str, Any],
@@ -130,6 +135,25 @@ def _write_excel_atomic(df: pd.DataFrame, output_path: Path, config: CleanerConf
         raise
 
 
+def _limit_error(name: str, value: int) -> str | None:
+    """Return an error when a resource limit is negative."""
+    if value < 0:
+        return f"{name} must be a non-negative integer"
+    return None
+
+
+def _apply_row_read_limit(csv_kwargs: dict[str, Any], max_rows: int) -> None:
+    """Bound CSV parsing to one row past the configured row limit."""
+    if max_rows <= 0:
+        return
+
+    read_limit = max_rows + 1
+    existing_nrows = csv_kwargs.get("nrows")
+    if isinstance(existing_nrows, int):
+        read_limit = min(existing_nrows, read_limit)
+    csv_kwargs["nrows"] = read_limit
+
+
 def run_cleaner(config: CleanerConfig) -> CleanerResult:
     """Execute a cleaning operation.
 
@@ -151,14 +175,57 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             error=f"Input file does not exist: {input_path}",
         )
 
+    for name, value in (
+        ("max_input_bytes", config.max_input_bytes),
+        ("max_rows", config.max_rows),
+    ):
+        error = _limit_error(name, value)
+        if error:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error=error,
+            )
+
+    if config.max_input_bytes > 0:
+        try:
+            input_size = input_path.stat().st_size
+        except OSError as e:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error=str(e),
+            )
+        if input_size > config.max_input_bytes:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error=(
+                    "Input file is too large: "
+                    f"{input_size} {_byte_unit(input_size)} exceeds limit of "
+                    f"{config.max_input_bytes} {_byte_unit(config.max_input_bytes)}"
+                ),
+            )
+
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         LOG.info("Reading %s", input_path)
         csv_kwargs: dict[str, Any] = dict(config.csv_kwargs)
         if config.skiprows:
             csv_kwargs.setdefault("skiprows", config.skiprows)
+        _apply_row_read_limit(csv_kwargs, config.max_rows)
         df = _read_csv_with_fallback(input_path, csv_kwargs, config.encoding)
         LOG.info("Found %d rows", len(df))
+        if config.max_rows > 0 and len(df) > config.max_rows:
+            raise ValueError(
+                f"Input CSV has too many rows: {len(df)} exceeds limit of {config.max_rows}"
+            )
 
         df = df.rename(columns=lambda name: str(name).strip().lstrip("\ufeff"))
         duplicate_columns = [str(name) for name in df.columns[df.columns.duplicated()].unique()]

@@ -386,11 +386,11 @@ pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete
 pr-summary: ## One-screen PR overview: state, CI rollup, open threads (make pr-summary [pr_num=N])
 	@$(GH) summary $(if $(pr_num),--pr $(pr_num))
 
-pr-merge: ## Merge the current PR (squash, delete branch)
-	gh pr merge --squash --delete-branch
+pr-merge: ## Merge the current PR (squash, delete branch) (make pr-merge [pr_num=N])
+	gh pr merge $(if $(pr_num),$(pr_num)) --squash --delete-branch
 
-pr-merge-admin: ## Force merge bypassing branch protection (admin)
-	gh pr merge --squash --delete-branch --admin
+pr-merge-admin: ## Force merge bypassing branch protection (admin) (make pr-merge-admin [pr_num=N])
+	gh pr merge $(if $(pr_num),$(pr_num)) --squash --delete-branch --admin
 
 pr-reviewers: ## Add reviewers (make pr-reviewers users="user1,user2")
 	@test -n "$(users)" || (printf 'Usage: make pr-reviewers users="octocat"\n' >&2; exit 1)

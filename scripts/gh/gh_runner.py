@@ -22,6 +22,7 @@ import subprocess
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 RunFunction = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -284,12 +285,25 @@ def _repo_from_remote(*, run_fn: RunFunction | None = None) -> str:
         url = run_git(["remote", "get-url", "origin"], run_fn=run_fn)
     except GhError:
         return ""
-    tail = url.split("github.com", 1)[-1].removesuffix(".git")
-    segments = [segment for segment in tail.replace(":", "/").split("/") if segment]
+    remote_path = _github_remote_path(url)
+    if not remote_path:
+        return ""
+    segments = [segment for segment in remote_path.removesuffix(".git").split("/") if segment]
     if len(segments) < 2:
         return ""
     owner_name = "/".join(segments[-2:])
     return owner_name if _is_owner_name(owner_name) else ""
+
+
+def _github_remote_path(url: str) -> str:
+    """Return the path part from an origin URL only when it is hosted on GitHub."""
+    if url.startswith("git@github.com:"):
+        return url.removeprefix("git@github.com:")
+
+    parsed = urlparse(url)
+    if parsed.hostname != "github.com":
+        return ""
+    return parsed.path
 
 
 def _is_owner_name(value: str) -> bool:

@@ -47,6 +47,21 @@ describe("runWebSmoke", () => {
         expect(String(fetchImpl.mock.calls[1][0])).toBe("https://example.com/api/csp-report");
     });
 
+    it("preserves configured app paths when checking the app shell", async () => {
+        const fetchImpl = vi
+            .fn()
+            .mockResolvedValueOnce(response(200, appShell(), APP_HEADERS))
+            .mockResolvedValueOnce(response(204));
+
+        await expect(runWebSmoke("https://example.com/app", { fetchImpl })).resolves.toEqual({
+            ok: true,
+            url: "https://example.com/app",
+        });
+
+        expect(String(fetchImpl.mock.calls[0][0])).toBe("https://example.com/app/");
+        expect(String(fetchImpl.mock.calls[1][0])).toBe("https://example.com/api/csp-report");
+    });
+
     it("fails when a required security header is missing", async () => {
         const headers = { ...APP_HEADERS };
         delete headers["content-security-policy"];
@@ -79,6 +94,25 @@ describe("runWebSmoke", () => {
 
         await expect(runWebSmoke("https://example.com", { fetchImpl })).rejects.toThrow(
             /csp-report returned HTTP 500/,
+        );
+    });
+
+    it("reports non-error app shell request failures", async () => {
+        const fetchImpl = vi.fn().mockRejectedValueOnce("offline").mockResolvedValueOnce(response(204));
+
+        await expect(runWebSmoke("https://example.com", { fetchImpl })).rejects.toThrow(
+            /app shell request failed: offline/,
+        );
+    });
+
+    it("reports non-error CSP report request failures", async () => {
+        const fetchImpl = vi
+            .fn()
+            .mockResolvedValueOnce(response(200, appShell(), APP_HEADERS))
+            .mockRejectedValueOnce("blocked");
+
+        await expect(runWebSmoke("https://example.com", { fetchImpl })).rejects.toThrow(
+            /csp report request failed: blocked/,
         );
     });
 });

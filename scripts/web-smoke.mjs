@@ -53,6 +53,15 @@ function getHeader(headers, name) {
 }
 
 /**
+ * Return an informative message for any caught JavaScript value.
+ * @param {unknown} error - Caught value.
+ * @returns {string} Human-readable error message.
+ */
+function errorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * Fetch with a bounded timeout.
  * @param {Function} fetchImpl - Fetch implementation.
  * @param {URL} url - Request URL.
@@ -113,12 +122,15 @@ export async function runWebSmoke(
     }
 
     const failures = [];
-    const appUrl = new URL("/", baseUrl);
+    const appUrl = new URL(baseUrl);
+    if (!appUrl.pathname.endsWith("/")) {
+        appUrl.pathname += "/";
+    }
     let appResponse;
     try {
         appResponse = await fetchWithTimeout(fetchImpl, appUrl, { method: "GET" }, timeoutMs);
     } catch (error) {
-        failures.push(`app shell request failed: ${error.message}`);
+        failures.push(`app shell request failed: ${errorMessage(error)}`);
     }
 
     if (appResponse) {
@@ -153,7 +165,7 @@ export async function runWebSmoke(
             failures.push(`/api/csp-report returned HTTP ${reportResponse.status}`);
         }
     } catch (error) {
-        failures.push(`csp report request failed: ${error.message}`);
+        failures.push(`csp report request failed: ${errorMessage(error)}`);
     }
 
     if (failures.length) {
@@ -167,7 +179,7 @@ async function main(argv) {
         const result = await runWebSmoke(argv[2]);
         console.log(`OK: web smoke check passed for ${result.url}`);
     } catch (error) {
-        console.error(error.message);
+        console.error(errorMessage(error));
         process.exitCode = 1;
     }
 }

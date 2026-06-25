@@ -75,6 +75,17 @@ def _non_negative_int(value: str) -> int:
     return parsed
 
 
+def _env_non_negative_int(name: str, default: int) -> int:
+    """Parse a non-negative integer environment default, or fall back."""
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    try:
+        return _non_negative_int(raw_value)
+    except argparse.ArgumentTypeError:
+        return default
+
+
 class JsonFormatter(logging.Formatter):
     """Structured JSON log formatter."""
 
@@ -226,9 +237,9 @@ Examples:
     parser.add_argument(
         "--max-input-bytes",
         type=_non_negative_int,
-        default=os.environ.get(
+        default=_env_non_negative_int(
             "LINKEDIN_ANALYZER_MAX_INPUT_BYTES",
-            str(DEFAULT_MAX_INPUT_BYTES),
+            DEFAULT_MAX_INPUT_BYTES,
         ),
         help=(
             "Maximum input CSV size in bytes, or 0 to disable "
@@ -238,7 +249,7 @@ Examples:
     parser.add_argument(
         "--max-rows",
         type=_non_negative_int,
-        default=os.environ.get("LINKEDIN_ANALYZER_MAX_ROWS", str(DEFAULT_MAX_ROWS)),
+        default=_env_non_negative_int("LINKEDIN_ANALYZER_MAX_ROWS", DEFAULT_MAX_ROWS),
         help=(
             "Maximum parsed row count, or 0 to disable "
             "(default: 1000000, env: LINKEDIN_ANALYZER_MAX_ROWS)"

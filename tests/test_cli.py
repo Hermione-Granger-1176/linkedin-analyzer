@@ -112,6 +112,17 @@ class TestParseArgs:
         assert args.max_input_bytes == 456
         assert args.max_rows == 789
 
+    def test_invalid_resource_limit_env_defaults_fall_back(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LINKEDIN_ANALYZER_MAX_INPUT_BYTES", "many")
+        monkeypatch.setenv("LINKEDIN_ANALYZER_MAX_ROWS", "-1")
+
+        args = parse_args(["shares"])
+
+        assert args.max_input_bytes == 104857600
+        assert args.max_rows == 1000000
+
     def test_rejects_negative_resource_limits(self) -> None:
         try:
             parse_args(["--max-input-bytes", "-1", "shares"])

@@ -121,6 +121,12 @@ describe("resolveReportMaxPerMinute", () => {
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "oops" })).toBe(120);
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "12oops" })).toBe(120);
         expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "9007199254740992" })).toBe(
+            120,
+        );
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "9".repeat(400) })).toBe(
+            120,
+        );
     });
 });
 

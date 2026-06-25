@@ -92,6 +92,9 @@ export function resolveReportMaxPerMinute(env) {
         return DEFAULT_REPORT_MAX_PER_MINUTE;
     }
     const parsed = Number(trimmedLimit);
+    if (!Number.isSafeInteger(parsed)) {
+        return DEFAULT_REPORT_MAX_PER_MINUTE;
+    }
     return parsed;
 }
 

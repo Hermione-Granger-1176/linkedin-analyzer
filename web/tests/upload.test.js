@@ -1866,25 +1866,23 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    it("falls back when file read rejects with a non-error value", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    if (this.onerror) {
-                        this.onerror("read failed");
-                    }
-                },
-            };
-        };
+    it("falls back when streaming file read rejects with a non-error value", async () => {
+        const originalReadableStream = globalThis.ReadableStream;
+        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
 
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         const file = new File(["bad"], "Messages.csv", { type: "text/csv" });
+        Object.defineProperty(file, "size", { value: 6 * 1024 * 1024 });
+        Object.defineProperty(file, "stream", {
+            value: () => ({
+                getReader: () => ({
+                    read: () => Promise.reject("read failed"),
+                    cancel: () => Promise.resolve(),
+                }),
+            }),
+        });
         const input = document.getElementById("multiFileInput");
         Object.defineProperty(input, "files", { value: [file] });
         input.dispatchEvent(new Event("change"));
@@ -1893,7 +1891,7 @@ describe("UploadPage", () => {
 
         expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
 
-        globalThis.FileReader = originalFileReader;
+        globalThis.ReadableStream = originalReadableStream;
     });
 
     // --- oversize file warning -----------------------------------------------

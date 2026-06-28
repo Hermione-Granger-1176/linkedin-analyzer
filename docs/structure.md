@@ -100,6 +100,7 @@ linkedin-analyzer/
 │   └── prettierrc.json                 # Prettier formatting rules
 ├── scripts/
 │   ├── check-overrides.mjs             # Validates npm overrides are still needed
+│   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)
 │   ├── ci/                             # Local CI parallel-runner and GitHub Actions workflow helpers
 │   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
 │   └── lint/                           # Local lint helpers

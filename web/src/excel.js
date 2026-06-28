@@ -3,8 +3,6 @@
  * Uses write-excel-file for browser-safe XLSX creation.
  */
 
-import writeXlsxFile from "write-excel-file/browser";
-
 import { LinkedInCleaner } from "./cleaner.js";
 import { FILE_TYPE_LABELS } from "./constants.js";
 
@@ -225,6 +223,9 @@ export const ExcelGenerator = (() => {
             normalizedSpec.rows,
             normalizedSpec.wrapColumns,
         );
+        // Loaded on demand so the export library stays out of the initial bundle
+        // and only downloads when a user actually generates a workbook.
+        const { default: writeXlsxFile } = await import("write-excel-file/browser");
         const workbook = writeXlsxFile(
             data,
             createSheetOptions(normalizedSpec),

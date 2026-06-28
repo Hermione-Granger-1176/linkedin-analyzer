@@ -562,7 +562,7 @@ describe("handleRestoreFiles", () => {
         expect(restored.payload.hasData).toBe(false);
     });
 
-    it("processes both shares and comments when both are provided", () => {
+    it("seeds both shares and comments without recomputing analytics", () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -572,12 +572,17 @@ describe("handleRestoreFiles", () => {
             cleanedData: [{ Date: "2025-01-02 09:00" }],
             rowCount: 1
         }));
-        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
         handleRestoreFiles({ sharesCsv: "shares", commentsCsv: "comments" });
 
-        // Should have called compute once after loading both
-        expect(AnalyticsEngine.compute).toHaveBeenCalledTimes(1);
+        // restoreFiles only seeds the source datasets; the analytics aggregate is
+        // (re)built and persisted by handleAddFile, so a compute here would be
+        // discarded. It must not run on this path.
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("shares", "shares");
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("comments", "comments");
+        expect(AnalyticsEngine.compute).not.toHaveBeenCalled();
+        const restored = messages.find((m) => m.type === "restored");
+        expect(restored.payload.hasData).toBe(true);
     });
 });
 

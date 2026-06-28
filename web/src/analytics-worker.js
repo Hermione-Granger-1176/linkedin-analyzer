@@ -266,6 +266,11 @@ function handleRestoreFiles(payload) {
     commentsData = null;
     connectionsData = null;
 
+    // Whether a posting source (shares/comments) loaded with rows. Tracked here
+    // rather than read back off the module fields afterwards because those are
+    // assigned through the indirection above, which control-flow analysis cannot
+    // follow.
+    let hasPostingSource = false;
     ANALYTICS_SOURCE_TYPES.forEach((type) => {
         const csvText = sourceCsvByType[type];
         if (!csvText) {
@@ -277,18 +282,24 @@ function handleRestoreFiles(payload) {
             return;
         }
         assignSourceByType[type](parsed.cleanedData);
+        if ((type === "shares" || type === "comments") && parsed.cleanedData.length > 0) {
+            hasPostingSource = true;
+        }
     });
 
-    if (sharesData || commentsData) {
-        computeAnalytics();
-    } else {
-        resetAnalyticsState();
-    }
+    // restoreFiles only seeds the worker's source datasets so a subsequent
+    // addFile recomputes analytics from the full set. The aggregate the dashboard
+    // reads is always produced and persisted by handleAddFile; the only signal
+    // this path emits (the "restored" hasData) is whether any posting source
+    // loaded. Computing the full analytics aggregate here would be discarded
+    // (never persisted or queried), so it is skipped. The stale aggregate is
+    // cleared so nothing reads an out-of-date view between seed and recompute.
+    resetAnalyticsState();
 
     self.postMessage({
         type: "restored",
         payload: {
-            hasData: hasAnalyticsData(),
+            hasData: hasPostingSource,
         },
     });
 }

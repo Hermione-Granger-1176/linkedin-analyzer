@@ -27,6 +27,10 @@ const MISSING_STRINGS = new Set([
     "<NA>",
 ]);
 
+// Length of the longest sentinel in MISSING_STRINGS ("#N/A N/A"). Used as a cheap
+// upper bound so isMissing can skip the uppercase + Set lookup for longer values.
+const MISSING_MAX_LENGTH = 8;
+
 const CONNECTION_MONTH_LOOKUP = Object.freeze({
     jan: "01",
     january: "01",
@@ -70,6 +74,12 @@ export function isMissing(value) {
         const trimmed = value.trim();
         if (trimmed === "") {
             return true;
+        }
+        // No MISSING_STRINGS sentinel is longer than 8 characters, so anything
+        // longer cannot be one. Skipping the uppercase + Set lookup here avoids a
+        // per-cell allocation on the common case (real content cells).
+        if (trimmed.length > MISSING_MAX_LENGTH) {
+            return false;
         }
         return MISSING_STRINGS.has(trimmed.toUpperCase());
     }
@@ -127,10 +137,14 @@ function cleanEscapedQuotesText(value) {
         return "";
     }
 
-    let text = String(value);
-    text = text.replace(/\\"/g, '"');
-    text = text.replace(/""/g, '"');
-    return text.trim();
+    const text = String(value);
+    // Both passes only rewrite quote/backslash sequences, so text with neither
+    // character is returned unchanged. This skips two regex scans over the long
+    // message/comment bodies that make up the common case.
+    if (!text.includes('"') && !text.includes("\\")) {
+        return text.trim();
+    }
+    return text.replace(/\\"/g, '"').replace(/""/g, '"').trim();
 }
 
 /**

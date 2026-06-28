@@ -178,6 +178,18 @@ describe("MessagesAnalytics", () => {
         expect(MessagesAnalytics.parseDateOnly("bad")).toBe(null);
     });
 
+    it("normalizeName lowercases, collapses whitespace, and handles repeats and non-strings", () => {
+        // Lowercasing + whitespace collapse.
+        expect(MessagesAnalytics.normalizeName("  Ada   Lovelace ")).toBe("ada lovelace");
+        // Repeated input returns the same result (exercises the memo cache hit).
+        expect(MessagesAnalytics.normalizeName("  Ada   Lovelace ")).toBe("ada lovelace");
+        // Non-string inputs take the non-memoized fallback: null/undefined become
+        // "" and other values are stringified.
+        expect(MessagesAnalytics.normalizeName(null)).toBe("");
+        expect(MessagesAnalytics.normalizeName(undefined)).toBe("");
+        expect(MessagesAnalytics.normalizeName(42)).toBe("42");
+    });
+
     it("normalizeUrl returns empty string for empty input", () => {
         expect(MessagesAnalytics.normalizeUrl("")).toBe("");
         expect(MessagesAnalytics.normalizeUrl(null)).toBe("");

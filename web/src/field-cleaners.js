@@ -27,9 +27,11 @@ const MISSING_STRINGS = new Set([
     "<NA>",
 ]);
 
-// Length of the longest sentinel in MISSING_STRINGS ("#N/A N/A"). Used as a cheap
-// upper bound so isMissing can skip the uppercase + Set lookup for longer values.
-const MISSING_MAX_LENGTH = 8;
+// Length of the longest sentinel in MISSING_STRINGS (currently "#N/A N/A" = 8).
+// Derived from the set so the fast-path stays correct if a longer sentinel is ever
+// added. Used as a cheap upper bound so isMissing can skip the uppercase + Set
+// lookup for longer values.
+const MISSING_MAX_LENGTH = Math.max(...Array.from(MISSING_STRINGS, (s) => s.length));
 
 const CONNECTION_MONTH_LOOKUP = Object.freeze({
     jan: "01",

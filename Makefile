@@ -177,7 +177,7 @@ web-e2e: test-e2e ## Alias for test-e2e
 # Local-only tools that run against your private export in data/input (never
 # committed). They skip cleanly when it is absent. Row dumps go to a temp folder
 # ($LIA_CHECKS_OUT, default $TMPDIR/linkedin-analyzer/checks-out), never the repo.
-# See scripts/checks/README.md.
+# See docs/development.md (Local checks and benchmarks).
 
 .PHONY: cleaner-diff xrt-diff bench bench-decode explore
 

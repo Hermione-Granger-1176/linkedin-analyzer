@@ -53,7 +53,8 @@ def month(s):
 
 
 # ---------- Shares ----------
-shares = list(csv.DictReader(open(BASE / "Shares.csv", encoding="utf-8", errors="replace")))
+with open(BASE / "Shares.csv", encoding="utf-8", errors="replace") as f:
+    shares = list(csv.DictReader(f))
 s_months = Counter(month(r["Date"]) for r in shares if r.get("Date"))
 hashtags = Counter()
 lengths = []
@@ -75,7 +76,8 @@ print("busiest_months:", s_months.most_common(6))
 print("last_6_months:", sorted(s_months.items())[-6:])
 
 # ---------- Comments ----------
-comments = list(csv.DictReader(open(BASE / "Comments.csv", encoding="utf-8", errors="replace")))
+with open(BASE / "Comments.csv", encoding="utf-8", errors="replace") as f:
+    comments = list(csv.DictReader(f))
 c_months = Counter(m for r in comments if (m := month(r.get("Date") or "")))
 urns = Counter(r.get("Link") for r in comments if r.get("Link"))
 print("\n=== COMMENTS ===")

@@ -22,8 +22,9 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
 const OUT_DIR = process.env.LIA_CHECKS_OUT || join(tmpdir(), "linkedin-analyzer", "checks-out");
 const FILES = {

@@ -22,8 +22,9 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 
-const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
 const RUNS = Number(process.argv[2] || 5);
 const STREAM_THRESHOLD = 5 * 1024 * 1024;
@@ -52,25 +53,26 @@ const DEFAULT_FILTERS = {
     shareType: "all",
 };
 
-// Decode mirrors upload.js: stream byte-buffer path for large files, reader for small.
+// Decode mirrors upload.js decodeBytes: large files are reassembled from chunks
+// (the stream reader's concat cost) before a single strict TextDecoder("utf-8",
+// {fatal:true}) decode, with a windows-1252 fallback only on a genuine decode
+// error (no U+FFFD heuristic).
 function decodeNew(bytes) {
+    let buf = bytes;
     if (bytes.length >= STREAM_THRESHOLD) {
-        const buf = new Uint8Array(bytes.length);
+        buf = new Uint8Array(bytes.length);
         let offset = 0;
         for (let i = 0; i < bytes.length; i += CHUNK) {
             const c = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
             buf.set(c, offset);
             offset += c.byteLength;
         }
-        let text = new TextDecoder("utf-8").decode(buf);
-        if (text.includes("�")) {
-            text = new TextDecoder("windows-1252").decode(buf);
-        }
-        return text;
     }
-    const text = new TextDecoder("utf-8").decode(bytes);
-    void text.includes("�");
-    return text;
+    try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch {
+        return new TextDecoder("windows-1252").decode(buf);
+    }
 }
 
 async function load(name) {

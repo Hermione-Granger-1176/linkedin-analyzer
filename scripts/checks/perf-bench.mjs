@@ -4,9 +4,11 @@
  * The cleaning parser (cleaner.js) is untouched here, so this isolates the file
  * read/decode hot path in upload.js.
  *   - Stream path (files >= 5MB, i.e. messages.csv): OLD did incremental
- *     TextDecoder({stream:true}); NEW buffers raw byte chunks -> concat ->
- *     single decode -> U+FFFD scan.
- *   - Reader path (<5MB): NEW adds an includes("�") scan.
+ *     TextDecoder({stream:true}); NEW buffers raw byte chunks -> concat -> a
+ *     single strict TextDecoder("utf-8", {fatal:true}) decode.
+ *   - Reader path (<5MB): OLD did a single non-fatal utf-8 decode; NEW uses the
+ *     same strict fatal decode. Both NEW paths fall back to windows-1252 only on
+ *     a genuine decode error (no U+FFFD heuristic).
  *
  * It (a) asserts the new decode yields byte-identical text to the old, and
  * (b) times read+decode and clean per file, taking the median over N runs.
@@ -23,8 +25,9 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 
-const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
 const RUNS = Number(process.argv[2] || 5);
 const STREAM_THRESHOLD = 5 * 1024 * 1024;

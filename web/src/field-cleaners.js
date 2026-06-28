@@ -27,10 +27,9 @@ const MISSING_STRINGS = new Set([
     "<NA>",
 ]);
 
-// Length of the longest sentinel in MISSING_STRINGS (currently "#N/A N/A" = 8).
-// Derived from the set so the fast-path stays correct if a longer sentinel is ever
-// added. Used as a cheap upper bound so isMissing can skip the uppercase + Set
-// lookup for longer values.
+// Length of the longest sentinel in MISSING_STRINGS. Derived from the set so the
+// fast-path stays correct if a longer sentinel is ever added. Used as a cheap
+// upper bound so isMissing can skip the uppercase + Set lookup for longer values.
 const MISSING_MAX_LENGTH = Math.max(...Array.from(MISSING_STRINGS, (s) => s.length));
 
 const CONNECTION_MONTH_LOOKUP = Object.freeze({
@@ -77,9 +76,9 @@ export function isMissing(value) {
         if (trimmed === "") {
             return true;
         }
-        // No MISSING_STRINGS sentinel is longer than 8 characters, so anything
-        // longer cannot be one. Skipping the uppercase + Set lookup here avoids a
-        // per-cell allocation on the common case (real content cells).
+        // No MISSING_STRINGS sentinel is longer than MISSING_MAX_LENGTH, so a
+        // longer trimmed value cannot be one. Skipping the uppercase + Set lookup
+        // here avoids a per-cell allocation on the common case (real content cells).
         if (trimmed.length > MISSING_MAX_LENGTH) {
             return false;
         }

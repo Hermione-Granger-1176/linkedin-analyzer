@@ -22,7 +22,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
@@ -76,7 +76,7 @@ function stage(ref) {
 
 async function runVariant(ref, dumpDir) {
     const dir = stage(ref);
-    const { LinkedInCleaner } = await import(join(dir, "cleaner.js"));
+    const { LinkedInCleaner } = await import(pathToFileURL(join(dir, "cleaner.js")).href);
     const out = {};
     for (const [type, name] of Object.entries(FILES)) {
         const csv = await readFile(join(INPUT, name), "utf8");

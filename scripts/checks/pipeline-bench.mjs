@@ -40,9 +40,13 @@ if (missing.length > 0) {
     process.exit(0);
 }
 
-const { LinkedInCleaner } = await import(join(REPO, "web/src/cleaner.js"));
-const { AnalyticsEngine } = await import(join(REPO, "web/src/analytics.js"));
-const { MessagesAnalytics } = await import(join(REPO, "web/src/messages-analytics.js"));
+const { LinkedInCleaner } = await import(new URL("../../web/src/cleaner.js", import.meta.url).href);
+const { AnalyticsEngine } = await import(
+    new URL("../../web/src/analytics.js", import.meta.url).href
+);
+const { MessagesAnalytics } = await import(
+    new URL("../../web/src/messages-analytics.js", import.meta.url).href
+);
 
 const DEFAULT_FILTERS = {
     timeRange: "12m",

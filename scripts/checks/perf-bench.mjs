@@ -49,7 +49,7 @@ if (missing.length > 0) {
     process.exit(0);
 }
 
-const { LinkedInCleaner } = await import(join(REPO, "web/src/cleaner.js"));
+const { LinkedInCleaner } = await import(new URL("../../web/src/cleaner.js", import.meta.url).href);
 
 function chunkize(bytes) {
     const out = [];

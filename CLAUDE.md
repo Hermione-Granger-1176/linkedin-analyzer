@@ -16,7 +16,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Structure
 
-- `src/linkedin_analyzer/`: Python package with `cli.py`, `core/` (text, types, paths, cleaner, excel), and `cleaners/` (comments, connections, messages, shares)
+- `src/linkedin_analyzer/`: Python package with `cli.py`, `core/` (text, types, paths, cleaner, excel, limits), and `cleaners/` (comments, connections, messages, shares)
 - `web/`: Vite SPA with `src/` (router, screens, cleaner, storage, telemetry, sentry), the `index.html` shell, `tests/` (Vitest unit), `e2e/` (Playwright), `vite.config.js`, and `vitest.config.js`
 - `api/`: Vercel Serverless Functions. `csp-report.mjs` collects CSP violation reports.
 - `tests/`: Python tests

@@ -79,7 +79,8 @@ linkedin-analyzer/
 │   │   ├── text.py                     # Text cleaning utilities
 │   │   ├── excel.py                    # Excel formatting
 │   │   ├── cleaner.py                  # Base cleaner
-│   │   └── paths.py                    # Default paths
+│   │   ├── paths.py                    # Default paths
+│   │   └── limits.py                   # Resource limit constants
 │   └── cleaners/
 │       ├── __init__.py
 │       ├── shares.py                   # Shares CSV cleaner

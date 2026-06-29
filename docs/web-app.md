@@ -134,7 +134,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Messages/connections parsing runs in `messages-worker.js` with safe fallback.
 - IndexedDB stores raw CSV text and analytics base when available so uploads can be restored after reloads; an in-memory fallback keeps the app functional but does not persist data across reloads.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
-- Upload restore warms cache first, then schedules analytics priming to avoid blocking first paint.
+- Upload restore warms the storage-backed file cache only. Analytics priming is deferred until fresh uploads because dashboards read persisted analytics directly.
 - Service worker caches navigation with NetworkFirst, scripts/styles with StaleWhileRevalidate, and fonts/images with CacheFirst (30-day TTL) to auto-refresh users onto newer builds.
 - **Clear data** removes stored uploads/analytics from IndexedDB and clears in-memory cache.
 - Fonts are self-hosted (no external Google Fonts dependency).

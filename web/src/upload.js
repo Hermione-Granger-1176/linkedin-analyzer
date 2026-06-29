@@ -972,7 +972,10 @@ export const UploadPage = (() => {
      */
     function resolveJobId(jobId, fileName) {
         const normalizedJobId = typeof jobId === "string" && jobId ? jobId : null;
-        if (normalizedJobId) {
+        if (
+            normalizedJobId &&
+            (activeJobs.has(normalizedJobId) || pendingFiles.has(normalizedJobId))
+        ) {
             return normalizedJobId;
         }
 

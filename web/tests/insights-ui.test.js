@@ -94,6 +94,37 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsGrid").hidden).toBe(true);
     });
 
+    it("times out and hides the overlay when the worker never responds", async () => {
+        vi.useFakeTimers();
+        try {
+            Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+            DataCache.get.mockReturnValue(null);
+
+            InsightsPage.init();
+            InsightsPage.onRouteChange({});
+            // Flush loadBase's awaits so the watchdog is armed; the worker is
+            // created but deliberately never posts an "init"/"view" reply.
+            for (let i = 0; i < 10; i++) {
+                await Promise.resolve();
+            }
+            expect(workerInstance).toBeTruthy();
+            expect(workerInstance.listeners.message.length).toBeGreaterThan(0);
+
+            // Regression: without a watchdog a silent worker leaves the loading
+            // overlay up forever. Advancing past the timeout must surface an error
+            // and hide the overlay.
+            vi.advanceTimersByTime(30000);
+
+            expect(document.getElementById("insightsEmpty").hidden).toBe(false);
+            expect(
+                document.getElementById("insightsEmpty").querySelector("h2").textContent.toLowerCase(),
+            ).toContain("timeout");
+            expect(LoadingOverlay.hide).toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it("initializes on route change when the page is not initialized yet", async () => {
         Storage.getAnalytics.mockResolvedValue(null);
         DataCache.get.mockReturnValue(null);

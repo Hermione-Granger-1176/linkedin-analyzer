@@ -408,6 +408,30 @@ describe("AnalyticsPage", () => {
         );
     });
 
+    it("terminates the dead worker on error and rebuilds it on re-entry", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+        AnalyticsPage.init();
+        await AnalyticsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const firstWorker = workerInstance;
+        expect(firstWorker).toBeTruthy();
+        firstWorker.terminate = vi.fn();
+
+        // The worker dies. Regression: the handler must tear it down, otherwise
+        // initWorker() early-returns on the live reference and the next load posts
+        // to a dead worker (and the stale watchdog later overwrites the screen).
+        workerInstance.listeners.error[0](new Event("error"));
+        expect(firstWorker.terminate).toHaveBeenCalled();
+
+        // Re-entering analytics must construct a fresh worker.
+        await AnalyticsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(workerInstance).not.toBe(firstWorker);
+    });
+
     it("defers render via resize retry when canvases are zero-sized and ResizeObserver absent", async () => {
         // Use zero-sized canvases so areChartsSized() returns false
         const zeroTimeline = document.createElement("canvas");

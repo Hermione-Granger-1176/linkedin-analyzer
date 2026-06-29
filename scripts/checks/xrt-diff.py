@@ -99,7 +99,7 @@ def main():
         xlsx_rows = read_xlsx_rows(OUT / xlsx_name)
         header, xlsx_data = xlsx_rows[0], xlsx_rows[1:]
 
-        js_rows = json.loads((JSON_DIR / f"{type_name}.json").read_text())
+        js_rows = json.loads((JSON_DIR / f"{type_name}.json").read_text(encoding="utf-8"))
         js_data = [[escape_formula(row.get(col, "")) for col in header] for row in js_rows]
 
         # Pad xlsx rows to header width (trailing empty cells are omitted in XML).

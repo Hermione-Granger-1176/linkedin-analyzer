@@ -19,7 +19,14 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-csv.field_size_limit(sys.maxsize)
+limit = sys.maxsize
+while True:
+    try:
+        csv.field_size_limit(limit)
+        break
+    except OverflowError:
+        limit //= 10
+
 BASE = Path(__file__).resolve().parents[2] / "data" / "input"
 
 

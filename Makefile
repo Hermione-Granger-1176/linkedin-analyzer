@@ -173,6 +173,29 @@ web-smoke: ## Smoke-check a deployed web app (make web-smoke url=https://example
 
 web-e2e: test-e2e ## Alias for test-e2e
 
+# ─── Checks @checks ──────────────────────────────────────────────────────────────────
+# Local-only tools that run against your private export in data/input (never
+# committed). They skip cleanly when it is absent. Row dumps go to a temp folder
+# ($LIA_CHECKS_OUT, default $TMPDIR/linkedin-analyzer/checks-out), never the repo.
+# See docs/development.md (Local checks and benchmarks).
+
+.PHONY: cleaner-diff xrt-diff bench bench-decode explore
+
+cleaner-diff: ## Verify the web cleaner output is unchanged on your export (make cleaner-diff [args="oldRef newRef"])
+	$(NODE) scripts/checks/cleaner-diff.mjs $(args)
+
+xrt-diff: ## Compare the Python CLI xlsx output against the web cleaner rows (run run-cli + cleaner-diff first)
+	$(VENV_PYTHON) scripts/checks/xrt-diff.py
+
+bench: ## Benchmark read, clean, and analytics on your export (make bench [runs=N])
+	$(NODE) scripts/checks/pipeline-bench.mjs $(runs)
+
+bench-decode: ## Benchmark and verify the upload decode layer (make bench-decode [runs=N])
+	$(NODE) scripts/checks/perf-bench.mjs $(runs)
+
+explore: ## Print ad-hoc statistics over your export
+	$(VENV_PYTHON) scripts/checks/li_explore.py
+
 # ─── Quality gates @quality ────────────────────────────────────────────────────────────
 
 .PHONY: ci-python ci-web ci ci-fast check-local check fix security audit-node audit-python

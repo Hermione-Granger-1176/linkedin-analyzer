@@ -16,7 +16,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Structure
 
-- `src/linkedin_analyzer/`: Python package with `cli.py`, `core/` (text, types, paths, cleaner, excel), and `cleaners/` (comments, connections, messages, shares)
+- `src/linkedin_analyzer/`: Python package with `cli.py`, `core/` (text, types, paths, cleaner, excel, limits), and `cleaners/` (comments, connections, messages, shares)
 - `web/`: Vite SPA with `src/` (router, screens, cleaner, storage, telemetry, sentry), the `index.html` shell, `tests/` (Vitest unit), `e2e/` (Playwright), `vite.config.js`, and `vitest.config.js`
 - `api/`: Vercel Serverless Functions. `csp-report.mjs` collects CSP violation reports.
 - `tests/`: Python tests
@@ -26,7 +26,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Local commands
 
-**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, test, web, quality, deps, util, git, pr, ci. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
+**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, test, web, checks, quality, deps, util, git, pr, ci. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
 
 Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 

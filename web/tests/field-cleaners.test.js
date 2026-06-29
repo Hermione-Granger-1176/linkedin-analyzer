@@ -23,6 +23,7 @@ describe("isMissing", () => {
 
     it("treats ordinary strings as present", () => {
         expect(isMissing("hello")).toBe(false);
+        expect(isMissing("ordinary long profile content")).toBe(false);
     });
 
     it("treats non-string, non-number values as present", () => {

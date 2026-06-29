@@ -3,6 +3,15 @@
 export const MessagesAnalytics = (() => {
     "use strict";
 
+    // normalizeName/normalizeUrl are pure and called millions of times over a
+    // large messages export, but on a small set of recurring contact strings
+    // (you message the same people repeatedly). Memoize string inputs so each
+    // unique value is normalized once; the cap bounds memory if a pathological
+    // export has an unusually large unique set.
+    const NORMALIZE_CACHE_LIMIT = 100000;
+    const nameNormalizeCache = new Map();
+    const urlNormalizeCache = new Map();
+
     /**
      * Build message analytics state from cleaned rows.
      * @param {object[]} rows - Cleaned message rows
@@ -667,6 +676,26 @@ export const MessagesAnalytics = (() => {
      * @returns {string}
      */
     function normalizeUrl(value) {
+        if (typeof value === "string") {
+            const cached = urlNormalizeCache.get(value);
+            if (cached !== undefined) {
+                return cached;
+            }
+            const computed = computeNormalizedUrl(value);
+            if (urlNormalizeCache.size < NORMALIZE_CACHE_LIMIT) {
+                urlNormalizeCache.set(value, computed);
+            }
+            return computed;
+        }
+        return computeNormalizedUrl(value);
+    }
+
+    /**
+     * Compute the normalized URL without the memo layer.
+     * @param {unknown} value - Raw URL field
+     * @returns {string}
+     */
+    function computeNormalizedUrl(value) {
         const text = cleanText(value);
         if (!text) {
             return "";
@@ -709,6 +738,26 @@ export const MessagesAnalytics = (() => {
      * @returns {string}
      */
     function normalizeName(value) {
+        if (typeof value === "string") {
+            const cached = nameNormalizeCache.get(value);
+            if (cached !== undefined) {
+                return cached;
+            }
+            const computed = computeNormalizedName(value);
+            if (nameNormalizeCache.size < NORMALIZE_CACHE_LIMIT) {
+                nameNormalizeCache.set(value, computed);
+            }
+            return computed;
+        }
+        return computeNormalizedName(value);
+    }
+
+    /**
+     * Compute the normalized name without the memo layer.
+     * @param {unknown} value - Raw name
+     * @returns {string}
+     */
+    function computeNormalizedName(value) {
         return cleanText(value).toLowerCase().replace(/\s+/g, " ");
     }
 

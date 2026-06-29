@@ -163,3 +163,18 @@ make test-e2e
 ```
 
 Tests are in `web/tests/`.
+
+## Local checks and benchmarks
+
+`scripts/checks/` holds developer-only tools (`make` group `checks`) that run against your private LinkedIn export in `data/input/` (never committed). They are not part of `make ci`; each one prints `SKIP:` and exits 0 when the export is absent, so they are safe to run anywhere. Generated row dumps go to a temp folder (`$LIA_CHECKS_OUT`, default `$TMPDIR/linkedin-analyzer/checks-out`), never the repo.
+
+```bash
+make cleaner-diff                 # web cleaner output unchanged vs main (sha256 per type)
+make cleaner-diff args="A B"      # compare two arbitrary git refs
+make bench                        # read -> clean -> analytics timing (make bench runs=N)
+make bench-decode                 # upload decode layer: speed + byte-identity vs the old path
+make xrt-diff                     # Python CLI xlsx vs web cleaner rows, cell by cell
+make explore                      # ad-hoc statistics over the export
+```
+
+Use `make cleaner-diff` after any change to the web cleaner to prove it is behavior-preserving, and `make bench` as the speed regression anchor. The cross-runtime `make xrt-diff` reads the CLI's `data/output/*.xlsx` (`make run-cli args="all"`) and the dumps from `make cleaner-diff`, so run those two first. `make explore` identifies the export owner for message-direction stats via `$LIA_ME`, falling back to git `user.name`.

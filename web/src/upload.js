@@ -1005,10 +1005,18 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Resolve first active job ID as final fallback.
+     * Resolve the sole active job ID as a final fallback.
+     *
+     * Only resolves when exactly one job is in flight: a worker message that
+     * lacks both a jobId and a matching fileName is unambiguous in that case.
+     * With concurrent uploads, guessing the "first" job would complete the wrong
+     * file, so we return null and let that job's watchdog handle it instead.
      * @returns {string|null}
      */
     function getFirstActiveJobId() {
+        if (activeJobs.size !== 1) {
+            return null;
+        }
         const iterator = activeJobs.values().next();
         return iterator.done ? null : iterator.value;
     }

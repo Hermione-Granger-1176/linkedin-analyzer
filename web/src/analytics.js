@@ -841,20 +841,31 @@ export const AnalyticsEngine = (() => {
         if (filters.shareType && filters.shareType !== "all" && useMonth) {
             const typeKey = SHARE_TYPE_MAP[filters.shareType];
             if (typeKey) {
-                monthPosts = bucket.shareTypes[typeKey];
+                // Scale the (possibly topic-adjusted) post count by the share of
+                // posts that are this type so a topic + shareType filter
+                // intersects, instead of the raw shareType count overwriting the
+                // topic adjustment. With no topic filter monthPosts === bucket.posts,
+                // so this reduces to bucket.shareTypes[typeKey] as before.
+                const shareTypeRatio =
+                    bucket.posts > 0 ? bucket.shareTypes[typeKey] / bucket.posts : 0;
+                monthPosts = Math.round(monthPosts * shareTypeRatio);
             }
             monthComments = 0;
             monthTotal = monthPosts;
         }
 
-        // Apply day/hour dimensional filter using the appropriate count
+        // Apply day/hour dimensional filter. The day/hour/heatmap counters tally
+        // ALL activity in the month, so the fraction must be taken over the
+        // month's full activity (bucket.total). Using the already-narrowed
+        // monthTotal as the denominator lets the ratio exceed 1 and inflates the
+        // counts when a topic or shareType filter is also active.
         const dimensionKey = hasDay && hasHour ? "both" : hasDay ? "day" : hasHour ? "hour" : null;
         if (useMonth && dimensionKey) {
             const filterCount = DIMENSION_COUNT_BY_KEY[dimensionKey](bucket, filters);
-            const ratio = monthTotal > 0 ? filterCount / monthTotal : 0;
+            const ratio = bucket.total > 0 ? filterCount / bucket.total : 0;
             monthPosts = Math.round(monthPosts * ratio);
             monthComments = Math.round(monthComments * ratio);
-            monthTotal = filterCount;
+            monthTotal = Math.round(monthTotal * ratio);
         }
 
         return { monthPosts, monthComments, monthTotal, useMonth };
@@ -1335,7 +1346,10 @@ export const AnalyticsEngine = (() => {
         for (let i = 1; i < days.length; i++) {
             const prev = parseDay(days[i - 1]);
             const curr = parseDay(days[i]);
-            const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+            // Round the day delta: across a DST transition two consecutive local
+            // calendar days are 23h or 25h apart, so an exact `=== 1` on the raw
+            // ms/day ratio would miss the boundary and reset the streak.
+            const diff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
             if (diff === 1) {
                 streak++;
                 longest = Math.max(longest, streak);

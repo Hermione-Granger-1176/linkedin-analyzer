@@ -29,6 +29,75 @@ describe("MessagesAnalytics", () => {
         expect(state.skippedRows).toBe(1);
     });
 
+    it("merges a contact seen with then without a profile URL into one entry", () => {
+        const base = {
+            FROM: "Ada Lovelace",
+            "SENDER PROFILE URL": "https://linkedin.com/in/ada",
+            CONTENT: "hi"
+        };
+        const rows = [
+            {
+                ...base,
+                DATE: "2025-01-01 10:00:00",
+                TO: "Bob Smith",
+                "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob"
+            },
+            {
+                ...base,
+                DATE: "2025-01-02 10:00:00",
+                TO: "Bob Smith",
+                "RECIPIENT PROFILE URLS": ""
+            }
+        ];
+
+        const state = MessagesAnalytics.buildMessageState(rows);
+
+        // Regression: keying url-vs-name used to split the same person in two.
+        expect(state.contacts.size).toBe(1);
+        const contact = [...state.contacts.values()][0];
+        expect(contact.count).toBe(2);
+        expect(contact.url).toBe("https://linkedin.com/in/bob");
+        expect(contact.name).toBe("Bob Smith");
+        // Both events point at the single merged key.
+        const eventKeys = new Set(state.events.map((event) => event.contactKey));
+        expect(eventKeys.size).toBe(1);
+        expect([...eventKeys][0]).toBe(contact.key);
+    });
+
+    it("merges a contact seen without then with a profile URL and repoints events", () => {
+        const base = {
+            FROM: "Ada Lovelace",
+            "SENDER PROFILE URL": "https://linkedin.com/in/ada",
+            CONTENT: "hi"
+        };
+        const rows = [
+            {
+                ...base,
+                DATE: "2025-01-01 10:00:00",
+                TO: "Bob Smith",
+                "RECIPIENT PROFILE URLS": ""
+            },
+            {
+                ...base,
+                DATE: "2025-01-02 10:00:00",
+                TO: "Bob Smith",
+                "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob"
+            }
+        ];
+
+        const state = MessagesAnalytics.buildMessageState(rows);
+
+        // The name-only entry is promoted to the URL key; the earlier event must
+        // be repointed to it so range-based aggregation does not re-split.
+        expect(state.contacts.size).toBe(1);
+        const contact = [...state.contacts.values()][0];
+        expect(contact.count).toBe(2);
+        expect(contact.url).toBe("https://linkedin.com/in/bob");
+        const eventKeys = new Set(state.events.map((event) => event.contactKey));
+        expect(eventKeys.size).toBe(1);
+        expect([...eventKeys][0]).toBe(contact.key);
+    });
+
     it("buildMessageState computes the outreach funnel", () => {
         const msg = (conversationId, date, from, fromUrl, to, toUrl) => ({
             "CONVERSATION ID": conversationId,

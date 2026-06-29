@@ -51,7 +51,7 @@ function setContextExtras(scope, context) {
  * @returns {unknown}
  */
 function sanitizeCapturedError(error, context) {
-    if (!(error instanceof Error) || !context) {
+    if (!context) {
         return error;
     }
 
@@ -64,6 +64,17 @@ function sanitizeCapturedError(error, context) {
 
     const redact = (text) =>
         sensitiveValues.reduce((sanitized, value) => sanitized.replaceAll(value, "[file]"), text);
+
+    // Non-Error captures (e.g. a string reason forwarded from an unhandled
+    // rejection) can still embed a local filename, so redact the string form
+    // too. Other non-Error shapes carry no message/stack string to scrub.
+    if (typeof error === "string") {
+        return redact(error);
+    }
+    if (!(error instanceof Error)) {
+        return error;
+    }
+
     const sanitizedMessage = redact(error.message);
     const sanitizedStack = typeof error.stack === "string" ? redact(error.stack) : undefined;
     if (sanitizedMessage === error.message && sanitizedStack === error.stack) {

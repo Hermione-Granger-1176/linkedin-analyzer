@@ -288,6 +288,79 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("does not complete the wrong job when an error lacks a jobId during concurrent uploads", async () => {
+        const fileReaderInstance = {
+            result: null,
+            onload: null,
+            onerror: null,
+            readAsArrayBuffer() {
+                this.result = encodeBuf("col\nvalue");
+                if (this.onload) {
+                    this.onload();
+                }
+            },
+        };
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return fileReaderInstance;
+        };
+
+        try {
+            UploadPage.init();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // Drop two files at once so two jobs are in flight simultaneously.
+            const input = document.getElementById("multiFileInput");
+            const files = [
+                new File(["csv"], "Shares.csv", { type: "text/csv" }),
+                new File(["csv"], "Comments.csv", { type: "text/csv" }),
+            ];
+            Object.defineProperty(input, "files", { value: files, configurable: true });
+            input.dispatchEvent(new Event("change"));
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            const addFileJobs = workerInstance.postMessage.mock.calls
+                .map((call) => call[0])
+                .filter((message) => message.type === "addFile")
+                .map((message) => message.payload.jobId);
+            expect(addFileJobs.length).toBe(2);
+
+            const progressOverlay = document.getElementById("progressOverlay");
+            expect(progressOverlay.hidden).toBe(false);
+
+            // A payload-level error with no jobId/fileName must not auto-complete a
+            // job while two are in flight. The old fallback grabbed the first active
+            // job (Shares), so completing Comments below then emptied the queue.
+            await workerInstance.listeners.message[0]({
+                data: { type: "error", payload: { message: "boom" } },
+            });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // Complete exactly one of the two real jobs.
+            await workerInstance.listeners.message[0]({
+                data: {
+                    type: "fileProcessed",
+                    payload: {
+                        fileType: "comments",
+                        fileName: "Comments.csv",
+                        rowCount: 2,
+                        jobId: addFileJobs[1],
+                        analyticsBase: { months: { "2024-01": {} } },
+                    },
+                },
+            });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // The first file is still processing, so the overlay must stay up. With
+            // the bug the stray error had completed it and the overlay hid early.
+            expect(progressOverlay.hidden).toBe(false);
+        } finally {
+            globalThis.FileReader = originalFileReader;
+        }
+    });
+
     it("clears storage and notifies worker on clear all", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));

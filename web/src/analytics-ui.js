@@ -459,6 +459,11 @@ export const AnalyticsPage = (() => {
             module: "analytics-ui",
             operation: "worker-error-event",
         });
+        // Tear down the broken worker: this clears the in-flight loadBase watchdog
+        // (so it cannot fire ~30s later and overwrite the screen) and nulls the
+        // reference so a subsequent loadBase recreates a fresh worker instead of
+        // posting to a dead one (initWorker early-returns while `worker` is set).
+        terminateWorker();
         setEmptyState("Analytics worker error", "Refresh the page and try again.");
     }
 

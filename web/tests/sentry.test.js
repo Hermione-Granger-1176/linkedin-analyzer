@@ -212,6 +212,30 @@ describe("sentry", () => {
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
+    it("redacts filenames from non-Error string captures", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+
+        const sentry = await import("@sentry/browser");
+        sentry.captureException.mockClear();
+
+        const { initSentry, captureError, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        // A non-Error capture (e.g. a string reason forwarded from an unhandled
+        // rejection) must still have the local filename scrubbed before it ships.
+        captureError('Reading "private-connections.csv" failed.', {
+            module: "upload",
+            fileName: "private-connections.csv",
+        });
+
+        const captured = sentry.captureException.mock.calls.at(-1)[0];
+        expect(captured).toBe('Reading "[file]" failed.');
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
     it("filters noisy browser-extension errors via beforeSend", async () => {
         const original = import.meta.env.VITE_SENTRY_DSN;
         import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";

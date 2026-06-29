@@ -23,6 +23,9 @@ export const InsightsPage = (() => {
 
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
+    // Guard against a worker that constructs but never responds (chunk load
+    // failure, silent hang): without this the loading overlay would stay up forever.
+    const WORKER_TIMEOUT_MS = 30000;
     /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
@@ -39,6 +42,7 @@ export const InsightsPage = (() => {
 
     let elements = null;
     let worker = null;
+    let workerTimeoutId = null;
     let requestId = 0;
     let pendingViewId = 0;
     let initialized = false;
@@ -101,6 +105,9 @@ export const InsightsPage = (() => {
     /** Cleanup when leaving route. */
     function onRouteLeave() {
         showInsightsLoading(false);
+        // Drop any in-flight worker watchdog so it cannot fire after navigation
+        // and overwrite a now-hidden screen with a timeout message.
+        clearWorkerTimeout();
         // Allow the next entry to reload outreach (e.g. after the user uploads
         // Messages from another screen).
         state.outreachLoaded = false;
@@ -184,6 +191,25 @@ export const InsightsPage = (() => {
         }
     }
 
+    /** Clear any in-flight worker watchdog timeout. */
+    function clearWorkerTimeout() {
+        if (!workerTimeoutId) {
+            return;
+        }
+        window.clearTimeout(workerTimeoutId);
+        workerTimeoutId = null;
+    }
+
+    /** Terminate the analytics Web Worker and clear its watchdog. */
+    function terminateWorker() {
+        clearWorkerTimeout();
+        if (!worker) {
+            return;
+        }
+        worker.terminate();
+        worker = null;
+    }
+
     /** Load analytics base from IndexedDB and send to worker. */
     async function loadBase() {
         showInsightsLoading(true);
@@ -224,6 +250,16 @@ export const InsightsPage = (() => {
                 type: "initBase",
                 payload: analyticsBase,
             });
+            clearWorkerTimeout();
+            workerTimeoutId = window.setTimeout(() => {
+                workerTimeoutId = null;
+                setEmptyState(
+                    "Insights timeout",
+                    "Insights worker did not respond in time. Try refreshing the page.",
+                );
+                terminateWorker();
+                showInsightsLoading(false);
+            }, WORKER_TIMEOUT_MS);
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
@@ -253,6 +289,8 @@ export const InsightsPage = (() => {
         }
 
         const message = parsed.value;
+        // The worker responded, so the loadBase watchdog is no longer needed.
+        clearWorkerTimeout();
 
         switch (message.type) {
             case "init":
@@ -428,6 +466,10 @@ export const InsightsPage = (() => {
                 operation: "worker-error-event",
             },
         );
+        // Tear down the broken worker (clears the watchdog and nulls the
+        // reference) so a later loadBase recreates a fresh worker rather than
+        // posting to a dead one, and the stale watchdog cannot fire afterward.
+        terminateWorker();
         setEmptyState("Insights worker error", "Refresh the page and try again.");
         showInsightsLoading(false);
     }

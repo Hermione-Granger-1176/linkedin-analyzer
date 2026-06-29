@@ -35,6 +35,14 @@ export const MessagesAnalytics = (() => {
         }
 
         const contacts = new Map();
+        // Maps a normalized contact name to the key its entry is currently stored
+        // under, so the same person seen once with a profile URL and once without
+        // folds into one contact instead of splitting across a url: and a name: key.
+        const nameToKey = new Map();
+        // Records name: -> url: re-keys (see promotion below) so events pushed
+        // under the old name key can be rewritten to the canonical key afterward;
+        // range views join events back to contacts by key and would otherwise split.
+        const keyRemap = new Map();
         const events = [];
         const rowTimestamps = [];
         const talkedNameKeys = new Set();
@@ -93,8 +101,35 @@ export const MessagesAnalytics = (() => {
             rowTimestamps.push(timestamp);
 
             participants.forEach(contact => {
-                const contactKey = buildContactKey(contact);
-                const existing = contacts.get(contactKey);
+                // Only non-anonymous names are safe to merge on: "LinkedIn Member"
+                // placeholders belong to different people and must not collapse.
+                const mergeNameKey =
+                    contact.name && !isAnonymousName(contact.name)
+                        ? normalizeName(contact.name)
+                        : "";
+                let contactKey = buildContactKey(contact);
+                let existing = contacts.get(contactKey);
+
+                // No direct hit: the same person may already be stored under their
+                // name (no URL yet) or under a URL (seen with one before). Reconcile
+                // via the name index so their message counts merge into one entry.
+                if (!existing && mergeNameKey) {
+                    const mappedKey = nameToKey.get(mergeNameKey);
+                    if (mappedKey && mappedKey !== contactKey && contacts.has(mappedKey)) {
+                        existing = contacts.get(mappedKey);
+                        if (contact.url) {
+                            // Promote a name-only entry to the stronger URL key so
+                            // later URL-bearing rows find it directly.
+                            contacts.delete(mappedKey);
+                            existing.key = contactKey;
+                            contacts.set(contactKey, existing);
+                            keyRemap.set(mappedKey, contactKey);
+                        } else {
+                            contactKey = mappedKey;
+                        }
+                    }
+                }
+
                 if (existing) {
                     existing.count += 1;
                     existing.lastTimestamp = Math.max(existing.lastTimestamp, timestamp);
@@ -105,13 +140,18 @@ export const MessagesAnalytics = (() => {
                         existing.name = contact.name;
                     }
                 } else {
-                    contacts.set(contactKey, {
+                    existing = {
                         key: contactKey,
                         name: contact.name || "Unknown",
                         url: contact.url,
                         count: 1,
                         lastTimestamp: timestamp
-                    });
+                    };
+                    contacts.set(contactKey, existing);
+                }
+
+                if (mergeNameKey) {
+                    nameToKey.set(mergeNameKey, existing.key);
                 }
 
                 const nameKey = normalizeName(contact.name);
@@ -133,6 +173,21 @@ export const MessagesAnalytics = (() => {
 
             latestTimestamp = Math.max(latestTimestamp, timestamp);
         });
+
+        // Repoint events pushed under a name: key that was later promoted to a
+        // url: key, so range-based aggregation joins them to the merged contact.
+        if (keyRemap.size) {
+            const resolveKey = (key) => {
+                let resolved = key;
+                while (keyRemap.has(resolved)) {
+                    resolved = keyRemap.get(resolved);
+                }
+                return resolved;
+            };
+            events.forEach((event) => {
+                event.contactKey = resolveKey(event.contactKey);
+            });
+        }
 
         return {
             contacts,

@@ -187,6 +187,95 @@ describe("AnalyticsEngine", () => {
         expect(filtered.totals.total).toBe(1);
     });
 
+    it("buildView does not inflate counts when a topic filter is combined with a day filter", () => {
+        // Regression: the day/hour fraction must be taken over the month's full
+        // activity, not the topic-narrowed total. Four posts land on the same
+        // weekday (Mon 2025-01-06) but only one is #ai, so the old code computed
+        // ratio = days[Mon] / topicCount = 4 / 1 and inflated the #ai count to 4.
+        const share = (commentary) => ({
+            Date: "2025-01-06 08:00:00",
+            ShareCommentary: commentary,
+            SharedUrl: "",
+            MediaUrl: "",
+            ShareLink: "https://linkedin.com",
+            Visibility: "MEMBER_NETWORK"
+        });
+        const shares = [
+            share("#ai breakthrough"),
+            share("#excel tips"),
+            share("#excel more"),
+            share("#data points")
+        ];
+        const analytics = AnalyticsEngine.compute(shares, []);
+        const base = {
+            timeRange: "all",
+            monthFocus: null,
+            day: null,
+            hour: null,
+            shareType: "all"
+        };
+
+        const topicOnly = AnalyticsEngine.buildView(analytics, { ...base, topic: "ai" });
+        const topicAndDay = AnalyticsEngine.buildView(analytics, { ...base, topic: "ai", day: 0 });
+
+        expect(topicOnly.totals.posts).toBe(1);
+        // Adding the (Monday) day filter can only narrow the topic subset; with
+        // the bug it ballooned to 4.
+        expect(topicAndDay.totals.posts).toBe(1);
+        expect(topicAndDay.totals.posts).toBeLessThanOrEqual(topicOnly.totals.posts);
+        expect(topicAndDay.totals.total).toBeLessThanOrEqual(topicOnly.totals.total);
+    });
+
+    it("buildView intersects a topic filter with a share-type filter", () => {
+        // Regression: the share-type branch used to overwrite the topic
+        // adjustment, so #ai + media reported every media post regardless of
+        // topic. Here only one of three media posts is #ai.
+        const share = (commentary, mediaUrl) => ({
+            Date: "2025-01-06 08:00:00",
+            ShareCommentary: commentary,
+            SharedUrl: "",
+            MediaUrl: mediaUrl,
+            ShareLink: "https://linkedin.com",
+            Visibility: "MEMBER_NETWORK"
+        });
+        const shares = [
+            share("#ai with video", "https://media.example.com/1"),
+            share("#ai text only", ""),
+            share("#excel chart", "https://media.example.com/2"),
+            share("#excel clip", "https://media.example.com/3")
+        ];
+        const analytics = AnalyticsEngine.compute(shares, []);
+        const base = {
+            timeRange: "all",
+            monthFocus: null,
+            day: null,
+            hour: null
+        };
+
+        const mediaOnly = AnalyticsEngine.buildView(analytics, {
+            ...base,
+            topic: "all",
+            shareType: "media"
+        });
+        const topicOnly = AnalyticsEngine.buildView(analytics, {
+            ...base,
+            topic: "ai",
+            shareType: "all"
+        });
+        const topicAndMedia = AnalyticsEngine.buildView(analytics, {
+            ...base,
+            topic: "ai",
+            shareType: "media"
+        });
+
+        expect(mediaOnly.totals.posts).toBe(3);
+        // The intersection is smaller than media-only (the topic excludes the two
+        // #excel media posts); with the bug it equaled media-only at 3.
+        expect(topicAndMedia.totals.posts).toBeGreaterThan(0);
+        expect(topicAndMedia.totals.posts).toBeLessThan(mediaOnly.totals.posts);
+        expect(topicAndMedia.totals.posts).toBeLessThanOrEqual(topicOnly.totals.posts);
+    });
+
     it("buildView creates weekly timeline for 1m range", () => {
         const shares = [
             {

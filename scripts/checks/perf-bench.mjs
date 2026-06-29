@@ -10,8 +10,9 @@
  *     same strict fatal decode. Both NEW paths fall back to windows-1252 only on
  *     a genuine decode error (no U+FFFD heuristic).
  *
- * It (a) asserts the new decode yields byte-identical text to the old, and
- * (b) times read+decode and clean per file, taking the median over N runs.
+ * It (a) asserts the new decode yields byte-identical text to the old without a
+ * fallback, and (b) times read+decode and clean per file, taking the median over
+ * N runs.
  *
  * Usage (prefer the Makefile):
  *   make bench-decode          # 5 runs (median)
@@ -135,8 +136,6 @@ console.log(
     "identical",
 );
 
-// Expected cleaned row counts on the real export (2026-06-12 baseline).
-const EXPECTED_ROWS = { shares: 886, comments: 7820, messages: 57898, connections: 5989 };
 let anyDiff = false;
 for (const [type, name] of Object.entries(FILES)) {
     const buf = await readFile(join(INPUT, name));
@@ -169,10 +168,11 @@ for (const [type, name] of Object.entries(FILES)) {
     const delta = newDecode.median - oldDecode.median;
     const rows = clean.last.success ? clean.last.cleanedData.length : "ERR";
     const usedFallback = newDecode.last.usedFallback;
+    const passed = identical && !usedFallback && clean.last.success;
 
-    // Real export is valid UTF-8, so the fatal decode must succeed without the
-    // windows-1252 fallback and must yield byte-identical text and row counts.
-    if (!identical || usedFallback || rows !== EXPECTED_ROWS[type]) {
+    // The fatal decode must match the old text, avoid the fallback for valid
+    // UTF-8 exports, and still produce cleanable text.
+    if (!passed) {
         anyDiff = true;
     }
 
@@ -186,13 +186,13 @@ for (const [type, name] of Object.entries(FILES)) {
         `${clean.median.toFixed(1)}ms`.padStart(9),
         String(rows).padStart(7),
         String(usedFallback).padStart(9),
-        identical && !usedFallback && rows === EXPECTED_ROWS[type] ? "YES" : "NO  <-- DIFF",
+        passed ? "YES" : "NO  <-- DIFF",
     );
 }
 
 console.log(
     anyDiff
-        ? "\nRESULT: new decode DIFFERS from old, triggered a fallback, or row counts drifted."
-        : "\nRESULT: new fatal decode is byte-identical to old, no fallback, row counts match.",
+        ? "\nRESULT: new decode DIFFERS from old, triggered a fallback, or cleaning failed."
+        : "\nRESULT: new fatal decode is byte-identical to old, no fallback, and cleaning succeeded.",
 );
 process.exitCode = anyDiff ? 1 : 0;

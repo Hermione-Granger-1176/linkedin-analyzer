@@ -109,11 +109,13 @@ def main():
         mismatches = [(i, a, b) for i, (a, b) in enumerate(zip(xlsx_data, js_data)) if a != b]
         sha_py = hashlib.sha256(json.dumps(xlsx_data).encode()).hexdigest()[:16]
         sha_js = hashlib.sha256(json.dumps(js_data).encode()).hexdigest()[:16]
+        row_count_delta = len(xlsx_data) - len(js_data)
         identical = sha_py == sha_js and len(xlsx_data) == len(js_data)
         status = "IDENTICAL" if identical else "DIFFERS"
         print(
             f"{type_name:<12} {status:<10} rows: py={len(xlsx_data)} js={len(js_data)} "
-            f"sha: py={sha_py} js={sha_js} cell-mismatched-rows={len(mismatches)}"
+            f"sha: py={sha_py} js={sha_js} cell-mismatched-rows={len(mismatches)} "
+            f"row-count-delta={row_count_delta:+d}"
         )
         for i, a, b in mismatches[:3]:
             for col_i, (x, y) in enumerate(zip(a, b)):

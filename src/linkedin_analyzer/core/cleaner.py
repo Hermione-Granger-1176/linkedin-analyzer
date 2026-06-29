@@ -260,11 +260,11 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             LOG.info("Cleaning column: %s", col_config.name)
             df[col_config.name] = df[col_config.name].apply(cleaner)
 
-        for column in df.columns:
-            df[column] = df[column].map(escape_excel_formula)
-
         configured_columns = [col.name for col in config.columns]
         df = df.reindex(columns=configured_columns, fill_value="")
+
+        for column in df.columns:
+            df[column] = df[column].map(escape_excel_formula)
 
         LOG.info("Exporting to %s", output_path)
         _write_excel_atomic(df, output_path, config)

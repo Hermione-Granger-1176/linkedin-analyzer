@@ -136,6 +136,7 @@ linkedin-analyzer all \
 - UTC timestamps are converted to local time where applicable.
 - NA-like values are treated as missing.
 - Rows missing required fields are dropped.
+- Cell values that start with Excel formula prefixes are quote-prefixed to avoid spreadsheet formula execution.
 - Encoding is auto-detected when `--encoding` is not set: UTF-8 (BOM-aware) is tried first, then Latin-1, which decodes any byte sequence. On the fallback the CLI logs a WARNING suggesting `--encoding`; pass it if characters look wrong.
 - Connections CSV skips the first 3 header rows before parsing.
 - Connections rows missing all of First Name, Last Name, and URL are dropped.
@@ -166,5 +167,6 @@ print(result)
 
 Configured in `src/linkedin_analyzer/core/paths.py`:
 
+- Base data directory: `data/`, configurable with `LINKEDIN_ANALYZER_DATA_DIR`
 - Input directory: `data/input/`
 - Output directory: `data/output/`

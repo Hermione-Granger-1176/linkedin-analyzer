@@ -605,7 +605,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
     });
 
-    it("handles error message type from worker with a jobId (completes job)", async () => {
+    it("falls back to fileName when worker error has an unknown jobId", async () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {
             return {
@@ -633,6 +633,9 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
+        const progressOverlay = document.getElementById("progressOverlay");
+        expect(progressOverlay.hidden).toBe(false);
+
         await workerInstance.listeners.message[0]({
             data: {
                 type: "error",
@@ -645,8 +648,10 @@ describe("UploadPage", () => {
         });
 
         await new Promise((resolve) => setTimeout(resolve, 0));
+        await Promise.resolve();
 
         expect(document.getElementById("uploadHint").textContent).toContain("Job failed");
+        expect(progressOverlay.hidden).toBe(true);
 
         Date.now.mockRestore();
         Math.random.mockRestore();
@@ -3582,10 +3587,9 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint")).toBeTruthy();
     });
 
-    // --- lines 612, 626, 630-631: resolveJobId / resolvePendingJobIdByFileName ----
+    // --- resolveJobId / resolvePendingJobIdByFileName ------------------------
     // Upload a file so pendingFiles has an entry, then send a 'fileProcessed'
-    // with jobId=null but fileName matching the pending entry.  This forces
-    // resolveJobId → resolvePendingJobIdByFileName (lines 630-631).
+    // with jobId=null but fileName matching the pending entry.
 
     it("resolveJobId falls back to resolvePendingJobIdByFileName when jobId is null", async () => {
         const originalFileReader = globalThis.FileReader;

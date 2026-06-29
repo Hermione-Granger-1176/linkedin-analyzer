@@ -507,6 +507,7 @@ export const ConnectionsPage = (() => {
                 operation: "worker-error-event",
             },
         );
+        terminateWorker();
         setEmptyState("Worker error", "Refresh the page and try again.");
         showConnectionsLoading(false);
     }

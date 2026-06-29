@@ -53,13 +53,13 @@ describe("ConnectionsPage", () => {
         constructor() {
             this.listeners = { message: [], error: [] };
             this.postMessage = vi.fn();
+            this.terminate = vi.fn();
             workerInstance = this;
         }
         addEventListener(type, callback) {
             this.listeners[type] = this.listeners[type] || [];
             this.listeners[type].push(callback);
         }
-        terminate() {}
     }
 
     beforeEach(async () => {
@@ -225,6 +225,31 @@ describe("ConnectionsPage", () => {
         expect(
             document.getElementById("connectionsEmpty").querySelector("h2").textContent,
         ).toContain("Worker error");
+    });
+
+    it("recreates the worker after a worker-level error", async () => {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const failedWorker = workerInstance;
+        failedWorker.listeners.error[0](new Event("error"));
+
+        expect(failedWorker.terminate).toHaveBeenCalled();
+
+        const cacheCallback = DataCache.subscribe.mock.calls[0][0];
+        cacheCallback({ type: "filesChanged", fileType: "connections" });
+
+        await ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(workerInstance).not.toBe(failedWorker);
+        expect(workerInstance.postMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "process" }),
+        );
     });
 
     it("sets empty state when worker sends error payload message", async () => {

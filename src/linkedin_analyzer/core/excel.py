@@ -32,7 +32,7 @@ def format_excel_output(output_path: Path, config: CleanerConfig) -> None:
     for col_letter, width in config.column_widths.items():
         ws.column_dimensions[col_letter].width = width
 
-    wrap_columns = config.wrap_text_columns
+    wrap_columns = set(config.wrap_text_columns)
     if wrap_columns:
         for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
             for cell in row:

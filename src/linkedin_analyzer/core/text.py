@@ -25,6 +25,7 @@ MISSING_TEXT_VALUES = frozenset(
         "<NA>",
     }
 )
+MISSING_TEXT_MAX_LENGTH = max(len(value) for value in MISSING_TEXT_VALUES)
 CONNECTION_MONTH_LOOKUP = {
     "jan": 1,
     "january": 1,
@@ -75,7 +76,11 @@ def is_missing(value: object) -> bool:
     # Check string values for empty, whitespace-only, or NA-like literals
     if isinstance(value, str):
         trimmed = value.strip()
-        return not trimmed or trimmed.upper() in MISSING_TEXT_VALUES
+        if not trimmed:
+            return True
+        if len(trimmed) > MISSING_TEXT_MAX_LENGTH:
+            return False
+        return trimmed.upper() in MISSING_TEXT_VALUES
     try:
         # Use cast to Any since pd.isna accepts more types than stubs indicate
         result = pd.isna(cast("Any", value))
@@ -159,6 +164,9 @@ def _clean_escaped_quotes_text(value: object) -> str:
         return ""
 
     text = str(value)
+    if '"' not in text and "\\" not in text:
+        return text.strip()
+
     text = text.replace('\\"', '"')
     text = text.replace('""', '"')
     return text.strip()

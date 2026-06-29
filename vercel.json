@@ -63,7 +63,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data:; font-src 'self'; style-src 'self'; style-src-elem 'self'; style-src-attr 'none'; script-src 'self'; connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; worker-src 'self'; report-uri /api/csp-report; report-to csp-endpoint"
+          "value": "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data:; font-src 'self'; style-src 'self'; style-src-elem 'self'; style-src-attr 'none'; script-src 'self'; connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io; worker-src 'self' blob:; report-uri /api/csp-report; report-to csp-endpoint"
         }
       ]
     }

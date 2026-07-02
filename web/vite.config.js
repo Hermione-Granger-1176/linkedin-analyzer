@@ -1,5 +1,11 @@
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+
+const sentryUploadEnabled = Boolean(
+    process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT,
+);
+const sentryReleaseName = process.env.VITE_APP_RELEASE;
 
 export default defineConfig({
     base: "./",
@@ -9,6 +15,7 @@ export default defineConfig({
         outDir: "dist",
         emptyOutDir: true,
         target: "es2022",
+        sourcemap: sentryUploadEnabled ? "hidden" : false,
     },
     plugins: [
         VitePWA({
@@ -48,5 +55,19 @@ export default defineConfig({
                 ],
             },
         }),
+        ...(sentryUploadEnabled
+            ? [
+                  sentryVitePlugin({
+                      org: process.env.SENTRY_ORG,
+                      project: process.env.SENTRY_PROJECT,
+                      authToken: process.env.SENTRY_AUTH_TOKEN,
+                      telemetry: false,
+                      ...(sentryReleaseName ? { release: { name: sentryReleaseName } } : {}),
+                      sourcemaps: {
+                          filesToDeleteAfterUpload: ["web/dist/**/*.map"],
+                      },
+                  }),
+              ]
+            : []),
     ],
 });

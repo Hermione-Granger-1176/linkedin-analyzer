@@ -12,11 +12,9 @@
 
 const MAX_BODY_BYTES = 64 * 1024;
 
-// Content types a CSP report may legitimately carry. The browser sends
-// `application/csp-report` (report-uri) or `application/reports+json` (Reporting
-// API). We forward using one of these rather than echoing the inbound header, so
-// an attacker POSTing to this open endpoint cannot pick the upstream content type.
-const ALLOWED_CONTENT_TYPES = new Set(["application/csp-report", "application/reports+json"]);
+// Forwarding always uses the legacy CSP report envelope and content type. The
+// endpoint accepts both report-uri and Reporting API input shapes, but never
+// relays caller-chosen top-level keys or content types upstream.
 const DEFAULT_CONTENT_TYPE = "application/csp-report";
 
 // Cap how long we wait on the upstream collector. Forwarding is best-effort, and
@@ -289,26 +287,15 @@ export default async function handler(req, res) {
 
     const endpoint = resolveReportEndpoint(process.env);
     if (endpoint) {
-        const rawContentType = req.headers["content-type"];
-        const inboundType = Array.isArray(rawContentType) ? rawContentType[0] : rawContentType;
-        // Match on the media type alone (case-insensitive, parameters stripped) so
-        // valid headers like "application/reports+json; charset=utf-8" are accepted,
-        // but preserve the original header when forwarding so upstream parsing of
-        // any charset parameter is unaffected.
-        const baseType =
-            typeof inboundType === "string" ? inboundType.split(";")[0].trim().toLowerCase() : "";
-        const contentType = ALLOWED_CONTENT_TYPES.has(baseType)
-            ? inboundType
-            : DEFAULT_CONTENT_TYPE;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT_MS);
         try {
             await fetch(endpoint, {
                 method: "POST",
                 headers: {
-                    "content-type": contentType,
+                    "content-type": DEFAULT_CONTENT_TYPE,
                 },
-                body,
+                body: JSON.stringify({ "csp-report": report }),
                 signal: controller.signal,
             });
         } catch {

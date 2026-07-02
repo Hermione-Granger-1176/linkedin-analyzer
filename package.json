@@ -54,11 +54,24 @@
     {
       "path": "web/dist/assets/index-*.css",
       "limit": "50 kB"
+    },
+    {
+      "path": "web/dist/assets/analytics-worker-*.js",
+      "limit": "13 kB"
+    },
+    {
+      "path": "web/dist/assets/connections-worker-*.js",
+      "limit": "6 kB"
+    },
+    {
+      "path": "web/dist/assets/messages-worker-*.js",
+      "limit": "8 kB"
     }
   ],
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
+    "@sentry/vite-plugin": "^5.3.0",
     "@size-limit/file": "^12.1.0",
     "@vitest/coverage-v8": "^4.1.9",
     "actionlint": "2.0.6",

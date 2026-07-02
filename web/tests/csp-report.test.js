@@ -183,7 +183,9 @@ describe("csp-report handler", () => {
         const [url, init] = fetchMock.mock.calls[0];
         expect(url).toBe("https://collector.example/report");
         expect(init.method).toBe("POST");
-        expect(init.body).toBe(JSON.stringify(report));
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": { "violated-directive": "style-src-attr" },
+        });
         expect(init.headers["content-type"]).toBe("application/csp-report");
         expect(res.statusCode).toBe(204);
     });
@@ -215,27 +217,7 @@ describe("csp-report handler", () => {
         },
     ]);
 
-    it("normalizes an array content-type header to a single allowlisted value", async () => {
-        process.env.CSP_REPORT_URI = "https://collector.example/report";
-        const fetchMock = vi.fn().mockResolvedValue({});
-        vi.stubGlobal("fetch", fetchMock);
-
-        const res = mockResponse();
-        await handler(
-            {
-                method: "POST",
-                headers: { "content-type": ["application/reports+json", "application/csp-report"] },
-                body: REPORTS_JSON_BODY,
-            },
-            res,
-        );
-
-        const [, init] = fetchMock.mock.calls[0];
-        expect(init.headers["content-type"]).toBe("application/reports+json");
-        expect(res.statusCode).toBe(204);
-    });
-
-    it("forwards a Reporting-API string body and preserves an allowlisted content-type", async () => {
+    it("forwards a Reporting-API body in the CSP report envelope", async () => {
         process.env.CSP_REPORT_URI = "https://collector.example/report";
         const fetchMock = vi.fn().mockResolvedValue({});
         vi.stubGlobal("fetch", fetchMock);
@@ -250,35 +232,18 @@ describe("csp-report handler", () => {
             res,
         );
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
         const [, init] = fetchMock.mock.calls[0];
-        expect(init.body).toBe(REPORTS_JSON_BODY);
-        expect(init.headers["content-type"]).toBe("application/reports+json");
-        expect(res.statusCode).toBe(204);
-    });
-
-    it("accepts and preserves an allowlisted content-type that carries parameters", async () => {
-        process.env.CSP_REPORT_URI = "https://collector.example/report";
-        const fetchMock = vi.fn().mockResolvedValue({});
-        vi.stubGlobal("fetch", fetchMock);
-
-        const res = mockResponse();
-        await handler(
-            {
-                method: "POST",
-                headers: { "content-type": "Application/Reports+JSON; charset=utf-8" },
-                body: REPORTS_JSON_BODY,
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": {
+                effectiveDirective: "img-src",
+                blockedURL: "https://evil.example/x.png",
             },
-            res,
-        );
-
-        const [, init] = fetchMock.mock.calls[0];
-        // Matched case-insensitively with parameters stripped, but forwarded verbatim.
-        expect(init.headers["content-type"]).toBe("Application/Reports+JSON; charset=utf-8");
+        });
+        expect(init.headers["content-type"]).toBe("application/csp-report");
         expect(res.statusCode).toBe(204);
     });
 
-    it("replaces a non-allowlisted content-type with the default when forwarding", async () => {
+    it("ignores inbound content type when forwarding", async () => {
         process.env.CSP_REPORT_URI = "https://collector.example/report";
         const fetchMock = vi.fn().mockResolvedValue({});
         vi.stubGlobal("fetch", fetchMock);
@@ -295,6 +260,31 @@ describe("csp-report handler", () => {
 
         const [, init] = fetchMock.mock.calls[0];
         expect(init.headers["content-type"]).toBe("application/csp-report");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("does not relay sibling top-level keys when forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": { "violated-directive": "script-src" },
+                    attacker: { relayed: true },
+                },
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": { "violated-directive": "script-src" },
+        });
         expect(res.statusCode).toBe(204);
     });
 

@@ -1432,8 +1432,12 @@ button {
     font-size: var(--font-size-sm);
     font-weight: 700;
     text-transform: uppercase;
-    color: var(--text-on-accent);
+    color: var(--text-primary);
     background: var(--accent-blue);
+}
+
+[data-theme="dark"] .message-item-avatar {
+    color: var(--bg-primary);
 }
 
 .avatar-blue {

@@ -5,6 +5,7 @@ import { VitePWA } from "vite-plugin-pwa";
 const sentryUploadEnabled = Boolean(
     process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT,
 );
+const sentryReleaseName = process.env.VITE_APP_RELEASE;
 
 export default defineConfig({
     base: "./",
@@ -61,9 +62,7 @@ export default defineConfig({
                       project: process.env.SENTRY_PROJECT,
                       authToken: process.env.SENTRY_AUTH_TOKEN,
                       telemetry: false,
-                      release: {
-                          name: process.env.VITE_APP_RELEASE || undefined,
-                      },
+                      ...(sentryReleaseName ? { release: { name: sentryReleaseName } } : {}),
                       sourcemaps: {
                           filesToDeleteAfterUpload: ["web/dist/**/*.map"],
                       },

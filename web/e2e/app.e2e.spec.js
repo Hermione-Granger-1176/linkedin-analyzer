@@ -46,7 +46,10 @@ async function runAxeScan(page) {
         () =>
             document
                 .getAnimations()
-                .filter((animation) => animation.effect.getTiming().iterations !== Infinity)
+                .filter(
+                    (animation) =>
+                        animation.effect && animation.effect.getTiming().iterations !== Infinity,
+                )
                 .every((animation) => animation.playState === "finished"),
         { timeout: 5000 },
     );

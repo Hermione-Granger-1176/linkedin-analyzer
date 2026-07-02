@@ -2,7 +2,7 @@
 
 import rough from "roughjs/bundled/rough.esm.js";
 
-import { SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
+import { MAX_CSV_CHARS, SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
@@ -453,6 +453,15 @@ export const UploadPage = (() => {
             const warningMb = Math.round(LARGE_FILE_WARNING_BYTES / (1024 * 1024));
             setHint(
                 `Some files are large (${warningMb}MB+). Processing may take longer than usual.`,
+                false,
+            );
+        }
+
+        const decodedLimitFiles = acceptedFiles.filter((file) => file.size > MAX_CSV_CHARS);
+        if (decodedLimitFiles.length) {
+            const maxTextMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
+            setHint(
+                `Some files are larger than the ${maxTextMb}MB text limit and may be rejected after decoding.`,
                 false,
             );
         }

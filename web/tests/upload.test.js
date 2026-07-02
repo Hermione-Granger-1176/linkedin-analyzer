@@ -2007,6 +2007,72 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("warns when accepted files may exceed the decoded text limit", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const bigFile = new File(["col\nval"], "Huge.csv", { type: "text/csv" });
+        Object.defineProperty(bigFile, "size", { value: MAX_CSV_CHARS + 1 });
+        Object.defineProperty(bigFile, "stream", { value: undefined, configurable: true });
+
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [bigFile] });
+        input.dispatchEvent(new Event("change"));
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("uploadHint").textContent).toContain("60MB text limit");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("does not show the decoded text-limit warning at the limit", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const bigFile = new File(["col\nval"], "AtLimit.csv", { type: "text/csv" });
+        Object.defineProperty(bigFile, "size", { value: MAX_CSV_CHARS });
+        Object.defineProperty(bigFile, "stream", { value: undefined, configurable: true });
+
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [bigFile] });
+        input.dispatchEvent(new Event("change"));
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("uploadHint").textContent).not.toContain("text limit");
+
+        globalThis.FileReader = originalFileReader;
+    });
+
     // --- No worker available: shows error hint --------------------------------
 
     it("shows hint when worker is unavailable during file upload", async () => {

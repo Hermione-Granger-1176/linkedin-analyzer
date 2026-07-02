@@ -1436,10 +1436,6 @@ button {
     background: var(--accent-blue);
 }
 
-[data-theme="dark"] .message-item-avatar {
-    color: var(--bg-primary);
-}
-
 .avatar-blue {
     background: var(--accent-blue);
 }
@@ -1459,6 +1455,11 @@ button {
 
 .avatar-purple {
     background: var(--accent-purple);
+    color: var(--text-on-accent);
+}
+
+[data-theme="dark"] .message-item-avatar {
+    color: var(--bg-primary);
 }
 
 .message-item-main {

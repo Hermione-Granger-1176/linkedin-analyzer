@@ -403,7 +403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command is None:
         parser.print_help()
-        return 1
+        return 0
 
     command_handlers = {
         "shares": run_shares,
@@ -420,6 +420,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         return handler(args)
+    except KeyboardInterrupt:
+        LOG.error("Interrupted by user")
+        return 130
     except Exception:
         LOG.exception("Unexpected error")
         return 1

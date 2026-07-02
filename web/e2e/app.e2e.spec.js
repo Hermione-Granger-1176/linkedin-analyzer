@@ -36,6 +36,29 @@ async function waitForLoadedStatus(page, id) {
     await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 20000 });
 }
 
+/**
+ * Run an axe scan after route-level loading and finite animations settle.
+ * @param {import('@playwright/test').Page} page - Playwright page instance
+ */
+async function runAxeScan(page) {
+    await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 5000 });
+    await page.waitForFunction(
+        () =>
+            document
+                .getAnimations()
+                .filter((animation) => animation.effect.getTiming().iterations !== Infinity)
+                .every((animation) => animation.playState === "finished"),
+        { timeout: 5000 },
+    );
+
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+
+    const critical = results.violations.filter(
+        (violation) => violation.impact === "critical" || violation.impact === "serious",
+    );
+    expect(critical).toEqual([]);
+}
+
 test("upload shares and render clean preview", async ({ page }) => {
     await uploadFiles(page, [SHARES_CSV]);
     await waitForLoadedStatus(page, "sharesStatus");
@@ -162,16 +185,36 @@ test("analytics screen has no critical accessibility violations", async ({ page 
     await openAnalyticsBtn.click();
     await expect(page).toHaveURL(/#analytics/);
     await expect(page.getByTestId("analytics-grid")).toBeVisible();
-    await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 5000 });
-    await page.waitForFunction(
-        () => document.getAnimations().filter((a) => a.effect.getTiming().iterations !== Infinity).every((a) => a.playState === "finished"),
-        { timeout: 5000 },
-    );
 
-    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    await runAxeScan(page);
+});
 
-    const critical = results.violations.filter(
-        (v) => v.impact === "critical" || v.impact === "serious",
-    );
-    expect(critical).toEqual([]);
+test("core data screens have no critical accessibility violations", async ({ page }) => {
+    await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV, MESSAGES_CSV, CONNECTIONS_CSV]);
+    await waitForLoadedStatus(page, "sharesStatus");
+    await waitForLoadedStatus(page, "commentsStatus");
+    await waitForLoadedStatus(page, "messagesStatus");
+    await waitForLoadedStatus(page, "connectionsStatus");
+
+    await runAxeScan(page);
+
+    await page.locator('#screen-home a.hub-card[data-route="clean"]').click();
+    await expect(page).toHaveURL(/#clean/);
+    await expect(page.getByTestId("clean-preview-table").locator("tbody tr").first()).toBeVisible();
+    await runAxeScan(page);
+
+    await page.goto("/#home");
+    await page.locator('#screen-home a.hub-card[data-route="connections"]').click();
+    await expect(page).toHaveURL(/#connections/);
+    await expect(page.locator("#connectionsGrid")).toBeVisible();
+    await expect(page.locator("#connectionsEmpty")).toBeHidden();
+    await runAxeScan(page);
+
+    await page.goto("/#home");
+    await page.locator('#screen-home a.hub-card[data-route="messages"]').click();
+    await expect(page).toHaveURL(/#messages/);
+    await expect(page.locator("#messagesLayout")).toBeVisible();
+    await expect(page.locator("#messagesEmpty")).toBeHidden();
+    await expect(page.locator("#topContactsList li").first()).toBeVisible();
+    await runAxeScan(page);
 });

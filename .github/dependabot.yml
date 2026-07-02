@@ -45,7 +45,9 @@ updates:
           - "*"
 
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/ci-setup
     schedule:
       interval: weekly
       day: monday

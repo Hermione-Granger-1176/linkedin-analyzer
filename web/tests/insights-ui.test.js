@@ -167,10 +167,91 @@ describe("InsightsPage", () => {
         });
 
         expect(document.querySelectorAll(".insight-card").length).toBe(1);
+        expect(document.querySelector(".insight-card").dataset.accent).toBe("accent-blue");
+        expect(document.querySelector(".insight-icon").classList.contains("accent-blue")).toBe(true);
         expect(document.getElementById("insightTip").hidden).toBe(false);
         expect(document.getElementById("insightTipText").textContent).toContain("Try sharing");
         // No lifetime data delivered, so the All-time section stays hidden.
         expect(document.getElementById("insightsAllTime").hidden).toBe(true);
+    });
+
+    it("renders a canonical insight accent class", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        workerInstance.listeners.message[0]({
+            data: { type: "init", payload: { hasData: true } },
+        });
+        const viewRequestId = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "view",
+        )[0].requestId;
+        workerInstance.listeners.message[0]({
+            data: {
+                type: "view",
+                requestId: viewRequestId,
+                payload: {
+                    insights: {
+                        insights: [
+                            {
+                                title: "Reply lift",
+                                body: "Direct outreach is improving.",
+                                accent: "accent-green",
+                                icon: "spark",
+                            },
+                        ],
+                        tip: null,
+                    },
+                },
+            },
+        });
+
+        expect(document.querySelector(".insight-card").dataset.accent).toBe("accent-green");
+        expect(document.querySelector(".insight-icon").classList.contains("accent-green")).toBe(true);
+    });
+
+    it("falls back for a non-allowlisted insight accent class", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        workerInstance.listeners.message[0]({
+            data: { type: "init", payload: { hasData: true } },
+        });
+        const viewRequestId = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "view",
+        )[0].requestId;
+        workerInstance.listeners.message[0]({
+            data: {
+                type: "view",
+                requestId: viewRequestId,
+                payload: {
+                    insights: {
+                        insights: [
+                            {
+                                title: "Hostile",
+                                body: "Unexpected accent should not render.",
+                                accent: 'accent-red" onclick="alert(1)',
+                                icon: "spark",
+                            },
+                        ],
+                        tip: null,
+                    },
+                },
+            },
+        });
+
+        const card = document.querySelector(".insight-card");
+        const icon = document.querySelector(".insight-icon");
+        expect(card.dataset.accent).toBe("accent-blue");
+        expect(icon.classList.contains("accent-blue")).toBe(true);
+        expect(icon.className).not.toContain("onclick");
     });
 
     it("renders the All-time section from networkGrowth and the stored outreach summary", async () => {

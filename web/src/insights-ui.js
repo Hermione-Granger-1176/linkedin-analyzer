@@ -8,6 +8,24 @@ import { Session } from "./session.js";
 import { Storage } from "./storage.js";
 import { parseAnalyticsWorkerMessage } from "./worker-contracts.js";
 
+const ACCENT_CLASSES = new Set([
+    "accent-yellow",
+    "accent-purple",
+    "accent-blue",
+    "accent-green",
+    "accent-red",
+]);
+const DEFAULT_ACCENT = "accent-blue";
+
+/**
+ * Resolve the CSS class allowed for an insight card accent.
+ * @param {unknown} accent - Worker-provided accent class.
+ * @returns {string} A known accent class.
+ */
+function resolveAccentClass(accent) {
+    return typeof accent === "string" && ACCENT_CLASSES.has(accent) ? accent : DEFAULT_ACCENT;
+}
+
 export const InsightsPage = (() => {
     "use strict";
 
@@ -557,11 +575,12 @@ export const InsightsPage = (() => {
 
         elements.insightsGrid.innerHTML = "";
         insights.slice(0, 6).forEach((insight) => {
+            const accent = resolveAccentClass(insight.accent);
             const card = document.createElement("div");
             card.className = "insight-card";
-            card.dataset.accent = insight.accent;
+            card.dataset.accent = accent;
             card.innerHTML = `
-                <div class="insight-icon ${insight.accent}">${getInsightIcon(insight.icon)}</div>
+                <div class="insight-icon ${accent}">${getInsightIcon(insight.icon)}</div>
                 <div class="insight-body">
                     <h3>${escapeHtml(insight.title)}</h3>
                     <p>${escapeHtml(insight.body)}</p>

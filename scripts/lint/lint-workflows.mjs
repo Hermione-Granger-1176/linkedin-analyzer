@@ -19,20 +19,27 @@ async function listWorkflowFiles() {
 
 function isAllowedFalsePositive(result) {
     // actionlint cannot know repository-level GitHub Actions variables at lint time.
+    // Its diagnostic only names the "vars" context and does not include the
+    // property path, so this allowlist cannot be narrowed to specific variables.
     return result.message.includes('undefined variable "vars"');
 }
 
 async function main() {
-    const lint = await createLinter();
     const workflowFiles = await listWorkflowFiles();
     let hasErrors = false;
 
     for (const relativePath of workflowFiles) {
+        const lint = await createLinter();
         const filePath = path.join(REPO_ROOT, relativePath);
         const content = await readFile(filePath, "utf-8");
-        const results = lint(content, relativePath).filter(
-            (result) => !isAllowedFalsePositive(result),
-        );
+        let results;
+        try {
+            results = lint(content, relativePath).filter(
+                (result) => !isAllowedFalsePositive(result),
+            );
+        } catch (error) {
+            throw new Error(`Failed to lint ${relativePath}`, { cause: error });
+        }
 
         if (results.length > 0) {
             hasErrors = true;

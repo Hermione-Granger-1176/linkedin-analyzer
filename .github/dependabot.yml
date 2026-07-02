@@ -44,6 +44,16 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: pip
+    directory: /constraints/container-build
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    groups:
+      container-build-tools:
+        patterns:
+          - "*"
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -52,6 +62,17 @@ updates:
     open-pull-requests-limit: 1
     groups:
       all-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /.github/actions/ci-setup
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    groups:
+      ci-setup-actions:
         patterns:
           - "*"
 

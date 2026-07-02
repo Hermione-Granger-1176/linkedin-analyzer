@@ -105,7 +105,7 @@ linkedin-analyzer/
 │   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
 │   ├── lint/                           # Local lint helpers
 │   └── web-smoke.mjs                   # Post-deploy HTTP smoke check (shell + headers + CSP endpoint)
-├── data/                               # Gitignored; created locally on first run
+├── data/                               # Local workspace; contents gitignored (only .gitkeep placeholders are tracked)
 │   ├── input/                          # Place CSVs here
 │   └── output/                         # Generated Excel files
 │

@@ -16,6 +16,7 @@
    - `VITE_APP_RELEASE` (recommended, e.g. commit SHA)
    - `CSP_REPORT_URI` or `SENTRY_DSN` (optional, server-side only; enables CSP report forwarding; see [CSP violation reporting](#csp-violation-reporting))
    - `CSP_REPORT_MAX_PER_MINUTE` (optional, server-side only; defaults to 120, use 0 to disable the per-instance CSP report guard)
+   - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` (optional, build-time only; when all three are set the production build uploads hidden sourcemaps to Sentry and deletes the `.map` files from `web/dist` before deploy. When any is unset the upload is a no-op and no sourcemaps are emitted.)
 5. Verify custom headers from `vercel.json` are applied after deploy.
 
 The `api/csp-report` Serverless Function deploys automatically from the `api/` directory; no extra Vercel configuration is required.
@@ -61,7 +62,7 @@ Re-run-failed-jobs caveat: `gh-action-pypi-publish` runs with `skip-existing: tr
 
 Each release surface rolls back independently.
 
-- **Web app (Vercel):** In the Vercel dashboard, open the project's Deployments, find the last known-good deployment, and use **Promote to Production** (or `vercel rollback <deployment-url>`). The PWA service worker auto-refreshes clients to the promoted build; a hard reload forces it immediately.
+- **Web app (Vercel):** In the Vercel dashboard, open the project's Deployments, find the last known-good deployment, and use **Promote to Production** (or `vercel rollback <deployment-url>`). The PWA service worker is registered with `updateViaCache: "none"` and calls `update()` on load, so clients pick up the promoted build on their next navigation rather than mid-session; a hard reload forces it immediately.
 - **PyPI (CLI):** Releases are immutable and a version cannot be re-uploaded. Roll forward by tagging a new patch release that reverts the offending change. If a release is actively harmful, `yank` it on PyPI so pip stops resolving to it while leaving existing pins working.
 - **GHCR (container):** Re-point `latest` by pushing the prior good tag, or instruct consumers to pin the previous immutable `:<version>` / `:sha-<sha>` tag (both are published by `publish.yml`).
 
@@ -84,6 +85,7 @@ The `Content-Security-Policy` header in `vercel.json` enforces a strict policy a
 
 - The collector (`api/csp-report.mjs`) forwards reports only when `CSP_REPORT_URI` (explicit collector URL) or `SENTRY_DSN` (server-side DSN) is configured; with neither set it accepts reports without forwarding them and logs a host-only summary so the policy stays valid and violations remain searchable.
 - The collector has a per-instance report guard controlled by `CSP_REPORT_MAX_PER_MINUTE`; it defaults to 120 valid CSP reports per minute and returns 204 without forwarding reports over the cap. It logs one notice when the cap is first reached in each window.
+- Accepted risk: the guard is per serverless instance, not global, so a burst spread across many concurrent instances can forward more than the nominal cap. This is a deliberate trade-off. The blast radius is bounded because each request is already limited by the 64 KB body cap and CSP-shape validation before it counts against the guard, and forwarded reports carry only violation metadata (never file contents). If you need a hard global limit, layer a WAF or edge rate rule on `/api/csp-report` in front of the function.
 - Reports contain only violation metadata (blocked URI, violated directive, document URI), never uploaded file contents, so this does not change the app's local-only data guarantee.
 - To verify after deploy, run `make web-smoke url=https://your-production-domain.example`, load the site, and confirm there are no unexpected CSP violations in the browser console. If forwarding is configured, confirm a test violation reaches the collector.
 

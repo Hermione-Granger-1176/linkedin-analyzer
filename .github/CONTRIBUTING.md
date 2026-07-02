@@ -33,6 +33,7 @@ See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 ## Checks
 
 - All linters: `make lint`
+- Workflow lint: `make lint-workflows`
 - Python lint: `make lint-py`
 - Python typecheck: `make typecheck-py`
 - Python tests: `make test-py`
@@ -42,6 +43,8 @@ See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 - Web tests: `make test-js`
 - Web E2E tests: `make test-e2e`
 - Web build: `make web-build`
+- Dead-code detection: `make dead-code` (vulture for Python, knip for JS)
+- Non-browser gate in parallel: `make ci-fast` (excludes `web-build-size`)
 - Full local gate: `make ci`
 
 ## Pull requests

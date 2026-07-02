@@ -19,8 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Move development dependencies from the `dev` optional-dependency extra to a PEP 735 `[dependency-groups]` table. The published package no longer advertises a `[dev]` extra; install dev tooling from source with `make install`.
 - Log how many rows each cleaning step drops (blank, missing required values, or all-optional-empty) so silent row loss is visible.
 - Point the Latin-1 decode-fallback warning at the `--encoding` flag when characters may look wrong.
+- Return exit code 0 for a bare `linkedin-analyzer` invocation once help is printed, instead of a non-zero error.
+- Pin the container runtime `pip` upgrade to the same version as the build stage.
 
 ### Fixed
+
+- Exit with code 130 and a clean "Interrupted by user" message when the CLI is cancelled with Ctrl-C, instead of printing a traceback.
 
 - Write cleaned Excel output atomically so a crash mid-export cannot leave a truncated or corrupt `.xlsx` at the destination.
 - Preserve exception tracebacks in structured JSON logs.

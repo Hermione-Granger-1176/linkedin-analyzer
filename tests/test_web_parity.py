@@ -29,17 +29,29 @@ def test_shares_fixture_matches_expected_python_contract(tmp_path: Path) -> None
     assert result.success is True
     df = pd.read_excel(output_file).fillna("")
     assert df["Date"].str.match(LOCAL_DATETIME_PATTERN).all()
+    # The impossible date passes through as raw text, which also matches the
+    # pattern above, so pin the exact cell explicitly.
+    assert df["Date"].iloc[3] == "2026-02-30 10:00:00"
     assert list(df["ShareLink"]) == [
         "https://www.linkedin.com/feed/update/urn:li:share:1",
         "https://www.linkedin.com/feed/update/urn:li:share:2",
+        "https://www.linkedin.com/feed/update/urn:li:share:4",
+        "https://www.linkedin.com/feed/update/urn:li:share:5",
     ]
     assert list(df["ShareCommentary"]) == [
         'He said "hi".\n\nNext "line" here.',
         "Smart “quotes” and naïve emoji 📌 stay intact.",
+        "'=SUM(A1:B2)",
+        "'@mention leads this",
     ]
-    assert list(df["SharedUrl"]) == ["https://example.com/post", ""]
-    assert list(df["MediaUrl"]) == ["", ""]
-    assert list(df["Visibility"]) == ["MEMBER_NETWORK", "CONNECTIONS"]
+    assert list(df["SharedUrl"]) == ["https://example.com/post", "", "", ""]
+    assert list(df["MediaUrl"]) == ["", "", "", ""]
+    assert list(df["Visibility"]) == [
+        "MEMBER_NETWORK",
+        "CONNECTIONS",
+        "MEMBER_NETWORK",
+        "CONNECTIONS",
+    ]
 
 
 def test_comments_fixture_matches_expected_python_contract(tmp_path: Path) -> None:
@@ -53,14 +65,18 @@ def test_comments_fixture_matches_expected_python_contract(tmp_path: Path) -> No
 
     assert result.success is True
     df = pd.read_excel(output_file).fillna("")
+    # The "none" row is dropped (Message required, NONE is a sentinel).
+    assert len(df) == 3
     assert df["Date"].str.match(LOCAL_DATETIME_PATTERN).all()
     assert list(df["Link"]) == [
         "https://www.linkedin.com/feed/update/urn:li:activity:1",
         "https://www.linkedin.com/feed/update/urn:li:activity:2",
+        "https://www.linkedin.com/feed/update/urn:li:activity:4",
     ]
     assert list(df["Message"]) == [
         'She wrote "great post" yesterday.\n📌 Naïve “smart quotes” line.',
         'Plain text with "doubled" quotes',
+        "'+1 first-token payload",
     ]
 
 
@@ -75,14 +91,17 @@ def test_messages_fixture_matches_expected_python_contract(tmp_path: Path) -> No
 
     assert result.success is True
     df = pd.read_excel(output_file).fillna("")
-    assert list(df["FROM"]) == ["Ada"]
-    assert list(df["TO"]) == ["Bob"]
+    assert list(df["FROM"]) == ["Ada", "Eve"]
+    assert list(df["TO"]) == ["Bob", "Bob"]
     assert df["DATE"].str.match(LOCAL_DATETIME_PATTERN).all()
-    assert list(df["CONTENT"]) == ['He said "hello"']
-    assert list(df["FOLDER"]) == ["INBOX"]
-    assert list(df["CONVERSATION ID"]) == ["abc"]
-    assert list(df["SENDER PROFILE URL"]) == ["https://linkedin.com/in/ada"]
-    assert list(df["RECIPIENT PROFILE URLS"]) == ["https://linkedin.com/in/bob"]
+    # UTC is stripped, then the impossible date passes through as raw text,
+    # which also matches the pattern above, so pin the exact cell explicitly.
+    assert df["DATE"].iloc[1] == "2026-02-30 10:00:00"
+    assert list(df["CONTENT"]) == ['He said "hello"', "'-2 plus 2"]
+    assert list(df["FOLDER"]) == ["INBOX", "ARCHIVE"]
+    assert list(df["CONVERSATION ID"]) == ["abc", "ghi"]
+    assert list(df["SENDER PROFILE URL"]) == ["https://linkedin.com/in/ada", ""]
+    assert list(df["RECIPIENT PROFILE URLS"]) == ["https://linkedin.com/in/bob", ""]
 
 
 def test_connections_fixture_matches_expected_python_contract(tmp_path: Path) -> None:
@@ -96,13 +115,21 @@ def test_connections_fixture_matches_expected_python_contract(tmp_path: Path) ->
 
     assert result.success is True
     df = pd.read_excel(output_file).fillna("")
-    assert list(df["First Name"]) == ["Ada", ""]
-    assert list(df["Last Name"]) == ["Lovelace", "Builder"]
+    assert list(df["First Name"]) == ["Ada", "", "'=2+5", "Bob"]
+    assert list(df["Last Name"]) == ["Lovelace", "Builder", "'+Lovelace", "Builder II"]
     assert list(df["URL"]) == [
         "https://linkedin.com/in/ada",
         "https://linkedin.com/in/bob",
+        "",
+        "https://linkedin.com/in/bob2",
     ]
-    assert list(df["Email Address"]) == ["", ""]
-    assert list(df["Company"]) == ["Analytical Engines", "Builders Inc"]
-    assert list(df["Position"]) == ["Mathematician", "Engineer"]
-    assert list(df["Connected On"]) == ["2026-01-30", "2026-02-15"]
+    assert list(df["Email Address"]) == ["", "", "", ""]
+    assert list(df["Company"]) == [
+        "Analytical Engines",
+        "Builders Inc",
+        "'-Analytical Co",
+        "Builders Inc",
+    ]
+    assert list(df["Position"]) == ["Mathematician", "Engineer", "'@Handle Corp", "Engineer"]
+    # The impossible "30 Feb 2026" date passes through as raw text.
+    assert list(df["Connected On"]) == ["2026-01-30", "2026-02-15", "30 Feb 2026", "2026-09-15"]

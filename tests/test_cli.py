@@ -192,7 +192,7 @@ class TestJsonFormatter:
 class TestMain:
     """Tests for main function."""
 
-    def test_no_command_returns_error(self) -> None:
+    def test_no_command_returns_success(self) -> None:
         parser = SimpleNamespace(
             parse_args=lambda _argv=None: SimpleNamespace(
                 command=None, log_level="INFO", log_format="text"
@@ -200,7 +200,7 @@ class TestMain:
             print_help=lambda: None,
         )
         with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
-            assert main([]) == 1
+            assert main([]) == 0
 
     def test_shares_command_success(self, tmp_path: Path) -> None:
         # Create test file
@@ -286,16 +286,6 @@ class TestMain:
         )
         assert exit_code == 1
 
-    def test_no_command_returns_one_when_help_does_not_exit(self) -> None:
-        parser = SimpleNamespace(
-            parse_args=lambda _argv=None: SimpleNamespace(
-                command=None, log_level="INFO", log_format="text"
-            ),
-            print_help=lambda: None,
-        )
-        with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
-            assert main([]) == 1
-
     def test_unknown_command_returns_error(self) -> None:
         parser = SimpleNamespace(
             parse_args=lambda _argv=None: SimpleNamespace(
@@ -318,6 +308,19 @@ class TestMain:
             patch("linkedin_analyzer.cli.run_shares", side_effect=RuntimeError("boom")),
         ):
             assert main([]) == 1
+
+    def test_main_returns_130_on_keyboard_interrupt(self) -> None:
+        parser = SimpleNamespace(
+            parse_args=lambda _argv=None: SimpleNamespace(
+                command="shares", log_level="INFO", log_format="text"
+            ),
+            print_help=lambda: None,
+        )
+        with (
+            patch("linkedin_analyzer.cli._build_parser", return_value=parser),
+            patch("linkedin_analyzer.cli.run_shares", side_effect=KeyboardInterrupt),
+        ):
+            assert main([]) == 130
 
 
 class TestRunAll:

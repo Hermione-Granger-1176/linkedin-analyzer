@@ -15,6 +15,9 @@ async function readFixture(name) {
 // assert the format instead of an exact machine-dependent value.
 const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
+// Non-UTF-8 decode parity is out of scope for this harness: the web parity path
+// is fed an already-decoded string, so encoding detection is not exercised here.
+
 describe("web/python parity fixtures", () => {
     it("matches shared shares fixture contract", async () => {
         const csv = await readFixture("shares-parity.csv");
@@ -38,6 +41,23 @@ describe("web/python parity fixtures", () => {
                 MediaUrl: "",
                 Visibility: "CONNECTIONS",
             },
+            {
+                Date: expect.stringMatching(LOCAL_DATETIME_PATTERN),
+                ShareLink: "https://www.linkedin.com/feed/update/urn:li:share:4",
+                ShareCommentary: "'=SUM(A1:B2)",
+                SharedUrl: "",
+                MediaUrl: "",
+                Visibility: "MEMBER_NETWORK",
+            },
+            {
+                // Impossible date passes through as raw text; pin it exactly.
+                Date: "2026-02-30 10:00:00",
+                ShareLink: "https://www.linkedin.com/feed/update/urn:li:share:5",
+                ShareCommentary: "'@mention leads this",
+                SharedUrl: "",
+                MediaUrl: "",
+                Visibility: "CONNECTIONS",
+            },
         ]);
     });
 
@@ -46,6 +66,8 @@ describe("web/python parity fixtures", () => {
         const result = LinkedInCleaner.process(csv, "comments");
 
         expect(result.success).toBe(true);
+        // The "none" row is dropped (Message required, NONE is a sentinel).
+        expect(result.cleanedData).toHaveLength(3);
         expect(result.cleanedData).toEqual([
             {
                 Date: expect.stringMatching(LOCAL_DATETIME_PATTERN),
@@ -56,6 +78,11 @@ describe("web/python parity fixtures", () => {
                 Date: expect.stringMatching(LOCAL_DATETIME_PATTERN),
                 Link: "https://www.linkedin.com/feed/update/urn:li:activity:2",
                 Message: 'Plain text with "doubled" quotes',
+            },
+            {
+                Date: expect.stringMatching(LOCAL_DATETIME_PATTERN),
+                Link: "https://www.linkedin.com/feed/update/urn:li:activity:4",
+                Message: "'+1 first-token payload",
             },
         ]);
     });
@@ -75,6 +102,18 @@ describe("web/python parity fixtures", () => {
                 "CONVERSATION ID": "abc",
                 "SENDER PROFILE URL": "https://linkedin.com/in/ada",
                 "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob",
+            },
+            {
+                FROM: "Eve",
+                TO: "Bob",
+                // UTC is stripped, then the impossible date passes through as
+                // raw text; pin it exactly.
+                DATE: "2026-02-30 10:00:00",
+                CONTENT: "'-2 plus 2",
+                FOLDER: "ARCHIVE",
+                "CONVERSATION ID": "ghi",
+                "SENDER PROFILE URL": "",
+                "RECIPIENT PROFILE URLS": "",
             },
         ]);
     });
@@ -102,6 +141,25 @@ describe("web/python parity fixtures", () => {
                 Company: "Builders Inc",
                 Position: "Engineer",
                 "Connected On": "2026-02-15",
+            },
+            {
+                "First Name": "'=2+5",
+                "Last Name": "'+Lovelace",
+                URL: "",
+                "Email Address": "",
+                Company: "'-Analytical Co",
+                Position: "'@Handle Corp",
+                // Impossible "30 Feb 2026" date passes through as raw text.
+                "Connected On": "30 Feb 2026",
+            },
+            {
+                "First Name": "Bob",
+                "Last Name": "Builder II",
+                URL: "https://linkedin.com/in/bob2",
+                "Email Address": "",
+                Company: "Builders Inc",
+                Position: "Engineer",
+                "Connected On": "2026-09-15",
             },
         ]);
     });

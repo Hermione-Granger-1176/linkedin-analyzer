@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      APP_ID: ${{ vars.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
       LOCK_REFRESH_ARTIFACT_NAME: python-lock-refresh-${{ github.event.workflow_run.pull_requests[0].number || 'unknown' }}
       LOCK_REFRESH_ROOT: .artifacts/lock-refresh
       LOCK_FILE_PATHSPEC: uv.lock
@@ -37,6 +39,23 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Check GitHub App credentials
+        id: credentials
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_PRIVATE_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub App token
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.APP_PRIVATE_KEY }}
 
       - name: Detect lock refresh artifact
         id: artifact
@@ -111,17 +130,53 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit refreshed Python lock file with verified commit
+      - name: Note GitHub App token fallback
         if: >-
           steps.artifact.outputs.available == 'true' &&
           steps.branch-state.outputs.stale != 'true' &&
-          steps.changes.outputs.changed == 'true'
+          steps.changes.outputs.changed == 'true' &&
+          steps.credentials.outputs.available != 'true'
+        run: |
+          {
+            echo "## Python lock refresh"
+            echo
+            echo "GitHub App credentials are not configured, so this run will commit with GITHUB_TOKEN."
+            echo "The refreshed lock file will still be written back, but the commit may not be verified by the app."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit refreshed Python lock file with GitHub App token
+        if: >-
+          steps.artifact.outputs.available == 'true' &&
+          steps.branch-state.outputs.stale != 'true' &&
+          steps.changes.outputs.changed == 'true' &&
+          steps.credentials.outputs.available == 'true'
+        uses: ./.github/actions/verified-commit
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          base-branch: ${{ steps.metadata.outputs.head-ref }}
+          expected-head-sha: ${{ steps.metadata.outputs.head-sha }}
+          commit-headline: "Refresh Python lock file"
+          fallback-branch-prefix: ci/refresh-python-lock
+          pr-title: "Refresh Python lock file"
+          pr-body: |
+            ## Summary
+            - Type: CI maintenance
+            - Refresh `uv.lock` to match the Dependabot Python update
+            - Keep Python installs reproducible in local and CI workflows
+          pathspec: ${{ env.LOCK_FILE_PATHSPEC }}
+
+      - name: Commit refreshed Python lock file with fallback token
+        if: >-
+          steps.artifact.outputs.available == 'true' &&
+          steps.branch-state.outputs.stale != 'true' &&
+          steps.changes.outputs.changed == 'true' &&
+          steps.credentials.outputs.available != 'true'
         uses: ./.github/actions/verified-commit
         with:
           github-token: ${{ github.token }}
           base-branch: ${{ steps.metadata.outputs.head-ref }}
           expected-head-sha: ${{ steps.metadata.outputs.head-sha }}
-          commit-headline: "Refresh Python lock file [skip ci]"
+          commit-headline: "Refresh Python lock file"
           fallback-branch-prefix: ci/refresh-python-lock
           pr-title: "Refresh Python lock file"
           pr-body: |

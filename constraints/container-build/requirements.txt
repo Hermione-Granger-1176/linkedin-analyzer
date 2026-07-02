@@ -1,0 +1,3 @@
+# Python tools used only inside the container build.
+pip==26.1.2
+build==1.5.0

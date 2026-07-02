@@ -8,9 +8,10 @@ ENV PIP_NO_CACHE_DIR=1 \
 WORKDIR /build
 
 COPY pyproject.toml README.md /build/
+COPY constraints/container-build/requirements.txt /build/constraints/container-build/requirements.txt
 COPY src /build/src
 
-RUN python -m pip install --upgrade pip==26.1.2 build==1.5.0 \
+RUN python -m pip install --upgrade -r constraints/container-build/requirements.txt \
     && SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m build --wheel --outdir /dist
 
 FROM python:3.14-slim@sha256:b877e50bd90de10af8d82c57a022fc2e0dc731c5320d762a27986facfc3355c1 AS runtime
@@ -36,10 +37,11 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 
 COPY --from=builder /dist/*.whl /tmp/
+COPY --from=builder /build/constraints/container-build/requirements.txt /tmp/container-build-requirements.txt
 
-RUN python -m pip install --upgrade pip \
+RUN python -m pip install --upgrade -c /tmp/container-build-requirements.txt pip \
     && python -m pip install /tmp/*.whl \
-    && rm -f /tmp/*.whl
+    && rm -f /tmp/*.whl /tmp/container-build-requirements.txt
 
 USER app
 

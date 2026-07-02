@@ -206,8 +206,8 @@ ci-web: format-js-check lint-js typecheck-web dead-code-js test-js web-build-siz
 
 ci: ci-python lint-workflows ci-web ## Full local CI gate
 
-ci-fast: ## Run the non-browser CI checks in parallel
-	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py lint-py format-py-check typecheck-py dead-code-py test-py lint-js format-js-check typecheck-web dead-code-js
+ci-fast: ## Run the non-browser CI checks in parallel (excludes web-build-size)
+	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py lint-py format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js format-js-check typecheck-web dead-code-js test-js
 
 check-local: ci ## Alias for the full local CI gate
 

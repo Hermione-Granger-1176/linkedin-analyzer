@@ -54,6 +54,18 @@
     {
       "path": "web/dist/assets/index-*.css",
       "limit": "50 kB"
+    },
+    {
+      "path": "web/dist/assets/analytics-worker-*.js",
+      "limit": "13 kB"
+    },
+    {
+      "path": "web/dist/assets/connections-worker-*.js",
+      "limit": "6 kB"
+    },
+    {
+      "path": "web/dist/assets/messages-worker-*.js",
+      "limit": "8 kB"
     }
   ],
   "devDependencies": {

@@ -391,8 +391,7 @@ export const AnalyticsEngine = (() => {
 
         // Process shares
         if (Array.isArray(sharesData)) {
-            for (let i = 0; i < sharesData.length; i++) {
-                const row = sharesData[i];
+            for (const row of sharesData) {
                 const dateInfo = parseLinkedInDate(row.Date);
                 if (!dateInfo) {
                     continue;
@@ -434,8 +433,7 @@ export const AnalyticsEngine = (() => {
 
         // Process comments
         if (Array.isArray(commentsData)) {
-            for (let i = 0; i < commentsData.length; i++) {
-                const row = commentsData[i];
+            for (const row of commentsData) {
                 const dateInfo = parseLinkedInDate(row.Date);
                 if (!dateInfo) {
                     continue;
@@ -895,13 +893,9 @@ export const AnalyticsEngine = (() => {
             const startDate = earliestTimestamp
                 ? startOfMonth(new Date(earliestTimestamp))
                 : latestMonth;
-            const keys = [];
-            for (let cursor = startDate; cursor <= latestMonth; cursor = addMonths(cursor, 1)) {
-                keys.push(
-                    `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`,
-                );
-            }
-            return keys;
+            const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
+            const endKey = `${latestMonth.getFullYear()}-${String(latestMonth.getMonth() + 1).padStart(2, "0")}`;
+            return enumerateMonths(startKey, endKey);
         }
 
         const monthCount = Number(rangeKey.replace("m", ""));
@@ -937,10 +931,7 @@ export const AnalyticsEngine = (() => {
             filters.monthFocus,
         );
 
-        // Determine which months to include
-        const targetMonths = monthKeys;
-
-        if (!targetMonths.length) {
+        if (!monthKeys.length) {
             return createEmptyView();
         }
 
@@ -963,7 +954,7 @@ export const AnalyticsEngine = (() => {
         const hasDay = filters.day !== null && filters.day !== undefined;
         const hasHour = filters.hour !== null && filters.hour !== undefined;
 
-        for (const monthKey of targetMonths) {
+        for (const monthKey of monthKeys) {
             const bucket = months[monthKey];
             const baselineValue = bucket ? bucket.total : 0;
             let topicRatio = 1;
@@ -1045,7 +1036,7 @@ export const AnalyticsEngine = (() => {
         }
 
         if (useWeeklyTimeline) {
-            const weekly = buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta);
+            const weekly = buildWeeklyTimeline(dayIndex, monthKeys, filters, monthMeta);
             timeline.push(...weekly.timeline);
             timelineMax = weekly.timelineMax;
         }
@@ -1386,16 +1377,8 @@ export const AnalyticsEngine = (() => {
         }
 
         const half = Math.floor(timeline.length / 2);
-        let recent = 0,
-            older = 0;
-
-        for (let i = 0; i < timeline.length; i++) {
-            if (i >= half) {
-                recent += timeline[i].value;
-            } else {
-                older += timeline[i].value;
-            }
-        }
+        const older = timeline.slice(0, half).reduce((sum, entry) => sum + entry.value, 0);
+        const recent = timeline.slice(half).reduce((sum, entry) => sum + entry.value, 0);
 
         if (older === 0) {
             const hasRecent = recent > 0;

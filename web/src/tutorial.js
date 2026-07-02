@@ -162,7 +162,7 @@ export const Tutorial = (() => {
             return;
         }
 
-        if (state.active && state.routeName !== normalized) {
+        if (state.active) {
             teardownActiveTutorial(false);
         }
 
@@ -892,26 +892,8 @@ export const Tutorial = (() => {
             step.fallbackSelector,
             step.fallbackEl,
         ];
-        const candidates = [];
 
-        fields.forEach((field) => {
-            if (!field) {
-                return;
-            }
-
-            if (Array.isArray(field)) {
-                field.forEach((value) => {
-                    if (value) {
-                        candidates.push(value);
-                    }
-                });
-                return;
-            }
-
-            candidates.push(field);
-        });
-
-        return candidates;
+        return fields.flat().filter(Boolean);
     }
 
     /**
@@ -1303,20 +1285,7 @@ export const Tutorial = (() => {
      * @returns {Element|null}
      */
     function resolveMiniTipTarget(tip) {
-        const refs = collectTargetCandidates(tip);
-
-        for (const ref of refs) {
-            if (!ref) {
-                continue;
-            }
-
-            const element = resolveElementReference(ref);
-            if (isElementVisible(element)) {
-                return element;
-            }
-        }
-
-        return null;
+        return resolveStepTarget(tip);
     }
 
     /**
@@ -1348,7 +1317,6 @@ export const Tutorial = (() => {
                 top = targetRect.top + targetRect.height / 2 - tipRect.height / 2;
                 break;
             default:
-                top = targetRect.bottom + 10;
                 break;
         }
 
@@ -1489,7 +1457,7 @@ export const Tutorial = (() => {
     }
 
     /**
-     * Read route tutorial steps from global config.
+     * Read route tutorial steps from the imported TutorialSteps config.
      * @param {string} routeName - Route name
      * @returns {object[]}
      */
@@ -1498,7 +1466,7 @@ export const Tutorial = (() => {
     }
 
     /**
-     * Read route mini-tip callouts from global config.
+     * Read route mini-tip callouts from the imported TutorialMiniTips config.
      * @param {string} routeName - Route name
      * @returns {object[]}
      */
@@ -1507,7 +1475,7 @@ export const Tutorial = (() => {
     }
 
     /**
-     * Read route-scoped config items from global window config.
+     * Read route-scoped items from a tutorial config object.
      * @param {object[]|{[key: string]: object[]}|undefined} config - Route config source
      * @param {string} routeName - Route name
      * @returns {object[]}

@@ -36,16 +36,15 @@ export const SketchCharts = (() => {
     /**
      * Resize canvas to match its CSS dimensions at device pixel ratio.
      * @param {HTMLCanvasElement} canvas - The canvas element to resize.
-     * @param {number} [dprOverride] - Optional DPR override for high-res export.
      * @returns {{ctx: CanvasRenderingContext2D, width: number, height: number}|null}
      */
-    function resizeCanvas(canvas, dprOverride) {
+    function resizeCanvas(canvas) {
         const rect = canvas.getBoundingClientRect();
         /* v8 ignore next */
         if (!rect.width || !rect.height) {
             return null;
         }
-        const ratio = exportDpr || dprOverride || window.devicePixelRatio || 1;
+        const ratio = exportDpr || window.devicePixelRatio || 1;
         canvas.width = rect.width * ratio;
         canvas.height = rect.height * ratio;
         const ctx = canvas.getContext("2d");
@@ -386,11 +385,9 @@ export const SketchCharts = (() => {
             ctx.textAlign = "right";
             let label = point.topic;
             const maxLabelSpace = padding.left - 12;
-            for (
-                ;
-                label.length > 1 && ctx.measureText(label).width > maxLabelSpace;
-                label = label.slice(0, -1)
-            ) {}
+            while (label.length > 1 && ctx.measureText(label).width > maxLabelSpace) {
+                label = label.slice(0, -1);
+            }
             if (label !== point.topic) {
                 label += "\u2026";
             }

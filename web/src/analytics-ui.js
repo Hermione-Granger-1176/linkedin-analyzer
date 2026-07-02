@@ -16,7 +16,7 @@ import { parseAnalyticsWorkerMessage } from "./worker-contracts.js";
 export const AnalyticsPage = (() => {
     "use strict";
 
-    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string }} */
+    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string }} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
         topic: "all",
@@ -322,8 +322,7 @@ export const AnalyticsPage = (() => {
                 return;
             }
 
-            let analyticsBase = null;
-            analyticsBase = DataCache.get("storage:analyticsBase") || null;
+            let analyticsBase = DataCache.get("storage:analyticsBase") || null;
 
             if (!analyticsBase) {
                 analyticsBase = await Storage.getAnalytics();
@@ -735,22 +734,12 @@ export const AnalyticsPage = (() => {
     }
 
     /**
-     * Reset filter state, optionally keeping the current time range.
-     * @param {boolean} preserveTimeRange - Whether to keep the current time range.
-     */
-    function resetFilterState(preserveTimeRange) {
-        const timeRange = preserveTimeRange ? state.filters.timeRange : FILTER_DEFAULTS.timeRange;
-        state.filters = { ...FILTER_DEFAULTS, timeRange };
-    }
-
-    /**
      * Apply a new time range, reset other filters, and request view.
      * @param {string} range - The time range identifier (e.g. '12m', '6m').
      */
     function applyTimeRange(range) {
         const nextRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-        state.filters.timeRange = nextRange;
-        resetFilterState(true);
+        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
         setActiveTimeRange(nextRange);
         syncRouteFromFilters();
         scheduleViewRequest(true);

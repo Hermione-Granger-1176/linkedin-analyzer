@@ -29,7 +29,7 @@ function resolveAccentClass(accent) {
 export const InsightsPage = (() => {
     "use strict";
 
-    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string }} */
+    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string }} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
         topic: "all",
@@ -44,7 +44,7 @@ export const InsightsPage = (() => {
     // Guard against a worker that constructs but never responds (chunk load
     // failure, silent hang): without this the loading overlay would stay up forever.
     const WORKER_TIMEOUT_MS = 30000;
-    /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: string|null, hour: string|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
+    /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,

@@ -8,9 +8,9 @@ import { parseConnectionsWorkerRequest } from "./worker-contracts.js";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Short month names used by LinkedIn's "Connected On" field after cleaning.
- * The cleaner outputs ISO dates (YYYY-MM-DD), so we only need this map for
- * building human-readable month labels in the growth timeline.
+ * Short month names for building human-readable month labels in the growth
+ * timeline. The cleaner outputs ISO "Connected On" dates (YYYY-MM-DD), so
+ * these labels are display-only.
  */
 const MONTH_LABELS = Object.freeze([
     "Jan",

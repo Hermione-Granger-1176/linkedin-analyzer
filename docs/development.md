@@ -162,7 +162,7 @@ make test-js
 make test-e2e
 ```
 
-Tests are in `web/tests/`.
+Unit tests are in `web/tests/`; Playwright E2E tests are in `web/e2e/`.
 
 ## Local checks and benchmarks
 

@@ -382,8 +382,8 @@ export const Storage = (() => {
     }
 
     /**
-     * Retrieve all stored file records.
-     * @returns {Promise<object[]>} Array of all stored file records
+     * Retrieve metadata records (no CSV text) for all stored files.
+     * @returns {Promise<object[]>} Array of stored file metadata records
      */
     function getAllFiles() {
         return runOp(

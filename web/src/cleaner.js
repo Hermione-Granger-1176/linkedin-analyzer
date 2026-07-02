@@ -270,7 +270,7 @@ export const LinkedInCleaner = (() => {
      *
      * A truncated tail can only corrupt the prefix's last row, never the header
      * at the top, so a positive match is reliable; a null result falls back to
-     * full multi-type detection in the caller, which keeps behaviour identical.
+     * full multi-type detection in the caller, which keeps behavior identical.
      * Uses a throwaway parse cache so truncated parses never poison the caller's
      * full-parse cache.
      * @param {string} csvText - Raw CSV text
@@ -382,7 +382,7 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Build a standardised process() result object.
+     * Build a standardized process() result object.
      * @param {boolean} success - Whether processing succeeded
      * @param {string|null} error - Error message, or null on success
      * @param {object} [overrides] - Fields that differ from the empty defaults

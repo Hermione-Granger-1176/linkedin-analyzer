@@ -8,7 +8,11 @@ Security fixes are applied to the latest commit on `main` and the latest release
 
 Please do **not** open public GitHub issues for security vulnerabilities.
 
-Instead, report privately by email:
+The preferred channel is GitHub Private Vulnerability Reporting, which keeps the report and discussion private with the maintainers:
+
+- [Open a private advisory](https://github.com/Hermione-Granger-1176/linkedin-analyzer/security/advisories/new)
+
+If you cannot use GitHub advisories, report privately by email instead:
 
 - `adityadarak9314@outlook.com`
 

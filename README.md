@@ -133,6 +133,10 @@ See the [`docs/`](docs/) folder for:
 
 Architecture Decision Records: [`docs/adr/`](docs/adr/)
 
+Contributor guide: [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md)
+
+Changelog (Python package): [`CHANGELOG.md`](CHANGELOG.md)
+
 Security reporting guidelines: [`.github/SECURITY.md`](.github/SECURITY.md)
 
 <br>

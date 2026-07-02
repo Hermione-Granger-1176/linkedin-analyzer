@@ -100,6 +100,8 @@ linkedin-analyzer --max-input-bytes 0 --max-rows 0 all
 
 By default, the CLI rejects input files larger than 104857600 bytes and CSVs with more than 1000000 parsed rows. Pass `0` to disable either limit. These are global options and go before the command.
 
+The web app enforces its own, different caps (per-file size, decoded text, rows, columns, and per-field length); see [web app Limits](web-app.md#limits).
+
 Environment defaults:
 
 - `LINKEDIN_ANALYZER_MAX_INPUT_BYTES`

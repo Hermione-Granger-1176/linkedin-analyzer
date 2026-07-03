@@ -11,7 +11,12 @@ from typing import Any
 import pandas as pd
 
 from linkedin_analyzer.core.excel import format_excel_output
-from linkedin_analyzer.core.text import clean_value, escape_excel_formula, is_missing
+from linkedin_analyzer.core.text import (
+    clean_value,
+    escape_excel_formula,
+    is_missing,
+    remove_illegal_chars,
+)
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 
 LOG = logging.getLogger(__name__)
@@ -173,6 +178,7 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             input_path=input_path,
             output_path=output_path,
             error=f"Input file does not exist: {input_path}",
+            missing_input=True,
         )
 
     for name, value in (
@@ -263,8 +269,11 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
         configured_columns = [col.name for col in config.columns]
         df = df.reindex(columns=configured_columns, fill_value="")
 
+        # Strip XML-illegal control characters before formula-escaping so a cell
+        # like "\x01=SUM(...)" is both made writable by openpyxl and still
+        # recognized as a formula-injection payload to quote-prefix.
         for column in df.columns:
-            df[column] = df[column].map(escape_excel_formula)
+            df[column] = df[column].map(remove_illegal_chars).map(escape_excel_formula)
 
         LOG.info("Exporting to %s", output_path)
         _write_excel_atomic(df, output_path, config)

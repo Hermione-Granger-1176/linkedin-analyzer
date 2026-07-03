@@ -18,6 +18,8 @@ const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 // Non-UTF-8 decode parity is out of scope for this harness: the web parity path
 // is fed an already-decoded string, so encoding detection is not exercised here.
 
+const CORPUS_TYPES = ["shares", "comments", "messages", "connections"];
+
 describe("web/python parity fixtures", () => {
     it("matches shared shares fixture contract", async () => {
         const csv = await readFixture("shares-parity.csv");
@@ -57,6 +59,15 @@ describe("web/python parity fixtures", () => {
                 SharedUrl: "",
                 MediaUrl: "",
                 Visibility: "CONNECTIONS",
+            },
+            {
+                Date: expect.stringMatching(LOCAL_DATETIME_PATTERN),
+                ShareLink: "https://www.linkedin.com/feed/update/urn:li:share:6",
+                // The BEL control character (\x07) is stripped so the export stays writable.
+                ShareCommentary: "Bellchar removed",
+                SharedUrl: "",
+                MediaUrl: "",
+                Visibility: "MEMBER_NETWORK",
             },
         ]);
     });
@@ -162,5 +173,17 @@ describe("web/python parity fixtures", () => {
                 "Connected On": "2026-09-15",
             },
         ]);
+    });
+});
+
+describe("web/python synthetic corpus", () => {
+    it.each(CORPUS_TYPES)("cleans the %s corpus to the shared expected output", async (type) => {
+        const expected = JSON.parse(await readFixture("parity-corpus-expected.json"));
+        const csv = await readFixture(`${type}-corpus.csv`);
+
+        const result = LinkedInCleaner.process(csv, type);
+
+        expect(result.success).toBe(true);
+        expect(result.cleanedData).toEqual(expected[type]);
     });
 });

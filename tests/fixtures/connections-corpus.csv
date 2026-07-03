@@ -1,0 +1,277 @@
+Notes:
+"When exporting your connections, ..."
+
+First Name,Last Name,URL,Email Address,Company,Position,Connected On
+#N/A,,,  ,Cafe resume naive facade,Cafe resume naive facade,01 Dec 2025
+@handle mention,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,,https://linkedin.com/in/sample,emoji 📌🚀 tail,formfeed mid,30 Jan 2026
+interiorbreak,emoji 📌🚀 tail,,person@example.com,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,-danger flag,07 Mar 2024
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,=SUM(A1:B2),,NA,emoji 📌🚀 tail,emoji 📌🚀 tail,01 Dec 2025
+leading vtab,ctrl abcd end,https://example.com/profile/1,person@example.com,emoji 📌🚀 tail,=SUM(A1:B2),07 Mar 2024
+Cafe resume naive facade,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,  ,https://linkedin.com/in/sample,formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+=SUM(A1:B2),ctrl abcd end,  ,person@example.com,tab	inside value,Cafe resume naive facade,01 Dec 2025
+leading vtab,ctrl abcd end,NA,NA,  padded value  ,=SUM(A1:B2),01 Dec 2025
+  ,,,,emoji 📌🚀 tail,=SUM(A1:B2),30 Feb 2026
+interiorbreak,ctrl abcd end,person@example.com,person@example.com,-danger flag,Cafe resume naive facade,30 Jan 2026
+"line one
+line two",formfeed mid,,https://example.com/profile/1,tab	inside value,Cafe resume naive facade,30 Jan 2026
+-danger flag,=SUM(A1:B2),  ,https://example.com/profile/1,Ada Lovelace,formfeed mid,01 Dec 2025
+emoji 📌🚀 tail,=SUM(A1:B2),NA,  ,  padded value  ,interiorbreak,07 Mar 2024
+formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,person@example.com,https://example.com/profile/1,  padded value  ,"line one
+line two",30 Jan 2026
+Ada Lovelace,formfeed mid,https://example.com/profile/1,https://example.com/profile/1,-danger flag,tab	inside value,15 September 2026
+"line one
+line two",Ada Lovelace,NA,https://example.com/profile/1,+1 leads here,  padded value  ,15 September 2026
+NaN,,,https://example.com/profile/1,leading vtab,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,15 September 2026
+@handle mention,interiorbreak,  ,  ,ctrl abcd end,"line one
+line two",30 Feb 2026
++1 leads here,leading vtab,https://example.com/profile/1,https://example.com/profile/1,Ada Lovelace,+1 leads here,30 Feb 2026
++1 leads here,formfeed mid,,https://linkedin.com/in/sample,@handle mention,ctrl abcd end,07 Mar 2024
+ctrl abcd end,Cafe resume naive facade,https://example.com/profile/1,NA,=SUM(A1:B2),@handle mention,15 September 2026
+ctrl abcd end,interiorbreak,person@example.com,person@example.com,emoji 📌🚀 tail,@handle mention,30 Feb 2026
++1 leads here,Cafe resume naive facade,,  ,tab	inside value,leading vtab,07 Mar 2024
+Ada Lovelace,leading vtab,  ,person@example.com,=SUM(A1:B2),+1 leads here,30 Jan 2026
+none,,,NA,@handle mention,"line one
+line two",30 Jan 2026
+  padded value  ,@handle mention,NA,  ,interiorbreak,leading vtab,30 Feb 2026
+formfeed mid,ctrl abcd end,,person@example.com,"line one
+line two",Ada Lovelace,30 Feb 2026
+formfeed mid,tab	inside value,  ,person@example.com,=SUM(A1:B2),"line one
+line two",07 Mar 2024
+@handle mention,tab	inside value,  ,person@example.com,+1 leads here,+1 leads here,01 Dec 2025
++1 leads here,+1 leads here,https://linkedin.com/in/sample,https://linkedin.com/in/sample,=SUM(A1:B2),interiorbreak,07 Mar 2024
+interiorbreak,=SUM(A1:B2),  ,person@example.com,@handle mention,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+Cafe resume naive facade,leading vtab,,,Ada Lovelace,+1 leads here,30 Jan 2026
+  ,,,https://example.com/profile/1,formfeed mid,-danger flag,15 September 2026
+ctrl abcd end,ctrl abcd end,https://linkedin.com/in/sample,,+1 leads here,  padded value  ,30 Feb 2026
+  padded value  ,Smart “quotes” stay,,,Cafe resume naive facade,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,07 Mar 2024
++1 leads here,-danger flag,https://linkedin.com/in/sample,https://linkedin.com/in/sample,+1 leads here,ctrl abcd end,15 September 2026
+ctrl abcd end,@handle mention,https://linkedin.com/in/sample,  ,tab	inside value,-danger flag,30 Feb 2026
+"line one
+line two",Ada Lovelace,  ,person@example.com,Cafe resume naive facade,Smart “quotes” stay,30 Jan 2026
+=SUM(A1:B2),leading vtab,https://example.com/profile/1,NA,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,tab	inside value,07 Mar 2024
+  padded value  ,@handle mention,https://linkedin.com/in/sample,NA,ctrl abcd end,=SUM(A1:B2),15 September 2026
+none,,,NA,Cafe resume naive facade,emoji 📌🚀 tail,01 Dec 2025
+emoji 📌🚀 tail,@handle mention,,https://example.com/profile/1,leading vtab,Ada Lovelace,15 September 2026
+"line one
+line two",  padded value  ,person@example.com,person@example.com,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ctrl abcd end,30 Jan 2026
+ctrl abcd end,emoji 📌🚀 tail,https://example.com/profile/1,,+1 leads here,=SUM(A1:B2),07 Mar 2024
+formfeed mid,formfeed mid,,  ,=SUM(A1:B2),formfeed mid,15 September 2026
+Ada Lovelace,emoji 📌🚀 tail,NA,,leading vtab,=SUM(A1:B2),30 Feb 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ctrl abcd end,NA,person@example.com,"line one
+line two",formfeed mid,01 Dec 2025
+@handle mention,emoji 📌🚀 tail,person@example.com,https://example.com/profile/1,@handle mention,tab	inside value,15 September 2026
+NaN,,,person@example.com,=SUM(A1:B2),interiorbreak,01 Dec 2025
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,interiorbreak,  ,person@example.com,@handle mention,ctrl abcd end,15 September 2026
+formfeed mid,Cafe resume naive facade,https://linkedin.com/in/sample,,tab	inside value,Cafe resume naive facade,30 Jan 2026
+"line one
+line two",ctrl abcd end,person@example.com,NA,tab	inside value,  padded value  ,01 Dec 2025
+interiorbreak,"line one
+line two",https://example.com/profile/1,  ,+1 leads here,Cafe resume naive facade,07 Mar 2024
+emoji 📌🚀 tail,Ada Lovelace,  ,,Ada Lovelace,"line one
+line two",07 Mar 2024
++1 leads here,"line one
+line two",https://linkedin.com/in/sample,person@example.com,Ada Lovelace,=SUM(A1:B2),07 Mar 2024
+emoji 📌🚀 tail,Smart “quotes” stay,https://example.com/profile/1,  ,+1 leads here,interiorbreak,01 Dec 2025
+<NA>,,,https://example.com/profile/1,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,Smart “quotes” stay,07 Mar 2024
+interiorbreak,leading vtab,person@example.com,  ,  padded value  ,-danger flag,15 September 2026
+formfeed mid,interiorbreak,,,tab	inside value,tab	inside value,07 Mar 2024
+-danger flag,ctrl abcd end,https://example.com/profile/1,https://example.com/profile/1,Cafe resume naive facade,"line one
+line two",15 September 2026
+  padded value  ,tab	inside value,https://linkedin.com/in/sample,NA,emoji 📌🚀 tail,formfeed mid,30 Feb 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,Smart “quotes” stay,  ,https://linkedin.com/in/sample,interiorbreak,formfeed mid,30 Jan 2026
+@handle mention,interiorbreak,  ,  ,formfeed mid,+1 leads here,30 Feb 2026
+@handle mention,  padded value  ,,https://linkedin.com/in/sample,formfeed mid,Cafe resume naive facade,01 Dec 2025
+NULL,,,person@example.com,formfeed mid,@handle mention,15 September 2026
+  padded value  ,+1 leads here,,,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,30 Jan 2026
+Cafe resume naive facade,interiorbreak,https://linkedin.com/in/sample,,=SUM(A1:B2),Ada Lovelace,30 Feb 2026
+ctrl abcd end,@handle mention,https://example.com/profile/1,https://linkedin.com/in/sample,ctrl abcd end,leading vtab,07 Mar 2024
+@handle mention,Ada Lovelace,https://example.com/profile/1,NA,  padded value  ,ctrl abcd end,30 Jan 2026
+Smart “quotes” stay,formfeed mid,https://example.com/profile/1,NA,Cafe resume naive facade,@handle mention,15 September 2026
+emoji 📌🚀 tail,leading vtab,https://linkedin.com/in/sample,https://example.com/profile/1,ctrl abcd end,Cafe resume naive facade,30 Jan 2026
++1 leads here,emoji 📌🚀 tail,https://example.com/profile/1,  ,formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,15 September 2026
+#N/A,,,person@example.com,leading vtab,  padded value  ,30 Feb 2026
+leading vtab,Ada Lovelace,person@example.com,person@example.com,Cafe resume naive facade,emoji 📌🚀 tail,30 Jan 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,Ada Lovelace,NA,person@example.com,"line one
+line two",+1 leads here,15 September 2026
+  padded value  ,"line one
+line two",https://linkedin.com/in/sample,,@handle mention,"line one
+line two",01 Dec 2025
+Cafe resume naive facade,Smart “quotes” stay,https://linkedin.com/in/sample,  ,-danger flag,  padded value  ,07 Mar 2024
+-danger flag,-danger flag,NA,person@example.com,interiorbreak,+1 leads here,30 Jan 2026
+formfeed mid,leading vtab,NA,https://linkedin.com/in/sample,leading vtab,-danger flag,30 Feb 2026
+=SUM(A1:B2),ctrl abcd end,NA,https://linkedin.com/in/sample,Cafe resume naive facade,ctrl abcd end,30 Jan 2026
+<NA>,,,,=SUM(A1:B2),"line one
+line two",30 Jan 2026
+formfeed mid,interiorbreak,https://linkedin.com/in/sample,https://linkedin.com/in/sample,-danger flag,Cafe resume naive facade,07 Mar 2024
+emoji 📌🚀 tail,formfeed mid,  ,NA,interiorbreak,-danger flag,07 Mar 2024
+  padded value  ,interiorbreak,https://linkedin.com/in/sample,  ,ctrl abcd end,leading vtab,30 Jan 2026
+"line one
+line two",interiorbreak,,NA,=SUM(A1:B2),+1 leads here,01 Dec 2025
+"line one
+line two",formfeed mid,  ,,Smart “quotes” stay,+1 leads here,30 Feb 2026
+Smart “quotes” stay,emoji 📌🚀 tail,,https://example.com/profile/1,Smart “quotes” stay,tab	inside value,15 September 2026
+ctrl abcd end,interiorbreak,https://linkedin.com/in/sample,https://linkedin.com/in/sample,formfeed mid,Cafe resume naive facade,30 Jan 2026
+NaN,,,https://linkedin.com/in/sample,+1 leads here,formfeed mid,07 Mar 2024
+  padded value  ,interiorbreak,,,Smart “quotes” stay,"line one
+line two",07 Mar 2024
+@handle mention,@handle mention,https://example.com/profile/1,,Ada Lovelace,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+-danger flag,=SUM(A1:B2),,https://example.com/profile/1,tab	inside value,emoji 📌🚀 tail,30 Jan 2026
+Smart “quotes” stay,Cafe resume naive facade,https://example.com/profile/1,NA,@handle mention,  padded value  ,07 Mar 2024
+-danger flag,formfeed mid,  ,https://linkedin.com/in/sample,Cafe resume naive facade,Cafe resume naive facade,30 Feb 2026
+@handle mention,-danger flag,  ,  ,formfeed mid,emoji 📌🚀 tail,15 September 2026
+ctrl abcd end,emoji 📌🚀 tail,https://linkedin.com/in/sample,https://example.com/profile/1,  padded value  ,=SUM(A1:B2),30 Jan 2026
+#N/A,,,https://linkedin.com/in/sample,Smart “quotes” stay,@handle mention,15 September 2026
+Smart “quotes” stay,Cafe resume naive facade,https://example.com/profile/1,person@example.com,"line one
+line two",leading vtab,30 Jan 2026
+formfeed mid,tab	inside value,  ,https://example.com/profile/1,Cafe resume naive facade,ctrl abcd end,07 Mar 2024
+tab	inside value,leading vtab,NA,NA,leading vtab,-danger flag,30 Feb 2026
+=SUM(A1:B2),Smart “quotes” stay,https://example.com/profile/1,NA,@handle mention,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+Cafe resume naive facade,Smart “quotes” stay,NA,NA,"line one
+line two",leading vtab,30 Jan 2026
+Cafe resume naive facade,formfeed mid,,person@example.com,interiorbreak,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,30 Feb 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,interiorbreak,NA,https://example.com/profile/1,-danger flag,+1 leads here,30 Jan 2026
+NaN,,,  ,ctrl abcd end,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,30 Feb 2026
+-danger flag,Ada Lovelace,NA,,interiorbreak,emoji 📌🚀 tail,30 Jan 2026
+=SUM(A1:B2),-danger flag,,,interiorbreak,ctrl abcd end,30 Feb 2026
+Smart “quotes” stay,=SUM(A1:B2),NA,NA,emoji 📌🚀 tail,Ada Lovelace,30 Jan 2026
+=SUM(A1:B2),Cafe resume naive facade,person@example.com,https://linkedin.com/in/sample,Cafe resume naive facade,=SUM(A1:B2),30 Jan 2026
+Smart “quotes” stay,formfeed mid,https://linkedin.com/in/sample,https://linkedin.com/in/sample,ctrl abcd end,emoji 📌🚀 tail,15 September 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,  ,https://linkedin.com/in/sample,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,@handle mention,07 Mar 2024
+formfeed mid,formfeed mid,person@example.com,person@example.com,formfeed mid,emoji 📌🚀 tail,01 Dec 2025
+none,,,person@example.com,formfeed mid,=SUM(A1:B2),15 September 2026
+@handle mention,leading vtab,https://linkedin.com/in/sample,https://linkedin.com/in/sample,interiorbreak,Smart “quotes” stay,30 Jan 2026
+Cafe resume naive facade,Smart “quotes” stay,person@example.com,person@example.com,-danger flag,formfeed mid,15 September 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,interiorbreak,,person@example.com,+1 leads here,interiorbreak,30 Jan 2026
+leading vtab,tab	inside value,person@example.com,person@example.com,Smart “quotes” stay,=SUM(A1:B2),07 Mar 2024
+ctrl abcd end,+1 leads here,https://example.com/profile/1,https://example.com/profile/1,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,+1 leads here,30 Feb 2026
+interiorbreak,+1 leads here,https://example.com/profile/1,https://example.com/profile/1,  padded value  ,tab	inside value,07 Mar 2024
+leading vtab,Smart “quotes” stay,person@example.com,https://example.com/profile/1,formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+NA,,,https://linkedin.com/in/sample,ctrl abcd end,ctrl abcd end,30 Jan 2026
++1 leads here,tab	inside value,https://linkedin.com/in/sample,,  padded value  ,ctrl abcd end,01 Dec 2025
+emoji 📌🚀 tail,emoji 📌🚀 tail,https://linkedin.com/in/sample,person@example.com,-danger flag,interiorbreak,07 Mar 2024
+Ada Lovelace,formfeed mid,person@example.com,  ,+1 leads here,emoji 📌🚀 tail,01 Dec 2025
+interiorbreak,Ada Lovelace,https://linkedin.com/in/sample,  ,interiorbreak,@handle mention,30 Jan 2026
+  padded value  ,emoji 📌🚀 tail,https://linkedin.com/in/sample,person@example.com,Ada Lovelace,Smart “quotes” stay,01 Dec 2025
+"line one
+line two",+1 leads here,  ,https://example.com/profile/1,Ada Lovelace,tab	inside value,01 Dec 2025
+-danger flag,formfeed mid,https://linkedin.com/in/sample,  ,=SUM(A1:B2),tab	inside value,01 Dec 2025
+  ,,,  ,Ada Lovelace,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+Cafe resume naive facade,emoji 📌🚀 tail,person@example.com,,interiorbreak,@handle mention,15 September 2026
+"line one
+line two",LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,https://linkedin.com/in/sample,https://linkedin.com/in/sample,=SUM(A1:B2),emoji 📌🚀 tail,07 Mar 2024
+Ada Lovelace,@handle mention,https://example.com/profile/1,NA,  padded value  ,ctrl abcd end,15 September 2026
+Ada Lovelace,"line one
+line two",https://example.com/profile/1,,"line one
+line two","line one
+line two",30 Jan 2026
+ctrl abcd end,-danger flag,  ,NA,ctrl abcd end,-danger flag,15 September 2026
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,+1 leads here,  ,  ,tab	inside value,"line one
+line two",07 Mar 2024
+ctrl abcd end,ctrl abcd end,  ,https://example.com/profile/1,leading vtab,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+#N/A,,,,emoji 📌🚀 tail,  padded value  ,30 Feb 2026
+ctrl abcd end,"line one
+line two",NA,https://example.com/profile/1,Cafe resume naive facade,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,07 Mar 2024
+leading vtab,-danger flag,person@example.com,NA,emoji 📌🚀 tail,Ada Lovelace,30 Feb 2026
+ctrl abcd end,interiorbreak,  ,person@example.com,Cafe resume naive facade,leading vtab,07 Mar 2024
++1 leads here,emoji 📌🚀 tail,https://linkedin.com/in/sample,  ,Cafe resume naive facade,=SUM(A1:B2),01 Dec 2025
+interiorbreak,"line one
+line two",  ,https://linkedin.com/in/sample,leading vtab,formfeed mid,30 Feb 2026
+Cafe resume naive facade,"line one
+line two",,https://linkedin.com/in/sample,@handle mention,"line one
+line two",30 Jan 2026
+ctrl abcd end,+1 leads here,NA,person@example.com,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,leading vtab,01 Dec 2025
+#N/A,,,https://example.com/profile/1,tab	inside value,tab	inside value,15 September 2026
+Smart “quotes” stay,interiorbreak,  ,person@example.com,Smart “quotes” stay,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+Smart “quotes” stay,Ada Lovelace,,NA,leading vtab,"line one
+line two",07 Mar 2024
+formfeed mid,leading vtab,,  ,Ada Lovelace,leading vtab,07 Mar 2024
++1 leads here,tab	inside value,  ,,Smart “quotes” stay,Cafe resume naive facade,30 Feb 2026
+formfeed mid,"line one
+line two",,person@example.com,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,+1 leads here,30 Feb 2026
+ctrl abcd end,Cafe resume naive facade,NA,https://linkedin.com/in/sample,leading vtab,-danger flag,01 Dec 2025
+interiorbreak,Ada Lovelace,  ,  ,emoji 📌🚀 tail,@handle mention,15 September 2026
+NaN,,,https://linkedin.com/in/sample,formfeed mid,ctrl abcd end,15 September 2026
+emoji 📌🚀 tail,  padded value  ,,  ,leading vtab,Cafe resume naive facade,15 September 2026
+=SUM(A1:B2),ctrl abcd end,NA,https://linkedin.com/in/sample,Cafe resume naive facade,emoji 📌🚀 tail,07 Mar 2024
+Ada Lovelace,+1 leads here,,https://linkedin.com/in/sample,  padded value  ,"line one
+line two",30 Jan 2026
+Cafe resume naive facade,@handle mention,NA,,@handle mention,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,30 Feb 2026
+Ada Lovelace,Cafe resume naive facade,  ,person@example.com,"line one
+line two",tab	inside value,01 Dec 2025
+  padded value  ,+1 leads here,https://linkedin.com/in/sample,https://linkedin.com/in/sample,Ada Lovelace,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+Ada Lovelace,leading vtab,  ,person@example.com,-danger flag,=SUM(A1:B2),07 Mar 2024
+NaN,,,NA,ctrl abcd end,"line one
+line two",30 Jan 2026
+Ada Lovelace,Cafe resume naive facade,NA,  ,emoji 📌🚀 tail,-danger flag,15 September 2026
+interiorbreak,=SUM(A1:B2),,,tab	inside value,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,30 Jan 2026
+=SUM(A1:B2),formfeed mid,https://example.com/profile/1,,"line one
+line two",formfeed mid,07 Mar 2024
+interiorbreak,"line one
+line two",NA,NA,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,emoji 📌🚀 tail,30 Jan 2026
+Cafe resume naive facade,formfeed mid,  ,  ,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,-danger flag,30 Jan 2026
+@handle mention,tab	inside value,,https://linkedin.com/in/sample,"line one
+line two",+1 leads here,15 September 2026
+leading vtab,ctrl abcd end,,https://linkedin.com/in/sample,  padded value  ,=SUM(A1:B2),15 September 2026
+  ,,,,@handle mention,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,07 Mar 2024
+formfeed mid,leading vtab,https://example.com/profile/1,person@example.com,formfeed mid,ctrl abcd end,07 Mar 2024
+"line one
+line two",tab	inside value,person@example.com,,tab	inside value,leading vtab,01 Dec 2025
+Smart “quotes” stay,ctrl abcd end,,,@handle mention,emoji 📌🚀 tail,30 Feb 2026
+formfeed mid,  padded value  ,  ,https://linkedin.com/in/sample,ctrl abcd end,Smart “quotes” stay,15 September 2026
+=SUM(A1:B2),ctrl abcd end,person@example.com,https://linkedin.com/in/sample,@handle mention,Smart “quotes” stay,01 Dec 2025
+-danger flag,Smart “quotes” stay,  ,  ,  padded value  ,=SUM(A1:B2),30 Jan 2026
+@handle mention,+1 leads here,,NA,@handle mention,interiorbreak,01 Dec 2025
+<NA>,,,https://example.com/profile/1,formfeed mid,ctrl abcd end,30 Feb 2026
+@handle mention,Smart “quotes” stay,person@example.com,https://linkedin.com/in/sample,Smart “quotes” stay,ctrl abcd end,30 Feb 2026
+@handle mention,+1 leads here,person@example.com,NA,@handle mention,Smart “quotes” stay,15 September 2026
+-danger flag,emoji 📌🚀 tail,https://example.com/profile/1,NA,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,01 Dec 2025
+ctrl abcd end,@handle mention,https://example.com/profile/1,https://linkedin.com/in/sample,  padded value  ,=SUM(A1:B2),07 Mar 2024
+@handle mention,tab	inside value,https://example.com/profile/1,NA,  padded value  ,Cafe resume naive facade,01 Dec 2025
+=SUM(A1:B2),formfeed mid,https://linkedin.com/in/sample,  ,formfeed mid,"line one
+line two",01 Dec 2025
+"line one
+line two",+1 leads here,https://linkedin.com/in/sample,https://example.com/profile/1,  padded value  ,Cafe resume naive facade,30 Jan 2026
+NULL,,,https://linkedin.com/in/sample,formfeed mid,emoji 📌🚀 tail,30 Feb 2026
+leading vtab,@handle mention,,NA,-danger flag,Smart “quotes” stay,30 Feb 2026
+interiorbreak,Cafe resume naive facade,person@example.com,person@example.com,leading vtab,emoji 📌🚀 tail,15 September 2026
+Smart “quotes” stay,Ada Lovelace,https://example.com/profile/1,https://example.com/profile/1,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,"line one
+line two",30 Jan 2026
+Ada Lovelace,emoji 📌🚀 tail,  ,https://linkedin.com/in/sample,-danger flag,  padded value  ,30 Feb 2026
+  padded value  ,@handle mention,,https://example.com/profile/1,Smart “quotes” stay,Smart “quotes” stay,01 Dec 2025
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,leading vtab,NA,person@example.com,Ada Lovelace,Smart “quotes” stay,07 Mar 2024
+-danger flag,Smart “quotes” stay,NA,person@example.com,interiorbreak,@handle mention,30 Feb 2026
+none,,,NA,Ada Lovelace,@handle mention,07 Mar 2024
+"line one
+line two","line one
+line two",https://example.com/profile/1,https://linkedin.com/in/sample,interiorbreak,-danger flag,30 Jan 2026
+tab	inside value,leading vtab,https://linkedin.com/in/sample,https://linkedin.com/in/sample,Cafe resume naive facade,+1 leads here,30 Jan 2026
+Cafe resume naive facade,emoji 📌🚀 tail,https://linkedin.com/in/sample,  ,interiorbreak,+1 leads here,30 Jan 2026
+ctrl abcd end,  padded value  ,https://example.com/profile/1,https://linkedin.com/in/sample,-danger flag,interiorbreak,01 Dec 2025
+Ada Lovelace,tab	inside value,https://linkedin.com/in/sample,,-danger flag,emoji 📌🚀 tail,30 Jan 2026
+tab	inside value,"line one
+line two",https://example.com/profile/1,NA,interiorbreak,+1 leads here,30 Feb 2026
+ctrl abcd end,tab	inside value,,https://linkedin.com/in/sample,Smart “quotes” stay,ctrl abcd end,01 Dec 2025
+#N/A,,,person@example.com,leading vtab,emoji 📌🚀 tail,15 September 2026
+@handle mention,+1 leads here,https://linkedin.com/in/sample,,-danger flag,tab	inside value,30 Jan 2026
+  padded value  ,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,NA,https://linkedin.com/in/sample,=SUM(A1:B2),@handle mention,30 Jan 2026
+Ada Lovelace,Ada Lovelace,NA,https://example.com/profile/1,+1 leads here,formfeed mid,15 September 2026
+Smart “quotes” stay,Smart “quotes” stay,  ,NA,Smart “quotes” stay,  padded value  ,30 Feb 2026
+-danger flag,@handle mention,  ,  ,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,01 Dec 2025
+-danger flag,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,https://linkedin.com/in/sample,  ,Cafe resume naive facade,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,01 Dec 2025
+LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,-danger flag,,NA,interiorbreak,tab	inside value,15 September 2026
+none,,,NA,@handle mention,-danger flag,30 Feb 2026
+@handle mention,@handle mention,https://example.com/profile/1,https://example.com/profile/1,"line one
+line two",Ada Lovelace,07 Mar 2024
+Cafe resume naive facade,Smart “quotes” stay,https://linkedin.com/in/sample,NA,emoji 📌🚀 tail,"line one
+line two",01 Dec 2025
+interiorbreak,leading vtab,person@example.com,person@example.com,"line one
+line two",=SUM(A1:B2),01 Dec 2025
+emoji 📌🚀 tail,Smart “quotes” stay,https://example.com/profile/1,https://linkedin.com/in/sample,"line one
+line two",formfeed mid,30 Feb 2026
+ctrl abcd end,Ada Lovelace,https://example.com/profile/1,  ,@handle mention,Ada Lovelace,07 Mar 2024
+ctrl abcd end,+1 leads here,https://example.com/profile/1,https://linkedin.com/in/sample,  padded value  ,Cafe resume naive facade,07 Mar 2024
+formfeed mid,formfeed mid,person@example.com,https://example.com/profile/1,ctrl abcd end,leading vtab,30 Feb 2026
+<NA>,,,,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,interiorbreak,30 Jan 2026
+@handle mention,interiorbreak,NA,  ,emoji 📌🚀 tail,=SUM(A1:B2),30 Jan 2026
+Ada Lovelace,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,  ,https://example.com/profile/1,  padded value  ,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,30 Feb 2026
+  padded value  ,=SUM(A1:B2),https://linkedin.com/in/sample,https://example.com/profile/1,  padded value  ,  padded value  ,07 Mar 2024

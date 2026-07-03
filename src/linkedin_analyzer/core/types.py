@@ -94,6 +94,9 @@ class CleanerResult:
         input_path: Path to input file
         output_path: Path to output file
         error: Error message if operation failed
+        missing_input: True when the failure was solely a non-existent input
+            file, letting callers distinguish an absent file from a malformed
+            or otherwise failing one
     """
 
     success: bool
@@ -101,6 +104,7 @@ class CleanerResult:
     input_path: Path
     output_path: Path
     error: str | None = None
+    missing_input: bool = False
 
     def __str__(self) -> str:
         """Return a human-readable summary of the result."""

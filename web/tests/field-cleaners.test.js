@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { CLEANERS, cleanValue, escapeFormula, isMissing } from "../src/field-cleaners.js";
+import {
+    CLEANERS,
+    cleanValue,
+    escapeFormula,
+    isMissing,
+    removeIllegalChars,
+} from "../src/field-cleaners.js";
 
 describe("isMissing", () => {
     it("treats null and undefined as missing", () => {
@@ -53,6 +59,18 @@ describe("escapeFormula", () => {
     it("leaves ordinary values and empty strings unchanged", () => {
         expect(escapeFormula("safe")).toBe("safe");
         expect(escapeFormula("")).toBe("");
+    });
+});
+
+describe("removeIllegalChars", () => {
+    it("strips XML-illegal control characters", () => {
+        expect(removeIllegalChars("a\u0000b\u0007c\u001fd")).toBe("abcd");
+        expect(removeIllegalChars("\u0008\u000b\u000c\u000e")).toBe("");
+    });
+
+    it("preserves legal whitespace and ordinary text", () => {
+        expect(removeIllegalChars("a\tb\nc\rd")).toBe("a\tb\nc\rd");
+        expect(removeIllegalChars("hello")).toBe("hello");
     });
 });
 

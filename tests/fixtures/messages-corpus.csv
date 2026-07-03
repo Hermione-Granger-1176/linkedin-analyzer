@@ -1,0 +1,280 @@
+CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS
+conv-0,  ,"line one
+line two",2026-02-30 10:00:00 UTC,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,NA,https://linkedin.com/in/sample
+conv-1,"line one
+line two",+1 leads here,2026-02-30 10:00:00 UTC,"says ""hi"" once",ARCHIVE,NA,
+conv-2,Smart “quotes” stay,Ada Lovelace,2026-02-30 10:00:00 UTC,"multi
+line body",ARCHIVE,,
+conv-3,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,2026-13-05 09:00:00,emoji 📌 payload,INBOX,person@example.com,
+conv-4,Ada Lovelace,-danger flag,1999-01-01,plain content body,SENT,  ,NA
+conv-5,=SUM(A1:B2),+1 leads here,sometime later,"says ""hi"" once",SENT,https://example.com/profile/1,https://example.com/profile/1
+conv-6,Cafe resume naive facade,interiorbreak,2026-06-31 12:00:00,"multi
+line body",SENT,person@example.com,  
+conv-7,  padded value  ,"line one
+line two",2026-02-30 10:00:00 UTC,=cmd injection,SENT,NA,NA
+conv-8,leading vtab,leading vtab,sometime later,=cmd injection,INBOX,NA,  
+conv-9,-danger flag,ctrl abcd end,2026-06-31 12:00:00,Smart “quotes” and cafe,SENT,person@example.com,  
+conv-10,Ada Lovelace,-danger flag,2026-02-30 10:00:00,"multi
+line body",INBOX,https://linkedin.com/in/sample,NA
+conv-11,Ada Lovelace,formfeed mid,2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,person@example.com,https://linkedin.com/in/sample
+conv-12,ctrl abcd end,formfeed mid,2026-06-31 12:00:00,"multi
+line body",INBOX,https://linkedin.com/in/sample,  
+conv-13,<NA>,-danger flag,2026-02-30 10:00:00,"multi
+line body",SENT,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-14,emoji 📌🚀 tail,@handle mention,1999-01-01,Smart “quotes” and cafe,ARCHIVE,,
+conv-15,emoji 📌🚀 tail,"line one
+line two",2026-13-05 09:00:00,Smart “quotes” and cafe,ARCHIVE,,person@example.com
+conv-16,tab	inside value,  padded value  ,sometime later,=cmd injection,INBOX,  ,https://example.com/profile/1
+conv-17,tab	inside value,leading vtab,1999-01-01,"multi
+line body",ARCHIVE,NA,NA
+conv-18,=SUM(A1:B2),=SUM(A1:B2),1999-01-01,emoji 📌 payload,SENT,https://example.com/profile/1,
+conv-19,ctrl abcd end,ctrl abcd end,1999-01-01,ctrl body abcd tail,INBOX,,https://example.com/profile/1
+conv-20,Ada Lovelace,Cafe resume naive facade,2026-02-30 10:00:00 UTC,=cmd injection,SENT,https://linkedin.com/in/sample,  
+conv-21,-danger flag,ctrl abcd end,2026-02-30 10:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,person@example.com,https://linkedin.com/in/sample
+conv-22,leading vtab,@handle mention,2026-06-31 12:00:00,ctrl body abcd tail,INBOX,https://linkedin.com/in/sample,  
+conv-23,tab	inside value,leading vtab,1999-01-01,"multi
+line body",SENT,,person@example.com
+conv-24,=SUM(A1:B2),tab	inside value,sometime later,=cmd injection,SENT,,  
+conv-25,ctrl abcd end,tab	inside value,2026-02-30 10:00:00 UTC,"says ""hi"" once",SENT,  ,https://example.com/profile/1
+conv-26,NULL,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,2026-02-30 10:00:00 UTC,"says ""hi"" once",SENT,  ,NA
+conv-27,emoji 📌🚀 tail,"line one
+line two",2026-02-30 10:00:00 UTC,Smart “quotes” and cafe,ARCHIVE,https://linkedin.com/in/sample,  
+conv-28,+1 leads here,formfeed mid,sometime later,ctrl body abcd tail,SENT,person@example.com,https://example.com/profile/1
+conv-29,leading vtab,+1 leads here,2026-13-05 09:00:00,Smart “quotes” and cafe,ARCHIVE,,NA
+conv-30,Ada Lovelace,leading vtab,2026-02-30 10:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,NA,https://example.com/profile/1
+conv-31,@handle mention,leading vtab,sometime later,"says ""hi"" once",SENT,https://example.com/profile/1,https://example.com/profile/1
+conv-32,emoji 📌🚀 tail,-danger flag,1999-01-01,=cmd injection,ARCHIVE,https://example.com/profile/1,NA
+conv-33,Ada Lovelace,-danger flag,2026-02-30 10:00:00,Smart “quotes” and cafe,ARCHIVE,NA,NA
+conv-34,  padded value  ,formfeed mid,2026-13-05 09:00:00,Smart “quotes” and cafe,INBOX,  ,https://example.com/profile/1
+conv-35,-danger flag,Smart “quotes” stay,2026-13-05 09:00:00,=cmd injection,INBOX,person@example.com,person@example.com
+conv-36,=SUM(A1:B2),ctrl abcd end,1999-01-01,emoji 📌 payload,ARCHIVE,NA,NA
+conv-37,formfeed mid,interiorbreak,2026-13-05 09:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,NA,NA
+conv-38,tab	inside value,  padded value  ,2026-13-05 09:00:00,"says ""hi"" once",SENT,NA,  
+conv-39,NaN,"line one
+line two",2026-13-05 09:00:00,emoji 📌 payload,ARCHIVE,NA,https://example.com/profile/1
+conv-40,Cafe resume naive facade,+1 leads here,2026-02-30 10:00:00,"says ""hi"" once",SENT,NA,  
+conv-41,ctrl abcd end,Cafe resume naive facade,2026-13-05 09:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-42,=SUM(A1:B2),"line one
+line two",2026-02-30 10:00:00 UTC,emoji 📌 payload,INBOX,https://example.com/profile/1,
+conv-43,+1 leads here,formfeed mid,2026-13-05 09:00:00,Smart “quotes” and cafe,ARCHIVE,https://example.com/profile/1,person@example.com
+conv-44,  padded value  ,  padded value  ,2026-02-30 10:00:00,"multi
+line body",INBOX,  ,https://example.com/profile/1
+conv-45,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,sometime later,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,INBOX,https://linkedin.com/in/sample,NA
+conv-46,interiorbreak,=SUM(A1:B2),2026-02-30 10:00:00,plain content body,INBOX,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-47,  padded value  ,@handle mention,2026-06-31 12:00:00,plain content body,ARCHIVE,https://example.com/profile/1,NA
+conv-48,emoji 📌🚀 tail,Cafe resume naive facade,2026-06-31 12:00:00,=cmd injection,ARCHIVE,https://example.com/profile/1,https://linkedin.com/in/sample
+conv-49,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,leading vtab,sometime later,Smart “quotes” and cafe,SENT,,NA
+conv-50,tab	inside value,interiorbreak,1999-01-01,ctrl body abcd tail,SENT,person@example.com,  
+conv-51,"line one
+line two",Smart “quotes” stay,2026-02-30 10:00:00,emoji 📌 payload,ARCHIVE,https://linkedin.com/in/sample,  
+conv-52,none,interiorbreak,2026-13-05 09:00:00,"says ""hi"" once",SENT,  ,person@example.com
+conv-53,formfeed mid,Smart “quotes” stay,2026-02-30 10:00:00,=cmd injection,ARCHIVE,  ,https://linkedin.com/in/sample
+conv-54,ctrl abcd end,Smart “quotes” stay,2026-02-30 10:00:00 UTC,"says ""hi"" once",SENT,https://linkedin.com/in/sample,  
+conv-55,+1 leads here,Ada Lovelace,1999-01-01,"multi
+line body",ARCHIVE,https://example.com/profile/1,person@example.com
+conv-56,@handle mention,ctrl abcd end,2026-02-30 10:00:00 UTC,"says ""hi"" once",SENT,person@example.com,person@example.com
+conv-57,ctrl abcd end,Ada Lovelace,2026-06-31 12:00:00,emoji 📌 payload,ARCHIVE,,https://linkedin.com/in/sample
+conv-58,=SUM(A1:B2),=SUM(A1:B2),1999-01-01,"multi
+line body",ARCHIVE,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-59,@handle mention,=SUM(A1:B2),2026-02-30 10:00:00 UTC,"says ""hi"" once",SENT,,  
+conv-60,@handle mention,emoji 📌🚀 tail,sometime later,"multi
+line body",SENT,https://linkedin.com/in/sample,
+conv-61,Smart “quotes” stay,interiorbreak,2026-06-31 12:00:00,"multi
+line body",INBOX,person@example.com,  
+conv-62,@handle mention,tab	inside value,2026-06-31 12:00:00,plain content body,SENT,person@example.com,  
+conv-63,formfeed mid,leading vtab,1999-01-01,"multi
+line body",ARCHIVE,person@example.com,https://example.com/profile/1
+conv-64,ctrl abcd end,formfeed mid,2026-02-30 10:00:00 UTC,emoji 📌 payload,INBOX,https://example.com/profile/1,person@example.com
+conv-65,NA,Cafe resume naive facade,2026-02-30 10:00:00,"multi
+line body",SENT,https://example.com/profile/1,person@example.com
+conv-66,interiorbreak,tab	inside value,1999-01-01,"says ""hi"" once",SENT,https://example.com/profile/1,  
+conv-67,emoji 📌🚀 tail,interiorbreak,sometime later,"multi
+line body",ARCHIVE,https://example.com/profile/1,https://example.com/profile/1
+conv-68,+1 leads here,+1 leads here,sometime later,"says ""hi"" once",ARCHIVE,,
+conv-69,"line one
+line two",+1 leads here,2026-02-30 10:00:00 UTC,=cmd injection,ARCHIVE,https://example.com/profile/1,  
+conv-70,formfeed mid,Ada Lovelace,sometime later,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,INBOX,NA,https://linkedin.com/in/sample
+conv-71,Smart “quotes” stay,Ada Lovelace,2026-13-05 09:00:00,"says ""hi"" once",ARCHIVE,,https://linkedin.com/in/sample
+conv-72,"line one
+line two",Cafe resume naive facade,2026-13-05 09:00:00,"says ""hi"" once",ARCHIVE,NA,person@example.com
+conv-73,Ada Lovelace,interiorbreak,1999-01-01,ctrl body abcd tail,SENT,,NA
+conv-74,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,interiorbreak,2026-13-05 09:00:00,=cmd injection,ARCHIVE,NA,https://linkedin.com/in/sample
+conv-75,=SUM(A1:B2),+1 leads here,sometime later,Smart “quotes” and cafe,SENT,  ,NA
+conv-76,-danger flag,"line one
+line two",2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,,https://example.com/profile/1
+conv-77,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,@handle mention,sometime later,"multi
+line body",SENT,https://linkedin.com/in/sample,NA
+conv-78,none,ctrl abcd end,2026-13-05 09:00:00,Smart “quotes” and cafe,INBOX,https://example.com/profile/1,NA
+conv-79,-danger flag,interiorbreak,1999-01-01,=cmd injection,INBOX,person@example.com,  
+conv-80,emoji 📌🚀 tail,"line one
+line two",2026-13-05 09:00:00,ctrl body abcd tail,INBOX,,https://example.com/profile/1
+conv-81,Smart “quotes” stay,tab	inside value,2026-06-31 12:00:00,Smart “quotes” and cafe,ARCHIVE,https://linkedin.com/in/sample,NA
+conv-82,+1 leads here,@handle mention,2026-02-30 10:00:00,Smart “quotes” and cafe,ARCHIVE,person@example.com,https://linkedin.com/in/sample
+conv-83,emoji 📌🚀 tail,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,2026-13-05 09:00:00,"multi
+line body",ARCHIVE,  ,
+conv-84,emoji 📌🚀 tail,+1 leads here,2026-13-05 09:00:00,"says ""hi"" once",INBOX,  ,https://example.com/profile/1
+conv-85,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,@handle mention,2026-06-31 12:00:00,plain content body,ARCHIVE,  ,NA
+conv-86,interiorbreak,=SUM(A1:B2),2026-02-30 10:00:00 UTC,=cmd injection,ARCHIVE,https://example.com/profile/1,person@example.com
+conv-87,tab	inside value,"line one
+line two",2026-06-31 12:00:00,"says ""hi"" once",INBOX,NA,https://linkedin.com/in/sample
+conv-88,formfeed mid,interiorbreak,sometime later,ctrl body abcd tail,INBOX,https://example.com/profile/1,  
+conv-89,Smart “quotes” stay,"line one
+line two",2026-13-05 09:00:00,=cmd injection,SENT,person@example.com,https://linkedin.com/in/sample
+conv-90,  padded value  ,tab	inside value,1999-01-01,"multi
+line body",SENT,,https://example.com/profile/1
+conv-91,  ,=SUM(A1:B2),2026-13-05 09:00:00,emoji 📌 payload,ARCHIVE,NA,  
+conv-92,leading vtab,Ada Lovelace,2026-02-30 10:00:00,Smart “quotes” and cafe,SENT,https://linkedin.com/in/sample,  
+conv-93,"line one
+line two",Smart “quotes” stay,1999-01-01,"says ""hi"" once",SENT,https://example.com/profile/1,
+conv-94,interiorbreak,@handle mention,2026-02-30 10:00:00 UTC,=cmd injection,SENT,  ,https://example.com/profile/1
+conv-95,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,2026-02-30 10:00:00,=cmd injection,ARCHIVE,,person@example.com
+conv-96,interiorbreak,Ada Lovelace,2026-06-31 12:00:00,Smart “quotes” and cafe,INBOX,person@example.com,  
+conv-97,Cafe resume naive facade,  padded value  ,2026-02-30 10:00:00,"says ""hi"" once",SENT,https://example.com/profile/1,NA
+conv-98,formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,1999-01-01,ctrl body abcd tail,ARCHIVE,  ,
+conv-99,interiorbreak,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,sometime later,plain content body,INBOX,person@example.com,https://example.com/profile/1
+conv-100,interiorbreak,@handle mention,2026-02-30 10:00:00,plain content body,INBOX,,NA
+conv-101,+1 leads here,+1 leads here,2026-02-30 10:00:00 UTC,ctrl body abcd tail,SENT,NA,person@example.com
+conv-102,Cafe resume naive facade,  padded value  ,2026-02-30 10:00:00 UTC,Smart “quotes” and cafe,ARCHIVE,person@example.com,person@example.com
+conv-103,  padded value  ,Cafe resume naive facade,1999-01-01,=cmd injection,ARCHIVE,person@example.com,  
+conv-104,NULL,Ada Lovelace,sometime later,"multi
+line body",ARCHIVE,,
+conv-105,emoji 📌🚀 tail,Ada Lovelace,1999-01-01,=cmd injection,ARCHIVE,,  
+conv-106,"line one
+line two",interiorbreak,2026-06-31 12:00:00,"says ""hi"" once",SENT,NA,person@example.com
+conv-107,Ada Lovelace,Smart “quotes” stay,2026-02-30 10:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,NA,https://linkedin.com/in/sample
+conv-108,leading vtab,ctrl abcd end,2026-02-30 10:00:00,emoji 📌 payload,INBOX,NA,https://example.com/profile/1
+conv-109,tab	inside value,formfeed mid,2026-02-30 10:00:00,plain content body,SENT,person@example.com,NA
+conv-110,leading vtab,ctrl abcd end,sometime later,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,INBOX,NA,NA
+conv-111,Cafe resume naive facade,Cafe resume naive facade,2026-02-30 10:00:00 UTC,=cmd injection,ARCHIVE,https://example.com/profile/1,NA
+conv-112,Smart “quotes” stay,leading vtab,1999-01-01,"says ""hi"" once",INBOX,,  
+conv-113,Smart “quotes” stay,interiorbreak,2026-02-30 10:00:00,"says ""hi"" once",SENT,person@example.com,
+conv-114,-danger flag,Ada Lovelace,sometime later,"says ""hi"" once",ARCHIVE,,https://linkedin.com/in/sample
+conv-115,@handle mention,=SUM(A1:B2),1999-01-01,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,INBOX,https://linkedin.com/in/sample,NA
+conv-116,Smart “quotes” stay,=SUM(A1:B2),2026-13-05 09:00:00,=cmd injection,SENT,https://example.com/profile/1,NA
+conv-117,none,-danger flag,2026-02-30 10:00:00 UTC,"multi
+line body",SENT,NA,  
+conv-118,Smart “quotes” stay,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,2026-06-31 12:00:00,plain content body,INBOX,  ,https://example.com/profile/1
+conv-119,@handle mention,formfeed mid,2026-13-05 09:00:00,plain content body,ARCHIVE,,person@example.com
+conv-120,tab	inside value,tab	inside value,sometime later,=cmd injection,INBOX,  ,NA
+conv-121,@handle mention,ctrl abcd end,1999-01-01,Smart “quotes” and cafe,INBOX,https://example.com/profile/1,  
+conv-122,  padded value  ,+1 leads here,1999-01-01,plain content body,SENT,NA,
+conv-123,interiorbreak,tab	inside value,sometime later,"says ""hi"" once",ARCHIVE,NA,https://linkedin.com/in/sample
+conv-124,interiorbreak,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,sometime later,emoji 📌 payload,ARCHIVE,person@example.com,https://linkedin.com/in/sample
+conv-125,leading vtab,=SUM(A1:B2),2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,NA,
+conv-126,"line one
+line two",leading vtab,2026-13-05 09:00:00,ctrl body abcd tail,INBOX,  ,  
+conv-127,Cafe resume naive facade,-danger flag,2026-06-31 12:00:00,=cmd injection,ARCHIVE,https://linkedin.com/in/sample,  
+conv-128,leading vtab,Cafe resume naive facade,2026-02-30 10:00:00 UTC,"multi
+line body",SENT,,NA
+conv-129,leading vtab,+1 leads here,2026-02-30 10:00:00 UTC,"says ""hi"" once",ARCHIVE,person@example.com,NA
+conv-130,NULL,Ada Lovelace,2026-13-05 09:00:00,emoji 📌 payload,ARCHIVE,person@example.com,person@example.com
+conv-131,tab	inside value,@handle mention,2026-13-05 09:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,person@example.com,NA
+conv-132,ctrl abcd end,ctrl abcd end,2026-13-05 09:00:00,plain content body,SENT,https://linkedin.com/in/sample,person@example.com
+conv-133,leading vtab,@handle mention,2026-02-30 10:00:00,"says ""hi"" once",SENT,  ,  
+conv-134,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,formfeed mid,sometime later,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,NA,https://linkedin.com/in/sample
+conv-135,ctrl abcd end,"line one
+line two",sometime later,emoji 📌 payload,SENT,https://example.com/profile/1,https://example.com/profile/1
+conv-136,interiorbreak,  padded value  ,1999-01-01,ctrl body abcd tail,INBOX,,https://example.com/profile/1
+conv-137,+1 leads here,Cafe resume naive facade,2026-02-30 10:00:00,"multi
+line body",ARCHIVE,  ,NA
+conv-138,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,@handle mention,2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,INBOX,,person@example.com
+conv-139,tab	inside value,formfeed mid,2026-13-05 09:00:00,plain content body,ARCHIVE,https://example.com/profile/1,https://example.com/profile/1
+conv-140,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,Smart “quotes” stay,2026-13-05 09:00:00,"multi
+line body",INBOX,person@example.com,
+conv-141,Ada Lovelace,Smart “quotes” stay,2026-02-30 10:00:00 UTC,"says ""hi"" once",ARCHIVE,NA,https://example.com/profile/1
+conv-142,tab	inside value,ctrl abcd end,2026-02-30 10:00:00,=cmd injection,INBOX,  ,
+conv-143,NA,Cafe resume naive facade,2026-06-31 12:00:00,Smart “quotes” and cafe,SENT,,https://linkedin.com/in/sample
+conv-144,leading vtab,"line one
+line two",2026-02-30 10:00:00,"multi
+line body",SENT,https://example.com/profile/1,https://example.com/profile/1
+conv-145,formfeed mid,leading vtab,2026-02-30 10:00:00,plain content body,ARCHIVE,  ,https://linkedin.com/in/sample
+conv-146,formfeed mid,emoji 📌🚀 tail,2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,https://linkedin.com/in/sample,  
+conv-147,Smart “quotes” stay,Cafe resume naive facade,1999-01-01,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,,https://example.com/profile/1
+conv-148,interiorbreak,formfeed mid,2026-13-05 09:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-149,Ada Lovelace,interiorbreak,2026-06-31 12:00:00,=cmd injection,ARCHIVE,,
+conv-150,interiorbreak,Ada Lovelace,sometime later,"multi
+line body",SENT,  ,NA
+conv-151,=SUM(A1:B2),emoji 📌🚀 tail,2026-13-05 09:00:00,emoji 📌 payload,ARCHIVE,person@example.com,
+conv-152,@handle mention,interiorbreak,2026-02-30 10:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,person@example.com,https://linkedin.com/in/sample
+conv-153,+1 leads here,=SUM(A1:B2),2026-13-05 09:00:00,"says ""hi"" once",SENT,https://example.com/profile/1,https://linkedin.com/in/sample
+conv-154,interiorbreak,"line one
+line two",2026-06-31 12:00:00,ctrl body abcd tail,SENT,person@example.com,
+conv-155,@handle mention,"line one
+line two",1999-01-01,"says ""hi"" once",INBOX,https://example.com/profile/1,NA
+conv-156,none,@handle mention,sometime later,ctrl body abcd tail,SENT,,NA
+conv-157,@handle mention,ctrl abcd end,2026-06-31 12:00:00,emoji 📌 payload,SENT,person@example.com,https://linkedin.com/in/sample
+conv-158,Cafe resume naive facade,  padded value  ,2026-02-30 10:00:00,emoji 📌 payload,INBOX,person@example.com,https://example.com/profile/1
+conv-159,Ada Lovelace,ctrl abcd end,2026-13-05 09:00:00,=cmd injection,SENT,,person@example.com
+conv-160,interiorbreak,+1 leads here,2026-02-30 10:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-161,@handle mention,tab	inside value,2026-06-31 12:00:00,"multi
+line body",ARCHIVE,https://example.com/profile/1,https://linkedin.com/in/sample
+conv-162,Smart “quotes” stay,ctrl abcd end,2026-02-30 10:00:00 UTC,=cmd injection,INBOX,https://example.com/profile/1,https://example.com/profile/1
+conv-163,=SUM(A1:B2),"line one
+line two",2026-13-05 09:00:00,emoji 📌 payload,INBOX,person@example.com,https://example.com/profile/1
+conv-164,formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,2026-13-05 09:00:00,plain content body,ARCHIVE,person@example.com,  
+conv-165,formfeed mid,leading vtab,1999-01-01,"multi
+line body",SENT,https://linkedin.com/in/sample,NA
+conv-166,  padded value  ,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,1999-01-01,Smart “quotes” and cafe,INBOX,https://example.com/profile/1,NA
+conv-167,-danger flag,-danger flag,2026-13-05 09:00:00,Smart “quotes” and cafe,INBOX,https://linkedin.com/in/sample,https://linkedin.com/in/sample
+conv-168,leading vtab,-danger flag,1999-01-01,=cmd injection,ARCHIVE,  ,https://example.com/profile/1
+conv-169,NA,Smart “quotes” stay,2026-13-05 09:00:00,plain content body,SENT,https://linkedin.com/in/sample,https://example.com/profile/1
+conv-170,+1 leads here,ctrl abcd end,2026-13-05 09:00:00,ctrl body abcd tail,SENT,https://linkedin.com/in/sample,https://linkedin.com/in/sample
+conv-171,interiorbreak,emoji 📌🚀 tail,2026-06-31 12:00:00,emoji 📌 payload,ARCHIVE,,  
+conv-172,=SUM(A1:B2),Cafe resume naive facade,2026-02-30 10:00:00 UTC,"says ""hi"" once",ARCHIVE,,https://example.com/profile/1
+conv-173,leading vtab,tab	inside value,2026-02-30 10:00:00,emoji 📌 payload,INBOX,NA,https://example.com/profile/1
+conv-174,formfeed mid,=SUM(A1:B2),2026-02-30 10:00:00,=cmd injection,SENT,  ,https://linkedin.com/in/sample
+conv-175,+1 leads here,=SUM(A1:B2),2026-13-05 09:00:00,=cmd injection,INBOX,https://example.com/profile/1,https://linkedin.com/in/sample
+conv-176,  padded value  ,tab	inside value,1999-01-01,plain content body,ARCHIVE,https://linkedin.com/in/sample,NA
+conv-177,leading vtab,tab	inside value,sometime later,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,ARCHIVE,NA,
+conv-178,leading vtab,=SUM(A1:B2),2026-13-05 09:00:00,emoji 📌 payload,INBOX,https://example.com/profile/1,  
+conv-179,interiorbreak,  padded value  ,1999-01-01,Smart “quotes” and cafe,SENT,  ,person@example.com
+conv-180,Ada Lovelace,@handle mention,1999-01-01,ctrl body abcd tail,INBOX,https://example.com/profile/1,https://example.com/profile/1
+conv-181,=SUM(A1:B2),=SUM(A1:B2),2026-02-30 10:00:00 UTC,=cmd injection,SENT,,
+conv-182,NA,tab	inside value,2026-02-30 10:00:00,ctrl body abcd tail,SENT,https://linkedin.com/in/sample,person@example.com
+conv-183,-danger flag,tab	inside value,sometime later,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,https://linkedin.com/in/sample,  
+conv-184,  padded value  ,Cafe resume naive facade,2026-02-30 10:00:00 UTC,=cmd injection,ARCHIVE,https://example.com/profile/1,  
+conv-185,tab	inside value,"line one
+line two",sometime later,"multi
+line body",SENT,,https://example.com/profile/1
+conv-186,@handle mention,-danger flag,1999-01-01,Smart “quotes” and cafe,ARCHIVE,  ,person@example.com
+conv-187,Smart “quotes” stay,Smart “quotes” stay,sometime later,"says ""hi"" once",ARCHIVE,NA,https://linkedin.com/in/sample
+conv-188,+1 leads here,+1 leads here,2026-02-30 10:00:00 UTC,emoji 📌 payload,ARCHIVE,  ,https://linkedin.com/in/sample
+conv-189,Ada Lovelace,+1 leads here,sometime later,=cmd injection,ARCHIVE,NA,NA
+conv-190,ctrl abcd end,"line one
+line two",2026-13-05 09:00:00,"multi
+line body",SENT,NA,person@example.com
+conv-191,formfeed mid,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,sometime later,ctrl body abcd tail,INBOX,https://example.com/profile/1,https://example.com/profile/1
+conv-192,  padded value  ,ctrl abcd end,2026-06-31 12:00:00,=cmd injection,SENT,  ,  
+conv-193,Ada Lovelace,ctrl abcd end,1999-01-01,=cmd injection,ARCHIVE,,https://linkedin.com/in/sample
+conv-194,@handle mention,-danger flag,2026-02-30 10:00:00 UTC,"says ""hi"" once",ARCHIVE,person@example.com,https://linkedin.com/in/sample
+conv-195,NA,Ada Lovelace,2026-02-30 10:00:00 UTC,Smart “quotes” and cafe,SENT,,NA
+conv-196,emoji 📌🚀 tail,tab	inside value,2026-02-30 10:00:00 UTC,emoji 📌 payload,INBOX,  ,https://example.com/profile/1
+conv-197,ctrl abcd end,tab	inside value,2026-06-31 12:00:00,"multi
+line body",INBOX,https://example.com/profile/1,https://linkedin.com/in/sample
+conv-198,Cafe resume naive facade,  padded value  ,1999-01-01,=cmd injection,INBOX,https://example.com/profile/1,person@example.com
+conv-199,Smart “quotes” stay,"line one
+line two",2026-02-30 10:00:00,"says ""hi"" once",ARCHIVE,person@example.com,https://linkedin.com/in/sample
+conv-200,formfeed mid,Cafe resume naive facade,1999-01-01,Smart “quotes” and cafe,ARCHIVE,NA,  
+conv-201,@handle mention,=SUM(A1:B2),2026-02-30 10:00:00,emoji 📌 payload,ARCHIVE,https://example.com/profile/1,https://example.com/profile/1
+conv-202,interiorbreak,Smart “quotes” stay,2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,INBOX,https://example.com/profile/1,
+conv-203,Ada Lovelace,ctrl abcd end,2026-02-30 10:00:00,emoji 📌 payload,INBOX,  ,person@example.com
+conv-204,Cafe resume naive facade,"line one
+line two",1999-01-01,emoji 📌 payload,INBOX,  ,
+conv-205,leading vtab,"line one
+line two",2026-13-05 09:00:00,"says ""hi"" once",ARCHIVE,NA,person@example.com
+conv-206,tab	inside value,Ada Lovelace,1999-01-01,"says ""hi"" once",INBOX,  ,NA
+conv-207,  padded value  ,Ada Lovelace,2026-02-30 10:00:00,ctrl body abcd tail,INBOX,  ,  
+conv-208,NA,Ada Lovelace,2026-06-31 12:00:00,ctrl body abcd tail,INBOX,https://example.com/profile/1,https://example.com/profile/1
+conv-209,ctrl abcd end,"line one
+line two",2026-02-30 10:00:00,=cmd injection,INBOX,NA,NA
+conv-210,Smart “quotes” stay,formfeed mid,2026-06-31 12:00:00,=cmd injection,INBOX,https://example.com/profile/1,https://example.com/profile/1
+conv-211,@handle mention,emoji 📌🚀 tail,2026-06-31 12:00:00,Smart “quotes” and cafe,SENT,person@example.com,https://linkedin.com/in/sample
+conv-212,emoji 📌🚀 tail,"line one
+line two",2026-13-05 09:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,,  
+conv-213,=SUM(A1:B2),interiorbreak,2026-06-31 12:00:00,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,SENT,,https://example.com/profile/1
+conv-214,emoji 📌🚀 tail,Cafe resume naive facade,sometime later,=cmd injection,ARCHIVE,https://example.com/profile/1,
+conv-215,leading vtab,  padded value  ,1999-01-01,Smart “quotes” and cafe,SENT,NA,person@example.com
+conv-216,ctrl abcd end,Smart “quotes” stay,2026-02-30 10:00:00 UTC,emoji 📌 payload,INBOX,,NA
+conv-217,formfeed mid,=SUM(A1:B2),2026-13-05 09:00:00,ctrl body abcd tail,INBOX,NA,https://linkedin.com/in/sample
+conv-218,=SUM(A1:B2),LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,2026-13-05 09:00:00,=cmd injection,ARCHIVE,https://example.com/profile/1,person@example.com
+conv-219,  padded value  ,emoji 📌🚀 tail,1999-01-01,plain content body,SENT,,NA

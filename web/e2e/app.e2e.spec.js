@@ -127,6 +127,23 @@ test("upload messages+connections and render relationship insights", async ({ pa
     await expect(page.locator("#topContactsList li").first()).toBeVisible();
 });
 
+test("upload shares+comments and render insights", async ({ page }) => {
+    await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV]);
+    await waitForLoadedStatus(page, "sharesStatus");
+    await waitForLoadedStatus(page, "commentsStatus");
+
+    await page.locator('#screen-home a.hub-card[data-route="insights"]').click();
+    await expect(page).toHaveURL(/#insights/);
+
+    await expect(page.locator("#insightsGrid")).toBeVisible();
+    await expect(page.locator("#insightsEmpty")).toBeHidden();
+    // A real insight card (not a loading skeleton) has a heading and body.
+    await expect(page.locator("#insightsGrid .insight-card h3").first()).toBeVisible();
+    await expect(page.locator("#insightsGrid .insight-card p").first()).not.toBeEmpty();
+
+    await runAxeScan(page);
+});
+
 test("shows an error hint for malformed CSV uploads", async ({ page }) => {
     await uploadFiles(page, [INVALID_CSV]);
     await expect(page.locator("#uploadHint")).toContainText("Could not auto-detect file type");

@@ -31,6 +31,14 @@ make web-smoke url=https://your-production-domain.example
 
 The check uses HTTP only, so it does not install or run Playwright. It verifies that the app shell loads, key security headers are present, and `/api/csp-report` accepts a minimal CSP report with HTTP 204.
 
+### Automated smoke check
+
+`web-smoke.yml` runs the same check on a schedule (twice daily) and on manual `workflow_dispatch`, so a broken production deploy is caught without waiting for the next manual run.
+
+- The target URL comes from the `PRODUCTION_URL` repository variable. When it is unset, the job records a skipped summary and passes (following the graceful-degrade pattern used by `refresh-action-shas.yml`), so a fork or a fresh clone without the variable never fails CI. Set `PRODUCTION_URL` to the production origin (for example `https://your-production-domain.example`) to enable the check.
+- On a genuine failure a `report-failure` job opens (or comments on the existing) `web-smoke`-labeled issue with a link to the run, mirroring `dependency-audit.yml`.
+- When the issue fires: open the linked run, read which assertion failed (app shell status/markers, a missing or altered security header, or a non-204 from `/api/csp-report`), then reproduce locally with `make web-smoke url=<production-url>`. If the deploy is bad, roll back per [Rollback](#rollback); if only a header or CSP directive drifted, fix `vercel.json` and redeploy. Close the issue once the next scheduled or dispatched run is green.
+
 ## Versioning
 
 Two independent version identifiers exist by design:
@@ -112,6 +120,24 @@ Diagnostics are **off until the user explicitly grants consent** (telemetry bann
 - Scheduled dependency audits run weekly for npm and Python dependencies resolved from `uv.lock`.
 - The weekly generic override-policy check verifies that any future npm overrides remain necessary; no overrides are currently configured (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
+
+## Custody and Recovery
+
+The project is maintained by a single person: Aditya Kumar Darak (GitHub `Hermione-Granger-1176`). This section records who holds each external account and how to recover access, so the project is not silently orphaned if one credential is lost.
+
+The monitored security mailbox is `adityadarak9314@outlook.com`, the contact published in `SECURITY.md`. Keep that file as the single source of truth for the address; update it there if the published contact ever changes.
+
+| Surface | Holder / owner | Recovery path |
+| --- | --- | --- |
+| GitHub repository | `Hermione-Granger-1176` (org/user account) | GitHub account recovery on the owning account; the account uses 2FA, so keep the recovery codes safe. |
+| GitHub App (`APP_ID` variable, `APP_PRIVATE_KEY` secret) | Same GitHub account (App owner) | Rotate by generating a new private key in the App settings and updating the `APP_PRIVATE_KEY` repository secret. If the App is lost, the maintenance writeback workflows degrade gracefully (they skip when credentials are absent). |
+| Vercel project (web hosting) | Maintainer's Vercel account, linked to the GitHub repo | Vercel account recovery via its linked email/GitHub login; re-link the repository and re-add the environment variables listed under Web Deployment. |
+| Sentry org/project (opt-in diagnostics) | Maintainer's Sentry account | Sentry account recovery; rotate `VITE_SENTRY_DSN` / `SENTRY_AUTH_TOKEN` and update the Vercel environment variables. Telemetry is opt-in and non-critical, so an outage here does not affect users. |
+| PyPI trusted publisher | Maintainer's PyPI account (OIDC trusted publishing, no stored token) | PyPI account recovery; re-configure the trusted publisher for this repository under the project's publishing settings. No API token exists to rotate. |
+| GHCR (container registry) | Same GitHub account (packages under the repo) | Publishing uses the workflow `GITHUB_TOKEN`, so it is tied to repository access; recovering the GitHub account restores publish rights. |
+| Security mailbox | `adityadarak9314@outlook.com` | Standard mailbox provider account recovery. Update `SECURITY.md` if the published contact ever changes. |
+
+If the sole maintainer becomes unavailable, the practical continuity path is a new maintainer forking the repository and reconfiguring their own Vercel, Sentry, and PyPI trusted-publisher links; nothing in the pipeline depends on a shared secret that cannot be regenerated from the owning accounts.
 
 ## CI Automation and Verified Writebacks
 

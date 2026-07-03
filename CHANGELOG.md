@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `--skip-missing` flag for the `all` command: absent input files are logged as skipped instead of failing the run, while malformed or otherwise failing files still exit 1.
 - Read non-UTF-8 CSV exports: input encoding is auto-detected (UTF-8 BOM-aware, then Latin-1), with a global `--encoding` flag to force a specific encoding.
 - Python 3.14 to the supported classifiers, with documentation for Python 3.11-3.13 development under uv.
 
@@ -24,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Strip XML-illegal control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F) from every exported cell so a stray control character no longer aborts the whole Excel export with an IllegalCharacterError. Tab, newline, and carriage return are preserved.
 - Exit with code 130 and a clean "Interrupted by user" message when the CLI is cancelled with Ctrl-C, instead of printing a traceback.
 
 - Write cleaned Excel output atomically so a crash mid-export cannot leave a truncated or corrupt `.xlsx` at the destination.

@@ -267,6 +267,14 @@ Examples:
         "all",
         help="Clean all LinkedIn CSV exports",
     )
+    all_parser.add_argument(
+        "--skip-missing",
+        action="store_true",
+        help=(
+            "Skip input files that do not exist (logged as a warning) instead of "
+            "failing the run. Malformed or otherwise failing files still exit 1."
+        ),
+    )
     for name, _help_text, default_input, default_output in SINGLE_COMMAND_SPECS:
         _add_named_io_args(all_parser, name, default_input, default_output)
 
@@ -323,6 +331,7 @@ def run_all(args: argparse.Namespace) -> int:
         )
         for command_name in ALL_COMMAND_NAMES
     )
+    skip_missing = getattr(args, "skip_missing", False)
     exit_code = 0
     for label, cleaner, input_path, output_path in tasks:
         LOG.info("Processing %s...", label)
@@ -332,6 +341,9 @@ def run_all(args: argparse.Namespace) -> int:
             encoding=args.encoding,
             **_cleaner_limit_kwargs(args),
         )
+        if skip_missing and result.missing_input:
+            LOG.warning("Skipping %s: %s", label, result.error)
+            continue
         if _handle_result(result) != 0:
             exit_code = 1
 

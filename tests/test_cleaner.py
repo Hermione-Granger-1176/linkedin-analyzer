@@ -61,6 +61,22 @@ class TestRunCleaner:
         result = run_cleaner(config)
         assert result.success is False
         assert "does not exist" in (result.error or "")
+        assert result.missing_input is True
+
+    def test_other_failures_do_not_set_missing_input(self, tmp_path: Path) -> None:
+        input_path = tmp_path / "test.csv"
+        input_path.write_text("Name\nAda\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=tmp_path / "output.xlsx",
+            columns=(ColumnConfig(name="Name", required=True),),
+            max_input_bytes=1,
+        )
+        result = run_cleaner(config)
+
+        assert result.success is False
+        assert result.missing_input is False
 
     def test_input_file_size_limit_returns_clear_error(self, tmp_path: Path) -> None:
         input_path = tmp_path / "test.csv"
@@ -339,6 +355,56 @@ class TestRunCleaner:
             input_path=input_path,
             output_path=output_path,
             columns=(ColumnConfig(name="Name", cleaner=lambda _value: "=SUM(1)"),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["Name"]) == ["'=SUM(1)"]
+
+    def test_illegal_control_characters_are_stripped_and_export_succeeds(
+        self, tmp_path: Path
+    ) -> None:
+        # A cell holding XML-illegal control chars makes openpyxl raise
+        # IllegalCharacterError inside df.to_excel; stripping them keeps the
+        # export working while leaving the surrounding text intact.
+        illegal_value = "a\x00b\x07c\x1fd"
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nvalue\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", cleaner=lambda _value: illegal_value),),
+        )
+        result = run_cleaner(config)
+
+        assert result.success is True
+        df = pd.read_excel(output_path)
+        assert list(df["Name"]) == ["abcd"]
+
+    def test_illegal_control_characters_would_break_openpyxl(self) -> None:
+        # Guard the premise of the fix: the same value written without stripping
+        # raises IllegalCharacterError, so the strip pass is load-bearing.
+        from openpyxl import Workbook
+        from openpyxl.utils.exceptions import IllegalCharacterError
+
+        sheet = Workbook().active
+        with pytest.raises(IllegalCharacterError):
+            sheet["A1"] = "a\x07b"
+
+    def test_control_characters_are_stripped_before_formula_escaping(self, tmp_path: Path) -> None:
+        # A leading control char must not hide a formula-injection payload: it is
+        # removed first so the "=" is still recognized and quote-prefixed.
+        input_path = tmp_path / "test.csv"
+        output_path = tmp_path / "test.xlsx"
+        input_path.write_text("Name\nvalue\n")
+
+        config = CleanerConfig(
+            input_path=input_path,
+            output_path=output_path,
+            columns=(ColumnConfig(name="Name", cleaner=lambda _value: "\x01=SUM(1)"),),
         )
         result = run_cleaner(config)
 

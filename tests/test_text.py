@@ -15,6 +15,7 @@ from linkedin_analyzer.core.text import (
     clean_value,
     escape_excel_formula,
     is_missing,
+    remove_illegal_chars,
 )
 
 
@@ -351,3 +352,22 @@ class TestEscapeExcelFormula:
 
     def test_prefixes_lf(self) -> None:
         assert escape_excel_formula("\ncmd") == "'\ncmd"
+
+
+class TestRemoveIllegalChars:
+    """Tests for remove_illegal_chars function."""
+
+    def test_strips_illegal_control_characters(self) -> None:
+        assert remove_illegal_chars("a\x00b\x07c\x1fd") == "abcd"
+
+    def test_strips_boundary_control_characters(self) -> None:
+        assert remove_illegal_chars("\x08\x0b\x0c\x0e") == ""
+
+    def test_preserves_legal_whitespace(self) -> None:
+        assert remove_illegal_chars("a\tb\nc\rd") == "a\tb\nc\rd"
+
+    def test_leaves_plain_text(self) -> None:
+        assert remove_illegal_chars("hello") == "hello"
+
+    def test_leaves_non_string(self) -> None:
+        assert remove_illegal_chars(123) == 123

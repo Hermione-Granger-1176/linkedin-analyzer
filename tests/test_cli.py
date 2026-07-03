@@ -64,6 +64,14 @@ class TestParseArgs:
         assert args.connections_input == Path("data/input/Connections.csv")
         assert args.connections_output == Path("data/output/Connections.xlsx")
 
+    def test_skip_missing_flag(self) -> None:
+        args = parse_args(["all", "--skip-missing"])
+        assert args.skip_missing is True
+
+    def test_skip_missing_default(self) -> None:
+        args = parse_args(["all"])
+        assert args.skip_missing is False
+
     def test_log_level(self) -> None:
         args = parse_args(["--log-level", "DEBUG", "shares"])
         assert args.log_level == "DEBUG"
@@ -428,6 +436,89 @@ class TestRunAll:
         monkeypatch.setattr(cli, "clean_comments", fake_comments)
         monkeypatch.setattr(cli, "clean_messages", fake_messages)
         monkeypatch.setattr(cli, "clean_connections", fake_connections)
+
+        assert cli.run_all(args) == 1
+
+    def test_run_all_skip_missing_skips_absent_inputs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = argparse.Namespace(
+            shares_input=tmp_path / "Shares.csv",
+            shares_output=tmp_path / "Shares.xlsx",
+            comments_input=tmp_path / "Comments.csv",
+            comments_output=tmp_path / "Comments.xlsx",
+            messages_input=tmp_path / "messages.csv",
+            messages_output=tmp_path / "Messages.xlsx",
+            connections_input=tmp_path / "Connections.csv",
+            connections_output=tmp_path / "Connections.xlsx",
+            encoding=None,
+            skip_missing=True,
+        )
+
+        def fake_missing(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error="Input file does not exist",
+                missing_input=True,
+            )
+
+        def fake_ok(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        monkeypatch.setattr(cli, "clean_shares", fake_missing)
+        monkeypatch.setattr(cli, "clean_comments", fake_ok)
+        monkeypatch.setattr(cli, "clean_messages", fake_ok)
+        monkeypatch.setattr(cli, "clean_connections", fake_ok)
+
+        assert cli.run_all(args) == 0
+
+    def test_run_all_skip_missing_still_fails_on_malformed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        args = argparse.Namespace(
+            shares_input=tmp_path / "Shares.csv",
+            shares_output=tmp_path / "Shares.xlsx",
+            comments_input=tmp_path / "Comments.csv",
+            comments_output=tmp_path / "Comments.xlsx",
+            messages_input=tmp_path / "messages.csv",
+            messages_output=tmp_path / "Messages.xlsx",
+            connections_input=tmp_path / "Connections.csv",
+            connections_output=tmp_path / "Connections.xlsx",
+            encoding=None,
+            skip_missing=True,
+        )
+
+        def fake_malformed(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
+            # A genuine processing failure (not a missing file) must still fail.
+            return CleanerResult(
+                success=False,
+                rows_processed=0,
+                input_path=input_path,
+                output_path=output_path,
+                error="boom",
+                missing_input=False,
+            )
+
+        def fake_ok(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
+            return CleanerResult(
+                success=True,
+                rows_processed=1,
+                input_path=input_path,
+                output_path=output_path,
+            )
+
+        monkeypatch.setattr(cli, "clean_shares", fake_malformed)
+        monkeypatch.setattr(cli, "clean_comments", fake_ok)
+        monkeypatch.setattr(cli, "clean_messages", fake_ok)
+        monkeypatch.setattr(cli, "clean_connections", fake_ok)
 
         assert cli.run_all(args) == 1
 

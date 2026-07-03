@@ -242,10 +242,13 @@ fix-deps: ## Refresh locks and reinstall local environments
 
 # ─── Utilities @util ────────────────────────────────────────────────────────────────
 
-.PHONY: run-cli status clean help help-json
+.PHONY: run-cli gen-parity-corpus status clean help help-json
 
 run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connections|all ...")
 	$(VENV)/bin/linkedin-analyzer $(args)
+
+gen-parity-corpus: ## Regenerate the synthetic cross-runtime parity corpus fixtures
+	$(NODE) scripts/gen-parity-corpus.mjs
 
 status: ## Show workspace health
 	@echo "=== Git ==="

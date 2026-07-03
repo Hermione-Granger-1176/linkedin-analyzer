@@ -16,7 +16,13 @@ import {
     isRowEmpty,
     parseCsvRows,
 } from "./csv-parser.js";
-import { CLEANERS, cleanValue, escapeFormula, isMissing } from "./field-cleaners.js";
+import {
+    CLEANERS,
+    cleanValue,
+    escapeFormula,
+    isMissing,
+    removeIllegalChars,
+} from "./field-cleaners.js";
 
 export const LinkedInCleaner = (() => {
     "use strict";
@@ -340,7 +346,10 @@ export const LinkedInCleaner = (() => {
                 const value = row[column.name];
                 const cleaner = column.cleaner ? CLEANERS[column.cleaner] : null;
                 const cleanedValue = cleaner ? cleaner(value) : cleanValue(value);
-                cleanedRow[column.name] = escapeFormula(cleanedValue);
+                // Strip XML-illegal control characters before formula-escaping so a
+                // cell like "\u0001=SUM(...)" is both export-safe and still detected
+                // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
+                cleanedRow[column.name] = escapeFormula(removeIllegalChars(cleanedValue));
             });
 
             if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {

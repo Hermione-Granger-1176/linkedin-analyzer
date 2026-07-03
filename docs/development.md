@@ -164,6 +164,21 @@ make test-e2e
 
 Unit tests are in `web/tests/`; Playwright E2E tests are in `web/e2e/`.
 
+### Cross-runtime cleaner parity
+
+The Python cleaner (`src/linkedin_analyzer/core/text.py`) and its web port (`web/src/field-cleaners.js`) must produce identical cleaned output. Two layers enforce this, both run by `make test`:
+
+- Hand-written `tests/fixtures/*-parity.csv` fixtures pin exact expected values for readable, targeted cases. They are asserted by `tests/test_web_parity.py` and `web/tests/parity.test.js`.
+- A seeded synthetic corpus (`tests/fixtures/*-corpus.csv`) drives a few hundred rows per type through both cleaners. Both suites assert their cleaned output equals one checked-in expected file (`tests/fixtures/parity-corpus-expected.json`, produced by the web cleaner). A cleaning-behavior change in only one runtime then fails CI.
+
+Regenerate the corpus and its expected output after an intentional cleaning change with:
+
+```bash
+make gen-parity-corpus
+```
+
+The generator (`scripts/gen-parity-corpus.mjs`) is deterministic. Date columns cleaned by `cleanDate` use only impossible or unparseable values so the expected file stays timezone independent.
+
 ## Local checks and benchmarks
 
 `scripts/checks/` holds developer-only tools (`make` group `checks`) that run against your private LinkedIn export in `data/input/` (never committed). They are not part of `make ci`; each one prints `SKIP:` and exits 0 when the export is absent, so they are safe to run anywhere. Generated row dumps go to a temp folder (`$LIA_CHECKS_OUT`, default `$TMPDIR/linkedin-analyzer/checks-out`), never the repo.

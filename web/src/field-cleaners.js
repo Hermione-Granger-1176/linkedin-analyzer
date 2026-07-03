@@ -10,6 +10,11 @@
 /** OWASP formula injection prefixes (= + - @ TAB CR LF). */
 const FORMULA_PREFIXES = new Set(["=", "+", "-", "@", "\t", "\r", "\n"]);
 
+// Control characters XML 1.0 forbids in a worksheet cell. Spreadsheet writers
+// reject them, so they are stripped from every exported cell. Tab (0x09),
+// newline (0x0A), and carriage return (0x0D) are legal and excluded.
+const ILLEGAL_XML_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g;
+
 const MISSING_STRINGS = new Set([
     "#N/A",
     "#N/A N/A",
@@ -342,6 +347,18 @@ export function cleanValue(value) {
  */
 export function escapeFormula(value) {
     return value.length > 0 && FORMULA_PREFIXES.has(value[0]) ? `'${value}` : value;
+}
+
+/**
+ * Strip control characters that are illegal in XML/xlsx worksheet cells.
+ * Mirror of remove_illegal_chars() from text.py so the web export never emits a
+ * cell a spreadsheet writer would reject. Tab, newline, and carriage return are
+ * legal and left intact.
+ * @param {string} value - Cleaned cell value
+ * @returns {string} Value with illegal control characters removed
+ */
+export function removeIllegalChars(value) {
+    return value.replace(ILLEGAL_XML_CHARS, "");
 }
 
 /** Named cell cleaners referenced by column configs via their string id. */

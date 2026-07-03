@@ -57,6 +57,14 @@ linkedin-analyzer all
 
 Processes all four exports in one run.
 
+By default, `all` exits with code 1 if any input file is absent. Pass `--skip-missing` to treat a missing input file as a skip (logged as a warning) rather than a failure, so a partial export set still succeeds:
+
+```bash
+linkedin-analyzer all --skip-missing
+```
+
+Only genuinely absent input files are skipped. A file that exists but is malformed or otherwise fails to process still exits with code 1. Without the flag, behavior is unchanged.
+
 ## Options
 
 ### Version

@@ -1,0 +1,83 @@
+name: Web Smoke
+
+on:
+  schedule:
+    - cron: "0 7,19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Check production URL
+        id: url
+        run: |
+          if [ -n "$PRODUCTION_URL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.url.outputs.available == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+
+      - name: CI setup
+        if: steps.url.outputs.available == 'true'
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: "22"
+          python-version: ""
+          install-python-deps: "false"
+
+      - name: Run web smoke check
+        if: steps.url.outputs.available == 'true'
+        run: make web-smoke url="$PRODUCTION_URL"
+
+      - name: Note missing production URL
+        if: steps.url.outputs.available != 'true'
+        run: |
+          {
+            echo "## Web Smoke"
+            echo
+            echo "Skipped because the PRODUCTION_URL repository variable is not configured."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report-failure:
+    needs: web-smoke
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the web-smoke issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          label="web-smoke"
+          gh label create "$label" -R "$REPO" --color B60205 \
+            --description "Scheduled post-deploy web smoke-check failures" 2>/dev/null || true
+          body="The scheduled post-deploy web smoke check failed. Review the app shell, security headers, and CSP report endpoint: $RUN_URL"
+          number="$(gh issue list -R "$REPO" --state open --label "$label" \
+            --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPO" --body "$body"
+          else
+            gh issue create -R "$REPO" --title "Web smoke check failed" \
+              --label "$label" --body "$body"
+          fi

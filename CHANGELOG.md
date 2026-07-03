@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-03
+
 ### Added
 
 - `--skip-missing` flag for the `all` command: absent input files are logged as skipped instead of failing the run, while malformed or otherwise failing files still exit 1.
@@ -27,7 +29,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Strip XML-illegal control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F) from every exported cell so a stray control character no longer aborts the whole Excel export with an IllegalCharacterError. Tab, newline, and carriage return are preserved.
 - Exit with code 130 and a clean "Interrupted by user" message when the CLI is cancelled with Ctrl-C, instead of printing a traceback.
-
 - Write cleaned Excel output atomically so a crash mid-export cannot leave a truncated or corrupt `.xlsx` at the destination.
 - Preserve exception tracebacks in structured JSON logs.
 - Preserve the declared pandas 2.0 compatibility when escaping formula-like cell values.
@@ -96,7 +97,8 @@ Initial release of the `linkedin-analyzer` Python CLI.
 
 - Repository URLs in `pyproject.toml`.
 
-[Unreleased]: https://github.com/Hermione-Granger-1176/linkedin-analyzer/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Hermione-Granger-1176/linkedin-analyzer/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Hermione-Granger-1176/linkedin-analyzer/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Hermione-Granger-1176/linkedin-analyzer/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Hermione-Granger-1176/linkedin-analyzer/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Hermione-Granger-1176/linkedin-analyzer/compare/v0.2.0...v0.3.0

@@ -157,14 +157,17 @@ function encDefault(value) {
 
 /**
  * Encode one field for the comments CSV (backslash escape char): quote when it
- * contains a delimiter, quote, or newline, escaping interior quotes with a
- * backslash to match pandas escapechar and the web comments parser.
+ * contains a delimiter, quote, or newline, escaping interior backslashes and
+ * quotes with a backslash to match pandas escapechar and the web comments
+ * parser. Payloads avoid literal backslashes: pandas collapses an escaped
+ * backslash while the web parser keeps it, so such a value cannot round-trip
+ * identically in both runtimes (the parity suites fail if one is added).
  * @param {string} value - Raw field value.
  * @returns {string} CSV-encoded field.
  */
 function encComments(value) {
     if (/[",\n\r]/.test(value)) {
-        return `"${value.replace(/"/g, '\\"')}"`;
+        return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
     }
     return value;
 }

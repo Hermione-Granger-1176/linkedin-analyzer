@@ -54,7 +54,7 @@ Releases are tag-driven: pushing a GitHub Release publishes the PyPI package and
 
 1. **Roll the changelog.** Move the `## [Unreleased]` entries in `CHANGELOG.md` into a new `## [X.Y.Z]` section with the date. Keep web-only changes out (the changelog is Python-package-only). Leave a fresh empty `Unreleased` heading.
 2. **Confirm green CI on the release commit.** `publish.yml`'s `require-ci` job refuses to publish unless the tagged commit's latest `CI result` check concluded `success`. Merge to `main` and let CI finish first, then tag that commit.
-3. **Tag and create the GitHub Release.** Tag `vX.Y.Z` on the release commit and publish a GitHub Release (the workflow triggers on `release: published`). Mark pre-releases as **prerelease** so the floating `:latest` Docker tag is not re-pointed (`publish.yml` only adds `:latest` for non-prereleases; `:vX.Y.Z` and `:sha-<sha>` are always pushed).
+3. **Tag and create the GitHub Release.** Run `make release-create tag=vX.Y.Z notes="..."` on the release commit (it tags and publishes the GitHub Release in one step; the workflow triggers on `release: published`). Mark pre-releases with `prerelease=1` so the floating `:latest` Docker tag is not re-pointed (`publish.yml` only adds `:latest` for non-prereleases; `:vX.Y.Z` and `:sha-<sha>` are always pushed).
 4. **Let the workflow self-verify.** `publish-pypi` builds, runs `twine check`, installs the wheel, and fails if `linkedin-analyzer --version` does not match the tag (minus the leading `v`); `publish-docker` repeats the version check on the built image and runs a Trivy HIGH/CRITICAL scan before pushing.
 5. **Set `VITE_APP_RELEASE`** on the next web build to the same tag/SHA so Sentry correlates web errors to the release (see Versioning above).
 

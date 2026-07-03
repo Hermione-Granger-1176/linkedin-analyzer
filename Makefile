@@ -326,7 +326,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch log diff diff-staged
+.PHONY: git branch log diff diff-staged release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -345,6 +345,17 @@ diff: ## Show unstaged changes
 
 diff-staged: ## Show staged changes
 	git diff --cached
+
+release-create: export RELEASE_NOTES := $(notes)
+release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..."] [prerelease=1])
+	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [notes="..."] [prerelease=1]\n' >&2; exit 1)
+	@set -e; \
+	tmp=""; \
+	trap 'test -n "$$tmp" && rm -f "$$tmp"' EXIT; \
+	set -- "$(tag)" --title "$(tag)"; \
+	if [ -n "$$RELEASE_NOTES" ]; then tmp=$$(mktemp); printf '%s' "$$RELEASE_NOTES" > "$$tmp"; set -- "$$@" --notes-file "$$tmp"; else set -- "$$@" --generate-notes; fi; \
+	if [ -n "$(prerelease)" ]; then set -- "$$@" --prerelease; fi; \
+	gh release create "$$@"
 
 # ─── Pull requests @pr ────────────────────────────────────────────────────────────
 

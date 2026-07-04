@@ -255,6 +255,173 @@ describe("Storage", () => {
             expect(reason).toBeInstanceOf(Error);
             expect(reason.message).toBe("IndexedDB transaction failed");
         });
+
+        it("saveAnalytics rejects with an Error when the write transaction aborts", async () => {
+            await Storage.clearAll();
+            abortNextTransaction();
+            let reason;
+            await Storage.saveAnalytics({ months: {} }).catch((error) => {
+                reason = error;
+            });
+            expect(reason).toBeInstanceOf(Error);
+            expect(reason.message).toBe("IndexedDB transaction failed");
+        });
+
+        it("getAnalytics rejects when the read transaction aborts", async () => {
+            await Storage.clearAll();
+            abortNextTransaction();
+            let rejected = false;
+            await Storage.getAnalytics().catch(() => {
+                rejected = true;
+            });
+            expect(rejected).toBe(true);
+        });
+
+        it("getOutreach rejects when the read transaction aborts", async () => {
+            await Storage.clearAll();
+            abortNextTransaction();
+            let rejected = false;
+            await Storage.getOutreach().catch(() => {
+                rejected = true;
+            });
+            expect(rejected).toBe(true);
+        });
+
+        it("getAllFiles rejects when the read transaction aborts", async () => {
+            await Storage.clearAll();
+            abortNextTransaction();
+            let rejected = false;
+            await Storage.getAllFiles().catch(() => {
+                rejected = true;
+            });
+            expect(rejected).toBe(true);
+        });
+    });
+
+    describe("record normalization fallbacks", () => {
+        async function openRawDb() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open("linkedin-analyzer", 3);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function putRaw(db, storeName, record) {
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, "readwrite");
+                tx.objectStore(storeName).put(record);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        it("defaults schemaVersion and updatedAt for records missing them", async () => {
+            await Storage.clearAll();
+            const db = await openRawDb();
+            // A record with no schemaVersion/updatedAt and inline text but no
+            // fileTexts entry exercises the Number(... || fallback) coercions and
+            // the inline-text fallback when the split text store has no row.
+            await putRaw(db, "files", { type: "shares", name: "legacy.csv", text: "a,b" });
+            db.close();
+
+            const file = await Storage.getFile("shares");
+            expect(file.schemaVersion).toBe(2);
+            expect(file.updatedAt).toBe(0);
+            expect(file.rowCount).toBe(0);
+            expect(file.text).toBe("a,b");
+        });
+
+        it("falls back to inline text when the text store row is not a string", async () => {
+            await Storage.clearAll();
+            const db = await openRawDb();
+            await putRaw(db, "files", {
+                type: "shares",
+                name: "x.csv",
+                text: "inline-text",
+                rowCount: 1,
+                updatedAt: 10,
+                schemaVersion: 2,
+            });
+            // A non-string text-store row must not shadow the inline metadata text.
+            await putRaw(db, "fileTexts", { type: "shares", text: 12345 });
+            db.close();
+
+            const file = await Storage.getFile("shares");
+            expect(file.text).toBe("inline-text");
+        });
+
+        it("drops future-version records from getAllFiles", async () => {
+            await Storage.clearAll();
+            const db = await openRawDb();
+            await putRaw(db, "files", {
+                type: "shares",
+                name: "ok.csv",
+                text: "a,b",
+                rowCount: 1,
+                updatedAt: 10,
+                schemaVersion: 2,
+            });
+            await putRaw(db, "files", {
+                type: "connections",
+                name: "future.csv",
+                text: "x,y",
+                rowCount: 1,
+                updatedAt: 10,
+                schemaVersion: 999,
+            });
+            db.close();
+
+            const files = await Storage.getAllFiles();
+            expect(files.map((f) => f.type)).toEqual(["shares"]);
+        });
+
+        it("defaults analytics schemaVersion when the record omits it", async () => {
+            await Storage.clearAll();
+            const db = await openRawDb();
+            await putRaw(db, "analytics", {
+                id: "base",
+                updatedAt: 10,
+                data: { months: { "2024-02": { total: 3 } } },
+            });
+            db.close();
+
+            const analytics = await Storage.getAnalytics();
+            expect(analytics.months["2024-02"].total).toBe(3);
+        });
+    });
+
+    describe("in-memory fallback when IndexedDB cannot open", () => {
+        it("degrades to memory and notifies listeners after an open failure", async () => {
+            vi.resetModules();
+            const { Storage: MemStorage } = await import("../src/storage.js");
+            const openSpy = vi.spyOn(indexedDB, "open").mockImplementation(() => {
+                throw new Error("open blew up");
+            });
+
+            let lostError = null;
+            MemStorage.onPersistenceLost((error) => {
+                lostError = error;
+            });
+
+            // The first op fails to open, degrades permanently, and serves the
+            // in-memory store for this and every subsequent operation.
+            await MemStorage.saveOutreach({ selfInitiated: 9 });
+            expect(lostError).toBeInstanceOf(Error);
+
+            expect((await MemStorage.getOutreach()).selfInitiated).toBe(9);
+            await MemStorage.saveFile("shares", { name: "m.csv", text: "a,b", rowCount: 2 });
+            expect((await MemStorage.getFile("shares")).text).toBe("a,b");
+            await MemStorage.saveAnalytics({ months: { "2024-03": { total: 1 } } });
+            expect((await MemStorage.getAnalytics()).months["2024-03"].total).toBe(1);
+            expect((await MemStorage.getAllFiles()).length).toBe(1);
+
+            await MemStorage.clearAll();
+            expect(await MemStorage.getOutreach()).toBeNull();
+            expect(await MemStorage.getFile("shares")).toBeNull();
+
+            openSpy.mockRestore();
+        });
     });
 
     describe("connection lifecycle", () => {

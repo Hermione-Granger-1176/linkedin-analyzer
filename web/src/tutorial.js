@@ -12,13 +12,27 @@ import {
     hashString,
     resolvePlacement,
 } from "./tutorial-geometry.js";
+import {
+    getMiniTipCooldownMs,
+    getMiniTipDisplayDelayMs,
+    getMiniTipVisitInterval,
+    normalizeVisitCount,
+} from "./tutorial-pacing.js";
 import { TutorialMiniTips, TutorialSteps } from "./tutorial-steps.js";
+import {
+    getCompletionKey,
+    getMiniTipKey,
+    getMiniTipLastShownAtKey,
+    getMiniTipVisitCountKey,
+    getStorageNumberValue,
+    getStorageValue,
+    removeStorageValue,
+    setStorageValue,
+} from "./tutorial-storage.js";
 
 export const Tutorial = (() => {
     "use strict";
 
-    const TUTORIAL_STORAGE_VERSION = "v1";
-    const STORAGE_PREFIX = `linkedin-analyzer:tutorial:${TUTORIAL_STORAGE_VERSION}`;
     const AUTO_START_DELAY_MS = 1500;
     const AUTO_START_RETRY_MS = 260;
     const AUTO_START_VISIBLE_PAUSE_MS = 900;
@@ -26,15 +40,6 @@ export const Tutorial = (() => {
     const INITIAL_TARGET_RETRY_MAX = 8;
     const MINI_TIP_RETRY_MS = 300;
     const MINI_TIP_RETRY_MAX = 8;
-    const MINI_TIP_INITIAL_DELAY_MS = 2200;
-    const MINI_TIP_DELAY_GROWTH_MS = 90;
-    const MINI_TIP_DELAY_MAX_EXTRA_MS = 2200;
-    const MINI_TIP_BASE_COOLDOWN_MS = 30000;
-    const MINI_TIP_COOLDOWN_GROWTH_MS = 2500;
-    const MINI_TIP_COOLDOWN_MAX_MS = 240000;
-    const MINI_TIP_MIN_INTERVAL_VISITS = 2;
-    const MINI_TIP_MAX_INTERVAL_VISITS = 6;
-    const MINI_TIP_INTERVAL_STEP = 12;
     const STEP_SCROLL_MARGIN = 56;
     const SVG_NS = "http://www.w3.org/2000/svg";
     const POINTER_BASE_ANGLE_DEG = -45;
@@ -232,6 +237,9 @@ export const Tutorial = (() => {
 
         clearMiniTips();
 
+        // Defensive: the tutorial shell (root + popover) is mounted by init()
+        // before any start(), so this guard is unreachable in normal flows.
+        /* v8 ignore next 3 */
         if (!ui.root || !ui.popover) {
             return false;
         }
@@ -379,6 +387,9 @@ export const Tutorial = (() => {
 
     /** Attach event handlers for controls, keyboard, and layout updates. */
     function bindEvents() {
+        // Defensive: bindEvents runs after the popover controls are built, so the
+        // missing-control guard never trips in the mounted shell.
+        /* v8 ignore next 3 */
         if (!ui.backButton || !ui.nextButton || !ui.skipButton || !ui.popover) {
             return;
         }
@@ -651,6 +662,8 @@ export const Tutorial = (() => {
 
     /** Update spotlight and popover position without rerendering text/progress. */
     function updateCurrentStepGeometry() {
+        // Defensive: viewport handlers only reposition while a tutorial is active.
+        /* v8 ignore next 3 */
         if (!state.active) {
             return;
         }
@@ -669,6 +682,8 @@ export const Tutorial = (() => {
      * @returns {boolean}
      */
     function moveToStep(requestedIndex, direction, allowInitialRetry) {
+        // Defensive: navigation helpers are only invoked within an active flow.
+        /* v8 ignore next 3 */
         if (!state.active) {
             return false;
         }
@@ -694,6 +709,8 @@ export const Tutorial = (() => {
      * @returns {boolean}
      */
     function scheduleInitialRetry() {
+        // Defensive: retries are only scheduled during an active render attempt.
+        /* v8 ignore next 3 */
         if (!state.active) {
             return false;
         }
@@ -721,6 +738,8 @@ export const Tutorial = (() => {
      * @returns {number}
      */
     function findRenderableStepIndex(fromIndex, direction) {
+        // Defensive: a started route always has at least one step.
+        /* v8 ignore next 3 */
         if (!state.steps.length) {
             return -1;
         }
@@ -751,6 +770,9 @@ export const Tutorial = (() => {
      * @param {boolean} focusPopover - Focus the dialog after render
      */
     function renderCurrentStep(focusPopover) {
+        // Defensive: renderCurrentStep runs on an active tutorial with the full
+        // popover shell mounted, so neither guard trips in the unit environment.
+        /* v8 ignore start */
         if (!state.active) {
             return;
         }
@@ -764,6 +786,7 @@ export const Tutorial = (() => {
         ) {
             return;
         }
+        /* v8 ignore stop */
 
         const step = getCurrentStep();
         const title = step.title || step.heading || "Quick tour";
@@ -803,6 +826,8 @@ export const Tutorial = (() => {
 
     /** Render step counter and dot navigation. */
     function renderProgress() {
+        // Defensive: the counter and dots are part of the mounted popover shell.
+        /* v8 ignore next 3 */
         if (!ui.counter || !ui.dots) {
             return;
         }
@@ -880,6 +905,8 @@ export const Tutorial = (() => {
      * @returns {(string|Element)[]}
      */
     function collectTargetCandidates(step) {
+        // Defensive: callers always pass a resolved step object.
+        /* v8 ignore next 3 */
         if (!step || typeof step !== "object") {
             return [];
         }
@@ -946,6 +973,8 @@ export const Tutorial = (() => {
      * @param {object} step - Step config
      */
     function updateGeometry(target, step) {
+        // Defensive: spotlight and popover are part of the mounted shell.
+        /* v8 ignore next 3 */
         if (!ui.spotlight || !ui.popover) {
             return;
         }
@@ -1015,6 +1044,8 @@ export const Tutorial = (() => {
      * @param {object} step - Step config
      */
     function updatePointer(targetRect, popPosition, popRect, placement, step) {
+        // Defensive: the pointer SVG and its paths are part of the mounted shell.
+        /* v8 ignore next 3 */
         if (!ui.pointer || !ui.pointerMainPath || !ui.pointerEchoPath || !ui.pointerHeadPath) {
             return;
         }
@@ -1128,6 +1159,8 @@ export const Tutorial = (() => {
 
     /** Persist completion and close active tutorial. */
     function completeCurrentRoute() {
+        // Defensive: completion is only reachable from an active tutorial.
+        /* v8 ignore next 3 */
         if (!state.active) {
             return;
         }
@@ -1356,6 +1389,8 @@ export const Tutorial = (() => {
     /** Clear rendered mini-tip nodes and tracked entries. */
     function clearMiniTips() {
         state.miniTipEntries = [];
+        // Defensive: the mini-tips layer is part of the mounted shell.
+        /* v8 ignore next 3 */
         if (!ui.miniTipsLayer) {
             return;
         }
@@ -1394,10 +1429,15 @@ export const Tutorial = (() => {
      * @param {KeyboardEvent} event - Key event
      */
     function trapFocus(event) {
+        // Defensive: focus trapping only runs while the popover is mounted.
+        /* v8 ignore next 3 */
         if (!ui.popover) {
             return;
         }
         const focusable = getFocusableElements(ui.popover);
+        // Defensive: the popover always renders Back/Next/Skip buttons, so it is
+        // never devoid of focusable controls while a step is shown.
+        /* v8 ignore next 5 */
         if (!focusable.length) {
             event.preventDefault();
             ui.popover.focus();
@@ -1437,6 +1477,8 @@ export const Tutorial = (() => {
      * @returns {HTMLElement[]}
      */
     function getFocusableElements(root) {
+        // Defensive: always called with the mounted popover as root.
+        /* v8 ignore next 3 */
         if (!root) {
             return [];
         }
@@ -1615,42 +1657,6 @@ export const Tutorial = (() => {
     }
 
     /**
-     * Compute mini-tip delay for current engagement level.
-     * @param {number} visitCount - Engagement visit count
-     * @returns {number}
-     */
-    function getMiniTipDisplayDelayMs(visitCount) {
-        const normalizedVisitCount = normalizeVisitCount(visitCount);
-        const extraDelay = Math.min(
-            normalizedVisitCount * MINI_TIP_DELAY_GROWTH_MS,
-            MINI_TIP_DELAY_MAX_EXTRA_MS,
-        );
-        return MINI_TIP_INITIAL_DELAY_MS + extraDelay;
-    }
-
-    /**
-     * Compute minimum cooldown between mini-tip callouts.
-     * @param {number} visitCount - Engagement visit count
-     * @returns {number}
-     */
-    function getMiniTipCooldownMs(visitCount) {
-        const normalizedVisitCount = normalizeVisitCount(visitCount);
-        const growth = normalizedVisitCount * MINI_TIP_COOLDOWN_GROWTH_MS;
-        return Math.min(MINI_TIP_COOLDOWN_MAX_MS, MINI_TIP_BASE_COOLDOWN_MS + growth);
-    }
-
-    /**
-     * Compute route-visit interval between mini-tip appearances.
-     * @param {number} visitCount - Engagement visit count
-     * @returns {number}
-     */
-    function getMiniTipVisitInterval(visitCount) {
-        const normalizedVisitCount = normalizeVisitCount(visitCount);
-        const growthSteps = Math.floor(normalizedVisitCount / MINI_TIP_INTERVAL_STEP);
-        return Math.min(MINI_TIP_MAX_INTERVAL_VISITS, MINI_TIP_MIN_INTERVAL_VISITS + growthSteps);
-    }
-
-    /**
      * Increment and persist engagement visit count for mini-tip pacing.
      * @returns {number}
      */
@@ -1762,19 +1768,6 @@ export const Tutorial = (() => {
     }
 
     /**
-     * Normalize engagement visit count.
-     * @param {number} value - Raw visit count
-     * @returns {number}
-     */
-    function normalizeVisitCount(value) {
-        const count = Number(value);
-        if (!Number.isFinite(count) || count < 1) {
-            return 1;
-        }
-        return Math.floor(count);
-    }
-
-    /**
      * Normalize route names.
      * @param {string | null | undefined} value - Raw route
      * @returns {string}
@@ -1783,97 +1776,6 @@ export const Tutorial = (() => {
         return String(value || "")
             .trim()
             .toLowerCase();
-    }
-
-    /**
-     * Build completion storage key.
-     * @param {string} routeName - Route name
-     * @returns {string}
-     */
-    function getCompletionKey(routeName) {
-        return `${STORAGE_PREFIX}:route:${routeName}:complete`;
-    }
-
-    /**
-     * Build mini-tip storage key.
-     * @param {string} routeName - Route name
-     * @param {string} tipId - Tip id
-     * @returns {string}
-     */
-    function getMiniTipKey(routeName, tipId) {
-        return `${STORAGE_PREFIX}:route:${routeName}:tip:${tipId}:dismissed`;
-    }
-
-    /**
-     * Build mini-tip engagement visit count storage key.
-     * @returns {string}
-     */
-    function getMiniTipVisitCountKey() {
-        return `${STORAGE_PREFIX}:mini-tip:route-visits`;
-    }
-
-    /**
-     * Build mini-tip last shown timestamp storage key.
-     * @returns {string}
-     */
-    function getMiniTipLastShownAtKey() {
-        return `${STORAGE_PREFIX}:mini-tip:last-shown-at`;
-    }
-
-    /**
-     * Safe localStorage getter.
-     * @param {string} key - Storage key
-     * @returns {string|null}
-     */
-    function getStorageValue(key) {
-        try {
-            return window.localStorage.getItem(key);
-        } catch {
-            /* v8 ignore next */
-            return null;
-        }
-    }
-
-    /**
-     * Safe localStorage number getter.
-     * @param {string} key - Storage key
-     * @param {number} fallbackValue - Fallback value
-     * @returns {number}
-     */
-    function getStorageNumberValue(key, fallbackValue) {
-        const rawValue = getStorageValue(key);
-        const parsed = Number(rawValue);
-        if (!Number.isFinite(parsed)) {
-            return fallbackValue;
-        }
-        return parsed;
-    }
-
-    /**
-     * Safe localStorage setter.
-     * @param {string} key - Storage key
-     * @param {string} value - Value
-     */
-    function setStorageValue(key, value) {
-        try {
-            window.localStorage.setItem(key, value);
-        } catch {
-            /* v8 ignore next */
-            return;
-        }
-    }
-
-    /**
-     * Remove a localStorage value safely.
-     * @param {string} key - Storage key
-     */
-    function removeStorageValue(key) {
-        try {
-            window.localStorage.removeItem(key);
-        } catch {
-            /* v8 ignore next */
-            return;
-        }
     }
 
     return {

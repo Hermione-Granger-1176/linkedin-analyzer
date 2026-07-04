@@ -1,11 +1,36 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_CSV_CHARS } from "../src/constants.js";
 import {
     CSV_OPTIONS_COMMENTS,
     CSV_OPTIONS_DEFAULT,
     isRowEmpty,
     parseCsvRows,
 } from "../src/csv-parser.js";
+
+describe("parseCsvRows input-size guard", () => {
+    it("rejects input longer than the character limit", () => {
+        // Pass a length-bearing object so the guard trips without allocating a
+        // multi-megabyte string (the early return never scans the characters).
+        const { rows, error } = parseCsvRows({ length: MAX_CSV_CHARS + 1 });
+        expect(rows).toEqual([]);
+        expect(error).toMatch(/parser limit/);
+    });
+});
+
+describe("parseCsvRows row endings outside quotes", () => {
+    it("splits rows on a bare CR not followed by LF", () => {
+        const { rows, error } = parseCsvRows("a\rb", CSV_OPTIONS_DEFAULT);
+        expect(error).toBeNull();
+        expect(rows).toEqual([["a"], ["b"]]);
+    });
+
+    it("consumes the LF of a CRLF row ending", () => {
+        const { rows, error } = parseCsvRows("a\r\nb", CSV_OPTIONS_DEFAULT);
+        expect(error).toBeNull();
+        expect(rows).toEqual([["a"], ["b"]]);
+    });
+});
 
 describe("parseCsvRows escape handling (comments options)", () => {
     it("collapses a backslash-escaped quote inside a quoted field", () => {

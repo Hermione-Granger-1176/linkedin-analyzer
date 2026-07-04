@@ -1031,3 +1031,149 @@ describe("AnalyticsEngine tiered insight cards", () => {
         expect(result.insights.find(i => i.id === "engagement-shift").body).toContain("posting more");
     });
 });
+
+describe("AnalyticsEngine input edge cases", () => {
+    const baseFilters = {
+        timeRange: "all",
+        topic: "all",
+        monthFocus: null,
+        day: null,
+        hour: null,
+        shareType: "all",
+    };
+
+    it("treats non-array shares and comments as empty", () => {
+        const analytics = AnalyticsEngine.compute(null, undefined);
+        expect(analytics.totals.posts).toBe(0);
+        expect(analytics.totals.comments).toBe(0);
+    });
+
+    it("skips share and comment rows with unparseable dates", () => {
+        const shares = [
+            { Date: "not-a-date", ShareCommentary: "#x", SharedUrl: "", MediaUrl: "" },
+            { Date: "2025-01-02 09:00:00", ShareCommentary: "#x", SharedUrl: "", MediaUrl: "" },
+        ];
+        const comments = [
+            { Date: "", Message: "#x" },
+            { Date: "2025-01-02 09:00:00", Message: "#x" },
+        ];
+        const analytics = AnalyticsEngine.compute(shares, comments);
+        expect(analytics.totals.posts).toBe(1);
+        expect(analytics.totals.comments).toBe(1);
+    });
+
+    it("ignores connection rows without a usable Connected On value", () => {
+        const connections = [
+            { "Connected On": "" },
+            { "Connected On": 20250101 },
+            { "Connected On": "2025" },
+            { "Connected On": "2025-03-10" },
+            { "Connected On": "2025-03-12" },
+        ];
+        const { shares } = buildMonthly(monthsRange(13, i => ({ posts: i + 1, topic: "x" })));
+        // Only the two well-formed 2025-03 rows count, so growth stays dormant
+        // (one connection month cannot overlap the posting range meaningfully).
+        expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
+    });
+
+    it("returns null from buildView without analytics", () => {
+        expect(AnalyticsEngine.buildView(null, baseFilters)).toBeNull();
+    });
+
+    it("returns an empty view for an unparseable time range", () => {
+        const { shares } = buildMonthly(monthsRange(3, () => ({ posts: 2, topic: "x" })));
+        const analytics = AnalyticsEngine.compute(shares, []);
+        const view = AnalyticsEngine.buildView(analytics, { ...baseFilters, timeRange: "zzz" });
+        expect(view.timeline).toEqual([]);
+        expect(view.totals.total).toBe(0);
+    });
+
+    it("falls back to the latest month when earliestTimestamp is missing", () => {
+        const { shares } = buildMonthly(monthsRange(2, () => ({ posts: 2, topic: "x" })));
+        const analytics = AnalyticsEngine.compute(shares, []);
+        // A stored payload missing earliestTimestamp must still resolve the "all"
+        // range using the latest month as the start.
+        analytics.earliestTimestamp = 0;
+        const view = AnalyticsEngine.buildView(analytics, baseFilters);
+        expect(view.timeline.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("zeroes a month when a day filter selects a day with no activity", () => {
+        // All posts land on Monday (2025-01-06); filtering to Sunday leaves the
+        // month with a zero dimensional count and drops it from the totals.
+        const shares = Array.from({ length: 3 }, () => ({
+            Date: "2025-01-06 09:00:00",
+            ShareCommentary: "#x",
+            SharedUrl: "",
+            MediaUrl: "",
+        }));
+        const analytics = AnalyticsEngine.compute(shares, []);
+        const view = AnalyticsEngine.buildView(analytics, { ...baseFilters, day: 6 });
+        expect(view.totals.posts).toBe(0);
+    });
+
+    it("zeroes a comments-only month under a share-type filter", () => {
+        // The month has comments but no posts, so a share-type filter scales the
+        // post count by a zero ratio and the month contributes nothing.
+        const comments = Array.from({ length: 4 }, () => ({
+            Date: "2025-01-05 10:00:00",
+            Message: "#x",
+        }));
+        const analytics = AnalyticsEngine.compute([], comments);
+        const view = AnalyticsEngine.buildView(analytics, { ...baseFilters, shareType: "media" });
+        expect(view.totals.posts).toBe(0);
+    });
+
+    it("applies a share-type filter to the weekly timeline", () => {
+        const shares = Array.from({ length: 6 }, (_, i) => ({
+            Date: `2025-01-0${i + 1} 09:00:00`,
+            ShareCommentary: "#x",
+            SharedUrl: "",
+            MediaUrl: i % 2 === 0 ? "https://media.example.com" : "",
+        }));
+        const analytics = AnalyticsEngine.compute(shares, []);
+        // 1m uses the weekly timeline; the media filter narrows the weekly values.
+        const view = AnalyticsEngine.buildView(analytics, {
+            ...baseFilters,
+            timeRange: "1m",
+            shareType: "media",
+        });
+        expect(Array.isArray(view.timeline)).toBe(true);
+    });
+
+    it("counts a runner-up topic when detecting a topic shift", () => {
+        // The first third mixes two topics so the dominant-topic scan compares a
+        // runner-up against the leader, and the range still shifts to "ai".
+        const topics = ["excel", "data", "excel", "data", "data", "data", "ai", "ai", "ai"];
+        const specs = topics.map((topic, i) => {
+            const month = String(i + 1).padStart(2, "0");
+            return { month: `2025-${month}`, posts: 3, topic };
+        });
+        const analytics = AnalyticsEngine.compute(buildMonthly(specs).shares, []);
+        expect(allTimeView(analytics).topicShift).toEqual({ from: "excel", to: "ai" });
+    });
+
+    it("aligns the growth window to the later posting start and spans gap months", () => {
+        // Connections begin two months before posts, so the overlap starts at the
+        // first posting month; a mid-range month has connections but no posts.
+        const specs = [];
+        for (let i = 0; i < 16; i++) {
+            const year = 2023 + Math.floor(i / 12);
+            const month = String((i % 12) + 1).padStart(2, "0");
+            const m = `${year}-${month}`;
+            if (i < 2) {
+                specs.push({ month: m, connections: 1 });
+            } else if (i === 9) {
+                specs.push({ month: m, connections: 6 });
+            } else if (i < 8) {
+                specs.push({ month: m, posts: 1, connections: 1, topic: "excel" });
+            } else {
+                specs.push({ month: m, posts: 12, connections: 26, topic: "ai" });
+            }
+        }
+        const { shares, comments, connections } = buildMonthly(specs);
+        const analytics = AnalyticsEngine.compute(shares, comments, connections);
+        expect(analytics.networkGrowth).not.toBeNull();
+        expect(analytics.networkGrowth.multiplier).toBeGreaterThanOrEqual(2);
+    });
+});

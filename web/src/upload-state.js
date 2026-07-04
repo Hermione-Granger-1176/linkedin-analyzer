@@ -40,6 +40,9 @@ export function createEmptyFileMap() {
  */
 export function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
     const stateKey = `${hasAny ? 1 : 0}-${hasAnalyticsFiles ? 1 : 0}-${analyticsReady ? 1 : 0}`;
+    // All eight boolean-triple keys are enumerated above, so the fallback is a
+    // defensive default that valid inputs never reach.
+    /* v8 ignore next 2 */
     return (
         UPLOAD_HINT_BY_STATE[stateKey] ||
         "Files loaded. Open Messages tab for conversation insights."

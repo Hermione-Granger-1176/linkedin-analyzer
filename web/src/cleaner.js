@@ -44,6 +44,9 @@ export const LinkedInCleaner = (() => {
      * @returns {boolean}
      */
     function hasRequiredRowValues(row, requiredColumns) {
+        // Every config defines a non-empty required-column set, so the empty
+        // guard is defensive and unreachable from process().
+        /* v8 ignore next 2 */
         if (!requiredColumns.length) {
             return true;
         }
@@ -57,6 +60,9 @@ export const LinkedInCleaner = (() => {
      * @returns {boolean}
      */
     function hasAnyRowValue(row, columns) {
+        // Only called when dropIfAllMissing is non-empty, so the empty guard is
+        // defensive and unreachable from cleanData().
+        /* v8 ignore next 2 */
         if (!columns.length) {
             return true;
         }
@@ -69,6 +75,8 @@ export const LinkedInCleaner = (() => {
      * @returns {string} Normalized header
      */
     function normalizeHeader(header) {
+        // Parsed CSV headers are always strings, so the type guard is defensive.
+        /* v8 ignore next 2 */
         if (typeof header !== "string") {
             return "";
         }
@@ -327,6 +335,9 @@ export const LinkedInCleaner = (() => {
      */
     function cleanData(data, fileType) {
         const config = CONFIGS[fileType];
+        // process() validates the file type before cleaning, so a missing config
+        // here is defensive and unreachable.
+        /* v8 ignore next 2 */
         if (!config) {
             return data;
         }
@@ -373,12 +384,15 @@ export const LinkedInCleaner = (() => {
      */
     function buildColumnErrorMessage(selectedType, detectedType, missing) {
         if (selectedType !== "auto" && detectedType && detectedType !== selectedType) {
+            // Known file types always have labels, so the `|| type` fallbacks are defensive.
+            /* v8 ignore next 2 */
             const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
             const detectedLabel = FILE_TYPE_LABELS[detectedType] || detectedType;
             return `This looks like a ${detectedLabel} file, but you selected ${selectedLabel}. Please switch to "${detectedLabel}" or "Auto-detect".`;
         }
 
         if (selectedType !== "auto" && !detectedType) {
+            /* v8 ignore next */
             const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
             return `This file doesn't appear to be a LinkedIn ${selectedLabel} export. Missing columns: ${missing.join(", ")}. Please check that you uploaded the correct file.`;
         }

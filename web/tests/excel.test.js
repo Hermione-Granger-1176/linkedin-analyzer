@@ -204,6 +204,94 @@ describe("ExcelGenerator", () => {
         );
     });
 
+    it("writes boolean and date cells with their native types", async () => {
+        const when = new Date(2024, 0, 2);
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Types",
+            headers: ["Flag", "When"],
+            rows: [[true, when]],
+        });
+
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        expect(sheetData[1][0]).toEqual(expect.objectContaining({ type: Boolean, value: true }));
+        expect(sheetData[1][1]).toEqual(expect.objectContaining({ type: Date, value: when }));
+    });
+
+    it("renders null cells as empty strings", async () => {
+        // Omitting columnWidths forces the auto-width path, which reads every
+        // cell (and the header) through valueToText.
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Blanks",
+            headers: ["", "Value"],
+            rows: [[null, null]],
+        });
+
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        expect(sheetData[1][0]).toEqual(expect.objectContaining({ type: String, value: "" }));
+    });
+
+    it("ignores a non-string hyperlink and keeps the plain value", async () => {
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Links",
+            headers: ["Profile"],
+            rows: [[{ value: "Ada", hyperlink: 123 }]],
+        });
+
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        // A non-string hyperlink is dropped, so the cell stays a plain value
+        // rather than becoming a HYPERLINK formula.
+        expect(sheetData[1][0]).toEqual(expect.objectContaining({ type: String, value: "Ada" }));
+        expect(sheetData[1][0].type).not.toBe("Formula");
+    });
+
+    it("pads rows shorter than the header with empty cells", async () => {
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Short",
+            headers: ["A", "B"],
+            rows: [["only-one"]],
+        });
+
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        expect(sheetData[1]).toHaveLength(2);
+        expect(sheetData[1][1]).toEqual(expect.objectContaining({ value: "" }));
+    });
+
+    it("fills missing data fields with empty strings when generating by type", async () => {
+        const blob = await ExcelGenerator.generate([{ Date: "2025-01-01 10:00:00" }], "shares");
+        expect(blob).toBeInstanceOf(Blob);
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        // Columns absent from the source row are written as blank cells.
+        expect(sheetData[1].some((cell) => cell.value === "")).toBe(true);
+    });
+
+    it("stringifies a non-Error thrown by downloadFromSpec", async () => {
+        // Deliberately reject with a non-Error value to exercise the stringify path.
+        const rawFailure = "raw-string-failure";
+        writeXlsxFile.mockImplementationOnce(() => {
+            throw rawFailure;
+        });
+        const result = await ExcelGenerator.downloadFromSpec(
+            { sheetName: "X", headers: ["A"], rows: [["1"]] },
+            "x.xlsx",
+        );
+        expect(result.success).toBe(false);
+        expect(result.error).toBe("raw-string-failure");
+    });
+
+    it("stringifies a non-Error thrown by generateAndDownload", async () => {
+        // Deliberately reject with a non-Error value to exercise the stringify path.
+        const rawFailure = "raw-string-failure";
+        writeXlsxFile.mockImplementationOnce(() => {
+            throw rawFailure;
+        });
+        const result = await ExcelGenerator.generateAndDownload(
+            [{ Date: "2025-01-01 10:00:00" }],
+            "shares",
+        );
+        expect(result.success).toBe(false);
+        expect(result.error).toBe("raw-string-failure");
+    });
+
     it("uses write-excel-file v4 browser workbook options", async () => {
         await ExcelGenerator.generateFromSpec({
             sheetName: "Metrics",

@@ -229,4 +229,101 @@ describe("SketchCharts", () => {
         const item = SketchCharts.getItemAt(canvas, 130, 100);
         expect(item).toBeNull();
     });
+
+    it("falls back to devicePixelRatio of 1 when the ratio reads as zero", () => {
+        const original = window.devicePixelRatio;
+        Object.defineProperty(window, "devicePixelRatio", {
+            configurable: true,
+            value: 0,
+        });
+        try {
+            const { canvas } = createCanvas({ width: 200, height: 100 });
+            const data = [{ key: "2025-01", label: "Jan 2025", value: 1 }];
+            SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);
+            // ratio resolves to 1, so backing store matches the CSS box exactly.
+            expect(canvas.width).toBe(200);
+            expect(canvas.height).toBe(100);
+        } finally {
+            Object.defineProperty(window, "devicePixelRatio", {
+                configurable: true,
+                value: original,
+            });
+        }
+    });
+
+    it("drawTimeline returns early for empty data", () => {
+        const { canvas } = createCanvas({ width: 400, height: 200 });
+        SketchCharts.drawTimeline(canvas, [], "12m", 1, 0);
+        // No items registered, so nothing can be hit.
+        expect(SketchCharts.getItemAt(canvas, 60, 120)).toBeNull();
+    });
+
+    it("drawTimeline uses full weekly labels for weekly time ranges", () => {
+        const { canvas } = createCanvas({ width: 400, height: 200 });
+        const data = [
+            { key: "2025-W01", label: "Wk 1", value: 4 },
+            { key: "2025-W02", label: "Wk 2", value: 6 },
+        ];
+        SketchCharts.drawTimeline(canvas, data, "1m", 1, 0);
+        const item = SketchCharts.getItemAt(canvas, 120, 100);
+        expect(item).toBeTruthy();
+        expect(item.type).toBe("week");
+    });
+
+    it("drawDonut returns early when the mix is missing", () => {
+        const { canvas } = createCanvas({ width: 260, height: 200 });
+        SketchCharts.drawDonut(canvas, null, 1);
+        expect(SketchCharts.getItemAt(canvas, 130, 100)).toBeNull();
+    });
+
+    it("drawDonut skips zero-value segments while keeping the rest", () => {
+        const { canvas } = createCanvas({ width: 260, height: 200 });
+        // links is 0, so only Text and Media segments register.
+        SketchCharts.drawDonut(canvas, { textOnly: 3, links: 0, media: 2 }, 1);
+        let found = null;
+        for (let x = 90; x <= 200 && !found; x += 4) {
+            for (let y = 60; y <= 140 && !found; y += 4) {
+                found = SketchCharts.getItemAt(canvas, x, y);
+            }
+        }
+        expect(found).toBeTruthy();
+        expect(found.label).not.toBe("Links");
+    });
+
+    it("donut hit test rejects points outside the ring and inside the hole", () => {
+        const { canvas } = createCanvas({ width: 260, height: 200 });
+        // A single full-circle segment simplifies the geometry: center (130,100),
+        // radius ~64, inner radius ~35.
+        SketchCharts.drawDonut(canvas, { textOnly: 5, links: 0, media: 0 }, 1);
+        // Far outside the ring (dist > radius).
+        expect(SketchCharts.getItemAt(canvas, 210, 100)).toBeNull();
+        // Inside the donut hole (dist < inner radius).
+        expect(SketchCharts.getItemAt(canvas, 135, 100)).toBeNull();
+        // Within the ring hits the segment.
+        const hit = SketchCharts.getItemAt(canvas, 180, 100);
+        expect(hit).toBeTruthy();
+        expect(hit.type).toBe("mix");
+    });
+
+    it("exportPng aborts when the canvas produces no blob", () => {
+        const { canvas } = createCanvas({ width: 320, height: 160 });
+        SketchCharts.drawTimeline(canvas, [{ key: "2025-01", label: "Jan 2025", value: 3 }], "12m");
+        HTMLCanvasElement.prototype.toBlob.mockImplementation((callback) => callback(null));
+        const createUrl = vi.spyOn(URL, "createObjectURL");
+        SketchCharts.exportPng(canvas, "chart.png");
+        expect(createUrl).not.toHaveBeenCalled();
+    });
+
+    it("exportPng defaults the download name to chart.png", () => {
+        const { canvas } = createCanvas({ width: 320, height: 160 });
+        SketchCharts.drawTimeline(canvas, [{ key: "2025-01", label: "Jan 2025", value: 3 }], "12m");
+        vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:chart");
+        vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+        let downloadName = null;
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+            downloadName = this.download;
+        });
+        SketchCharts.exportPng(canvas);
+        expect(downloadName).toBe("chart.png");
+    });
 });

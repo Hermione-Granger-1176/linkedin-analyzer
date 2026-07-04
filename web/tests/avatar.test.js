@@ -39,4 +39,10 @@ describe("pickAvatarColor", () => {
     it("ignores surrounding whitespace", () => {
         expect(pickAvatarColor("  Ada Lovelace  ")).toBe(pickAvatarColor("Ada Lovelace"));
     });
+
+    it("coerces null or undefined names to the empty-string color", () => {
+        const emptyColor = pickAvatarColor("");
+        expect(pickAvatarColor(null)).toBe(emptyColor);
+        expect(pickAvatarColor(undefined)).toBe(emptyColor);
+    });
 });

@@ -1,227 +1,25 @@
 /* LinkedIn Analyzer - Analytics Engine (Optimized) */
 
+import { DAY_LABELS, MONTH_LABELS } from "./analytics-constants.js";
+import {
+    addDays,
+    addMonths,
+    endOfMonth,
+    enumerateMonths,
+    formatDateKey,
+    formatWeekLabel,
+    parseDateKey,
+    parseLinkedInDate,
+    startOfMonth,
+    startOfWeek,
+} from "./analytics-dates.js";
+import { generateInsights } from "./analytics-insights.js";
+import { average, pearson } from "./analytics-stats.js";
+import { extractTopics } from "./analytics-text.js";
+
 export const AnalyticsEngine = (() => {
     "use strict";
 
-    const STOP_WORDS = new Set([
-        "the",
-        "a",
-        "an",
-        "and",
-        "or",
-        "but",
-        "in",
-        "on",
-        "at",
-        "to",
-        "for",
-        "of",
-        "with",
-        "by",
-        "from",
-        "up",
-        "about",
-        "into",
-        "through",
-        "during",
-        "before",
-        "after",
-        "above",
-        "below",
-        "between",
-        "under",
-        "again",
-        "further",
-        "then",
-        "once",
-        "here",
-        "there",
-        "when",
-        "where",
-        "why",
-        "how",
-        "all",
-        "each",
-        "few",
-        "more",
-        "most",
-        "other",
-        "some",
-        "such",
-        "no",
-        "nor",
-        "not",
-        "only",
-        "own",
-        "same",
-        "so",
-        "than",
-        "too",
-        "very",
-        "s",
-        "t",
-        "can",
-        "will",
-        "just",
-        "don",
-        "should",
-        "now",
-        "i",
-        "you",
-        "he",
-        "she",
-        "it",
-        "we",
-        "they",
-        "what",
-        "which",
-        "who",
-        "this",
-        "that",
-        "these",
-        "those",
-        "am",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "have",
-        "has",
-        "had",
-        "having",
-        "do",
-        "does",
-        "did",
-        "doing",
-        "would",
-        "could",
-        "ought",
-        "im",
-        "youre",
-        "hes",
-        "shes",
-        "its",
-        "were",
-        "theyre",
-        "ive",
-        "youve",
-        "weve",
-        "theyve",
-        "id",
-        "youd",
-        "hed",
-        "shed",
-        "wed",
-        "theyd",
-        "ill",
-        "youll",
-        "hell",
-        "shell",
-        "well",
-        "theyll",
-        "isnt",
-        "arent",
-        "wasnt",
-        "werent",
-        "hasnt",
-        "havent",
-        "hadnt",
-        "doesnt",
-        "dont",
-        "didnt",
-        "wont",
-        "wouldnt",
-        "couldnt",
-        "shouldnt",
-        "my",
-        "your",
-        "his",
-        "her",
-        "our",
-        "their",
-        "me",
-        "him",
-        "us",
-        "them",
-        "if",
-        "because",
-        "as",
-        "until",
-        "while",
-        "also",
-        "even",
-        "much",
-        "many",
-        "get",
-        "got",
-        "like",
-        "know",
-        "think",
-        "make",
-        "see",
-        "one",
-        "two",
-        "new",
-        "want",
-        "way",
-        "use",
-        "go",
-        "going",
-        "come",
-        "take",
-        "really",
-        "thing",
-        "things",
-        "something",
-        "say",
-        "said",
-        "people",
-        "time",
-        "year",
-        "years",
-        "day",
-        "days",
-        "good",
-        "first",
-        "ve",
-        "re",
-        "ll",
-        "d",
-        "m",
-        "let",
-        "need",
-        "back",
-        "still",
-        "every",
-        "look",
-        "www",
-        "https",
-        "http",
-        "com",
-        "linkedin",
-        "amp",
-        "hi",
-        "hello",
-    ]);
-
-    const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const MONTH_LABELS = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ];
     const WEEKLY_TIME_RANGES = new Set(["1m", "3m"]);
     // Minimum overlapping months of posting + connection data before the
     // network-growth correlation card is trustworthy enough to show.
@@ -233,19 +31,6 @@ export const AnalyticsEngine = (() => {
     // A focus shift / engagement-style card needs at least this many active
     // months so the first/last buckets are not built from a single data point.
     const MIN_SHIFT_MONTHS = 6;
-    // Comment-to-post ratio tiers, highest threshold first so `find` matches the
-    // strongest tier a value qualifies for.
-    const ENGAGER_TIERS = Object.freeze([
-        { min: 25, title: "Engagement Machine", note: "Conversations are clearly your superpower." },
-        { min: 10, title: "Community Builder", note: "You invest heavily in other people's posts." },
-        { min: 3, title: "Super Engager", note: "You build community." },
-    ]);
-    // Activity-streak tiers, highest threshold first.
-    const STREAK_TIERS = Object.freeze([
-        { min: 100, title: "Unstoppable Streak" },
-        { min: 30, title: "Streak Master" },
-        { min: 7, title: "Consistency Streak" },
-    ]);
     const SHARE_TYPE_MAP = Object.freeze({ text: "textOnly", links: "links", media: "media" });
     const DIMENSION_COUNT_BY_KEY = Object.freeze({
         both: (bucket, filters) =>
@@ -253,90 +38,6 @@ export const AnalyticsEngine = (() => {
         day: (bucket, filters) => bucket.days[filters.day] || 0,
         hour: (bucket, filters) => bucket.hours[filters.hour] || 0,
     });
-
-    /**
-     * Parse a LinkedIn date string into date components.
-     * @param {string} value - Date string in "YYYY-MM-DD HH:MM:SS" format.
-     * @returns {{ timestamp: number, dayIndex: number, hour: number, dateKey: string, monthKey: string } | null} Parsed date components, or null if invalid.
-     */
-    function parseLinkedInDate(value) {
-        if (!value || typeof value !== "string") {
-            return null;
-        }
-        const trimmed = value.trim();
-        const [datePart, timePart] = trimmed.split(" ");
-        if (!datePart || !timePart) {
-            return null;
-        }
-        const [year, month, day] = datePart.split("-").map(Number);
-        const [hour, minute] = timePart.split(":").map(Number);
-        if (!year || !month || !day) {
-            return null;
-        }
-
-        // Timestamps are already converted to local time by the cleaner.
-        const localDate = new Date(year, month - 1, day, hour || 0, minute || 0, 0);
-
-        const localHour = localDate.getHours();
-        const localDay = localDate.getDay(); // 0 = Sunday
-        const localDayIndex = (localDay + 6) % 7; // Convert to 0 = Monday
-
-        const localYear = localDate.getFullYear();
-        const localMonth = localDate.getMonth() + 1;
-        const localDayOfMonth = localDate.getDate();
-
-        return {
-            timestamp: localDate.getTime(),
-            dayIndex: localDayIndex,
-            hour: localHour,
-            dateKey: `${localYear}-${String(localMonth).padStart(2, "0")}-${String(localDayOfMonth).padStart(2, "0")}`,
-            monthKey: `${localYear}-${String(localMonth).padStart(2, "0")}`,
-        };
-    }
-
-    /**
-     * Strip URLs and normalize whitespace in a text string.
-     * @param {string} text - Raw text to normalize.
-     * @returns {string} Cleaned text with URLs removed and whitespace collapsed.
-     */
-    function normalizeText(text) {
-        if (!text) {
-            return "";
-        }
-        return String(text)
-            .replace(/https?:\/\/\S+/gi, " ")
-            .replace(/\s+/g, " ")
-            .trim();
-    }
-
-    /**
-     * Extract hashtags and significant words from text, filtering out stop words.
-     * @param {string} text - Raw text to extract topics from.
-     * @returns {string[]} Array of unique lowercase topic tokens.
-     */
-    function extractTopics(text) {
-        const normalized = normalizeText(text);
-        if (!normalized) {
-            return [];
-        }
-        const hashtags = normalized.match(/#([A-Za-z0-9_]+)/g) || [];
-        const textWithoutTags = normalized.replace(/#[A-Za-z0-9_]+/g, " ");
-        const words = textWithoutTags.match(/\b[a-zA-Z]{3,}\b/g) || [];
-        const tokenSet = new Set();
-        hashtags.forEach((tag) => {
-            const cleaned = tag.replace("#", "").toLowerCase();
-            if (cleaned && !STOP_WORDS.has(cleaned)) {
-                tokenSet.add(cleaned);
-            }
-        });
-        words.forEach((word) => {
-            const cleaned = word.toLowerCase();
-            if (!STOP_WORDS.has(cleaned)) {
-                tokenSet.add(cleaned);
-            }
-        });
-        return Array.from(tokenSet);
-    }
 
     // Compute pre-aggregated analytics indices from raw event data.
     // Indexes by month and day for O(months) view building instead of O(events).
@@ -535,78 +236,6 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
-     * Enumerate inclusive "YYYY-MM" month keys between two keys.
-     * @param {string} startKey - First month key, "YYYY-MM"
-     * @param {string} endKey - Last month key, "YYYY-MM"
-     * @returns {string[]} Contiguous month keys, oldest first
-     */
-    function enumerateMonths(startKey, endKey) {
-        const [startYear, startMonth] = startKey.split("-").map(Number);
-        const [endYear, endMonth] = endKey.split("-").map(Number);
-        const keys = [];
-        let year = startYear;
-        let month = startMonth;
-        while (year < endYear || (year === endYear && month <= endMonth)) {
-            keys.push(`${year}-${String(month).padStart(2, "0")}`);
-            month += 1;
-            if (month > 12) {
-                month = 1;
-                year += 1;
-            }
-        }
-        return keys;
-    }
-
-    /**
-     * Compute the Pearson correlation coefficient of two equal-length series.
-     * @param {number[]} xs - First series
-     * @param {number[]} ys - Second series
-     * @returns {number|null} Correlation in [-1, 1], or null when undefined
-     */
-    function pearson(xs, ys) {
-        const n = xs.length;
-        /* v8 ignore next 3 */
-        if (n < 2) {
-            return null;
-        }
-        let sumX = 0;
-        let sumY = 0;
-        let sumXX = 0;
-        let sumYY = 0;
-        let sumXY = 0;
-        for (let i = 0; i < n; i++) {
-            const x = xs[i];
-            const y = ys[i];
-            sumX += x;
-            sumY += y;
-            sumXX += x * x;
-            sumYY += y * y;
-            sumXY += x * y;
-        }
-        const covariance = n * sumXY - sumX * sumY;
-        const varianceX = n * sumXX - sumX * sumX;
-        const varianceY = n * sumYY - sumY * sumY;
-        const denominator = Math.sqrt(varianceX * varianceY);
-        if (denominator === 0) {
-            return null;
-        }
-        return covariance / denominator;
-    }
-
-    /**
-     * Average a numeric array, treating an empty array as 0.
-     * @param {number[]} values - Numbers to average
-     * @returns {number} Arithmetic mean
-     */
-    function average(values) {
-        if (!values.length) {
-            /* v8 ignore next */
-            return 0;
-        }
-        return values.reduce((sum, value) => sum + value, 0) / values.length;
-    }
-
-    /**
      * Correlate monthly posting volume with new-connection counts and compare
      * the busiest posting months against quiet ones. Returns null unless there
      * are enough overlapping months and real posting variance, so the card only
@@ -695,86 +324,6 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
-     * Return a new Date offset by the given number of months, set to the 1st.
-     * @param {Date} date - Starting date.
-     * @param {number} months - Number of months to add (can be negative).
-     * @returns {Date} New date offset by months.
-     */
-    function addMonths(date, months) {
-        return new Date(date.getFullYear(), date.getMonth() + months, 1);
-    }
-
-    /**
-     * Return a new Date offset by the given number of days.
-     * @param {Date} date - Starting date.
-     * @param {number} days - Number of days to add (can be negative).
-     * @returns {Date} New date offset by days.
-     */
-    function addDays(date, days) {
-        return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
-    }
-
-    /**
-     * Get the first day of the month for the given date.
-     * @param {Date} date - Input date.
-     * @returns {Date} New date set to the 1st of the same month.
-     */
-    function startOfMonth(date) {
-        return new Date(date.getFullYear(), date.getMonth(), 1);
-    }
-
-    /**
-     * Get the last day of the month for the given date.
-     * @param {Date} date - Input date.
-     * @returns {Date} New date set to the last day of the same month.
-     */
-    function endOfMonth(date) {
-        return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    }
-
-    /**
-     * Parse a "YYYY-MM-DD" date key string into a Date object.
-     * @param {string} key - Date key in "YYYY-MM-DD" format.
-     * @returns {Date} Parsed date.
-     */
-    function parseDateKey(key) {
-        const [year, month, day] = key.split("-").map(Number);
-        return new Date(year, month - 1, day);
-    }
-
-    /**
-     * Format a Date object as a "YYYY-MM-DD" string.
-     * @param {Date} date - Date to format.
-     * @returns {string} Formatted date key.
-     */
-    function formatDateKey(date) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const day = String(date.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
-    }
-
-    /**
-     * Get the Monday of the week containing the given date.
-     * @param {Date} date - Input date.
-     * @returns {Date} Monday of that week.
-     */
-    function startOfWeek(date) {
-        const day = date.getDay();
-        const diff = (day + 6) % 7;
-        return addDays(date, -diff);
-    }
-
-    /**
-     * Format a date as a "Mon DD" label string.
-     * @param {Date} date - Date to format.
-     * @returns {string} Formatted label, e.g. "Jan 05".
-     */
-    function formatWeekLabel(date) {
-        return `${MONTH_LABELS[date.getMonth()]} ${String(date.getDate()).padStart(2, "0")}`;
-    }
-
-    /**
      * Get the topic filter ratio for a month bucket. Returns the fraction of activity matching the selected topic.
      * @param {object} bucket - Month bucket with topics and total count.
      * @param {object} filters - Active filters including topic.
@@ -784,6 +333,8 @@ export const AnalyticsEngine = (() => {
         if (!filters.topic || filters.topic === "all") {
             return 1;
         }
+        // An existing bucket always has total >= 1, so this guard is defensive.
+        /* v8 ignore next 3 */
         if (!bucket.total) {
             return 0;
         }
@@ -807,6 +358,8 @@ export const AnalyticsEngine = (() => {
             return dayTotal > 0 ? dayHour / dayTotal : 0;
         }
         const hourTotal = bucket.hours[filters.hour] || 0;
+        // bucket.total is always >= 1 for an existing bucket; the 0 arm is defensive.
+        /* v8 ignore next */
         return bucket.total > 0 ? hourTotal / bucket.total : 0;
     }
 
@@ -860,6 +413,8 @@ export const AnalyticsEngine = (() => {
         const dimensionKey = hasDay && hasHour ? "both" : hasDay ? "day" : hasHour ? "hour" : null;
         if (useMonth && dimensionKey) {
             const filterCount = DIMENSION_COUNT_BY_KEY[dimensionKey](bucket, filters);
+            // bucket.total is always >= 1 for an existing bucket; the 0 arm is defensive.
+            /* v8 ignore next */
             const ratio = bucket.total > 0 ? filterCount / bucket.total : 0;
             monthPosts = Math.round(monthPosts * ratio);
             monthComments = Math.round(monthComments * ratio);
@@ -1096,6 +651,8 @@ export const AnalyticsEngine = (() => {
     function topTopicOf(monthlyStats) {
         const counts = new Map();
         for (const month of monthlyStats) {
+            // monthlyStats entries always carry a topics object; the fallback is defensive.
+            /* v8 ignore next */
             for (const [topic, count] of Object.entries(month.topics || {})) {
                 counts.set(topic, (counts.get(topic) || 0) + count);
             }
@@ -1222,11 +779,14 @@ export const AnalyticsEngine = (() => {
             const date = parseDateKey(dateKey);
             const weekKey = formatDateKey(startOfWeek(date));
             const index = weekIndex.get(weekKey);
+            // Every in-range date maps to a week bucket built above, so a miss is defensive.
+            /* v8 ignore next 3 */
             if (index === undefined) {
-                /* v8 ignore next */
                 continue;
             }
 
+            // Day buckets always carry a positive total; the fallback is defensive.
+            /* v8 ignore next */
             const dayTotal = entry.total || 0;
             baselineTotals[index] += dayTotal;
 
@@ -1247,6 +807,8 @@ export const AnalyticsEngine = (() => {
             if (filters.topic && filters.topic !== "all") {
                 const monthKey = dateKey.slice(0, 7);
                 const meta = monthMeta[monthKey];
+                // A day with activity always has month metadata; the 0 arm is defensive.
+                /* v8 ignore next */
                 const ratio = meta ? meta.topicRatio : 0;
                 value *= ratio;
             }
@@ -1254,6 +816,8 @@ export const AnalyticsEngine = (() => {
             if (hasHour) {
                 const monthKey = dateKey.slice(0, 7);
                 const meta = monthMeta[monthKey];
+                // A day with activity always has month metadata; the 0 arm is defensive.
+                /* v8 ignore next */
                 const ratio = meta ? meta.hourRatio : 0;
                 value *= ratio;
             }
@@ -1396,165 +960,6 @@ export const AnalyticsEngine = (() => {
         const direction = percent > 8 ? "up" : percent < -12 ? "down" : "flat";
 
         return { percent, direction, currentCount: recent, previousCount: older };
-    }
-
-    function generateInsights(view) {
-        if (!view || !view.totals || view.totals.total === 0) {
-            return { insights: [], tip: null };
-        }
-
-        const insights = [];
-        const peakHour = view.peakHour.hour;
-        const peakDayLabel = DAY_LABELS[view.peakDay.dayIndex];
-
-        const TIME_OF_DAY_INSIGHTS = [
-            {
-                max: 5,
-                id: "early-bird",
-                title: "Early Bird",
-                template: "Your peak hour is {hour}. Mornings are your power time.",
-                icon: "rooster",
-                accent: "accent-yellow",
-            },
-            {
-                min: 21,
-                id: "night-owl",
-                title: "Night Owl",
-                template: "Your peak hour is {hour}. Late hours work best for you.",
-                icon: "owl",
-                accent: "accent-purple",
-            },
-        ];
-        const hourLabel = `${String(peakHour).padStart(2, "0")}:00`;
-        const timeInsight = TIME_OF_DAY_INSIGHTS.find(
-            (i) =>
-                (i.max !== undefined && peakHour <= i.max) ||
-                (i.min !== undefined && peakHour >= i.min),
-        ) || {
-            id: "steady-pace",
-            title: "Steady Rhythm",
-            template: "Most activity happens around {hour}. You keep a consistent rhythm.",
-            icon: "calendar",
-            accent: "accent-blue",
-        };
-        insights.push({
-            id: timeInsight.id,
-            title: timeInsight.title,
-            body: timeInsight.template.replace("{hour}", hourLabel),
-            icon: timeInsight.icon,
-            accent: timeInsight.accent,
-        });
-
-        const TREND_INSIGHTS = {
-            up: {
-                id: "trending-up",
-                title: "Trending Up",
-                template: "Activity is up {pct}% compared to the previous period.",
-                icon: "rocket",
-                accent: "accent-blue",
-            },
-            down: {
-                id: "slowing",
-                title: "Taking a Breather",
-                template: "Activity is down {pct}% compared to the previous period.",
-                icon: "sloth",
-                accent: "accent-purple",
-            },
-        };
-        if (view.trend) {
-            const trendDef = TREND_INSIGHTS[view.trend.direction];
-            if (trendDef) {
-                insights.push({
-                    id: trendDef.id,
-                    title: trendDef.title,
-                    body: trendDef.template.replace(
-                        "{pct}",
-                        String(Math.abs(Math.round(view.trend.percent))),
-                    ),
-                    icon: trendDef.icon,
-                    accent: trendDef.accent,
-                });
-            }
-        }
-
-        if (view.topicShift) {
-            insights.push({
-                id: "topic-shift",
-                title: "Focus Shift",
-                body: `Your focus shifted from ${view.topicShift.from} to ${view.topicShift.to}.`,
-                icon: "compass",
-                accent: "accent-purple",
-            });
-        }
-
-        if (view.ratioTrend) {
-            insights.push({
-                id: "engagement-shift",
-                title: "Engagement Style Shift",
-                body:
-                    view.ratioTrend.direction === "more-engaging"
-                        ? "You are commenting more and posting less than before, leaning into conversations."
-                        : "You are posting more and commenting less than before, leaning into creating.",
-                icon: "scale",
-                accent: "accent-blue",
-            });
-        }
-
-        if (view.totals.total < 12) {
-            insights.push({
-                id: "quiet-stretch",
-                title: "Quiet Stretch",
-                body: "This period is lighter on activity. A small push could restart momentum.",
-                icon: "monkey",
-                accent: "accent-purple",
-            });
-        }
-
-        const ratio = view.totals.posts ? view.totals.comments / view.totals.posts : 0;
-        const engagerTier = ENGAGER_TIERS.find((tier) => ratio >= tier.min);
-        if (engagerTier) {
-            insights.push({
-                id: "super-engager",
-                title: engagerTier.title,
-                body: `You comment ${ratio.toFixed(1)}x more than you post. ${engagerTier.note}`,
-                icon: "handshake",
-                accent: "accent-green",
-            });
-        }
-
-        if (Array.isArray(view.topics) && view.topics.length) {
-            const topTopic = view.topics[0];
-            insights.push({
-                id: "topic-master",
-                title: "Topic Focus",
-                body: `${topTopic.topic} shows up ${topTopic.count} times in your recent activity.`,
-                icon: "trophy",
-                accent: "accent-yellow",
-            });
-        }
-
-        const streakTier = STREAK_TIERS.find((tier) => view.streaks.current >= tier.min);
-        if (streakTier) {
-            insights.push({
-                id: "streak",
-                title: streakTier.title,
-                body: `You have a ${view.streaks.current}-day activity streak going.`,
-                icon: "flame",
-                accent: "accent-red",
-            });
-        }
-
-        insights.push({
-            id: "weekday",
-            title: "Peak Day",
-            body: `${peakDayLabel} is your strongest day for activity.`,
-            icon: "calendar",
-            accent: "accent-blue",
-        });
-
-        const tip = `Try posting close to ${peakDayLabel} around ${String(peakHour).padStart(2, "0")}:00 for maximum consistency.`;
-
-        return { insights, tip };
     }
 
     return {

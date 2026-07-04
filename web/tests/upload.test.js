@@ -4076,4 +4076,234 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         // No crash = pass
     });
+
+    // --- init/restore guards --------------------------------------------------
+
+    it("warns when browser storage is unavailable at init", async () => {
+        Storage.isAvailable = false;
+        try {
+            // The unavailable-storage hint is written synchronously in init(); the
+            // async restoreState() later overwrites it, so assert before awaiting.
+            UploadPage.init();
+
+            expect(document.getElementById("uploadHint").textContent).toContain(
+                "Browser storage is unavailable",
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        } finally {
+            Storage.isAvailable = true;
+        }
+    });
+
+    it("does nothing when the drop zone and file input are absent", async () => {
+        // Rebuild the DOM without the required upload elements so init()'s early
+        // guard fires and no worker or listeners are wired up.
+        setupDom('<div id="uploadHint"></div>');
+        vi.resetModules();
+        ({ UploadPage } = await import("../src/upload.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        Storage.getAllFiles.mockResolvedValue([]);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The guard returned before restoreState, so storage was never queried.
+        expect(Storage.getAllFiles).not.toHaveBeenCalled();
+    });
+
+    it("skips the offline banner update when the banner element is absent", async () => {
+        // Build a DOM with the required inputs but no #offlineBanner, so
+        // updateOfflineBanner() returns at its element guard during restore.
+        setupDom(`
+            <div id="multiDropZone"></div>
+            <input id="multiFileInput" type="file" />
+            <div id="uploadHint"></div>
+        `);
+        window.requestIdleCallback = vi.fn((cb) => {
+            cb();
+            return 0;
+        });
+        window.cancelIdleCallback = vi.fn();
+        vi.resetModules();
+        ({ UploadPage } = await import("../src/upload.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        Storage.getAllFiles.mockResolvedValue([]);
+        Storage.getAnalytics.mockResolvedValue(null);
+        DataCache.get.mockImplementation(() => null);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Restore completed without an offline banner present.
+        expect(document.getElementById("offlineBanner")).toBeNull();
+    });
+
+    it("skips stored file records with an invalid type when building the file map", async () => {
+        // One record has a type outside FILE_TYPES, so parseStoredUploadFile flags
+        // it invalid and getFileMap skips it; the valid shares record still counts.
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "bogus", name: "Weird.csv", text: "col\nval", rowCount: 1 },
+            { type: "shares", name: "Shares.csv", text: "col\nval", rowCount: 2 },
+        ]);
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The bogus record did not throw and shares was still recognised, so the
+        // analytics button unlocks (shares present and analytics ready).
+        expect(document.getElementById("openAnalyticsBtn").disabled).toBe(false);
+    });
+
+    it("swallows a storage estimate failure and still processes the upload", async () => {
+        navigator.storage = {
+            estimate: () => Promise.reject(new Error("estimate boom")),
+        };
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        try {
+            UploadPage.init();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+            const input = document.getElementById("multiFileInput");
+            Object.defineProperty(input, "files", { value: [file], configurable: true });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            // The rejected estimate was swallowed: no low-storage warning, and the
+            // file still reached the worker.
+            const addFileCall = workerInstance.postMessage.mock.calls.find(
+                (call) => call[0].type === "addFile",
+            );
+            expect(addFileCall).toBeTruthy();
+            expect(document.getElementById("uploadHint").textContent).not.toContain(
+                "running low",
+            );
+        } finally {
+            globalThis.FileReader = originalFileReader;
+        }
+    });
+
+    // --- read watchdog timeouts ----------------------------------------------
+
+    it("rejects a FileReader read that exceeds the timeout", async () => {
+        vi.useFakeTimers();
+        const originalFileReader = globalThis.FileReader;
+        let aborted = false;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                // Never resolves, so only the 30s watchdog can settle the read.
+                readAsArrayBuffer() {},
+                abort() {
+                    aborted = true;
+                },
+            };
+        };
+
+        try {
+            UploadPage.init();
+            await vi.advanceTimersByTimeAsync(0);
+
+            const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+            const input = document.getElementById("multiFileInput");
+            Object.defineProperty(input, "files", { value: [file], configurable: true });
+            input.dispatchEvent(new Event("change"));
+            await vi.advanceTimersByTimeAsync(0);
+
+            // Fire the file-read watchdog (FILE_READ_TIMEOUT_MS = 30000).
+            await vi.advanceTimersByTimeAsync(30000);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(aborted).toBe(true);
+            expect(document.getElementById("uploadHint").textContent).toMatch(/timed out/i);
+        } finally {
+            globalThis.FileReader = originalFileReader;
+            vi.useRealTimers();
+        }
+    });
+
+    it("aborts a streamed read that times out mid-stream", async () => {
+        vi.useFakeTimers();
+        const originalReadableStream = globalThis.ReadableStream;
+        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
+
+        let cancelled = false;
+        let reads = 0;
+        const file = {
+            name: "Messages.csv",
+            size: 6 * 1024 * 1024,
+            stream() {
+                return {
+                    getReader() {
+                        return {
+                            read() {
+                                reads += 1;
+                                if (reads === 1) {
+                                    return Promise.resolve({
+                                        done: false,
+                                        value: new Uint8Array([99]),
+                                    });
+                                }
+                                // The next chunk only arrives after the watchdog has
+                                // already fired, so the loop observes timedOut.
+                                return new Promise((resolve) => {
+                                    setTimeout(
+                                        () =>
+                                            resolve({ done: false, value: new Uint8Array([100]) }),
+                                        40000,
+                                    );
+                                });
+                            },
+                            cancel() {
+                                cancelled = true;
+                                return Promise.resolve();
+                            },
+                        };
+                    },
+                };
+            },
+        };
+
+        try {
+            UploadPage.init();
+            await vi.advanceTimersByTimeAsync(0);
+
+            const event = new Event("drop");
+            Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
+            document.getElementById("multiDropZone").dispatchEvent(event);
+            await vi.advanceTimersByTimeAsync(0);
+
+            // Fire the stream watchdog, then release the gated second read.
+            await vi.advanceTimersByTimeAsync(30000);
+            await vi.advanceTimersByTimeAsync(11000);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(cancelled).toBe(true);
+            expect(document.getElementById("uploadHint").textContent).toMatch(/timed out/i);
+            expect(
+                workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
+            ).toBe(false);
+        } finally {
+            globalThis.ReadableStream = originalReadableStream;
+            vi.useRealTimers();
+        }
+    });
 });

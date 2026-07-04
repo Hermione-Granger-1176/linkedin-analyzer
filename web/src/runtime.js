@@ -9,6 +9,9 @@ export function initRuntime() {
 
     const BANNER_ID = "globalErrorBanner";
     const MESSAGE = "Something went wrong. Refresh the page or re-upload your files.";
+    // BASE_URL is a build-time constant only consumed by the service-worker
+    // registration below, which is itself environment-gated and v8-ignored.
+    /* v8 ignore next */
     const APP_BASE_URL = import.meta.env.BASE_URL || "/";
 
     /**

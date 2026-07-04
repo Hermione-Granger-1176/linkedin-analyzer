@@ -126,6 +126,18 @@ describe("runtime", () => {
         expect(banner).toBeTruthy();
     });
 
+    it("invokes the reload handler when the Reload button is clicked", () => {
+        // jsdom cannot actually navigate, so it reports the reload attempt to the
+        // virtual console; swallow that here. Clicking still runs the handler.
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        initRuntime();
+        window.dispatchEvent(new ErrorEvent("error", { error: new Error("boom") }));
+        const banner = document.getElementById("globalErrorBanner");
+        const reloadBtn = banner.querySelectorAll("button")[0];
+        expect(reloadBtn.textContent).toBe("Reload");
+        expect(() => reloadBtn.click()).not.toThrow();
+    });
+
     it("uses default filename when data-export-name is absent (line 115)", () => {
         const canvas = document.createElement("canvas");
         canvas.id = "defaultCanvas";

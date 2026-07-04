@@ -34,6 +34,33 @@ describe("Theme", () => {
         expect(window.localStorage.getItem("linkedin-analyzer-theme")).toBe("dark");
     });
 
+    it("uses the dark system preference at init when no theme is stored", () => {
+        setupDom('<button id="themeToggle"></button>');
+        mockMatchMedia(true);
+        Theme.init();
+        expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    });
+
+    it("toggles from dark back to light on button click", () => {
+        setupDom('<button id="themeToggle"></button>');
+        mockMatchMedia(true);
+        // No stored theme + dark system preference means init lands on dark.
+        Theme.init();
+        expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+        document.getElementById("themeToggle").click();
+        expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    });
+
+    it("applies the light system preference on a change event", () => {
+        setupDom('<button id="themeToggle"></button>');
+        const mql = mockMatchMedia(true);
+        Theme.init();
+        expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+        // System flips back to light with no stored preference to override it.
+        mql.dispatch(false);
+        expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    });
+
     it("reacts to system preference changes when no stored theme", () => {
         setupDom('<button id="themeToggle"></button>');
         const mql = mockMatchMedia(false);

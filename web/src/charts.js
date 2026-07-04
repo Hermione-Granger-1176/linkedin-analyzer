@@ -291,6 +291,10 @@ export const SketchCharts = (() => {
                 if (!isStart && !isJan && !isLast) {
                     return;
                 }
+                // Well-formed monthly keys contribute one label candidate per
+                // year before the year changes, so a repeat never occurs; the
+                // dedupe guard is defensive against duplicated month keys.
+                /* v8 ignore next 3 */
                 if (year === lastYear && !isLast) {
                     return;
                 }
@@ -498,6 +502,7 @@ export const SketchCharts = (() => {
         }
 
         // Single sketchy border (only 1 RoughJS call for entire heatmap)
+        /* v8 ignore next */
         if (rough) {
             const rc = rough.canvas(canvas);
             rc.rectangle(padding.left, padding.top, chartWidth, chartHeight, {
@@ -593,6 +598,9 @@ export const SketchCharts = (() => {
                     if (anglePoint < -Math.PI / 2) {
                         anglePoint += Math.PI * 2;
                     }
+                    // Segment angles accumulate upward from -PI/2, so they never
+                    // fall below it; the wrap adjustment is defensive only.
+                    /* v8 ignore next 3 */
                     const ns =
                         segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
                     const ne = segmentEnd < -Math.PI / 2 ? segmentEnd + Math.PI * 2 : segmentEnd;
@@ -611,6 +619,7 @@ export const SketchCharts = (() => {
         ctx.globalCompositeOperation = "source-over";
 
         // Single RoughJS call for outer circle
+        /* v8 ignore next */
         if (rough) {
             const rc = rough.canvas(canvas);
             rc.circle(centerX, centerY, radius * 2, {

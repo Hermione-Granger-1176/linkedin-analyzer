@@ -507,4 +507,104 @@ describe("MessagesAnalytics", () => {
         expect(state.skippedRows).toBe(1);
     });
 
+    it("normalizeUrlList returns an empty list for text without any URL", () => {
+        expect(MessagesAnalytics.normalizeUrlList("just a plain note")).toEqual([]);
+    });
+
+    it("labels a URL-only recipient as Unknown when the name column is blank", () => {
+        const rows = [
+            {
+                "CONVERSATION ID": "c1",
+                FROM: "Ada Lovelace",
+                "SENDER PROFILE URL": "https://linkedin.com/in/ada",
+                TO: "",
+                "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob",
+                DATE: "2025-01-01 10:00:00",
+                CONTENT: "Hello",
+            },
+        ];
+        const state = MessagesAnalytics.buildMessageState(rows);
+        const contacts = [...state.contacts.values()];
+        expect(
+            contacts.some(
+                (c) => c.name === "Unknown" && c.url === "https://linkedin.com/in/bob",
+            ),
+        ).toBe(true);
+    });
+
+    it("detects self by URL even when the self participant is never named", () => {
+        const self = "https://linkedin.com/in/self";
+        const alice = "https://linkedin.com/in/alice";
+        const bob = "https://linkedin.com/in/bob";
+        const rows = [
+            // Self sends (name blank) to Alice and Bob, then receives from Alice,
+            // so self is the only URL balanced across the most conversations while
+            // never contributing a name.
+            {
+                "CONVERSATION ID": "c1",
+                FROM: "",
+                "SENDER PROFILE URL": self,
+                TO: "Alice",
+                "RECIPIENT PROFILE URLS": alice,
+                DATE: "2025-01-01 10:00:00",
+            },
+            {
+                "CONVERSATION ID": "c2",
+                FROM: "",
+                "SENDER PROFILE URL": self,
+                TO: "Bob",
+                "RECIPIENT PROFILE URLS": bob,
+                DATE: "2025-01-02 10:00:00",
+            },
+            {
+                "CONVERSATION ID": "c3",
+                FROM: "Alice",
+                "SENDER PROFILE URL": alice,
+                TO: "",
+                "RECIPIENT PROFILE URLS": self,
+                DATE: "2025-01-03 10:00:00",
+            },
+        ];
+        const state = MessagesAnalytics.buildMessageState(rows);
+        const urls = [...state.contacts.values()].map((c) => c.url);
+        // Self is filtered out of the contact list; the correspondents remain.
+        expect(urls).not.toContain(self);
+        expect(urls).toContain(alice);
+    });
+
+    it("picks the most frequent self name when the self URL carries several", () => {
+        const self = "https://linkedin.com/in/self";
+        const alice = "https://linkedin.com/in/alice";
+        const bob = "https://linkedin.com/in/bob";
+        const rows = [
+            {
+                "CONVERSATION ID": "c1",
+                FROM: "Ada",
+                "SENDER PROFILE URL": self,
+                TO: "Alice",
+                "RECIPIENT PROFILE URLS": alice,
+                DATE: "2025-01-01 10:00:00",
+            },
+            {
+                "CONVERSATION ID": "c2",
+                FROM: "Ada Alt",
+                "SENDER PROFILE URL": self,
+                TO: "Bob",
+                "RECIPIENT PROFILE URLS": bob,
+                DATE: "2025-01-02 10:00:00",
+            },
+            {
+                "CONVERSATION ID": "c3",
+                FROM: "Alice",
+                "SENDER PROFILE URL": alice,
+                TO: "Ada",
+                "RECIPIENT PROFILE URLS": self,
+                DATE: "2025-01-03 10:00:00",
+            },
+        ];
+        const state = MessagesAnalytics.buildMessageState(rows);
+        // Self (by URL and by its dominant name) is excluded from the contacts.
+        const urls = [...state.contacts.values()].map((c) => c.url);
+        expect(urls).not.toContain(self);
+    });
 });

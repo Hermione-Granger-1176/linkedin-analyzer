@@ -220,6 +220,45 @@ describe("LinkedInCleaner", () => {
         expect(result.rowCount).toBe(2);
     });
 
+    it("skips file types whose prefix fails to parse during auto-detect", () => {
+        // Over 64KB so auto-detect takes the prefix fast-path. The single row has
+        // far more columns than the parser allows, so every candidate type's
+        // prefix parse errors (the quote-retry cannot fix it) and detection walks
+        // past each error before falling through to full multi-type detection.
+        const result = LinkedInCleaner.process(",".repeat(64 * 1024 + 100), "auto");
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBeTruthy();
+    });
+
+    describe("parseCSV without a shared cache", () => {
+        it("reports an empty document", () => {
+            const result = LinkedInCleaner.parseCSV("", "shares");
+            expect(result.error).toBeTruthy();
+            expect(result.data).toEqual([]);
+        });
+
+        it("reports a document that trims down to no rows", () => {
+            const result = LinkedInCleaner.parseCSV(",,,\n,,", "shares");
+            expect(result.error).toBeTruthy();
+            expect(result.data).toEqual([]);
+        });
+
+        it("propagates an unrecoverable parser error", () => {
+            const result = LinkedInCleaner.parseCSV(",".repeat(300), "shares");
+            expect(result.error).toMatch(/too many columns/i);
+            expect(result.data).toEqual([]);
+        });
+
+        it("reports when nothing remains after the configured skipRows", () => {
+            // The connections config skips 3 leading rows; with only three rows of
+            // input there is no header row left to read.
+            const result = LinkedInCleaner.parseCSV("a\nb\nc", "connections");
+            expect(result.error).toMatch(/skip/i);
+            expect(result.data).toEqual([]);
+        });
+    });
+
     // ── cleanSharesCommentary paths ──────────────────────────
 
     it("cleans shares commentary that starts and ends with quotes", () => {

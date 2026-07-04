@@ -124,4 +124,13 @@ describe("Session", () => {
     it("consumeExpiryNotice returns false when no stale cleanup occurred", () => {
         expect(Session.consumeExpiryNotice()).toBe(false);
     });
+
+    it("treats a non-numeric stored timestamp as no prior activity", async () => {
+        window.localStorage.setItem("linkedin-analyzer:last-activity", "not-a-number");
+        vi.spyOn(Storage, "clearAll").mockResolvedValue();
+        // getLastActivity parses NaN, which is not finite, so cleanup is skipped.
+        const cleaned = await Session.cleanIfStale();
+        expect(cleaned).toBe(false);
+        expect(Storage.clearAll).not.toHaveBeenCalled();
+    });
 });

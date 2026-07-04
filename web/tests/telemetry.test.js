@@ -109,6 +109,23 @@ describe("telemetry", () => {
         expect(sentry.captureMetric).toHaveBeenCalledTimes(2);
     });
 
+    it("labels a nameless web-vital metric as unknown", async () => {
+        const vitals = await import("web-vitals");
+
+        vitals.onCLS.mockImplementation((callback) => callback({ value: 7 }));
+        vitals.onINP.mockImplementation(() => {});
+        vitals.onLCP.mockImplementation(() => {});
+        vitals.onFCP.mockImplementation(() => {});
+        vitals.onTTFB.mockImplementation(() => {});
+
+        const sentry = await import("../src/sentry.js");
+        const { initTelemetry } = await import("../src/telemetry.js");
+
+        initTelemetry();
+
+        expect(sentry.captureMetric).toHaveBeenCalledWith("web-vital:unknown", 7);
+    });
+
     it("reports web-vital values numerically by name", async () => {
         const vitals = await import("web-vitals");
 

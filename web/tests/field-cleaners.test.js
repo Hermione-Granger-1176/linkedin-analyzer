@@ -98,4 +98,17 @@ describe("CLEANERS registry", () => {
         expect(CLEANERS.cleanSharesCommentary('"He said ""hi"""')).toBe('He said "hi"');
         expect(CLEANERS.cleanSharesCommentary(null)).toBe("");
     });
+
+    it("cleanConnectionsDate normalizes a day-month-year date to ISO", () => {
+        expect(CLEANERS.cleanConnectionsDate("30 Jan 2026")).toBe("2026-01-30");
+    });
+
+    it("cleanConnectionsDate returns an empty string for missing values", () => {
+        expect(CLEANERS.cleanConnectionsDate("")).toBe("");
+        expect(CLEANERS.cleanConnectionsDate(null)).toBe("");
+    });
+
+    it("cleanConnectionsDate passes through text it cannot parse", () => {
+        expect(CLEANERS.cleanConnectionsDate("sometime last year")).toBe("sometime last year");
+    });
 });

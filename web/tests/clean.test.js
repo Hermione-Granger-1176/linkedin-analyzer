@@ -462,4 +462,122 @@ describe("CleanPage", () => {
         // The stale shares render must bail after the await instead of parsing.
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
     });
+
+    it("defaults a missing updatedAt to 0 when caching the parse", async () => {
+        // No updatedAt on the metadata exercises the `file.updatedAt || 0` fallback.
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv" }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "A", Link: "https://a.com" }],
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanPreviewSection").hidden).toBe(false);
+    });
+
+    it("renders the preview when no radio is checked", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 3 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "A", Link: "https://a.com" }],
+        });
+
+        // Clear the default selection so updateView sees no checked input.
+        document.querySelector('input[value="shares"]').checked = false;
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanPreviewSection").hidden).toBe(false);
+    });
+
+    it("reports a load failure even when the file metadata has no name", async () => {
+        // Missing name exercises the `file.name || null` fallback in the load path.
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 10, rowCount: 1 }]);
+        Storage.getFile.mockResolvedValue({ type: "shares" });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to load file",
+        );
+        expect(captureError).toHaveBeenCalledWith(
+            expect.any(Error),
+            expect.objectContaining({ fileName: null }),
+        );
+    });
+
+    it("reports a parse crash even when the file metadata has no name", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 10, rowCount: 1 }]);
+        LinkedInCleaner.process.mockImplementation(() => {
+            throw new Error("boom");
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to parse file",
+        );
+        expect(captureError).toHaveBeenCalledWith(
+            expect.any(Error),
+            expect.objectContaining({ fileName: null }),
+        );
+    });
+
+    it("falls back to a generic message when a parse failure carries no error text", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", text: "csv", updatedAt: 4, name: "S.csv" },
+        ]);
+        LinkedInCleaner.process.mockReturnValue({ success: false });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Unable to parse file",
+        );
+    });
+
+    it("shows a truncated-count note when the row count exceeds the preview limit", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 1 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 9,
+            cleanedData: Array.from({ length: 9 }, (_, i) => ({
+                Title: `T${i}`,
+                Link: "https://x.com",
+            })),
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanPreviewNote").textContent).toBe(
+            "Showing first 5 of 9 rows",
+        );
+    });
+
+    it("falls back to a generic Excel error message when none is provided", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 2 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
+        });
+        ExcelGenerator.generateAndDownload.mockResolvedValue({ success: false });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanDownloadBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(captureError).toHaveBeenCalled();
+    });
 });

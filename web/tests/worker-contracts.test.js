@@ -39,6 +39,21 @@ describe("worker contracts", () => {
         expect(parsed.value.payload.fileName).toBe("Shares.csv");
     });
 
+    it("truncates an over-long file name to the bounded length", () => {
+        const parsed = parseAnalyticsWorkerRequest({
+            type: "addFile",
+            payload: {
+                csvText: "Date\n2025-01-01",
+                fileName: "x".repeat(5000),
+                jobId: "job-1",
+                totalSize: 1,
+            },
+        });
+
+        expect(parsed.valid).toBe(true);
+        expect(parsed.value.payload.fileName.length).toBeLessThan(5000);
+    });
+
     it("rejects analytics addFile request without csvText", () => {
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",

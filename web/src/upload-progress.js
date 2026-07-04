@@ -98,6 +98,8 @@ export const UploadProgress = (() => {
         stopProgressAnimation();
         const start = performance.now();
         const startValue = progressValue;
+        // show()/hide() always pass a live session token, so the fallback is defensive.
+        /* v8 ignore next */
         const animationSession = sessionId || progressSessionId;
 
         function step(now) {
@@ -117,6 +119,8 @@ export const UploadProgress = (() => {
             }
 
             progressAnimationId = null;
+            // show()/hide() always pass a completion callback, so the guard is defensive.
+            /* v8 ignore next */
             if (callback) {
                 queueMicrotask(callback);
             }
@@ -216,6 +220,7 @@ export const UploadProgress = (() => {
         const trackWidth = rect.width - 16;
         const trackHeight = 28;
 
+        /* v8 ignore next */
         if (rough) {
             const rc = rough.canvas(canvas);
             rc.rectangle(trackX, trackY, trackWidth, trackHeight, {

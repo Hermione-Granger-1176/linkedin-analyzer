@@ -167,4 +167,51 @@ describe("UploadProgress", () => {
         await loadController();
         expect(() => UploadProgress.show(() => true)).not.toThrow();
     });
+
+    it("falls back to a devicePixelRatio of 1 when the ratio reads as zero", async () => {
+        vi.stubGlobal("devicePixelRatio", 0);
+        const canvas = setupOverlayDom({ width: 200, height: 40 });
+        await loadController();
+        UploadProgress.reportPercent(0.5);
+        // ratio resolves to 1, so the backing store matches the CSS box.
+        expect(canvas.width).toBe(200);
+    });
+
+    it("draws without throwing when the percent label element is missing", async () => {
+        document.body.innerHTML = `
+            <div id="progressOverlay" hidden>
+                <canvas id="progressCanvas"></canvas>
+            </div>`;
+        const canvas = document.getElementById("progressCanvas");
+        canvas.getContext = vi.fn(() => createMockCanvasContext());
+        canvas.getBoundingClientRect = () => ({
+            width: 200,
+            height: 40,
+            left: 0,
+            top: 0,
+            right: 200,
+            bottom: 40,
+        });
+        await loadController();
+        expect(() => UploadProgress.reportPercent(0.4)).not.toThrow();
+    });
+
+    it("ignores a stale hide completion when a newer session has started", async () => {
+        setupOverlayDom();
+        await loadController();
+
+        UploadProgress.show(() => false);
+        flushFrame(performance.now() + 5000);
+        await flushMicrotasks();
+
+        UploadProgress.hide();
+        // Complete the hide animation, which queues its completion microtask.
+        flushFrame(performance.now() + 10000);
+        // A new upload starts before the queued hide completion runs.
+        UploadProgress.show(() => false);
+        await flushMicrotasks();
+
+        // The stale hide callback must not hide the freshly reopened overlay.
+        expect(document.getElementById("progressOverlay").hidden).toBe(false);
+    });
 });

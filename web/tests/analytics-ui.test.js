@@ -1158,4 +1158,285 @@ describe("AnalyticsPage", () => {
 
         vi.useRealTimers();
     });
+
+    it("ignores an empty shareType route param but keeps a real one in the URL", async () => {
+        // An empty shareType leaves the default in place (parser skips it).
+        const requestId = await bootstrapWithData({ shareType: "" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // A real shareType survives a subsequent sync back into the route params.
+        const requestId2 = await bootstrapWithData({ shareType: "articles" });
+        sendViewResponse(requestId2);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        SketchCharts.getItemAt.mockReturnValue({ type: "topic", key: "AI" });
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("timelineChart")
+            .dispatchEvent(new MouseEvent("click", { clientX: 10, clientY: 10 }));
+
+        const params = AppRouter.setParams.mock.calls.at(-1)[0];
+        expect(params.shareType).toBe("articles");
+    });
+
+    it("re-requests a view when a later route change alters the filters", async () => {
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const before = workerInstance.postMessage.mock.calls.filter(
+            (c) => c[0].type === "view",
+        ).length;
+
+        await AnalyticsPage.onRouteChange({ topic: "Careers" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const after = workerInstance.postMessage.mock.calls.filter(
+            (c) => c[0].type === "view",
+        ).length;
+        expect(after).toBeGreaterThan(before);
+    });
+
+    it("tolerates a route change invoked without any params", async () => {
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(() => AnalyticsPage.onRouteChange()).not.toThrow();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // Filters remain at their defaults, so the empty state stays hidden.
+        expect(document.getElementById("analyticsEmpty").hidden).toBe(true);
+    });
+
+    it("captures an invalid worker message with a null data payload", async () => {
+        await bootstrapWithData({});
+        expect(() =>
+            workerInstance.listeners.message[0]({ data: null }),
+        ).not.toThrow();
+    });
+
+    it("shows the worker-error empty state for an error event with an error object", async () => {
+        await bootstrapWithData({});
+        workerInstance.listeners.error[0]({ type: "error", error: new Error("boom") });
+
+        const emptyEl = document.getElementById("analyticsEmpty");
+        expect(emptyEl.hidden).toBe(false);
+        expect(emptyEl.querySelector("h2").textContent).toBe("Analytics worker error");
+    });
+
+    it("synthesizes an error for a messageerror event without an error object", async () => {
+        await bootstrapWithData({});
+        workerInstance.listeners.messageerror[0]({ type: "messageerror" });
+
+        const emptyEl = document.getElementById("analyticsEmpty");
+        expect(emptyEl.hidden).toBe(false);
+        expect(emptyEl.querySelector("h2").textContent).toBe("Analytics worker error");
+    });
+
+    it("skips a duplicate view request when the debounced filters net to no change", async () => {
+        vi.useFakeTimers();
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+        AnalyticsPage.init();
+        await AnalyticsPage.onRouteChange({});
+        await vi.advanceTimersByTimeAsync(0);
+        workerInstance.listeners.message[0]({
+            data: { type: "init", payload: { hasData: true } },
+        });
+        await vi.advanceTimersByTimeAsync(0);
+
+        const before = workerInstance.postMessage.mock.calls.filter(
+            (c) => c[0].type === "view",
+        ).length;
+
+        const canvas = document.getElementById("timelineChart");
+        SketchCharts.getItemAt.mockReturnValue({ type: "topic", key: "AI" });
+        // Toggle the topic on, then off again, within the debounce window.
+        canvas.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+        canvas.dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+        await vi.advanceTimersByTimeAsync(200);
+
+        const after = workerInstance.postMessage.mock.calls.filter(
+            (c) => c[0].type === "view",
+        ).length;
+        expect(after).toBe(before);
+        vi.useRealTimers();
+    });
+
+    it("shows placeholder stats when the view has no activity", async () => {
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId, {
+            totals: { posts: 0, comments: 0, total: 0 },
+            peakHour: { hour: 0 },
+            streaks: { current: 0 },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("statPeak").textContent).toBe("-");
+        expect(document.getElementById("statStreak").textContent).toBe("0 days");
+    });
+
+    it("labels a month chip with the raw key when the month cannot be parsed", async () => {
+        const requestId = await bootstrapWithData({ month: "0000-00" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const chip = document.querySelector('#activeFiltersList button[data-filter="month"]');
+        expect(chip).not.toBeNull();
+        expect(chip.parentElement.textContent).toContain("Month: 0000-00");
+    });
+
+    it("applies the default range when a time-range button carries an unknown value", async () => {
+        const buttons = document.getElementById("analyticsTimeRangeButtons");
+        const bogus = document.createElement("button");
+        bogus.className = "filter-btn";
+        bogus.setAttribute("data-range", "zzz");
+        buttons.appendChild(bogus);
+
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        AppRouter.setParams.mockClear();
+        bogus.click();
+        const params = AppRouter.setParams.mock.calls.at(-1)[0];
+        expect(params.range).toBe("12m");
+    });
+
+    it("ignores a filter-list click that lands outside any chip button", async () => {
+        const requestId = await bootstrapWithData({ topic: "AI" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("activeFiltersList")
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    it("toggles a month filter off when its own chart segment is clicked again", async () => {
+        const requestId = await bootstrapWithData({ month: "2024-05" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        SketchCharts.getItemAt.mockReturnValue({ type: "month", key: "2024-05" });
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("timelineChart")
+            .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+
+        const params = AppRouter.setParams.mock.calls.at(-1)[0];
+        expect(params.month).toBeUndefined();
+    });
+
+    it("toggles a week filter off using its key when no monthKey is present", async () => {
+        const requestId = await bootstrapWithData({ month: "2024-07" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        SketchCharts.getItemAt.mockReturnValue({ type: "week", key: "2024-07" });
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("timelineChart")
+            .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+
+        const params = AppRouter.setParams.mock.calls.at(-1)[0];
+        expect(params.month).toBeUndefined();
+    });
+
+    it("toggles a topic filter off when the active topic segment is clicked", async () => {
+        const requestId = await bootstrapWithData({ topic: "AI" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        SketchCharts.getItemAt.mockReturnValue({ type: "topic", key: "AI" });
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("topicsChart")
+            .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+
+        const params = AppRouter.setParams.mock.calls.at(-1)[0];
+        expect(params.topic).toBeUndefined();
+    });
+
+    it("clears the day and hour filters when the same heatmap cell is clicked again", async () => {
+        const requestId = await bootstrapWithData({ day: "3", hour: "14" });
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        SketchCharts.getItemAt.mockReturnValue({ type: "heatmap", day: 3, hour: 14 });
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("heatmapChart")
+            .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+
+        const params = AppRouter.setParams.mock.calls.at(-1)[0];
+        expect(params.day).toBeUndefined();
+        expect(params.hour).toBeUndefined();
+    });
+
+    it("ignores a chart click on an item of an unhandled type", async () => {
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        SketchCharts.getItemAt.mockReturnValue({ type: "legend", key: "posts" });
+        AppRouter.setParams.mockClear();
+        document
+            .getElementById("timelineChart")
+            .dispatchEvent(new MouseEvent("click", { clientX: 5, clientY: 5 }));
+
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    it("defers rendering until charts gain layout size, then draws on resize", async () => {
+        const resize = mockResizeObserver();
+        const zeroRect = { width: 0, height: 0, left: 0, top: 0, right: 0, bottom: 0 };
+        const canvases = ["timelineChart", "topicsChart", "heatmapChart"].map((id) =>
+            document.getElementById(id),
+        );
+        canvases.forEach((canvas) => {
+            canvas.getBoundingClientRect = () => zeroRect;
+        });
+
+        SketchCharts.drawTimeline.mockClear();
+        const requestId = await bootstrapWithData({});
+        // A single-point timeline skips animation so drawTimeline is called directly.
+        sendViewResponse(requestId, { timeline: [{ label: "0", value: 1 }] });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Charts have no size yet, so drawing is deferred.
+        expect(SketchCharts.drawTimeline).not.toHaveBeenCalled();
+
+        // Once the containers report a size, the resize callback renders.
+        canvases.forEach((canvas) => {
+            canvas.getBoundingClientRect = () => ({
+                width: 200,
+                height: 120,
+                left: 0,
+                top: 0,
+                right: 200,
+                bottom: 120,
+            });
+        });
+        resize.trigger();
+        expect(SketchCharts.drawTimeline).toHaveBeenCalled();
+    });
+
+    it("defers a re-entrant render triggered mid-draw and replays it afterward", async () => {
+        SketchCharts.drawTimeline.mockClear();
+        const requestId = await bootstrapWithData({});
+        // A themechange fired while the first draw is in flight must not throw and
+        // must still leave a completed render behind.
+        SketchCharts.drawHeatmap.mockImplementationOnce(() => {
+            document.dispatchEvent(new Event("themechange"));
+        });
+        sendViewResponse(requestId, { timeline: [{ label: "0", value: 1 }] });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(SketchCharts.drawTimeline).toHaveBeenCalled();
+        expect(document.getElementById("analyticsEmpty").hidden).toBe(true);
+    });
 });

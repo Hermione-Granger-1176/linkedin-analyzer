@@ -1,8 +1,31 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MessagesAnalytics } from "../src/messages-analytics.js";
 
 describe("MessagesAnalytics", () => {
+    it("builds message state when the Performance API is unavailable", () => {
+        const rows = [
+            {
+                FROM: "Ada Lovelace",
+                TO: "Bob Smith",
+                DATE: "2025-01-01 10:00:00",
+                CONTENT: "Hello",
+                "SENDER PROFILE URL": "https://linkedin.com/in/ada",
+                "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob",
+            },
+        ];
+        // Some environments (older Safari, restricted workers) lack performance.*;
+        // the instrumentation guards must degrade gracefully.
+        vi.stubGlobal("performance", undefined);
+        try {
+            const state = MessagesAnalytics.buildMessageState(rows);
+            expect(state.contacts.size).toBe(1);
+            expect(state.events.length).toBe(1);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
     it("buildMessageState extracts contacts and events", () => {
         const rows = [
             {

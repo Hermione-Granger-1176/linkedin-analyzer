@@ -265,8 +265,10 @@ describe("ExcelGenerator", () => {
     });
 
     it("stringifies a non-Error thrown by downloadFromSpec", async () => {
+        // Deliberately reject with a non-Error value to exercise the stringify path.
+        const rawFailure = "raw-string-failure";
         writeXlsxFile.mockImplementationOnce(() => {
-            throw "raw-string-failure";
+            throw rawFailure;
         });
         const result = await ExcelGenerator.downloadFromSpec(
             { sheetName: "X", headers: ["A"], rows: [["1"]] },
@@ -277,8 +279,10 @@ describe("ExcelGenerator", () => {
     });
 
     it("stringifies a non-Error thrown by generateAndDownload", async () => {
+        // Deliberately reject with a non-Error value to exercise the stringify path.
+        const rawFailure = "raw-string-failure";
         writeXlsxFile.mockImplementationOnce(() => {
-            throw "raw-string-failure";
+            throw rawFailure;
         });
         const result = await ExcelGenerator.generateAndDownload(
             [{ Date: "2025-01-01 10:00:00" }],

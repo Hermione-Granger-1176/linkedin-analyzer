@@ -4099,7 +4099,7 @@ describe("UploadPage", () => {
     it("does nothing when the drop zone and file input are absent", async () => {
         // Rebuild the DOM without the required upload elements so init()'s early
         // guard fires and no worker or listeners are wired up.
-        setupDom(`<div id="uploadHint"></div>`);
+        setupDom('<div id="uploadHint"></div>');
         vi.resetModules();
         ({ UploadPage } = await import("../src/upload.js"));
         ({ Storage } = await import("../src/storage.js"));

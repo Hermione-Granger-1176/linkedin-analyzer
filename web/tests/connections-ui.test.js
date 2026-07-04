@@ -708,4 +708,219 @@ describe("ConnectionsPage", () => {
         Object.defineProperty(window, "innerWidth", { value: origWidth, configurable: true });
         Object.defineProperty(window, "innerHeight", { value: origHeight, configurable: true });
     });
+
+    /** Init, route in, and return the pending worker request id. */
+    async function primeWorker(routeParams = {}) {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange(routeParams);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        return workerInstance.postMessage.mock.calls[0][0].requestId;
+    }
+
+    /** Dispatch a processed worker payload for the pending request. */
+    function sendProcessed(requestId, payload) {
+        workerInstance.listeners.message[0]({
+            data: { type: "processed", requestId, payload },
+        });
+    }
+
+    it("ignores a malformed worker message without rendering data", async () => {
+        await primeWorker({ range: "all" });
+        expect(() =>
+            workerInstance.listeners.message[0]({ data: { notAType: true } }),
+        ).not.toThrow();
+        expect(document.getElementById("connStatTotal").textContent).toBe("");
+    });
+
+    it("shows the failure message from an unsuccessful worker payload", async () => {
+        const id = await primeWorker({ range: "all" });
+        sendProcessed(id, { success: false, error: "Broken CSV" });
+        expect(
+            document.getElementById("connectionsEmpty").querySelector("p").textContent,
+        ).toContain("Broken CSV");
+    });
+
+    it("falls back to a default failure message when none is supplied", async () => {
+        const id = await primeWorker({ range: "all" });
+        sendProcessed(id, { success: false });
+        expect(
+            document.getElementById("connectionsEmpty").querySelector("p").textContent,
+        ).toContain("Unable to parse Connections.csv");
+    });
+
+    it("treats a payload with no rows or analytics as empty", async () => {
+        const id = await primeWorker({ range: "all" });
+        sendProcessed(id, { success: true });
+        expect(document.getElementById("connectionsEmpty").hidden).toBe(false);
+    });
+
+    it("defaults company, position, and stats for sparse rows", async () => {
+        const id = await primeWorker({ range: "all" });
+        // Rows missing Company/Position and stats missing total/networkAgeMonths
+        // exercise the field and stat fallbacks.
+        sendProcessed(id, {
+            success: true,
+            rows: [{ "Connected On": "2024-05-01" }, { "Connected On": "2024-05-02" }],
+            analytics: { stats: {} },
+        });
+        expect(document.getElementById("connStatTotal").textContent).toBe("2");
+        expect(document.getElementById("connStatTopCompany").textContent).toBe("-");
+        expect(document.getElementById("connStatNetworkAge").textContent).toBe("-");
+    });
+
+    it("skips unparseable Connected On dates without crashing", async () => {
+        const id = await primeWorker({ range: "all" });
+        sendProcessed(id, {
+            success: true,
+            rows: [
+                { "Connected On": "2024", Company: "Acme" },
+                { "Connected On": "bad-da-te", Company: "Acme" },
+                { "Connected On": "2024-05-01", Company: "Beta" },
+            ],
+            analytics: { stats: { total: 3, networkAgeMonths: 5 } },
+        });
+        // The most common company still wins over the runner-up.
+        expect(document.getElementById("connStatTopCompany").textContent).toBe("Acme");
+        // networkAgeMonths under 12 renders in months.
+        expect(document.getElementById("connStatNetworkAge").textContent).toContain("mo");
+    });
+
+    it("normalizes a stored file that carries its own metadata", async () => {
+        Storage.getFile.mockResolvedValue({
+            text: "csv",
+            name: "MyConnections.csv",
+            rowCount: 3,
+            updatedAt: 1700000000000,
+        });
+        DataCache.get.mockReturnValue(null);
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({ range: "all" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const id = workerInstance.postMessage.mock.calls[0][0].requestId;
+        sendProcessed(id, {
+            success: true,
+            rows: [{ "Connected On": "2024-05-01", Company: "Acme" }],
+            analytics: { stats: { total: 1, networkAgeMonths: 20 } },
+        });
+        expect(document.getElementById("connStatTotal").textContent).toBe("1");
+    });
+
+    it("captures a worker error event that carries an error object", async () => {
+        await primeWorker({ range: "all" });
+        const event = Object.assign(new Event("error"), { error: new Error("kaboom") });
+        workerInstance.listeners.error[0](event);
+        expect(
+            document.getElementById("connectionsEmpty").querySelector("h2").textContent,
+        ).toContain("Worker error");
+    });
+
+    it("re-renders on a later route change once data is loaded", async () => {
+        const id = await primeWorker({ range: "all" });
+        sendProcessed(id, {
+            success: true,
+            rows: [
+                { "Connected On": "2024-05-01", Company: "Acme" },
+                { "Connected On": "2023-01-01", Company: "Beta" },
+            ],
+            analytics: {
+                growthTimeline: [{ key: "2024-05", label: "May 2024", value: 1 }],
+                stats: { total: 2, networkAgeMonths: 18 },
+            },
+        });
+        SketchCharts.drawTimeline.mockClear();
+        // A second route change with a new range re-applies filters and renders.
+        await ConnectionsPage.onRouteChange({ range: "3m" });
+        expect(SketchCharts.drawTimeline).toHaveBeenCalled();
+    });
+
+    it("reflects an already-active time-range button as aria-pressed", () => {
+        document.querySelector('[data-range="3m"]').classList.add("active");
+        // bindEvents (run during init) mirrors the active class into aria-pressed.
+        ConnectionsPage.init();
+        expect(document.querySelector('[data-range="3m"]').getAttribute("aria-pressed")).toBe(
+            "true",
+        );
+    });
+
+    it("is a no-op when init runs a second time", () => {
+        ConnectionsPage.init();
+        expect(() => ConnectionsPage.init()).not.toThrow();
+        // A second init must not create a second worker.
+        expect(workerInstance.postMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "process" }),
+        );
+    });
+
+    it("shows a timeout state when the worker never responds", async () => {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+        const realSetTimeout = globalThis.setTimeout;
+        let workerTimeoutCb = null;
+        vi.spyOn(window, "setTimeout").mockImplementation((cb, delay) => {
+            if (delay && delay > 100) {
+                workerTimeoutCb = cb;
+                return 999;
+            }
+            return realSetTimeout(cb, delay);
+        });
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({ range: "all" });
+        await new Promise((resolve) => realSetTimeout(resolve, 0));
+
+        expect(typeof workerTimeoutCb).toBe("function");
+        workerTimeoutCb();
+
+        expect(
+            document.getElementById("connectionsEmpty").querySelector("h2").textContent,
+        ).toContain("timeout");
+    });
+
+    it("ignores a worker message event that carries no data", async () => {
+        await primeWorker({ range: "all" });
+        expect(() => workerInstance.listeners.message[0]({})).not.toThrow();
+        expect(document.getElementById("connStatTotal").textContent).toBe("");
+    });
+
+    it("reports a stored file that has no usable text payload", async () => {
+        Storage.getFile.mockResolvedValue({ name: "broken" });
+        DataCache.get.mockReturnValue(null);
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // With no text the file cannot be parsed, so the empty state is shown and
+        // no worker request is dispatched.
+        expect(document.getElementById("connectionsEmpty").hidden).toBe(false);
+    });
+
+    it("does not re-render on a repeat route change with the same range", async () => {
+        const id = await primeWorker({ range: "all" });
+        sendProcessed(id, {
+            success: true,
+            rows: [{ "Connected On": "2024-05-01", Company: "Acme" }],
+            analytics: { stats: { total: 1, networkAgeMonths: 12 } },
+        });
+        SketchCharts.drawTimeline.mockClear();
+        // Same range and an existing view: nothing changed, so no re-render.
+        await ConnectionsPage.onRouteChange({ range: "all" });
+        expect(SketchCharts.drawTimeline).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the default range for an unknown time-range button", async () => {
+        const button = document.createElement("button");
+        button.className = "filter-btn";
+        button.dataset.range = "bogus";
+        document.getElementById("connectionsTimeRangeButtons").append(button);
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+        button.click();
+        // The invalid range resolves to the default before syncing the router.
+        expect(AppRouter.setParams).toHaveBeenLastCalledWith(
+            { range: "12m" },
+            expect.anything(),
+        );
+    });
 });

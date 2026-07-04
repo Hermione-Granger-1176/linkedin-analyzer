@@ -67,6 +67,29 @@ describe("parseLinkedInDate", () => {
         expect(parseLinkedInDate("bad-date-here 09:30:00")).toBeNull();
         expect(parseLinkedInDate("0000-01-01 09:30:00")).toBeNull();
     });
+
+    it("rejects out-of-range month and day instead of rolling them over", () => {
+        // Month 13 would roll into next January and day 32 into the next month;
+        // both must be treated as unparseable rather than silently shifted.
+        expect(parseLinkedInDate("2024-13-01 09:30:00")).toBeNull();
+        expect(parseLinkedInDate("2024-00-15 09:30:00")).toBeNull();
+        expect(parseLinkedInDate("2024-01-32 09:30:00")).toBeNull();
+        expect(parseLinkedInDate("2024-01-00 09:30:00")).toBeNull();
+    });
+
+    it("rejects impossible calendar dates that would roll into the next month", () => {
+        // 2024 is a leap year, so Feb 29 is valid but Feb 30 is not.
+        expect(parseLinkedInDate("2024-02-29 09:30:00")).not.toBeNull();
+        expect(parseLinkedInDate("2024-02-30 09:30:00")).toBeNull();
+        expect(parseLinkedInDate("2023-02-29 09:30:00")).toBeNull();
+    });
+
+    it("rejects non-numeric or out-of-range time parts", () => {
+        expect(parseLinkedInDate("2024-01-03 xx:30")).toBeNull();
+        expect(parseLinkedInDate("2024-01-03 09:xx")).toBeNull();
+        expect(parseLinkedInDate("2024-01-03 25:00:00")).toBeNull();
+        expect(parseLinkedInDate("2024-01-03 09:75:00")).toBeNull();
+    });
 });
 
 describe("enumerateMonths", () => {

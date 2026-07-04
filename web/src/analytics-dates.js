@@ -17,13 +17,46 @@ export function parseLinkedInDate(value) {
         return null;
     }
     const [year, month, day] = datePart.split("-").map(Number);
-    const [hour, minute] = timePart.split(":").map(Number);
-    if (!year || !month || !day) {
+    const timeTokens = timePart.split(":");
+    const hour = Number(timeTokens[0]);
+    // Minute is optional: LinkedIn always emits it, but tolerate its absence by
+    // defaulting to zero. A present-but-non-numeric minute is invalid, not zero.
+    const minute = timeTokens.length > 1 ? Number(timeTokens[1]) : 0;
+
+    // Reject non-numeric or out-of-range components. Without these guards the
+    // Date constructor silently rolls over (month 13 -> next January, day 32 ->
+    // next month), shifting activity into the wrong local day/month.
+    if (
+        !Number.isInteger(year) ||
+        !Number.isInteger(month) ||
+        !Number.isInteger(day) ||
+        !Number.isInteger(hour) ||
+        !Number.isInteger(minute)
+    ) {
+        return null;
+    }
+    if (
+        year < 1 ||
+        month < 1 ||
+        month > 12 ||
+        day < 1 ||
+        day > 31 ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59
+    ) {
         return null;
     }
 
     // Timestamps are already converted to local time by the cleaner.
-    const localDate = new Date(year, month - 1, day, hour || 0, minute || 0, 0);
+    const localDate = new Date(year, month - 1, day, hour, minute, 0);
+
+    // Reject impossible calendar dates (e.g. Feb 30) that the Date constructor
+    // would otherwise roll forward into the following month.
+    if (localDate.getMonth() !== month - 1 || localDate.getDate() !== day) {
+        return null;
+    }
 
     const localHour = localDate.getHours();
     const localDay = localDate.getDay(); // 0 = Sunday

@@ -311,6 +311,8 @@ export const MessagesPage = (() => {
             };
 
             const removeWorkerListeners = () => {
+                // the worker is only nulled after listeners are removed, so this guard is defensive.
+                /* v8 ignore next 3 */
                 if (!parseWorker) {
                     return;
                 }
@@ -602,6 +604,8 @@ export const MessagesPage = (() => {
 
         const parsed = parseStoredUploadFile(file);
         if (!parsed.valid) {
+            // invalid() always supplies an error string, so the fallback is defensive.
+            /* v8 ignore next */
             captureError(new Error(parsed.error || "Invalid stored file payload."), {
                 module: "messages-insights",
                 operation: "parse-stored-file",
@@ -654,6 +658,8 @@ export const MessagesPage = (() => {
      * @param {string} name - Mark name
      */
     function markPerformance(name) {
+        // performance.mark is always available in supported browsers, so this env guard is defensive.
+        /* v8 ignore next 3 */
         if (typeof performance === "undefined" || typeof performance.mark !== "function") {
             return;
         }
@@ -667,6 +673,8 @@ export const MessagesPage = (() => {
      * @param {string} end - End mark
      */
     function measurePerformance(name, start, end) {
+        // performance.measure is always available in supported browsers, so this env guard is defensive.
+        /* v8 ignore next 3 */
         if (typeof performance === "undefined" || typeof performance.measure !== "function") {
             return;
         }

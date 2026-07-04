@@ -185,6 +185,21 @@ function deliverProcessed(handlers, payload) {
     handlers.message[0]({ data: { type: "processed", requestId: 1, payload } });
 }
 
+/** Boot the page with no Worker global so parsing runs on the main thread. */
+async function bootMainThread(cacheEntries = {}) {
+    globalThis.Worker = undefined;
+    buildDom();
+    vi.resetModules();
+    ({ MessagesPage } = await import("../src/messages-insights.js"));
+    ({ DataCache } = await import("../src/data-cache.js"));
+    ({ Storage } = await import("../src/storage.js"));
+    ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+    ({ MessagesAnalytics } = await import("../src/messages-analytics.js"));
+    for (const [key, value] of Object.entries(cacheEntries)) {
+        DataCache.set(key, value);
+    }
+}
+
 describe("MessagesPage", () => {
     beforeEach(async () => {
         buildDom();
@@ -3128,6 +3143,180 @@ describe("MessagesPage", () => {
             window.dispatchEvent(new Event("beforeunload"));
             window.dispatchEvent(new Event("beforeunload"));
         }).not.toThrow();
+        globalThis.Worker = undefined;
+    });
+
+    it("captures a worker construction failure and parses on the main thread", async () => {
+        globalThis.Worker = function ThrowingWorker() {
+            throw new Error("worker blocked");
+        };
+        buildDom();
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ DataCache } = await import("../src/data-cache.js"));
+        ({ Storage } = await import("../src/storage.js"));
+        ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+        ({ MessagesAnalytics } = await import("../src/messages-analytics.js"));
+
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [{}] });
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState());
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+        DataCache.set("storage:file:messages", {
+            type: "messages",
+            name: "m.csv",
+            text: "csv",
+            updatedAt: 1,
+            rowCount: 1,
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("uses a default message when main-thread messages parsing fails", async () => {
+        await bootMainThread({
+            "storage:file:messages": {
+                type: "messages",
+                name: "m.csv",
+                text: "csv",
+                updatedAt: 1,
+                rowCount: 1,
+            },
+        });
+        LinkedInCleaner.process.mockReturnValue({ success: false, error: null });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        const heading = document.getElementById("messagesEmpty").querySelector("h2");
+        expect(heading.textContent).toContain("Messages parsing error");
+        globalThis.Worker = undefined;
+    });
+
+    it("records a default connection error when connections parsing fails", async () => {
+        await bootMainThread({
+            "storage:file:messages": {
+                type: "messages",
+                name: "m.csv",
+                text: "csv",
+                updatedAt: 1,
+                rowCount: 1,
+            },
+            "storage:file:connections": {
+                type: "connections",
+                name: "c.csv",
+                text: "csv",
+                updatedAt: 2,
+                rowCount: 1,
+            },
+        });
+        LinkedInCleaner.process.mockImplementation((_csv, type) =>
+            type === "messages"
+                ? { success: true, cleanedData: [{}] }
+                : { success: false, error: null },
+        );
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState());
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("skips a stored messages file whose type is invalid", async () => {
+        await bootMainThread({
+            "storage:file:messages": { type: "bogus", text: "csv", name: "x" },
+        });
+        Storage.getAllFiles.mockResolvedValue([]);
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        const heading = document.getElementById("messagesEmpty").querySelector("h2");
+        expect(heading.textContent).toContain("No messages data available yet");
+        globalThis.Worker = undefined;
+    });
+
+    it("skips a stored file whose type does not match its slot", async () => {
+        await bootMainThread({
+            "storage:file:messages": {
+                type: "connections",
+                text: "csv",
+                name: "x",
+                updatedAt: 1,
+                rowCount: 1,
+            },
+        });
+        Storage.getAllFiles.mockResolvedValue([]);
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        const heading = document.getElementById("messagesEmpty").querySelector("h2");
+        expect(heading.textContent).toContain("No messages data available yet");
+        globalThis.Worker = undefined;
+    });
+
+    it("ignores a range button that has no data-range attribute", async () => {
+        globalThis.Worker = undefined;
+        buildDom({
+            rangeButtons: `
+                <button class="filter-btn active" data-range="12m"></button>
+                <button class="filter-btn" id="noRangeBtn"></button>
+            `,
+        });
+        vi.resetModules();
+        ({ MessagesPage } = await import("../src/messages-insights.js"));
+        ({ AppRouter } = await import("../src/router.js"));
+
+        MessagesPage.init();
+        AppRouter.setParams.mockClear();
+        document.getElementById("noRangeBtn").click();
+
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+        globalThis.Worker = undefined;
+    });
+
+    it("shows an empty top-contacts message when no events fall in range", async () => {
+        const ancient = new Date("2019-01-01").getTime();
+        const future = new Date("2024-01-01").getTime();
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: {
+                contacts: [{ key: "c1", name: "Ancient", url: "", lastTimestamp: ancient }],
+                events: [{ contactKey: "c1", timestamp: ancient }],
+                rowTimestamps: [ancient],
+                skippedRows: 0,
+                talkedNameKeys: ["ancient"],
+                talkedUrlKeys: [],
+                latestTimestamp: future,
+            },
+        });
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain(
+            "No conversations in this range",
+        );
         globalThis.Worker = undefined;
     });
 });

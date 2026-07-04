@@ -373,7 +373,8 @@ export const AnalyticsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            /* v8 ignore next */ // invalid() always supplies an error string, so the fallback is defensive.
+            // invalid() always supplies an error string, so the fallback is defensive.
+            /* v8 ignore next */
             captureError(new Error(parsed.error || "Invalid analytics worker message."), {
                 module: "analytics-ui",
                 operation: "worker-message-parse",
@@ -395,7 +396,8 @@ export const AnalyticsPage = (() => {
                 if (message.requestId !== pendingViewId) {
                     return;
                 }
-                /* v8 ignore next */ // parser defaults a view payload to {}, so the fallback is defensive.
+                // parser defaults a view payload to {}, so the fallback is defensive.
+                /* v8 ignore next */
                 applyWorkerViewPayload(message.payload || {});
                 return;
             case "error":
@@ -444,7 +446,8 @@ export const AnalyticsPage = (() => {
      * @returns {string}
      */
     function getWorkerMessage(payload, fallback) {
-        /* v8 ignore next */ // the error parser defaults payload.message, so the fallback arm is defensive.
+        // the error parser defaults payload.message, so the fallback arm is defensive.
+        /* v8 ignore next */
         return payload && payload.message ? payload.message : fallback;
     }
 
@@ -481,7 +484,8 @@ export const AnalyticsPage = (() => {
             filters.monthFocus || "none",
             filters.day !== null && filters.day !== undefined ? filters.day : "none",
             filters.hour !== null && filters.hour !== undefined ? filters.hour : "none",
-            /* v8 ignore next */ // shareType always defaults to a non-empty string, so "all" fallback is defensive.
+            // shareType always defaults to a non-empty string, so "all" fallback is defensive.
+            /* v8 ignore next */
             filters.shareType || "all",
         ].join("|");
     }
@@ -653,7 +657,8 @@ export const AnalyticsPage = (() => {
         }
 
         try {
-            /* v8 ignore next */ // callers only pass a truthy view; the guard is defensive.
+            // callers only pass a truthy view; the guard is defensive.
+            /* v8 ignore next */
             if (!view) {
                 setEmptyState("No analytics data", "Try resetting filters.");
                 showAnalyticsLoading(false);
@@ -803,7 +808,8 @@ export const AnalyticsPage = (() => {
             filters.push({ key: "month", label });
         }
         if (state.filters.day !== null && state.filters.day !== undefined) {
-            /* v8 ignore next */ // day is validated to 0-6 before storage, so "Unknown" is defensive.
+            // day is validated to 0-6 before storage, so "Unknown" is defensive.
+            /* v8 ignore next */
             const label = DAY_LABELS[state.filters.day] || "Unknown";
             filters.push({ key: "day", label: `Day: ${label}` });
         }

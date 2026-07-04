@@ -137,6 +137,54 @@ function makeMessageState(overrides = {}) {
 /** Flush all pending microtasks + one macrotask. */
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/**
+ * Boot the page with a captured mock worker and one stored messages file.
+ * Returns the per-type listener map and the worker instance so a test can
+ * deliver "processed"/"error" events straight to the controller.
+ */
+async function bootWithWorker(file = {}) {
+    const handlers = {};
+    const worker = {
+        postMessage: vi.fn(),
+        addEventListener: vi.fn((type, handler) => {
+            (handlers[type] ||= []).push(handler);
+        }),
+        removeEventListener: vi.fn(),
+        terminate: vi.fn(),
+    };
+    globalThis.Worker = function WorkerMock() {
+        return worker;
+    };
+
+    buildDom();
+    vi.resetModules();
+    ({ MessagesPage } = await import("../src/messages-insights.js"));
+    ({ DataCache } = await import("../src/data-cache.js"));
+    ({ Storage } = await import("../src/storage.js"));
+    ({ LinkedInCleaner } = await import("../src/cleaner.js"));
+    ({ MessagesAnalytics } = await import("../src/messages-analytics.js"));
+    ({ ExcelGenerator } = await import("../src/excel.js"));
+
+    DataCache.set("storage:file:messages", {
+        type: "messages",
+        name: "w.csv",
+        text: "csv",
+        updatedAt: 1,
+        rowCount: 1,
+        ...file,
+    });
+
+    MessagesPage.init();
+    MessagesPage.onRouteChange({});
+    await tick();
+    return { handlers, worker };
+}
+
+/** Deliver a "processed" worker response for request id 1. */
+function deliverProcessed(handlers, payload) {
+    handlers.message[0]({ data: { type: "processed", requestId: 1, payload } });
+}
+
 describe("MessagesPage", () => {
     beforeEach(async () => {
         buildDom();
@@ -2838,5 +2886,248 @@ describe("MessagesPage", () => {
         const html = document.getElementById("topContactsList").innerHTML;
         expect(html).toContain("Valid User");
         expect(html).not.toContain("No Key User");
+    });
+
+    // -------------------------------------------------------------------------
+    // Additional branch coverage: worker plumbing, hydration fallbacks, exports
+    // -------------------------------------------------------------------------
+
+    /** Build a fully-populated hydrated messageState payload for one contact. */
+    function makeWorkerMessageState(overrides = {}) {
+        const timestamp = new Date("2024-06-01").getTime();
+        return {
+            contacts: [{ key: "c1", name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
+            events: [{ contactKey: "c1", timestamp }],
+            rowTimestamps: [timestamp],
+            skippedRows: 0,
+            talkedNameKeys: ["ada lovelace"],
+            talkedUrlKeys: [],
+            latestTimestamp: timestamp,
+            ...overrides,
+        };
+    }
+
+    it("shows the empty state when a hydrated payload has no usable events", async () => {
+        const { handlers } = await bootWithWorker();
+        // A bare messageState exercises every hydrate fallback (missing arrays and
+        // finite numbers) and then trips the empty-events guard.
+        deliverProcessed(handlers, { success: true, messageState: {} });
+        await tick();
+
+        const heading = document.getElementById("messagesEmpty").querySelector("h2");
+        expect(heading.textContent).toContain("No usable message rows");
+        globalThis.Worker = undefined;
+    });
+
+    it("ignores an invalid worker envelope and renders a later valid response", async () => {
+        const { handlers } = await bootWithWorker();
+        // An envelope without a data payload is dropped; the request stays open.
+        handlers.message[0]({ data: null });
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: makeWorkerMessageState({
+                contacts: [{ key: "c1", name: "Late Valid", url: "", lastTimestamp: 1 }],
+            }),
+        });
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Late Valid");
+        globalThis.Worker = undefined;
+    });
+
+    it("falls back to main-thread parsing when a processed message has no payload", async () => {
+        const { handlers } = await bootWithWorker();
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState());
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+
+        handlers.message[0]({ data: { type: "processed", requestId: 1, payload: null } });
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("captures a worker error event that carries an error object", async () => {
+        const { handlers } = await bootWithWorker();
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState());
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+
+        handlers.error[0]({ type: "error", error: new Error("worker exploded") });
+        await tick();
+
+        // The error tears down the worker and re-parses on the main thread.
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("synthesizes an error label when the worker error event has no type", async () => {
+        const { handlers } = await bootWithWorker();
+        LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
+        MessagesAnalytics.buildMessageState.mockReturnValue(makeMessageState());
+        MessagesAnalytics.buildConnectionState.mockReturnValue({
+            list: [],
+            byUrl: new Map(),
+            byName: new Map(),
+        });
+
+        handlers.error[0]({});
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("rebuilds connection lookups from a worker payload, skipping malformed rows", async () => {
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: makeWorkerMessageState(),
+            connectionState: {
+                list: [
+                    { name: "No Url Person", url: "", nameKey: "no url person" },
+                    { name: "No Name Key", url: "https://li.com/nk", nameKey: "" },
+                    { name: "Full Contact", url: "https://li.com/x", nameKey: "kx" },
+                ],
+            },
+        });
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("treats a non-array connection list as empty", async () => {
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: makeWorkerMessageState(),
+            connectionState: { notAList: true },
+        });
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Ada Lovelace");
+        globalThis.Worker = undefined;
+    });
+
+    it("labels a contact with a blank name as Unknown", async () => {
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: makeWorkerMessageState({
+                contacts: [{ key: "c1", name: "", url: "", lastTimestamp: 1 }],
+            }),
+        });
+        await tick();
+
+        expect(document.getElementById("topContactsList").innerHTML).toContain("Unknown");
+        globalThis.Worker = undefined;
+    });
+
+    it("ignores unrelated keys on the skipped-rows popup trigger", async () => {
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 5,
+            messageState: makeWorkerMessageState({ skippedRows: 3 }),
+        });
+        await tick();
+
+        const asterisk = document.querySelector(".stat-asterisk");
+        expect(asterisk).not.toBeNull();
+        asterisk.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+        expect(document.querySelector(".stat-popup").classList.contains("visible")).toBe(false);
+        globalThis.Worker = undefined;
+    });
+
+    it("exports silent and fading rows that omit optional fields", async () => {
+        const now = Date.now();
+        const old = now - 40 * 24 * 60 * 60 * 1000;
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: {
+                contacts: [
+                    { key: "c1", name: "Old Friend", url: "https://li.com/old", lastTimestamp: old },
+                ],
+                events: [{ contactKey: "c1", timestamp: old }],
+                rowTimestamps: [old],
+                skippedRows: 0,
+                talkedNameKeys: ["old friend"],
+                talkedUrlKeys: ["https://li.com/old"],
+                latestTimestamp: old,
+            },
+            connectionState: {
+                list: [
+                    { name: "Silent Person", url: "https://li.com/silent", nameKey: "silent person" },
+                    { name: "Old Friend", url: "https://li.com/old", nameKey: "old friend" },
+                ],
+            },
+        });
+        await tick();
+
+        document.getElementById("silentConnectionsExportBtn").click();
+        document.getElementById("fadingConversationsExportBtn").click();
+        await tick();
+
+        const calls = ExcelGenerator.downloadFromSpec.mock.calls;
+        const silentCall = calls.find((c) => c[1] === "messages-silent-connections.xlsx");
+        const fadingCall = calls.find((c) => c[1] === "messages-fading-conversations.xlsx");
+        expect(silentCall).toBeTruthy();
+        expect(fadingCall).toBeTruthy();
+        // The silent row omits connectedOn/position/company, all falling back to "".
+        expect(silentCall[0].rows[0]).toContain("");
+        globalThis.Worker = undefined;
+    });
+
+    it("captures an export failure surfaced by the excel generator", async () => {
+        ExcelGenerator.downloadFromSpec.mockResolvedValue({ success: false, error: null });
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, {
+            success: true,
+            totalInputRows: 1,
+            messageState: makeWorkerMessageState(),
+        });
+        await tick();
+
+        document.getElementById("topContactsExportBtn").click();
+        await tick();
+
+        expect(ExcelGenerator.downloadFromSpec).toHaveBeenCalled();
+        globalThis.Worker = undefined;
+    });
+
+    it("surfaces the parsing-error empty state with a default message", async () => {
+        const { handlers } = await bootWithWorker();
+        deliverProcessed(handlers, { success: false });
+        await tick();
+
+        const heading = document.getElementById("messagesEmpty").querySelector("h2");
+        expect(heading.textContent).toContain("Messages parsing error");
+        globalThis.Worker = undefined;
+    });
+
+    it("no-ops terminateWorker once the worker is already gone", async () => {
+        await bootWithWorker();
+        // First teardown terminates the live worker; the second hits the guard.
+        expect(() => {
+            window.dispatchEvent(new Event("beforeunload"));
+            window.dispatchEvent(new Event("beforeunload"));
+        }).not.toThrow();
+        globalThis.Worker = undefined;
     });
 });

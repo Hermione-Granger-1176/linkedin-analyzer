@@ -595,4 +595,93 @@ describe("InsightsPage", () => {
 
         expect(AppRouter.setParams).toHaveBeenCalled();
     });
+
+    /** Init, route in, deliver the worker "init" reply, and return the view id. */
+    async function primeInsights(range = "3m", hasData = true) {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        workerInstance.listeners.message[0]({
+            data: { type: "init", payload: { hasData } },
+        });
+        const viewCall = workerInstance.postMessage.mock.calls.find((c) => c[0].type === "view");
+        return viewCall ? viewCall[0].requestId : null;
+    }
+
+    function sendView(requestId, payload) {
+        workerInstance.listeners.message[0]({
+            data: { type: "view", requestId, payload },
+        });
+    }
+
+    it("is a no-op when init runs a second time", () => {
+        InsightsPage.init();
+        expect(() => InsightsPage.init()).not.toThrow();
+    });
+
+    it("requests a fresh view on a repeat route change once data is ready", async () => {
+        await primeInsights();
+        const viewCallsBefore = workerInstance.postMessage.mock.calls.filter(
+            (c) => c[0].type === "view",
+        ).length;
+        // Data is already loaded, so re-entering the route just re-requests a view.
+        await InsightsPage.onRouteChange({ range: "3m" });
+        const viewCallsAfter = workerInstance.postMessage.mock.calls.filter(
+            (c) => c[0].type === "view",
+        ).length;
+        expect(viewCallsAfter).toBeGreaterThan(viewCallsBefore);
+    });
+
+    it("reflects an already-active time-range button as aria-pressed", () => {
+        document.querySelector('[data-range="3m"]').classList.add("active");
+        InsightsPage.init();
+        expect(document.querySelector('[data-range="3m"]').getAttribute("aria-pressed")).toBe(
+            "true",
+        );
+    });
+
+    it("ignores a worker message event that carries no data", async () => {
+        await primeInsights();
+        expect(() => workerInstance.listeners.message[0]({})).not.toThrow();
+    });
+
+    it("leaves prior cards untouched when a later view omits insights", async () => {
+        const id = await primeInsights();
+        sendView(id, {
+            insights: {
+                insights: [{ title: "T", body: "B", accent: "blue", icon: "spark" }],
+                tip: null,
+            },
+        });
+        expect(document.querySelectorAll(".insight-card").length).toBe(1);
+        // A follow-up view with no insights leaves currentInsights null, so the
+        // existing cards are not re-rendered away.
+        sendView(id, { view: { networkGrowth: null } });
+        expect(document.getElementById("insightsAllTime").hidden).toBe(true);
+    });
+
+    it("clears networkGrowth when the view carries none", async () => {
+        const id = await primeInsights();
+        sendView(id, { insights: { insights: [], tip: null }, view: {} });
+        expect(document.getElementById("insightsNetworkGrowthCard").hidden).toBe(true);
+    });
+
+    it("renders an insights payload with no cards or tip", async () => {
+        const id = await primeInsights();
+        // A currentInsights object missing its array and tip exercises the defaults.
+        sendView(id, { insights: {} });
+        expect(document.querySelectorAll(".insight-card").length).toBe(0);
+        expect(document.getElementById("insightTip").hidden).toBe(true);
+    });
+
+    it("captures a worker error event that carries an error object", async () => {
+        await primeInsights();
+        const event = Object.assign(new Event("error"), { error: new Error("kaboom") });
+        workerInstance.listeners.error[0](event);
+        expect(
+            document.getElementById("insightsEmpty").querySelector("h2").textContent,
+        ).toContain("Insights worker error");
+    });
 });

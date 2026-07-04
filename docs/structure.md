@@ -43,13 +43,19 @@ linkedin-analyzer/
 │   │   ├── upload.js                   # Home/upload logic
 │   │   ├── upload-decode.js            # Byte-decoding and storage-error helpers
 │   │   ├── upload-state.js             # File-state and hint helpers
+│   │   ├── upload-progress.js          # Sketch-style progress overlay controller
 │   │   ├── cleaner.js                  # CSV cleaning logic
 │   │   ├── cleaner-configs.js          # Per-file-type cleaner configuration
 │   │   ├── csv-parser.js               # Low-level CSV parsing primitives
 │   │   ├── field-cleaners.js           # Field-level cleaning primitives
 │   │   ├── clean.js                    # Clean screen UI logic
 │   │   ├── excel.js                    # Excel generation (write-excel-file)
-│   │   ├── analytics.js                # Analytics engine
+│   │   ├── analytics.js                # Analytics engine (compute + buildView)
+│   │   ├── analytics-constants.js      # Shared day/month label constants
+│   │   ├── analytics-text.js           # Text normalization and topic extraction
+│   │   ├── analytics-dates.js          # Date parsing and calendar math
+│   │   ├── analytics-stats.js          # Numeric helpers (pearson, average)
+│   │   ├── analytics-insights.js       # Narrative insight-card generation
 │   │   ├── analytics-worker.js         # Worker for analytics aggregates/views
 │   │   ├── analytics-ui.js             # Analytics screen controller
 │   │   ├── connections-worker.js       # Worker for connections network analytics
@@ -57,10 +63,13 @@ linkedin-analyzer/
 │   │   ├── messages-worker.js          # Worker for messages/connections parsing
 │   │   ├── messages-analytics.js       # Messages analytics computations
 │   │   ├── messages-format.js          # Formatting, range, and signature helpers
+│   │   ├── messages-relationships.js   # Top/silent/fading relationship queries
 │   │   ├── messages-insights.js        # Messages screen controller
 │   │   ├── insights-ui.js              # Insights screen controller
 │   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
 │   │   ├── tutorial-geometry.js        # Geometry and math helpers for the overlay
+│   │   ├── tutorial-pacing.js          # Engagement-aware mini-tip pacing math
+│   │   ├── tutorial-storage.js         # Tutorial storage keys and safe localStorage
 │   │   ├── tutorial.js                 # Tutorial engine
 │   │   ├── charts.js                   # Canvas chart rendering (incl. PNG export)
 │   │   ├── worker-contracts.js         # Shared worker message contracts

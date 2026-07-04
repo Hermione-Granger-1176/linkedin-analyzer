@@ -1,7 +1,5 @@
 /* Upload page logic */
 
-import rough from "roughjs/bundled/rough.esm.js";
-
 import { MAX_CSV_CHARS, SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
@@ -9,6 +7,7 @@ import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
 import { concatChunks, decodeBytes, isQuotaExceededError } from "./upload-decode.js";
+import { UploadProgress } from "./upload-progress.js";
 import {
     createEmptyFileMap,
     getTypeSpecificFileCacheKey,
@@ -45,11 +44,6 @@ export const UploadPage = (() => {
             messages: document.querySelector('.file-status-item[data-file="messages"]'),
             connections: document.querySelector('.file-status-item[data-file="connections"]'),
         },
-        progressOverlay: document.getElementById("progressOverlay"),
-        progressCanvas: /** @type {HTMLCanvasElement|null} */ (
-            document.getElementById("progressCanvas")
-        ),
-        progressPercent: document.getElementById("progressPercent"),
         offlineBanner: document.getElementById("offlineBanner"),
     };
 
@@ -90,9 +84,6 @@ export const UploadPage = (() => {
     const pendingFiles = new Map();
     const activeJobs = new Set();
     const jobTimeouts = new Map();
-    let progressValue = 0;
-    let progressAnimationId = null;
-    let progressSessionId = 0;
     let initialized = false;
     let lastPrimedSignature = null;
     let restorePromise = null;
@@ -101,7 +92,6 @@ export const UploadPage = (() => {
     let primeIdleId = null;
     let pendingPrimePayload = null;
     let primeInFlight = null;
-    let lastProgressPercent = 0;
     let storagePersistenceRequested = false;
     // Restart throttle: at most MAX_WORKER_RESTARTS within WORKER_RESTART_WINDOW_MS.
     const MAX_WORKER_RESTARTS = 3;
@@ -283,7 +273,7 @@ export const UploadPage = (() => {
             });
         }
 
-        window.addEventListener("resize", () => drawProgressBar(progressValue));
+        window.addEventListener("resize", () => UploadProgress.redraw());
         window.addEventListener("online", updateOfflineBanner);
         window.addEventListener("offline", updateOfflineBanner);
     }
@@ -473,7 +463,7 @@ export const UploadPage = (() => {
         warnIfStorageLow(incomingBytes);
 
         if (activeJobs.size === 0) {
-            showProgressOverlay();
+            UploadProgress.show(() => activeJobs.size > 0);
         }
         // Seed the worker with any already-stored shares/comments before sending
         // the new file(s), so an added shares/comments file recomputes analytics
@@ -812,13 +802,7 @@ export const UploadPage = (() => {
         if (activeJobs.size === 0) {
             return;
         }
-        const normalized = Math.max(0, Math.min(1, payload.percent));
-        const capped = Math.min(0.98, Math.max(progressValue, normalized * 0.98));
-        progressValue = capped;
-        if (Math.abs(normalized - lastProgressPercent) >= 0.02) {
-            lastProgressPercent = normalized;
-        }
-        drawProgressBar(progressValue);
+        UploadProgress.reportPercent(payload.percent);
     }
 
     /**
@@ -1325,7 +1309,7 @@ export const UploadPage = (() => {
     /** Hide progress overlay when all active jobs complete. */
     function checkJobs() {
         if (activeJobs.size === 0) {
-            hideProgressOverlay();
+            UploadProgress.hide();
         }
     }
 
@@ -1336,8 +1320,7 @@ export const UploadPage = (() => {
         pendingFiles.clear();
         clearAllJobTimeouts();
         activeJobs.clear();
-        lastProgressPercent = 0;
-        hideProgressOverlay();
+        UploadProgress.hide();
     }
 
     /**
@@ -1386,203 +1369,6 @@ export const UploadPage = (() => {
             window.clearTimeout(timeoutId);
         });
         jobTimeouts.clear();
-    }
-
-    /** Show the progress overlay and start animation. */
-    function showProgressOverlay() {
-        if (!elements.progressOverlay) {
-            return;
-        }
-        progressSessionId += 1;
-        const sessionId = progressSessionId;
-        elements.progressOverlay.hidden = false;
-        progressValue = 0;
-        lastProgressPercent = 0;
-        drawProgressBar(progressValue);
-        animateProgressTo(
-            0.72,
-            650,
-            () => {
-                if (sessionId !== progressSessionId || activeJobs.size <= 0) {
-                    return;
-                }
-                startProgressCrawl(sessionId);
-            },
-            sessionId,
-        );
-    }
-
-    /** Animate progress to 100% then hide the overlay. */
-    function hideProgressOverlay() {
-        const { progressOverlay } = elements;
-        if (!progressOverlay || progressOverlay.hidden) {
-            return;
-        }
-        const sessionId = progressSessionId;
-        animateProgressTo(
-            1,
-            320,
-            () => {
-                if (sessionId !== progressSessionId) {
-                    return;
-                }
-                progressOverlay.hidden = true;
-            },
-            sessionId,
-        );
-    }
-
-    /**
-     * Smoothly animate progress bar to target value.
-     * @param {number} target - Target progress value (0-1)
-     * @param {number} duration - Animation duration in ms
-     * @param {(() => void) | null} [callback] - Optional callback when animation completes
-     * @param {number} [sessionId] - Progress animation session token
-     */
-    function animateProgressTo(target, duration, callback, sessionId) {
-        stopProgressAnimation();
-        const start = performance.now();
-        const startValue = progressValue;
-        const animationSession = sessionId || progressSessionId;
-
-        function step(now) {
-            /* v8 ignore next 4 */
-            if (animationSession !== progressSessionId) {
-                progressAnimationId = null;
-                return;
-            }
-            const elapsed = now - start;
-            const t = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - t, 3);
-            progressValue = startValue + (target - startValue) * eased;
-            drawProgressBar(progressValue);
-            if (t < 1) {
-                progressAnimationId = requestAnimationFrame(step);
-                return;
-            }
-
-            progressAnimationId = null;
-            if (callback) {
-                queueMicrotask(callback);
-            }
-        }
-
-        progressAnimationId = requestAnimationFrame(step);
-    }
-
-    /** Stop any in-flight progress animation frame loop. */
-    function stopProgressAnimation() {
-        if (!progressAnimationId) {
-            return;
-        }
-        cancelAnimationFrame(progressAnimationId);
-        progressAnimationId = null;
-    }
-
-    /**
-     * Slowly crawl progress toward completion while jobs are active.
-     * @param {number} sessionId - Progress animation session token
-     */
-    function startProgressCrawl(sessionId) {
-        stopProgressAnimation();
-        const crawlCap = 0.985;
-        let previousTime = 0;
-
-        function crawl(now) {
-            /* v8 ignore next 4 */
-            if (sessionId !== progressSessionId) {
-                progressAnimationId = null;
-                return;
-            }
-
-            /* v8 ignore next */
-            if (activeJobs.size === 0) {
-                progressAnimationId = null;
-                return;
-            }
-
-            if (!previousTime) {
-                previousTime = now;
-            }
-
-            const deltaMs = Math.max(0, now - previousTime);
-            previousTime = now;
-            const remaining = Math.max(0, crawlCap - progressValue);
-
-            if (remaining > 0.0005) {
-                const normalizedRemaining = Math.min(1, remaining / 0.265);
-                const unitsPerSecond = 0.007 + 0.06 * normalizedRemaining;
-                const increment = (unitsPerSecond * deltaMs) / 1000;
-                progressValue = Math.min(crawlCap, progressValue + increment);
-                drawProgressBar(progressValue);
-            }
-
-            progressAnimationId = requestAnimationFrame(crawl);
-        }
-
-        progressAnimationId = requestAnimationFrame(crawl);
-    }
-
-    /**
-     * Draw the progress bar on canvas at the given value (0-1).
-     * @param {number} value - Progress value between 0 and 1
-     */
-    function drawProgressBar(value) {
-        const canvas = elements.progressCanvas;
-        /* v8 ignore next */
-        if (!canvas) {
-            return;
-        }
-        const rect = canvas.getBoundingClientRect();
-        if (!rect.width || !rect.height) {
-            return;
-        }
-        const ratio = window.devicePixelRatio || 1;
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
-        const ctx = canvas.getContext("2d");
-        /* v8 ignore next */
-        if (!ctx) {
-            return;
-        }
-        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-        ctx.clearRect(0, 0, rect.width, rect.height);
-
-        /* v8 ignore next 3 */
-        if (typeof document === "undefined" || !document.documentElement) {
-            return;
-        }
-        const styles = getComputedStyle(document.documentElement);
-        const border = styles.getPropertyValue("--border-color").trim();
-        const fill = styles.getPropertyValue("--accent-purple").trim();
-
-        const trackX = 8;
-        const trackY = rect.height / 2 - 14;
-        const trackWidth = rect.width - 16;
-        const trackHeight = 28;
-
-        if (rough) {
-            const rc = rough.canvas(canvas);
-            rc.rectangle(trackX, trackY, trackWidth, trackHeight, {
-                stroke: border,
-                strokeWidth: 1.5,
-                roughness: 1.4,
-            });
-            const fillWidth = Math.max(4, (trackWidth - 4) * value);
-            ctx.fillStyle = fill;
-            ctx.globalAlpha = 0.6;
-            ctx.fillRect(trackX + 2, trackY + 2, fillWidth, trackHeight - 4);
-            ctx.globalAlpha = 1;
-            rc.rectangle(trackX + 2, trackY + 2, fillWidth, trackHeight - 4, {
-                stroke: fill,
-                strokeWidth: 1.2,
-                roughness: 1.2,
-            });
-        }
-
-        if (elements.progressPercent) {
-            elements.progressPercent.textContent = `${Math.round(value * 100)}%`;
-        }
     }
 
     return {

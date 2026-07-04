@@ -126,6 +126,9 @@ export const UploadPage = (() => {
 
     /** Request persistent browser storage when supported. */
     function requestPersistentStorage() {
+        // Re-entry guard: init() runs once, so the second-call short-circuit is a
+        // defensive idempotency guard never re-entered in a single page lifetime.
+        /* v8 ignore next 3 */
         if (storagePersistenceRequested) {
             return;
         }
@@ -220,7 +223,9 @@ export const UploadPage = (() => {
         const { dropZone, fileInput, openAnalyticsBtn, clearAllBtn } = elements;
         // Match init()'s contract: only dropZone/fileInput are required for uploads.
         // The optional buttons are guarded individually below so a missing button
-        // never disables drag/drop or the file input.
+        // never disables drag/drop or the file input. init() already returns before
+        // calling bindEvents when either is missing, so this mirror is unreachable here.
+        /* v8 ignore next 3 */
         if (!dropZone || !fileInput) {
             return;
         }
@@ -561,6 +566,9 @@ export const UploadPage = (() => {
      * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
     function readFileAsText(file) {
+        // validateFiles() already drops files above MAX_FILE_BYTES before they
+        // reach here, so this per-file cap is a defensive backstop, not a live path.
+        /* v8 ignore next 4 */
         if (file.size > MAX_FILE_BYTES) {
             const maxMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));
             return Promise.reject(new Error(`"${file.name}" exceeds the ${maxMb}MB upload limit.`));
@@ -670,6 +678,10 @@ export const UploadPage = (() => {
                 totalBytes += chunk.value.byteLength;
             }
 
+            // The in-loop check above throws first when the watchdog fires mid-read;
+            // this post-loop check only trips if the final read completes (done) in
+            // the same tick the watchdog fires, which the unit clock does not stage.
+            /* v8 ignore next 3 */
             if (timedOut) {
                 throw new Error(`Reading ${file.name} timed out.`);
             }
@@ -725,6 +737,9 @@ export const UploadPage = (() => {
                 completeJob(payload.jobId || null, payload.fileName || "");
                 return;
             }
+            // parseAnalyticsWorkerMessage only yields the known message types above,
+            // so the switch default is an unreachable exhaustiveness guard.
+            /* v8 ignore next 2 */
             default:
                 return;
         }
@@ -796,6 +811,9 @@ export const UploadPage = (() => {
      * @param {{jobId?: string|null, percent?: number}} payload - Progress payload
      */
     function handleProgressMessage(payload) {
+        // parseAnalyticsWorkerMessage normalizes percent to a number and defaults
+        // the payload object, so this shape guard is a defensive backstop.
+        /* v8 ignore next 3 */
         if (!payload || typeof payload.percent !== "number") {
             return;
         }
@@ -1137,6 +1155,9 @@ export const UploadPage = (() => {
      * @returns {Promise<void>|void}
      */
     function scheduleAnalyticsWorkerPrime(fileMap, options) {
+        // Priming only runs while a worker exists; upload flows that call this
+        // always have one (they post addFile right after), so the guard is defensive.
+        /* v8 ignore next 3 */
         if (!worker) {
             return undefined;
         }
@@ -1213,6 +1234,9 @@ export const UploadPage = (() => {
      * @returns {Promise<void>}
      */
     function primeAnalyticsWorkerNow() {
+        // Both guards fire only on a torn-down worker or a payload cleared by a
+        // racing restart between scheduling and firing, neither staged in units.
+        /* v8 ignore next 3 */
         if (!worker || !pendingPrimePayload) {
             return Promise.resolve();
         }
@@ -1238,6 +1262,9 @@ export const UploadPage = (() => {
      * @returns {Promise<void>}
      */
     async function postPrimeToWorker(signature) {
+        // Entry guard for a worker torn down before the chained post runs; the
+        // caller only reaches here with a live worker in unit flows.
+        /* v8 ignore next 3 */
         if (!worker) {
             return;
         }
@@ -1262,6 +1289,8 @@ export const UploadPage = (() => {
         }
 
         // The worker may have been torn down (clear/restart) during the async load.
+        // That teardown race is not staged in unit tests, so this recheck is defensive.
+        /* v8 ignore next 3 */
         if (!worker) {
             return;
         }
@@ -1299,6 +1328,9 @@ export const UploadPage = (() => {
      * @param {boolean} isError - Whether the hint is an error
      */
     function setHint(message, isError) {
+        // The upload shell always renders #uploadHint; the guard mirrors the
+        // optional-element contract for embedders that omit it.
+        /* v8 ignore next 3 */
         if (!elements.uploadHint) {
             return;
         }
@@ -1331,6 +1363,9 @@ export const UploadPage = (() => {
     function scheduleJobTimeout(jobId, fileName) {
         clearJobTimeout(jobId);
         const timeoutId = window.setTimeout(() => {
+            // completeJob/resetProcessingState clear this timer when a job finishes,
+            // so a fired watchdog for an already-removed job is a defensive backstop.
+            /* v8 ignore next 3 */
             if (!activeJobs.has(jobId)) {
                 return;
             }

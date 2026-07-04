@@ -418,6 +418,24 @@ describe("Tutorial.init()", () => {
         expect(document.querySelector(".tutorial-mini-layer")).not.toBeNull();
     });
 
+    it("is a no-op for init/onRouteChange/start when tutorials are disabled", () => {
+        window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
+        try {
+            Tutorial.init();
+            // Shell is never built while disabled.
+            expect(document.querySelector(".tutorial-layer")).toBeNull();
+
+            // Route changes and explicit starts stay inert too.
+            Tutorial.onRouteChange("home");
+            expect(document.querySelector(".tutorial-layer")).toBeNull();
+
+            expect(Tutorial.start("home")).toBe(false);
+            expect(document.body.classList.contains("tutorial-open")).toBe(false);
+        } finally {
+            delete window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__;
+        }
+    });
+
     it("is idempotent, second call does not duplicate DOM", () => {
         Tutorial.init();
         Tutorial.init();
@@ -824,6 +842,14 @@ describe("step permission guards", () => {
 
         document.querySelector(".tutorial-btn-back").click();
         // Should stay on Step B
+        expect(document.querySelector(".tutorial-title").textContent).toBe("Step B");
+
+        // The Back button is disabled on this step, so the click above never
+        // reaches handleBackClick. ArrowLeft routes through the keyboard handler
+        // and exercises the allowBack===false guard directly (still a no-op).
+        document.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }),
+        );
         expect(document.querySelector(".tutorial-title").textContent).toBe("Step B");
     });
 

@@ -236,6 +236,116 @@ describe("sentry", () => {
         import.meta.env.VITE_SENTRY_DSN = original;
     });
 
+    it("returns a non-Error, non-string capture unchanged after redaction", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+        const sentry = await import("@sentry/browser");
+        sentry.captureException.mockClear();
+
+        const { initSentry, captureError, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        // A non-Error, non-string reason carries no message/stack to scrub, so it
+        // ships through untouched even when a sensitive context key is present.
+        const reason = { code: 42 };
+        captureError(reason, { fileName: "private.csv" });
+        expect(sentry.captureException.mock.calls.at(-1)[0]).toBe(reason);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("keeps the same Error instance when nothing sensitive appears in it", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+        const sentry = await import("@sentry/browser");
+        sentry.captureException.mockClear();
+
+        const { initSentry, captureError, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        const err = new Error("nothing to redact here");
+        captureError(err, { fileName: "secret.csv" });
+        // Message and stack are unchanged, so the original instance is reused.
+        expect(sentry.captureException.mock.calls.at(-1)[0]).toBe(err);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("sanitizes an Error with a non-string stack and non-string name", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+        const sentry = await import("@sentry/browser");
+        sentry.captureException.mockClear();
+
+        const { initSentry, captureError, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        const err = new Error('Reading "secret.csv" failed');
+        err.stack = undefined;
+        err.name = 123;
+        captureError(err, { fileName: "secret.csv" });
+
+        const captured = sentry.captureException.mock.calls.at(-1)[0];
+        expect(captured.message).toBe('Reading "[file]" failed');
+        expect(captured.name).toBe("Error");
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("keeps events whose exception frames are all clean", async () => {
+        const original = import.meta.env.VITE_SENTRY_DSN;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+        const sentry = await import("@sentry/browser");
+        sentry.init.mockClear();
+
+        const { initSentry, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        const initArgs = sentry.init.mock.calls[0][0];
+        const cleanStackEvent = {
+            exception: {
+                values: [
+                    { value: "Real application error" }, // no stacktrace
+                    {
+                        value: "Another real error",
+                        stacktrace: {
+                            frames: [
+                                { filename: "https://app.example.com/index.js" }, // clean
+                                { filename: 123 }, // non-string filename
+                            ],
+                        },
+                    },
+                ],
+            },
+        };
+        expect(initArgs.beforeSend(cleanStackEvent)).toEqual(cleanStackEvent);
+
+        import.meta.env.VITE_SENTRY_DSN = original;
+    });
+
+    it("omits a blank release from the Sentry config", async () => {
+        const originalDsn = import.meta.env.VITE_SENTRY_DSN;
+        const originalRelease = import.meta.env.VITE_APP_RELEASE;
+        import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";
+        import.meta.env.VITE_APP_RELEASE = "   ";
+        const sentry = await import("@sentry/browser");
+        sentry.init.mockClear();
+
+        const { initSentry, setTelemetryConsent } = await import("../src/sentry.js");
+        setTelemetryConsent(true);
+        initSentry();
+
+        const initArgs = sentry.init.mock.calls[0][0];
+        expect(initArgs.release).toBeUndefined();
+
+        import.meta.env.VITE_SENTRY_DSN = originalDsn;
+        import.meta.env.VITE_APP_RELEASE = originalRelease;
+    });
+
     it("filters noisy browser-extension errors via beforeSend", async () => {
         const original = import.meta.env.VITE_SENTRY_DSN;
         import.meta.env.VITE_SENTRY_DSN = "https://example@sentry.io/123";

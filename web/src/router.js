@@ -62,6 +62,9 @@ export const AppRouter = (() => {
             return;
         }
 
+        // routes.has(normalized) is verified above, so get() always returns the
+        // stored options object; the fallback is defensive.
+        /* v8 ignore next */
         const routeOptions = routes.get(normalized) || {};
         const nextParams = params === undefined
             ? (rememberedParams.get(normalized) || {})
@@ -218,6 +221,8 @@ export const AppRouter = (() => {
      * @param {boolean} replaceHistory - Use replaceState instead of push
      */
     function setHash(name, params, replaceHistory) {
+        // Every caller passes a concrete params object, so the fallback is defensive.
+        /* v8 ignore next */
         const nextHash = buildHash(name, params || {});
         if (nextHash === window.location.hash) {
             handleHashChange();
@@ -295,6 +300,8 @@ export const AppRouter = (() => {
      * @param {{name: string, params: object}} state - Current route state
      */
     function rememberSharedParams(state) {
+        // state.name always names a registered route, so the fallback is defensive.
+        /* v8 ignore next */
         const routeOptions = routes.get(state.name) || {};
         const keys = Array.isArray(routeOptions.sharedParams) ? routeOptions.sharedParams : [];
         if (!keys.length) {
@@ -348,6 +355,8 @@ export const AppRouter = (() => {
             return false;
         }
 
+        // Route states always carry a params object, so the fallbacks are defensive.
+        /* v8 ignore next 2 */
         const leftKeys = Object.keys(left.params || {});
         const rightKeys = Object.keys(right.params || {});
         if (leftKeys.length !== rightKeys.length) {

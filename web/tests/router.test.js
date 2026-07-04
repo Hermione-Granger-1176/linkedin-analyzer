@@ -223,3 +223,77 @@ describe("AppRouter navigation", () => {
         expect(parsed.params.zone).toBeUndefined();
     });
 });
+
+describe("AppRouter pure helpers", () => {
+    it("parseHash falls back to the default route for a query-only hash", () => {
+        const parsed = AppRouter.parseHash("#?foo=1");
+        expect(parsed.name).toBe("home");
+        expect(parsed.params.foo).toBe("1");
+    });
+
+    it("buildHash falls back to the default route for a blank name", () => {
+        expect(AppRouter.buildHash("", {})).toBe("#home");
+    });
+
+    it("buildHash tolerates null params", () => {
+        expect(AppRouter.buildHash("home", null)).toBe("#home");
+    });
+
+    it("buildHash normalizes an undefined name to the default route", () => {
+        // Exercises the String(value || "") coercion in normalizeRouteName.
+        expect(AppRouter.buildHash(undefined, {})).toBe("#home");
+    });
+});
+
+describe("AppRouter start and navigate edge cases", () => {
+    beforeEach(() => {
+        window.location.hash = "";
+        vi.restoreAllMocks();
+        AppRouter.registerRoute("home");
+    });
+
+    it("start with no fallback keeps the existing default route", () => {
+        AppRouter.start();
+        // An empty hash routes to the default "home".
+        expect(window.location.hash).toContain("home");
+    });
+
+    it("start ignores a blank fallback route", () => {
+        expect(() => AppRouter.start("   ")).not.toThrow();
+    });
+
+    it("start is idempotent when called twice", () => {
+        AppRouter.start("home");
+        expect(() => AppRouter.start("home")).not.toThrow();
+    });
+
+    it("navigate with omitted params uses an empty object for an unvisited route", () => {
+        AppRouter.registerRoute("fresh-unvisited");
+        AppRouter.navigate("fresh-unvisited");
+        expect(AppRouter.parseHash(window.location.hash).name).toBe("fresh-unvisited");
+    });
+
+    it("navigate tolerates explicitly null params", () => {
+        AppRouter.registerRoute("null-params");
+        AppRouter.navigate("null-params", null, { replaceHistory: true });
+        expect(AppRouter.parseHash(window.location.hash).name).toBe("null-params");
+    });
+
+    it("setParams tolerates null params on the current route", () => {
+        AppRouter.navigate("home", { a: "1" }, { replaceHistory: true });
+        AppRouter.setParams(null, { replaceHistory: true });
+        expect(AppRouter.parseHash(window.location.hash).params.a).toBeUndefined();
+    });
+
+    it("updateParams tolerates an undefined patch", () => {
+        AppRouter.navigate("home", { a: "1" }, { replaceHistory: true });
+        expect(() => AppRouter.updateParams(undefined, { replaceHistory: true })).not.toThrow();
+        expect(AppRouter.parseHash(window.location.hash).params.a).toBe("1");
+    });
+
+    it("getCurrentRoute returns null before any navigation on a fresh module", async () => {
+        vi.resetModules();
+        const { AppRouter: FreshRouter } = await import("../src/router.js");
+        expect(FreshRouter.getCurrentRoute()).toBeNull();
+    });
+});

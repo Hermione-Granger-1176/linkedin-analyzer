@@ -566,7 +566,7 @@ export const UploadPage = (() => {
      * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
     function readFileAsText(file) {
-        // validateFiles() already drops files above MAX_FILE_BYTES before they
+        // processFiles() already drops files above MAX_FILE_BYTES before they
         // reach here, so this per-file cap is a defensive backstop, not a live path.
         /* v8 ignore next 4 */
         if (file.size > MAX_FILE_BYTES) {

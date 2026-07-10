@@ -88,11 +88,7 @@ def is_missing(value: object) -> bool:
         return trimmed.upper() in MISSING_TEXT_VALUES
     try:
         # Use cast to Any since pd.isna accepts more types than stubs indicate
-        result = pd.isna(cast("Any", value))
-        # Handle scalar and array results
-        if isinstance(result, bool):
-            return result
-        return bool(result)
+        return bool(pd.isna(cast("Any", value)))
     except (TypeError, ValueError):
         return False
 

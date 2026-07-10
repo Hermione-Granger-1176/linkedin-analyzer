@@ -101,7 +101,6 @@ const STOP_WORDS = new Set([
     "hes",
     "shes",
     "its",
-    "were",
     "theyre",
     "ive",
     "youve",

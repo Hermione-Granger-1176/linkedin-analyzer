@@ -382,6 +382,12 @@ export const ConnectionsPage = (() => {
         return null;
     }
 
+    /** Worker payload handlers keyed by message type. */
+    const WORKER_MESSAGE_HANDLERS = Object.freeze({
+        processed: handleParsedPayload,
+        error: handleWorkerErrorPayload,
+    });
+
     /**
      * Handle messages received from the connections worker.
      * @param {MessageEvent} event - The message event from the worker
@@ -400,12 +406,7 @@ export const ConnectionsPage = (() => {
 
         const message = parsed.value;
 
-        const HANDLERS = {
-            processed: handleParsedPayload,
-            error: handleWorkerErrorPayload,
-        };
-
-        const handler = HANDLERS[message.type];
+        const handler = WORKER_MESSAGE_HANDLERS[message.type];
         /* v8 ignore next 3 */
         if (!handler) {
             return;

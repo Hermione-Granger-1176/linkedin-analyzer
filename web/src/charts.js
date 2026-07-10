@@ -2,10 +2,11 @@
 
 import rough from "roughjs/bundled/rough.esm.js";
 
+import { DAY_LABELS } from "./analytics-constants.js";
+
 export const SketchCharts = (() => {
     "use strict";
 
-    const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const WEEKLY_TIME_RANGES = new Set(["1m", "3m"]);
 
     const registry = new Map();

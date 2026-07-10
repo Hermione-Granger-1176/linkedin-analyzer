@@ -1,31 +1,12 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
+import { MONTH_LABELS } from "./analytics-constants.js";
 import { LinkedInCleaner } from "./cleaner.js";
 import { parseConnectionsWorkerRequest } from "./worker-contracts.js";
 
 /* -- Constants --------------------------------------------------------------- */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/**
- * Short month names for building human-readable month labels in the growth
- * timeline. The cleaner outputs ISO "Connected On" dates (YYYY-MM-DD), so
- * these labels are display-only.
- */
-const MONTH_LABELS = Object.freeze([
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-]);
 
 /* -- Date helpers ------------------------------------------------------------ */
 

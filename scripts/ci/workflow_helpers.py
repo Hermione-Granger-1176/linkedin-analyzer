@@ -114,9 +114,7 @@ COMMAND_HANDLERS = {
 def main(argv: list[str] | None = None) -> int:
     """Run a workflow helper command."""
     args = _build_parser().parse_args(argv)
-    handler = COMMAND_HANDLERS.get(args.command)
-    if handler is None:
-        raise ValueError(f"Unsupported command: {args.command}")
+    handler = COMMAND_HANDLERS[args.command]
     return handler(args)
 
 

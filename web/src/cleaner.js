@@ -146,12 +146,15 @@ export const LinkedInCleaner = (() => {
             return parseCache.get(cacheKey);
         }
 
-        if (typeof csvText !== "string" || !csvText.trim()) {
-            const emptyResult = { headers: [], data: [], error: EMPTY_CSV_ERROR };
+        const finish = (result) => {
             if (parseCache && cacheKey) {
-                parseCache.set(cacheKey, emptyResult);
+                parseCache.set(cacheKey, result);
             }
-            return emptyResult;
+            return result;
+        };
+
+        if (typeof csvText !== "string" || !csvText.trim()) {
+            return finish({ headers: [], data: [], error: EMPTY_CSV_ERROR });
         }
 
         const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
@@ -160,56 +163,36 @@ export const LinkedInCleaner = (() => {
             ({ rows, error } = parseCsvRows(`${csvText}"`, csvOptions));
         }
         if (error) {
-            const errorResult = { headers: [], data: [], error };
-            if (parseCache && cacheKey) {
-                parseCache.set(cacheKey, errorResult);
-            }
-            return errorResult;
+            return finish({ headers: [], data: [], error });
         }
 
         if (!rows.length) {
-            const emptyRowsResult = { headers: [], data: [], error: EMPTY_CSV_ERROR };
-            if (parseCache && cacheKey) {
-                parseCache.set(cacheKey, emptyRowsResult);
-            }
-            return emptyRowsResult;
+            return finish({ headers: [], data: [], error: EMPTY_CSV_ERROR });
         }
 
         const config = CONFIGS[fileType] || null;
         const skipRows = config && Number.isInteger(config.skipRows) ? config.skipRows : 0;
         const rowsAfterSkip = skipRows > 0 ? rows.slice(skipRows) : rows;
         if (!rowsAfterSkip.length) {
-            const skipResult = {
+            return finish({
                 headers: [],
                 data: [],
                 error: "CSV file has no header rows after skip.",
-            };
-            if (parseCache && cacheKey) {
-                parseCache.set(cacheKey, skipResult);
-            }
-            return skipResult;
+            });
         }
 
         const headers = normalizeHeaders(rowsAfterSkip[0]);
         if (!headers.length || headers.every((header) => header === "")) {
-            const headerResult = { headers: [], data: [], error: "Could not parse CSV headers" };
-            if (parseCache && cacheKey) {
-                parseCache.set(cacheKey, headerResult);
-            }
-            return headerResult;
+            return finish({ headers: [], data: [], error: "Could not parse CSV headers" });
         }
 
         const duplicateHeaders = findDuplicateHeaders(headers);
         if (duplicateHeaders.length) {
-            const duplicateResult = {
+            return finish({
                 headers: [],
                 data: [],
                 error: buildDuplicateHeadersError(duplicateHeaders),
-            };
-            if (parseCache && cacheKey) {
-                parseCache.set(cacheKey, duplicateResult);
-            }
-            return duplicateResult;
+            });
         }
 
         const headerCount = headers.length;
@@ -229,11 +212,7 @@ export const LinkedInCleaner = (() => {
             data.push(record);
         }
 
-        const result = { headers, data, error: null };
-        if (parseCache && cacheKey) {
-            parseCache.set(cacheKey, result);
-        }
-        return result;
+        return finish({ headers, data, error: null });
     }
 
     /**

@@ -38,7 +38,7 @@ const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
  */
 export function parseRangeParam(value, fallback) {
     const range = String(value || "").toLowerCase();
-    if (range === "all" || RANGE_MONTHS[range]) {
+    if (range === "all" || Object.prototype.hasOwnProperty.call(RANGE_MONTHS, range)) {
         return range;
     }
     return fallback;

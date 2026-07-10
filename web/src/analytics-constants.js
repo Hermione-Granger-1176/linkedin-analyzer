@@ -1,8 +1,8 @@
 /* LinkedIn Analyzer - Analytics shared label constants */
 
-export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const DAY_LABELS = Object.freeze(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 
-export const MONTH_LABELS = [
+export const MONTH_LABELS = Object.freeze([
     "Jan",
     "Feb",
     "Mar",
@@ -15,4 +15,4 @@ export const MONTH_LABELS = [
     "Oct",
     "Nov",
     "Dec",
-];
+]);

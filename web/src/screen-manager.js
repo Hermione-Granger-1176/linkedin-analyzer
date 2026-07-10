@@ -173,6 +173,16 @@ export const ScreenManager = (() => {
         });
     }
 
+    /** Human-readable screen names for the route announcer. */
+    const ROUTE_LABELS = Object.freeze({
+        home: "Home",
+        clean: "Clean",
+        analytics: "Analytics",
+        connections: "Connections",
+        messages: "Messages",
+        insights: "Insights"
+    });
+
     /**
      * Update route announcer live region for accessibility.
      * @param {string} routeName - Active route name
@@ -182,15 +192,7 @@ export const ScreenManager = (() => {
         if (!announcer) {
             return;
         }
-        const labels = {
-            home: "Home",
-            clean: "Clean",
-            analytics: "Analytics",
-            connections: "Connections",
-            messages: "Messages",
-            insights: "Insights"
-        };
-        announcer.textContent = `${labels[routeName] || routeName} screen`;
+        announcer.textContent = `${ROUTE_LABELS[routeName] || routeName} screen`;
     }
 
     /**

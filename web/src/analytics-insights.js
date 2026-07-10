@@ -15,6 +15,42 @@ const STREAK_TIERS = Object.freeze([
     { min: 30, title: "Streak Master" },
     { min: 7, title: "Consistency Streak" },
 ]);
+// Time-of-day archetypes, matched against the peak posting hour.
+const TIME_OF_DAY_INSIGHTS = Object.freeze([
+    {
+        max: 5,
+        id: "early-bird",
+        title: "Early Bird",
+        template: "Your peak hour is {hour}. Mornings are your power time.",
+        icon: "rooster",
+        accent: "accent-yellow",
+    },
+    {
+        min: 21,
+        id: "night-owl",
+        title: "Night Owl",
+        template: "Your peak hour is {hour}. Late hours work best for you.",
+        icon: "owl",
+        accent: "accent-purple",
+    },
+]);
+// Trend cards keyed by the view's trend direction.
+const TREND_INSIGHTS = Object.freeze({
+    up: {
+        id: "trending-up",
+        title: "Trending Up",
+        template: "Activity is up {pct}% compared to the previous period.",
+        icon: "rocket",
+        accent: "accent-blue",
+    },
+    down: {
+        id: "slowing",
+        title: "Taking a Breather",
+        template: "Activity is down {pct}% compared to the previous period.",
+        icon: "sloth",
+        accent: "accent-purple",
+    },
+});
 
 /**
  * Derive the narrative insight cards and closing tip from a built view.
@@ -30,24 +66,6 @@ export function generateInsights(view) {
     const peakHour = view.peakHour.hour;
     const peakDayLabel = DAY_LABELS[view.peakDay.dayIndex];
 
-    const TIME_OF_DAY_INSIGHTS = [
-        {
-            max: 5,
-            id: "early-bird",
-            title: "Early Bird",
-            template: "Your peak hour is {hour}. Mornings are your power time.",
-            icon: "rooster",
-            accent: "accent-yellow",
-        },
-        {
-            min: 21,
-            id: "night-owl",
-            title: "Night Owl",
-            template: "Your peak hour is {hour}. Late hours work best for you.",
-            icon: "owl",
-            accent: "accent-purple",
-        },
-    ];
     const hourLabel = `${String(peakHour).padStart(2, "0")}:00`;
     const timeInsight = TIME_OF_DAY_INSIGHTS.find(
         (i) =>
@@ -68,22 +86,6 @@ export function generateInsights(view) {
         accent: timeInsight.accent,
     });
 
-    const TREND_INSIGHTS = {
-        up: {
-            id: "trending-up",
-            title: "Trending Up",
-            template: "Activity is up {pct}% compared to the previous period.",
-            icon: "rocket",
-            accent: "accent-blue",
-        },
-        down: {
-            id: "slowing",
-            title: "Taking a Breather",
-            template: "Activity is down {pct}% compared to the previous period.",
-            icon: "sloth",
-            accent: "accent-purple",
-        },
-    };
     if (view.trend) {
         const trendDef = TREND_INSIGHTS[view.trend.direction];
         if (trendDef) {

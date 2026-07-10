@@ -2,6 +2,7 @@
 
 import rough from "roughjs/bundled/rough.esm.js";
 
+import { DAY_LABELS, MONTH_LABELS } from "./analytics-constants.js";
 import { SketchCharts } from "./charts.js";
 import { DataCache } from "./data-cache.js";
 import { DomEvents } from "./dom-events.js";
@@ -26,21 +27,6 @@ export const AnalyticsPage = (() => {
         shareType: "all",
     });
 
-    const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const MONTH_LABELS = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ];
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
     const CLICKABLE_TYPES = new Set(["month", "week", "heatmap", "topic"]);
@@ -92,6 +78,13 @@ export const AnalyticsPage = (() => {
             filters.hour !== null && filters.hour !== undefined ? String(filters.hour) : null,
         shareType: (filters) =>
             filters.shareType && filters.shareType !== "all" ? filters.shareType : null,
+    });
+
+    const FILTER_RESET_MAP = Object.freeze({
+        topic: { field: "topic", value: "all" },
+        month: { field: "monthFocus", value: null },
+        day: { field: "day", value: null },
+        hour: { field: "hour", value: null },
     });
 
     const TIMELINE_ANIMATION = {
@@ -778,13 +771,7 @@ export const AnalyticsPage = (() => {
         }
 
         const filter = button.getAttribute("data-filter");
-        const FILTER_RESET_MAP = {
-            topic: { field: "topic", value: "all" },
-            month: { field: "monthFocus", value: null },
-            day: { field: "day", value: null },
-            hour: { field: "hour", value: null },
-        };
-        const entry = FILTER_RESET_MAP[filter];
+        const entry = filter ? FILTER_RESET_MAP[filter] : null;
         if (entry) {
             state.filters[entry.field] = entry.value;
             syncRouteFromFilters();

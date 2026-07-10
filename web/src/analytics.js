@@ -454,7 +454,7 @@ export const AnalyticsEngine = (() => {
         }
 
         const monthCount = Number(rangeKey.replace("m", ""));
-        if (!monthCount || Number.isNaN(monthCount)) {
+        if (!monthCount) {
             return [];
         }
 
@@ -512,7 +512,6 @@ export const AnalyticsEngine = (() => {
         for (const monthKey of monthKeys) {
             const bucket = months[monthKey];
             const baselineValue = bucket ? bucket.total : 0;
-            let topicRatio = 1;
             if (!useWeeklyTimeline) {
                 timelineMax = Math.max(timelineMax, baselineValue);
             }
@@ -523,7 +522,7 @@ export const AnalyticsEngine = (() => {
                 continue;
             }
 
-            topicRatio = getTopicRatio(bucket, filters);
+            const topicRatio = getTopicRatio(bucket, filters);
             const hourRatio = getHourRatio(bucket, filters);
             monthMeta[monthKey] = {
                 topicRatio,
@@ -915,16 +914,14 @@ export const AnalyticsEngine = (() => {
 
         // Current streak from latest
         const latestDay = days[days.length - 1];
-        let cursor = parseDay(latestDay);
         let current = 1;
 
         for (
-            let prev = addDays(cursor, -1);
+            let prev = addDays(parseDay(latestDay), -1);
             daySet.has(formatDateKey(prev));
             prev = addDays(prev, -1)
         ) {
             current++;
-            cursor = prev;
         }
 
         return { current, longest };

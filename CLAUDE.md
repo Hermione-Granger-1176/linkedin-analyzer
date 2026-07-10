@@ -40,7 +40,7 @@ Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 - `make fmt`: auto-fix Python, JS, and metadata formatting
 - `make web`: start the Vite dev server
 - `make security`: dependency and override audits
-- `make pr` / `make git` / `make ci`: drill into PR, git, and CI sub-commands
+- `make pr` / `make git`: drill into PR and git sub-commands (`make help-ci` lists the CI sub-commands)
 - `make status`: quick workspace health check
 
 Python deps live in `pyproject.toml` (frozen in `uv.lock`); Node deps in `package.json` (frozen in `package-lock.json`). Refresh with `make lock` / `make lock-node`.

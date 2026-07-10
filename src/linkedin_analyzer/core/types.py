@@ -81,7 +81,7 @@ class CleanerConfig:
     @property
     def wrap_text_columns(self) -> list[int]:
         """Return 1-indexed column numbers that should have text wrapping."""
-        return [i + 1 for i, col in enumerate(self.columns) if col.wrap_text]
+        return [index for index, column in enumerate(self.columns, start=1) if column.wrap_text]
 
 
 @dataclass(frozen=True, slots=True)

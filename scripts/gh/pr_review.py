@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import gh_runner
-from .gh_runner import GhError, RunFunction
+from .gh_runner import GhError, GhRateLimitError, RunFunction
 
 _THREADS_QUERY = """
 query($owner: String!, $name: String!, $pr: Int!, $after: String) {
@@ -365,16 +365,20 @@ def request_copilot_review(pr: int | None = None, *, run_fn: RunFunction | None 
     """Request a GitHub Copilot code review on the pull request.
 
     Also used to re-request Copilot after addressing review feedback, since it
-    does not automatically re-review new pushes. Raises ``GhError`` if the
-    request fails (for example, if Copilot code review is not enabled for the
-    repository).
+    does not automatically re-review new pushes. The mutation is not retried so
+    a transient failure never double-requests a review. Raises ``GhError`` if
+    the request fails (for example, if Copilot code review is not enabled for
+    the repository).
     """
     pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
     try:
         gh_runner.run_gh(
             ["pr", "edit", str(pr), "--add-reviewer", _COPILOT_REVIEWER],
             run_fn=run_fn,
+            retries=0,
         )
+    except GhRateLimitError:
+        raise
     except GhError as exc:
         raise GhError(f"Failed to request Copilot review on PR #{pr}: {exc}") from exc
 

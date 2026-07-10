@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from scripts.gh import cli, gh_runner, pr_review
-from scripts.gh.gh_runner import GhError
+from scripts.gh.gh_runner import GhError, GhRateLimitError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -541,6 +541,81 @@ def test_main_list_comments_json(
     captured = json.loads(capsys.readouterr().out)
     assert exit_code == 0
     assert captured[0]["comment_id"] == "PRRC_x"
+
+
+def test_request_copilot_review_adds_reviewer() -> None:
+    """Requesting a Copilot review adds @copilot as a reviewer on the PR."""
+    runner = FakeGh([(has("pr", "edit"), completed_process(0, ""))])
+
+    pr_review.request_copilot_review(7, run_fn=runner)
+
+    (cmd,) = runner.calls
+    assert cmd == ["gh", "pr", "edit", "7", "--add-reviewer", "@copilot"]
+
+
+def test_request_copilot_review_defaults_to_current_pr() -> None:
+    """The PR number is resolved from the current branch when omitted."""
+    runner = FakeGh(
+        [
+            (has("pr", "view"), completed_process(0, json.dumps({"number": 7}))),
+            (has("pr", "edit"), completed_process(0, "")),
+        ]
+    )
+
+    pr_review.request_copilot_review(run_fn=runner)
+
+    assert ["gh", "pr", "edit", "7", "--add-reviewer", "@copilot"] in runner.calls
+
+
+def test_request_copilot_review_wraps_failure() -> None:
+    """A gh failure surfaces as a GhError naming the PR."""
+    runner = FakeGh([(has("pr", "edit"), completed_process(1, "", "Copilot review not enabled"))])
+
+    with pytest.raises(GhError, match=r"Copilot review on PR #7"):
+        pr_review.request_copilot_review(7, run_fn=runner)
+
+
+def test_request_copilot_review_does_not_retry_transient_failures() -> None:
+    """The reviewer mutation opts out of retries so it never double-requests."""
+    runner = FakeGh([(has("pr", "edit"), completed_process(1, "", "(HTTP 502) bad gateway"))])
+
+    with pytest.raises(GhError):
+        pr_review.request_copilot_review(7, run_fn=runner)
+
+    assert len(runner.calls) == 1
+
+
+def test_request_copilot_review_reraises_rate_limit() -> None:
+    """A rate limit surfaces unchanged so callers stop instead of retrying."""
+    runner = FakeGh(
+        [(has("pr", "edit"), completed_process(1, "", "API rate limit exceeded (HTTP 429)"))]
+    )
+
+    with pytest.raises(GhRateLimitError):
+        pr_review.request_copilot_review(7, run_fn=runner)
+
+
+def test_main_copilot_review_invokes_helper(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The copilot-review command requests the review and confirms."""
+    requested: list[int | None] = []
+    monkeypatch.setattr(pr_review, "request_copilot_review", lambda pr: requested.append(pr))
+
+    exit_code = cli.main(["copilot-review", "--pr", "9"])
+
+    assert exit_code == 0
+    assert requested == [9]
+    assert "Requested Copilot review" in capsys.readouterr().out
+
+
+def test_main_copilot_review_defaults_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The copilot-review command passes pr=None when no --pr is given."""
+    requested: list[int | None] = []
+    monkeypatch.setattr(pr_review, "request_copilot_review", lambda pr: requested.append(pr))
+
+    assert cli.main(["copilot-review"]) == 0
+    assert requested == [None]
 
 
 def test_main_delete_comment_invokes_helper(

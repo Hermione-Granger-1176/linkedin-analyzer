@@ -359,7 +359,7 @@ release-create: ## Tag and publish a GitHub release (make release-create tag=vX.
 
 # ─── Pull requests @pr ────────────────────────────────────────────────────────────
 
-.PHONY: pr pr-create pr-edit pr-list pr-status pr-checks pr-diff pr-comments pr-comment pr-review-comments pr-reply pr-resolve pr-address pr-comments-list pr-comment-delete pr-summary pr-merge pr-merge-admin pr-reviewers pr-label pr-close
+.PHONY: pr pr-create pr-edit pr-list pr-status pr-checks pr-diff pr-comments pr-comment pr-review-comments pr-reply pr-resolve pr-address pr-comments-list pr-comment-delete pr-summary pr-merge pr-merge-admin pr-reviewers pr-copilot pr-label pr-close
 
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
@@ -432,6 +432,9 @@ pr-merge-admin: ## Force merge bypassing branch protection (admin) (make pr-merg
 pr-reviewers: ## Add reviewers (make pr-reviewers users="user1,user2")
 	@test -n "$(users)" || (printf 'Usage: make pr-reviewers users="octocat"\n' >&2; exit 1)
 	gh pr edit --add-reviewer $(users)
+
+pr-copilot: ## Request (or re-request) a Copilot review on the PR (make pr-copilot [pr_num=N])
+	@$(GH) copilot-review $(if $(pr_num),--pr $(pr_num))
 
 pr-label: ## Add labels (make pr-label labels="bug")
 	@test -n "$(labels)" || (printf 'Usage: make pr-label labels="bug"\n' >&2; exit 1)

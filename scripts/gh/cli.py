@@ -58,6 +58,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--comment", required=True, help="Comment node id (PRRC_...)"
     )
 
+    copilot_parser = subparsers.add_parser(
+        "copilot-review", help="Request a Copilot code review on the PR"
+    )
+    copilot_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
     summary_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
 
@@ -117,6 +122,13 @@ def _handle_delete_comment(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_copilot_review(args: argparse.Namespace) -> int:
+    """Request a Copilot code review on the PR."""
+    pr_review.request_copilot_review(args.pr)
+    print("Requested Copilot review")
+    return 0
+
+
 def _handle_summary(args: argparse.Namespace) -> int:
     """Print the PR overview."""
     print(pr_review.pr_summary(args.pr))
@@ -136,6 +148,7 @@ COMMAND_HANDLERS = {
     "address": _handle_address,
     "list-comments": _handle_list_comments,
     "delete-comment": _handle_delete_comment,
+    "copilot-review": _handle_copilot_review,
     "summary": _handle_summary,
     "ci-failures": _handle_ci_failures,
 }

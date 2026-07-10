@@ -358,6 +358,27 @@ def pr_summary(pr: int | None = None, *, run_fn: RunFunction | None = None) -> s
     return "\n".join(lines)
 
 
+_COPILOT_REVIEWER = "@copilot"
+
+
+def request_copilot_review(pr: int | None = None, *, run_fn: RunFunction | None = None) -> None:
+    """Request a GitHub Copilot code review on the pull request.
+
+    Also used to re-request Copilot after addressing review feedback, since it
+    does not automatically re-review new pushes. Raises ``GhError`` if the
+    request fails (for example, if Copilot code review is not enabled for the
+    repository).
+    """
+    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    try:
+        gh_runner.run_gh(
+            ["pr", "edit", str(pr), "--add-reviewer", _COPILOT_REVIEWER],
+            run_fn=run_fn,
+        )
+    except GhError as exc:
+        raise GhError(f"Failed to request Copilot review on PR #{pr}: {exc}") from exc
+
+
 def _rollup_summary(rollup: list[dict[str, Any]]) -> str:
     """Summarize a ``statusCheckRollup`` list as a conclusion tally."""
     if not rollup:

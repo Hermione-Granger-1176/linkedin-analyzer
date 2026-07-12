@@ -73,7 +73,7 @@ def validate_lock_refresh_artifact(root: Path) -> None:
     unexpected_directories = sorted(_artifact_directories(root))
     if unexpected_directories:
         formatted = ", ".join(path.as_posix() for path in unexpected_directories)
-        raise ValueError(f"Unexpected director(y/ies) in lock artifact: {formatted}")
+        raise ValueError(f"Unexpected directory(ies) in lock artifact: {formatted}")
 
 
 def validate_lock_refresh_context(pr_number: str, head_sha: str, head_ref: str) -> None:

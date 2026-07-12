@@ -67,7 +67,7 @@ def test_validate_lock_refresh_artifact_rejects_unexpected_directories(tmp_path:
     write_valid_lock_artifact(tmp_path)
     (tmp_path / ".artifacts").mkdir()
 
-    with pytest.raises(ValueError, match=r"Unexpected director\(y/ies\).*\.artifacts"):
+    with pytest.raises(ValueError, match=r"Unexpected directory\(ies\).*\.artifacts"):
         validate_lock_refresh_artifact(tmp_path)
 
 

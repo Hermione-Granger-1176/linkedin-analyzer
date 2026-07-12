@@ -164,7 +164,7 @@ The lock refresh pair preserves the existing writeback flow while making the wor
 3. Only a successful validation can start the write-capable job. That job downloads the artifact from the original workflow run, rejects symlinks, extra directories, and every file other than `uv.lock`, then checks that the branch still has the validated ref and SHA.
 4. If the lock changed, the existing `.github/actions/verified-commit` action creates the same app-authored commit when app credentials are available. If direct commit creation is unavailable, that action retains its existing fallback branch and PR behavior. When the app credentials are absent, the lock refresh workflow retains its existing `GITHUB_TOKEN` writeback path.
 
-Any failed validation, missing artifact, unchanged lock, or stale branch skips the writeback without changing the pull request. The validation job receives no GitHub App credential or repository write permission.
+A failed workflow-run context validation, missing artifact, unchanged lock, or stale branch skips the writeback cleanly (the job stays green) without changing the pull request. Downloaded-artifact content validation is the one deliberate exception: an artifact with symlinks, unexpected files, or unexpected directories fails the job loudly rather than skipping, because unexpected contents point to tampering that must not pass silently. The validation job receives no GitHub App credential or repository write permission.
 
 To enable app-authored maintenance commits, configure these repository values:
 

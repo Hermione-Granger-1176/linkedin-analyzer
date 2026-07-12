@@ -62,6 +62,15 @@ def test_validate_lock_refresh_artifact_rejects_legacy_metadata_files(tmp_path: 
         validate_lock_refresh_artifact(tmp_path)
 
 
+def test_validate_lock_refresh_artifact_rejects_unexpected_directories(tmp_path: Path) -> None:
+    """Reject empty directories so the artifact contains only the lock file."""
+    write_valid_lock_artifact(tmp_path)
+    (tmp_path / ".artifacts").mkdir()
+
+    with pytest.raises(ValueError, match=r"Unexpected director\(y/ies\).*\.artifacts"):
+        validate_lock_refresh_artifact(tmp_path)
+
+
 def test_validate_lock_refresh_artifact_rejects_missing_required_files(tmp_path: Path) -> None:
     """Reject artifacts that omit the refreshed lock file."""
     write_valid_lock_artifact(tmp_path)
@@ -95,6 +104,10 @@ def test_validate_lock_refresh_context_accepts_expected_values(
         ("12", "a" * 40, "feature/unsafe", "head ref"),
         ("12", "a" * 40, "dependabot/uv/$(touch marker)", "head ref"),
         ("12", "a" * 40, "dependabot/uv/unsafe\nbranch", "head ref"),
+        ("12", "a" * 40, "dependabot/uv/unsafe/", "valid Git branch name"),
+        ("12", "a" * 40, "dependabot/uv/unsafe..branch", "valid Git branch name"),
+        ("12", "a" * 40, "dependabot/uv/unsafe//branch", "valid Git branch name"),
+        ("12", "a" * 40, "dependabot/uv/.unsafe", "valid Git branch name"),
     ],
 )
 def test_validate_lock_refresh_context_rejects_untrusted_values(

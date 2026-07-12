@@ -59,7 +59,9 @@ jobs:
             exit 0
           fi
 
-          if ! pr_json=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+          if pr_json=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+            :
+          else
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Python lock refresh"

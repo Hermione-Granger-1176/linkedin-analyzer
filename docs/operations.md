@@ -161,7 +161,7 @@ The lock refresh pair preserves the existing writeback flow while making the wor
 
 1. `refresh-python-locks.yml` runs only for a same-repository `dependabot[bot]` PR on a `dependabot/uv/` branch. It runs `make lock` and uploads a short-lived artifact named for that PR number. The artifact contains only the generated `uv.lock` file.
 2. `commit-python-locks.yml` starts with a read-only validation job. It checks the workflow-run PR number, SHA, and ref format, then queries GitHub for the current PR and requires the same bot author, repository, ref, and SHA.
-3. Only a successful validation can start the write-capable job. That job downloads the artifact from the original workflow run, rejects symlinks and every file other than `uv.lock`, then checks that the branch still has the validated ref and SHA.
+3. Only a successful validation can start the write-capable job. That job downloads the artifact from the original workflow run, rejects symlinks, extra directories, and every file other than `uv.lock`, then checks that the branch still has the validated ref and SHA.
 4. If the lock changed, the existing `.github/actions/verified-commit` action creates the same app-authored commit when app credentials are available. If direct commit creation is unavailable, that action retains its existing fallback branch and PR behavior. When the app credentials are absent, the lock refresh workflow retains its existing `GITHUB_TOKEN` writeback path.
 
 Any failed validation, missing artifact, unchanged lock, or stale branch skips the writeback without changing the pull request. The validation job receives no GitHub App credential or repository write permission.

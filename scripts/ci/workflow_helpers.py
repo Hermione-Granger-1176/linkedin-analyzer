@@ -46,6 +46,15 @@ def _artifact_files(root: Path) -> set[Path]:
     return files
 
 
+def _artifact_directories(root: Path) -> set[Path]:
+    """Return all directories in an artifact tree, relative to the root."""
+    directories: set[Path] = set()
+    for walk_root, dirnames, _filenames in os.walk(root, followlinks=False):
+        current_root = Path(walk_root)
+        directories.update((current_root / name).relative_to(root) for name in dirnames)
+    return directories
+
+
 def validate_lock_refresh_artifact(root: Path) -> None:
     """Validate a downloaded Python lock-refresh artifact tree."""
     reject_symlinks(root)
@@ -61,6 +70,11 @@ def validate_lock_refresh_artifact(root: Path) -> None:
         formatted = ", ".join(path.as_posix() for path in unexpected)
         raise ValueError(f"Unexpected file(s) in lock artifact: {formatted}")
 
+    unexpected_directories = sorted(_artifact_directories(root))
+    if unexpected_directories:
+        formatted = ", ".join(path.as_posix() for path in unexpected_directories)
+        raise ValueError(f"Unexpected director(y/ies) in lock artifact: {formatted}")
+
 
 def validate_lock_refresh_context(pr_number: str, head_sha: str, head_ref: str) -> None:
     """Validate trusted workflow-run values before a lockfile writeback."""
@@ -70,6 +84,10 @@ def validate_lock_refresh_context(pr_number: str, head_sha: str, head_ref: str) 
         raise ValueError("Lock refresh head SHA must be a 40-character lowercase hexadecimal SHA")
     if DEPENDABOT_UV_REF_PATTERN.fullmatch(head_ref) is None:
         raise ValueError("Lock refresh head ref must be a dependabot/uv branch name")
+    if ".." in head_ref or "//" in head_ref or head_ref.endswith((".", "/")):
+        raise ValueError("Lock refresh head ref must be a valid Git branch name")
+    if any(part.startswith(".") or part.endswith(".") for part in head_ref.split("/")):
+        raise ValueError("Lock refresh head ref must be a valid Git branch name")
 
 
 def _build_parser() -> argparse.ArgumentParser:

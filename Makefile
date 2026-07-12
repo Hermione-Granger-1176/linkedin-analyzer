@@ -364,7 +364,7 @@ commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"])
 	@if [ -n "$$COMMIT_BODY" ]; then git commit -m "$$COMMIT_TITLE" -m "$$COMMIT_BODY"; else git commit -m "$$COMMIT_TITLE"; fi
 
 push: ## Push the current branch and set its upstream
-	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin "$$branch"
+	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin -- "$$branch"
 
 release-create: export RELEASE_NOTES := $(notes)
 release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..."] [prerelease=1])

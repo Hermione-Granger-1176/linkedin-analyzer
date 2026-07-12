@@ -59,7 +59,15 @@ jobs:
             exit 0
           fi
 
-          pr_json=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")
+          if ! pr_json=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"); then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Python lock refresh"
+              echo
+              echo "Skipping writeback because the current pull request could not be verified."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           pr_author=$(jq --raw-output '.user.login // ""' <<<"$pr_json")
           pr_repository=$(jq --raw-output '.head.repo.full_name // ""' <<<"$pr_json")
           pr_ref=$(jq --raw-output '.head.ref // ""' <<<"$pr_json")

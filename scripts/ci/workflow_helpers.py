@@ -19,8 +19,8 @@ COMMIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 DEPENDABOT_UV_REF_PATTERN = re.compile(r"dependabot/uv/[A-Za-z0-9._/-]+")
 
 
-def reject_symlinks(root: Path) -> None:
-    """Reject any symlink inside an artifact tree before copying files out."""
+def reject_unsafe_entries(root: Path) -> None:
+    """Reject symlinks and special files inside an artifact tree before copying files out."""
     if not root.exists():
         raise ValueError(f"Artifact root does not exist: {root}")
     if root.is_symlink():
@@ -32,6 +32,10 @@ def reject_symlinks(root: Path) -> None:
             path = current_root / name
             if path.is_symlink():
                 raise ValueError(f"Artifact contains a symlink: {path}")
+        for name in filenames:
+            path = current_root / name
+            if not path.is_file():
+                raise ValueError(f"Artifact contains a non-regular file: {path}")
 
 
 def _artifact_files(root: Path) -> set[Path]:
@@ -57,7 +61,7 @@ def _artifact_directories(root: Path) -> set[Path]:
 
 def validate_lock_refresh_artifact(root: Path) -> None:
     """Validate a downloaded Python lock-refresh artifact tree."""
-    reject_symlinks(root)
+    reject_unsafe_entries(root)
 
     for relative_path in LOCK_ARTIFACT_REQUIRED_FILES.values():
         path = root / relative_path

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,15 @@ def test_validate_lock_refresh_artifact_rejects_symlinked_root(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="Artifact root is a symlink"):
         validate_lock_refresh_artifact(linked_root)
+
+
+def test_validate_lock_refresh_artifact_rejects_special_file(tmp_path: Path) -> None:
+    """Reject non-regular files (e.g. FIFOs) that slip past the file/directory checks."""
+    write_valid_lock_artifact(tmp_path)
+    os.mkfifo(tmp_path / "pipe")
+
+    with pytest.raises(ValueError, match="Artifact contains a non-regular file"):
+        validate_lock_refresh_artifact(tmp_path)
 
 
 def test_validate_lock_refresh_artifact_rejects_unexpected_files(tmp_path: Path) -> None:

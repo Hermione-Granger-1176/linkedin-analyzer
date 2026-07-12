@@ -4,19 +4,15 @@ from pathlib import Path
 
 import pytest
 from scripts.ci.workflow_helpers import (
-    read_lock_refresh_metadata,
     validate_lock_refresh_artifact,
+    validate_lock_refresh_context,
 )
 
 
 def write_valid_lock_artifact(root: Path) -> None:
     """Create the expected lock refresh artifact shape."""
-    artifact_dir = root / ".artifacts"
-    artifact_dir.mkdir(parents=True)
+    root.mkdir(parents=True, exist_ok=True)
     (root / "uv.lock").write_text("version = 1\n", encoding="utf-8")
-    (artifact_dir / "pr-number.txt").write_text("123\n", encoding="utf-8")
-    (artifact_dir / "head-sha.txt").write_text("abc123\n", encoding="utf-8")
-    (artifact_dir / "head-ref.txt").write_text("dependabot/example\n", encoding="utf-8")
 
 
 def test_validate_lock_refresh_artifact_accepts_expected_files(tmp_path: Path) -> None:
@@ -29,7 +25,7 @@ def test_validate_lock_refresh_artifact_accepts_expected_files(tmp_path: Path) -
 def test_validate_lock_refresh_artifact_rejects_symlink(tmp_path: Path) -> None:
     """Reject symlinks before artifact contents are copied into the workspace."""
     write_valid_lock_artifact(tmp_path)
-    (tmp_path / ".artifacts" / "linked-lock").symlink_to(tmp_path / "uv.lock")
+    (tmp_path / "linked-lock").symlink_to(tmp_path / "uv.lock")
 
     with pytest.raises(ValueError, match="Artifact contains a symlink"):
         validate_lock_refresh_artifact(tmp_path)
@@ -49,37 +45,61 @@ def test_validate_lock_refresh_artifact_rejects_symlinked_root(tmp_path: Path) -
 def test_validate_lock_refresh_artifact_rejects_unexpected_files(tmp_path: Path) -> None:
     """Reject extra files in the downloaded artifact tree."""
     write_valid_lock_artifact(tmp_path)
-    (tmp_path / ".artifacts" / "extra.txt").write_text("unexpected\n", encoding="utf-8")
+    (tmp_path / "extra.txt").write_text("unexpected\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match=r"Unexpected file\(s\).*extra.txt"):
         validate_lock_refresh_artifact(tmp_path)
 
 
-def test_validate_lock_refresh_artifact_rejects_missing_required_files(tmp_path: Path) -> None:
-    """Reject artifacts that omit required metadata files."""
+def test_validate_lock_refresh_artifact_rejects_legacy_metadata_files(tmp_path: Path) -> None:
+    """Reject artifact metadata that could otherwise select the writeback target."""
     write_valid_lock_artifact(tmp_path)
-    (tmp_path / ".artifacts" / "head-sha.txt").unlink()
+    metadata_dir = tmp_path / ".artifacts"
+    metadata_dir.mkdir()
+    (metadata_dir / "pr-number.txt").write_text("12$(touch marker)\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Unexpected file\(s\).*pr-number.txt"):
+        validate_lock_refresh_artifact(tmp_path)
+
+
+def test_validate_lock_refresh_artifact_rejects_missing_required_files(tmp_path: Path) -> None:
+    """Reject artifacts that omit the refreshed lock file."""
+    write_valid_lock_artifact(tmp_path)
+    (tmp_path / "uv.lock").unlink()
 
     with pytest.raises(ValueError, match="Required artifact file missing"):
         validate_lock_refresh_artifact(tmp_path)
 
 
-def test_read_lock_refresh_metadata_strips_expected_values(tmp_path: Path) -> None:
-    """Read and trim lock-refresh metadata values."""
-    write_valid_lock_artifact(tmp_path)
+@pytest.mark.parametrize(
+    ("pr_number", "head_sha", "head_ref"),
+    [
+        ("123", "a" * 40, "dependabot/uv/requests-2.32.0"),
+        ("42", "0123456789abcdef0123456789abcdef01234567", "dependabot/uv/foo/bar-1.0"),
+    ],
+)
+def test_validate_lock_refresh_context_accepts_expected_values(
+    pr_number: str, head_sha: str, head_ref: str
+) -> None:
+    """Accept trusted Dependabot workflow-run context values."""
+    validate_lock_refresh_context(pr_number, head_sha, head_ref)
 
-    assert read_lock_refresh_metadata(tmp_path) == {
-        "pr-number": "123",
-        "head-sha": "abc123",
-        "head-ref": "dependabot/example",
-    }
 
-
-def test_read_lock_refresh_metadata_validates_before_reading(tmp_path: Path) -> None:
-    """Reject unsafe metadata artifacts before reading their contents."""
-    write_valid_lock_artifact(tmp_path)
-    (tmp_path / ".artifacts" / "head-ref.txt").unlink()
-    (tmp_path / ".artifacts" / "head-ref.txt").symlink_to(tmp_path / "uv.lock")
-
-    with pytest.raises(ValueError, match="Artifact contains a symlink"):
-        read_lock_refresh_metadata(tmp_path)
+@pytest.mark.parametrize(
+    ("pr_number", "head_sha", "head_ref", "message"),
+    [
+        ("0", "a" * 40, "dependabot/uv/requests-2.32.0", "pull request number"),
+        ("12$(touch marker)", "a" * 40, "dependabot/uv/requests-2.32.0", "pull request number"),
+        ("12", "a" * 39, "dependabot/uv/requests-2.32.0", "head SHA"),
+        ("12", "A" * 40, "dependabot/uv/requests-2.32.0", "head SHA"),
+        ("12", "a" * 40, "feature/unsafe", "head ref"),
+        ("12", "a" * 40, "dependabot/uv/$(touch marker)", "head ref"),
+        ("12", "a" * 40, "dependabot/uv/unsafe\nbranch", "head ref"),
+    ],
+)
+def test_validate_lock_refresh_context_rejects_untrusted_values(
+    pr_number: str, head_sha: str, head_ref: str, message: str
+) -> None:
+    """Reject values that cannot safely select a trusted writeback target."""
+    with pytest.raises(ValueError, match=message):
+        validate_lock_refresh_context(pr_number, head_sha, head_ref)

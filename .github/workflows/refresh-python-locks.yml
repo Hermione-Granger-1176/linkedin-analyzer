@@ -31,7 +31,6 @@ jobs:
     env:
       PYTHON_VERSION: "3.14"
       LOCK_REFRESH_ARTIFACT_NAME: python-lock-refresh-${{ github.event.pull_request.number }}
-      LOCK_REFRESH_ROOT: .artifacts
     steps:
       - name: Checkout Dependabot branch
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -61,25 +60,10 @@ jobs:
           python -m pip install --upgrade pip uv
           make lock
 
-      - name: Write refresh metadata
-        env:
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          mkdir -p "$LOCK_REFRESH_ROOT"
-          printf '%s\n' "$PR_NUMBER" > "$LOCK_REFRESH_ROOT/pr-number.txt"
-          printf '%s\n' "$HEAD_SHA" > "$LOCK_REFRESH_ROOT/head-sha.txt"
-          printf '%s\n' "$HEAD_REF" > "$LOCK_REFRESH_ROOT/head-ref.txt"
-
       - name: Upload refreshed Python lock file
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.LOCK_REFRESH_ARTIFACT_NAME }}
-          path: |
-            uv.lock
-            ${{ env.LOCK_REFRESH_ROOT }}/pr-number.txt
-            ${{ env.LOCK_REFRESH_ROOT }}/head-sha.txt
-            ${{ env.LOCK_REFRESH_ROOT }}/head-ref.txt
+          path: uv.lock
           if-no-files-found: error
           overwrite: true

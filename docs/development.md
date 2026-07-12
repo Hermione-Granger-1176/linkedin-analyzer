@@ -124,7 +124,7 @@ If either audit job fails, a `report-failure` job opens (or comments on the exis
 
 Maintenance workflows also keep generated repository state current:
 
-- `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for Dependabot uv PRs through a validated artifact handoff.
+- `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for same-repository Dependabot uv PRs through a validated artifact handoff. The artifact contains only `uv.lock`; a read-only job validates the triggering PR's current author, repository, ref, and SHA before a separate write-capable job can download it or create a commit. See [CI Automation and Verified Writebacks](operations.md#ci-automation-and-verified-writebacks) for the full flow and fallback behavior.
 - `refresh-action-shas.yml` converts tag-based GitHub Action references to full commit SHAs when app credentials are configured. Already pinned references are left unchanged; Dependabot handles action-version updates.
 
 ## Code Style

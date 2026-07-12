@@ -145,6 +145,7 @@ The workflow structure mirrors the stricter automation pattern used in the `arti
 
 - Pull-request verification is separated from writeback jobs.
 - Generated maintenance changes are passed through short-lived workflow artifacts before any commit is created.
+- The writeback workflow independently validates the completed run against the live same-repository Dependabot PR before downloading its artifact.
 - Writeback jobs re-check the PR branch SHA before applying generated files, so stale artifacts cannot overwrite newer commits.
 - Automated commits use `.github/actions/verified-commit`, which creates GitHub-verified commits through the API and can fall back to a PR branch.
 
@@ -152,14 +153,25 @@ Configured automation:
 
 - `refresh-action-shas.yml` runs monthly or manually and converts tag-based workflow/action `uses:` refs to full commit SHAs. It leaves already pinned refs unchanged; Dependabot updates action versions.
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
-- `commit-python-locks.yml` downloads the refreshed lock artifact from the completed workflow run, validates its contents, revalidates the Dependabot branch head, and commits `uv.lock` back only if it is still safe.
+- `commit-python-locks.yml` validates the triggering workflow run against the live Dependabot PR, downloads a `uv.lock`-only artifact, validates its contents, revalidates the branch head, and commits only if it is still safe.
+
+### Python lock refresh flow
+
+The lock refresh pair preserves the existing writeback flow while making the workflow-run boundary stricter:
+
+1. `refresh-python-locks.yml` runs only for a same-repository `dependabot[bot]` PR on a `dependabot/uv/` branch. It runs `make lock` and uploads a short-lived artifact named for that PR number. The artifact contains only the generated `uv.lock` file.
+2. `commit-python-locks.yml` starts with a read-only validation job. It checks the workflow-run PR number, SHA, and ref format, then queries GitHub for the current PR and requires the same bot author, repository, ref, and SHA.
+3. Only a successful validation can start the write-capable job. That job downloads the artifact from the original workflow run, rejects symlinks and every file other than `uv.lock`, then checks that the branch still has the validated ref and SHA.
+4. If the lock changed, the existing `.github/actions/verified-commit` action creates the same app-authored commit when app credentials are available. If direct commit creation is unavailable, that action retains its existing fallback branch and PR behavior. When the app credentials are absent, the lock refresh workflow retains its existing `GITHUB_TOKEN` writeback path.
+
+Any failed validation, missing artifact, unchanged lock, or stale branch skips the writeback without changing the pull request. The validation job receives no GitHub App credential or repository write permission.
 
 To enable app-authored maintenance commits, configure these repository values:
 
 - Repository variable: `APP_ID`
 - Repository secret: `APP_PRIVATE_KEY`
 
-If they are missing, the action-SHA refresh workflow records a skipped summary instead of attempting a write.
+If they are missing, the action-SHA refresh workflow records a skipped summary instead of attempting a write. The Python lock refresh workflow instead uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
 
 ## CLI Environment Variables
 

@@ -326,7 +326,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch log diff diff-staged release-create
+.PHONY: git branch branch-current rebase log diff diff-staged stage-all commit push release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -337,6 +337,14 @@ branch: ## Create and switch to a new branch off main, or off base for a stacked
 	if git rev-parse --symbolic-full-name --abbrev-ref '@{u}' >/dev/null 2>&1; then git pull; fi && \
 	git checkout -b "$(name)"
 
+branch-current: ## Create a branch from the current checkout without updating its base
+	@test -n "$(name)" || (printf 'Usage: make branch-current name=my-feature\n' >&2; exit 1)
+	git checkout -b "$(name)"
+
+rebase: ## Rebase the current branch onto its remote base (make rebase base=origin/main)
+	@test -n "$(base)" || (printf 'Usage: make rebase base=origin/main\n' >&2; exit 1)
+	git rebase "$(base)"
+
 log: ## Show recent commit log
 	git log --oneline -20
 
@@ -345,6 +353,18 @@ diff: ## Show unstaged changes
 
 diff-staged: ## Show staged changes
 	git diff --cached
+
+stage-all: ## Stage all working tree changes
+	git add -A
+
+commit: export COMMIT_TITLE := $(title)
+commit: export COMMIT_BODY := $(body)
+commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"])
+	@test -n "$$COMMIT_TITLE" || (printf 'Usage: make commit title="Subject" [body="- Detail"]\n' >&2; exit 1)
+	@if [ -n "$$COMMIT_BODY" ]; then git commit -m "$$COMMIT_TITLE" -m "$$COMMIT_BODY"; else git commit -m "$$COMMIT_TITLE"; fi
+
+push: ## Push the current branch and set its upstream
+	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin -- "$$branch"
 
 release-create: export RELEASE_NOTES := $(notes)
 release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..."] [prerelease=1])

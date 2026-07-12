@@ -43,9 +43,7 @@ def test_validate_lock_refresh_artifact_rejects_symlinked_root(tmp_path: Path) -
         validate_lock_refresh_artifact(linked_root)
 
 
-@pytest.mark.skipif(
-    not hasattr(os, "mkfifo"), reason="os.mkfifo is unavailable on this platform"
-)
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="os.mkfifo is unavailable on this platform")
 def test_validate_lock_refresh_artifact_rejects_special_file(tmp_path: Path) -> None:
     """Reject non-regular files (e.g. FIFOs) that slip past the file/directory checks."""
     write_valid_lock_artifact(tmp_path)

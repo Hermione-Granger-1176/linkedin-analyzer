@@ -352,6 +352,29 @@ describe("SketchCharts", () => {
         expect(heatmapLabels).toContain("No activity yet.");
     });
 
+    it("exportPng redraws the empty-state message after an empty draw", () => {
+        const { canvas, ctx } = createCanvas({ width: 320, height: 160 });
+        SketchCharts.drawTimeline(canvas, [], "12m", 1, 0, "No activity yet.");
+
+        // Only inspect the export redraws, not the initial empty draw.
+        ctx.fillText.mockClear();
+
+        const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:chart");
+        vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+        const clickSpy = vi
+            .spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => {});
+
+        SketchCharts.exportPng(canvas, "empty.png");
+
+        // An empty chart keeps a registered redraw, so exporting reproduces the
+        // message instead of being a no-op.
+        const labels = ctx.fillText.mock.calls.map((args) => String(args[0]));
+        expect(labels).toContain("No activity yet.");
+        expect(createUrl).toHaveBeenCalled();
+        expect(clickSpy).toHaveBeenCalled();
+    });
+
     it("drawTimeline draws y-axis ticks with headroom for flat sparse data", () => {
         const { canvas, ctx } = createCanvas({ width: 400, height: 200 });
         const data = [

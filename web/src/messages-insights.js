@@ -825,12 +825,15 @@ export const MessagesPage = (() => {
         // Bound only inside the `if (elements.timeRangeSelect)` guard in init, so
         // the element is always present here; assert non-null for the type checker.
         const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        // parseRangeParam echoes a valid range and returns the fallback otherwise;
-        // an empty sentinel is never a valid range, so it flags unknown values.
-        if (parseRangeParam(range, "") === "") {
+        // parseRangeParam echoes a valid range normalized to lowercase and returns
+        // the fallback otherwise; the empty sentinel is never a valid range, so it
+        // flags unknown values. Apply the parsed value so odd casing still enters
+        // state and the router as the normalized range.
+        const parsed = parseRangeParam(range, "");
+        if (parsed === "") {
             return;
         }
-        applyTimeRange(range);
+        applyTimeRange(parsed);
     }
 
     /** Reset filters to defaults. */

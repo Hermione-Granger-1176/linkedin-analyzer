@@ -90,6 +90,9 @@ export const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
+        // Register a redraw so exportPng (and any other drawRegistry consumer) can
+        // reproduce the empty-state message; clear() dropped the previous handle.
+        drawRegistry.set(canvas, () => drawEmptyState(canvas, message));
         ctx.font = "14px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.textSecondary;
         ctx.textAlign = "center";

@@ -1096,6 +1096,27 @@ describe("MessagesPage", () => {
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 
+    it("normalizes a cased range from the select before applying it", async () => {
+        Storage.getAllFiles.mockResolvedValue([]);
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        AppRouter.setParams.mockClear();
+        const select = document.getElementById("messagesTimeRangeSelect");
+        // A stray option with odd casing must normalize to the canonical range
+        // rather than leaking mixed case into state and the router.
+        select.insertAdjacentHTML("beforeend", '<option value="3M">3 months</option>');
+        select.value = "3M";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).toHaveBeenCalledWith(
+            { range: "3m" },
+            { replaceHistory: false },
+        );
+        expect(document.querySelector('[data-range="3m"]').classList.contains("active")).toBe(true);
+    });
+
     it("mirrors the active range onto the select when applied from the route", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
         MessagesPage.onRouteChange({ range: "3m" });

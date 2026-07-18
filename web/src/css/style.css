@@ -1890,11 +1890,20 @@ button {
         color: var(--text-primary);
     }
 
-    /* The fixed top-left toggle overlaps the top of each left-aligned screen
-       header, so drop those titles below it. The centered hero title clears the
-       corner on its own and keeps its own spacing. */
+    /* The fixed top-left toggle overlaps the top of each screen header, so drop
+       the titles below it. Center every screen title, subtitle, and underline on
+       the card. Without this the header block shrink-wraps to its own subtitle
+       width and, being left-anchored, lands each screen's title at a different x
+       position, so titles visibly jump during navigation. Centering the header
+       block makes each title's center coincide with the card center regardless
+       of subtitle length; the underline is already centered by the 768px rule. */
     .screen-header {
         padding-top: var(--space-2xl);
+        align-items: center;
+    }
+
+    .header-text .subtitle {
+        text-align: center;
     }
 
     /* Collapse the time-range chip row into a compact native select that is

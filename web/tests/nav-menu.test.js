@@ -26,6 +26,28 @@ function renderMenu() {
     };
 }
 
+/** Render two independent toggle + nav pairs wired by aria-controls. */
+function renderTwoMenus() {
+    document.body.innerHTML = `
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="topNav-a"></button>
+        <nav class="top-nav" id="topNav-a" aria-label="Primary A">
+            <a class="top-link" data-route="home" href="#home">Home</a>
+        </nav>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="topNav-b"></button>
+        <nav class="top-nav" id="topNav-b" aria-label="Primary B">
+            <a class="top-link" data-route="analytics" href="#analytics">Analytics</a>
+        </nav>
+        <p id="outside">Outside content</p>
+    `;
+    const toggles = document.querySelectorAll(".nav-toggle");
+    return {
+        toggleA: /** @type {HTMLElement} */ (toggles[0]),
+        navA: /** @type {HTMLElement} */ (document.getElementById("topNav-a")),
+        toggleB: /** @type {HTMLElement} */ (toggles[1]),
+        navB: /** @type {HTMLElement} */ (document.getElementById("topNav-b")),
+    };
+}
+
 describe("NavMenu", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -164,5 +186,37 @@ describe("NavMenu", () => {
     it("does nothing when there are no toggles", () => {
         document.body.innerHTML = '<nav class="top-nav"></nav>';
         expect(() => NavMenu.init()).not.toThrow();
+    });
+
+    it("closes only the open nav on Escape when two menus are wired", () => {
+        const { toggleA, navA, toggleB, navB } = renderTwoMenus();
+        NavMenu.init();
+
+        toggleA.click();
+        expect(navA.classList.contains("is-open")).toBe(true);
+        expect(navB.classList.contains("is-open")).toBe(false);
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+        expect(navA.classList.contains("is-open")).toBe(false);
+        expect(document.activeElement).toBe(toggleA);
+        expect(navB.classList.contains("is-open")).toBe(false);
+        expect(toggleB.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("closes only the open nav on an outside click when two menus are wired", () => {
+        const { toggleA, navA, toggleB, navB } = renderTwoMenus();
+        NavMenu.init();
+
+        toggleB.click();
+        expect(navB.classList.contains("is-open")).toBe(true);
+        expect(navA.classList.contains("is-open")).toBe(false);
+
+        document.getElementById("outside").click();
+
+        expect(navB.classList.contains("is-open")).toBe(false);
+        expect(toggleB.getAttribute("aria-expanded")).toBe("false");
+        expect(navA.classList.contains("is-open")).toBe(false);
+        expect(toggleA.getAttribute("aria-expanded")).toBe("false");
     });
 });

@@ -1796,16 +1796,6 @@ button {
     }
 }
 
-/* Demote wide cards to a single track only once the auto-fit grid itself has
-   collapsed to one column (minmax(280px) x 2 + gap no longer fits inside the
-   padded container). Demoting earlier left a large empty hole beside the card
-   while the grid still had two tracks. */
-@media (max-width: 615px) {
-    .chart-card--wide {
-        grid-column: span 1;
-    }
-}
-
 /* In the two-column analytics band the lone Top topics card would otherwise sit
    beside an empty column, wedged between the two full-row charts. Stretch just
    that card to the full row for a consistent stack. The connections screen keeps
@@ -1848,6 +1838,16 @@ button {
 
     .header-text .subtitle {
         text-align: left;
+    }
+}
+
+/* Demote wide cards to a single track only once the auto-fit grid itself has
+   collapsed to one column (minmax(280px) x 2 + gap no longer fits inside the
+   padded container). Demoting earlier left a large empty hole beside the card
+   while the grid still had two tracks. */
+@media (max-width: 615px) {
+    .chart-card--wide {
+        grid-column: span 1;
     }
 }
 

@@ -1432,7 +1432,7 @@ describe("AnalyticsPage", () => {
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
     });
 
-    it("applies the range chosen from the compact select and syncs the route", async () => {
+    it("syncs range into router on select change", async () => {
         const requestId = await bootstrapWithData({});
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1461,7 +1461,7 @@ describe("AnalyticsPage", () => {
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 
-    it("mirrors the active range onto the select when filters come from the route", async () => {
+    it("mirrors the active range onto the select when applied from the route", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();

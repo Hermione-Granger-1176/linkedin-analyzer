@@ -822,12 +822,9 @@ export const MessagesPage = (() => {
 
     /** Apply the range chosen from the compact select, ignoring unknown values. */
     function handleTimeRangeSelect() {
-        // timeRangeSelect is present whenever this handler is bound, so the guard is defensive.
-        /* v8 ignore next 3 */
-        if (!elements.timeRangeSelect) {
-            return;
-        }
-        const range = elements.timeRangeSelect.value;
+        // Bound only inside the `if (elements.timeRangeSelect)` guard in init, so
+        // the element is always present here; assert non-null for the type checker.
+        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
         // parseRangeParam echoes a valid range and returns the fallback otherwise;
         // an empty sentinel is never a valid range, so it flags unknown values.
         if (parseRangeParam(range, "") === "") {

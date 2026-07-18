@@ -8,10 +8,18 @@ export const NavMenu = (() => {
     const OPEN_LABEL = "Open navigation menu";
     const CLOSE_LABEL = "Close navigation menu";
 
+    /** @type {Array<{toggle: HTMLElement, nav: HTMLElement}>} */
+    const pairs = [];
+    let documentListenersBound = false;
+
     /** Wire every nav toggle button to the nav it controls. */
     function init() {
+        // Clear in place so re-init drops stale pairs while the shared document
+        // listeners keep their reference to this same array.
+        pairs.length = 0;
         const toggles = document.querySelectorAll(".nav-toggle");
         toggles.forEach((toggle) => wireToggle(/** @type {HTMLElement} */ (toggle)));
+        bindDocumentListeners();
     }
 
     /**
@@ -25,12 +33,10 @@ export const NavMenu = (() => {
             return;
         }
 
+        pairs.push({ toggle, nav });
+
         toggle.addEventListener("click", () => {
-            if (nav.classList.contains("is-open")) {
-                setOpen(toggle, nav, false);
-            } else {
-                setOpen(toggle, nav, true);
-            }
+            setOpen(toggle, nav, !nav.classList.contains("is-open"));
         });
 
         // A route link click navigates; collapse the panel behind it.
@@ -39,25 +45,44 @@ export const NavMenu = (() => {
                 setOpen(toggle, nav, false);
             }
         });
+    }
 
-        // Escape closes and returns focus to the toggle for keyboard users.
+    /**
+     * Register the shared document-level handlers once. A single keydown and a
+     * single click listener drive every wired pair, so app-wide events fan out
+     * once rather than through one closure per toggle.
+     */
+    function bindDocumentListeners() {
+        if (documentListenersBound) {
+            return;
+        }
+        documentListenersBound = true;
+
+        // Escape closes whichever nav is open and returns focus to its toggle.
         document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape" && nav.classList.contains("is-open")) {
-                setOpen(toggle, nav, false);
-                toggle.focus();
+            if (event.key !== "Escape") {
+                return;
             }
+            pairs.forEach(({ toggle, nav }) => {
+                if (nav.classList.contains("is-open")) {
+                    setOpen(toggle, nav, false);
+                    toggle.focus();
+                }
+            });
         });
 
-        // A click anywhere outside the nav or its toggle dismisses the panel.
+        // A click outside an open nav and its toggle dismisses that panel.
         document.addEventListener("click", (event) => {
-            if (!nav.classList.contains("is-open")) {
-                return;
-            }
             const target = /** @type {Node|null} */ (event.target);
-            if (nav.contains(target) || toggle.contains(target)) {
-                return;
-            }
-            setOpen(toggle, nav, false);
+            pairs.forEach(({ toggle, nav }) => {
+                if (!nav.classList.contains("is-open")) {
+                    return;
+                }
+                if (nav.contains(target) || toggle.contains(target)) {
+                    return;
+                }
+                setOpen(toggle, nav, false);
+            });
         });
     }
 

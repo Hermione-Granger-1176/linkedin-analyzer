@@ -276,19 +276,19 @@ export const SketchCharts = (() => {
         ctx.font = "10px Patrick Hand, sans-serif";
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 0.6;
+        ctx.fillStyle = colors.textSecondary;
         for (let tickValue = 0; tickValue <= maxValue; tickValue += tickStep) {
             const tickY = baseY - (tickValue / maxValue) * chartHeight;
             if (tickValue !== 0) {
-                ctx.strokeStyle = colors.border;
                 ctx.globalAlpha = 0.35;
-                ctx.lineWidth = 0.6;
                 ctx.beginPath();
                 ctx.moveTo(padding.left, tickY);
                 ctx.lineTo(padding.left + chartWidth, tickY);
                 ctx.stroke();
                 ctx.globalAlpha = 1;
             }
-            ctx.fillStyle = colors.textSecondary;
             ctx.fillText(String(tickValue), padding.left - 6, tickY);
         }
 
@@ -416,18 +416,17 @@ export const SketchCharts = (() => {
                     return;
                 }
                 const prev = accepted[accepted.length - 1];
-                if (prev && entry.x - prev.entry.x < minLabelSpacing) {
-                    if (isLast) {
-                        accepted.pop();
-                        accepted.push({ entry, isLast });
+                if (prev && entry.x - prev.x < minLabelSpacing) {
+                    // Crowded: a regular label yields; the last point evicts its neighbour.
+                    if (!isLast) {
+                        return;
                     }
-                    return;
+                    accepted.pop();
                 }
-                accepted.push({ entry, isLast });
+                accepted.push(entry);
             });
 
-            accepted.forEach(({ entry }) => {
-                const { point, x } = entry;
+            accepted.forEach(({ point, x }) => {
                 const labelText = isWeekly ? point.label : point.label.split(" ")[0];
                 ctx.save();
                 ctx.translate(x, baseY + 18);

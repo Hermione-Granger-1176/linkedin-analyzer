@@ -1825,13 +1825,6 @@ button {
         flex-direction: column;
     }
 
-    /* The title centers here (column flex + centered cross-axis), so its
-       decorative underline must follow instead of staying anchored left. */
-    .screen-header .title::before {
-        left: 50%;
-        transform: translateX(-50%);
-    }
-
     .theme-toggle {
         top: var(--space-md);
         right: var(--space-md);
@@ -1840,6 +1833,21 @@ button {
     .filters-bar {
         flex-direction: column;
         align-items: flex-start;
+    }
+}
+
+/* Tablet band: keep every screen header left-anchored so all five screens line
+   up identically, matching desktop, regardless of subtitle length. .title is
+   column flex here (set by the 768px rule), so pin its cross-axis and the
+   subtitle explicitly instead of inheriting the centered base rule. The
+   underline stays left via the base .screen-header .title::before rule. */
+@media (min-width: 541px) and (max-width: 768px) {
+    .screen-header .title {
+        align-items: flex-start;
+    }
+
+    .header-text .subtitle {
+        text-align: left;
     }
 }
 
@@ -1904,6 +1912,14 @@ button {
 
     .header-text .subtitle {
         text-align: center;
+    }
+
+    /* The title centers here (centered header block + column flex), so its
+       decorative underline must follow. Above 540px the underline stays
+       left-anchored via the base .screen-header .title::before rule. */
+    .screen-header .title::before {
+        left: 50%;
+        transform: translateX(-50%);
     }
 
     /* Collapse the time-range chip row into a compact native select that is

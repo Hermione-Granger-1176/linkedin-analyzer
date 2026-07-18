@@ -1839,10 +1839,16 @@ button {
 }
 
 @media (max-width: 540px) {
-    /* Swap the pill row for a hamburger toggle plus a stacked panel that stays
-       in normal document flow (no overlay positioning). */
+    /* Pin the hamburger to the fixed top-left corner, mirroring the top-right
+       theme toggle, and drop the open menu as a floating dropdown panel anchored
+       below it so it overlays content instead of pushing the page down. */
     .nav-toggle {
         display: flex;
+        position: fixed;
+        top: var(--space-md);
+        left: var(--space-md);
+        margin: 0;
+        z-index: 200;
     }
 
     .top-nav {
@@ -1854,12 +1860,36 @@ button {
         flex-direction: column;
         align-items: stretch;
         gap: var(--space-sm);
-        margin-top: var(--space-md);
+        position: fixed;
+        top: calc(var(--space-md) + 44px + var(--space-sm));
+        left: var(--space-md);
+        z-index: 200;
+        width: min(240px, calc(100vw - var(--space-md) * 2));
+        margin: 0;
+        padding: var(--space-sm);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        box-shadow: var(--shadow-md);
     }
 
     .top-nav.is-open .top-link {
         width: 100%;
         text-align: center;
+    }
+
+    /* Against the solid panel the active pill's blue-on-tint text drops below the
+       contrast floor, so use the primary text color here and let the tinted fill
+       plus blue border carry the active affordance. */
+    .top-nav.is-open .top-link.is-active {
+        color: var(--text-primary);
+    }
+
+    /* The fixed top-left toggle overlaps the top of each left-aligned screen
+       header, so drop those titles below it. The centered hero title clears the
+       corner on its own and keeps its own spacing. */
+    .screen-header {
+        padding-top: var(--space-2xl);
     }
 
     .action-buttons {

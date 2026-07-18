@@ -110,6 +110,7 @@ docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-
 | **Analytics**        | Timeline, topics, heatmap                                  |
 | **Messages view**    | Top contacts, silent connections, fading chats             |
 | **SPA routing**      | Hash routes with URL-synced filters                        |
+| **Mobile friendly**  | Hamburger nav and compact filters on narrow screens        |
 | **Excel export**     | Formatted .xlsx with proper columns                        |
 | **Connections**      | Network growth, top companies, top positions               |
 | **Chart export**     | Download any chart as PNG                                  |

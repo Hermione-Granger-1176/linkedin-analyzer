@@ -144,6 +144,55 @@ test("upload shares+comments and render insights", async ({ page }) => {
     await runAxeScan(page);
 });
 
+test("mobile hamburger menu opens, navigates, and closes", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto("/#home");
+
+    const toggle = page.locator("#screen-home .nav-toggle");
+    const nav = page.locator("#topNav-home");
+
+    // The pill row is collapsed behind the toggle at this width.
+    await expect(toggle).toBeVisible();
+    await expect(nav).toBeHidden();
+
+    await toggle.click();
+    await expect(nav).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    // Accessibility check with the menu open at the mobile viewport.
+    await runAxeScan(page);
+
+    await page.locator('#topNav-home a.top-link[data-route="analytics"]').click();
+    await expect(page).toHaveURL(/#analytics/);
+    await expect(nav).toBeHidden();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
+test("mobile time-range select replaces the chip row on analytics", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV]);
+    await waitForLoadedStatus(page, "sharesStatus");
+    await waitForLoadedStatus(page, "commentsStatus");
+
+    const openAnalyticsBtn = page.getByTestId("open-analytics-btn");
+    await expect(openAnalyticsBtn).toBeEnabled({ timeout: 20000 });
+    await openAnalyticsBtn.click();
+    await expect(page).toHaveURL(/#analytics/);
+    await expect(page.getByTestId("analytics-grid")).toBeVisible();
+
+    // At this width the chip row collapses into the compact native select.
+    await expect(page.locator("#analyticsTimeRangeButtons")).toBeHidden();
+    const select = page.locator("#analyticsTimeRangeSelect");
+    await expect(select).toBeVisible();
+
+    // Selecting a range drives the same route sync as the chips.
+    await select.selectOption("all");
+    await expect(page).toHaveURL(/range=all/);
+
+    // The label wires an accessible name onto the select; keep the state clean.
+    await runAxeScan(page);
+});
+
 test("shows an error hint for malformed CSV uploads", async ({ page }) => {
     await uploadFiles(page, [INVALID_CSV]);
     await expect(page.locator("#uploadHint")).toContainText("Could not auto-detect file type");

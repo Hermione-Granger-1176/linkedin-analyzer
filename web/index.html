@@ -145,7 +145,23 @@
                         <p class="subtitle">Clean and analyze your LinkedIn data exports</p>
                     </header>
 
-                    <nav class="top-nav" aria-label="Primary">
+                    <button
+                        class="nav-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="topNav-home"
+                        aria-label="Open navigation menu"
+                    >
+                        <svg class="nav-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="4" y1="7" x2="20" y2="7" />
+                                <line x1="4" y1="12" x2="20" y2="12" />
+                                <line x1="4" y1="17" x2="20" y2="17" />
+                            </g>
+                        </svg>
+                    </button>
+
+                    <nav class="top-nav" id="topNav-home" aria-label="Primary">
                         <a class="top-link no-underline" data-route="home" href="#home">Home</a>
                         <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
                         <a class="top-link no-underline" data-route="analytics" href="#analytics"
@@ -469,7 +485,23 @@
                         </div>
                     </header>
 
-                    <nav class="top-nav" aria-label="Primary">
+                    <button
+                        class="nav-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="topNav-clean"
+                        aria-label="Open navigation menu"
+                    >
+                        <svg class="nav-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="4" y1="7" x2="20" y2="7" />
+                                <line x1="4" y1="12" x2="20" y2="12" />
+                                <line x1="4" y1="17" x2="20" y2="17" />
+                            </g>
+                        </svg>
+                    </button>
+
+                    <nav class="top-nav" id="topNav-clean" aria-label="Primary">
                         <a class="top-link no-underline" data-route="home" href="#home">Home</a>
                         <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
                         <a class="top-link no-underline" data-route="analytics" href="#analytics"
@@ -557,14 +589,16 @@
                                 <span class="file-info" id="cleanFileInfo"></span>
                             </div>
                             <div class="preview-table-wrapper">
-                                <table
-                                    class="preview-table"
-                                    id="cleanPreviewTable"
-                                    data-testid="clean-preview-table"
-                                >
-                                    <thead></thead>
-                                    <tbody></tbody>
-                                </table>
+                                <div class="preview-table-scroll">
+                                    <table
+                                        class="preview-table"
+                                        id="cleanPreviewTable"
+                                        data-testid="clean-preview-table"
+                                    >
+                                        <thead></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
                             </div>
                             <p class="preview-note" id="cleanPreviewNote"></p>
                         </div>
@@ -654,7 +688,23 @@
                         </div>
                     </header>
 
-                    <nav class="top-nav" aria-label="Primary">
+                    <button
+                        class="nav-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="topNav-analytics"
+                        aria-label="Open navigation menu"
+                    >
+                        <svg class="nav-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="4" y1="7" x2="20" y2="7" />
+                                <line x1="4" y1="12" x2="20" y2="12" />
+                                <line x1="4" y1="17" x2="20" y2="17" />
+                            </g>
+                        </svg>
+                    </button>
+
+                    <nav class="top-nav" id="topNav-analytics" aria-label="Primary">
                         <a class="top-link no-underline" data-route="home" href="#home">Home</a>
                         <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
                         <a class="top-link no-underline" data-route="analytics" href="#analytics"
@@ -676,7 +726,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="analyticsTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="analyticsTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -686,6 +738,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="analyticsTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="analyticsResetFiltersBtn">
                             Reset filters
@@ -852,7 +911,23 @@
                         </div>
                     </header>
 
-                    <nav class="top-nav" aria-label="Primary">
+                    <button
+                        class="nav-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="topNav-connections"
+                        aria-label="Open navigation menu"
+                    >
+                        <svg class="nav-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="4" y1="7" x2="20" y2="7" />
+                                <line x1="4" y1="12" x2="20" y2="12" />
+                                <line x1="4" y1="17" x2="20" y2="17" />
+                            </g>
+                        </svg>
+                    </button>
+
+                    <nav class="top-nav" id="topNav-connections" aria-label="Primary">
                         <a class="top-link no-underline" data-route="home" href="#home">Home</a>
                         <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
                         <a class="top-link no-underline" data-route="analytics" href="#analytics"
@@ -874,7 +949,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="connectionsTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="connectionsTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -884,6 +961,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="connectionsTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="connectionsResetFiltersBtn">
                             Reset filters
@@ -1035,7 +1119,23 @@
                         </div>
                     </header>
 
-                    <nav class="top-nav" aria-label="Primary">
+                    <button
+                        class="nav-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="topNav-messages"
+                        aria-label="Open navigation menu"
+                    >
+                        <svg class="nav-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="4" y1="7" x2="20" y2="7" />
+                                <line x1="4" y1="12" x2="20" y2="12" />
+                                <line x1="4" y1="17" x2="20" y2="17" />
+                            </g>
+                        </svg>
+                    </button>
+
+                    <nav class="top-nav" id="topNav-messages" aria-label="Primary">
                         <a class="top-link no-underline" data-route="home" href="#home">Home</a>
                         <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
                         <a class="top-link no-underline" data-route="analytics" href="#analytics"
@@ -1057,7 +1157,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="messagesTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="messagesTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -1067,6 +1169,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="messagesTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="messagesResetFiltersBtn">
                             Reset filters
@@ -1201,7 +1310,23 @@
                         </div>
                     </header>
 
-                    <nav class="top-nav" aria-label="Primary">
+                    <button
+                        class="nav-toggle"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="topNav-insights"
+                        aria-label="Open navigation menu"
+                    >
+                        <svg class="nav-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="4" y1="7" x2="20" y2="7" />
+                                <line x1="4" y1="12" x2="20" y2="12" />
+                                <line x1="4" y1="17" x2="20" y2="17" />
+                            </g>
+                        </svg>
+                    </button>
+
+                    <nav class="top-nav" id="topNav-insights" aria-label="Primary">
                         <a class="top-link no-underline" data-route="home" href="#home">Home</a>
                         <a class="top-link no-underline" data-route="clean" href="#clean">Clean</a>
                         <a class="top-link no-underline" data-route="analytics" href="#analytics"
@@ -1223,7 +1348,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="insightsTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="insightsTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -1233,6 +1360,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="insightsTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="insightsResetFiltersBtn">
                             Reset filters

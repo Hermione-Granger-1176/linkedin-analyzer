@@ -218,6 +218,44 @@ button {
     color: var(--accent-blue);
 }
 
+.top-link:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+/* Mobile navigation toggle. Hidden above the narrow breakpoint; the max-width
+   540px block reveals it and collapses the pill row into a stacked panel. */
+.nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: var(--space-md) auto 0;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-fast);
+}
+
+.nav-toggle:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.nav-toggle:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+.nav-toggle-icon {
+    width: 24px;
+    height: 24px;
+}
+
 .hero-header {
     text-align: center;
     display: flex;
@@ -721,9 +759,24 @@ button {
 }
 
 .preview-table-wrapper {
-    overflow-x: auto;
+    position: relative;
+}
+
+/* Scrolling-shadows: the right/left fades appear only while there is more table
+   to scroll to, hinting that off-screen columns exist. The cover gradients are
+   pinned to the scroll box (scroll) and the shadows to the content (local), so
+   each fade hides itself once that edge is reached. */
+.preview-table-scroll {
+    overflow: auto;
     max-height: 320px;
-    overflow-y: auto;
+    background:
+        linear-gradient(to right, var(--bg-secondary) 30%, transparent) 0 0 / 32px 100% no-repeat,
+        linear-gradient(to left, var(--bg-secondary) 30%, transparent) 100% 0 / 32px 100% no-repeat,
+        radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.14), transparent) 0 0 / 14px 100%
+            no-repeat,
+        radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.14), transparent) 100% 0 / 14px
+            100% no-repeat;
+    background-attachment: local, local, scroll, scroll;
 }
 
 .preview-table {
@@ -937,12 +990,17 @@ button {
     border-color: var(--accent-blue);
 }
 
+/* Compact swap for the chip row on narrow screens: hidden until the max-width
+   540px block reveals it in place of .filter-buttons. */
 .filter-select {
+    display: none;
     padding: var(--space-xs) var(--space-md);
     border-radius: var(--radius-md);
     border: 2px solid var(--border-light);
     background: var(--bg-tertiary);
+    color: var(--filter-btn-text);
     font-family: inherit;
+    font-size: var(--font-size-base);
 }
 
 .active-filters {
@@ -951,6 +1009,12 @@ button {
     gap: var(--space-sm);
     flex-wrap: wrap;
     margin-bottom: var(--space-lg);
+}
+
+/* The display:flex above outranks the [hidden] UA rule, so the "Active filters:"
+   label lingered with no chips. Re-hide it explicitly when there are none. */
+.active-filters[hidden] {
+    display: none;
 }
 
 .active-filters-label {
@@ -1057,9 +1121,26 @@ button {
     height: 320px;
 }
 
+/* Empty charts collapse to a short band with a centered message so the card
+   shrinks instead of leaving a tall blank canvas. */
+.chart-canvas-wrap--empty,
+.chart-card--wide .chart-canvas-wrap--empty {
+    height: 140px;
+}
+
 .chart-canvas-wrap canvas {
     width: 100%;
     height: 100%;
+}
+
+/* The 24-hour heatmap needs a minimum width to stay tappable; let it scroll
+   horizontally inside its card on narrow screens instead of squashing. */
+#heatmapCard .chart-canvas-wrap {
+    overflow-x: auto;
+}
+
+#heatmapChart {
+    min-width: 540px;
 }
 
 .chart-note {
@@ -1713,9 +1794,15 @@ button {
     .screen-header .title {
         justify-content: flex-start;
     }
+}
 
-    .chart-card--wide {
-        grid-column: span 1;
+/* In the two-column analytics band the lone Top topics card would otherwise sit
+   beside an empty column, wedged between the two full-row charts. Stretch just
+   that card to the full row for a consistent stack. The connections screen keeps
+   its own Top companies and Top positions pair side by side, so it is untouched. */
+@media (min-width: 616px) and (max-width: 1000px) {
+    #topicsCard {
+        grid-column: 1 / -1;
     }
 }
 
@@ -1739,7 +1826,133 @@ button {
     }
 }
 
+/* Tablet band: keep every screen header left-anchored so all five screens line
+   up identically, matching desktop, regardless of subtitle length. .title is
+   column flex here (set by the 768px rule), so pin its cross-axis and the
+   subtitle explicitly instead of inheriting the centered base rule. The
+   underline stays left via the base .screen-header .title::before rule. */
+@media (min-width: 541px) and (max-width: 768px) {
+    .screen-header .title {
+        align-items: flex-start;
+    }
+
+    .header-text .subtitle {
+        text-align: left;
+    }
+}
+
+/* Demote wide cards to a single track only once the auto-fit grid itself has
+   collapsed to one column (minmax(280px) x 2 + gap no longer fits inside the
+   padded container). Demoting earlier left a large empty hole beside the card
+   while the grid still had two tracks. */
+@media (max-width: 615px) {
+    .chart-card--wide {
+        grid-column: span 1;
+    }
+}
+
 @media (max-width: 540px) {
+    /* Pin the hamburger to the fixed top-left corner, mirroring the top-right
+       theme toggle, and drop the open menu as a floating dropdown panel anchored
+       below it so it overlays content instead of pushing the page down. */
+    .nav-toggle {
+        display: flex;
+        position: fixed;
+        top: var(--space-md);
+        left: var(--space-md);
+        margin: 0;
+        z-index: 200;
+    }
+
+    .top-nav {
+        display: none;
+    }
+
+    .top-nav.is-open {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-sm);
+        position: fixed;
+        top: calc(var(--space-md) + 44px + var(--space-sm));
+        left: var(--space-md);
+        z-index: 200;
+        width: min(240px, calc(100vw - var(--space-md) * 2));
+        margin: 0;
+        padding: var(--space-sm);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        box-shadow: var(--shadow-md);
+    }
+
+    .top-nav.is-open .top-link {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Against the solid panel the active pill's blue-on-tint text drops below the
+       contrast floor, so use the primary text color here and let the tinted fill
+       plus blue border carry the active affordance. */
+    .top-nav.is-open .top-link.is-active {
+        color: var(--text-primary);
+    }
+
+    /* The fixed top-left toggle overlaps the top of each screen header, so drop
+       the titles below it. Center every screen title, subtitle, and underline on
+       the card. Without this the header block shrink-wraps to its own subtitle
+       width and, being left-anchored, lands each screen's title at a different x
+       position, so titles visibly jump during navigation. Centering the header
+       block makes each title's center coincide with the card center regardless
+       of subtitle length; the underline is already centered by the 768px rule. */
+    .screen-header {
+        padding-top: var(--space-2xl);
+        align-items: center;
+    }
+
+    .header-text .subtitle {
+        text-align: center;
+    }
+
+    /* The title centers here (centered header block + column flex), so its
+       decorative underline must follow. Above 540px the underline stays
+       left-anchored via the base .screen-header .title::before rule. */
+    .screen-header .title::before {
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    /* Collapse the time-range chip row into a compact native select that is
+       easier to operate on narrow touch screens, and lay the bar out as the
+       label on its own line above a single row that pairs the flexing select
+       with the natural-width Reset button. display:contents lifts the label and
+       select out of .filter-group so they share the .filters-bar flex row with
+       the Reset button (which overrides the 768px column layout). */
+    .filters-bar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-sm);
+    }
+
+    .filter-group {
+        display: contents;
+    }
+
+    .filter-label {
+        flex-basis: 100%;
+    }
+
+    .filter-buttons {
+        display: none;
+    }
+
+    .filter-select {
+        display: block;
+        flex: 1;
+        min-width: 0;
+    }
+
     .action-buttons {
         flex-direction: column;
         width: 100%;

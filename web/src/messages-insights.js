@@ -76,9 +76,12 @@ export const MessagesPage = (() => {
      * @typedef {{list: Connection[], byUrl: Map<string, Connection>, byName: Map<string, Connection>}} ConnectionState
      */
 
-    /** @type {{timeRangeButtons: NodeListOf<Element>, resetFiltersBtn: HTMLElement | null, topContactsExportBtn: HTMLButtonElement | null, silentConnectionsExportBtn: HTMLButtonElement | null, fadingConversationsExportBtn: HTMLButtonElement | null, messagesEmpty: HTMLElement | null, messagesLayout: HTMLElement | null, topContactsList: HTMLElement | null, silentConnectionsList: HTMLElement | null, fadingConversationsList: HTMLElement | null, msgStatMessages: HTMLElement | null, msgStatContacts: HTMLElement | null, msgStatConnected: HTMLElement | null, msgStatFading: HTMLElement | null, messagesTip: HTMLElement | null, messagesTipText: HTMLElement | null}} */
+    /** @type {{timeRangeButtons: NodeListOf<Element>, timeRangeSelect: HTMLSelectElement | null, resetFiltersBtn: HTMLElement | null, topContactsExportBtn: HTMLButtonElement | null, silentConnectionsExportBtn: HTMLButtonElement | null, fadingConversationsExportBtn: HTMLButtonElement | null, messagesEmpty: HTMLElement | null, messagesLayout: HTMLElement | null, topContactsList: HTMLElement | null, silentConnectionsList: HTMLElement | null, fadingConversationsList: HTMLElement | null, msgStatMessages: HTMLElement | null, msgStatContacts: HTMLElement | null, msgStatConnected: HTMLElement | null, msgStatFading: HTMLElement | null, messagesTip: HTMLElement | null, messagesTipText: HTMLElement | null}} */
     const elements = {
         timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
+        timeRangeSelect: /** @type {HTMLSelectElement|null} */ (
+            document.getElementById("messagesTimeRangeSelect")
+        ),
         resetFiltersBtn: document.getElementById("messagesResetFiltersBtn"),
         topContactsExportBtn: /** @type {HTMLButtonElement|null} */ (
             document.getElementById("topContactsExportBtn")
@@ -169,6 +172,9 @@ export const MessagesPage = (() => {
                 button.classList.contains("active") ? "true" : "false",
             );
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
+        }
         if (elements.resetFiltersBtn) {
             elements.resetFiltersBtn.addEventListener("click", resetFilters);
         }
@@ -814,6 +820,22 @@ export const MessagesPage = (() => {
         applyTimeRange(range);
     }
 
+    /** Apply the range chosen from the compact select, ignoring unknown values. */
+    function handleTimeRangeSelect() {
+        // Bound only inside the `if (elements.timeRangeSelect)` guard in init, so
+        // the element is always present here; assert non-null for the type checker.
+        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
+        // parseRangeParam echoes a valid range normalized to lowercase and returns
+        // the fallback otherwise; the empty sentinel is never a valid range, so it
+        // flags unknown values. Apply the parsed value so odd casing still enters
+        // state and the router as the normalized range.
+        const parsed = parseRangeParam(range, "");
+        if (parsed === "") {
+            return;
+        }
+        applyTimeRange(parsed);
+    }
+
     /** Reset filters to defaults. */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
@@ -843,6 +865,9 @@ export const MessagesPage = (() => {
             button.classList.toggle("active", isActive);
             button.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.value = range;
+        }
     }
 
     /**

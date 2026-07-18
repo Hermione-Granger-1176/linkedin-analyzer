@@ -8,6 +8,7 @@ import { initDecorations } from "./decorations.js";
 import { DomEvents } from "./dom-events.js";
 import { InsightsPage } from "./insights-ui.js";
 import { MessagesPage } from "./messages-insights.js";
+import { NavMenu } from "./nav-menu.js";
 import { AppRouter } from "./router.js";
 import { initRuntime } from "./runtime.js";
 import { ScreenManager } from "./screen-manager.js";
@@ -85,6 +86,7 @@ function init() {
     initRuntime();
     initDecorations();
     Theme.init();
+    NavMenu.init();
     Tutorial.init();
     registerRoutes();
     bindRouteLinks();

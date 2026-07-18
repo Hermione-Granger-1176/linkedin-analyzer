@@ -126,6 +126,7 @@ export const ConnectionsPage = (() => {
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll("#connectionsTimeRangeButtons .filter-btn"),
+            timeRangeSelect: document.getElementById("connectionsTimeRangeSelect"),
             resetFiltersBtn: document.getElementById("connectionsResetFiltersBtn"),
             connectionsEmpty: document.getElementById("connectionsEmpty"),
             connectionsGrid: document.getElementById("connectionsGrid"),
@@ -150,6 +151,10 @@ export const ConnectionsPage = (() => {
                 button.classList.contains("active") ? "true" : "false",
             );
         });
+
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
+        }
 
         /* v8 ignore next 3 */
         if (elements.resetFiltersBtn) {
@@ -763,10 +768,27 @@ export const ConnectionsPage = (() => {
      * @param {object} view - The computed view data
      */
     function renderCharts(view) {
-        SketchCharts.drawTimeline(elements.connectionGrowthChart, view.timeline, "all", 1, 0);
+        SketchCharts.drawTimeline(
+            elements.connectionGrowthChart,
+            view.timeline,
+            "all",
+            1,
+            0,
+            "No connection growth yet.",
+        );
 
-        SketchCharts.drawTopics(elements.connectionCompaniesChart, view.companies, 1);
-        SketchCharts.drawTopics(elements.connectionPositionsChart, view.positions, 1);
+        SketchCharts.drawTopics(
+            elements.connectionCompaniesChart,
+            view.companies,
+            1,
+            "No companies in this range.",
+        );
+        SketchCharts.drawTopics(
+            elements.connectionPositionsChart,
+            view.positions,
+            1,
+            "No positions in this range.",
+        );
     }
 
     /** Toggle empty state vs content grid based on data availability. */
@@ -789,6 +811,15 @@ export const ConnectionsPage = (() => {
         const range = button.getAttribute("data-range");
         /* v8 ignore next 3 */
         if (!range) {
+            return;
+        }
+        applyTimeRange(range);
+    }
+
+    /** Apply the range chosen from the compact select, ignoring unknown values. */
+    function handleTimeRangeSelect() {
+        const range = elements.timeRangeSelect.value;
+        if (!RANGE_VALUES.has(range)) {
             return;
         }
         applyTimeRange(range);
@@ -824,6 +855,9 @@ export const ConnectionsPage = (() => {
             btn.classList.toggle("active", isActive);
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.value = range;
+        }
     }
 
     /**

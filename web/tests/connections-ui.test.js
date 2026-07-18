@@ -74,6 +74,13 @@ describe("ConnectionsPage", () => {
                 <button class="filter-btn" data-range="12m"></button>
                 <button class="filter-btn" data-range="3m"></button>
             </div>
+            <select id="connectionsTimeRangeSelect">
+                <option value="1m">1 month</option>
+                <option value="3m">3 months</option>
+                <option value="6m">6 months</option>
+                <option value="12m" selected>12 months</option>
+                <option value="all">All time</option>
+            </select>
             <button id="connectionsResetFiltersBtn"></button>
             <div id="connStatTotal"></div>
             <div id="connStatRecent"></div>
@@ -906,6 +913,48 @@ describe("ConnectionsPage", () => {
         // Same range and an existing view: nothing changed, so no re-render.
         await ConnectionsPage.onRouteChange({ range: "all" });
         expect(SketchCharts.drawTimeline).not.toHaveBeenCalled();
+    });
+
+    it("syncs range into router on select change", async () => {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+
+        const select = document.getElementById("connectionsTimeRangeSelect");
+        select.value = "3m";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).toHaveBeenCalledWith(
+            { range: "3m" },
+            { replaceHistory: false },
+        );
+    });
+
+    it("ignores a select change carrying an unknown range value", async () => {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({});
+        AppRouter.setParams.mockClear();
+
+        const select = document.getElementById("connectionsTimeRangeSelect");
+        select.value = "bogus";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    it("mirrors the active range onto the select when applied from the route", async () => {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({ range: "3m" });
+
+        expect(document.getElementById("connectionsTimeRangeSelect").value).toBe("3m");
     });
 
     it("falls back to the default range for an unknown time-range button", async () => {

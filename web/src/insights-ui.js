@@ -139,6 +139,7 @@ export const InsightsPage = (() => {
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll("#insightsTimeRangeButtons .filter-btn"),
+            timeRangeSelect: document.getElementById("insightsTimeRangeSelect"),
             resetFiltersBtn: document.getElementById("insightsResetFiltersBtn"),
             insightsEmpty: document.getElementById("insightsEmpty"),
             insightsGrid: document.getElementById("insightsGrid"),
@@ -167,6 +168,9 @@ export const InsightsPage = (() => {
                 button.classList.contains("active") ? "true" : "false",
             );
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
+        }
         /* v8 ignore next */
         if (elements.resetFiltersBtn) {
             elements.resetFiltersBtn.addEventListener("click", resetFilters);
@@ -532,6 +536,15 @@ export const InsightsPage = (() => {
         applyTimeRange(range);
     }
 
+    /** Apply the range chosen from the compact select, ignoring unknown values. */
+    function handleTimeRangeSelect() {
+        const range = elements.timeRangeSelect.value;
+        if (!RANGE_VALUES.has(range)) {
+            return;
+        }
+        applyTimeRange(range);
+    }
+
     /** Reset all filters to defaults and request a fresh view. */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
@@ -562,6 +575,9 @@ export const InsightsPage = (() => {
             btn.classList.toggle("active", isActive);
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.value = range;
+        }
     }
 
     /** Toggle empty state vs insights grid based on data availability. */

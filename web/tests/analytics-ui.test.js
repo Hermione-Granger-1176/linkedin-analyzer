@@ -83,6 +83,13 @@ describe("AnalyticsPage", () => {
             <div id="analyticsTimeRangeButtons">
                 <button class="filter-btn" data-range="12m"></button>
             </div>
+            <select id="analyticsTimeRangeSelect">
+                <option value="1m">1 month</option>
+                <option value="3m">3 months</option>
+                <option value="6m">6 months</option>
+                <option value="12m" selected>12 months</option>
+                <option value="all">All time</option>
+            </select>
             <canvas id="timelineChart"></canvas>
             <canvas id="topicsChart"></canvas>
             <canvas id="heatmapChart"></canvas>
@@ -1423,6 +1430,45 @@ describe("AnalyticsPage", () => {
         });
         resize.trigger();
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
+    });
+
+    it("syncs range into router on select change", async () => {
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const select = document.getElementById("analyticsTimeRangeSelect");
+        AppRouter.setParams.mockClear();
+        select.value = "all";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).toHaveBeenCalled();
+        expect(AppRouter.setParams.mock.calls.at(-1)[0].range).toBe("all");
+    });
+
+    it("ignores a select change carrying an unknown range value", async () => {
+        const requestId = await bootstrapWithData({});
+        sendViewResponse(requestId);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const select = document.getElementById("analyticsTimeRangeSelect");
+        AppRouter.setParams.mockClear();
+        // Assigning an option that does not exist leaves the value empty, which
+        // the handler must reject without touching the route.
+        select.value = "bogus";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    it("mirrors the active range onto the select when applied from the route", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+        AnalyticsPage.init();
+        await AnalyticsPage.onRouteChange({ range: "6m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("analyticsTimeRangeSelect").value).toBe("6m");
     });
 
     it("defers a re-entrant render triggered mid-draw and replays it afterward", async () => {

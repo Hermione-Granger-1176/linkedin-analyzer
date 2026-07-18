@@ -46,15 +46,74 @@ export const SketchCharts = (() => {
             return null;
         }
         const ratio = exportDpr || window.devicePixelRatio || 1;
-        canvas.width = rect.width * ratio;
-        canvas.height = rect.height * ratio;
+        // Round the CSS box first, then scale the backing store to whole device
+        // pixels. A fractional backing store (rect.width is often sub-pixel) makes
+        // the browser resample the canvas, which reads as blur on wide charts.
+        const cssWidth = Math.round(rect.width);
+        const cssHeight = Math.round(rect.height);
+        canvas.width = Math.round(cssWidth * ratio);
+        canvas.height = Math.round(cssHeight * ratio);
         const ctx = canvas.getContext("2d");
         /* v8 ignore next */
         if (!ctx) {
             return null;
         }
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-        return { ctx, width: rect.width, height: rect.height };
+        return { ctx, width: cssWidth, height: cssHeight };
+    }
+
+    /**
+     * Toggle the empty-state class on a canvas wrapper so the card can shrink.
+     * @param {HTMLCanvasElement} canvas - The canvas whose wrapper to toggle.
+     * @param {boolean} isEmpty - Whether the chart has no data to show.
+     */
+    function setChartEmpty(canvas, isEmpty) {
+        const wrap = canvas.parentElement;
+        if (!wrap) {
+            return;
+        }
+        wrap.classList.toggle("chart-canvas-wrap--empty", isEmpty);
+    }
+
+    /**
+     * Draw a centered friendly message when a chart has no data.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {string} message - The short message to show.
+     */
+    function drawEmptyState(canvas, message) {
+        setChartEmpty(canvas, true);
+        const size = resizeCanvas(canvas);
+        /* v8 ignore next 3 */
+        if (!size) {
+            return;
+        }
+        const { ctx, width, height } = size;
+        const colors = getColors();
+        clear(canvas, ctx, width, height);
+        // Register a redraw so exportPng (and any other drawRegistry consumer) can
+        // reproduce the empty-state message; clear() dropped the previous handle.
+        drawRegistry.set(canvas, () => drawEmptyState(canvas, message));
+        ctx.font = "14px Patrick Hand, sans-serif";
+        ctx.fillStyle = colors.textSecondary;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(message, width / 2, height / 2);
+    }
+
+    /**
+     * Pick a "nice" chart maximum with headroom so sparse or flat data still
+     * reads as a chart instead of a full-height block pinned to the top edge.
+     * @param {number} value - The raw maximum data value.
+     * @returns {number} A rounded maximum with a little headroom above the data.
+     */
+    function niceTimelineMax(value) {
+        if (value <= 1) {
+            return 2;
+        }
+        if (value <= 4) {
+            return value + 1;
+        }
+        return Math.ceil(value * 1.12);
     }
 
     /**
@@ -158,8 +217,21 @@ export const SketchCharts = (() => {
      * @param {string} timeRange - Filter key (e.g. '1m', '3m', '12m', 'all').
      * @param {number} [progress=1] - Animation progress from 0 to 1.
      * @param {number} [maxOverride=0] - Optional max Y value override.
+     * @param {string} [emptyMessage] - Message shown when there is no data.
      */
-    function drawTimeline(canvas, data, timeRange, progress = 1, maxOverride = 0) {
+    function drawTimeline(
+        canvas,
+        data,
+        timeRange,
+        progress = 1,
+        maxOverride = 0,
+        emptyMessage = "No activity to show yet.",
+    ) {
+        if (!data || !data.length) {
+            drawEmptyState(canvas, emptyMessage);
+            return;
+        }
+        setChartEmpty(canvas, false);
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
         if (!size) {
@@ -168,15 +240,15 @@ export const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () => drawTimeline(canvas, data, timeRange, 1, maxOverride));
-        if (!data || !data.length) {
-            return;
-        }
+        drawRegistry.set(canvas, () =>
+            drawTimeline(canvas, data, timeRange, 1, maxOverride, emptyMessage),
+        );
 
-        const padding = { top: 22, right: 12, bottom: 42, left: 40 };
+        const padding = { top: 28, right: 12, bottom: 42, left: 40 };
         const chartWidth = width - padding.left - padding.right;
         const chartHeight = height - padding.top - padding.bottom;
-        const maxValue = Math.max(maxOverride || 0, ...data.map((p) => p.value), 1);
+        const rawMax = Math.max(maxOverride || 0, ...data.map((p) => p.value), 1);
+        const maxValue = niceTimelineMax(rawMax);
         const sliceWidth = chartWidth / data.length;
         const baseY = padding.top + chartHeight;
 
@@ -201,6 +273,27 @@ export const SketchCharts = (() => {
         ctx.moveTo(padding.left, baseY + 2);
         ctx.lineTo(padding.left + chartWidth, baseY + 2);
         ctx.stroke();
+
+        // Y-axis ticks and gridlines so sparse/flat data still reads as a chart
+        const tickStep = Math.max(1, Math.ceil(maxValue / 4));
+        ctx.font = "10px Patrick Hand, sans-serif";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 0.6;
+        ctx.fillStyle = colors.textSecondary;
+        for (let tickValue = 0; tickValue <= maxValue; tickValue += tickStep) {
+            const tickY = baseY - (tickValue / maxValue) * chartHeight;
+            if (tickValue !== 0) {
+                ctx.globalAlpha = 0.35;
+                ctx.beginPath();
+                ctx.moveTo(padding.left, tickY);
+                ctx.lineTo(padding.left + chartWidth, tickY);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+            ctx.fillText(String(tickValue), padding.left - 6, tickY);
+        }
 
         // Area fill
         ctx.fillStyle = colors.blue;
@@ -267,10 +360,15 @@ export const SketchCharts = (() => {
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         visiblePoints.forEach(({ point, x, y, index }) => {
+            // Flat months emit a row of noisy repeated "0" labels; skip them.
+            if (point.value === 0) {
+                return;
+            }
             if (!showAllValues && index % valueEvery !== 0 && index !== points.length - 1) {
                 return;
             }
-            const labelY = Math.max(padding.top + 10, y - 6);
+            // Keep the label above the point and clear of the top edge.
+            const labelY = Math.max(14, y - 8);
             ctx.fillText(String(point.value), x, labelY);
         });
 
@@ -309,10 +407,29 @@ export const SketchCharts = (() => {
             });
         } else {
             const labelEvery = data.length <= 10 ? 1 : Math.ceil(data.length / 8);
-            points.forEach(({ point, x }, index) => {
-                if (index % labelEvery !== 0 && index !== points.length - 1) {
+            const minLabelSpacing = 38;
+
+            // Collect label candidates, then thin out any that would crowd their
+            // neighbour so rotated labels (e.g. "Dec"/"Jan") no longer collide at
+            // narrow widths. The last point wins over an adjacent regular label.
+            const accepted = [];
+            points.forEach((entry, index) => {
+                const isLast = index === points.length - 1;
+                if (index % labelEvery !== 0 && !isLast) {
                     return;
                 }
+                const prev = accepted[accepted.length - 1];
+                if (prev && entry.x - prev.x < minLabelSpacing) {
+                    // Crowded: a regular label yields; the last point evicts its neighbour.
+                    if (!isLast) {
+                        return;
+                    }
+                    accepted.pop();
+                }
+                accepted.push(entry);
+            });
+
+            accepted.forEach(({ point, x }) => {
                 const labelText = isWeekly ? point.label : point.label.split(" ")[0];
                 ctx.save();
                 ctx.translate(x, baseY + 18);
@@ -344,8 +461,14 @@ export const SketchCharts = (() => {
      * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
      * @param {Array<object>} data - Array of topic objects with topic and count properties.
      * @param {number} [progress=1] - Animation progress from 0 to 1.
+     * @param {string} [emptyMessage] - Message shown when there is no data.
      */
-    function drawTopics(canvas, data, progress = 1) {
+    function drawTopics(canvas, data, progress = 1, emptyMessage = "No data to show yet.") {
+        if (!data || !data.length) {
+            drawEmptyState(canvas, emptyMessage);
+            return;
+        }
+        setChartEmpty(canvas, false);
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
         if (!size) {
@@ -354,10 +477,7 @@ export const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () => drawTopics(canvas, data, 1));
-        if (!data || !data.length) {
-            return;
-        }
+        drawRegistry.set(canvas, () => drawTopics(canvas, data, 1, emptyMessage));
 
         ctx.font = "13px Patrick Hand, sans-serif";
         const maxLabelWidth = Math.max(...data.map((p) => ctx.measureText(p.topic).width), 60);
@@ -418,8 +538,14 @@ export const SketchCharts = (() => {
      * Draw 7x24 activity heatmap grid.
      * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
      * @param {Array<Array<number>>} grid - 7x24 grid of activity counts (days x hours).
+     * @param {string} [emptyMessage] - Message shown when there is no data.
      */
-    function drawHeatmap(canvas, grid) {
+    function drawHeatmap(canvas, grid, emptyMessage = "No activity to show yet.") {
+        if (!grid || !grid.length) {
+            drawEmptyState(canvas, emptyMessage);
+            return;
+        }
+        setChartEmpty(canvas, false);
         const size = resizeCanvas(canvas);
         /* v8 ignore next */
         if (!size) {
@@ -428,10 +554,7 @@ export const SketchCharts = (() => {
         const { ctx, width, height } = size;
         const colors = getColors();
         clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () => drawHeatmap(canvas, grid));
-        if (!grid || !grid.length) {
-            return;
-        }
+        drawRegistry.set(canvas, () => drawHeatmap(canvas, grid, emptyMessage));
 
         const padding = { top: 20, right: 20, bottom: 26, left: 44 };
         const chartWidth = width - padding.left - padding.right;

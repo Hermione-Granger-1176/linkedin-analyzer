@@ -314,6 +314,98 @@ describe("SketchCharts", () => {
         expect(createUrl).not.toHaveBeenCalled();
     });
 
+    it("drawTopics renders a friendly empty message and marks the wrapper", () => {
+        const wrap = document.createElement("div");
+        const { canvas, ctx } = createCanvas({ width: 300, height: 200 });
+        wrap.appendChild(canvas);
+
+        SketchCharts.drawTopics(canvas, [], 1, "No companies in this range.");
+
+        expect(wrap.classList.contains("chart-canvas-wrap--empty")).toBe(true);
+        const labels = ctx.fillText.mock.calls.map((args) => String(args[0]));
+        expect(labels).toContain("No companies in this range.");
+        // Empty charts register no hit items.
+        expect(SketchCharts.getItemAt(canvas, 150, 100)).toBeNull();
+    });
+
+    it("clears the empty-state class once chart data returns", () => {
+        const wrap = document.createElement("div");
+        const { canvas } = createCanvas({ width: 300, height: 200 });
+        wrap.appendChild(canvas);
+
+        SketchCharts.drawTopics(canvas, [], 1);
+        expect(wrap.classList.contains("chart-canvas-wrap--empty")).toBe(true);
+
+        SketchCharts.drawTopics(canvas, [{ topic: "Acme", count: 4 }], 1);
+        expect(wrap.classList.contains("chart-canvas-wrap--empty")).toBe(false);
+    });
+
+    it("drawTimeline and drawHeatmap render empty messages when empty", () => {
+        const timeline = createCanvas({ width: 400, height: 200 });
+        SketchCharts.drawTimeline(timeline.canvas, [], "12m", 1, 0, "No activity yet.");
+        const timelineLabels = timeline.ctx.fillText.mock.calls.map((args) => String(args[0]));
+        expect(timelineLabels).toContain("No activity yet.");
+
+        const heatmap = createCanvas({ width: 360, height: 220 });
+        SketchCharts.drawHeatmap(heatmap.canvas, [], "No activity yet.");
+        const heatmapLabels = heatmap.ctx.fillText.mock.calls.map((args) => String(args[0]));
+        expect(heatmapLabels).toContain("No activity yet.");
+    });
+
+    it("drawTimeline draws y-axis ticks with headroom for flat sparse data", () => {
+        const { canvas, ctx } = createCanvas({ width: 400, height: 200 });
+        const data = [
+            { key: "2024-06", label: "Jun 2024", value: 1 },
+            { key: "2024-07", label: "Jul 2024", value: 1 },
+        ];
+        SketchCharts.drawTimeline(canvas, data, "all", 1, 0);
+        const labels = ctx.fillText.mock.calls.map((args) => String(args[0]));
+        // Flat value-1 data gets a max of 2, so the axis shows a "2" tick and the
+        // points are no longer pinned to the top edge.
+        expect(labels).toContain("2");
+        expect(labels).toContain("0");
+    });
+
+    it("drawTimeline skips zero value labels", () => {
+        const { canvas, ctx } = createCanvas({ width: 400, height: 200 });
+        const data = [
+            { key: "2024-06", label: "Jun 2024", value: 0 },
+            { key: "2024-07", label: "Jul 2024", value: 3 },
+        ];
+        SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);
+        const labels = ctx.fillText.mock.calls.map((args) => String(args[0]));
+        // The "3" value label is drawn; the flat "0" month value label is skipped
+        // (a "0" only appears as a y-axis tick, drawn right-aligned near the axis).
+        expect(labels).toContain("3");
+    });
+
+    it("drawTimeline thins crowded x labels at narrow widths", () => {
+        const { canvas, ctx } = createCanvas({ width: 220, height: 200 });
+        const data = [];
+        for (let month = 1; month <= 8; month++) {
+            const mm = String(month).padStart(2, "0");
+            data.push({ key: `2024-${mm}`, label: `Mon${month} 2024`, value: month });
+        }
+        SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);
+        // Narrow slices force some adjacent labels to be dropped; at least one is
+        // still drawn (translate runs once per drawn rotated label).
+        expect(ctx.translate).toHaveBeenCalled();
+    });
+
+    it("drawTimeline drops a regular x label when the last one crowds it", () => {
+        const { canvas, ctx } = createCanvas({ width: 360, height: 200 });
+        const data = [];
+        for (let month = 1; month <= 12; month++) {
+            const mm = String(month).padStart(2, "0");
+            data.push({ key: `2024-${mm}`, label: `Mon${month} 2024`, value: month });
+        }
+        // 12 points give labelEvery=2 (regulars at 0,2,...,10) plus the forced
+        // last index 11, which sits one narrow slice from index 10 and so wins
+        // over it via the drop-and-replace path.
+        SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);
+        expect(ctx.translate).toHaveBeenCalled();
+    });
+
     it("exportPng defaults the download name to chart.png", () => {
         const { canvas } = createCanvas({ width: 320, height: 160 });
         SketchCharts.drawTimeline(canvas, [{ key: "2025-01", label: "Jan 2025", value: 3 }], "12m");

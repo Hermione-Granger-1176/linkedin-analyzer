@@ -721,9 +721,24 @@ button {
 }
 
 .preview-table-wrapper {
-    overflow-x: auto;
+    position: relative;
+}
+
+/* Scrolling-shadows: the right/left fades appear only while there is more table
+   to scroll to, hinting that off-screen columns exist. The cover gradients are
+   pinned to the scroll box (scroll) and the shadows to the content (local), so
+   each fade hides itself once that edge is reached. */
+.preview-table-scroll {
+    overflow: auto;
     max-height: 320px;
-    overflow-y: auto;
+    background:
+        linear-gradient(to right, var(--bg-secondary) 30%, transparent) 0 0 / 32px 100% no-repeat,
+        linear-gradient(to left, var(--bg-secondary) 30%, transparent) 100% 0 / 32px 100% no-repeat,
+        radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.14), transparent) 0 0 / 14px 100%
+            no-repeat,
+        radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.14), transparent) 100% 0 / 14px
+            100% no-repeat;
+    background-attachment: local, local, scroll, scroll;
 }
 
 .preview-table {
@@ -953,6 +968,12 @@ button {
     margin-bottom: var(--space-lg);
 }
 
+/* The display:flex above outranks the [hidden] UA rule, so the "Active filters:"
+   label lingered with no chips. Re-hide it explicitly when there are none. */
+.active-filters[hidden] {
+    display: none;
+}
+
 .active-filters-label {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
@@ -1057,9 +1078,26 @@ button {
     height: 320px;
 }
 
+/* Empty charts collapse to a short band with a centered message so the card
+   shrinks instead of leaving a tall blank canvas. */
+.chart-canvas-wrap--empty,
+.chart-card--wide .chart-canvas-wrap--empty {
+    height: 140px;
+}
+
 .chart-canvas-wrap canvas {
     width: 100%;
     height: 100%;
+}
+
+/* The 24-hour heatmap needs a minimum width to stay tappable; let it scroll
+   horizontally inside its card on narrow screens instead of squashing. */
+#heatmapCard .chart-canvas-wrap {
+    overflow-x: auto;
+}
+
+#heatmapChart {
+    min-width: 540px;
 }
 
 .chart-note {
@@ -1713,9 +1751,25 @@ button {
     .screen-header .title {
         justify-content: flex-start;
     }
+}
 
+/* Demote wide cards to a single track only once the auto-fit grid itself has
+   collapsed to one column (minmax(280px) x 2 + gap no longer fits inside the
+   padded container). Demoting earlier left a large empty hole beside the card
+   while the grid still had two tracks. */
+@media (max-width: 615px) {
     .chart-card--wide {
         grid-column: span 1;
+    }
+}
+
+/* In the two-column analytics band the lone Top topics card would otherwise sit
+   beside an empty column, wedged between the two full-row charts. Stretch just
+   that card to the full row for a consistent stack. The connections screen keeps
+   its own Top companies and Top positions pair side by side, so it is untouched. */
+@media (min-width: 616px) and (max-width: 1000px) {
+    #topicsCard {
+        grid-column: 1 / -1;
     }
 }
 
@@ -1726,6 +1780,13 @@ button {
 
     .title {
         flex-direction: column;
+    }
+
+    /* The title centers here (column flex + centered cross-axis), so its
+       decorative underline must follow instead of staying anchored left. */
+    .screen-header .title::before {
+        left: 50%;
+        transform: translateX(-50%);
     }
 
     .theme-toggle {

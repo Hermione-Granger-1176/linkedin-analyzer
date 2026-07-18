@@ -613,8 +613,8 @@ export const AnalyticsPage = (() => {
      * @param {object} view - The analytics view containing timeline, topics, and heatmap data.
      */
     function renderCharts(view) {
-        SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap);
-        SketchCharts.drawTopics(elements.topicsChart, view.topics, 1);
+        SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap, "No activity in this range yet.");
+        SketchCharts.drawTopics(elements.topicsChart, view.topics, 1, "No topics in this range yet.");
 
         if (shouldAnimate(view)) {
             const duration = getTimelineAnimationDuration(view.timeline.length);

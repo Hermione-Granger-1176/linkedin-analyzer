@@ -763,10 +763,27 @@ export const ConnectionsPage = (() => {
      * @param {object} view - The computed view data
      */
     function renderCharts(view) {
-        SketchCharts.drawTimeline(elements.connectionGrowthChart, view.timeline, "all", 1, 0);
+        SketchCharts.drawTimeline(
+            elements.connectionGrowthChart,
+            view.timeline,
+            "all",
+            1,
+            0,
+            "No connection growth yet.",
+        );
 
-        SketchCharts.drawTopics(elements.connectionCompaniesChart, view.companies, 1);
-        SketchCharts.drawTopics(elements.connectionPositionsChart, view.positions, 1);
+        SketchCharts.drawTopics(
+            elements.connectionCompaniesChart,
+            view.companies,
+            1,
+            "No companies in this range.",
+        );
+        SketchCharts.drawTopics(
+            elements.connectionPositionsChart,
+            view.positions,
+            1,
+            "No positions in this range.",
+        );
     }
 
     /** Toggle empty state vs content grid based on data availability. */

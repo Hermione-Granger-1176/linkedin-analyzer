@@ -64,6 +64,17 @@ describe("NavMenu", () => {
         expect(toggle.getAttribute("aria-label")).toBe("Close navigation menu");
     });
 
+    it("keeps a single click handler per toggle across repeated init calls", () => {
+        const { toggle, nav } = renderMenu();
+        NavMenu.init();
+        NavMenu.init();
+
+        toggle.click();
+
+        expect(nav.classList.contains("is-open")).toBe(true);
+        expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    });
+
     it("closes the menu on a second toggle click", () => {
         const { toggle, nav } = renderMenu();
         NavMenu.init();

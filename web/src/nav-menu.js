@@ -10,6 +10,9 @@ export const NavMenu = (() => {
 
     /** @type {Array<{toggle: HTMLElement, nav: HTMLElement}>} */
     const pairs = [];
+    /** Toggles whose per-element listeners are already attached; re-init must
+     * refresh pairs without stacking duplicate handlers on the same elements. */
+    const wiredToggles = new WeakSet();
     let documentListenersBound = false;
 
     /** Wire every nav toggle button to the nav it controls. */
@@ -34,6 +37,11 @@ export const NavMenu = (() => {
         }
 
         pairs.push({ toggle, nav });
+
+        if (wiredToggles.has(toggle)) {
+            return;
+        }
+        wiredToggles.add(toggle);
 
         toggle.addEventListener("click", () => {
             setOpen(toggle, nav, !nav.classList.contains("is-open"));

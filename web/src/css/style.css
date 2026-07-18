@@ -1898,14 +1898,34 @@ button {
     }
 
     /* Collapse the time-range chip row into a compact native select that is
-       easier to operate on narrow touch screens. */
+       easier to operate on narrow touch screens, and lay the bar out as the
+       label on its own line above a single row that pairs the flexing select
+       with the natural-width Reset button. display:contents lifts the label and
+       select out of .filter-group so they share the .filters-bar flex row with
+       the Reset button (which overrides the 768px column layout). */
+    .filters-bar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-sm);
+    }
+
+    .filter-group {
+        display: contents;
+    }
+
+    .filter-label {
+        flex-basis: 100%;
+    }
+
     .filter-buttons {
         display: none;
     }
 
     .filter-select {
         display: block;
-        width: 100%;
+        flex: 1;
+        min-width: 0;
     }
 
     .action-buttons {

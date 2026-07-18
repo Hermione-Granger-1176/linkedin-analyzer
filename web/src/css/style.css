@@ -990,12 +990,17 @@ button {
     border-color: var(--accent-blue);
 }
 
+/* Compact swap for the chip row on narrow screens: hidden until the max-width
+   540px block reveals it in place of .filter-buttons. */
 .filter-select {
+    display: none;
     padding: var(--space-xs) var(--space-md);
     border-radius: var(--radius-md);
     border: 2px solid var(--border-light);
     background: var(--bg-tertiary);
+    color: var(--filter-btn-text);
     font-family: inherit;
+    font-size: var(--font-size-base);
 }
 
 .active-filters {
@@ -1890,6 +1895,17 @@ button {
        corner on its own and keeps its own spacing. */
     .screen-header {
         padding-top: var(--space-2xl);
+    }
+
+    /* Collapse the time-range chip row into a compact native select that is
+       easier to operate on narrow touch screens. */
+    .filter-buttons {
+        display: none;
+    }
+
+    .filter-select {
+        display: block;
+        width: 100%;
     }
 
     .action-buttons {

@@ -726,7 +726,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="analyticsTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="analyticsTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -736,6 +738,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="analyticsTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="analyticsResetFiltersBtn">
                             Reset filters
@@ -940,7 +949,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="connectionsTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="connectionsTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -950,6 +961,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="connectionsTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="connectionsResetFiltersBtn">
                             Reset filters
@@ -1139,7 +1157,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="messagesTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="messagesTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -1149,6 +1169,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="messagesTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="messagesResetFiltersBtn">
                             Reset filters
@@ -1321,7 +1348,9 @@
 
                     <div class="filters-bar">
                         <div class="filter-group">
-                            <span class="filter-label">Time range</span>
+                            <label class="filter-label" for="insightsTimeRangeSelect"
+                                >Time range</label
+                            >
                             <div class="filter-buttons" id="insightsTimeRangeButtons">
                                 <button class="filter-btn" data-range="1m">1 month</button>
                                 <button class="filter-btn" data-range="3m">3 months</button>
@@ -1331,6 +1360,13 @@
                                 </button>
                                 <button class="filter-btn" data-range="all">All time</button>
                             </div>
+                            <select class="filter-select" id="insightsTimeRangeSelect">
+                                <option value="1m">1 month</option>
+                                <option value="3m">3 months</option>
+                                <option value="6m">6 months</option>
+                                <option value="12m" selected>12 months</option>
+                                <option value="all">All time</option>
+                            </select>
                         </div>
                         <button class="ghost-btn" id="insightsResetFiltersBtn">
                             Reset filters

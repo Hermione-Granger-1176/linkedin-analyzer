@@ -89,6 +89,13 @@ function buildDom(opts = {}) {
         <div id="messagesTimeRangeButtons">
             ${rangeButtons}
         </div>
+        <select id="messagesTimeRangeSelect">
+            <option value="1m">1 month</option>
+            <option value="3m">3 months</option>
+            <option value="6m">6 months</option>
+            <option value="12m" selected>12 months</option>
+            <option value="all">All time</option>
+        </select>
         <button id="messagesResetFiltersBtn"></button>
         <button id="topContactsExportBtn"></button>
         <button id="silentConnectionsExportBtn"></button>
@@ -1052,6 +1059,49 @@ describe("MessagesPage", () => {
         const btn6m = document.querySelector('[data-range="6m"]');
         btn6m.click();
         expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    // --- compact time-range select (narrow screens) -------------------------
+
+    it("syncs range into router on select change", async () => {
+        Storage.getAllFiles.mockResolvedValue([]);
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        AppRouter.setParams.mockClear();
+        const select = document.getElementById("messagesTimeRangeSelect");
+        select.value = "3m";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).toHaveBeenCalledWith(
+            { range: "3m" },
+            { replaceHistory: false },
+        );
+        expect(document.querySelector('[data-range="3m"]').classList.contains("active")).toBe(true);
+    });
+
+    it("ignores a select change carrying an unknown range value", async () => {
+        Storage.getAllFiles.mockResolvedValue([]);
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        AppRouter.setParams.mockClear();
+        const select = document.getElementById("messagesTimeRangeSelect");
+        // No matching option leaves the value empty, which the handler rejects.
+        select.value = "bogus";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    it("mirrors the active range onto the select when applied from the route", async () => {
+        Storage.getAllFiles.mockResolvedValue([]);
+        MessagesPage.onRouteChange({ range: "3m" });
+        await tick();
+
+        expect(document.getElementById("messagesTimeRangeSelect").value).toBe("3m");
     });
 
     // --- hydrateMessageState & hydrateConnectionState via worker payload -----

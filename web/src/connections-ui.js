@@ -126,6 +126,7 @@ export const ConnectionsPage = (() => {
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll("#connectionsTimeRangeButtons .filter-btn"),
+            timeRangeSelect: document.getElementById("connectionsTimeRangeSelect"),
             resetFiltersBtn: document.getElementById("connectionsResetFiltersBtn"),
             connectionsEmpty: document.getElementById("connectionsEmpty"),
             connectionsGrid: document.getElementById("connectionsGrid"),
@@ -150,6 +151,10 @@ export const ConnectionsPage = (() => {
                 button.classList.contains("active") ? "true" : "false",
             );
         });
+
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
+        }
 
         /* v8 ignore next 3 */
         if (elements.resetFiltersBtn) {
@@ -811,6 +816,15 @@ export const ConnectionsPage = (() => {
         applyTimeRange(range);
     }
 
+    /** Apply the range chosen from the compact select, ignoring unknown values. */
+    function handleTimeRangeSelect() {
+        const range = elements.timeRangeSelect.value;
+        if (!RANGE_VALUES.has(range)) {
+            return;
+        }
+        applyTimeRange(range);
+    }
+
     /** Reset filters to defaults and re-render. */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
@@ -841,6 +855,9 @@ export const ConnectionsPage = (() => {
             btn.classList.toggle("active", isActive);
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.value = range;
+        }
     }
 
     /**

@@ -70,6 +70,13 @@ describe("InsightsPage", () => {
                 <button class="filter-btn" data-range="12m"></button>
                 <button class="filter-btn" data-range="3m"></button>
             </div>
+            <select id="insightsTimeRangeSelect">
+                <option value="1m">1 month</option>
+                <option value="3m">3 months</option>
+                <option value="6m">6 months</option>
+                <option value="12m" selected>12 months</option>
+                <option value="all">All time</option>
+            </select>
             <button id="insightsResetFiltersBtn"></button>
         `;
 
@@ -377,6 +384,48 @@ describe("InsightsPage", () => {
             { range: "3m" },
             { replaceHistory: false },
         );
+    });
+
+    it("syncs range into router on select change", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({});
+
+        const select = document.getElementById("insightsTimeRangeSelect");
+        select.value = "3m";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).toHaveBeenCalledWith(
+            { range: "3m" },
+            { replaceHistory: false },
+        );
+    });
+
+    it("ignores a select change carrying an unknown range value", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({});
+        AppRouter.setParams.mockClear();
+
+        const select = document.getElementById("insightsTimeRangeSelect");
+        select.value = "bogus";
+        select.dispatchEvent(new Event("change"));
+
+        expect(AppRouter.setParams).not.toHaveBeenCalled();
+    });
+
+    it("mirrors the active range onto the select when applied from the route", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+
+        expect(document.getElementById("insightsTimeRangeSelect").value).toBe("3m");
     });
 
     it("hides insightTip when tip is null in renderInsights (line 341)", async () => {

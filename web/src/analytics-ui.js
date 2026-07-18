@@ -188,6 +188,7 @@ export const AnalyticsPage = (() => {
     function resolveElements() {
         return {
             timeRangeButtons: document.querySelectorAll("#analyticsTimeRangeButtons .filter-btn"),
+            timeRangeSelect: document.getElementById("analyticsTimeRangeSelect"),
             resetFiltersBtn: document.getElementById("analyticsResetFiltersBtn"),
             activeFilters: document.getElementById("activeFilters"),
             activeFiltersList: document.getElementById("activeFiltersList"),
@@ -211,6 +212,10 @@ export const AnalyticsPage = (() => {
         elements.timeRangeButtons.forEach((button) => {
             button.addEventListener("click", () => handleTimeRangeChange(button));
         });
+
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
+        }
 
         if (elements.resetFiltersBtn) {
             elements.resetFiltersBtn.addEventListener("click", resetFilters);
@@ -728,6 +733,15 @@ export const AnalyticsPage = (() => {
         applyTimeRange(range);
     }
 
+    /** Apply the range chosen from the compact select, ignoring unknown values. */
+    function handleTimeRangeSelect() {
+        const range = elements.timeRangeSelect.value;
+        if (!RANGE_VALUES.has(range)) {
+            return;
+        }
+        applyTimeRange(range);
+    }
+
     /** Reset all filters to defaults and request a fresh view. */
     function resetFilters() {
         state.filters = { ...FILTER_DEFAULTS };
@@ -758,6 +772,9 @@ export const AnalyticsPage = (() => {
             btn.classList.toggle("active", isActive);
             btn.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
+        if (elements.timeRangeSelect) {
+            elements.timeRangeSelect.value = range;
+        }
     }
 
     /**

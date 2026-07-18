@@ -32,6 +32,7 @@ linkedin-analyzer/
 │   │   ├── telemetry.js                # Web-vitals and perf telemetry
 │   │   ├── session.js                  # Session management
 │   │   ├── theme.js                    # Theme toggle
+│   │   ├── nav-menu.js                 # Mobile hamburger nav toggle
 │   │   ├── decorations.js              # Background doodles (Rough.js)
 │   │   ├── avatar.js                   # Deterministic contact avatar generation
 │   │   ├── storage.js                  # IndexedDB helpers

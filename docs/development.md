@@ -66,6 +66,9 @@ make setup-ci
 # Run browser E2E tests
 make test-e2e
 
+# Capture screens at mobile/tablet/desktop viewports (writes to .artifacts/screens by default)
+make web-screens
+
 # Lint
 make lint-js
 
@@ -160,6 +163,7 @@ make test-py ARGS="-k test_clean --no-cov"      # By name pattern
 ```bash
 make test-js
 make test-e2e
+make test-e2e ARGS="--project=chromium web/e2e/app.e2e.spec.js" # Specific project/file
 ```
 
 Unit tests are in `web/tests/`; Playwright E2E tests are in `web/e2e/`.

@@ -105,5 +105,15 @@ test.describe("viewport screenshots", () => {
                 });
             }
         }
+
+        // Extra mobile capture: the home nav expanded via the hamburger toggle.
+        await page.setViewportSize({ width: 375, height: 812 });
+        await gotoRoute(page, "home");
+        await page.locator("#screen-home .nav-toggle").click();
+        await expect(page.locator("#topNav-home")).toBeVisible();
+        await page.screenshot({
+            path: path.join(outDir, "mobile", "home-menu-open.png"),
+            fullPage: true,
+        });
     });
 });

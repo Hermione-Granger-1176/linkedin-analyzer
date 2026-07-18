@@ -218,6 +218,44 @@ button {
     color: var(--accent-blue);
 }
 
+.top-link:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+/* Mobile navigation toggle. Hidden above the narrow breakpoint; the max-width
+   540px block reveals it and collapses the pill row into a stacked panel. */
+.nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: var(--space-md) auto 0;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-fast);
+}
+
+.nav-toggle:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.nav-toggle:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+.nav-toggle-icon {
+    width: 24px;
+    height: 24px;
+}
+
 .hero-header {
     text-align: center;
     display: flex;
@@ -1801,6 +1839,29 @@ button {
 }
 
 @media (max-width: 540px) {
+    /* Swap the pill row for a hamburger toggle plus a stacked panel that stays
+       in normal document flow (no overlay positioning). */
+    .nav-toggle {
+        display: flex;
+    }
+
+    .top-nav {
+        display: none;
+    }
+
+    .top-nav.is-open {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-sm);
+        margin-top: var(--space-md);
+    }
+
+    .top-nav.is-open .top-link {
+        width: 100%;
+        text-align: center;
+    }
+
     .action-buttons {
         flex-direction: column;
         width: 100%;

@@ -28,6 +28,7 @@ vi.mock("../src/insights-ui.js", () => ({
 vi.mock("../src/messages-insights.js", () => ({
     MessagesPage: { init: vi.fn(), onRouteChange: vi.fn() },
 }));
+vi.mock("../src/nav-menu.js", () => ({ NavMenu: { init: vi.fn() } }));
 vi.mock("../src/router.js", () => ({
     AppRouter: {
         registerRoute: vi.fn(),

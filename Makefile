@@ -132,8 +132,8 @@ test-js: ## Run JS unit tests only
 test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick ARGS="analytics")
 	$(NPX) vitest run --config web/vitest.config.js $(ARGS)
 
-test-e2e: ## Run Playwright browser tests
-	$(NPM) run test:e2e
+test-e2e: ## Run Playwright browser tests (make test-e2e ARGS="--project=chromium web/e2e/app.e2e.spec.js")
+	$(NPM) run test:e2e -- $(ARGS)
 
 test-e2e-headed: ## Run Playwright browser tests in headed mode
 	$(NPM) run test:e2e:headed

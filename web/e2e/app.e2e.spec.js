@@ -144,6 +144,30 @@ test("upload shares+comments and render insights", async ({ page }) => {
     await runAxeScan(page);
 });
 
+test("mobile hamburger menu opens, navigates, and closes", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto("/#home");
+
+    const toggle = page.locator("#screen-home .nav-toggle");
+    const nav = page.locator("#topNav-home");
+
+    // The pill row is collapsed behind the toggle at this width.
+    await expect(toggle).toBeVisible();
+    await expect(nav).toBeHidden();
+
+    await toggle.click();
+    await expect(nav).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    // Accessibility check with the menu open at the mobile viewport.
+    await runAxeScan(page);
+
+    await page.locator('#topNav-home a.top-link[data-route="analytics"]').click();
+    await expect(page).toHaveURL(/#analytics/);
+    await expect(nav).toBeHidden();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
 test("shows an error hint for malformed CSV uploads", async ({ page }) => {
     await uploadFiles(page, [INVALID_CSV]);
     await expect(page.locator("#uploadHint")).toContainText("Could not auto-detect file type");

@@ -262,7 +262,6 @@ Examples:
         command_parser = subparsers.add_parser(name, help=help_text)
         _add_default_io_args(command_parser, default_input, default_output)
 
-    # All subcommand
     all_parser = subparsers.add_parser(
         "all",
         help="Clean all LinkedIn CSV exports",

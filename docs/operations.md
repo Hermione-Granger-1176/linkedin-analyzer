@@ -64,7 +64,7 @@ Re-run-failed-jobs caveat: `gh-action-pypi-publish` runs with `skip-existing: tr
 
 - The web app is a PWA: once a visitor has loaded it, the service worker (`web/src/sw.js`) serves the cached shell, so the app stays usable offline and during a brief Vercel outage. File processing is fully client-side, so a backend outage does not block cleaning or analysis of already-loaded data.
 - The only server-side surface is the `api/csp-report` function, which is best-effort and non-critical: if it is down, CSP reports are simply not collected and nothing user-facing breaks.
-- There is no built-in uptime monitor. If availability SLAs matter, point an external monitor (for example a simple HTTPS check) at the production URL; Vercel also exposes deployment/health status in its dashboard.
+- A scheduled smoke check (`.github/workflows/web-smoke.yml`) runs `make web-smoke` against the production URL twice daily when the `PRODUCTION_URL` repository variable is configured, and opens or updates an issue on failure. It is not an SLA-grade uptime monitor: if availability SLAs matter, point an external monitor (for example a simple HTTPS check) at the production URL; Vercel also exposes deployment/health status in its dashboard.
 
 ## Rollback
 
@@ -125,7 +125,7 @@ Diagnostics are **off until the user explicitly grants consent** (telemetry bann
 
 The project is maintained by a single person: Aditya Kumar Darak (GitHub `Hermione-Granger-1176`). This section records who holds each external account and how to recover access, so the project is not silently orphaned if one credential is lost.
 
-The monitored security mailbox is `adityadarak9314@outlook.com`, the contact published in `SECURITY.md`. Keep that file as the single source of truth for the address; update it there if the published contact ever changes.
+The monitored security mailbox is `adityadarak9314@outlook.com`, the contact published in `.github/SECURITY.md`. Keep that file as the single source of truth for the address; update it there if the published contact ever changes.
 
 | Surface | Holder / owner | Recovery path |
 | --- | --- | --- |
@@ -135,7 +135,7 @@ The monitored security mailbox is `adityadarak9314@outlook.com`, the contact pub
 | Sentry org/project (opt-in diagnostics) | Maintainer's Sentry account | Sentry account recovery; rotate `VITE_SENTRY_DSN` / `SENTRY_AUTH_TOKEN` and update the Vercel environment variables. Telemetry is opt-in and non-critical, so an outage here does not affect users. |
 | PyPI trusted publisher | Maintainer's PyPI account (OIDC trusted publishing, no stored token) | PyPI account recovery; re-configure the trusted publisher for this repository under the project's publishing settings. No API token exists to rotate. |
 | GHCR (container registry) | Same GitHub account (packages under the repo) | Publishing uses the workflow `GITHUB_TOKEN`, so it is tied to repository access; recovering the GitHub account restores publish rights. |
-| Security mailbox | `adityadarak9314@outlook.com` | Standard mailbox provider account recovery. Update `SECURITY.md` if the published contact ever changes. |
+| Security mailbox | `adityadarak9314@outlook.com` | Standard mailbox provider account recovery. Update `.github/SECURITY.md` if the published contact ever changes. |
 
 If the sole maintainer becomes unavailable, the practical continuity path is a new maintainer forking the repository and reconfiguring their own Vercel, Sentry, and PyPI trusted-publisher links; nothing in the pipeline depends on a shared secret that cannot be regenerated from the owning accounts.
 

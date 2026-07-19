@@ -198,13 +198,13 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
     if config.max_input_bytes > 0:
         try:
             input_size = input_path.stat().st_size
-        except OSError as e:
+        except OSError as exc:
             return CleanerResult(
                 success=False,
                 rows_processed=0,
                 input_path=input_path,
                 output_path=output_path,
-                error=str(e),
+                error=str(exc),
             )
         if input_size > config.max_input_bytes:
             return CleanerResult(
@@ -286,12 +286,12 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             output_path=output_path,
         )
 
-    except Exception as e:
+    except Exception as exc:
         LOG.exception("Failed to clean and export data")
         return CleanerResult(
             success=False,
             rows_processed=0,
             input_path=input_path,
             output_path=output_path,
-            error=str(e),
+            error=str(exc),
         )

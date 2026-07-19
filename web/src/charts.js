@@ -586,8 +586,10 @@ export const SketchCharts = (() => {
 
         // Draw cells (no RoughJS - just fills)
         for (let day = 0; day < 7; day++) {
+            const values = grid[day];
+            const dayLabel = DAY_LABELS[day];
             for (let hour = 0; hour < 24; hour++) {
-                const value = grid[day][hour];
+                const value = values[hour];
                 const intensity = Math.max(0.08, value / maxValue);
                 const x = padding.left + hour * cellWidth;
                 const y = padding.top + day * cellHeight;
@@ -602,7 +604,7 @@ export const SketchCharts = (() => {
                     y,
                     width: cellWidth,
                     height: cellHeight,
-                    tooltip: `${DAY_LABELS[day]} ${String(hour).padStart(2, "0")}:00 - ${value}`,
+                    tooltip: `${dayLabel} ${String(hour).padStart(2, "0")}:00 - ${value}`,
                 });
             }
         }

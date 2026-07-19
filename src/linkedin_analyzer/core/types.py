@@ -13,7 +13,6 @@ from linkedin_analyzer.core.limits import DEFAULT_MAX_INPUT_BYTES, DEFAULT_MAX_R
 if TYPE_CHECKING:
     from pathlib import Path
 
-# Type aliases for clarity
 TextCleaner = Callable[[object], str]
 ColumnWidths = Mapping[str, int]
 

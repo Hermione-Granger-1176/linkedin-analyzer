@@ -1031,8 +1031,7 @@ export const UploadPage = (() => {
         if (activeJobs.size !== 1) {
             return null;
         }
-        const iterator = activeJobs.values().next();
-        return iterator.done ? null : iterator.value;
+        return activeJobs.values().next().value;
     }
 
     /**

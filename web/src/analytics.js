@@ -39,11 +39,10 @@ export const AnalyticsEngine = (() => {
         hour: (bucket, filters) => bucket.hours[filters.hour] || 0,
     });
 
-    // Compute pre-aggregated analytics indices from raw event data.
-    // Indexes by month and day for O(months) view building instead of O(events).
     /**
      * Pre-compute aggregates during initial load.
-     * This creates an indexed structure that allows fast filter lookups.
+     * This creates an indexed structure that allows fast filter lookups:
+     * indexing by month and day means view building is O(months) instead of O(events).
      * @param {object[]|null|undefined} sharesData - Cleaned shares rows
      * @param {object[]|null|undefined} commentsData - Cleaned comments rows
      * @param {object[]|null|undefined} connectionsData - Cleaned connections rows
@@ -556,8 +555,10 @@ export const AnalyticsEngine = (() => {
 
             // Aggregate heatmap
             for (let d = 0; d < 7; d++) {
+                const targetDay = heatmap[d];
+                const sourceDay = bucket.heatmap[d];
                 for (let h = 0; h < 24; h++) {
-                    heatmap[d][h] += bucket.heatmap[d][h];
+                    targetDay[h] += sourceDay[h];
                 }
                 dayCounts[d] += bucket.days[d];
             }

@@ -34,10 +34,11 @@ class FakeGh:
         command = list(cmd)
         self.calls.append(command)
         for predicate, response in self.routes:
-            if predicate(command):
-                if isinstance(response, Exception):
-                    raise response
-                return response
+            if not predicate(command):
+                continue
+            if isinstance(response, Exception):
+                raise response
+            return response
         raise AssertionError(f"unexpected command: {command}")
 
 

@@ -406,12 +406,9 @@ export const MessagesAnalytics = (() => {
 
         const selfUrl = pickSelfKey(urlStats);
         const selfUrls = new Set();
-        if (selfUrl) {
-            selfUrls.add(selfUrl);
-        }
-
         const selfNames = new Set();
         if (selfUrl) {
+            selfUrls.add(selfUrl);
             const nameCounts = urlNameCounts.get(selfUrl) || new Map();
             const primaryName = pickMostFrequentKey(nameCounts);
             if (primaryName) {

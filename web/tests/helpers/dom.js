@@ -93,7 +93,6 @@ export function mockResizeObserver() {
     const callbacks = [];
     class MockResizeObserver {
         constructor(callback) {
-            this.callback = callback;
             callbacks.push(callback);
         }
         observe() {}

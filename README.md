@@ -38,7 +38,7 @@ make setup
 **Web:** Run the Vite dev server and open the local URL:
 
 ```bash
-cp .env.example .env  # optional; set VITE_SENTRY_DSN + VITE_APP_RELEASE for opt-in diagnostics
+cp .env.example .env  # optional; set VITE_SENTRY_DSN for opt-in diagnostics (VITE_APP_RELEASE adds release metadata)
 make web
 ```
 

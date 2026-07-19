@@ -6,20 +6,10 @@ from typing import TYPE_CHECKING
 
 from scripts.ci import run_parallel_checks
 
+from tests.test_pr_review import completed_process
+
 if TYPE_CHECKING:
     import pytest
-
-
-def completed_process(
-    returncode: int, stdout: str = "", stderr: str = ""
-) -> subprocess.CompletedProcess[str]:
-    """Create a subprocess result for injected check runners."""
-    return subprocess.CompletedProcess(
-        args=["make", "target"],
-        returncode=returncode,
-        stdout=stdout,
-        stderr=stderr,
-    )
 
 
 def test_run_check_reports_success_output() -> None:

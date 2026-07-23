@@ -1,5 +1,7 @@
 /* Messages analytics helpers shared by UI and worker */
 
+import { parseLocalDate, parseLocalDateTime } from "./analytics-dates.js";
+
 export const MessagesAnalytics = (() => {
     "use strict";
 
@@ -674,33 +676,13 @@ export const MessagesAnalytics = (() => {
     }
 
     /**
-     * Parse local datetime string in YYYY-MM-DD HH:MM:SS format.
+     * Parse a local date-only or date-time string ("YYYY-MM-DD" or "YYYY-MM-DD HH:MM[:SS]").
      * @param {string} value - Date string
      * @returns {Date|null}
      */
     function parseDateTime(value) {
         const text = cleanText(value);
-        if (!text) {
-            return null;
-        }
-        const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
-        if (!match) {
-            return null;
-        }
-
-        const year = Number(match[1]);
-        const month = Number(match[2]);
-        const day = Number(match[3]);
-        const hour = Number(match[4] || 0);
-        const minute = Number(match[5] || 0);
-        const second = Number(match[6] || 0);
-
-        const parsed = new Date(year, month - 1, day, hour, minute, second);
-        /* v8 ignore next */
-        if (Number.isNaN(parsed.getTime())) {
-            return null;
-        }
-        return parsed;
+        return parseLocalDateTime(text) || parseLocalDate(text);
     }
 
     /**
@@ -709,17 +691,7 @@ export const MessagesAnalytics = (() => {
      * @returns {Date|null}
      */
     function parseDateOnly(value) {
-        const text = cleanText(value);
-        const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!match) {
-            return null;
-        }
-        const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-        /* v8 ignore next */
-        if (Number.isNaN(parsed.getTime())) {
-            return null;
-        }
-        return parsed;
+        return parseLocalDate(cleanText(value));
     }
 
     /**

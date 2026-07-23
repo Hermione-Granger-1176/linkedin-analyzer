@@ -2,39 +2,23 @@
 
 import { MONTH_LABELS } from "./analytics-constants.js";
 
-/**
- * Parse a LinkedIn date string into date components.
- * @param {string} value - Date string in "YYYY-MM-DD HH:MM:SS" format.
- * @returns {{ timestamp: number, dayIndex: number, hour: number, dateKey: string, monthKey: string } | null} Parsed date components, or null if invalid.
- */
-export function parseLinkedInDate(value) {
-    if (!value || typeof value !== "string") {
-        return null;
-    }
-    const trimmed = value.trim();
-    const [datePart, timePart] = trimmed.split(" ");
-    if (!datePart || !timePart) {
-        return null;
-    }
-    const [year, month, day] = datePart.split("-").map(Number);
-    const timeTokens = timePart.split(":");
-    const hour = Number(timeTokens[0]);
-    // Minute is optional: LinkedIn always emits it, but tolerate its absence by
-    // defaulting to zero. A present-but-non-numeric minute is invalid, not zero.
-    const minute = timeTokens.length > 1 ? Number(timeTokens[1]) : 0;
+const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const LOCAL_DATE_TIME_PATTERN =
+    /^(\d{4})-(\d{2})-(\d{2})[ \t]+(\d{2}):(\d{2})(?::(\d{2}))?$/;
+const LINKEDIN_DATE_TIME_PATTERN =
+    /^(\d{4})-(\d{2})-(\d{2})[ \t]+(\d{2})(?::(\d{2}))?(?::(\d{2}))?$/;
 
-    // Reject non-numeric or out-of-range components. Without these guards the
-    // Date constructor silently rolls over (month 13 -> next January, day 32 ->
-    // next month), shifting activity into the wrong local day/month.
-    if (
-        !Number.isInteger(year) ||
-        !Number.isInteger(month) ||
-        !Number.isInteger(day) ||
-        !Number.isInteger(hour) ||
-        !Number.isInteger(minute)
-    ) {
-        return null;
-    }
+/**
+ * Construct a local Date only when every component describes the same instant.
+ * @param {number} year - Four-digit year
+ * @param {number} month - One-based month
+ * @param {number} day - One-based day of month
+ * @param {number} hour - Hour from 0 through 23
+ * @param {number} minute - Minute from 0 through 59
+ * @param {number} second - Second from 0 through 59
+ * @returns {Date|null} Strictly validated local Date, or null
+ */
+function createStrictLocalDate(year, month, day, hour = 0, minute = 0, second = 0) {
     if (
         year < 1 ||
         month < 1 ||
@@ -44,17 +28,100 @@ export function parseLinkedInDate(value) {
         hour < 0 ||
         hour > 23 ||
         minute < 0 ||
-        minute > 59
+        minute > 59 ||
+        second < 0 ||
+        second > 59
     ) {
         return null;
     }
 
-    // Timestamps are already converted to local time by the cleaner.
-    const localDate = new Date(year, month - 1, day, hour, minute, 0);
+    const parsed = new Date(year, month - 1, day, hour, minute, second, 0);
+    if (year < 100) {
+        parsed.setFullYear(year);
+    }
 
-    // Reject impossible calendar dates (e.g. Feb 30) that the Date constructor
-    // would otherwise roll forward into the following month.
-    if (localDate.getMonth() !== month - 1 || localDate.getDate() !== day) {
+    if (
+        Number.isNaN(parsed.getTime()) ||
+        parsed.getFullYear() !== year ||
+        parsed.getMonth() !== month - 1 ||
+        parsed.getDate() !== day ||
+        parsed.getHours() !== hour ||
+        parsed.getMinutes() !== minute ||
+        parsed.getSeconds() !== second
+    ) {
+        return null;
+    }
+
+    return parsed;
+}
+
+/**
+ * Parse a strict local date in YYYY-MM-DD format.
+ * @param {string} value - Local date string
+ * @returns {Date|null} Local-midnight Date, or null if invalid
+ */
+export function parseLocalDate(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const match = value.trim().match(LOCAL_DATE_PATTERN);
+    if (!match) {
+        return null;
+    }
+
+    return createStrictLocalDate(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
+/**
+ * Parse a strict local date-time in YYYY-MM-DD HH:MM[:SS] format.
+ * @param {string} value - Local date-time string
+ * @returns {Date|null} Local Date, or null if invalid
+ */
+export function parseLocalDateTime(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const match = value.trim().match(LOCAL_DATE_TIME_PATTERN);
+    if (!match) {
+        return null;
+    }
+
+    return createStrictLocalDate(
+        Number(match[1]),
+        Number(match[2]),
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5]),
+        Number(match[6] || 0),
+    );
+}
+
+/**
+ * Parse a LinkedIn date string into date components.
+ * @param {string} value - Date string in "YYYY-MM-DD HH[:MM[:SS]]" format (hour required, minutes and seconds optional).
+ * @returns {{ timestamp: number, dayIndex: number, hour: number, dateKey: string, monthKey: string } | null} Parsed date components, or null if invalid.
+ */
+export function parseLinkedInDate(value) {
+    if (!value || typeof value !== "string") {
+        return null;
+    }
+
+    const match = value.trim().match(LINKEDIN_DATE_TIME_PATTERN);
+    if (!match) {
+        return null;
+    }
+
+    const localDate = createStrictLocalDate(
+        Number(match[1]),
+        Number(match[2]),
+        Number(match[3]),
+        Number(match[4]),
+        Number(match[5] || 0),
+        Number(match[6] || 0),
+    );
+    if (!localDate) {
         return null;
     }
 

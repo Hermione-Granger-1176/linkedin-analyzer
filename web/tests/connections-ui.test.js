@@ -189,6 +189,37 @@ describe("ConnectionsPage", () => {
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
     });
 
+    it("excludes impossible connection dates from range analytics", async () => {
+        Storage.getFile.mockResolvedValue({ text: "csv" });
+        DataCache.get.mockReturnValue(null);
+
+        ConnectionsPage.init();
+        await ConnectionsPage.onRouteChange({ range: "12m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const processedId = workerInstance.postMessage.mock.calls[0][0].requestId;
+        workerInstance.listeners.message[0]({
+            data: {
+                type: "processed",
+                requestId: processedId,
+                payload: {
+                    success: true,
+                    rows: [
+                        { "Connected On": "9999-02-29", Company: "Invalid", Position: "Bad" },
+                        { "Connected On": "9999-02-28", Company: "Valid", Position: "Good" },
+                    ],
+                    analytics: {
+                        growthTimeline: [],
+                        stats: { total: 2, networkAgeMonths: 1 },
+                    },
+                },
+            },
+        });
+
+        expect(document.getElementById("connStatRecent").textContent).toBe("1");
+        expect(document.getElementById("connStatTopCompany").textContent).toBe("Valid");
+    });
+
     it("shows tooltip on chart hover", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);

@@ -1,5 +1,6 @@
 /* Connections page logic */
 
+import { parseLocalDate } from "./analytics-dates.js";
 import { SketchCharts } from "./charts.js";
 import { DataCache } from "./data-cache.js";
 import { LoadingOverlay } from "./loading-overlay.js";
@@ -617,21 +618,8 @@ export const ConnectionsPage = (() => {
      * @returns {number} Epoch milliseconds, or 0 if unparseable
      */
     function parseConnectedOn(dateStr) {
-        /* v8 ignore next 6 */
-        if (!dateStr || typeof dateStr !== "string") {
-            return 0;
-        }
-        const parts = dateStr.split("-");
-        if (parts.length !== 3) {
-            return 0;
-        }
-        const y = Number(parts[0]);
-        const m = Number(parts[1]);
-        const d = Number(parts[2]);
-        if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) {
-            return 0;
-        }
-        return new Date(y, m - 1, d).getTime();
+        const parsed = parseLocalDate(dateStr);
+        return parsed ? parsed.getTime() : 0;
     }
 
     /**

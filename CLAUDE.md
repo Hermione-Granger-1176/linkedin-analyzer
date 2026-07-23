@@ -31,7 +31,8 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 
 - `make setup`: fast default (Python + Node deps, no Playwright browsers)
-- `make setup-all`: full setup including Playwright browsers
+- `make setup-all`: full local setup including Playwright browsers, without system packages or sudo
+- `make setup-ci`: CI-only setup that may install Playwright system packages through `--with-deps`
 - `make ci`: full local CI gate (`check-local` is an alias)
 - `make check`: full gate including browser tests
 - `make ci-python` / `make ci-web`: per-surface CI gates
@@ -42,6 +43,8 @@ Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 - `make security`: dependency and override audits
 - `make pr` / `make git`: drill into PR and git sub-commands (`make help-ci` lists the CI sub-commands)
 - `make status`: quick workspace health check
+
+Playwright uses native host platform detection. On Debian or Ubuntu hosts that lack browser libraries, `make setup-playwright-local` prepares a private no-sudo library runtime below the ignored `.playwright/` cache and installs browsers into Playwright's shared `~/.cache/ms-playwright` cache (reused across projects). Use `local_libs=1` with browser targets to run through that prepared runtime. `make clean` and `make playwright-local-clean` remove only `.playwright/`, never the shared browsers. `make setup-all` installs dependencies and browsers without system packages, while CI retains Playwright's `--with-deps` setup.
 
 Python deps live in `pyproject.toml` (frozen in `uv.lock`); Node deps in `package.json` (frozen in `package-lock.json`). Refresh with `make lock` / `make lock-node`.
 

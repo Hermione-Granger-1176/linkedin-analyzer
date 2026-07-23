@@ -192,15 +192,18 @@ The generator (`scripts/gen-parity-corpus.mjs`) is deterministic. Date columns c
 
 ## Local checks and benchmarks
 
-`scripts/checks/` holds developer-only tools (`make` group `checks`) that run against your private LinkedIn export in `data/input/` (never committed). They are not part of `make ci`; each one prints `SKIP:` and exits 0 when the export is absent, so they are safe to run anywhere. Generated row dumps go to a temp folder (`$LIA_CHECKS_OUT`, default `$TMPDIR/linkedin-analyzer/checks-out`), never the repo.
+`scripts/checks/` holds developer-only tools (`make` group `checks`) that run against your private LinkedIn export in `data/input/` (never committed). They are not part of `make ci`. Checks skip with exit code 0 when the export is absent unless `strict=1` is set. Cross-runtime row dumps use an owner-only temporary directory and are removed automatically.
 
 ```bash
-make cleaner-diff                 # web cleaner output unchanged vs main (sha256 per type)
+make cleaner-diff                 # compare main and worktree web cleaner output
 make cleaner-diff args="A B"      # compare two arbitrary git refs
+make cleaner-diff strict=1        # fail when required private inputs are absent
 make bench                        # read -> clean -> analytics timing (make bench runs=N)
 make bench-decode                 # upload decode layer: speed + byte-identity vs the old path
-make xrt-diff                     # Python CLI xlsx vs web cleaner rows, cell by cell
+make xrt-diff                     # stage worktree web rows and compare with CLI xlsx cells
+make xrt-diff ref=A               # stage one arbitrary web ref for cross-runtime comparison
+make xrt-diff strict=1            # fail when required private inputs are absent
 make explore                      # ad-hoc statistics over the export
 ```
 
-Use `make cleaner-diff` after any change to the web cleaner to prove it is behavior-preserving, and `make bench` as the speed regression anchor. The cross-runtime `make xrt-diff` reads the CLI's `data/output/*.xlsx` (`make run-cli args="all"`) and the dumps from `make cleaner-diff`, so run those two first. `make explore` identifies the export owner for message-direction stats via `$LIA_ME`, falling back to git `user.name`.
+Use `make cleaner-diff` after a web cleaner change to prove it is behavior-preserving. This standalone check compares two refs and does not retain cleaned rows. Use `make bench` as the speed regression anchor. Before `make xrt-diff`, generate the CLI workbooks with `make run-cli args="all"`. The cross-runtime target stages only the selected web ref, defaulting to `worktree`, so its Python-to-web parity result is independent of the standalone ref comparison. It reports only aggregate counts and bounded mismatch coordinates, and removes the temporary rows on every exit path. `make explore` identifies the export owner for message-direction stats via `$LIA_ME`, falling back to git `user.name`.

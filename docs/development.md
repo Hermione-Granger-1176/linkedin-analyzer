@@ -21,10 +21,17 @@ cp .env.example .env
 
 Python dependencies are declared in `pyproject.toml` and resolved in `uv.lock`. The local environment remains `.venv`; uv creates and syncs it from the lockfile.
 
-Refresh `uv.lock` after Python dependency changes:
+Refresh lockfiles after dependency changes:
 
 ```bash
-make lock
+make lock       # Python
+make lock-node  # Node
+```
+
+When only selected transitive Node packages need a security refresh, update them without changing `package.json`:
+
+```bash
+make lock-node-update packages="package-a package-b"
 ```
 
 ### Using an older Python version

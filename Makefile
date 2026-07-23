@@ -229,13 +229,17 @@ audit-python: ## Run pip-audit against the frozen uv lock export
 
 # ─── Dependency maintenance @deps ──────────────────────────────────────────────────
 
-.PHONY: lock lock-node fix-deps
+.PHONY: lock lock-node lock-node-update fix-deps
 
 lock: ## Refresh uv.lock after Python dependency changes
 	$(UV) lock
 
 lock-node: ## Refresh package-lock.json after Node dependency changes
 	$(NPM) install --package-lock-only
+
+lock-node-update: ## Update selected transitive Node packages in the lockfile (packages="name ...")
+	@test -n "$(packages)" || (printf 'Usage: make lock-node-update packages="package ..."\n' >&2; exit 1)
+	$(NPM) update --package-lock-only $(packages)
 
 fix-deps: ## Refresh locks and reinstall local environments
 	$(MAKE) lock

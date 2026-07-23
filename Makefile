@@ -178,17 +178,22 @@ web-e2e: test-e2e ## Alias for test-e2e
 
 # ─── Checks @checks ──────────────────────────────────────────────────────────────────
 # Local-only tools that run against your private export in data/input (never
-# committed). They skip cleanly when it is absent. Row dumps go to a temp folder
-# ($LIA_CHECKS_OUT, default $TMPDIR/linkedin-analyzer/checks-out), never the repo.
+# committed). They skip cleanly when it is absent unless strict=1 is set. Any
+# cross-runtime row dumps use a private temporary directory and are always removed.
 # See docs/development.md (Local checks and benchmarks).
 
 .PHONY: cleaner-diff xrt-diff bench bench-decode explore
 
-cleaner-diff: ## Verify the web cleaner output is unchanged on your export (make cleaner-diff [args="oldRef newRef"])
-	$(NODE) scripts/checks/cleaner-diff.mjs $(args)
+cleaner-diff: ## Compare web cleaner behavior across refs (make cleaner-diff [args="oldRef newRef"] [strict=1] [input_dir=path])
+	$(NODE) scripts/checks/cleaner-diff.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") $(args)
 
-xrt-diff: ## Compare the Python CLI xlsx output against the web cleaner rows (run run-cli + cleaner-diff first)
-	$(VENV_PYTHON) scripts/checks/xrt-diff.py
+xrt-diff: ## Stage one web ref and compare its rows with CLI xlsx output (make xrt-diff [ref=worktree] [strict=1] [input_dir=path] [xlsx_dir=path])
+	@set -eu; \
+	temp_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/linkedin-analyzer-xrt.XXXXXX"); \
+	chmod 700 "$$temp_dir"; \
+	trap 'rm -rf -- "$$temp_dir"' EXIT; \
+	$(NODE) scripts/checks/cleaner-diff.mjs --output-dir "$$temp_dir" $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") "$(or $(ref),worktree)"; \
+	$(VENV_PYTHON) scripts/checks/xrt-diff.py --json-dir "$$temp_dir" $(if $(strict),--strict) $(if $(xlsx_dir),--xlsx-dir "$(xlsx_dir)")
 
 bench: ## Benchmark read, clean, and analytics on your export (make bench [runs=N])
 	$(NODE) scripts/checks/pipeline-bench.mjs $(runs)

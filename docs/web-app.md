@@ -164,6 +164,8 @@ Your file contents stay in your browser unless you explicitly enable diagnostics
 - Tutorial and mini-tip onboarding state is preserved in `localStorage` (versioned keys).
 - No backend API calls for file content.
 - If `VITE_SENTRY_DSN` is configured, diagnostics remain disabled until the user opts in.
+- After opt-in, outbound error events are reduced to fixed module/operation identifiers, allowlisted enum tags, normalized same-origin JavaScript or service-worker pathnames with nonnegative integer line/column data, sourcemap debug IDs, and build environment/release metadata. Raw user-controlled strings are not attached.
+- Performance telemetry contains only allowlisted nonnegative numeric web-vital and internal timing values, plus positive integer sample counts, sent as a numeric-only `session-metrics` batch each time a nonempty buffer is flushed on page hide.
 
 ## Running Locally
 

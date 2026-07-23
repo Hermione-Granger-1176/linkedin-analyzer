@@ -947,7 +947,10 @@ export const MessagesPage = (() => {
             return;
         }
         Promise.resolve(Storage.saveOutreach(outreach)).catch((error) => {
-            captureError(error, { module: "messages", operation: "persist-outreach" });
+            captureError(error, {
+                module: "messages-insights",
+                operation: "persist-outreach",
+            });
         });
     }
 

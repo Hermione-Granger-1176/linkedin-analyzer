@@ -1,6 +1,7 @@
 import { onCLS, onFCP, onINP, onLCP, onTTFB } from "web-vitals";
 
 import { captureError, captureMetric } from "./sentry.js";
+import { PERFORMANCE_MEASURE_NAMES, WEB_VITAL_NAMES } from "./telemetry-metrics.js";
 
 let telemetryInitialized = false;
 
@@ -11,7 +12,7 @@ let telemetryInitialized = false;
  * @param {number} durationMs
  */
 export function reportPerformanceMeasure(name, durationMs) {
-    if (typeof name !== "string" || !name) {
+    if (typeof name !== "string" || !PERFORMANCE_MEASURE_NAMES.has(name)) {
         return;
     }
 
@@ -36,13 +37,16 @@ export function initTelemetry() {
             return;
         }
 
-        const value = Number(metric.value);
-        if (!Number.isFinite(value)) {
+        if (!WEB_VITAL_NAMES.has(metric.name)) {
             return;
         }
 
-        const name = metric.name || "unknown";
-        captureMetric(`web-vital:${name}`, value);
+        const value = metric.value;
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+            return;
+        }
+
+        captureMetric(`web-vital:${metric.name}`, value);
     };
 
     try {

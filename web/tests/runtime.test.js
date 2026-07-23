@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SketchCharts } from "../src/charts.js";
 import { initRuntime } from "../src/runtime.js";
+import { captureError } from "../src/sentry.js";
 
 vi.mock("../src/sentry.js", () => ({ captureError: vi.fn() }));
 vi.mock("../src/charts.js", () => ({ SketchCharts: { exportPng: vi.fn() } }));
@@ -10,12 +11,18 @@ describe("runtime", () => {
     beforeEach(() => {
         document.body.innerHTML = "";
         vi.restoreAllMocks();
+        vi.clearAllMocks();
     });
 
     it("creates error banner on error", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         initRuntime();
-        window.dispatchEvent(new ErrorEvent("error", { error: new Error("boom") }));
+        const error = new Error("boom");
+        window.dispatchEvent(new ErrorEvent("error", { error }));
+        expect(captureError).toHaveBeenCalledWith(error, {
+            module: "runtime",
+            operation: "global-error",
+        });
         const banner = document.getElementById("globalErrorBanner");
         expect(banner).toBeTruthy();
         expect(banner.hidden).toBe(false);
@@ -25,8 +32,13 @@ describe("runtime", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         initRuntime();
         const event = new Event("unhandledrejection");
-        Object.defineProperty(event, "reason", { value: new Error("rejected") });
+        const reason = { private: "rejection value" };
+        Object.defineProperty(event, "reason", { value: reason });
         window.dispatchEvent(event);
+        expect(captureError).toHaveBeenCalledWith(reason, {
+            module: "runtime",
+            operation: "unhandled-rejection",
+        });
         const banner = document.getElementById("globalErrorBanner");
         expect(banner).toBeTruthy();
     });
@@ -51,9 +63,9 @@ describe("runtime", () => {
         expect(SketchCharts.exportPng).not.toHaveBeenCalled();
     });
 
-    it("ignores export click when canvasId is empty (line 112)", () => {
-        // A button with an empty data-export-canvas attribute, canvasId is '' (falsy),
-        // so the early return on line 111-113 fires before looking up the canvas.
+    it("ignores an export click when the export canvas id is empty", () => {
+        // A button with an empty data-export-canvas attribute has a falsy canvasId,
+        // so the export handler returns early before looking up the canvas.
         document.body.innerHTML =
             '<button class="chart-export-btn" data-export-canvas=""></button>';
         initRuntime();
@@ -80,11 +92,11 @@ describe("runtime", () => {
         expect(SketchCharts.exportPng).toHaveBeenCalledWith(canvas, "my-chart.png");
     });
 
-    it("handleError shows banner even when event has no error property (lines 81-82)", () => {
+    it("handleError shows the banner when the error event has no error property", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         initRuntime();
-        // Dispatch an ErrorEvent without an .error property, event.error is null
-        // → line 81's ternary takes the false branch (error = event), line 82 still true
+        // Dispatch an error event without an .error property: the handler falls back
+        // to the event itself and still shows the banner.
         const event = new Event("error");
         window.dispatchEvent(event);
         const banner = document.getElementById("globalErrorBanner");
@@ -92,20 +104,22 @@ describe("runtime", () => {
         expect(banner.hidden).toBe(false);
     });
 
-    it("handleError shows banner even when event itself is falsy-like (line 82 false branch)", () => {
+    it("handleError shows the banner when the error event has a null error value", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         initRuntime();
-        // Dispatch ErrorEvent with error=null → error is null → line 82 if(error) is false
+        // Dispatch an error event with error=null: the resolved error is falsy, so the
+        // console-logging branch is skipped but the banner still shows.
         window.dispatchEvent(new ErrorEvent("error", { error: null }));
         const banner = document.getElementById("globalErrorBanner");
         expect(banner).toBeTruthy();
         expect(banner.hidden).toBe(false);
     });
 
-    it("handleRejection shows banner even with no reason (lines 94-98 false branch)", () => {
+    it("handleRejection shows the banner when the rejection has no reason", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         initRuntime();
-        // An unhandledrejection event with no .reason property → line 94 if is false
+        // An unhandledrejection event with no .reason property skips console logging
+        // but still shows the banner.
         const event = new Event("unhandledrejection");
         window.dispatchEvent(event);
         const banner = document.getElementById("globalErrorBanner");
@@ -113,7 +127,7 @@ describe("runtime", () => {
         expect(banner.hidden).toBe(false);
     });
 
-    it("createBanner uses documentElement when body is null (line 53-54)", () => {
+    it("createBanner falls back to documentElement when body is null", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         const originalBody = document.body;
         Object.defineProperty(document, "body", { value: null, configurable: true });
@@ -138,7 +152,7 @@ describe("runtime", () => {
         expect(() => reloadBtn.click()).not.toThrow();
     });
 
-    it("uses default filename when data-export-name is absent (line 115)", () => {
+    it("uses the default filename when data-export-name is absent", () => {
         const canvas = document.createElement("canvas");
         canvas.id = "defaultCanvas";
         document.body.appendChild(canvas);

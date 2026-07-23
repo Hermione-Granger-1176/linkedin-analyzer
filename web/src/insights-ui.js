@@ -464,7 +464,7 @@ export const InsightsPage = (() => {
             state.outreach = await Storage.getOutreach();
         } catch (error) {
             state.outreachLoaded = false;
-            captureError(error, { module: "insights", operation: "load-outreach" });
+            captureError(error, { module: "insights-ui", operation: "load-outreach" });
             return;
         }
         renderAllTime();

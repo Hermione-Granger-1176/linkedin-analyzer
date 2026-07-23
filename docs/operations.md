@@ -83,9 +83,11 @@ After any rollback, confirm the active release in Sentry via the `release` tag a
 - Configure `VITE_SENTRY_DSN` in each environment if you want opt-in diagnostics.
 - Set `VITE_APP_RELEASE` during builds to correlate errors with deploys.
 - Sentry captures:
-  - unhandled runtime errors and rejections
-  - page/module errors from guarded operations
-  - selected performance telemetry (`web-vitals` + custom performance measures), buffered per session and sent as a single numeric-only `session-metrics` event on page hide (rather than one event per measure) to conserve quota
+  - unhandled runtime errors and rejections as fixed diagnostic identifiers
+  - page/module errors from guarded operations as fixed module/operation tags
+  - normalized same-origin JavaScript or service-worker pathnames with nonnegative integer line/column locations, valid sourcemap debug IDs, and configured environment/release metadata
+  - selected performance telemetry (`web-vitals` plus custom performance measures), buffered and sent as an allowlisted numeric-only `session-metrics` event each time a nonempty buffer is flushed on page hide to conserve quota
+- Raw user-controlled strings are not attached. The reducer excludes error messages, filenames, CSV values, names, URLs and queries, DOM text, arbitrary rejection values/context, local filesystem paths, object serialization, breadcrumbs, request/user data, and SDK-added context.
 
 ### CSP violation reporting
 
@@ -100,8 +102,8 @@ The `Content-Security-Policy` header in `vercel.json` enforces a strict policy a
 ### Recommended alerting
 
 - Create alerts for:
-  - spike in `Unhandled error` events
-  - spike in worker parse failures (`module` extra fields)
+  - spike in `runtime.global-error` and `runtime.unhandled-rejection` diagnostics
+  - spike in worker parse failures (`module` and `operation` tags)
   - regression in web-vitals (`metric:web-vital:*` extras on `session-metrics` events)
 
 ### Observability blind spot (opt-in telemetry)

@@ -11,7 +11,8 @@ The app's core promise is that file contents stay in the user's browser. Diagnos
 Keep diagnostics off until the user explicitly opts in, and scrub aggressively when they do.
 
 - The Sentry SDK is not initialized until consent is granted through the telemetry banner or footer toggle, and consent can be revoked at any time (`web/src/telemetry.js`, `web/src/sentry.js`). Most visitors never opt in, so the default is no telemetry at all.
-- Layered scrubbing runs before anything leaves the browser: captured events carry only violation or error metadata, performance telemetry is reduced to numeric-only measures buffered into a single per-session event, and user-controlled strings (file contents, upload names) are never attached.
+- Layered reduction runs before anything leaves the browser. Error events are rebuilt from a strict schema containing fixed diagnostic identifiers, normalized same-origin JavaScript or service-worker pathnames, nonnegative integer line and column locations, sourcemap debug IDs, and configured environment/release metadata. Performance telemetry is limited to allowlisted nonnegative numeric measures and positive integer counts, buffered and sent as one numeric event each time a nonempty buffer is flushed on page hide.
+- Raw user-controlled strings are not attached. This includes file contents and names, messages, URLs and queries, DOM text, rejection values, local filesystem paths, arbitrary context, object serialization, breadcrumbs, request/user data, and SDK-added context.
 
 ## Consequences
 

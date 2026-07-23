@@ -85,7 +85,7 @@ export function initRuntime() {
         const error = event && event.error ? event.error : event;
         if (error) {
             console.error("Unhandled error", error);
-            captureError(error);
+            captureError(error, { module: "runtime", operation: "global-error" });
         }
         showBanner();
     }
@@ -97,7 +97,10 @@ export function initRuntime() {
     function handleRejection(event) {
         if (event && event.reason) {
             console.error("Unhandled rejection", event.reason);
-            captureError(event.reason);
+            captureError(event.reason, {
+                module: "runtime",
+                operation: "unhandled-rejection",
+            });
         }
         showBanner();
     }

@@ -70,8 +70,9 @@ describe("telemetry", () => {
         const { reportPerformanceMeasure } = await import("../src/telemetry.js");
 
         reportPerformanceMeasure("", 10);
-        reportPerformanceMeasure("render", Number.NaN);
-        reportPerformanceMeasure("render", -1);
+        reportPerformanceMeasure("private:measure", 10);
+        reportPerformanceMeasure("messages:render", Number.NaN);
+        reportPerformanceMeasure("messages:render", -1);
 
         expect(sentry.captureMetric).not.toHaveBeenCalled();
     });
@@ -109,11 +110,11 @@ describe("telemetry", () => {
         expect(sentry.captureMetric).toHaveBeenCalledTimes(2);
     });
 
-    it("labels a nameless web-vital metric as unknown", async () => {
+    it("ignores nameless and unknown web-vital metrics", async () => {
         const vitals = await import("web-vitals");
 
         vitals.onCLS.mockImplementation((callback) => callback({ value: 7 }));
-        vitals.onINP.mockImplementation(() => {});
+        vitals.onINP.mockImplementation((callback) => callback({ name: "PRIVATE", value: 7 }));
         vitals.onLCP.mockImplementation(() => {});
         vitals.onFCP.mockImplementation(() => {});
         vitals.onTTFB.mockImplementation(() => {});
@@ -123,7 +124,7 @@ describe("telemetry", () => {
 
         initTelemetry();
 
-        expect(sentry.captureMetric).toHaveBeenCalledWith("web-vital:unknown", 7);
+        expect(sentry.captureMetric).not.toHaveBeenCalled();
     });
 
     it("reports web-vital values numerically by name", async () => {

@@ -232,7 +232,7 @@ Examples:
     parser.add_argument(
         "--encoding",
         default=None,
-        help="Input CSV encoding (default: auto-detect UTF-8, then Latin-1)",
+        help="Input CSV encoding (default: auto-detect UTF-8, then Windows-1252)",
     )
     parser.add_argument(
         "--max-input-bytes",

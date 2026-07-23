@@ -24,6 +24,7 @@ from linkedin_analyzer.cleaners.comments import clean_comments
 from linkedin_analyzer.cleaners.connections import clean_connections
 from linkedin_analyzer.cleaners.messages import clean_messages
 from linkedin_analyzer.cleaners.shares import clean_shares
+from linkedin_analyzer.core.cleaner import _decode_csv_bytes, _read_csv_with_fallback
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,6 +49,30 @@ MALFORMED_OUTCOME_CATEGORIES = frozenset(
     {"accepted", "empty_input", "invalid_header", "parse_error"}
 )
 MALFORMED_OUTCOME_CASES = MALFORMED_OUTCOME_MANIFEST["cases"]
+BYTE_DECODING_MANIFEST = json.loads(
+    (FIXTURES_DIR / "byte-decoding-parity.json").read_text(encoding="utf-8"),
+)
+BYTE_DECODING_CASES = BYTE_DECODING_MANIFEST["cases"]
+
+
+def _byte_decoding_expected_text(case: dict[str, object]) -> str:
+    """Build expected decoded text from shared numeric code points."""
+    code_points = case["expectedCodePoints"]
+    assert isinstance(code_points, list)
+    return "".join(chr(int(code_point)) for code_point in code_points)
+
+
+def _byte_decoding_csv(case: dict[str, object]) -> bytes:
+    """Build one synthetic CSV from the shared raw-byte payload."""
+    byte_values = case["bytes"]
+    prefix = BYTE_DECODING_MANIFEST["csvPrefix"]
+    suffix = BYTE_DECODING_MANIFEST["csvSuffix"]
+    assert isinstance(byte_values, list)
+    assert isinstance(prefix, str)
+    assert isinstance(suffix, str)
+    return (
+        prefix.encode("utf-8") + bytes(int(value) for value in byte_values) + suffix.encode("utf-8")
+    )
 
 
 def _normalize_python_csv_outcome(result: CleanerResult) -> str:
@@ -65,6 +90,49 @@ def _normalize_python_csv_outcome(result: CleanerResult) -> str:
     if "Error tokenizing data" in error:
         return "parse_error"
     pytest.fail(f"Unclassified Python CSV outcome: {error!r}")
+
+
+@pytest.mark.parametrize(
+    "case",
+    BYTE_DECODING_CASES,
+    ids=[case["id"] for case in BYTE_DECODING_CASES],
+)
+def test_byte_decoding_matches_shared_contract(case: dict[str, object], tmp_path: Path) -> None:
+    """Python decoding and cleaned output should match the shared byte fixture."""
+    raw_csv = _byte_decoding_csv(case)
+    expected_value = _byte_decoding_expected_text(case)
+    prefix = BYTE_DECODING_MANIFEST["csvPrefix"]
+    suffix = BYTE_DECODING_MANIFEST["csvSuffix"]
+    assert isinstance(prefix, str)
+    assert isinstance(suffix, str)
+
+    decoded, used_fallback = _decode_csv_bytes(raw_csv)
+
+    assert decoded == f"{prefix}{expected_value}{suffix}"
+    assert used_fallback is case["usedFallback"]
+
+    input_file = tmp_path / f"{case['id']}.csv"
+    output_file = tmp_path / f"{case['id']}.xlsx"
+    input_file.write_bytes(raw_csv)
+    result = clean_shares(input_path=input_file, output_path=output_file)
+
+    assert result.success is True
+    frame = pd.read_excel(output_file, dtype=str).fillna("")
+    assert frame["ShareCommentary"].tolist() == [expected_value]
+
+
+def test_explicit_iso_8859_1_preserves_c1_code_points(tmp_path: Path) -> None:
+    """An explicit ISO-8859-1 encoding must not apply WHATWG remapping."""
+    case = next(case for case in BYTE_DECODING_CASES if case["id"] == "windows-1252-representative")
+    input_file = tmp_path / "explicit-latin-1.csv"
+    raw_csv = _byte_decoding_csv(case)
+    input_file.write_bytes(raw_csv)
+
+    frame = _read_csv_with_fallback(input_file, {}, "iso-8859-1")
+    expected_value = bytes(case["bytes"]).decode("iso-8859-1")
+
+    assert frame["ShareCommentary"].tolist() == [expected_value]
+    assert expected_value != _byte_decoding_expected_text(case)
 
 
 def test_malformed_csv_outcome_manifest_contract() -> None:

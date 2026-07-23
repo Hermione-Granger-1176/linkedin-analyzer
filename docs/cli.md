@@ -93,11 +93,11 @@ Choose `text` (default, human-readable) or `json` (structured, one object per li
 ### Input encoding
 
 ```bash
-linkedin-analyzer --encoding latin-1 shares
+linkedin-analyzer --encoding iso-8859-1 shares
 linkedin-analyzer --encoding utf-8 all
 ```
 
-Forces the encoding used to read input CSVs. When omitted, the encoding is auto-detected (see Cleaning Notes below). Pass this when characters look wrong, or when you already know the export's encoding. Like `--log-level` and `--log-format`, it is a global option and goes before the command.
+Forces the encoding used to read input CSVs. When omitted, the encoding is auto-detected (see Cleaning Notes below). Explicit encodings are passed through unchanged, so `iso-8859-1` retains its C1 control-code mappings instead of using the automatic Windows-1252 mapping. Pass this option when characters look wrong, or when you already know the export's encoding. Like `--log-level` and `--log-format`, it is a global option and goes before the command.
 
 ### Resource limits
 
@@ -147,7 +147,7 @@ linkedin-analyzer all \
 - NA-like values are treated as missing.
 - Rows missing required fields are dropped.
 - Cell values that start with Excel formula prefixes are quote-prefixed to avoid spreadsheet formula execution.
-- Encoding is auto-detected when `--encoding` is not set: UTF-8 (BOM-aware) is tried first, then Latin-1, which decodes any byte sequence. On the fallback the CLI logs a WARNING suggesting `--encoding`; pass it if characters look wrong.
+- Encoding is auto-detected when `--encoding` is not set: UTF-8 (BOM-aware) is tried first, then WHATWG Windows-1252, matching browser `TextDecoder` behavior across the full C1 byte range. On fallback the CLI logs a WARNING suggesting `--encoding`; pass it if characters look wrong.
 - Connections CSV skips the first 3 header rows before parsing.
 - Connections rows missing all of First Name, Last Name, and URL are dropped.
 

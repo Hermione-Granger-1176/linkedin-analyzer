@@ -561,7 +561,7 @@ export const UploadPage = (() => {
 
     /**
      * Read a File object as text, decoding as UTF-8 and falling back to
-     * windows-1252 for non-UTF-8 exports (mirrors the CLI's latin-1 fallback).
+     * WHATWG windows-1252 for non-UTF-8 exports, matching the CLI.
      * @param {File} file - Uploaded file
      * @returns {Promise<{text: string, usedFallback: boolean}>}
      */
@@ -779,7 +779,7 @@ export const UploadPage = (() => {
             updateStatus({ fileMap, analyticsReady });
             setHint(
                 pending.usedFallback
-                    ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a fallback. Double-check accented names."
+                    ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a Windows-1252 fallback. Double-check accented names."
                     : "File loaded successfully.",
                 false,
             );

@@ -1,0 +1,36 @@
+{
+  "csvPrefix": "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-01-30 10:00:00,https://example.com/decoded,",
+  "csvSuffix": ",,,MEMBER_NETWORK\n",
+  "cases": [
+    {
+      "id": "valid-utf8",
+      "bytes": [86, 97, 108, 105, 100, 32, 99, 97, 102, 195, 169, 32, 240, 159, 154, 128],
+      "expectedCodePoints": [86, 97, 108, 105, 100, 32, 99, 97, 102, 233, 32, 128640],
+      "usedFallback": false
+    },
+    {
+      "id": "latin-1-accent",
+      "bytes": [74, 111, 115, 233],
+      "expectedCodePoints": [74, 111, 115, 233],
+      "usedFallback": true
+    },
+    {
+      "id": "windows-1252-representative",
+      "bytes": [128, 32, 145, 113, 117, 111, 116, 101, 115, 146, 32, 150, 32, 133, 32, 153],
+      "expectedCodePoints": [8364, 32, 8216, 113, 117, 111, 116, 101, 115, 8217, 32, 8211, 32, 8230, 32, 8482],
+      "usedFallback": true
+    },
+    {
+      "id": "windows-1252-undefined-controls",
+      "bytes": [129, 141, 143, 144, 157],
+      "expectedCodePoints": [129, 141, 143, 144, 157],
+      "usedFallback": true
+    },
+    {
+      "id": "windows-1252-full-c1-range",
+      "bytes": [128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159],
+      "expectedCodePoints": [8364, 129, 8218, 402, 8222, 8230, 8224, 8225, 710, 8240, 352, 8249, 338, 141, 381, 143, 144, 8216, 8217, 8220, 8221, 8226, 8211, 8212, 732, 8482, 353, 8250, 339, 157, 382, 376],
+      "usedFallback": true
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "categories": [
+    "accepted",
+    "empty_input",
+    "invalid_header",
+    "parse_error"
+  ],
+  "cases": [
+    {
+      "id": "empty-document",
+      "boundary": "malformed",
+      "fileType": "shares",
+      "csv": "",
+      "expected": {
+        "python": "empty_input",
+        "web": "empty_input"
+      }
+    },
+    {
+      "id": "blank-header",
+      "boundary": "malformed",
+      "fileType": "shares",
+      "csv": ",,\n1,2,3\n",
+      "expected": {
+        "python": "invalid_header",
+        "web": "invalid_header"
+      }
+    },
+    {
+      "id": "duplicate-normalized-header",
+      "boundary": "malformed",
+      "fileType": "shares",
+      "csv": "Date, Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-01-30 10:00:00 UTC,2026-01-30 10:00:00 UTC,https://example.test/share,Hello,,,PUBLIC\n",
+      "expected": {
+        "python": "invalid_header",
+        "web": "invalid_header"
+      }
+    },
+    {
+      "id": "missing-required-header",
+      "boundary": "malformed",
+      "fileType": "messages",
+      "csv": "FROM,TO,DATE\nAda,Bob,2026-01-30 10:00:00 UTC\n",
+      "expected": {
+        "python": "invalid_header",
+        "web": "invalid_header"
+      }
+    },
+    {
+      "id": "quoted-comma-valid",
+      "boundary": "valid",
+      "fileType": "shares",
+      "csv": "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-01-30 10:00:00 UTC,https://example.test/share,\"Hello, CSV\",,,PUBLIC\n",
+      "expected": {
+        "python": "accepted",
+        "web": "accepted"
+      }
+    },
+    {
+      "id": "short-row-valid",
+      "boundary": "valid",
+      "fileType": "shares",
+      "csv": "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-01-30 10:00:00 UTC,https://example.test/share,Optional fields omitted\n",
+      "expected": {
+        "python": "accepted",
+        "web": "accepted"
+      }
+    },
+    {
+      "id": "multiline-quoted-field-valid",
+      "boundary": "valid",
+      "fileType": "messages",
+      "csv": "FROM,TO,DATE,CONTENT\nAda,Bob,2026-01-30 10:00:00 UTC,\"Line one\nLine two\"\n",
+      "expected": {
+        "python": "accepted",
+        "web": "accepted"
+      }
+    },
+    {
+      "id": "comments-escaped-quote-valid",
+      "boundary": "valid",
+      "fileType": "comments",
+      "csv": "Date,Link,Message\n2026-01-30 10:00:00 UTC,https://example.test/comment,\"Hello \\\"CSV\\\"\"\n",
+      "expected": {
+        "python": "accepted",
+        "web": "accepted"
+      }
+    },
+    {
+      "id": "comments-trailing-escape",
+      "boundary": "malformed",
+      "fileType": "comments",
+      "csv": "Date,Link,Message\n2026-01-30 10:00:00 UTC,https://example.test/comment,Trailing\\",
+      "expected": {
+        "python": "parse_error",
+        "web": "parse_error"
+      }
+    },
+    {
+      "id": "unmatched-final-quote",
+      "boundary": "malformed",
+      "fileType": "shares",
+      "csv": "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-01-30 10:00:00 UTC,https://example.test/share,\"Unclosed commentary,,,PUBLIC",
+      "expected": {
+        "python": "parse_error",
+        "web": "parse_error"
+      }
+    },
+    {
+      "id": "over-wide-data-row",
+      "boundary": "malformed",
+      "fileType": "shares",
+      "csv": "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2026-01-30 10:00:00 UTC,https://example.test/share-1,Valid row,,,PUBLIC\n2026-01-30 11:00:00 UTC,https://example.test/share-2,Extra field row,,,PUBLIC,unexpected\n",
+      "expected": {
+        "python": "parse_error",
+        "web": "parse_error"
+      }
+    },
+    {
+      "id": "connections-preamble-only",
+      "boundary": "malformed",
+      "fileType": "connections",
+      "csv": "Notes:\nSynthetic export metadata\n\n",
+      "expected": {
+        "python": "empty_input",
+        "web": "empty_input"
+      }
+    }
+  ]
+}

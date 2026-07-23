@@ -19,6 +19,34 @@ const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 // is fed an already-decoded string, so encoding detection is not exercised here.
 
 const CORPUS_TYPES = ["shares", "comments", "messages", "connections"];
+const MALFORMED_OUTCOME_CATEGORIES = new Set([
+    "accepted",
+    "empty_input",
+    "invalid_header",
+    "parse_error",
+]);
+
+function normalizeCsvOutcome(result) {
+    if (result.success) {
+        return "accepted";
+    }
+
+    const error = result.error || "";
+    if (/empty|no header rows after skip/i.test(error)) {
+        return "empty_input";
+    }
+    if (
+        /Could not parse CSV headers|Duplicate columns after header normalization|Missing columns:/i.test(
+            error,
+        )
+    ) {
+        return "invalid_header";
+    }
+    if (/CSV parsing error/i.test(error)) {
+        return "parse_error";
+    }
+    throw new Error(`Unclassified web CSV outcome: ${JSON.stringify(error)}`);
+}
 
 describe("web/python parity fixtures", () => {
     it("matches shared shares fixture contract", async () => {
@@ -173,6 +201,28 @@ describe("web/python parity fixtures", () => {
                 "Connected On": "2026-09-15",
             },
         ]);
+    });
+});
+
+describe("shared malformed CSV outcomes", () => {
+    it("uses the stable outcome vocabulary", async () => {
+        const manifest = JSON.parse(await readFixture("malformed-csv-outcomes.json"));
+
+        expect(new Set(manifest.categories)).toEqual(MALFORMED_OUTCOME_CATEGORIES);
+        expect(new Set(manifest.cases.map(({ boundary }) => boundary))).toEqual(
+            new Set(["valid", "malformed"]),
+        );
+        expect(new Set(manifest.cases.map(({ id }) => id)).size).toBe(manifest.cases.length);
+    });
+
+    it("matches every web outcome in the shared manifest", async () => {
+        const manifest = JSON.parse(await readFixture("malformed-csv-outcomes.json"));
+
+        for (const testCase of manifest.cases) {
+            const result = LinkedInCleaner.process(testCase.csv, testCase.fileType);
+            expect(normalizeCsvOutcome(result), testCase.id).toBe(testCase.expected.web);
+            expect(testCase.expected.web, testCase.id).toBe(testCase.expected.python);
+        }
     });
 });
 

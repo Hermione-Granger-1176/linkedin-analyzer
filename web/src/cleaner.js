@@ -158,10 +158,7 @@ export const LinkedInCleaner = (() => {
         }
 
         const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
-        let { rows, error } = parseCsvRows(csvText, csvOptions);
-        if (error && error.includes("unmatched quote")) {
-            ({ rows, error } = parseCsvRows(`${csvText}"`, csvOptions));
-        }
+        const { rows, error } = parseCsvRows(csvText, csvOptions);
         if (error) {
             return finish({ headers: [], data: [], error });
         }
@@ -201,6 +198,13 @@ export const LinkedInCleaner = (() => {
             const row = rowsAfterSkip[r];
             if (isRowEmpty(row)) {
                 continue;
+            }
+            if (row.length > headerCount) {
+                return finish({
+                    headers: [],
+                    data: [],
+                    error: "CSV parsing error: data row has more fields than the header.",
+                });
             }
             // Null-prototype object: CSV headers are user-controlled, so keys
             // like "__proto__" must not mutate the prototype chain.
@@ -463,6 +467,19 @@ export const LinkedInCleaner = (() => {
 
         const parsed = parseCSV(csvText, fileType, parseCache);
         if (parsed.error) {
+            if (parsed.error.includes("data row has more fields than the header")) {
+                const alternateType = detectMatchingFileTypes(csvText, parseCache).find(
+                    (match) => match.type !== fileType,
+                )?.type;
+                if (alternateType) {
+                    const missing = CONFIGS[fileType]?.requiredColumns || [];
+                    return makeResult(
+                        false,
+                        buildColumnErrorMessage(fileType, alternateType, missing),
+                        { fileType, detectedType: alternateType },
+                    );
+                }
+            }
             return makeResult(false, parsed.error);
         }
 

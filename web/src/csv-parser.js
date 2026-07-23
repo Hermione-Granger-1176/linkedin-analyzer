@@ -43,7 +43,7 @@ export function isRowEmpty(row) {
 }
 
 /**
- * Parse CSV into rows with support for quoted fields, escaped quotes, and newlines.
+ * Parse CSV into rows with support for quoted fields, configured escaped characters, and newlines.
  * @param {string} csvText
  * @param {{delimiter: string, quote: string, escape: string|null}} options
  * @returns {{rows: string[][], error: string|null}}
@@ -84,6 +84,22 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         return false;
     };
 
+    const consumeEscape = (start) => {
+        if (start + 1 >= length) {
+            parseError = "CSV parsing error: trailing escape character.";
+            return length;
+        }
+        // start + 1 < length was just checked, so the index is in range and
+        // codePointAt always returns a code point (never undefined) here.
+        const escapedCodePoint = /** @type {number} */ (csvText.codePointAt(start + 1));
+        const escapedCharacter = String.fromCodePoint(escapedCodePoint);
+        if (wouldOverflowField(escapedCharacter.length)) {
+            return start + 1 + escapedCharacter.length;
+        }
+        field += escapedCharacter;
+        return start + 1 + escapedCharacter.length;
+    };
+
     const pushField = () => {
         if (row.length >= CSV_LIMITS.maxColumns) {
             parseError = "CSV parsing error: too many columns in a row.";
@@ -105,7 +121,7 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
     };
 
     // Handle one step while inside a quoted field; returns the next index.
-    // parseError (set via wouldOverflowField) is what stops the outer loop.
+    // Setting parseError (here, in consumeEscape, or in wouldOverflowField) stops the outer loop.
     const stepInsideQuotes = (start) => {
         // Bulk-copy the run of ordinary characters up to the next quote,
         // carriage return, or escape character.
@@ -126,6 +142,9 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         }
 
         const code = csvText.charCodeAt(start);
+        if (code === escapeCode) {
+            return consumeEscape(start);
+        }
         if (code === quoteCode) {
             // Lone closing quote: leave the quoted section.
             if (csvText.charCodeAt(start + 1) !== quoteCode) {
@@ -150,24 +169,20 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
             field += "\r";
             return start + 1;
         }
-        // Escape character: collapse escape+quote, otherwise keep it literally.
-        if (csvText.charCodeAt(start + 1) === quoteCode) {
-            field += quote;
-            return start + 2;
-        }
         field += csvText[start];
         return start + 1;
     };
 
     // Handle one step while outside quotes; returns the next index.
     const stepOutsideQuotes = (start) => {
-        // Bulk-copy ordinary characters up to the next quote, delimiter,
-        // or line break.
+        // Bulk-copy ordinary characters up to the next quote, escape,
+        // delimiter, or line break.
         let j = start;
         while (j < length) {
             const code = csvText.charCodeAt(j);
             if (
                 code === quoteCode ||
+                code === escapeCode ||
                 code === delimiterCode ||
                 code === CR ||
                 code === LF
@@ -185,6 +200,9 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         }
 
         const code = csvText.charCodeAt(start);
+        if (code === escapeCode) {
+            return consumeEscape(start);
+        }
         if (code === quoteCode) {
             // Quotes only open a quoted section at the start of a field;
             // mid-field quotes stay literal (matches the Python cleaner's

@@ -130,6 +130,10 @@ const COMMENT_PAYLOADS = [
     "ctrl comment ab\u0007cd",
     LONG_FIELD,
     "multi\nline comment",
+    String.raw`path C:\Users\Ada\Documents`,
+    String.raw`doubled \\ backslashes`,
+    String.raw`literal slash before \"quote\"`,
+    String.raw`unicode \café \📌`,
 ];
 
 /**
@@ -156,20 +160,20 @@ function encDefault(value) {
 }
 
 /**
- * Encode one field for the comments CSV (backslash escape char): quote when it
- * contains a delimiter, quote, or newline, escaping interior backslashes and
- * quotes with a backslash to match pandas escapechar and the web comments
- * parser. Payloads avoid literal backslashes: pandas collapses an escaped
- * backslash while the web parser keeps it, so such a value cannot round-trip
- * identically in both runtimes (the parity suites fail if one is added).
+ * Encode one field for the comments CSV (backslash escape char): always escape
+ * interior backslashes and quotes with a backslash to match pandas escapechar
+ * and the web comments parser, and quote only when the value contains a
+ * delimiter, quote, or newline. A value whose only special character is a
+ * backslash stays unquoted, so the corpus exercises the unquoted escape path.
  * @param {string} value - Raw field value.
  * @returns {string} CSV-encoded field.
  */
 function encComments(value) {
+    const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     if (/[",\n\r]/.test(value)) {
-        return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+        return `"${escaped}"`;
     }
-    return value;
+    return escaped;
 }
 
 /**

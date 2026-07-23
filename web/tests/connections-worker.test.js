@@ -26,7 +26,14 @@ describe("connections worker helpers", () => {
         expect(parseConnectionDate("2024-13-01")).toBe(null);
         expect(parseConnectionDate("2024-00-15")).toBe(null);
         expect(parseConnectionDate("2024-06-32")).toBe(null);
+        expect(parseConnectionDate("2024-04-31")).toBe(null);
+        expect(parseConnectionDate("2023-02-29")).toBe(null);
+        expect(parseConnectionDate("2024/06/15")).toBe(null);
         expect(parseConnectionDate(42)).toBe(null);
+    });
+
+    it("parseConnectionDate accepts leap day in a leap year", () => {
+        expect(parseConnectionDate("2024-02-29")).toEqual(new Date(2024, 1, 29));
     });
 
     it("toMonthKey formats Date as YYYY-MM with zero-padding", () => {
@@ -64,6 +71,16 @@ describe("connections worker helpers", () => {
         expect(buildGrowthTimeline([])).toEqual([]);
         expect(buildGrowthTimeline([{ "Connected On": "" }])).toEqual([]);
         expect(buildGrowthTimeline([{ "Connected On": "invalid" }])).toEqual([]);
+    });
+
+    it("buildGrowthTimeline excludes impossible dates from analytics", () => {
+        const timeline = buildGrowthTimeline([
+            { "Connected On": "2024-02-29" },
+            { "Connected On": "2023-02-29" },
+            { "Connected On": "2024-04-31" }
+        ]);
+
+        expect(timeline).toEqual([{ key: "2024-02", label: "Feb 2024", value: 1 }]);
     });
 
     it("computeStats returns total and positive network age", () => {

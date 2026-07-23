@@ -378,6 +378,22 @@ describe("MessagesAnalytics", () => {
         expect(state.byName.size).toBe(0);
     });
 
+    it("buildConnectionState excludes impossible connected dates", () => {
+        const state = MessagesAnalytics.buildConnectionState([
+            {
+                "First Name": "Ada",
+                "Last Name": "Lovelace",
+                URL: "https://linkedin.com/in/ada",
+                Company: "Engines",
+                Position: "Mathematician",
+                "Connected On": "2023-02-29"
+            }
+        ]);
+
+        expect(state.list).toHaveLength(1);
+        expect(state.list[0].connectedOnTimestamp).toBeNull();
+    });
+
     it("buildConnectionState uses URL as name when name is empty", () => {
         const rows = [
             {
@@ -407,6 +423,26 @@ describe("MessagesAnalytics", () => {
         const state = MessagesAnalytics.buildMessageState(rows);
         expect(state.skippedRows).toBe(1);
         expect(state.events.length).toBe(0);
+    });
+
+    it("excludes impossible dates and invalid times from message analytics", () => {
+        const base = {
+            FROM: "Alice",
+            TO: "Bob",
+            "SENDER PROFILE URL": "https://linkedin.com/in/alice",
+            "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob"
+        };
+        const rows = [
+            { ...base, DATE: "2024-02-29 10:00:00" },
+            { ...base, DATE: "2023-02-29 10:00:00" },
+            { ...base, DATE: "2024-02-29 24:00:00" }
+        ];
+
+        const state = MessagesAnalytics.buildMessageState(rows);
+
+        expect(state.skippedRows).toBe(2);
+        expect(state.events).toHaveLength(1);
+        expect(state.rowTimestamps).toHaveLength(1);
     });
 
     it("buildMessageState merges duplicate contacts by URL across rows", () => {
@@ -457,12 +493,13 @@ describe("MessagesAnalytics", () => {
         expect(typeof hasNameKey).toBe("boolean");
     });
 
-    it("parseDateTime handles overflow date values (JS Date constructor normalizes them)", () => {
-        // JS Date constructor overflows month/day values into valid dates,
-        // so the NaN branch in parseDateTime is structurally unreachable.
-        // Verify that overflow strings matching the regex return a Date (not null).
-        const result = MessagesAnalytics.parseDateTime("9999-99-99 25:99:99");
-        expect(result).toBeInstanceOf(Date);
+    it("date parsers reject rollover-prone dates and times", () => {
+        expect(MessagesAnalytics.parseDateTime("2024-02-29 23:59:59")).toBeInstanceOf(Date);
+        expect(MessagesAnalytics.parseDateTime("2023-02-29 10:00:00")).toBeNull();
+        expect(MessagesAnalytics.parseDateTime("2024-04-31 10:00:00")).toBeNull();
+        expect(MessagesAnalytics.parseDateTime("2024-01-01 24:00:00")).toBeNull();
+        expect(MessagesAnalytics.parseDateTime("2024-01-01T10:00:00")).toBeNull();
+        expect(MessagesAnalytics.parseDateOnly("2023-02-29")).toBeNull();
     });
 
     it("parseDateOnly returns null when date string has wrong format", () => {

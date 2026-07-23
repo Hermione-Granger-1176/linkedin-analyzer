@@ -1,6 +1,7 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
 import { MONTH_LABELS } from "./analytics-constants.js";
+import { parseLocalDate } from "./analytics-dates.js";
 import { LinkedInCleaner } from "./cleaner.js";
 import { parseConnectionsWorkerRequest } from "./worker-contracts.js";
 
@@ -13,33 +14,14 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /**
  * Parse a cleaned "Connected On" value into a Date.
  * The cleaner's cleanConnectionsDate turns "01 Jan 2024" into "2024-01-01",
- * so we split on hyphens to avoid timezone-shifting pitfalls of Date.parse.
+ * which the shared strict parser turns into a local-midnight Date without the
+ * timezone-shifting pitfalls of Date.parse.
  *
  * @param {string} dateStr - ISO-style date string (YYYY-MM-DD)
  * @returns {Date|null} Local-midnight Date, or null if unparseable
  */
 function parseConnectionDate(dateStr) {
-    if (!dateStr || typeof dateStr !== "string") {
-        return null;
-    }
-
-    const parts = dateStr.split("-");
-    if (parts.length !== 3) {
-        return null;
-    }
-
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
-
-    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
-        return null;
-    }
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
-        return null;
-    }
-
-    return new Date(year, month - 1, day);
+    return parseLocalDate(dateStr);
 }
 
 /**

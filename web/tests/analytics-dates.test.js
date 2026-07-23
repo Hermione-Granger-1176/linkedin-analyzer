@@ -16,6 +16,8 @@ import {
     formatWeekLabel,
     parseDateKey,
     parseLinkedInDate,
+    parseLocalDate,
+    parseLocalDateTime,
     startOfMonth,
     startOfWeek,
 } from "../src/analytics-dates.js";
@@ -89,6 +91,61 @@ describe("parseLinkedInDate", () => {
         expect(parseLinkedInDate("2024-01-03 09:xx")).toBeNull();
         expect(parseLinkedInDate("2024-01-03 25:00:00")).toBeNull();
         expect(parseLinkedInDate("2024-01-03 09:75:00")).toBeNull();
+        expect(parseLinkedInDate("2024-01-03 09:30:60")).toBeNull();
+    });
+});
+
+describe("strict local date parsing", () => {
+    it("parses valid dates at local midnight", () => {
+        expect(parseLocalDate("2024-06-15")).toEqual(new Date(2024, 5, 15));
+        expect(parseLocalDate(" 2024-06-15 ")).toEqual(new Date(2024, 5, 15));
+    });
+
+    it("accepts leap day only in leap years", () => {
+        expect(parseLocalDate("2024-02-29")).toEqual(new Date(2024, 1, 29));
+        expect(parseLocalDate("2023-02-29")).toBeNull();
+        expect(parseLocalDate("2100-02-29")).toBeNull();
+        expect(parseLocalDate("2000-02-29")).toEqual(new Date(2000, 1, 29));
+    });
+
+    it("rejects impossible calendar dates instead of rolling over", () => {
+        expect(parseLocalDate("2024-02-30")).toBeNull();
+        expect(parseLocalDate("2024-04-31")).toBeNull();
+        expect(parseLocalDate("2024-13-01")).toBeNull();
+        expect(parseLocalDate("2024-01-32")).toBeNull();
+    });
+
+    it("rejects malformed date input", () => {
+        expect(parseLocalDate("2024/01/01")).toBeNull();
+        expect(parseLocalDate("01-01-2024")).toBeNull();
+        expect(parseLocalDate("2024-1-01")).toBeNull();
+        expect(parseLocalDate("2024-01-01 extra")).toBeNull();
+        expect(parseLocalDate(null)).toBeNull();
+    });
+});
+
+describe("strict local date-time parsing", () => {
+    it("parses valid local times with optional seconds", () => {
+        expect(parseLocalDateTime("2024-02-29 23:59")).toEqual(
+            new Date(2024, 1, 29, 23, 59, 0),
+        );
+        expect(parseLocalDateTime("2024-02-29 23:59:58")).toEqual(
+            new Date(2024, 1, 29, 23, 59, 58),
+        );
+    });
+
+    it("rejects invalid time components instead of rolling over", () => {
+        expect(parseLocalDateTime("2024-01-01 24:00:00")).toBeNull();
+        expect(parseLocalDateTime("2024-01-01 23:60:00")).toBeNull();
+        expect(parseLocalDateTime("2024-01-01 23:59:60")).toBeNull();
+    });
+
+    it("rejects impossible dates and malformed date-time input", () => {
+        expect(parseLocalDateTime("2023-02-29 10:30:00")).toBeNull();
+        expect(parseLocalDateTime("2024-01-01")).toBeNull();
+        expect(parseLocalDateTime("2024-01-01 9:30:00")).toBeNull();
+        expect(parseLocalDateTime("2024-01-01T09:30:00")).toBeNull();
+        expect(parseLocalDateTime("2024-01-01 09:30:00 extra")).toBeNull();
     });
 });
 

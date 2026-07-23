@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -21,10 +22,63 @@ from linkedin_analyzer.core.types import CleanerConfig, CleanerResult
 
 LOG = logging.getLogger(__name__)
 
+_WHATWG_WINDOWS_1252_C1_CODE_POINTS = (
+    0x20AC,
+    0x0081,
+    0x201A,
+    0x0192,
+    0x201E,
+    0x2026,
+    0x2020,
+    0x2021,
+    0x02C6,
+    0x2030,
+    0x0160,
+    0x2039,
+    0x0152,
+    0x008D,
+    0x017D,
+    0x008F,
+    0x0090,
+    0x2018,
+    0x2019,
+    0x201C,
+    0x201D,
+    0x2022,
+    0x2013,
+    0x2014,
+    0x02DC,
+    0x2122,
+    0x0161,
+    0x203A,
+    0x0153,
+    0x009D,
+    0x017E,
+    0x0178,
+)
+_WHATWG_WINDOWS_1252_TRANSLATION = str.maketrans(
+    {
+        byte_value: chr(code_point)
+        for byte_value, code_point in enumerate(
+            _WHATWG_WINDOWS_1252_C1_CODE_POINTS,
+            start=0x80,
+        )
+    }
+)
+
 
 def _byte_unit(value: int) -> str:
     """Return a singular or plural byte unit."""
     return "byte" if value == 1 else "bytes"
+
+
+def _decode_csv_bytes(data: bytes) -> tuple[str, bool]:
+    """Decode bytes as BOM-aware UTF-8, then WHATWG Windows-1252."""
+    try:
+        return data.decode("utf-8-sig"), False
+    except UnicodeDecodeError:
+        latin_1 = data.decode("latin-1")
+        return latin_1.translate(_WHATWG_WINDOWS_1252_TRANSLATION), True
 
 
 def _read_csv_with_fallback(
@@ -36,7 +90,7 @@ def _read_csv_with_fallback(
 
     LinkedIn (and user-edited) exports are not always UTF-8. When no explicit
     encoding is requested, this tries UTF-8 (BOM-aware) first, then falls back to
-    Latin-1, which decodes any byte sequence and so never raises.
+    WHATWG Windows-1252 to match browser ``TextDecoder`` behavior.
 
     Args:
         input_path: Path to the CSV file to read
@@ -56,15 +110,14 @@ def _read_csv_with_fallback(
     if resolved_encoding is not None:
         frame: pd.DataFrame = pd.read_csv(input_path, encoding=resolved_encoding, **csv_kwargs)
         return frame
-    try:
-        frame = pd.read_csv(input_path, encoding="utf-8-sig", **csv_kwargs)
-    except UnicodeDecodeError:
+    text, used_fallback = _decode_csv_bytes(input_path.read_bytes())
+    if used_fallback:
         LOG.warning(
-            "UTF-8 decode failed for %s; retrying with latin-1. "
+            "UTF-8 decode failed for %s; retrying with Windows-1252. "
             "Pass --encoding to choose the correct encoding if characters look wrong.",
             input_path,
         )
-        frame = pd.read_csv(input_path, encoding="latin-1", **csv_kwargs)
+    frame = pd.read_csv(StringIO(text), **csv_kwargs)
     return frame
 
 

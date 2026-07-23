@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { LinkedInCleaner } from "../src/cleaner.js";
+import { concatChunks, decodeBytes } from "../src/upload-decode.js";
 
 const fixtureBase = resolve(process.cwd(), "tests/fixtures");
 
@@ -15,16 +16,25 @@ async function readFixture(name) {
 // assert the format instead of an exact machine-dependent value.
 const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
-// Non-UTF-8 decode parity is out of scope for this harness: the web parity path
-// is fed an already-decoded string, so encoding detection is not exercised here.
-
 const CORPUS_TYPES = ["shares", "comments", "messages", "connections"];
+const ENCODER = new TextEncoder();
 const MALFORMED_OUTCOME_CATEGORIES = new Set([
     "accepted",
     "empty_input",
     "invalid_header",
     "parse_error",
 ]);
+
+function expectedByteText(testCase) {
+    return String.fromCodePoint(...testCase.expectedCodePoints);
+}
+
+function byteFixtureCsv(manifest, testCase) {
+    const prefix = ENCODER.encode(manifest.csvPrefix);
+    const payload = new Uint8Array(testCase.bytes);
+    const suffix = ENCODER.encode(manifest.csvSuffix);
+    return concatChunks([prefix, payload, suffix], prefix.length + payload.length + suffix.length);
+}
 
 function normalizeCsvOutcome(result) {
     if (result.success) {
@@ -47,6 +57,28 @@ function normalizeCsvOutcome(result) {
     }
     throw new Error(`Unclassified web CSV outcome: ${JSON.stringify(error)}`);
 }
+
+describe("shared byte decoding parity", () => {
+    it("matches decoded text, fallback state, and cleaned output", async () => {
+        const manifest = JSON.parse(await readFixture("byte-decoding-parity.json"));
+
+        for (const testCase of manifest.cases) {
+            const bytes = byteFixtureCsv(manifest, testCase);
+            const expectedValue = expectedByteText(testCase);
+            const decoded = decodeBytes(bytes, `${testCase.id}.csv`);
+
+            expect(decoded.text, testCase.id).toBe(
+                `${manifest.csvPrefix}${expectedValue}${manifest.csvSuffix}`,
+            );
+            expect(decoded.usedFallback, testCase.id).toBe(testCase.usedFallback);
+
+            const result = LinkedInCleaner.process(decoded.text, "shares");
+            expect(result.success, testCase.id).toBe(true);
+            expect(result.cleanedData, testCase.id).toHaveLength(1);
+            expect(result.cleanedData[0].ShareCommentary, testCase.id).toBe(expectedValue);
+        }
+    });
+});
 
 describe("web/python parity fixtures", () => {
     it("matches shared shares fixture contract", async () => {

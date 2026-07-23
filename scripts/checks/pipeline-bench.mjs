@@ -24,6 +24,8 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
+import { concatChunks, decodeBytes } from "../../web/src/upload-decode.js";
+
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
 const RUNS = Number(process.argv[2] || 5);
@@ -57,26 +59,18 @@ const DEFAULT_FILTERS = {
     shareType: "all",
 };
 
-// Decode mirrors upload.js decodeBytes: large files are reassembled from chunks
-// (the stream reader's concat cost) before a single strict TextDecoder("utf-8",
-// {fatal:true}) decode, with a windows-1252 fallback only on a genuine decode
-// error (no U+FFFD heuristic).
+// Large files include the production stream-concatenation cost, then both paths
+// call the production upload decoder so benchmark semantics cannot drift.
 function decodeNew(bytes) {
-    let buf = bytes;
+    let decodeInput = bytes;
     if (bytes.length >= STREAM_THRESHOLD) {
-        buf = new Uint8Array(bytes.length);
-        let offset = 0;
+        const chunks = [];
         for (let i = 0; i < bytes.length; i += CHUNK) {
-            const c = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
-            buf.set(c, offset);
-            offset += c.byteLength;
+            chunks.push(bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
         }
+        decodeInput = concatChunks(chunks, bytes.length);
     }
-    try {
-        return new TextDecoder("utf-8", { fatal: true }).decode(buf);
-    } catch {
-        return new TextDecoder("windows-1252").decode(buf);
-    }
+    return decodeBytes(decodeInput, "benchmark.csv").text;
 }
 
 async function load(name) {

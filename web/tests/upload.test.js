@@ -2639,7 +2639,7 @@ describe("UploadPage", () => {
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(document.getElementById("uploadHint").textContent).toContain(
-            "decoded with a fallback",
+            "decoded with a Windows-1252 fallback",
         );
 
         globalThis.FileReader = originalFileReader;
@@ -2722,7 +2722,7 @@ describe("UploadPage", () => {
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(document.getElementById("uploadHint").textContent).toContain(
-            "decoded with a fallback",
+            "decoded with a Windows-1252 fallback",
         );
     });
 

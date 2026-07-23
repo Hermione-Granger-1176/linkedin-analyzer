@@ -28,6 +28,8 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
+import { concatChunks, decodeBytes } from "../../web/src/upload-decode.js";
+
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
 const RUNS = Number(process.argv[2] || 5);
@@ -71,37 +73,17 @@ function decodeOldStream(chunks) {
     return text;
 }
 
-// NEW decode: mirrors upload.js decodeBytes — fatal UTF-8 validation with a
-// windows-1252 fallback only on a genuine decode error (no U+FFFD heuristic).
-function decodeBytesNew(bytes) {
-    let text;
-    let usedFallback = false;
-    try {
-        text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    } catch {
-        text = new TextDecoder("windows-1252").decode(bytes);
-        usedFallback = true;
-    }
-    return { text, usedFallback };
-}
-
-// NEW stream decode: buffer bytes, concat, then decodeBytes.
+// NEW stream decode: buffer bytes, then call the production upload decoder.
 function decodeNewStream(chunks, totalBytes) {
-    const bytes = new Uint8Array(totalBytes);
-    let offset = 0;
-    for (const c of chunks) {
-        bytes.set(c, offset);
-        offset += c.byteLength;
-    }
-    return decodeBytesNew(bytes);
+    return decodeBytes(concatChunks(chunks, totalBytes), "benchmark.csv");
 }
 
-// Reader path: OLD = single utf-8 decode; NEW = byte-based decodeBytes.
+// Reader path: OLD = single utf-8 decode; NEW = production decodeBytes.
 function decodeOldReader(bytes) {
     return new TextDecoder("utf-8").decode(bytes);
 }
 function decodeNewReader(bytes) {
-    return decodeBytesNew(bytes);
+    return decodeBytes(bytes, "benchmark.csv");
 }
 
 function ms(fn) {

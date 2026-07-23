@@ -556,7 +556,7 @@ class TestEncoding:
     """Tests for CSV input encoding handling."""
 
     def test_auto_detects_non_utf8_input(self, tmp_path: Path) -> None:
-        """A Latin-1 file with no explicit encoding falls back and decodes cleanly."""
+        """A legacy single-byte file falls back and decodes cleanly."""
         input_path = tmp_path / "latin1.csv"
         output_path = tmp_path / "latin1.xlsx"
         input_path.write_bytes("Name\nJosé\n".encode("latin-1"))

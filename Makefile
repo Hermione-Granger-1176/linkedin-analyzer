@@ -13,9 +13,16 @@ VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
 NPX                 ?= npx
 NODE                ?= node
-PY_PATHS            := src/ tests/ scripts/ci/ scripts/gh/
-PY_TYPE_PATHS       := src/ scripts/ci/ scripts/gh/
+PY_PATHS            := src/ tests/ scripts/ci/ scripts/gh/ scripts/setup/
+PY_TYPE_PATHS       := src/ scripts/ci/ scripts/gh/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
+
+# Browser targets opt into the private Linux runtime only with local_libs=1.
+# Browsers install into Playwright's shared cache so every project reuses one
+# copy; only the extracted shared libraries and per-run scratch live below the
+# ignored .playwright cache. The wrapper refuses to download packages mid-run.
+PLAYWRIGHT_LOCAL_RUNTIME := $(VENV_PYTHON) scripts/setup/playwright_local_runtime.py
+PLAYWRIGHT_LOCAL_RUN = $(if $(filter 1,$(local_libs)),$(PLAYWRIGHT_LOCAL_RUNTIME) run --,)
 
 # Entry point for the GitHub PR/CI helper (scripts/gh). The Makefile targets
 # below are thin wrappers; the testable logic (repo and PR auto-detection,
@@ -24,7 +31,7 @@ GH = PYTHONPATH=. $(VENV_PYTHON) -m scripts.gh.cli
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
-.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci setup-playwright setup-playwright-ci
+.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci setup-playwright setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
 
 install: ## Install locked Python deps into the uv-managed virtual environment
 	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-groups --frozen --python $(PYTHON)
@@ -39,15 +46,29 @@ setup-base: install node-install ## Install Python and Node deps
 
 setup: setup-base ## Install Python and Node deps (fast, no browsers)
 
-setup-all: setup-base setup-playwright ## Full local setup including Playwright browsers
+setup-all: setup-base setup-playwright ## Full local setup with Playwright browsers, no system deps or sudo
 
-setup-ci: setup-base setup-playwright-ci ## CI setup including Playwright browsers and system deps
+setup-ci: setup-base setup-playwright-ci ## CI-only setup with Playwright browsers and system deps
 
-setup-playwright: ## Install Playwright browsers (no system deps)
+setup-playwright: ## Install Playwright browsers locally, no system deps or sudo
 	$(NPX) playwright install $(PLAYWRIGHT_BROWSERS)
 
-setup-playwright-ci: ## Install Playwright browsers with system deps
+setup-playwright-ci: ## Install Playwright browsers with system deps for CI
 	$(NPX) playwright install --with-deps $(PLAYWRIGHT_BROWSERS)
+
+setup-playwright-local: ## Install shared browsers and the private Ubuntu/Debian runtime without sudo
+	$(PLAYWRIGHT_LOCAL_RUNTIME) prepare
+	PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 $(NPX) playwright install $(PLAYWRIGHT_BROWSERS)
+	$(PLAYWRIGHT_LOCAL_RUNTIME) prepare
+
+playwright-local-status: ## Show repository-local Playwright runtime status
+	$(PLAYWRIGHT_LOCAL_RUNTIME) status
+
+playwright-local-gate: ## Launch Chromium, Firefox, and WebKit in the private runtime
+	$(PLAYWRIGHT_LOCAL_RUNTIME) probe
+
+playwright-local-clean: ## Remove only the repository-local Playwright cache (keeps shared browsers)
+	$(PLAYWRIGHT_LOCAL_RUNTIME) clean
 
 # ─── Lint @lint ─────────────────────────────────────────────────────────────────────
 
@@ -133,13 +154,13 @@ test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick 
 	$(NPX) vitest run --config web/vitest.config.js $(ARGS)
 
 test-e2e: ## Run Playwright browser tests (make test-e2e ARGS="--project=chromium web/e2e/app.e2e.spec.js")
-	$(NPM) run test:e2e -- $(ARGS)
+	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- $(ARGS)
 
 test-e2e-headed: ## Run Playwright browser tests in headed mode
-	$(NPM) run test:e2e:headed
+	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e:headed
 
 test-e2e-ui: ## Run Playwright UI mode
-	$(NPM) run test:e2e:ui
+	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e:ui
 
 # ─── Web @web ──────────────────────────────────────────────────────────────────────
 
@@ -172,7 +193,7 @@ web-smoke: ## Smoke-check a deployed web app (make web-smoke url=https://example
 	$(NODE) scripts/web-smoke.mjs "$(url)"
 
 web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.artifacts/screens)
-	SCREENS_DIR="$(or $(dir),.artifacts/screens)" $(NPM) run test:e2e -- --project=chromium web/e2e/screenshots.e2e.spec.js
+	SCREENS_DIR="$(or $(dir),.artifacts/screens)" $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- --project=chromium web/e2e/screenshots.e2e.spec.js
 
 web-e2e: test-e2e ## Alias for test-e2e
 
@@ -280,8 +301,8 @@ status: ## Show workspace health
 	@echo "=== Pull request ==="
 	@$(GH) summary || true
 
-clean: ## Remove local environments, build outputs, and caches
-	rm -rf $(VENV) node_modules web/dist .artifacts .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
+clean: ## Remove local environments, build outputs, and caches (keeps shared Playwright browsers)
+	rm -rf $(VENV) node_modules web/dist .artifacts .playwright .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
 
 help: ## Show command groups (expand one with make help-<group>)
 	@printf '\n  \033[1mmake <target>\033[0m   ·   expand a group: \033[1mmake help-<group>\033[0m   ·   machine-readable: \033[1mmake help-json\033[0m\n'

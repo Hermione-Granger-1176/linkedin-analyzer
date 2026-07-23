@@ -64,14 +64,24 @@ make web
 # Run tests
 make test-js
 
-# Install browser for E2E (one-time)
+# Fast setup: Python and Node dependencies only, no browsers
+make setup
+
+# Full local setup (deps plus browsers) for hosts that already have browser libraries
 make setup-all
 
-# CI/Linux setup with Playwright system deps
-make setup-ci
+# Shared browsers plus repository-local Ubuntu/Debian libraries, no sudo
+make setup-playwright-local
 
-# Run browser E2E tests
-make test-e2e
+# Verify the private runtime launches Chromium, Firefox, and WebKit
+make playwright-local-status
+make playwright-local-gate
+
+# Run browser E2E tests through the prepared private runtime
+make test-e2e local_libs=1
+
+# CI-only setup that may install Playwright system packages through --with-deps
+make setup-ci
 
 # Capture screens at mobile/tablet/desktop viewports (writes to .artifacts/screens by default)
 make web-screens
@@ -88,6 +98,16 @@ make dead-code-js
 # Format check (docs/config files)
 make format-js-check
 ```
+
+`make setup` is the fast default and does not install browsers. `make setup-all` installs Chromium, Firefox, and WebKit in Playwright's normal user-local browser cache. It is browser-only, does not install system packages, and does not require sudo. Use it when the host already provides the libraries Playwright needs.
+
+On a Debian or Ubuntu host that lacks those libraries, run `make setup-playwright-local`. It downloads package archives from the already configured APT repositories and extracts them only into this repository's ignored `.playwright/local-libs/` cache. Browsers install into Playwright's shared `~/.cache/ms-playwright` cache, so every project on the machine reuses one copy instead of duplicating roughly a gigabyte per repository. The setup uses APT simulation, `apt download`, and `dpkg-deb -x`; it never invokes package installation, sudo, or `dpkg -i`, and it does not change the system package database. The library cache has a manifest that is rebuilt when the operating system, architecture, Playwright version, browser engine set, or resolved package versions change.
+
+Browser-running Make targets accept `local_libs=1`, including `test-e2e`, `test-e2e-headed`, `test-e2e-ui`, and `web-screens`. This wrapper requires the cache to have been prepared already, points `PLAYWRIGHT_BROWSERS_PATH` at the shared browser cache, keeps browser home, cache, configuration, runtime, and temporary files under `.playwright/runtime/`, and adds only discovered extracted library and browser-data paths to the child environment. Preparing the runtime also patches the shared WebKit bundle launcher to append any inherited `LD_LIBRARY_PATH` after its own bundle directories. Plain (non-`local_libs`) runs that do not set `LD_LIBRARY_PATH` behave exactly as before; a value set outside the wrapper is appended at lower priority instead of being dropped. The wrapper never downloads packages during a test run. Use native Playwright host detection. Do not set `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE`.
+
+`make playwright-local-clean` and `make clean` both remove only this repository's `.playwright/` cache (the extracted libraries and per-run scratch). Neither touches the shared browser cache, since other projects depend on it; manage shared browsers with Playwright's own tooling.
+
+Reserve `make setup-ci` for CI and ephemeral runners. It retains Playwright's `--with-deps` mode, which may install operating-system packages on the disposable runner.
 
 ## Python CLI
 

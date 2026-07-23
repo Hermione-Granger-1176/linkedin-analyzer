@@ -33,24 +33,48 @@ describe("parseCsvRows row endings outside quotes", () => {
 });
 
 describe("parseCsvRows escape handling (comments options)", () => {
-    it("collapses a backslash-escaped quote inside a quoted field", () => {
-        const { rows, error } = parseCsvRows('"a\\"b"', CSV_OPTIONS_COMMENTS);
+    it.each([
+        ["ordinary ASCII inside quotes", String.raw`"a\b"`, [["ab"]]],
+        ["a quote inside quotes", String.raw`"a\"b"`, [['a"b']]],
+        ["a doubled backslash", String.raw`"a\\b"`, [["a\\b"]]],
+        ["adjacent doubled backslashes", String.raw`"a\\\\b"`, [["a\\\\b"]]],
+        ["backslashes next to a closing quote", String.raw`"a\\"`, [["a\\"]]],
+        ["non-ASCII characters", String.raw`"caf\é \📌"`, [["café 📌"]]],
+        ["an unquoted delimiter", String.raw`a\,b,c`, [["a,b", "c"]]],
+        ["an unquoted ordinary character", String.raw`a\bc`, [["abc"]]],
+        ["an unquoted quote", String.raw`a\",b`, [['a"', "b"]]],
+        ["an LF inside a quoted field", '"line\\\nbreak"', [["line\nbreak"]]],
+        ["a CR inside a quoted field", '"line\\\rbreak"', [["line\rbreak"]]],
+        ["an LF outside quotes", "line\\\nbreak", [["line\nbreak"]]],
+        ["a CR outside quotes", "line\\\rbreak", [["line\rbreak"]]],
+    ])("consumes the escape before %s", (_name, csv, expectedRows) => {
+        const { rows, error } = parseCsvRows(csv, CSV_OPTIONS_COMMENTS);
         expect(error).toBeNull();
-        expect(rows).toEqual([['a"b']]);
+        expect(rows).toEqual(expectedRows);
     });
 
-    it("keeps a backslash literal when it does not escape a quote", () => {
-        // Escape char (\) followed by a non-quote char falls through to the
-        // literal-append branch inside the quoted-field state machine.
-        const { rows, error } = parseCsvRows('"a\\b"', CSV_OPTIONS_COMMENTS);
-        expect(error).toBeNull();
-        expect(rows).toEqual([["a\\b"]]);
+    it.each(["a\\", '"a\\'])("rejects a trailing escape in %j", (csv) => {
+        const { rows, error } = parseCsvRows(csv, CSV_OPTIONS_COMMENTS);
+        expect(rows).toEqual([]);
+        expect(error).toBe("CSV parsing error: trailing escape character.");
     });
 
-    it("keeps a trailing backslash literal at end of input", () => {
-        const { rows } = parseCsvRows('"a\\', CSV_OPTIONS_COMMENTS);
-        // Unterminated quote, but the literal backslash is appended first.
-        expect(rows[0][0]).toContain("a\\");
+    it("counts an escape pair as its decoded field content", () => {
+        const atLimitMinusOne = "x".repeat(199999);
+        const accepted = parseCsvRows(`${atLimitMinusOne}\\,`, CSV_OPTIONS_COMMENTS);
+        expect(accepted.error).toBeNull();
+        expect(accepted.rows).toEqual([[`${atLimitMinusOne},`]]);
+
+        const atLimit = "x".repeat(200000);
+        const rejected = parseCsvRows(`${atLimit}\\,`, CSV_OPTIONS_COMMENTS);
+        expect(rejected.rows).toEqual([]);
+        expect(rejected.error).toMatch(/too large/i);
+    });
+
+    it("does not consume backslashes when escape is null", () => {
+        const { rows, error } = parseCsvRows(String.raw`a\b`, CSV_OPTIONS_DEFAULT);
+        expect(error).toBeNull();
+        expect(rows).toEqual([[String.raw`a\b`]]);
     });
 });
 

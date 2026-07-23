@@ -1,250 +1,233 @@
 Date,Link,Message
 2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:0,  
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:1,emoji 🚀 reply
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:2,Smart “quotes” cafe naive
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:3,Smart “quotes” cafe naive
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:4,plain comment
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:5,ctrl comment abcd
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:6,ctrl comment abcd
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:7,+formula lead
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:8,"multi
-line comment"
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:1,ctrl comment abcd
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:2,emoji 🚀 reply
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:3,+formula lead
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:4,"wrote \"great post\" today"
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:5,path C:\\Users\\Ada\\Documents
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:6,path C:\\Users\\Ada\\Documents
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:7,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:8,unicode \\café \\📌
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:9,NULL
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:10,plain comment
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:11,emoji 🚀 reply
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:12,plain comment
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:13,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:14,"multi
-line comment"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:15,+formula lead
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:16,"multi
-line comment"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:17,Smart “quotes” cafe naive
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:10,"wrote \"great post\" today"
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:11,ctrl comment abcd
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:12,"wrote \"great post\" today"
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:13,doubled \\\\ backslashes
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:14,"literal slash before \\\"quote\\\""
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:15,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:16,unicode \\café \\📌
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:17,emoji 🚀 reply
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:18,  
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:19,ctrl comment abcd
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:20,+formula lead
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:19,"multi
+line comment"
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:20,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:21,plain comment
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:22,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:23,"multi
-line comment"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:24,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:25,"multi
-line comment"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:26,emoji 🚀 reply
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:22,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:23,"literal slash before \\\"quote\\\""
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:24,doubled \\\\ backslashes
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:25,unicode \\café \\📌
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:26,+formula lead
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:27,  
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:28,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:29,Smart “quotes” cafe naive
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:30,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:31,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:32,"multi
-line comment"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:33,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:34,ctrl comment abcd
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:35,ctrl comment abcd
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:28,doubled \\\\ backslashes
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:29,emoji 🚀 reply
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:30,doubled \\\\ backslashes
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:31,"literal slash before \\\"quote\\\""
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:32,"literal slash before \\\"quote\\\""
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:33,doubled \\\\ backslashes
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:34,path C:\\Users\\Ada\\Documents
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:35,path C:\\Users\\Ada\\Documents
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:36,NA
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:37,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:38,emoji 🚀 reply
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:39,Smart “quotes” cafe naive
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:40,"multi
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:37,"multi
 line comment"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:41,Smart “quotes” cafe naive
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:38,ctrl comment abcd
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:39,emoji 🚀 reply
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:40,unicode \\café \\📌
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:41,emoji 🚀 reply
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:42,plain comment
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:43,"wrote \"great post\" today"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:44,emoji 🚀 reply
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:43,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:44,+formula lead
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:45,  
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:46,+formula lead
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:47,emoji 🚀 reply
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:48,"wrote \"great post\" today"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:49,ctrl comment abcd
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:50,ctrl comment abcd
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:51,+formula lead
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:52,+formula lead
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:53,emoji 🚀 reply
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:46,"multi
+line comment"
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:47,ctrl comment abcd
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:48,Smart “quotes” cafe naive
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:49,path C:\\Users\\Ada\\Documents
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:50,path C:\\Users\\Ada\\Documents
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:51,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:52,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:53,ctrl comment abcd
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:54,#N/A
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:55,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:56,ctrl comment abcd
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:55,"literal slash before \\\"quote\\\""
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:56,path C:\\Users\\Ada\\Documents
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:57,plain comment
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:58,+formula lead
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:59,"wrote \"great post\" today"
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:60,"wrote \"great post\" today"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:61,emoji 🚀 reply
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:62,"wrote \"great post\" today"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:58,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:59,Smart “quotes” cafe naive
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:60,Smart “quotes” cafe naive
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:61,+formula lead
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:62,Smart “quotes” cafe naive
 sometime later,https://www.linkedin.com/feed/update/urn:li:activity:63,<NA>
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:64,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:65,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:66,+formula lead
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:67,+formula lead
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:68,+formula lead
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:69,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:70,"multi
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:64,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:65,"literal slash before \\\"quote\\\""
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:66,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:67,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:68,"multi
 line comment"
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:71,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:69,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:70,unicode \\café \\📌
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:71,+formula lead
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:72,#N/A
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:73,Smart “quotes” cafe naive
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:74,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:75,"multi
-line comment"
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:76,"multi
-line comment"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:73,+formula lead
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:74,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:75,unicode \\café \\📌
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:76,unicode \\café \\📌
 sometime later,https://www.linkedin.com/feed/update/urn:li:activity:77,plain comment
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:78,plain comment
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:79,"wrote \"great post\" today"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:80,+formula lead
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:80,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:81,NaN
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:82,Smart “quotes” cafe naive
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:83,ctrl comment abcd
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:82,+formula lead
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:83,"multi
+line comment"
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:84,plain comment
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:85,"wrote \"great post\" today"
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:86,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:87,ctrl comment abcd
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:88,Smart “quotes” cafe naive
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:89,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:85,Smart “quotes” cafe naive
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:86,doubled \\\\ backslashes
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:87,path C:\\Users\\Ada\\Documents
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:88,+formula lead
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:89,doubled \\\\ backslashes
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:90,none
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:91,emoji 🚀 reply
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:92,ctrl comment abcd
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:93,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:94,"multi
-line comment"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:95,ctrl comment abcd
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:96,Smart “quotes” cafe naive
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:97,+formula lead
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:98,"wrote \"great post\" today"
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:91,ctrl comment abcd
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:92,path C:\\Users\\Ada\\Documents
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:93,doubled \\\\ backslashes
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:94,unicode \\café \\📌
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:95,path C:\\Users\\Ada\\Documents
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:96,emoji 🚀 reply
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:97,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:98,Smart “quotes” cafe naive
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:99,none
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:100,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:101,"multi
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:100,doubled \\\\ backslashes
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:101,"literal slash before \\\"quote\\\""
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:102,"literal slash before \\\"quote\\\""
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:103,unicode \\café \\📌
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:104,"multi
 line comment"
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:102,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:103,"multi
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:105,"multi
 line comment"
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:104,ctrl comment abcd
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:105,ctrl comment abcd
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:106,"multi
-line comment"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:107,"wrote \"great post\" today"
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:106,"literal slash before \\\"quote\\\""
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:107,Smart “quotes” cafe naive
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:108,NaN
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:109,"multi
-line comment"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:110,Smart “quotes” cafe naive
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:111,Smart “quotes” cafe naive
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:112,"multi
-line comment"
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:113,Smart “quotes” cafe naive
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:114,"wrote \"great post\" today"
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:115,"wrote \"great post\" today"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:116,"multi
-line comment"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:109,unicode \\café \\📌
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:110,emoji 🚀 reply
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:111,emoji 🚀 reply
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:112,unicode \\café \\📌
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:113,emoji 🚀 reply
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:114,Smart “quotes” cafe naive
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:115,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:116,"literal slash before \\\"quote\\\""
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:117,NaN
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:118,"wrote \"great post\" today"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:119,Smart “quotes” cafe naive
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:120,ctrl comment abcd
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:121,Smart “quotes” cafe naive
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:119,emoji 🚀 reply
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:120,path C:\\Users\\Ada\\Documents
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:121,+formula lead
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:122,"wrote \"great post\" today"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:123,emoji 🚀 reply
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:124,emoji 🚀 reply
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:125,+formula lead
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:123,ctrl comment abcd
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:124,ctrl comment abcd
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:125,"multi
+line comment"
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:126,NA
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:127,"wrote \"great post\" today"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:128,ctrl comment abcd
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:129,plain comment
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:130,"wrote \"great post\" today"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:131,"wrote \"great post\" today"
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:132,"multi
-line comment"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:133,ctrl comment abcd
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:134,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:128,path C:\\Users\\Ada\\Documents
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:129,"wrote \"great post\" today"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:130,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:131,Smart “quotes” cafe naive
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:132,unicode \\café \\📌
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:133,path C:\\Users\\Ada\\Documents
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:134,emoji 🚀 reply
 sometime later,https://www.linkedin.com/feed/update/urn:li:activity:135,NA
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:136,+formula lead
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:137,ctrl comment abcd
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:138,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:139,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:140,+formula lead
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:141,Smart “quotes” cafe naive
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:142,+formula lead
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:143,ctrl comment abcd
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:136,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:137,"multi
+line comment"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:138,doubled \\\\ backslashes
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:139,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:140,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:141,emoji 🚀 reply
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:142,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:143,path C:\\Users\\Ada\\Documents
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:144,NaN
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:145,Smart “quotes” cafe naive
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:146,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:145,emoji 🚀 reply
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:146,doubled \\\\ backslashes
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:147,plain comment
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:148,"wrote \"great post\" today"
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:149,"wrote \"great post\" today"
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:150,"wrote \"great post\" today"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:151,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:152,ctrl comment abcd
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:149,Smart “quotes” cafe naive
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:150,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:151,doubled \\\\ backslashes
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:152,"multi
+line comment"
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:153,NULL
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:154,emoji 🚀 reply
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:155,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:156,"wrote \"great post\" today"
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:157,Smart “quotes” cafe naive
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:158,Smart “quotes” cafe naive
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:159,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:160,"multi
-line comment"
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:161,"multi
-line comment"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:154,ctrl comment abcd
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:155,doubled \\\\ backslashes
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:156,Smart “quotes” cafe naive
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:157,emoji 🚀 reply
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:158,emoji 🚀 reply
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:159,"literal slash before \\\"quote\\\""
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:160,unicode \\café \\📌
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:161,unicode \\café \\📌
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:162,NULL
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:163,+formula lead
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:164,Smart “quotes” cafe naive
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:165,+formula lead
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:166,"multi
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:163,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:164,emoji 🚀 reply
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:165,"multi
 line comment"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:167,ctrl comment abcd
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:168,plain comment
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:169,+formula lead
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:170,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:166,"literal slash before \\\"quote\\\""
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:167,path C:\\Users\\Ada\\Documents
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:168,"wrote \"great post\" today"
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:169,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:170,doubled \\\\ backslashes
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:171,#N/A
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:172,emoji 🚀 reply
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:172,ctrl comment abcd
 sometime later,https://www.linkedin.com/feed/update/urn:li:activity:173,"wrote \"great post\" today"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:174,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:175,"multi
-line comment"
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:174,"literal slash before \\\"quote\\\""
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:175,unicode \\café \\📌
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:176,plain comment
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:177,"multi
-line comment"
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:177,unicode \\café \\📌
 2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:178,plain comment
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:179,"wrote \"great post\" today"
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:179,Smart “quotes” cafe naive
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:180,NA
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:181,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:181,doubled \\\\ backslashes
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:182,"wrote \"great post\" today"
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:183,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:184,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:185,"multi
-line comment"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:186,Smart “quotes” cafe naive
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:183,"literal slash before \\\"quote\\\""
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:184,"literal slash before \\\"quote\\\""
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:185,"literal slash before \\\"quote\\\""
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:186,emoji 🚀 reply
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:187,plain comment
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:188,plain comment
 2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:189,NA
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:190,ctrl comment abcd
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:190,path C:\\Users\\Ada\\Documents
 2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:191,plain comment
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:192,+formula lead
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:193,"multi
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:192,"multi
 line comment"
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:194,ctrl comment abcd
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:195,ctrl comment abcd
-2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:196,"multi
-line comment"
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:197,emoji 🚀 reply
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:193,unicode \\café \\📌
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:194,path C:\\Users\\Ada\\Documents
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:195,path C:\\Users\\Ada\\Documents
+2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:196,unicode \\café \\📌
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:197,+formula lead
 sometime later,https://www.linkedin.com/feed/update/urn:li:activity:198,NULL
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:199,plain comment
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:200,ctrl comment abcd
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:201,"wrote \"great post\" today"
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:199,"wrote \"great post\" today"
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:200,path C:\\Users\\Ada\\Documents
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:201,Smart “quotes” cafe naive
 2026-06-31 12:00:00,https://www.linkedin.com/feed/update/urn:li:activity:202,plain comment
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:203,+formula lead
-2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:204,"wrote \"great post\" today"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:205,Smart “quotes” cafe naive
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:206,"multi
-line comment"
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:203,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+2026-02-30 10:00:00 UTC,https://www.linkedin.com/feed/update/urn:li:activity:204,Smart “quotes” cafe naive
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:205,+formula lead
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:206,"literal slash before \\\"quote\\\""
 sometime later,https://www.linkedin.com/feed/update/urn:li:activity:207,NA
 1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:208,plain comment
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:209,emoji 🚀 reply
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:209,+formula lead
 2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:210,"wrote \"great post\" today"
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:211,+formula lead
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:212,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:213,plain comment
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:214,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
-2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:215,"multi
-line comment"
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:211,LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:212,doubled \\\\ backslashes
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:213,"wrote \"great post\" today"
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:214,"literal slash before \\\"quote\\\""
+2026-13-05 09:00:00,https://www.linkedin.com/feed/update/urn:li:activity:215,"literal slash before \\\"quote\\\""
 2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:216,none
-sometime later,https://www.linkedin.com/feed/update/urn:li:activity:217,Smart “quotes” cafe naive
-2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:218,Smart “quotes” cafe naive
-1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:219,"multi
-line comment"
+sometime later,https://www.linkedin.com/feed/update/urn:li:activity:217,emoji 🚀 reply
+2026-02-30 10:00:00,https://www.linkedin.com/feed/update/urn:li:activity:218,emoji 🚀 reply
+1999-01-01,https://www.linkedin.com/feed/update/urn:li:activity:219,"literal slash before \\\"quote\\\""

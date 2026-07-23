@@ -390,7 +390,7 @@ describe("LinkedInCleaner", () => {
         expect(result.error).toMatch(/empty/i);
     });
 
-    it("recovers unmatched quote by retrying parse with appended quote", () => {
+    it("rejects an unmatched final quote", () => {
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
             '2025-01-01 10:00:00 UTC,https://linkedin.com/in/post,"Unclosed commentary,,,MEMBER_NETWORK',
@@ -398,9 +398,8 @@ describe("LinkedInCleaner", () => {
 
         const result = LinkedInCleaner.process(csv, "shares");
 
-        expect(result.success).toBe(true);
-        expect(result.rowCount).toBe(1);
-        expect(result.cleanedData[0].ShareCommentary).toContain("Unclosed commentary");
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/unmatched quote/i);
     });
 
     it("surfaces alternate detected type when selected type cannot be inferred directly", () => {

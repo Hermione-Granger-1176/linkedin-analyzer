@@ -1,14 +1,15 @@
 /* Upload page logic */
 
-import { FILE_TYPES } from "./cleaner-configs.js";
-import { MAX_CSV_CHARS } from "./constants.js";
+import { FILE_TYPES, MAX_CSV_CHARS } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
-import { concatChunks, decodeBytes, isQuotaExceededError } from "./upload-decode.js";
+import { isQuotaExceededError } from "./upload-decode.js";
+import { consumePendingFile, createJobId, resolveJobId } from "./upload-jobs.js";
 import { UploadProgress } from "./upload-progress.js";
+import { MAX_FILE_BYTES, readFileAsText } from "./upload-read.js";
 import {
     createEmptyFileMap,
     getTypeSpecificFileCacheKey,
@@ -68,9 +69,6 @@ export const UploadPage = (() => {
 
     const JOB_TIMEOUT_MS = 45000;
     const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024;
-    const MAX_FILE_BYTES = 80 * 1024 * 1024;
-    const FILE_READ_TIMEOUT_MS = 30000;
-    const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
     function formatRows(count) {
         return `${count} ${count === 1 ? "row" : "rows"}`;
@@ -531,151 +529,6 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Build a unique job ID for pending file processing.
-     * @param {File} file - Uploaded file
-     * @returns {string}
-     */
-    function createJobId(file) {
-        return `${file.name}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
-    }
-
-    /**
-     * Read a File object as text, decoding as UTF-8 and falling back to
-     * WHATWG windows-1252 for non-UTF-8 exports, matching the CLI.
-     * @param {File} file - Uploaded file
-     * @returns {Promise<{text: string, usedFallback: boolean}>}
-     */
-    function readFileAsText(file) {
-        // processFiles() already drops files above MAX_FILE_BYTES before they
-        // reach here, so this per-file cap is a defensive backstop, not a live path.
-        /* v8 ignore next 4 */
-        if (file.size > MAX_FILE_BYTES) {
-            const maxMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));
-            return Promise.reject(new Error(`"${file.name}" exceeds the ${maxMb}MB upload limit.`));
-        }
-
-        const useStreamingRead =
-            file.size >= STREAMING_READ_THRESHOLD_BYTES &&
-            typeof file.stream === "function" &&
-            typeof TextDecoder !== "undefined" &&
-            typeof ReadableStream !== "undefined";
-
-        if (useStreamingRead) {
-            return readFileAsTextStream(file);
-        }
-
-        return readFileAsTextWithReader(file);
-    }
-
-    /**
-     * Read a File as text via FileReader, decoding the raw bytes so UTF-8
-     * validity is checked directly rather than inferred from the output.
-     * @param {File} file - Uploaded file
-     * @returns {Promise<{text: string, usedFallback: boolean}>}
-     */
-    function readFileAsTextWithReader(file) {
-        return readBytesWithReader(file).then((bytes) => decodeBytes(bytes, file.name));
-    }
-
-    /**
-     * Read a File's raw bytes via FileReader, with timeout and error guards.
-     * @param {File} file - Uploaded file
-     * @returns {Promise<Uint8Array>}
-     */
-    function readBytesWithReader(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            let settled = false;
-            const timeoutId = window.setTimeout(() => {
-                try {
-                    reader.abort();
-                } catch {
-                    /* v8 ignore next */
-                    // Ignore abort failures and continue timeout handling.
-                }
-                finish(() => reject(new Error(`Reading ${file.name} timed out.`)));
-            }, FILE_READ_TIMEOUT_MS);
-
-            const finish = (callback) => {
-                if (settled) {
-                    return;
-                }
-                settled = true;
-                window.clearTimeout(timeoutId);
-                callback();
-            };
-
-            reader.onload = () => {
-                /* v8 ignore next */
-                if (settled) {
-                    return;
-                }
-                // Duck-type for an ArrayBuffer (avoids cross-realm instanceof
-                // pitfalls): a successful read yields a byte buffer, so anything
-                // without a numeric byteLength is an unexpected/failed read and is
-                // surfaced as an error rather than a silently empty file.
-                const buffer = /** @type {ArrayBuffer} */ (reader.result);
-                if (!buffer || typeof buffer.byteLength !== "number") {
-                    finish(() => reject(new Error("Error reading file")));
-                    return;
-                }
-                finish(() => resolve(new Uint8Array(buffer)));
-            };
-            reader.onerror = () => {
-                finish(() => reject(new Error("Error reading file")));
-            };
-            reader.readAsArrayBuffer(file);
-        });
-    }
-
-    /**
-     * Read file text via stream chunks for large uploads, decoding as UTF-8 and
-     * falling back to windows-1252 when the bytes are not valid UTF-8.
-     * @param {File} file - Uploaded file
-     * @returns {Promise<{text: string, usedFallback: boolean}>}
-     */
-    async function readFileAsTextStream(file) {
-        const reader = file.stream().getReader();
-        const chunks = [];
-        let totalBytes = 0;
-        let timedOut = false;
-
-        const timeoutId = window.setTimeout(() => {
-            timedOut = true;
-            /* v8 ignore next */
-            reader.cancel().catch(() => {
-                // Ignore cancellation failures after timeout.
-            });
-        }, FILE_READ_TIMEOUT_MS);
-
-        try {
-            for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
-                if (timedOut) {
-                    throw new Error(`Reading ${file.name} timed out.`);
-                }
-
-                chunks.push(chunk.value);
-                totalBytes += chunk.value.byteLength;
-            }
-
-            // The in-loop check above throws first when the watchdog fires mid-read;
-            // this post-loop check only trips if the final read completes (done) in
-            // the same tick the watchdog fires, which the unit clock does not stage.
-            /* v8 ignore next 3 */
-            if (timedOut) {
-                throw new Error(`Reading ${file.name} timed out.`);
-            }
-        } finally {
-            window.clearTimeout(timeoutId);
-        }
-
-        // Both read paths share decodeBytes: strict UTF-8 validation with a
-        // windows-1252 fallback and the character-count limit applied after
-        // decoding. Peak memory stays bounded by the upstream MAX_FILE_BYTES cap.
-        return decodeBytes(concatChunks(chunks, totalBytes), file.name);
-    }
-
-    /**
      * Handle messages from the analytics worker.
      * @param {MessageEvent} event - Worker message event
      */
@@ -734,7 +587,7 @@ export const UploadPage = (() => {
         const fileName = payload.fileName;
         const jobId = payload.jobId || null;
         const rowCount = payload.rowCount || 0;
-        const pending = consumePendingFile(jobId, fileName);
+        const pending = consumePendingFile(pendingFiles, jobId, fileName);
 
         if (!fileType) {
             setHint(payload.error || "File could not be processed.", true);
@@ -878,32 +731,6 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Consume a pending upload entry for a processed worker job.
-     * @param {string|null} jobId - Worker job ID
-     * @param {string} fileName - Original file name
-     * @returns {{text: string, fileName: string, usedFallback?: boolean}|null}
-     */
-    function consumePendingFile(jobId, fileName) {
-        if (jobId && pendingFiles.has(jobId)) {
-            const pending = pendingFiles.get(jobId) || null;
-            pendingFiles.delete(jobId);
-            return pending;
-        }
-
-        if (!fileName) {
-            return null;
-        }
-
-        for (const [key, pending] of pendingFiles.entries()) {
-            if (pending.fileName === fileName) {
-                pendingFiles.delete(key);
-                return pending;
-            }
-        }
-        return null;
-    }
-
-    /**
      * Handle worker-level errors.
      * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
@@ -942,7 +769,7 @@ export const UploadPage = (() => {
      * @param {string} fileName - Uploaded file name fallback
      */
     function completeJob(jobId, fileName) {
-        const resolvedJobId = resolveJobId(jobId, fileName);
+        const resolvedJobId = resolveJobId(activeJobs, pendingFiles, jobId, fileName);
 
         if (!resolvedJobId) {
             checkJobs();
@@ -953,65 +780,6 @@ export const UploadPage = (() => {
         clearJobTimeout(resolvedJobId);
         activeJobs.delete(resolvedJobId);
         checkJobs();
-    }
-
-    /**
-     * Resolve a job ID from explicit ID, file name, or active queue fallback.
-     * @param {string|null} jobId - Worker job ID
-     * @param {string} fileName - Uploaded file name fallback
-     * @returns {string|null}
-     */
-    function resolveJobId(jobId, fileName) {
-        const normalizedJobId = typeof jobId === "string" && jobId ? jobId : null;
-        if (
-            normalizedJobId &&
-            (activeJobs.has(normalizedJobId) || pendingFiles.has(normalizedJobId))
-        ) {
-            return normalizedJobId;
-        }
-
-        const pendingJobId = resolvePendingJobIdByFileName(fileName);
-        if (pendingJobId) {
-            return pendingJobId;
-        }
-
-        return getFirstActiveJobId();
-    }
-
-    /**
-     * Resolve pending job ID by uploaded file name.
-     * @param {string} fileName - Uploaded file name
-     * @returns {string|null}
-     */
-    function resolvePendingJobIdByFileName(fileName) {
-        const normalizedFileName = String(fileName || "");
-        if (!normalizedFileName) {
-            return null;
-        }
-
-        for (const [key, pending] of pendingFiles.entries()) {
-            if (pending && pending.fileName === normalizedFileName) {
-                return key;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Resolve the sole active job ID as a final fallback.
-     *
-     * Only resolves when exactly one job is in flight: a worker message that
-     * lacks both a jobId and a matching fileName is unambiguous in that case.
-     * With concurrent uploads, guessing the "first" job would complete the wrong
-     * file, so we return null and let that job's watchdog handle it instead.
-     * @returns {string|null}
-     */
-    function getFirstActiveJobId() {
-        if (activeJobs.size !== 1) {
-            return null;
-        }
-        return activeJobs.values().next().value;
     }
 
     /**

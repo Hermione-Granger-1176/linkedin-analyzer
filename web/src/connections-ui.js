@@ -4,11 +4,11 @@ import { parseLocalDate } from "./analytics-dates.js";
 import { SketchCharts } from "./charts.js";
 import { DataCache } from "./data-cache.js";
 import { LoadingOverlay } from "./loading-overlay.js";
+import { markPerformance, measurePerformance } from "./perf.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
-import { reportPerformanceMeasure } from "./telemetry.js";
 import { hideChartTooltip, showChartTooltip } from "./ui/chart-tooltip.js";
 import {
     parseConnectionsWorkerMessage,
@@ -532,52 +532,6 @@ export const ConnectionsPage = (() => {
         terminateWorker();
         setEmptyState("Worker error", "Refresh the page and try again.");
         showConnectionsLoading(false);
-    }
-
-    /**
-     * Mark a performance point if available.
-     * @param {string} name - Mark name
-     */
-    function markPerformance(name) {
-        /* v8 ignore next 3 */
-        if (typeof performance === "undefined" || typeof performance.mark !== "function") {
-            return;
-        }
-        performance.mark(name);
-    }
-
-    /**
-     * Measure a performance range if available.
-     * @param {string} name - Measure name
-     * @param {string} start - Start mark
-     * @param {string} end - End mark
-     */
-    function measurePerformance(name, start, end) {
-        /* v8 ignore next 3 */
-        if (typeof performance === "undefined" || typeof performance.measure !== "function") {
-            return;
-        }
-        try {
-            performance.measure(name, start, end);
-
-            // getEntriesByName availability and the shape of the returned entries
-            // are environment-dependent, so the negative arms here are defensive.
-            /* v8 ignore next 11 */
-            if (typeof performance.getEntriesByName === "function") {
-                const entries = performance.getEntriesByName(name);
-                const lastEntry = entries.length ? entries[entries.length - 1] : null;
-                if (
-                    lastEntry &&
-                    lastEntry.entryType === "measure" &&
-                    Number.isFinite(lastEntry.duration)
-                ) {
-                    reportPerformanceMeasure(name, lastEntry.duration);
-                }
-            }
-            /* v8 ignore next 3 */
-        } catch {
-            // Ignore missing marks to keep instrumentation resilient.
-        }
     }
 
     /**

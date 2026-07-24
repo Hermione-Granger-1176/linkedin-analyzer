@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/browser";
 
-import { FILE_TYPES } from "./cleaner-configs.js";
+import { FILE_TYPES } from "./constants.js";
 import { WIRE_METRIC_NAMES } from "./telemetry-metrics.js";
 
 let sentryReady = false;

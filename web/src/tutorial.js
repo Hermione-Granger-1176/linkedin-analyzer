@@ -4,12 +4,12 @@ import { DomEvents } from "./dom-events.js";
 import { LoadingOverlay } from "./loading-overlay.js";
 import { AppRouter } from "./router.js";
 import { ScreenManager } from "./screen-manager.js";
+import { resolvePointerVariant } from "./tutorial-arrows.js";
 import {
     calculatePopoverPosition,
     clamp,
     EDGE_PADDING,
     getRectEdgePoint,
-    hashString,
     resolvePlacement,
 } from "./tutorial-geometry.js";
 import {
@@ -18,6 +18,7 @@ import {
     getMiniTipVisitInterval,
     normalizeVisitCount,
 } from "./tutorial-pacing.js";
+import { buildTutorialShell } from "./tutorial-shell.js";
 import { TutorialMiniTips, TutorialSteps } from "./tutorial-steps.js";
 import {
     getCompletionKey,
@@ -29,6 +30,13 @@ import {
     removeStorageValue,
     setStorageValue,
 } from "./tutorial-storage.js";
+import {
+    ensureTargetInView,
+    getFocusableElements,
+    hasStepTarget,
+    isElementVisible,
+    resolveStepTarget,
+} from "./tutorial-targets.js";
 
 export const Tutorial = (() => {
     "use strict";
@@ -40,41 +48,8 @@ export const Tutorial = (() => {
     const INITIAL_TARGET_RETRY_MAX = 8;
     const MINI_TIP_RETRY_MS = 300;
     const MINI_TIP_RETRY_MAX = 8;
-    const STEP_SCROLL_MARGIN = 56;
-    const SVG_NS = "http://www.w3.org/2000/svg";
     const POINTER_BASE_ANGLE_DEG = -45;
     const POINTER_ICON_HALF = 46;
-
-    const ARROW_VARIANTS = Object.freeze([
-        {
-            name: "classic",
-            style: "solid",
-            body: "M 13 78 C 24 58 45 37 74 20",
-            echo: "M 18 77 C 29 58 47 42 70 26",
-            head: "M 63 17 L 81 20 L 70 34",
-        },
-        {
-            name: "hook",
-            style: "solid",
-            body: "M 12 75 C 21 57 35 48 50 50 C 64 52 74 40 82 22",
-            echo: "M 16 74 C 24 58 37 51 50 53",
-            head: "M 70 19 L 84 22 L 77 34",
-        },
-        {
-            name: "dash",
-            style: "dashed",
-            body: "M 14 76 C 24 61 39 49 55 41 C 65 35 74 27 82 17",
-            echo: "M 19 76 C 30 62 45 51 60 42",
-            head: "M 71 14 L 84 17 L 77 29",
-        },
-        {
-            name: "swoop",
-            style: "solid",
-            body: "M 10 79 C 28 68 26 55 40 48 C 54 41 67 30 79 18",
-            echo: "M 16 78 C 31 68 32 56 44 49",
-            head: "M 68 14 L 81 18 L 75 30",
-        },
-    ]);
 
     /** @type {{initialized: boolean, active: boolean, routeName: string, steps: object[], renderableIndices: number[], currentIndex: number, retryCount: number, token: number, autoTimer: number, retryTimer: number, highlightedTarget: HTMLElement | null, highlightedStyle: {position: string, zIndex: string} | null, previousFocus: HTMLElement | null, miniTipsRoute: string, miniTipTimer: number, miniTipRetryTimer: number, miniTipRetryCount: number, miniTipEntries: Array<{node: HTMLElement, tip: object, routeName: string, tipId: string, placement: string | undefined, target: Element | null}>}} */
     const state = {
@@ -137,7 +112,7 @@ export const Tutorial = (() => {
             return;
         }
 
-        buildUI();
+        buildTutorialShell(ui);
         bindEvents();
         state.initialized = true;
     }
@@ -278,111 +253,6 @@ export const Tutorial = (() => {
             return false;
         }
         return getStorageValue(getCompletionKey(normalized)) === "1";
-    }
-
-    /** Build tutorial and mini-tip DOM layers. */
-    function buildUI() {
-        ui.root = document.createElement("div");
-        ui.root.className = "tutorial-layer";
-        ui.root.hidden = true;
-        ui.root.setAttribute("aria-hidden", "true");
-
-        ui.overlay = document.createElement("div");
-        ui.overlay.className = "tutorial-overlay";
-
-        ui.spotlight = document.createElement("div");
-        ui.spotlight.className = "tutorial-spotlight";
-
-        ui.pointer = document.createElementNS(SVG_NS, "svg");
-        ui.pointer.classList.add("tutorial-pointer");
-        ui.pointer.setAttribute("aria-hidden", "true");
-        ui.pointer.setAttribute("viewBox", "0 0 96 96");
-        ui.pointer.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
-        ui.pointerMainPath = document.createElementNS(SVG_NS, "path");
-        ui.pointerMainPath.classList.add("tutorial-pointer-path-main");
-
-        ui.pointerEchoPath = document.createElementNS(SVG_NS, "path");
-        ui.pointerEchoPath.classList.add("tutorial-pointer-path-echo");
-
-        ui.pointerHeadPath = document.createElementNS(SVG_NS, "path");
-        ui.pointerHeadPath.classList.add("tutorial-pointer-head");
-
-        ui.pointer.appendChild(ui.pointerEchoPath);
-        ui.pointer.appendChild(ui.pointerMainPath);
-        ui.pointer.appendChild(ui.pointerHeadPath);
-
-        ui.popover = document.createElement("section");
-        ui.popover.className = "tutorial-popover";
-        ui.popover.hidden = true;
-        ui.popover.setAttribute("role", "dialog");
-        ui.popover.setAttribute("aria-modal", "true");
-        ui.popover.setAttribute("aria-labelledby", "tutorialPopoverTitle");
-        ui.popover.setAttribute("aria-describedby", "tutorialPopoverBody");
-        ui.popover.tabIndex = -1;
-
-        ui.title = document.createElement("h3");
-        ui.title.className = "tutorial-title";
-        ui.title.id = "tutorialPopoverTitle";
-
-        ui.body = document.createElement("p");
-        ui.body.className = "tutorial-text";
-        ui.body.id = "tutorialPopoverBody";
-
-        const footer = document.createElement("div");
-        footer.className = "tutorial-footer";
-
-        const progress = document.createElement("div");
-        progress.className = "tutorial-progress";
-
-        ui.counter = document.createElement("span");
-        ui.counter.className = "tutorial-counter";
-
-        ui.dots = document.createElement("div");
-        ui.dots.className = "tutorial-dots";
-
-        progress.appendChild(ui.counter);
-        progress.appendChild(ui.dots);
-
-        const controls = document.createElement("div");
-        controls.className = "tutorial-controls";
-
-        ui.backButton = document.createElement("button");
-        ui.backButton.type = "button";
-        ui.backButton.className = "tutorial-btn tutorial-btn-back";
-        ui.backButton.textContent = "Back";
-
-        ui.nextButton = document.createElement("button");
-        ui.nextButton.type = "button";
-        ui.nextButton.className = "tutorial-btn tutorial-btn-next";
-        ui.nextButton.textContent = "Next";
-
-        ui.skipButton = document.createElement("button");
-        ui.skipButton.type = "button";
-        ui.skipButton.className = "tutorial-btn tutorial-btn-skip";
-        ui.skipButton.textContent = "Skip";
-
-        controls.appendChild(ui.backButton);
-        controls.appendChild(ui.nextButton);
-        controls.appendChild(ui.skipButton);
-
-        footer.appendChild(progress);
-        footer.appendChild(controls);
-
-        ui.popover.appendChild(ui.title);
-        ui.popover.appendChild(ui.body);
-        ui.popover.appendChild(footer);
-
-        ui.root.appendChild(ui.overlay);
-        ui.root.appendChild(ui.spotlight);
-
-        ui.miniTipsLayer = document.createElement("div");
-        ui.miniTipsLayer.className = "tutorial-mini-layer";
-
-        document.body.appendChild(ui.root);
-        document.body.appendChild(ui.popover);
-        document.body.appendChild(ui.pointer);
-        document.body.appendChild(ui.miniTipsLayer);
     }
 
     /** Attach event handlers for controls, keyboard, and layout updates. */
@@ -601,43 +471,6 @@ export const Tutorial = (() => {
      */
     function getCurrentStep() {
         return state.steps[state.currentIndex] || {};
-    }
-
-    /**
-     * Keep the step target inside viewport when possible.
-     * @param {Element|null} target - Step target
-     */
-    function ensureTargetInView(target) {
-        if (!(target instanceof HTMLElement)) {
-            return;
-        }
-        if (isViewportPinned(target)) {
-            return;
-        }
-
-        const rect = target.getBoundingClientRect();
-        const minTop = STEP_SCROLL_MARGIN;
-        const maxBottom = window.innerHeight - STEP_SCROLL_MARGIN;
-        const outOfView = rect.top < minTop || rect.bottom > maxBottom;
-        if (!outOfView) {
-            return;
-        }
-
-        target.scrollIntoView({
-            block: "center",
-            inline: "nearest",
-            behavior: "instant",
-        });
-    }
-
-    /**
-     * Check whether element stays pinned to viewport.
-     * @param {HTMLElement} element - DOM element
-     * @returns {boolean}
-     */
-    function isViewportPinned(element) {
-        const position = window.getComputedStyle(element).position;
-        return position === "fixed" || position === "sticky";
     }
 
     /**
@@ -870,104 +703,6 @@ export const Tutorial = (() => {
     }
 
     /**
-     * Resolve a step target from selector/element.
-     * @param {object} step - Step config
-     * @returns {Element|null}
-     */
-    function resolveStepTarget(step) {
-        const candidates = collectTargetCandidates(step);
-        if (!candidates.length) {
-            return null;
-        }
-
-        for (const candidate of candidates) {
-            const element = resolveElementReference(candidate);
-            if (isElementVisible(element)) {
-                return element;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Check whether a step defines any target selector/element.
-     * @param {object} step - Step config
-     * @returns {boolean}
-     */
-    function hasStepTarget(step) {
-        return collectTargetCandidates(step).length > 0;
-    }
-
-    /**
-     * Collect primary and fallback step targets.
-     * @param {object} step - Step config
-     * @returns {(string|Element)[]}
-     */
-    function collectTargetCandidates(step) {
-        // Defensive: callers always pass a resolved step object.
-        /* v8 ignore next 3 */
-        if (!step || typeof step !== "object") {
-            return [];
-        }
-
-        const fields = [
-            step.target,
-            step.selector,
-            step.el,
-            step.fallbackTarget,
-            step.fallbackSelector,
-            step.fallbackEl,
-        ];
-
-        return fields.flat().filter(Boolean);
-    }
-
-    /**
-     * Resolve selector/element references to a DOM element.
-     * @param {string|Element|undefined} ref - Target reference
-     * @returns {Element|null}
-     */
-    function resolveElementReference(ref) {
-        if (!ref) {
-            return null;
-        }
-        if (typeof ref === "string") {
-            return document.querySelector(ref);
-        }
-        if (ref instanceof Element) {
-            return ref;
-        }
-        return null;
-    }
-
-    /**
-     * Check if a target is visible enough for spotlighting.
-     * @param {Element|null} element - DOM element
-     * @returns {element is HTMLElement}
-     */
-    function isElementVisible(element) {
-        if (!(element instanceof HTMLElement)) {
-            return false;
-        }
-
-        const styles = window.getComputedStyle(element);
-        if (
-            styles.display === "none" ||
-            styles.visibility === "hidden" ||
-            styles.visibility === "collapse"
-        ) {
-            return false;
-        }
-        if (Number(styles.opacity || "1") <= 0) {
-            return false;
-        }
-
-        const rect = element.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-    }
-
-    /**
      * Position spotlight, popover, and pointer.
      * @param {Element|null} target - Highlight target
      * @param {object} step - Step config
@@ -1074,7 +809,7 @@ export const Tutorial = (() => {
         const maxY = window.innerHeight - POINTER_ICON_HALF;
         const clampedX = clamp(pointerX, POINTER_ICON_HALF, maxX);
         const clampedY = clamp(pointerY, POINTER_ICON_HALF, maxY);
-        const variant = resolvePointerVariant(step);
+        const variant = resolvePointerVariant(step, state.routeName, state.currentIndex);
         const rotationDeg = (angle * 180) / Math.PI - POINTER_BASE_ANGLE_DEG;
 
         ui.pointer.dataset.arrowStyle = variant.style;
@@ -1087,31 +822,6 @@ export const Tutorial = (() => {
         ui.pointer.style.left = `${clampedX}px`;
         ui.pointer.style.top = `${clampedY}px`;
         ui.pointer.style.transform = `translate(-50%, -50%) rotate(${rotationDeg}deg)`;
-    }
-
-    /**
-     * Pick an arrow variant for the current step.
-     * @param {object} step - Step config
-     * @returns {{name:string, style:string, body:string, echo:string, head:string}}
-     */
-    function resolvePointerVariant(step) {
-        const preferredName = String(step && step.arrowStyle ? step.arrowStyle : "")
-            .trim()
-            .toLowerCase();
-        if (preferredName) {
-            const preferred = ARROW_VARIANTS.find((variant) => variant.name === preferredName);
-            if (preferred) {
-                return preferred;
-            }
-        }
-
-        const key = [
-            state.routeName,
-            step && step.id ? step.id : "",
-            String(state.currentIndex),
-        ].join(":");
-        const hash = hashString(key);
-        return ARROW_VARIANTS[hash % ARROW_VARIANTS.length];
     }
 
     /**
@@ -1469,33 +1179,6 @@ export const Tutorial = (() => {
             event.preventDefault();
             first.focus();
         }
-    }
-
-    /**
-     * Collect focusable children for focus trapping.
-     * @param {HTMLElement} root - Root container
-     * @returns {HTMLElement[]}
-     */
-    function getFocusableElements(root) {
-        // Defensive: always called with the mounted popover as root.
-        /* v8 ignore next 3 */
-        if (!root) {
-            return [];
-        }
-
-        const selectors = [
-            "button:not([disabled])",
-            "a[href]",
-            'input:not([disabled]):not([type="hidden"])',
-            "select:not([disabled])",
-            "textarea:not([disabled])",
-            '[tabindex]:not([tabindex="-1"])',
-        ];
-
-        const nodes = root.querySelectorAll(selectors.join(","));
-        return /** @type {HTMLElement[]} */ (Array.from(nodes)).filter((node) =>
-            isElementVisible(node),
-        );
     }
 
     /**

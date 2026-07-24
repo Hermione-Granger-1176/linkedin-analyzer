@@ -2445,7 +2445,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain("Unable to restore");
     });
 
-    // --- waitForSessionCleanup catch (line 205) ------------------------------
+    // --- Session.waitForCleanup rejection handling ---------------------------
 
     it("does not throw when session cleanup promise rejects", async () => {
         const rejectingPromise = Promise.reject(new Error("cleanup fail"));
@@ -3442,9 +3442,9 @@ describe("UploadPage", () => {
         expect(AppRouter.navigate).not.toHaveBeenCalled();
     });
 
-    // --- line 205: waitForSessionCleanup catch --------------------------------
+    // --- Session.waitForCleanup rejection handling ---------------------------
     // Set a rejecting session cleanup promise before the module is imported so
-    // waitForSessionCleanup() swallows it and returns (line 205).
+    // Session.waitForCleanup() swallows it and restoreState continues.
 
     it("does not throw when session cleanup promise rejects during restoreState", async () => {
         setupUploadDom();

@@ -62,7 +62,18 @@
         <link rel="preload" href="./src/css/variables.css" as="style" />
 
         <link rel="stylesheet" href="./src/css/variables.css" />
-        <link rel="stylesheet" href="./src/css/style.css" />
+        <!-- Order is load-bearing: these eight files were one stylesheet, and
+             later rules still rely on overriding earlier ones. Keep
+             responsive.css last within this group, ahead of the stylesheets
+             that follow it. -->
+        <link rel="stylesheet" href="./src/css/base.css" />
+        <link rel="stylesheet" href="./src/css/layout.css" />
+        <link rel="stylesheet" href="./src/css/upload.css" />
+        <link rel="stylesheet" href="./src/css/filters.css" />
+        <link rel="stylesheet" href="./src/css/analytics.css" />
+        <link rel="stylesheet" href="./src/css/insights.css" />
+        <link rel="stylesheet" href="./src/css/overlays.css" />
+        <link rel="stylesheet" href="./src/css/responsive.css" />
         <link rel="stylesheet" href="./src/css/screens.css" />
         <link rel="stylesheet" href="./src/css/sketch.css" />
         <link rel="stylesheet" href="./src/css/tutorial.css" />

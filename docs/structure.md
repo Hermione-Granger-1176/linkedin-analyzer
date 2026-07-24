@@ -21,7 +21,14 @@ linkedin-analyzer/
 │   ├── src/
 │   │   ├── css/
 │   │   │   ├── variables.css           # Theme variables + @font-face (light/dark)
-│   │   │   ├── style.css               # Main styles
+│   │   │   ├── base.css                # Reset, typography, background canvas, theme toggle
+│   │   │   ├── layout.css              # Containers, headers, top nav, buttons
+│   │   │   ├── upload.css              # Drop zone, hub, file selection, preview, download
+│   │   │   ├── filters.css             # Filter chips, selects, active-filter row
+│   │   │   ├── analytics.css           # Stat cards, charts, heatmap
+│   │   │   ├── insights.css            # Insights and messages insights panels
+│   │   │   ├── overlays.css            # Progress overlay and chart tooltip
+│   │   │   ├── responsive.css          # Responsive breakpoints (last of the style.css split)
 │   │   │   ├── screens.css             # Screen transitions + page animation rules
 │   │   │   ├── sketch.css              # Hand-drawn effects
 │   │   │   └── tutorial.css            # Tutorial overlays, popovers, and mini tips
@@ -30,6 +37,7 @@ linkedin-analyzer/
 │   │   ├── runtime.js                  # Global error handler
 │   │   ├── sentry.js                   # Sentry error reporting integration
 │   │   ├── telemetry.js                # Web-vitals and perf telemetry
+│   │   ├── perf.js                     # Shared frame/mark/measure helpers
 │   │   ├── session.js                  # Session management
 │   │   ├── theme.js                    # Theme toggle
 │   │   ├── nav-menu.js                 # Mobile hamburger nav toggle
@@ -43,6 +51,8 @@ linkedin-analyzer/
 │   │   ├── app.js                      # SPA bootstrap wiring
 │   │   ├── upload.js                   # Home/upload logic
 │   │   ├── upload-decode.js            # Byte-decoding and storage-error helpers
+│   │   ├── upload-read.js              # File-to-text reading (streaming + FileReader)
+│   │   ├── upload-jobs.js              # Upload job id resolution helpers
 │   │   ├── upload-state.js             # File-state and hint helpers
 │   │   ├── upload-progress.js          # Sketch-style progress overlay controller
 │   │   ├── cleaner.js                  # CSV cleaning logic
@@ -65,10 +75,16 @@ linkedin-analyzer/
 │   │   ├── messages-analytics.js       # Messages analytics computations
 │   │   ├── messages-format.js          # Formatting, range, and signature helpers
 │   │   ├── messages-relationships.js   # Top/silent/fading relationship queries
+│   │   ├── messages-parse.js           # Messages worker transport + main-thread fallback
+│   │   ├── messages-hydrate.js         # Rebuilds Map/Set state from worker payloads
+│   │   ├── messages-list-dom.js        # Message list row builders
 │   │   ├── messages-insights.js        # Messages screen controller
 │   │   ├── insights-ui.js              # Insights screen controller
 │   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
 │   │   ├── tutorial-geometry.js        # Geometry and math helpers for the overlay
+│   │   ├── tutorial-shell.js           # Builds the tutorial overlay DOM shell
+│   │   ├── tutorial-targets.js         # Step target resolution and visibility checks
+│   │   ├── tutorial-arrows.js          # Hand-drawn pointer arrow variants
 │   │   ├── tutorial-pacing.js          # Engagement-aware mini-tip pacing math
 │   │   ├── tutorial-storage.js         # Tutorial storage keys and safe localStorage
 │   │   ├── tutorial.js                 # Tutorial engine

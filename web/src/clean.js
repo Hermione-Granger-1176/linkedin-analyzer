@@ -1,8 +1,7 @@
 /* Clean page logic */
 
-import { FILE_TYPES } from "./cleaner-configs.js";
 import { LinkedInCleaner } from "./cleaner.js";
-import { FILE_TYPE_LABELS } from "./constants.js";
+import { FILE_TYPE_LABELS, FILE_TYPES } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { ExcelGenerator } from "./excel.js";
 import { captureError } from "./sentry.js";

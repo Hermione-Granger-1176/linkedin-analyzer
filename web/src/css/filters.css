@@ -1,0 +1,124 @@
+/* Filter chips, selects, and the active-filter summary row */
+
+/* Filters */
+.filters-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-lg);
+    align-items: center;
+    padding: var(--space-md);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-lg);
+    color: var(--filter-bar-text);
+}
+
+.filters-bar .ghost-btn {
+    border-color: var(--filter-danger-border);
+    color: var(--filter-danger-text);
+    background: var(--filter-danger-bg);
+}
+
+.filters-bar .ghost-btn:hover {
+    border-color: var(--accent-red);
+    color: var(--text-on-accent);
+    background: var(--accent-red);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.filter-label {
+    font-size: var(--font-size-sm);
+    color: var(--filter-label-text);
+    text-transform: uppercase;
+    letter-spacing: 1.12px;
+}
+
+.filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+.filter-btn {
+    padding: var(--space-xs) var(--space-md);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--filter-btn-bg);
+    color: var(--filter-btn-text);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.filter-btn.active {
+    border-color: var(--filter-btn-active-border);
+    background: var(--filter-btn-active-bg);
+    color: var(--filter-btn-active-text);
+}
+
+.filter-btn:hover {
+    border-color: var(--accent-blue);
+}
+
+/* Compact swap for the chip row on narrow screens: hidden until the max-width
+   540px block reveals it in place of .filter-buttons. */
+.filter-select {
+    display: none;
+    padding: var(--space-xs) var(--space-md);
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-light);
+    background: var(--bg-tertiary);
+    color: var(--filter-btn-text);
+    font-family: inherit;
+    font-size: var(--font-size-base);
+}
+
+.active-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-lg);
+}
+
+/* The display:flex above outranks the [hidden] UA rule, so the "Active filters:"
+   label lingered with no chips. Re-hide it explicitly when there are none. */
+.active-filters[hidden] {
+    display: none;
+}
+
+.active-filters-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.active-filters-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-light);
+    background: var(--bg-tertiary);
+    font-size: var(--font-size-sm);
+}
+
+.filter-chip button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+}

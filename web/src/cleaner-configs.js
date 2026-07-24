@@ -6,8 +6,12 @@
  * in cleaner.js.
  */
 
-/** Supported file types, in auto-detection priority order. */
-export const FILE_TYPES = Object.freeze(["shares", "comments", "messages", "connections"]);
+import { FILE_TYPES } from "./constants.js";
+
+// Re-exported so existing `import { FILE_TYPES } from "./cleaner-configs.js"`
+// call sites keep working; the canonical definition lives in constants.js, a
+// dependency-free module that stays out of the worker bundle graph.
+export { FILE_TYPES };
 
 /**
  * Deep-freeze a cleaner configuration object.

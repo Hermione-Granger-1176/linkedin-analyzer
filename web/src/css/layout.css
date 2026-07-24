@@ -1,0 +1,234 @@
+/* Page containers, headers, top navigation, and buttons */
+
+/* Layout Containers */
+.screens-container {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.screen-inner {
+    width: min(100%, var(--container-max-width));
+    margin: 0 auto;
+    padding: var(--space-2xl) var(--space-lg) var(--space-xl);
+}
+
+.screen-inner--wide {
+    width: min(100%, var(--container-wide));
+}
+
+.screen-inner--hero {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xl);
+    padding-top: var(--space-xl);
+    padding-bottom: var(--space-xl);
+}
+
+/* Header and Titles */
+.title {
+    font-size: var(--title-size);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    justify-content: center;
+}
+
+.title-icon {
+    display: inline-flex;
+}
+
+.pencil-icon {
+    width: 42px;
+    height: 42px;
+    color: var(--accent-blue);
+}
+
+.subtitle {
+    font-size: var(--subtitle-size);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* Top Navigation */
+.top-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    margin: var(--space-lg) 0 var(--space-xl);
+    flex-wrap: wrap;
+}
+
+.top-link {
+    font-size: var(--font-size-lg);
+    padding: var(--space-xs) var(--space-md);
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.top-link:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.top-link.is-active {
+    border-color: var(--accent-blue);
+    background: var(--accent-blue-bg);
+    color: var(--accent-blue);
+}
+
+.top-link:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+/* Mobile navigation toggle. Hidden above the narrow breakpoint; the max-width
+   540px block reveals it and collapses the pill row into a stacked panel. */
+.nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: var(--space-md) auto 0;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-fast);
+}
+
+.nav-toggle:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.nav-toggle:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+.nav-toggle-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.hero-header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.screen-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.screen-header--center {
+    flex-direction: column;
+    text-align: center;
+}
+
+.screen-header .title {
+    font-size: clamp(29px, 3vw + 13px, 51px);
+    justify-content: flex-start;
+}
+
+.screen-header .title::before {
+    left: 0;
+    transform: none;
+    /* Fixed length so the underline stays consistent across pages instead of
+       tracking the per-page title/subtitle width. */
+    width: clamp(190px, 22vw, 290px);
+}
+
+.screen-header--center .title::before {
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+}
+
+.header-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.header-text .subtitle {
+    text-align: left;
+    font-size: clamp(16px, 1.4vw + 6px, 22px);
+}
+
+.screen-header--center .title,
+.screen-header--center .subtitle {
+    text-align: center;
+    justify-content: center;
+}
+
+/* Buttons */
+.primary-btn {
+    padding: var(--space-md) var(--space-2xl);
+    border: 3px solid var(--accent-blue);
+    border-radius: var(--radius-lg);
+    background: var(--accent-blue-bg);
+    color: var(--text-primary);
+    font-size: var(--font-size-lg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: var(--shadow-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.primary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.primary-btn:hover:not(:disabled) {
+    background: var(--accent-blue);
+    color: var(--text-on-accent);
+    transform: translateY(-2px);
+}
+
+.ghost-btn {
+    padding: var(--space-sm) var(--space-lg);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.ghost-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.link-btn {
+    border: none;
+    background: none;
+    color: var(--accent-blue);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+}
+
+.link-btn:hover {
+    color: var(--accent-blue);
+}

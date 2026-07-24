@@ -1,34 +1,30 @@
 /* Messages insights page logic */
 
-import { getInitials, pickAvatarColor } from "./avatar.js";
-import { LinkedInCleaner } from "./cleaner.js";
 import { DataCache } from "./data-cache.js";
 import { ExcelGenerator } from "./excel.js";
 import { LoadingOverlay } from "./loading-overlay.js";
 import { MessagesAnalytics } from "./messages-analytics.js";
 import {
     buildDataSignature,
-    computeWorkerTimeout,
     DEFAULT_TIME_RANGE,
     formatShortDate,
     getRangeStart,
     parseRangeParam,
 } from "./messages-format.js";
+import { hydrateConnectionState, hydrateMessageState } from "./messages-hydrate.js";
+import { createMessageItem, renderEmptyList, SKELETON_ITEM } from "./messages-list-dom.js";
+import { initWorker, processFiles, terminateWorker } from "./messages-parse.js";
 import {
     getFadingConversations,
     getSilentConnections,
     getTopContactsInRange,
 } from "./messages-relationships.js";
+import { markPerformance, measurePerformance, nextFrame } from "./perf.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
 import { Session } from "./session.js";
 import { Storage } from "./storage.js";
-import { reportPerformanceMeasure } from "./telemetry.js";
-import {
-    parseMessagesWorkerMessage,
-    parseStoredUploadFile,
-    toStoredFileMetadata,
-} from "./worker-contracts.js";
+import { parseStoredUploadFile, toStoredFileMetadata } from "./worker-contracts.js";
 
 export const MessagesPage = (() => {
     "use strict";
@@ -37,9 +33,6 @@ export const MessagesPage = (() => {
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: DEFAULT_TIME_RANGE,
     });
-    // Above this combined CSV size, re-parsing on the UI thread would freeze the
-    // page, so the main-thread fallback is skipped in favor of an empty state.
-    const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
     /**
      * @typedef {object} MessageContact
@@ -123,9 +116,6 @@ export const MessagesPage = (() => {
 
     let initialized = false;
     let isApplyingRouteParams = false;
-    let parseWorker = null;
-    let parseWorkerRequestId = 0;
-    let parseWorkerTimeoutId = null;
 
     /** Initialize messages page. */
     function init() {
@@ -195,214 +185,6 @@ export const MessagesPage = (() => {
         window.addEventListener("pagehide", terminateWorker);
 
         updateExportButtonStates();
-    }
-
-    /** Initialize background worker for messages/connections parsing. */
-    function initWorker() {
-        if (parseWorker || typeof Worker === "undefined") {
-            return;
-        }
-
-        try {
-            parseWorker = new Worker(new URL("./messages-worker.js", import.meta.url), {
-                type: "module",
-            });
-        } catch (error) {
-            parseWorker = null;
-            captureError(error, {
-                module: "messages-insights",
-                operation: "init-worker",
-            });
-        }
-    }
-
-    /** Terminate messages parsing worker. */
-    function terminateWorker() {
-        if (!parseWorker) {
-            return;
-        }
-        parseWorker.terminate();
-        parseWorker = null;
-        clearWorkerTimeout();
-    }
-
-    /** Clear any in-flight worker watchdog timeout. */
-    function clearWorkerTimeout() {
-        if (!parseWorkerTimeoutId) {
-            return;
-        }
-        window.clearTimeout(parseWorkerTimeoutId);
-        parseWorkerTimeoutId = null;
-    }
-
-    /**
-     * Parse messages/connections in a worker when available.
-     * Falls back to main-thread parsing if worker is unavailable or fails.
-     * @param {string} messagesCsv - Raw messages CSV text
-     * @param {string} connectionsCsv - Raw connections CSV text
-     * @returns {Promise<object>}
-     */
-    async function processFiles(messagesCsv, connectionsCsv) {
-        if (!parseWorker) {
-            initWorker();
-        }
-        const workerResult = await processFilesInWorker(messagesCsv, connectionsCsv);
-        if (workerResult) {
-            return workerResult;
-        }
-        // The worker was unavailable, errored, or timed out. Re-parsing a large
-        // export on the UI thread would freeze the page, so bail out with an
-        // explanatory empty state above the size ceiling.
-        if (messagesCsv.length + connectionsCsv.length > MAIN_THREAD_FALLBACK_MAX_CHARS) {
-            return {
-                success: false,
-                error: "These files are too large to analyze without a background worker. Reload the page, or open it in a browser that supports Web Workers.",
-            };
-        }
-        return processFilesOnMainThread(messagesCsv, connectionsCsv);
-    }
-
-    /**
-     * Parse files using a dedicated Web Worker.
-     * @param {string} messagesCsv - Raw messages CSV text
-     * @param {string} connectionsCsv - Raw connections CSV text
-     * @returns {Promise<object|null>} Parsed payload or null on worker failure
-     */
-    function processFilesInWorker(messagesCsv, connectionsCsv) {
-        if (!parseWorker) {
-            return Promise.resolve(null);
-        }
-
-        const requestId = ++parseWorkerRequestId;
-
-        return new Promise((resolve) => {
-            clearWorkerTimeout();
-            const handleMessage = (event) => {
-                const parsed = parseMessagesWorkerMessage(event.data || {});
-                if (!parsed.valid) {
-                    // invalid() always supplies an error string, so the fallback is defensive.
-                    /* v8 ignore next */
-                    captureError(new Error(parsed.error || "Invalid messages worker response."), {
-                        module: "messages-insights",
-                        operation: "worker-message-parse",
-                        requestId,
-                    });
-                    return;
-                }
-
-                const message = parsed.value;
-                if (message.type !== "processed" || message.requestId !== requestId) {
-                    return;
-                }
-                finishRequest();
-                resolve(message.payload || null);
-            };
-
-            const handleError = (event) => {
-                captureError(
-                    event && event.error
-                        ? event.error
-                        : new Error(
-                              `Messages worker ${event && event.type ? event.type : "error"} event`,
-                          ),
-                    {
-                        module: "messages-insights",
-                        operation: "worker-error-event",
-                        requestId,
-                    },
-                );
-                finishRequest();
-                terminateWorker();
-                resolve(null);
-            };
-
-            const removeWorkerListeners = () => {
-                // the worker is only nulled after listeners are removed, so this guard is defensive.
-                /* v8 ignore next 3 */
-                if (!parseWorker) {
-                    return;
-                }
-                parseWorker.removeEventListener("message", handleMessage);
-                parseWorker.removeEventListener("error", handleError);
-                parseWorker.removeEventListener("messageerror", handleError);
-            };
-
-            const finishRequest = () => {
-                removeWorkerListeners();
-                clearWorkerTimeout();
-            };
-
-            parseWorkerTimeoutId = window.setTimeout(() => {
-                captureError(new Error("Messages worker request timed out."), {
-                    module: "messages-insights",
-                    operation: "worker-timeout",
-                    requestId,
-                });
-                finishRequest();
-                terminateWorker();
-                resolve(null);
-            }, computeWorkerTimeout(messagesCsv, connectionsCsv));
-
-            try {
-                parseWorker.addEventListener("message", handleMessage);
-                parseWorker.addEventListener("error", handleError);
-                parseWorker.addEventListener("messageerror", handleError);
-                parseWorker.postMessage({
-                    type: "process",
-                    requestId,
-                    payload: {
-                        messagesCsv,
-                        connectionsCsv,
-                    },
-                });
-            } catch (error) {
-                captureError(error, {
-                    module: "messages-insights",
-                    operation: "worker-post-message",
-                    requestId,
-                });
-                finishRequest();
-                terminateWorker();
-                resolve(null);
-            }
-        });
-    }
-
-    /**
-     * Parse files directly on main thread as fallback.
-     * @param {string} messagesCsv - Raw messages CSV text
-     * @param {string} connectionsCsv - Raw connections CSV text
-     * @returns {object}
-     */
-    function processFilesOnMainThread(messagesCsv, connectionsCsv) {
-        const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
-        if (!messagesResult.success) {
-            return {
-                success: false,
-                error: messagesResult.error || "Unable to parse messages.csv.",
-            };
-        }
-
-        let connectionsData = [];
-        let connectionError = null;
-
-        if (connectionsCsv) {
-            const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");
-            if (connectionsResult.success) {
-                connectionsData = connectionsResult.cleanedData;
-            } else {
-                connectionError = connectionsResult.error || "Unable to parse Connections.csv.";
-            }
-        }
-
-        const messagesData = messagesResult.cleanedData;
-        return {
-            success: true,
-            messagesData,
-            connectionsData,
-            connectionError,
-            totalInputRows: messagesData.length,
-        };
     }
 
     /** Load messages and connections files from IndexedDB. */
@@ -650,60 +432,6 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Yield one frame so loading overlay can paint before heavy parsing.
-     * @returns {Promise<void>}
-     */
-    function nextFrame() {
-        return new Promise((resolve) => {
-            requestAnimationFrame(() => resolve());
-        });
-    }
-
-    /**
-     * Mark a performance point if available.
-     * @param {string} name - Mark name
-     */
-    function markPerformance(name) {
-        // performance.mark is always available in supported browsers, so this env guard is defensive.
-        /* v8 ignore next 3 */
-        if (typeof performance === "undefined" || typeof performance.mark !== "function") {
-            return;
-        }
-        performance.mark(name);
-    }
-
-    /**
-     * Measure a performance range if available.
-     * @param {string} name - Measure name
-     * @param {string} start - Start mark
-     * @param {string} end - End mark
-     */
-    function measurePerformance(name, start, end) {
-        // performance.measure is always available in supported browsers, so this env guard is defensive.
-        /* v8 ignore next 3 */
-        if (typeof performance === "undefined" || typeof performance.measure !== "function") {
-            return;
-        }
-        try {
-            performance.measure(name, start, end);
-
-            if (typeof performance.getEntriesByName === "function") {
-                const entries = performance.getEntriesByName(name);
-                const lastEntry = entries.length ? entries[entries.length - 1] : null;
-                if (
-                    lastEntry &&
-                    lastEntry.entryType === "measure" &&
-                    Number.isFinite(lastEntry.duration)
-                ) {
-                    reportPerformanceMeasure(name, lastEntry.duration);
-                }
-            }
-        } catch {
-            // Ignore missing marks to keep instrumentation resilient.
-        }
-    }
-
-    /**
      * Build message analytics state from cleaned rows.
      * @param {object[]} rows - Cleaned message rows
      * @returns {MessageState}
@@ -737,75 +465,6 @@ export const MessagesPage = (() => {
             "messages:build-connections:end",
         );
         return result;
-    }
-
-    /**
-     * Rehydrate message state from worker payload.
-     * @param {object|null} payload - Worker payload
-     * @returns {MessageState}
-     */
-    function hydrateMessageState(payload) {
-        // only called with a truthy processed.messageState, so the fallback is defensive.
-        /* v8 ignore next */
-        const safePayload = payload || {};
-        /** @type {Map<string, MessageContact>} */
-        const contacts = new Map();
-        const contactList = Array.isArray(safePayload.contacts) ? safePayload.contacts : [];
-        contactList.forEach((contact) => {
-            if (!contact || !contact.key) {
-                return;
-            }
-            contacts.set(contact.key, contact);
-        });
-
-        return {
-            contacts,
-            events: Array.isArray(safePayload.events) ? safePayload.events : [],
-            rowTimestamps: Array.isArray(safePayload.rowTimestamps)
-                ? safePayload.rowTimestamps
-                : [],
-            skippedRows: Number.isFinite(safePayload.skippedRows) ? safePayload.skippedRows : 0,
-            talkedNameKeys: new Set(
-                Array.isArray(safePayload.talkedNameKeys) ? safePayload.talkedNameKeys : [],
-            ),
-            talkedUrlKeys: new Set(
-                Array.isArray(safePayload.talkedUrlKeys) ? safePayload.talkedUrlKeys : [],
-            ),
-            latestTimestamp: Number.isFinite(safePayload.latestTimestamp)
-                ? safePayload.latestTimestamp
-                : 0,
-            outreach: safePayload.outreach || null,
-        };
-    }
-
-    /**
-     * Rehydrate connection state from worker payload.
-     * @param {object|null} payload - Worker payload
-     * @returns {{list: object[], byUrl: Map<string, object>, byName: Map<string, object>}}
-     */
-    function hydrateConnectionState(payload) {
-        // only called with a truthy processed.connectionState, so the fallback is defensive.
-        /* v8 ignore next */
-        const safePayload = payload || {};
-        const list = Array.isArray(safePayload.list) ? safePayload.list : [];
-        const byUrl = new Map();
-        const byName = new Map();
-
-        list.forEach((connection) => {
-            // the worker never emits null list rows, so this guard is defensive.
-            /* v8 ignore next 3 */
-            if (!connection) {
-                return;
-            }
-            if (connection.url && !byUrl.has(connection.url)) {
-                byUrl.set(connection.url, connection);
-            }
-            if (connection.nameKey && !byName.has(connection.nameKey)) {
-                byName.set(connection.nameKey, connection);
-            }
-        });
-
-        return { list, byUrl, byName };
     }
 
     /**
@@ -1067,67 +726,6 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Create one list item element for messages panels.
-     * @param {{name: string, url: string, meta: string, value: string}} item - Render payload
-     * @returns {HTMLElement}
-     */
-    function createMessageItem(item) {
-        const listItem = document.createElement("li");
-        listItem.className = "message-item";
-
-        const label = cleanText(item.name) || "Unknown";
-        const avatar = document.createElement("span");
-        avatar.className = `message-item-avatar avatar-${pickAvatarColor(label)}`;
-        avatar.textContent = getInitials(label);
-        avatar.setAttribute("aria-hidden", "true");
-        listItem.appendChild(avatar);
-
-        const main = document.createElement("div");
-        main.className = "message-item-main";
-
-        const title = document.createElement("p");
-        title.className = "message-item-title";
-        appendContactName(title, label, item.url);
-
-        const meta = document.createElement("p");
-        meta.className = "message-item-meta";
-        meta.textContent = item.meta;
-
-        const value = document.createElement("span");
-        value.className = "message-item-value";
-        value.textContent = item.value;
-
-        main.appendChild(title);
-        main.appendChild(meta);
-        listItem.appendChild(main);
-        listItem.appendChild(value);
-        return listItem;
-    }
-
-    /**
-     * Append contact name as link when URL is available.
-     * @param {HTMLElement} container - Name container
-     * @param {string} label - Display name (already cleaned, never empty)
-     * @param {string} url - Contact profile URL
-     */
-    function appendContactName(container, label, url) {
-        const cleanUrl = cleanText(url);
-        // Defense in depth: callers currently pass normalizeUrl-validated values, but guard the
-        // scheme here so a future non-normalized caller can't introduce a javascript: URL.
-        if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
-            container.textContent = label;
-            return;
-        }
-
-        const link = document.createElement("a");
-        link.href = cleanUrl;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.textContent = label;
-        container.appendChild(link);
-    }
-
-    /**
      * Update summary stats.
      * @param {{totalMessages: number, totalRows: number, totalPeople: number}} topSummary - Top summary
      * @param {number} totalConnections - Total number of connections
@@ -1299,18 +897,6 @@ export const MessagesPage = (() => {
             return state.connectionLoadError;
         }
         return null;
-    }
-
-    /**
-     * Render list empty message.
-     * @param {HTMLElement} listElement - Target list element
-     * @param {string} message - Empty message text
-     */
-    function renderEmptyList(listElement, message) {
-        const item = document.createElement("li");
-        item.className = "message-empty";
-        item.textContent = message;
-        listElement.replaceChildren(item);
     }
 
     /** Export top contacts panel data. */
@@ -1503,25 +1089,14 @@ export const MessagesPage = (() => {
             elements.messagesTip.hidden = true;
         }
 
-        const skeletonItem = `
-            <li class="message-item skeleton-row">
-                <span class="skeleton-block skeleton-avatar"></span>
-                <div class="message-item-main">
-                    <div class="skeleton-block skeleton-title"></div>
-                    <div class="skeleton-block skeleton-meta"></div>
-                </div>
-                <div class="skeleton-block skeleton-value"></div>
-            </li>
-        `;
-
         if (elements.topContactsList) {
-            elements.topContactsList.innerHTML = skeletonItem.repeat(3);
+            elements.topContactsList.innerHTML = SKELETON_ITEM.repeat(3);
         }
         if (elements.silentConnectionsList) {
-            elements.silentConnectionsList.innerHTML = skeletonItem.repeat(3);
+            elements.silentConnectionsList.innerHTML = SKELETON_ITEM.repeat(3);
         }
         if (elements.fadingConversationsList) {
-            elements.fadingConversationsList.innerHTML = skeletonItem.repeat(3);
+            elements.fadingConversationsList.innerHTML = SKELETON_ITEM.repeat(3);
         }
     }
 

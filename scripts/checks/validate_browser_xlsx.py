@@ -84,10 +84,18 @@ def check_structure(
     elif sheet_names[0] != expected["sheetName"]:
         failures.append("SHEET    FAIL name-mismatch")
 
-    if header != list(expected["headers"]):
+    expected_headers = list(expected["headers"])
+    if len(header) != len(expected_headers):
         failures.append(
-            f"HEADER   FAIL expected-cols={len(expected['headers'])} actual-cols={len(header)}"
+            f"HEADER   FAIL check=length expected-cols={len(expected_headers)} actual-cols={len(header)}"
         )
+    elif header != expected_headers:
+        first_mismatch = next(
+            index
+            for index, (actual, want) in enumerate(zip(header, expected_headers), start=1)
+            if actual != want
+        )
+        failures.append(f"HEADER   FAIL check=values first-mismatch-column={first_mismatch}")
 
     if len(data_rows) != expected["dataRowCount"]:
         failures.append(
@@ -134,11 +142,16 @@ def check_safety(data_rows: list[list[str]]) -> list[str]:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse the workbook and expectation paths, with environment fallbacks."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workbook", type=Path, default=os.environ.get("BROWSER_XLSX_OUT"))
-    parser.add_argument("--expected", type=Path, default=os.environ.get("BROWSER_XLSX_EXPECTED"))
+    # argparse applies type= only to values parsed off the command line, not to
+    # environment-sourced defaults, so accept raw strings and coerce to Path
+    # once below for both the CLI and env-var paths.
+    parser.add_argument("--workbook", default=os.environ.get("BROWSER_XLSX_OUT"))
+    parser.add_argument("--expected", default=os.environ.get("BROWSER_XLSX_EXPECTED"))
     args = parser.parse_args(argv)
     if args.workbook is None or args.expected is None:
         parser.error("both --workbook and --expected are required")
+    args.workbook = Path(args.workbook)
+    args.expected = Path(args.expected)
     return args
 
 

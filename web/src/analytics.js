@@ -777,6 +777,11 @@ export const AnalyticsEngine = (() => {
                 continue;
             }
             const date = parseDateKey(dateKey);
+            // dayIndex keys always come from formatDateKey, so a parse miss is defensive.
+            /* v8 ignore next 3 */
+            if (date === null) {
+                continue;
+            }
             const weekKey = formatDateKey(startOfWeek(date));
             const index = weekIndex.get(weekKey);
             // Every in-range date maps to a week bucket built above, so a miss is defensive.
@@ -891,16 +896,17 @@ export const AnalyticsEngine = (() => {
             return { current: 0, longest: 0 };
         }
         const days = Array.from(daySet).sort();
-        const parseDay = (key) => {
-            const [year, month, day] = key.split("-").map(Number);
-            return new Date(year, month - 1, day);
-        };
         let longest = 1;
         let streak = 1;
 
         for (let i = 1; i < days.length; i++) {
-            const prev = parseDay(days[i - 1]);
-            const curr = parseDay(days[i]);
+            const prev = parseDateKey(days[i - 1]);
+            const curr = parseDateKey(days[i]);
+            // Active day keys always come from formatDateKey, so a parse miss is defensive.
+            /* v8 ignore next 3 */
+            if (prev === null || curr === null) {
+                continue;
+            }
             // Round the day delta: across a DST transition two consecutive local
             // calendar days are 23h or 25h apart, so an exact `=== 1` on the raw
             // ms/day ratio would miss the boundary and reset the streak.
@@ -917,8 +923,15 @@ export const AnalyticsEngine = (() => {
         const latestDay = days[days.length - 1];
         let current = 1;
 
+        const latest = parseDateKey(latestDay);
+        // Active day keys always come from formatDateKey, so a parse miss is defensive.
+        /* v8 ignore next 3 */
+        if (latest === null) {
+            return { current, longest };
+        }
+
         for (
-            let prev = addDays(parseDay(latestDay), -1);
+            let prev = addDays(latest, -1);
             daySet.has(formatDateKey(prev));
             prev = addDays(prev, -1)
         ) {

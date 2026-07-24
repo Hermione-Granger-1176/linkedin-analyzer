@@ -206,11 +206,11 @@ export function endOfMonth(date) {
 /**
  * Parse a "YYYY-MM-DD" date key string into a Date object.
  * @param {string} key - Date key in "YYYY-MM-DD" format.
- * @returns {Date} Parsed date.
+ * @returns {Date|null} Parsed date, or null if the key is not a valid date.
  */
 export function parseDateKey(key) {
     const [year, month, day] = key.split("-").map(Number);
-    return new Date(year, month - 1, day);
+    return createStrictLocalDate(year, month, day);
 }
 
 /**

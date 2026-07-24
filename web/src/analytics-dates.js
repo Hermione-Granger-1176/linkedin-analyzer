@@ -57,7 +57,7 @@ function createStrictLocalDate(year, month, day, hour = 0, minute = 0, second = 
 
 /**
  * Parse a strict local date in YYYY-MM-DD format.
- * @param {string} value - Local date string
+ * @param {unknown} value - Expected local date string; other values return null.
  * @returns {Date|null} Local-midnight Date, or null if invalid
  */
 export function parseLocalDate(value) {
@@ -204,8 +204,8 @@ export function endOfMonth(date) {
 }
 
 /**
- * Parse a strict "YYYY-MM-DD" date key string into a Date object.
- * @param {string} key - Date key in "YYYY-MM-DD" format.
+ * Parse a strict "YYYY-MM-DD" date key into a Date object.
+ * @param {unknown} key - Expected date key in "YYYY-MM-DD" format; other values return null.
  * @returns {Date|null} Parsed date, or null if the key is not a valid date.
  */
 export function parseDateKey(key) {

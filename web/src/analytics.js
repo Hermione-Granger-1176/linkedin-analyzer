@@ -902,9 +902,11 @@ export const AnalyticsEngine = (() => {
         for (let i = 1; i < days.length; i++) {
             const prev = parseDateKey(days[i - 1]);
             const curr = parseDateKey(days[i]);
-            // Active day keys always come from formatDateKey, so a parse miss is defensive.
-            /* v8 ignore next 3 */
+            // Active day keys always come from formatDateKey, so a parse miss is
+            // defensive; break the streak rather than bridging across a bad key.
+            /* v8 ignore next 4 */
             if (prev === null || curr === null) {
+                streak = 1;
                 continue;
             }
             // Round the day delta: across a DST transition two consecutive local
@@ -924,10 +926,11 @@ export const AnalyticsEngine = (() => {
         let current = 1;
 
         const latest = parseDateKey(latestDay);
-        // Active day keys always come from formatDateKey, so a parse miss is defensive.
+        // Active day keys always come from formatDateKey, so a parse miss is
+        // defensive; without a parseable latest day the current streak is unknown.
         /* v8 ignore next 3 */
         if (latest === null) {
-            return { current, longest };
+            return { current: 0, longest };
         }
 
         for (

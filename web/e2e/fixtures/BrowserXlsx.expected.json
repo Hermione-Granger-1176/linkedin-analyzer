@@ -1,0 +1,14 @@
+{
+  "sheetName": "Comments",
+  "headers": ["Date", "Link", "Message"],
+  "dataRowCount": 6,
+  "cells": [
+    { "row": 1, "column": 2, "equals": "https://linkedin.example/activity/1001" },
+    { "row": 1, "column": 3, "equals": "Great perspective on product strategy." },
+    { "row": 2, "column": 3, "equals": "'=SUM(1+1)" },
+    { "row": 3, "column": 3, "equals": "'+1+2" },
+    { "row": 4, "column": 3, "equals": "'-3-4" },
+    { "row": 5, "column": 3, "equals": "'@handle" },
+    { "row": 6, "column": 3, "equals": "AlphaBeta" }
+  ]
+}

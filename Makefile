@@ -140,7 +140,7 @@ dead-code-js: ## Detect unused JS code, exports, and deps (knip)
 
 # ─── Test @test ─────────────────────────────────────────────────────────────────────
 
-.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-headed test-e2e-ui
+.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-headed test-e2e-ui test-browser-xlsx
 
 test: test-py test-js ## Run non-browser Python and JS tests
 
@@ -161,6 +161,14 @@ test-e2e-headed: ## Run Playwright browser tests in headed mode
 
 test-e2e-ui: ## Run Playwright UI mode
 	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e:ui
+
+test-browser-xlsx: ## Download the real browser xlsx (chromium) and validate it with openpyxl (make test-browser-xlsx local_libs=1)
+	@set -eu; \
+	out_dir=$$(mktemp -d "$${TMPDIR:-/tmp}/linkedin-analyzer-browser-xlsx.XXXXXX"); \
+	chmod 700 "$$out_dir"; \
+	trap 'rm -rf -- "$$out_dir"' EXIT; \
+	BROWSER_XLSX_OUT="$$out_dir/Comments.xlsx" $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- --project=chromium web/e2e/browser-xlsx.e2e.spec.js; \
+	$(VENV_PYTHON) scripts/checks/validate_browser_xlsx.py --workbook "$$out_dir/Comments.xlsx" --expected web/e2e/fixtures/BrowserXlsx.expected.json
 
 # ─── Web @web ──────────────────────────────────────────────────────────────────────
 

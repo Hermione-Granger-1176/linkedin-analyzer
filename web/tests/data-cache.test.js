@@ -30,19 +30,6 @@ describe("DataCache", () => {
         expect(DataCache.get("definitely-not-set-xyz-123")).toBeUndefined();
     });
 
-    it("has returns false for missing key and true after set", () => {
-        expect(DataCache.has("new-key-abc")).toBe(false);
-        DataCache.set("new-key-abc", 42);
-        expect(DataCache.has("new-key-abc")).toBe(true);
-    });
-
-    it("delete removes a single key", () => {
-        DataCache.set("to-delete", "value");
-        expect(DataCache.has("to-delete")).toBe(true);
-        DataCache.delete("to-delete");
-        expect(DataCache.has("to-delete")).toBe(false);
-    });
-
     it("clear removes all cached values", () => {
         DataCache.set("x", 1);
         DataCache.set("y", 2);

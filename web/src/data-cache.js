@@ -29,23 +29,6 @@ export const DataCache = (() => {
     }
 
     /**
-     * Check cache key existence.
-     * @param {string} key - Cache key
-     * @returns {boolean}
-     */
-    function has(key) {
-        return values.has(key);
-    }
-
-    /**
-     * Remove one key from cache.
-     * @param {string} key - Cache key
-     */
-    function del(key) {
-        values.delete(key);
-    }
-
-    /**
      * Remove all keys that match a prefix.
      * @param {string} prefix - Key prefix
      */
@@ -103,8 +86,6 @@ export const DataCache = (() => {
     return {
         get,
         set,
-        has,
-        delete: del,
         invalidate,
         clear,
         subscribe,

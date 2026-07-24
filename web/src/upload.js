@@ -1,6 +1,7 @@
 /* Upload page logic */
 
-import { MAX_CSV_CHARS, SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
+import { FILE_TYPES } from "./cleaner-configs.js";
+import { MAX_CSV_CHARS } from "./constants.js";
 import { DataCache } from "./data-cache.js";
 import { AppRouter } from "./router.js";
 import { captureError } from "./sentry.js";
@@ -23,8 +24,7 @@ import {
 export const UploadPage = (() => {
     "use strict";
 
-    const TRACKED_TYPES = Object.freeze(["shares", "comments", "messages", "connections"]);
-    const TRACKED_TYPES_SET = new Set(TRACKED_TYPES);
+    const TRACKED_TYPES_SET = new Set(FILE_TYPES);
 
     const elements = {
         dropZone: document.getElementById("multiDropZone"),
@@ -296,7 +296,7 @@ export const UploadPage = (() => {
         }
 
         restorePromise = (async () => {
-            await waitForSessionCleanup();
+            await Session.waitForCleanup();
             updateOfflineBanner();
             const files = await Storage.getAllFiles();
             const fileMap = getFileMap(files);
@@ -332,26 +332,6 @@ export const UploadPage = (() => {
         }
 
         return;
-    }
-
-    /**
-     * Wait for non-blocking session cleanup to finish when present.
-     * @returns {Promise<void>}
-     */
-    async function waitForSessionCleanup() {
-        const cleanupPromise = window[SESSION_CLEANUP_PROMISE_KEY];
-        if (!cleanupPromise || typeof cleanupPromise.then !== "function") {
-            return;
-        }
-        try {
-            await cleanupPromise;
-        } catch (error) {
-            captureError(error, {
-                module: "upload",
-                operation: "wait-session-cleanup",
-            });
-            return;
-        }
     }
 
     /** Update offline banner visibility based on navigator state. */
@@ -1062,7 +1042,7 @@ export const UploadPage = (() => {
             updateFileStatus(/** @type {HTMLElement|null} */ (item), label, fileMap[type]);
         });
 
-        const hasAny = TRACKED_TYPES.some((type) => Boolean(fileMap[type]));
+        const hasAny = FILE_TYPES.some((type) => Boolean(fileMap[type]));
         const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
         if (elements.openAnalyticsBtn) {
             elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;

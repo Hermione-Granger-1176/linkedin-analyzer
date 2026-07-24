@@ -1,5 +1,6 @@
 /* Clean page logic */
 
+import { FILE_TYPES } from "./cleaner-configs.js";
 import { LinkedInCleaner } from "./cleaner.js";
 import { FILE_TYPE_LABELS } from "./constants.js";
 import { DataCache } from "./data-cache.js";
@@ -14,7 +15,6 @@ export const CleanPage = (() => {
 
     const PREVIEW_ROW_LIMIT = 5;
     const PREVIEW_CELL_LIMIT = 50;
-    const FILE_TYPE_ORDER = Object.freeze(["shares", "comments", "messages", "connections"]);
     const CLEAN_HINT_BY_CATEGORY = Object.freeze({
         all: () => "All files loaded. Choose one to clean and export.",
         many: (loadedCount) => `${loadedCount} files loaded. Choose one to clean.`,
@@ -135,7 +135,7 @@ export const CleanPage = (() => {
             DataCache.set("storage:files", files);
         }
 
-        FILE_TYPE_ORDER.forEach((type) => {
+        FILE_TYPES.forEach((type) => {
             storedFiles[type] = files.find((file) => file.type === type) || null;
         });
     }
@@ -146,7 +146,7 @@ export const CleanPage = (() => {
      * @returns {string}
      */
     function getCleanerHint(loadedCount) {
-        if (loadedCount === FILE_TYPE_ORDER.length) {
+        if (loadedCount === FILE_TYPES.length) {
             return CLEAN_HINT_BY_CATEGORY.all();
         }
         if (loadedCount > 1) {
@@ -162,7 +162,7 @@ export const CleanPage = (() => {
      * Update the clean page UI based on available files.
      */
     function updateView() {
-        const loadedTypes = FILE_TYPE_ORDER.filter((type) => Boolean(storedFiles[type]));
+        const loadedTypes = FILE_TYPES.filter((type) => Boolean(storedFiles[type]));
         const loadedCount = loadedTypes.length;
         const hasFiles = loadedCount > 0;
 
@@ -188,7 +188,7 @@ export const CleanPage = (() => {
         const fallbackInput = document.querySelector(
             `input[name="cleanFileType"][value="${fallbackType}"]`,
         );
-        // fallbackType is always a loaded FILE_TYPE_ORDER value, and every such
+        // fallbackType is always a loaded FILE_TYPES value, and every such
         // value has a radio in the page shell, so the miss is defensive only.
         /* v8 ignore next */
         if (fallbackInput) {
@@ -211,7 +211,7 @@ export const CleanPage = (() => {
         if (selected && storedFiles[selected.value]) {
             return selected.value;
         }
-        const fallback = FILE_TYPE_ORDER.find((type) => Boolean(storedFiles[type]));
+        const fallback = FILE_TYPES.find((type) => Boolean(storedFiles[type]));
         return fallback || "shares";
     }
 

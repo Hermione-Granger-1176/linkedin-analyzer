@@ -2445,13 +2445,13 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain("Unable to restore");
     });
 
-    // --- waitForSessionCleanup catch (line 205) ------------------------------
+    // --- Session.waitForCleanup rejection handling ---------------------------
 
     it("does not throw when session cleanup promise rejects", async () => {
         const rejectingPromise = Promise.reject(new Error("cleanup fail"));
         // Attach a catch handler immediately so it doesn't trigger an unhandled rejection
         rejectingPromise.catch(() => {});
-        window.__linkedin_analyzer_cleanup__ = rejectingPromise;
+        window.__linkedinAnalyzerSessionCleanupPromise = rejectingPromise;
 
         Storage.getAllFiles.mockResolvedValue([]);
         Storage.getAnalytics.mockResolvedValue(null);
@@ -2460,7 +2460,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         // No uncaught exception = pass
 
-        delete window.__linkedin_analyzer_cleanup__;
+        delete window.__linkedinAnalyzerSessionCleanupPromise;
     });
 
     // --- warnIfStorageLow with null estimate (line 329) ----------------------
@@ -3442,9 +3442,9 @@ describe("UploadPage", () => {
         expect(AppRouter.navigate).not.toHaveBeenCalled();
     });
 
-    // --- line 205: waitForSessionCleanup catch --------------------------------
+    // --- Session.waitForCleanup rejection handling ---------------------------
     // Set a rejecting session cleanup promise before the module is imported so
-    // waitForSessionCleanup() swallows it and returns (line 205).
+    // Session.waitForCleanup() swallows it and restoreState continues.
 
     it("does not throw when session cleanup promise rejects during restoreState", async () => {
         setupUploadDom();

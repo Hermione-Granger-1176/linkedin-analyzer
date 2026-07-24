@@ -1,8 +1,9 @@
 /* Runtime contracts for worker request/response payloads */
 
+import { FILE_TYPES as FILE_TYPE_LIST } from "./cleaner-configs.js";
 import { MAX_CSV_CHARS } from "./constants.js";
 
-const FILE_TYPES = new Set(["shares", "comments", "messages", "connections"]);
+const FILE_TYPES = new Set(FILE_TYPE_LIST);
 
 const LIMITS = Object.freeze({
     maxCsvChars: MAX_CSV_CHARS,

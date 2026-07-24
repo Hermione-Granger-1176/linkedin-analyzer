@@ -216,6 +216,23 @@ describe("parseDateKey", () => {
     it("parses a YYYY-MM-DD key into a local Date", () => {
         expect(parseDateKey("2024-07-04")).toEqual(new Date(2024, 6, 4));
     });
+
+    it("returns null for an impossible day-of-month instead of rolling over", () => {
+        expect(parseDateKey("2024-02-30")).toBeNull();
+    });
+
+    it("returns null for an out-of-range month", () => {
+        expect(parseDateKey("2024-13-01")).toBeNull();
+    });
+
+    it("returns null for a key with trailing segments", () => {
+        expect(parseDateKey("2024-07-04-extra")).toBeNull();
+    });
+
+    it("returns null for non-string input", () => {
+        expect(parseDateKey(null)).toBeNull();
+        expect(parseDateKey(20240704)).toBeNull();
+    });
 });
 
 describe("formatDateKey", () => {

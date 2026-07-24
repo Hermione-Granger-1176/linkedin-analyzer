@@ -48,9 +48,11 @@ def run_child(type_name: str, input_path: str, output_path: str) -> int:
     """Run one cleaner in this process and print its peak RSS on one line."""
     _, cleaner = TYPES[type_name]
     result = cleaner(input_path=Path(input_path), output_path=Path(output_path))
-    # ru_maxrss is KiB on Linux; read it after the cleaner so it reflects the
-    # peak of the whole cleaning run in this isolated process.
-    peak_rss_kib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # Read peak RSS after the cleaner so it reflects the whole run in this
+    # isolated process. ru_maxrss is KiB on Linux but bytes on macOS; normalize
+    # to KiB so results stay comparable across developer machines.
+    raw_maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    peak_rss_kib = raw_maxrss // 1024 if sys.platform == "darwin" else raw_maxrss
     status = "OK" if result.success else "ERROR"
     print(f"rows={result.rows_processed} peak_rss_kib={peak_rss_kib} status={status}")
     return 0 if result.success else 1

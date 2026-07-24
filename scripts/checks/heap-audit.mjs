@@ -120,34 +120,48 @@ function startPreview() {
 }
 
 // SIGTERM the preview process group and wait for it to exit, escalating to
-// SIGKILL if it lingers. Always resolves so teardown never blocks shutdown.
+// SIGKILL if it lingers. A hard deadline guarantees the promise always resolves
+// so teardown can never block shutdown, even if the process never reports exit
+// or process-group signals are unsupported on this platform.
 function stopPreview(preview) {
     if (!preview || preview.pid === undefined || preview.exitCode !== null) {
         return Promise.resolve();
     }
     return new Promise((resolve) => {
+        let settled = false;
         let killTimer = null;
+        let hardTimer = null;
         const finish = () => {
+            if (settled) {
+                return;
+            }
+            settled = true;
             if (killTimer) {
                 clearTimeout(killTimer);
             }
+            if (hardTimer) {
+                clearTimeout(hardTimer);
+            }
             resolve();
         };
-        preview.once("exit", finish);
-        try {
-            process.kill(-preview.pid, "SIGTERM");
-        } catch {
-            // The process group is already gone.
-            finish();
-            return;
-        }
-        killTimer = setTimeout(() => {
+        // Prefer signalling the whole group; fall back to the single pid when
+        // negative-pid group signals are unsupported or the group is gone.
+        const signal = (name) => {
             try {
-                process.kill(-preview.pid, "SIGKILL");
+                process.kill(-preview.pid, name);
             } catch {
-                // The process group exited between SIGTERM and the deadline.
+                try {
+                    process.kill(preview.pid, name);
+                } catch {
+                    finish();
+                }
             }
-        }, KILL_TIMEOUT_MS);
+        };
+        preview.once("exit", finish);
+        // Resolve no matter what after a bounded wait past the SIGKILL attempt.
+        hardTimer = setTimeout(finish, 2 * KILL_TIMEOUT_MS);
+        signal("SIGTERM");
+        killTimer = setTimeout(() => signal("SIGKILL"), KILL_TIMEOUT_MS);
     });
 }
 

@@ -2451,7 +2451,7 @@ describe("UploadPage", () => {
         const rejectingPromise = Promise.reject(new Error("cleanup fail"));
         // Attach a catch handler immediately so it doesn't trigger an unhandled rejection
         rejectingPromise.catch(() => {});
-        window.__linkedin_analyzer_cleanup__ = rejectingPromise;
+        window.__linkedinAnalyzerSessionCleanupPromise = rejectingPromise;
 
         Storage.getAllFiles.mockResolvedValue([]);
         Storage.getAnalytics.mockResolvedValue(null);
@@ -2460,7 +2460,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         // No uncaught exception = pass
 
-        delete window.__linkedin_analyzer_cleanup__;
+        delete window.__linkedinAnalyzerSessionCleanupPromise;
     });
 
     // --- warnIfStorageLow with null estimate (line 329) ----------------------

@@ -273,11 +273,14 @@ async function measureHeap(browser, inputDir) {
         const afterUpload = await readHeap(client);
         peakUsed = Math.max(peakUsed, afterUpload.used);
 
-        // Exercise each analytics surface so the heap reflects a full session,
-        // waiting for each route's real completion signal before sampling.
+        // Exercise each analytics surface so the heap reflects a full session.
+        // Navigate within the SPA by changing the hash rather than reloading the
+        // page, so the upload and every screen accumulate in one continuous
+        // session instead of resetting per route.
         for (const [route, waitReady] of Object.entries(ROUTE_READY)) {
-            await page.goto(`${BASE_URL}/#home`);
-            await page.locator(`#screen-home a.hub-card[data-route="${route}"]`).click();
+            await page.evaluate((target) => {
+                window.location.hash = target;
+            }, `#${route}`);
             await page.waitForFunction((target) => window.location.hash.includes(target), route, {
                 timeout: STATUS_TIMEOUT_MS,
             });

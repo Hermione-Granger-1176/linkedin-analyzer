@@ -47,6 +47,12 @@ const FILES = {
     connections: "Connections.csv",
 };
 const STATUS_IDS = ["sharesStatus", "commentsStatus", "messagesStatus", "connectionsStatus"];
+// Confirms a readiness response is our own app, not an unrelated listener that
+// held the port before strictPort forced the preview process to exit.
+const APP_TITLE_MARKER = "<title>LinkedIn Analyzer</title>";
+// Persisted consent plus a build-time DSN is what starts Sentry; clearing this
+// key before boot keeps the audit reliably no-telemetry.
+const TELEMETRY_CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
 
 // Per-route readiness signals, copied from web/e2e/app.e2e.spec.js, so each
 // surface's real IndexedDB reads and Web Worker processing complete before the
@@ -193,7 +199,8 @@ async function waitForServer(url, preview) {
                     redirect: "manual",
                     signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
                 });
-                if (childExit === null && response.status >= 200 && response.status < 500) {
+                const body = response.ok ? await response.text() : "";
+                if (childExit === null && body.includes(APP_TITLE_MARKER)) {
                     return;
                 }
             } catch {
@@ -218,10 +225,16 @@ async function readHeap(client) {
 async function measureHeap(browser, inputDir) {
     // Leave traces, screenshots, video, and downloads off; never enable Sentry.
     const context = await browser.newContext({ acceptDownloads: false });
-    // Disable the first-run tutorial overlay exactly as the e2e specs do.
-    await context.addInitScript(() => {
+    // Disable the first-run tutorial overlay exactly as the e2e specs do, and
+    // clear any stored telemetry consent so the audit never starts Sentry.
+    await context.addInitScript((consentKey) => {
         window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
-    });
+        try {
+            localStorage.removeItem(consentKey);
+        } catch {
+            // localStorage may be unavailable before first navigation.
+        }
+    }, TELEMETRY_CONSENT_KEY);
     const page = await context.newPage();
     const client = await context.newCDPSession(page);
     await client.send("Performance.enable");

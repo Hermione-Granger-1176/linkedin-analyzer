@@ -83,7 +83,9 @@ def measure(type_name: str, input_path: Path, output_dir: Path) -> tuple[int, in
 
 def run_audit(input_dir: Path, strict: bool) -> int:
     """Measure every cleaner's peak RSS and return nonzero for errors."""
-    missing = [name for name, (filename, _) in TYPES.items() if not (input_dir / filename).is_file()]
+    missing = [
+        name for name, (filename, _) in TYPES.items() if not (input_dir / filename).is_file()
+    ]
     if missing:
         for name in missing:
             print(f"{name:<12} MISSING    input-file-absent=1")
@@ -123,7 +125,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT_DIR)
     parser.add_argument("--strict", action="store_true")
     # Hidden self-dispatch: run one cleaner in isolation and report its peak RSS.
-    parser.add_argument("--child", nargs=3, metavar=("TYPE", "INPUT", "OUTPUT"))
+    # SUPPRESS keeps this internal interface out of --help.
+    parser.add_argument(
+        "--child",
+        nargs=3,
+        metavar=("TYPE", "INPUT", "OUTPUT"),
+        help=argparse.SUPPRESS,
+    )
     return parser.parse_args(argv)
 
 

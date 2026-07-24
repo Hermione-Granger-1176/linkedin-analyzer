@@ -110,11 +110,12 @@ function run(command, args) {
     return new Promise((resolve, reject) => {
         const child = spawn(command, args, { cwd: REPO, stdio: "inherit" });
         child.on("error", reject);
-        child.on("exit", (code) => {
+        child.on("exit", (code, signal) => {
             if (code === 0) {
                 resolve();
             } else {
-                reject(new Error(`${command} exited with ${code}`));
+                const reason = signal ? `signal ${signal}` : `code ${code}`;
+                reject(new Error(`${command} exited with ${reason}`));
             }
         });
     });
@@ -347,4 +348,13 @@ async function main() {
     }
 }
 
-process.exitCode = await main();
+try {
+    process.exitCode = await main();
+} catch (error) {
+    // main() already tears the browser and preview down in its finally blocks;
+    // this only guarantees a structured RESULT line on unexpected failures
+    // (build, browser launch, server readiness), matching the sibling scripts.
+    console.error(error);
+    console.error("RESULT   FAILED reason=unexpected");
+    process.exitCode = 1;
+}

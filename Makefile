@@ -211,7 +211,7 @@ web-e2e: test-e2e ## Alias for test-e2e
 # cross-runtime row dumps use a private temporary directory and are always removed.
 # See docs/development.md (Local checks and benchmarks).
 
-.PHONY: cleaner-diff xrt-diff bench bench-decode explore
+.PHONY: cleaner-diff xrt-diff bench bench-decode audit-memory-python audit-memory-browser explore
 
 cleaner-diff: ## Compare web cleaner behavior across refs (make cleaner-diff [args="oldRef newRef"] [strict=1] [input_dir=path])
 	$(NODE) scripts/checks/cleaner-diff.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") $(args)
@@ -229,6 +229,12 @@ bench: ## Benchmark read, clean, and analytics on your export (make bench [runs=
 
 bench-decode: ## Benchmark and verify the upload decode layer (make bench-decode [runs=N])
 	$(NODE) scripts/checks/perf-bench.mjs $(runs)
+
+audit-memory-python: ## Measure per-cleaner peak RSS on your export (make audit-memory-python [strict=1] [input_dir=path])
+	$(VENV_PYTHON) scripts/checks/audit_memory_python.py $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
+
+audit-memory-browser: ## Measure browser JS heap on your export in Chromium (make audit-memory-browser local_libs=1 [strict=1] [input_dir=path])
+	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/heap-audit.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
 
 explore: ## Print ad-hoc statistics over your export
 	$(VENV_PYTHON) scripts/checks/li_explore.py

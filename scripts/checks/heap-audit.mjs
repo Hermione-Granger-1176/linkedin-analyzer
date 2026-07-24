@@ -28,12 +28,17 @@ import { fileURLToPath } from "node:url";
 import { chromium, expect } from "@playwright/test";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
+// Match the Makefile's overridable NPM launcher instead of hard-coding "npm".
+const NPM = process.env.NPM || "npm";
 // A distinct port from the e2e webServer (4173) so the two never collide.
 const PORT = 4319;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const SERVER_TIMEOUT_MS = 120000;
 const STATUS_TIMEOUT_MS = 20000;
 const KILL_TIMEOUT_MS = 5000;
+// Per-attempt fetch cap so a socket that accepts but never answers cannot hang
+// past the overall readiness deadline.
+const PROBE_TIMEOUT_MS = 2000;
 
 const FILES = {
     shares: "Shares.csv",
@@ -113,7 +118,7 @@ function run(command, args) {
 // (npm plus vite) on teardown.
 function startPreview() {
     return spawn(
-        "npm",
+        NPM,
         ["run", "preview", "--", "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"],
         { cwd: REPO, stdio: "ignore", detached: true },
     );
@@ -184,7 +189,10 @@ async function waitForServer(url, preview) {
                 throw new Error(`preview server exited before becoming ready (${childExit})`);
             }
             try {
-                const response = await fetch(url, { redirect: "manual" });
+                const response = await fetch(url, {
+                    redirect: "manual",
+                    signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+                });
                 if (childExit === null && response.status >= 200 && response.status < 500) {
                     return;
                 }
@@ -299,7 +307,7 @@ async function main() {
         return 0;
     }
 
-    await run("npm", ["run", "build"]);
+    await run(NPM, ["run", "build"]);
     const preview = startPreview();
     try {
         await waitForServer(BASE_URL, preview);

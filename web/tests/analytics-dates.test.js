@@ -224,6 +224,15 @@ describe("parseDateKey", () => {
     it("returns null for an out-of-range month", () => {
         expect(parseDateKey("2024-13-01")).toBeNull();
     });
+
+    it("returns null for a key with trailing segments", () => {
+        expect(parseDateKey("2024-07-04-extra")).toBeNull();
+    });
+
+    it("returns null for non-string input", () => {
+        expect(parseDateKey(null)).toBeNull();
+        expect(parseDateKey(20240704)).toBeNull();
+    });
 });
 
 describe("formatDateKey", () => {

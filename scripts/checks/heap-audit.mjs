@@ -188,6 +188,14 @@ async function waitForServer(url, preview) {
     };
     preview.on("exit", onExit);
     preview.on("error", onError);
+    // The child may have already exited (for example strictPort found the port
+    // taken) before these listeners attached; seed from its recorded state so
+    // fail-fast stays reliable.
+    if (preview.exitCode !== null) {
+        childExit = `code ${preview.exitCode}`;
+    } else if (preview.signalCode !== null) {
+        childExit = `signal ${preview.signalCode}`;
+    }
     try {
         const deadline = Date.now() + SERVER_TIMEOUT_MS;
         while (Date.now() < deadline) {

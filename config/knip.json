@@ -17,6 +17,9 @@
   "prettier": {
     "config": ["config/prettierrc.json"]
   },
+  "stylelint": {
+    "config": ["config/stylelint.config.mjs"]
+  },
   "ignoreDependencies": ["workbox-.+"],
   "ignoreBinaries": ["make"]
 }

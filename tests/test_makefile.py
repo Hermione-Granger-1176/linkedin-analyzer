@@ -65,6 +65,21 @@ def test_node_audit_uses_policy_runner_and_optional_severity_filter() -> None:
     assert '$(if $(audit_level),--audit-level "$(audit_level)")' in recipe
 
 
+def test_python_audit_uses_policy_runner_and_private_temporary_export() -> None:
+    """Keep the frozen Python audit export private and policy-driven."""
+    recipe = _target_recipe("audit-python")
+
+    assert "set -eu" in recipe
+    assert 'requirements_file="$$(mktemp)"' in recipe
+    assert "trap 'rm -f \"$$requirements_file\"' EXIT" in recipe
+    assert "$(UV) export --quiet" in recipe
+    assert '--output-file "$$requirements_file"' in recipe
+    assert "-m scripts.ci.run_security_audit" in recipe
+    assert '--requirements "$$requirements_file"' in recipe
+    assert '--pip-audit "$(UV) run --with pip-audit pip-audit"' in recipe
+    assert "/tmp/linkedin-analyzer-requirements.txt" not in recipe
+
+
 def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> None:
     """Prepare private libraries around a shared, sudo-free browser install."""
     recipe = _target_recipe("setup-playwright-local")

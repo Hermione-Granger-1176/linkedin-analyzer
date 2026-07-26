@@ -319,9 +319,14 @@ audit-node: ## Run policy-driven npm dependency audit (make audit-node [audit_le
 audit-fix-node: ## Apply available npm audit fixes to package-lock.json
 	$(NPM) audit fix --package-lock-only
 
-audit-python: ## Run pip-audit against the frozen uv lock export
-	$(UV) export --all-groups --frozen --no-emit-project --format requirements.txt --output-file /tmp/linkedin-analyzer-requirements.txt
-	$(UV) run --with pip-audit pip-audit --strict -r /tmp/linkedin-analyzer-requirements.txt
+audit-python: ## Run policy-driven pip-audit against the frozen uv lock export
+	@set -eu; \
+	requirements_file="$$(mktemp)"; \
+	trap 'rm -f "$$requirements_file"' EXIT; \
+	$(UV) export --quiet --all-groups --frozen --no-emit-project --format requirements.txt --output-file "$$requirements_file"; \
+	PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.ci.run_security_audit \
+		--requirements "$$requirements_file" \
+		--pip-audit "$(UV) run --with pip-audit pip-audit"
 
 # ─── Dependency maintenance @deps ──────────────────────────────────────────────────
 

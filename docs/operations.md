@@ -120,7 +120,7 @@ Diagnostics are **off until the user explicitly grants consent** (telemetry bann
 - CI actions are SHA-pinned.
 - Dependency review runs on pull requests.
 - Scheduled dependency audits run weekly for npm and Python dependencies resolved from `uv.lock`.
-- The npm audit gates every severity and fails closed on malformed audit data. Reviewed exceptions are time-bounded in `config/security_audit.json`, become invalid when a fix appears if configured that way, and fail when they no longer match a reported advisory.
+- The npm and Python audits fail closed on malformed audit data. Reviewed exceptions are ecosystem-specific and time-bounded in `config/security_audit.json`. They become invalid when a fix appears if configured that way, and fail when they no longer match a reported advisory. The Python audit also fails when `pip-audit --strict` reports a skipped dependency.
 - The weekly generic override-policy check verifies that npm overrides remain necessary (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
 

@@ -146,6 +146,7 @@ linkedin-analyzer/
 ├── Dockerfile                          # CLI container image (multi-stage, non-root)
 ├── vercel.json                         # Vercel config
 ├── .editorconfig                       # Editor whitespace and charset defaults
+├── .yamllint.yml                       # yamllint rules
 ├── .pre-commit-config.yaml             # Local pre-commit hooks
 ├── Makefile                            # Local and CI command entrypoints
 ├── package.json                        # NPM config

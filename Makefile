@@ -88,7 +88,7 @@ lint-css: ## Run stylelint only
 	$(NPM) run lint:css
 
 lint-yaml: ## Run yamllint only [paths=...]
-	$(VENV)/bin/yamllint $(if $(paths),$(paths),.)
+	$(VENV_PYTHON) -m yamllint $(if $(paths),$(paths),.)
 
 lint-workflows: ## Run GitHub workflow linter only
 	$(NPM) run lint:workflows

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +18,7 @@ class CodeSnippet:
 
     line_number: int
     text: str
+    column_start: int | None = field(default=None, compare=False)
 
 
 def parse_makefile_targets(content: str) -> set[str]:
@@ -51,7 +52,13 @@ def extract_markdown_code_snippets(text: str) -> list[CodeSnippet]:
             continue
 
         for match in INLINE_CODE_PATTERN.finditer(line):
-            snippet = match.group(1).strip()
-            if snippet:
-                snippets.append(CodeSnippet(line_number=line_number, text=snippet))
+            snippet = match.group(1)
+            if snippet.strip():
+                snippets.append(
+                    CodeSnippet(
+                        line_number=line_number,
+                        text=snippet,
+                        column_start=match.start(),
+                    )
+                )
     return snippets

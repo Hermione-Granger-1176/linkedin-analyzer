@@ -254,13 +254,18 @@ def _mask_inline_code(text: str) -> str:
     return INLINE_CODE_PATTERN.sub(lambda match: "`" + "_" * len(match.group(1)) + "`", text)
 
 
-def _snippet_is_actionable(line: str, snippet: str) -> bool:
+def _snippet_is_actionable(
+    line: str,
+    snippet: str,
+    column_start: int | None = None,
+) -> bool:
     """Return whether one inline snippet is presented as a command to run."""
-    marker = f"`{snippet}`"
-    if marker not in line:
+    if column_start is None:
         return not line.lstrip().startswith("#")
 
-    prefix, suffix = line.split(marker, 1)
+    marker = f"`{snippet}`"
+    prefix = line[:column_start]
+    suffix = line[column_start + len(marker) :]
     local_prefix = CLAUSE_SEPARATOR_PATTERN.split(_mask_inline_code(prefix))[-1]
     if NEGATION_PREFIX_PATTERN.search(local_prefix):
         return False
@@ -284,7 +289,7 @@ def check_file(path: Path, known_targets: set[str], root: Path | None = None) ->
     violations: list[str] = []
     for snippet in extract_markdown_code_snippets(text):
         line = lines[snippet.line_number - 1]
-        if not _snippet_is_actionable(line, snippet.text):
+        if not _snippet_is_actionable(line, snippet.text, snippet.column_start):
             continue
         for target in find_replacement_targets(snippet.text, known_targets):
             violations.append(
@@ -360,9 +365,17 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
 
         try:
             resolved = candidate.resolve(strict=True)
+        except FileNotFoundError:
+            errors.append(f"{raw}: path does not exist")
+            continue
+        except OSError:
+            errors.append(f"{raw}: path could not be accessed")
+            continue
+
+        try:
             resolved.relative_to(resolved_root)
-        except (OSError, ValueError):
-            errors.append(f"{raw}: path does not exist or is outside the repository")
+        except ValueError:
+            errors.append(f"{raw}: path resolves outside the repository")
             continue
 
         if not resolved.is_file():

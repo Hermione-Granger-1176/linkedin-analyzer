@@ -160,6 +160,26 @@ def test_check_doc_commands_scopes_negation_to_current_clause(tmp_path: Path) ->
     assert violations == ["README.md:1: use `make lint-js` instead of `npm run lint`"]
 
 
+def test_check_doc_commands_tracks_repeated_inline_snippet_occurrences(tmp_path: Path) -> None:
+    """Identical snippets in separate clauses keep independent actionability."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Do not run `pytest`; instead run `pytest`.\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:1: use `make test-py` instead of `pytest`"]
+
+
+def test_check_doc_commands_preserves_padded_inline_code(tmp_path: Path) -> None:
+    """Whitespace inside backticks does not bypass negation analysis."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Do not run ` pytest ` directly.\n")
+
+    assert check_doc_commands.run_check(paths=[doc_path], root=tmp_path) == []
+
+
 def test_check_doc_commands_keeps_negation_across_neighboring_code_spans(
     tmp_path: Path,
 ) -> None:

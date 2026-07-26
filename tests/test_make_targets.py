@@ -1,0 +1,643 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from scripts.lint import check_doc_commands, check_make_targets, make_targets
+
+if TYPE_CHECKING:
+    import pytest
+
+
+def write_text(path: Path, content: str) -> None:
+    """Write text."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def test_parse_makefile_targets_skips_special_targets() -> None:
+    """Parse makefile targets skips special targets."""
+    targets = make_targets.parse_makefile_targets(
+        ".PHONY: lint\nsetup: install\nlint-js: ## Run eslint\n"
+    )
+
+    assert targets == {"setup", "lint-js"}
+
+
+def test_parse_makefile_targets_adds_group_help_targets() -> None:
+    """Parse makefile targets adds group help targets."""
+    targets = make_targets.parse_makefile_targets(
+        "# ─── Pull requests @pr ───\n"
+        "pr: ## PR commands\n"
+        "# ─── Quality gates @quality ───\n"
+        "check-local: ## Run checks\n"
+        "help-%: ## List one group\n"
+    )
+
+    assert {"help-pr", "help-quality"}.issubset(targets)
+
+
+def test_iter_markdown_files_skips_build_directories(tmp_path: Path) -> None:
+    """Iter markdown files skips build directories."""
+    write_text(tmp_path / "README.md", "# Root\n")
+    write_text(tmp_path / "docs" / "guide.md", "# Guide\n")
+    write_text(tmp_path / "node_modules" / "pkg" / "README.md", "# Ignore\n")
+
+    files = make_targets.iter_markdown_files(tmp_path)
+
+    assert files == [tmp_path / "README.md", tmp_path / "docs" / "guide.md"]
+
+
+def test_extract_make_references_handles_env_prefixes() -> None:
+    """Extract make references handles env prefixes."""
+    references = make_targets.extract_make_references(
+        "Use `make check-local`\n"
+        'Run `ARTIFACTS_BROWSER_APP_SLUGS="demo" make test-browser-apps`\n'
+        "Generic `make <target>` guidance should be ignored.\n"
+    )
+
+    assert references == [
+        make_targets.MakeReference(
+            target="check-local",
+            line_number=1,
+            snippet="make check-local",
+        ),
+        make_targets.MakeReference(
+            target="test-browser-apps",
+            line_number=2,
+            snippet='ARTIFACTS_BROWSER_APP_SLUGS="demo" make test-browser-apps',
+        ),
+    ]
+
+
+def test_extract_make_references_ignores_plain_prose_make_mentions() -> None:
+    """Extract make references ignores plain prose make mentions."""
+    references = make_targets.extract_make_references(
+        "Adding a new make target with ## description makes it appear automatically.\n"
+        "CI and local workflows use the same make targets.\n"
+    )
+
+    assert references == []
+
+
+def test_extract_markdown_code_snippets_ignores_shell_comments_in_fences() -> None:
+    """Extract markdown code snippets ignores shell comments in fences."""
+    snippets = make_targets.extract_markdown_code_snippets(
+        "```bash\n# pytest is wrapped by make test-py\npytest\n```\n"
+    )
+
+    assert snippets == [make_targets.CodeSnippet(line_number=3, text="pytest")]
+
+
+def test_check_make_targets_reports_unknown_target(tmp_path: Path) -> None:
+    """Check make targets reports unknown target."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\ncheck-local:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Run `make check-local` and `make nope`.\n")
+
+    violations = check_make_targets.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:1: unknown Make target `nope`"]
+
+
+def test_check_make_targets_main_reports_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check make targets main reports success."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\ncheck-local:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Use `make check-local`.\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_make_targets, "MAKEFILE_PATH", tmp_path / "Makefile")
+
+    exit_code = check_make_targets.main(["README.md"])
+
+    assert exit_code == 0
+    assert "Make target check passed for 1 file(s)" in capsys.readouterr().out
+
+
+def test_check_make_targets_main_rejects_missing_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check make targets main rejects missing path."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_make_targets, "MAKEFILE_PATH", tmp_path / "Makefile")
+
+    exit_code = check_make_targets.main(["missing.md"])
+
+    assert exit_code == 1
+    assert "path does not exist" in capsys.readouterr().out
+
+
+def test_main_rejects_path_escaping_workspace_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Main rejects path escaping workspace root."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_make_targets, "MAKEFILE_PATH", tmp_path / "Makefile")
+
+    exit_code = check_make_targets.main(["../../../etc/passwd"])
+
+    assert exit_code == 1
+    assert "escapes workspace root" in capsys.readouterr().out
+
+
+def test_iter_default_paths_limits_command_lint_scope(tmp_path: Path) -> None:
+    """Iter default paths limits command lint scope."""
+    write_text(tmp_path / "README.md", "# Readme\n")
+    write_text(tmp_path / "CLAUDE.md", "# Agent\n")
+    write_text(tmp_path / ".github" / "CONTRIBUTING.md", "# Contributing\n")
+    write_text(tmp_path / ".github" / "PULL_REQUEST_TEMPLATE.md", "# Template\n")
+    write_text(tmp_path / "docs" / "development.md", "# Development\n")
+    write_text(tmp_path / "docs" / "operations.md", "# Operations\n")
+    write_text(tmp_path / "docs" / "structure.md", "# Internal\n")
+
+    paths = check_doc_commands.iter_default_paths(tmp_path)
+
+    assert paths == [
+        tmp_path / "README.md",
+        tmp_path / "CLAUDE.md",
+        tmp_path / ".github" / "CONTRIBUTING.md",
+        tmp_path / ".github" / "PULL_REQUEST_TEMPLATE.md",
+        tmp_path / "docs" / "development.md",
+        tmp_path / "docs" / "operations.md",
+    ]
+
+
+def test_extract_markdown_code_snippets_reads_inline_and_fenced_blocks() -> None:
+    """Extract markdown code snippets reads inline and fenced blocks."""
+    snippets = make_targets.extract_markdown_code_snippets(
+        "Use `make help`.\n\n```bash\npytest\nmake test-py\n```\n"
+    )
+
+    assert snippets == [
+        make_targets.CodeSnippet(line_number=1, text="make help"),
+        make_targets.CodeSnippet(line_number=4, text="pytest"),
+        make_targets.CodeSnippet(line_number=5, text="make test-py"),
+    ]
+
+
+def test_extract_markdown_code_snippets_skips_blank_inline_code() -> None:
+    """Extract markdown code snippets ignores whitespace-only inline code."""
+    assert make_targets.extract_markdown_code_snippets("A blank ` ` span.\n") == []
+
+
+def test_find_replacement_targets_uses_makefile_targets() -> None:
+    """Find replacement targets uses makefile targets."""
+    targets = check_doc_commands.find_replacement_targets(
+        "python -m pytest --ignore=tests/browser",
+        {"test-py", "lint-py"},
+    )
+
+    assert targets == ["test-py"]
+
+
+def test_find_replacement_targets_ignores_make_only_commands() -> None:
+    """Find replacement targets ignores make only commands."""
+    targets = check_doc_commands.find_replacement_targets("make test-py", {"test-py"})
+
+    assert targets == []
+
+
+def test_find_replacement_targets_reports_make_and_raw_mix() -> None:
+    """Find replacement targets reports make and raw mix."""
+    targets = check_doc_commands.find_replacement_targets(
+        "make setup && pytest && npm run lint",
+        {"setup", "test-py", "lint-js"},
+    )
+
+    assert targets == ["test-py", "lint-js"]
+
+
+def test_find_replacement_targets_prefers_full_match_rules() -> None:
+    """Find replacement targets prefers full match rules."""
+    targets = check_doc_commands.find_replacement_targets(
+        "npm run test:e2e",
+        {"test-e2e", "test-js"},
+    )
+
+    assert targets == ["test-e2e"]
+
+
+def test_find_replacement_targets_deduplicates_repeated_targets() -> None:
+    """Find replacement targets deduplicates repeated targets."""
+    targets = check_doc_commands.find_replacement_targets(
+        "pip-audit && npm audit",
+        {"security"},
+    )
+
+    assert targets == ["security"]
+
+
+def test_find_replacement_targets_ignores_empty_shell_segments() -> None:
+    """Find replacement targets ignores empty shell segments."""
+    targets = check_doc_commands.find_replacement_targets(
+        " && pytest ; ",
+        {"test-py"},
+    )
+
+    assert targets == ["test-py"]
+
+
+def test_find_replacement_targets_covers_additional_make_equivalents() -> None:
+    """Find replacement targets covers additional make equivalents."""
+    targets = check_doc_commands.find_replacement_targets(
+        "npm install --package-lock-only && uv lock && npm run lint -- --fix",
+        {"lock-node", "lock", "fmt-js"},
+    )
+
+    assert targets == ["lock-node", "lock", "fmt-js"]
+
+
+def test_find_replacement_targets_covers_quality_tooling() -> None:
+    """Find replacement targets covers quality tooling."""
+    targets = check_doc_commands.find_replacement_targets(
+        "npm run format:check && python -m vulture && npm run dead-code",
+        {"format-js-check", "dead-code-py", "dead-code-js"},
+    )
+
+    assert targets == ["format-js-check", "dead-code-py", "dead-code-js"]
+
+
+def test_find_replacement_targets_ignores_descriptive_tool_names() -> None:
+    """Find replacement targets ignores descriptive tool names."""
+    targets = check_doc_commands.find_replacement_targets(
+        "ruff scans Python files",
+        {"lint-py"},
+    )
+
+    assert targets == []
+
+
+def test_check_doc_commands_reports_direct_commands(tmp_path: Path) -> None:
+    """Check doc commands reports direct commands."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\nlint-js:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(
+        doc_path,
+        "Use `python -m pytest --ignore=tests/browser` and `npm run lint`.\n",
+    )
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == [
+        "README.md:1: use `make test-py` instead of `python -m pytest --ignore=tests/browser`",
+        "README.md:1: use `make lint-js` instead of `npm run lint`",
+    ]
+
+
+def test_check_doc_commands_reports_multiple_direct_commands_in_one_snippet(
+    tmp_path: Path,
+) -> None:
+    """Check doc commands reports multiple direct commands in one snippet."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\nlint-js:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Use `make setup && pytest && npm run lint`.\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == [
+        "README.md:1: use `make test-py` instead of `make setup && pytest && npm run lint`",
+        "README.md:1: use `make lint-js` instead of `make setup && pytest && npm run lint`",
+    ]
+
+
+def test_check_doc_commands_ignores_comment_only_fence_lines(tmp_path: Path) -> None:
+    """Check doc commands ignores comment only fence lines."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "```bash\n# pytest is wrapped by make test-py\n```\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == []
+
+
+def test_check_doc_commands_flags_fenced_commands(tmp_path: Path) -> None:
+    """Check doc commands flags fenced commands."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "```bash\npytest\n```\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:2: use `make test-py` instead of `pytest`"]
+
+
+def test_check_doc_commands_default_scope_avoids_internal_docs(tmp_path: Path) -> None:
+    """Check doc commands default scope avoids internal docs."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Use `make help`.\n")
+    write_text(
+        tmp_path / "docs" / "architecture.md",
+        "Internal note: `pytest --cov=scripts/`.\n",
+    )
+
+    violations = check_doc_commands.run_check(root=tmp_path)
+
+    assert violations == []
+
+
+def test_check_doc_commands_ignores_descriptive_tool_mentions(tmp_path: Path) -> None:
+    """Check doc commands ignores descriptive tool mentions."""
+    write_text(tmp_path / "Makefile", "lint-py:\n\t@true\ntest-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(
+        doc_path,
+        "- `pytest` enforces coverage for Python tests.\n- `ruff` scans Python files.\n",
+    )
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == []
+
+
+def test_check_doc_commands_ignores_negated_commands(tmp_path: Path) -> None:
+    """Check doc commands ignores negated commands."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Do not run `pytest` directly.\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == []
+
+
+def test_check_doc_commands_scopes_negation_to_the_current_clause(
+    tmp_path: Path,
+) -> None:
+    """Check doc commands scopes negation to the current clause."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\nlint-js:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Do not run `pytest`; instead run `npm run lint`.\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:1: use `make lint-js` instead of `npm run lint`"]
+
+
+def test_check_doc_commands_scopes_negation_across_comma_clauses(
+    tmp_path: Path,
+) -> None:
+    """Check doc commands scopes negation across comma clauses."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\nlint-js:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "Do not run `pytest`, instead run `npm run lint`.\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:1: use `make lint-js` instead of `npm run lint`"]
+
+
+def test_check_doc_commands_flags_plain_bullets_with_explanatory_suffixes(
+    tmp_path: Path,
+) -> None:
+    """Check doc commands flags plain bullets with explanatory suffixes."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\nlint-js:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(
+        doc_path,
+        "- `pytest` to run Python tests.\n- `npm run lint` for JS linting.\n",
+    )
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == [
+        "README.md:1: use `make test-py` instead of `pytest`",
+        "README.md:2: use `make lint-js` instead of `npm run lint`",
+    ]
+
+
+def test_check_doc_commands_flags_checklist_commands(tmp_path: Path) -> None:
+    """Check doc commands flags checklist commands."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "- [ ] `pytest`\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:1: use `make test-py` instead of `pytest`"]
+
+
+def test_check_doc_commands_flags_ordered_command_steps(tmp_path: Path) -> None:
+    """Check doc commands flags ordered command steps."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(doc_path, "1. `pytest`\n")
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == ["README.md:1: use `make test-py` instead of `pytest`"]
+
+
+def test_check_doc_commands_main_reports_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check doc commands main reports failure."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Run `pytest`.\n")
+    monkeypatch.setattr(check_doc_commands, "REPO_ROOT", tmp_path)
+
+    exit_code = check_doc_commands.main(["README.md"])
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Command lint failed:" in captured
+    assert "use `make test-py` instead of `pytest`" in captured
+
+
+def test_check_doc_commands_main_uses_default_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check doc commands main uses default paths."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Run `make test-py`.\n")
+    write_text(tmp_path / ".github" / "CONTRIBUTING.md", "Use `make test-py`.\n")
+    monkeypatch.setattr(check_doc_commands, "REPO_ROOT", tmp_path)
+
+    exit_code = check_doc_commands.main([])
+
+    assert exit_code == 0
+    assert capsys.readouterr().out.strip() == "Command lint passed for 2 file(s)"
+
+
+def test_check_doc_commands_main_reports_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check doc commands main reports success."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Run `make test-py`.\n")
+    monkeypatch.setattr(check_doc_commands, "REPO_ROOT", tmp_path)
+
+    exit_code = check_doc_commands.main(["README.md"])
+
+    assert exit_code == 0
+    assert capsys.readouterr().out.strip() == "Command lint passed for 1 file(s)"
+
+
+def test_check_doc_commands_main_rejects_missing_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check doc commands main rejects missing path."""
+    write_text(tmp_path / "Makefile", "test-py:\n\t@true\n")
+    monkeypatch.setattr(check_doc_commands, "REPO_ROOT", tmp_path)
+
+    exit_code = check_doc_commands.main(["missing.md"])
+
+    assert exit_code == 1
+    assert "path does not exist" in capsys.readouterr().out
+
+
+def test_check_make_targets_main_reports_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check make targets main reports failure."""
+    write_text(tmp_path / "Makefile", "check-local:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Use `make missing-target`.\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_make_targets, "MAKEFILE_PATH", tmp_path / "Makefile")
+
+    exit_code = check_make_targets.main(["README.md"])
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "Make target check failed:" in captured
+    assert "unknown Make target `missing-target`" in captured
+
+
+def test_check_make_targets_main_uses_default_markdown_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Check make targets main uses default markdown scope."""
+    write_text(tmp_path / "Makefile", "check-local:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Use `make check-local`.\n")
+    write_text(tmp_path / "docs" / "operations.md", "Use `make check-local`.\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_make_targets, "MAKEFILE_PATH", tmp_path / "Makefile")
+
+    exit_code = check_make_targets.main([])
+
+    assert exit_code == 0
+    assert "Make target check passed for 2 file(s)" in capsys.readouterr().out
+
+
+def test_find_shell_control_flow_flags_if_and_for() -> None:
+    """Raw shell if/for at the start of a recipe line are flagged."""
+    violations = make_targets.find_shell_control_flow(
+        'target-a:\n\t@if [ -n "$(x)" ]; then echo hi; fi\n\tfor f in a b; do echo $$f; done\n'
+    )
+
+    assert [(v.target, v.keyword) for v in violations] == [
+        ("target-a", "if"),
+        ("target-a", "for"),
+    ]
+
+
+def test_find_shell_control_flow_ignores_make_if_function() -> None:
+    """The Make ``$(if ...)`` function is not shell control flow."""
+    violations = make_targets.find_shell_control_flow(
+        "target-a:\n\t$(if $(src),--from-html $(src)) build\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_ignores_define_blocks() -> None:
+    """Control flow inside a define...endef helper is ignored."""
+    violations = make_targets.find_shell_control_flow(
+        "define helper\nif [ 1 ]; then true; fi\nendef\n\ntarget-a:\n\t@true\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_ignores_quoted_program_bodies() -> None:
+    """An if inside a quoted awk program spanning continuations is ignored."""
+    violations = make_targets.find_shell_control_flow(
+        "target-a:\n\t@awk ' \\\n\t\tif (ti == 0) next; \\\n\t' $(FILE)\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_ignores_variable_continuations() -> None:
+    """A tab-indented shell continuation of a variable assignment is ignored."""
+    violations = make_targets.find_shell_control_flow(
+        "VAR ?= $(shell \\\n\tif [ -z x ]; then echo a; fi)\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_respects_allowlist() -> None:
+    """Allowlisted targets may keep inline control flow."""
+    content = 'release-create:\n\t@if [ -n "$(C)" ]; then a; else b; fi\n'
+
+    assert make_targets.find_shell_control_flow(content) == []
+    assert make_targets.find_shell_control_flow(content, allowlist=frozenset()) != []
+
+
+def test_repository_makefile_has_no_raw_shell_control_flow() -> None:
+    """The committed Makefile passes the raw shell control-flow check."""
+    content = make_targets.MAKEFILE_PATH.read_text(encoding="utf-8")
+
+    assert make_targets.find_shell_control_flow(content) == []
+
+
+def test_run_control_flow_check_formats_violations(tmp_path: Path) -> None:
+    """run_control_flow_check renders a greppable violation line."""
+    makefile = tmp_path / "Makefile"
+    write_text(makefile, "target-a:\n\tfor f in a; do :; done\n")
+
+    violations = check_make_targets.run_control_flow_check(makefile)
+
+    assert violations == [
+        "Makefile:2: recipe for `target-a` begins raw shell control flow "
+        "(`for`); move logic into scripts/ or allowlist it"
+    ]
+
+
+def test_run_control_flow_check_defaults_to_repository_makefile() -> None:
+    """With no path, the check reads the committed Makefile and finds nothing."""
+    assert check_make_targets.run_control_flow_check() == []
+
+
+def test_check_make_targets_main_reports_control_flow_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Raw shell control flow in the Makefile fails the make-targets lint."""
+    write_text(tmp_path / "Makefile", "check-local:\n\t@while true; do :; done\n")
+    write_text(tmp_path / "README.md", "Use `make check-local`.\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check_make_targets, "MAKEFILE_PATH", tmp_path / "Makefile")
+
+    exit_code = check_make_targets.main(["README.md"])
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "begins raw shell control flow" in captured
+    assert "`while`" in captured
+
+
+def test_check_doc_commands_keeps_negation_across_neighbouring_code_spans(
+    tmp_path: Path,
+) -> None:
+    """Punctuation and verbs inside other code spans must not strand a negation."""
+    write_text(tmp_path / "Makefile", "web:\n\t@true\n")
+    doc_path = tmp_path / "README.md"
+    write_text(
+        doc_path,
+        "Never run `.venv/bin/*`, `pytest`, `npm run`, `npx`, or `vite` directly.\n",
+    )
+
+    violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
+
+    assert violations == []
+
+
+def test_mask_inline_code_preserves_offsets_and_blanks_span_contents() -> None:
+    """Masking keeps line length stable so clause splitting stays aligned."""
+    masked = check_doc_commands._mask_inline_code("Run `npm run` then `a.b` now")
+
+    assert masked == "Run `_______` then `___` now"

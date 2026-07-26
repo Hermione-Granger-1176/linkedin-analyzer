@@ -39,6 +39,7 @@ dev = [
     "ruff>=0.3.0",
     "vulture>=2.14",
     "pandas-stubs>=2.0.0",
+    "yamllint>=1.38.0",
 ]
 
 [project.scripts]
@@ -130,7 +131,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",
-    "--cov=linkedin_analyzer",
+    "--cov",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
@@ -139,7 +140,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["src/linkedin_analyzer"]
+source = ["src/linkedin_analyzer", "scripts"]
 branch = true
 
 [tool.coverage.report]

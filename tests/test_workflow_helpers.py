@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
+from scripts.ci import workflow_helpers
 from scripts.ci.workflow_helpers import (
     validate_lock_refresh_artifact,
     validate_lock_refresh_context,
@@ -127,3 +128,69 @@ def test_validate_lock_refresh_context_rejects_untrusted_values(
     """Reject values that cannot safely select a trusted writeback target."""
     with pytest.raises(ValueError, match=message):
         validate_lock_refresh_context(pr_number, head_sha, head_ref)
+
+
+def test_validate_lock_refresh_artifact_rejects_a_missing_root(tmp_path: Path) -> None:
+    """A download that produced nothing at all is rejected by path."""
+    with pytest.raises(ValueError, match="Artifact root does not exist"):
+        validate_lock_refresh_artifact(tmp_path / "absent")
+
+
+def test_artifact_files_skips_non_regular_entries(tmp_path: Path) -> None:
+    """Entries that vanish or are not regular files are not collected."""
+    root = tmp_path / "artifact"
+    root.mkdir()
+    (root / "uv.lock").write_text("version = 1\n", encoding="utf-8")
+    os.mkfifo(root / "pipe")
+
+    assert workflow_helpers._artifact_files(root) == {Path("uv.lock")}
+
+
+def test_main_validates_a_lock_artifact(tmp_path: Path) -> None:
+    """The validate-lock-artifact subcommand exits zero for a valid tree."""
+    root = tmp_path / "artifact"
+    write_valid_lock_artifact(root)
+
+    assert workflow_helpers.main(["validate-lock-artifact", "--root", str(root)]) == 0
+
+
+def test_main_rejects_an_invalid_lock_artifact(tmp_path: Path) -> None:
+    """The validate-lock-artifact subcommand surfaces validation errors."""
+    root = tmp_path / "artifact"
+    root.mkdir()
+
+    with pytest.raises(ValueError, match="missing"):
+        workflow_helpers.main(["validate-lock-artifact", "--root", str(root)])
+
+
+def test_main_validates_a_lock_context() -> None:
+    """The validate-lock-context subcommand exits zero for trusted values."""
+    exit_code = workflow_helpers.main(
+        [
+            "validate-lock-context",
+            "--pr-number",
+            "42",
+            "--head-sha",
+            "a" * 40,
+            "--head-ref",
+            "dependabot/uv/requests-2.32.0",
+        ]
+    )
+
+    assert exit_code == 0
+
+
+def test_main_rejects_an_untrusted_lock_context() -> None:
+    """The validate-lock-context subcommand surfaces validation errors."""
+    with pytest.raises(ValueError, match="head ref"):
+        workflow_helpers.main(
+            [
+                "validate-lock-context",
+                "--pr-number",
+                "42",
+                "--head-sha",
+                "a" * 40,
+                "--head-ref",
+                "feature/unsafe",
+            ]
+        )

@@ -123,13 +123,16 @@ linkedin-analyzer/
 │   ├── knip.json                       # JavaScript dead-code config
 │   ├── playwright.config.js            # Playwright browser test config
 │   ├── prettierignore                  # Prettier ignore rules
-│   └── prettierrc.json                 # Prettier formatting rules
+│   ├── prettierrc.json                 # Prettier formatting rules
+│   ├── security_audit.json             # Reviewed dependency vulnerability exceptions
+│   └── stylelint.config.mjs            # stylelint CSS rules
 ├── scripts/
 │   ├── check-overrides.mjs             # Validates npm overrides are still needed
 │   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)
-│   ├── ci/                             # Local CI parallel-runner and GitHub Actions workflow helpers
-│   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
-│   ├── lint/                           # Local lint helpers
+│   ├── ci/                             # Local CI parallel-runner, action SHA refresh, and policy-driven dependency audits
+│   ├── gh/                             # GitHub PR/issue/CI helper (auto-detect repo/PR, GraphQL, CI triage)
+│   ├── lib/                            # Shared stdlib-only helpers (gh retry policy, gh api, staging, status)
+│   ├── lint/                           # EditorConfig, doc-command, and Make-target checks
 │   └── web-smoke.mjs                   # Post-deploy HTTP smoke check (shell + headers + CSP endpoint)
 ├── data/                               # Local workspace; contents gitignored (only .gitkeep placeholders are tracked)
 │   ├── input/                          # Place CSVs here
@@ -144,7 +147,8 @@ linkedin-analyzer/
 │   └── workflows/                      # CI, audit, publish, and maintenance workflows
 ├── Dockerfile                          # CLI container image (multi-stage, non-root)
 ├── vercel.json                         # Vercel config
-├── .editorconfig                       # Editor whitespace and charset defaults
+├── .editorconfig                       # Editor whitespace and charset defaults (enforced by make editorconfig-check)
+├── .yamllint.yml                       # yamllint rules
 ├── .pre-commit-config.yaml             # Local pre-commit hooks
 ├── Makefile                            # Local and CI command entrypoints
 ├── package.json                        # NPM config

@@ -123,6 +123,41 @@ Diagnostics are **off until the user explicitly grants consent** (telemetry bann
 - The weekly generic override-policy check verifies that any future npm overrides remain necessary; no overrides are currently configured (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
 
+### Dependency audit policy
+
+`make security` runs both audits. Each wraps the raw tool in a tested Python policy layer rather than calling it directly, so a known-but-triaged advisory has a reviewed override instead of forcing the gate to be disabled wholesale:
+
+| Target | Wrapper | Underlying tool |
+| --- | --- | --- |
+| `make audit-python` | `scripts/ci/run_security_audit.py` | `pip-audit --strict` over the frozen `uv.lock` export |
+| `make audit-node` | `scripts/ci/run_npm_audit.py` | `npm audit`, every severity gated |
+
+Both wrappers are stricter than the raw invocations they replaced. `--strict` is always passed to pip-audit, and any dependency pip-audit reports as skipped fails the audit (pip-audit's exit code cannot distinguish a skip from a finding, so the JSON report is checked instead). The npm wrapper reads the JSON report, where `--audit-level` has no effect, so it applies its own threshold: every severity is gated, where the raw `npm audit --audit-level=high` ignored anything below high. A reviewed exception, not a severity floor, is what silences a finding. `make audit-node --audit-level=...` still narrows an ad-hoc run.
+
+Reviewed exceptions live in `config/security_audit.json` under `python_vulnerability_exceptions` and `npm_vulnerability_exceptions`. Both lists share one schema:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | yes | Advisory id. GHSA or CVE for Python; GHSA or npm's numeric source id for npm. Matched against the finding's id **and** its aliases, case-insensitively. |
+| `package` | yes | Package name, matched case-insensitively. |
+| `reason` | yes | Why the advisory is accepted. Printed on every passing run. |
+| `review_by` | yes | `YYYY-MM-DD`. The audit fails once this date has passed. |
+| `ignore_only_without_fix` | no | When `true`, the exception is evicted as soon as a fixed version exists. Defaults to `false`. |
+
+To add an exception, append an entry to the relevant list. For example:
+
+```json
+{
+  "id": "GHSA-mh99-v99m-4gvg",
+  "package": "brace-expansion",
+  "reason": "Transitive dev-only dependency; no upstream release yet.",
+  "review_by": "2026-10-01",
+  "ignore_only_without_fix": true
+}
+```
+
+The allow-list is self-cleaning: an expired `review_by`, an exception whose advisory now has a fix (when `ignore_only_without_fix` is set), and an exception that no longer matches any finding all fail the audit. Duplicate package-and-id pairs are rejected when the config loads.
+
 ## Custody and Recovery
 
 The project is maintained by a single person: Aditya Kumar Darak (GitHub `Hermione-Granger-1176`). This section records who holds each external account and how to recover access, so the project is not silently orphaned if one credential is lost.

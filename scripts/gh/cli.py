@@ -11,8 +11,31 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from pathlib import Path
 
-from . import ci_status, pr_review
+from . import ci_status, commit_message, issues, pr_review, pr_watch
+from .gh_runner import GhError
+
+
+def _add_body_options(parser: argparse.ArgumentParser, *, required: bool = True) -> None:
+    """Add the shared body options (reply, comment, or PR body) to a subcommand parser."""
+    body_group = parser.add_mutually_exclusive_group(required=required)
+    body_group.add_argument("--body", help="Body text")
+    body_group.add_argument(
+        "--body-file", help="Path to a file containing the body text (- reads stdin)"
+    )
+
+
+def _body_text(args: argparse.Namespace) -> str:
+    """Return the body text from ``--body`` or ``--body-file`` (``-`` reads stdin)."""
+    if args.body_file is not None:
+        if args.body_file == "-":
+            return sys.stdin.read()
+        try:
+            return Path(args.body_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise GhError(f"Could not read --body-file {args.body_file}: {exc}") from exc
+    return str(args.body)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -24,7 +47,10 @@ def _build_parser() -> argparse.ArgumentParser:
     list_parser = subparsers.add_parser("list", help="List pull-request review threads")
     list_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
     list_parser.add_argument(
-        "--all", action="store_true", dest="include_resolved", help="Include resolved threads"
+        "--all",
+        action="store_true",
+        dest="include_resolved",
+        help="Include resolved threads",
     )
     list_parser.add_argument(
         "--json", action="store_true", dest="as_json", help="Emit machine-readable JSON"
@@ -32,7 +58,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     reply_parser = subparsers.add_parser("reply", help="Reply to a review thread by id")
     reply_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
-    reply_parser.add_argument("--body", required=True, help="Reply text")
+    _add_body_options(reply_parser)
 
     resolve_parser = subparsers.add_parser("resolve", help="Resolve a review thread by id")
     resolve_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
@@ -41,7 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "address", help="Reply to and resolve a review thread in one step"
     )
     address_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
-    address_parser.add_argument("--body", required=True, help="Reply text")
+    _add_body_options(address_parser)
 
     list_comments_parser = subparsers.add_parser(
         "list-comments", help="List individual review comments with node ids"
@@ -58,18 +84,53 @@ def _build_parser() -> argparse.ArgumentParser:
         "--comment", required=True, help="Comment node id (PRRC_...)"
     )
 
-    copilot_parser = subparsers.add_parser(
-        "copilot-review", help="Request a Copilot code review on the PR"
-    )
-    copilot_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    edit_pr_parser = subparsers.add_parser("edit-pr", help="Edit a PR title and/or body")
+    edit_pr_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    edit_pr_parser.add_argument("--title", help="New PR title")
+    _add_body_options(edit_pr_parser, required=False)
 
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
     summary_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+
+    issue_summary_parser = subparsers.add_parser("issue-summary", help="One-screen issue overview")
+    issue_summary_parser.add_argument("--issue", type=int, required=True, help="Issue number")
+
+    watch_parser = subparsers.add_parser(
+        "watch", help="Wait for settled checks and a fresh Copilot review"
+    )
+    watch_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    watch_parser.add_argument("--since", help="Review timestamp (default: newest PR commit)")
+    watch_parser.add_argument(
+        "--interval", type=float, default=45.0, help="Poll interval in seconds"
+    )
+    watch_parser.add_argument("--max-polls", type=int, default=40, help="Maximum poll count")
+    watch_parser.add_argument(
+        "--checks-only", action="store_true", help="Do not wait for a Copilot review"
+    )
 
     ci_parser = subparsers.add_parser(
         "ci-failures", help="Show failed-step logs for the latest run"
     )
     ci_parser.add_argument("--run", type=int, help="Run id (default: latest for this branch)")
+
+    subparsers.add_parser(
+        "latest-run-id", help="Print the latest workflow run id for the current branch"
+    )
+
+    copilot_parser = subparsers.add_parser(
+        "copilot-review", help="Request a Copilot code review on the PR"
+    )
+    copilot_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+
+    check_commit_parser = subparsers.add_parser(
+        "check-commit-message",
+        help="Reject a commit message that leaked shell text (heredoc fragments)",
+    )
+    check_commit_parser.add_argument(
+        "--message-file",
+        required=True,
+        help="Path to the commit message (- reads stdin)",
+    )
 
     return parser
 
@@ -86,7 +147,7 @@ def _handle_list(args: argparse.Namespace) -> int:
 
 def _handle_reply(args: argparse.Namespace) -> int:
     """Reply to a single review thread."""
-    pr_review.reply_to_thread(args.thread, args.body)
+    pr_review.reply_to_thread(args.thread, _body_text(args))
     print(f"Replied to {args.thread}")
     return 0
 
@@ -100,7 +161,7 @@ def _handle_resolve(args: argparse.Namespace) -> int:
 
 def _handle_address(args: argparse.Namespace) -> int:
     """Reply to and resolve a single review thread."""
-    pr_review.address_thread(args.thread, args.body)
+    pr_review.address_thread(args.thread, _body_text(args))
     print(f"Replied to and resolved {args.thread}")
     return 0
 
@@ -122,10 +183,15 @@ def _handle_delete_comment(args: argparse.Namespace) -> int:
     return 0
 
 
-def _handle_copilot_review(args: argparse.Namespace) -> int:
-    """Request a Copilot code review on the PR."""
-    pr_review.request_copilot_review(args.pr)
-    print("Requested Copilot review")
+def _handle_edit_pr(args: argparse.Namespace) -> int:
+    """Edit a pull request's title and/or body.
+
+    The body file is forwarded to ``gh pr edit --body-file`` rather than read
+    here, so gh handles large files (and ``-`` stdin) without an oversized
+    command-line argument.
+    """
+    pr_review.edit_pr(args.pr, title=args.title, body=args.body, body_file=args.body_file)
+    print("Edited PR")
     return 0
 
 
@@ -135,9 +201,58 @@ def _handle_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_issue_summary(args: argparse.Namespace) -> int:
+    """Print the issue overview."""
+    print(issues.issue_summary(args.issue))
+    return 0
+
+
+def _handle_watch(args: argparse.Namespace) -> int:
+    """Wait for a pull request to settle, then print its report."""
+    print(
+        pr_watch.watch_pr(
+            args.pr,
+            args.since,
+            interval=args.interval,
+            max_polls=args.max_polls,
+            checks_only=args.checks_only,
+        )
+    )
+    return 0
+
+
 def _handle_ci_failures(args: argparse.Namespace) -> int:
     """Print failed-step logs for a run."""
     print(ci_status.failure_digest(args.run))
+    return 0
+
+
+def _handle_latest_run_id(_args: argparse.Namespace) -> int:
+    """Print the latest workflow run id for the current branch."""
+    print(ci_status.latest_run().run_id)
+    return 0
+
+
+def _handle_copilot_review(args: argparse.Namespace) -> int:
+    """Request a Copilot code review on the PR."""
+    pr_review.request_copilot_review(args.pr)
+    print("Requested Copilot review")
+    return 0
+
+
+def _handle_check_commit_message(args: argparse.Namespace) -> int:
+    """Validate a commit message and reject leaked shell fragments."""
+    if args.message_file == "-":
+        message = sys.stdin.read()
+    else:
+        try:
+            message = Path(args.message_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise GhError(f"Could not read --message-file {args.message_file}: {exc}") from exc
+    try:
+        commit_message.validate_commit_message(message)
+    except ValueError as exc:
+        raise GhError(str(exc)) from exc
     return 0
 
 
@@ -148,9 +263,14 @@ COMMAND_HANDLERS = {
     "address": _handle_address,
     "list-comments": _handle_list_comments,
     "delete-comment": _handle_delete_comment,
-    "copilot-review": _handle_copilot_review,
+    "edit-pr": _handle_edit_pr,
     "summary": _handle_summary,
+    "issue-summary": _handle_issue_summary,
+    "watch": _handle_watch,
     "ci-failures": _handle_ci_failures,
+    "latest-run-id": _handle_latest_run_id,
+    "copilot-review": _handle_copilot_review,
+    "check-commit-message": _handle_check_commit_message,
 }
 
 
@@ -164,6 +284,6 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__":  # pragma: no cover
     try:
         raise SystemExit(main())
-    except (RuntimeError, ValueError) as exc:
+    except (GhError, ValueError) as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc

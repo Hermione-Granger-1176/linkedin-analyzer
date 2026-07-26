@@ -89,6 +89,9 @@ make web-screens
 # Lint
 make lint-js
 
+# Lint stylesheets (stylelint)
+make lint-css
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 
@@ -134,6 +137,33 @@ make dead-code-py
 make fmt
 ```
 
+Coverage is gated at 100% for both `src/linkedin_analyzer/` and `scripts/`, so a new repo-tooling script needs tests just like package code. The one exception is `scripts/setup/playwright_local_runtime.py`, listed in `[tool.coverage.run] omit` in `pyproject.toml` until it has tests of its own.
+
+## Repository linters
+
+Beyond the language linters above, `make lint` runs checks that keep the repo itself consistent. Each is a tested Python script under `scripts/lint/` and can be run on its own:
+
+```bash
+# Check every linter at once
+make lint
+
+# Check files against .editorconfig (line endings, final newline, indentation)
+make editorconfig-check
+
+# Lint YAML (workflows, action metadata, pre-commit config)
+make lint-yaml
+
+# Check that commands shown in contributor docs have Make equivalents
+make lint-doc-commands
+
+# Check that every documented `make <target>` reference exists
+make lint-make-targets
+```
+
+`make lint-doc-commands` covers `README.md`, `CLAUDE.md`, `.github/CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `docs/development.md`, and `docs/operations.md`. It flags a raw command shown as something to run when a Make target already wraps it, which is what keeps rule 1 of `CLAUDE.md` enforceable rather than aspirational. Add a new mapping to `COMMAND_RULES` in `scripts/lint/check_doc_commands.py` when you add a target that replaces a direct tool invocation.
+
+`make lint-make-targets` scans every tracked Markdown file, so a renamed or deleted target is caught wherever it is documented. It also rejects raw shell control flow (`if`, `for`, `while`, `case`) at the start of a Make recipe, pushing that logic into `scripts/` instead; `CONTROL_FLOW_ALLOWLIST` in `scripts/lint/make_targets.py` holds the reviewed exceptions.
+
 ## CI
 
 GitHub Actions runs on pull requests and pushes to `main`:
@@ -148,7 +178,7 @@ See `.github/workflows/ci.yml`.
 A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
 
 - `make audit-node` and `make audit-python` for the npm and Python dependency audits
-- `make check-overrides` to verify any future npm overrides remain necessary; the original overrides have been removed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
+- `make check-overrides` to verify each npm override remains necessary, by removing it and re-running the audit. One override is currently active, pinning `brace-expansion` off its unpatched 2.x line (see [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)); the earlier overrides were removed once upstream caught up (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
 
 If either audit job fails, a `report-failure` job opens (or comments on the existing) `dependency-audit`-labeled issue with a link to the run, so a scheduled failure is visible without watching the Actions tab.
 
@@ -156,6 +186,98 @@ Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for same-repository Dependabot uv PRs through a validated artifact handoff. The artifact contains only `uv.lock`; a read-only job validates the triggering PR's current author, repository, ref, and SHA before a separate write-capable job can download it or create a commit. See [CI Automation and Verified Writebacks](operations.md#ci-automation-and-verified-writebacks) for the full flow and fallback behavior.
 - `refresh-action-shas.yml` converts tag-based GitHub Action references to full commit SHAs when app credentials are configured. Already pinned references are left unchanged; Dependabot handles action-version updates.
+
+## Git and GitHub workflow
+
+Everything below runs through `make`, so there is no need to remember `gh` flags. Run `make git`, `make pr`, `make issue`, or `make ci` to list a group, and `make help-json` to get the whole surface as JSON.
+
+### Branching and committing
+
+```bash
+make branch name=my-feature          # branch off main (fetches and pulls first)
+make branch name=my-feature base=other-branch   # stacked branch
+make branch-current name=my-feature  # branch here, without updating the base
+
+make stage files="a.py b.py"         # stage selected paths
+make stage file="one path with spaces.py"       # stage exactly one path
+make stage-all                       # stage everything
+
+make commit message="Add the thing"  # commit staged changes
+make commit message_file=notes.txt   # read the message from a file
+make commit message_file=- <<'EOF'   # read the message from stdin (heredoc)
+Add the thing
+
+- Detail one
+- Detail two
+EOF
+make commit message="Fix typo" amend=1          # amend the previous commit
+
+make push                            # push and set upstream
+make push-force                      # after a rebase; uses --force-with-lease
+```
+
+`make stage` passes each path to `git add` as its own argument with no shell in between, so a filename containing spaces, globs, or `;` is staged literally instead of being re-interpreted. `make commit` writes the message to a temporary file and lints it with `make`'s commit-message checker before `git commit` runs: a mistyped heredoc terminator or trailing shell (`EOF && make push 2>&1 | tail -3`) is rejected rather than recorded in history. `make push-force` always uses `--force-with-lease`, so it refuses to overwrite commits you have not seen.
+
+Keeping the branch current:
+
+```bash
+make rebase                 # fetch origin/main, then rebase onto it
+make rebase base=release    # rebase onto origin/release
+make rebase-continue        # after resolving conflicts
+make sync-branch            # rebase onto this branch's own upstream
+```
+
+`make rebase` fetches first, so it can never rebase onto a stale local copy of the base branch. Override the default base repository-wide with `MAIN_BRANCH=...`.
+
+### Pull requests
+
+```bash
+make pr-create                       # open a PR for the current branch
+make pr-summary                      # state, CI rollup, open review threads
+make pr-review-comments              # review threads, each with a thread=PRRT_... id
+make pr-address thread=PRRT_... body="Fixed in abc123"   # reply and resolve
+make pr-watch                        # wait for checks to settle and Copilot to review
+make pr-checkout pr_num=123          # check out someone else's PR locally
+```
+
+Every `pr-*` target accepts `pr_num=N`. Without it the PR for the current branch is used, so the common case needs no argument.
+
+Every target that takes a comment body accepts either `body="..."` for a short inline message or `body_file=path` for a longer one, and `body_file=-` reads the body from stdin. Use the stdin form for anything multiline; the body is passed through a file rather than a shell argument, so backticks, quotes, and `$` need no escaping:
+
+```bash
+make pr-comment body_file=- <<'EOF'
+Two things:
+
+- `make ci` is green
+- rebased onto `main`
+EOF
+```
+
+### Issues
+
+```bash
+make issue-list                      # add state=, label=, assignee=, mine=1, author=, search=, limit=
+make issue-view issue=123            # the issue plus its comments
+make issue-summary issue=123         # one screen: state, labels, assignees, recent comments
+make issue-create title="..." body_file=- labels="bug"
+make issue-comment issue=123 body="On it"
+make issue-edit issue=123 title="..." body_file=-
+make issue-label issue=123 labels="bug,ci"
+make issue-assign issue=123 mine=1
+make issue-close issue=123 reason=completed comment="Fixed in #124"
+make issue-develop issue=123         # create and check out a branch linked to the issue
+```
+
+### CI
+
+```bash
+make ci-runs                # recent workflow runs (limit=N)
+make ci-watch               # watch the latest run
+make ci-failures            # failed-step logs for this branch's latest run
+make ci-run                 # show one run; defaults to this branch's latest, or run=ID
+make ci-run-log             # failed logs for that run
+make ci-job-log run=ID job=ID
+```
 
 ## Code Style
 
@@ -228,4 +350,4 @@ make audit-memory-browser local_libs=1   # main renderer JS heap in Chromium
 make explore                      # ad-hoc statistics over the export
 ```
 
-Use `make cleaner-diff` after a web cleaner change to prove it is behavior-preserving. This standalone check compares two refs and does not retain cleaned rows. Use `make bench` as the speed regression anchor. Before `make xrt-diff`, generate the CLI workbooks with `make run-cli args="all"`. The cross-runtime target stages only the selected web ref, defaulting to `worktree`, so its Python-to-web parity result is independent of the standalone ref comparison. It reports only aggregate counts and bounded mismatch coordinates, and removes the temporary rows on every exit path. The two `make audit-memory-*` targets establish memory measurements rather than budgets: `make audit-memory-python` runs each cleaner in its own child process and reports per-type peak RSS from `resource.getrusage`, writing xlsx only into an owner-only temporary directory it always removes; `make audit-memory-browser` builds the app, serves it from a private preview server on a dedicated port, and reports the Chromium main renderer JS heap (used, total, and peak used) after the real upload-to-insights flow. Web Worker heaps are excluded, so this is the main-thread heap rather than a whole-process total. The browser audit is Chromium only, needs `local_libs=1` for the private runtime, and its heap value depends on the browser version and garbage-collection timing. `make explore` identifies the export owner for message-direction stats via `$LIA_ME`, falling back to git `user.name`.
+Use `make cleaner-diff` after a web cleaner change to prove it is behavior-preserving. This standalone check compares two refs and does not retain cleaned rows. Use `make bench` as the speed regression anchor. Before `make xrt-diff`, generate the CLI workbooks with `make run-cli args="all"`. The cross-runtime target stages only the selected web ref, defaulting to `worktree`, so its Python-to-web parity result is independent of the standalone ref comparison. It reports only aggregate counts and bounded mismatch coordinates, and removes the temporary rows on every exit path. The two audit-memory targets establish memory measurements rather than budgets: `make audit-memory-python` runs each cleaner in its own child process and reports per-type peak RSS from `resource.getrusage`, writing xlsx only into an owner-only temporary directory it always removes; `make audit-memory-browser` builds the app, serves it from a private preview server on a dedicated port, and reports the Chromium main renderer JS heap (used, total, and peak used) after the real upload-to-insights flow. Web Worker heaps are excluded, so this is the main-thread heap rather than a whole-process total. The browser audit is Chromium only, needs `local_libs=1` for the private runtime, and its heap value depends on the browser version and garbage-collection timing. `make explore` identifies the export owner for message-direction stats via `$LIA_ME`, falling back to git `user.name`.

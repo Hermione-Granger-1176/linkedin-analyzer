@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import ClassVar
 
 import pytest
 from openpyxl import Workbook
@@ -242,3 +243,104 @@ def test_identical_inputs_succeed(tmp_path: Path, capsys: pytest.CaptureFixture[
     assert "RESULT       IDENTICAL" in output
     assert "differing=0" in output
     assert "errors=0" in output
+
+
+def test_read_xlsx_rows_rejects_a_workbook_without_worksheets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A sheetless workbook is guarded against.
+
+    openpyxl refuses to *save* a workbook with no visible sheet, so the guard
+    is unreachable from a real file and the loader is stubbed instead.
+    """
+    path = tmp_path / "synthetic.xlsx"
+    write_xlsx(path, [HEADER, *BASE_ROWS])
+    closed: list[bool] = []
+
+    class _SheetlessWorkbook:
+        worksheets: ClassVar[list[object]] = []
+
+        def close(self) -> None:
+            closed.append(True)
+
+    monkeypatch.setattr(XRT_DIFF, "load_workbook", lambda *_a, **_k: _SheetlessWorkbook())
+
+    with pytest.raises(ValueError, match="missing worksheet"):
+        XRT_DIFF.read_xlsx_rows(path)
+
+    assert closed == [True]
+
+
+def test_read_web_rows_rejects_a_non_list_payload(tmp_path: Path) -> None:
+    """The web cleaner must emit a list of row objects."""
+    path = tmp_path / "rows.json"
+    path.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid row payload"):
+        XRT_DIFF.read_web_rows(path, HEADER)
+
+
+def test_read_web_rows_rejects_a_non_mapping_row(tmp_path: Path) -> None:
+    """A row that is not an object cannot be projected onto the header."""
+    path = tmp_path / "rows.json"
+    path.write_text(json.dumps([["Ada", "same"]]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid row payload"):
+        XRT_DIFF.read_web_rows(path, HEADER)
+
+
+def test_compare_type_rejects_an_empty_workbook(tmp_path: Path) -> None:
+    """A workbook with no rows at all has no header to project onto."""
+    xlsx_path = tmp_path / "empty-rows.xlsx"
+    write_xlsx(xlsx_path, [])
+    json_path = tmp_path / "rows.json"
+    json_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing header row"):
+        XRT_DIFF.compare_type(xlsx_path, json_path)
+
+
+def test_compare_type_rejects_an_empty_header_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A present-but-columnless header row cannot name any column.
+
+    openpyxl normalises a blank leading row to a single empty cell, so the
+    reader is stubbed to produce the degenerate shape the guard defends.
+    """
+    xlsx_path = tmp_path / "blank-header.xlsx"
+    write_xlsx(xlsx_path, [HEADER])
+    json_path = tmp_path / "rows.json"
+    json_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(XRT_DIFF, "read_xlsx_rows", lambda _path: [[]])
+
+    with pytest.raises(ValueError, match="empty header row"):
+        XRT_DIFF.compare_type(xlsx_path, json_path)
+
+
+def test_read_xlsx_rows_pads_a_ragged_worksheet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Short data rows are padded out to the header width.
+
+    openpyxl hands back a rectangular cell range, so a genuinely ragged sheet
+    only arises from other writers; the worksheet is stubbed to produce one.
+    """
+    path = tmp_path / "synthetic.xlsx"
+    write_xlsx(path, [HEADER, *BASE_ROWS])
+
+    class _RaggedWorksheet:
+        @staticmethod
+        def iter_rows(*, values_only: bool = False) -> list[tuple[object, ...]]:
+            assert values_only
+            return [("Name", "Value"), ("Ada",)]
+
+    class _RaggedWorkbook:
+        worksheets: ClassVar[list[object]] = [_RaggedWorksheet()]
+
+        def close(self) -> None:
+            """Match the openpyxl workbook interface."""
+
+    monkeypatch.setattr(XRT_DIFF, "load_workbook", lambda *_a, **_k: _RaggedWorkbook())
+
+    assert XRT_DIFF.read_xlsx_rows(path) == [["Name", "Value"], ["Ada", ""]]

@@ -41,6 +41,13 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: CI setup
+        if: steps.credentials.outputs.available == 'true'
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ""
+          install-node-deps: "false"
+
       - name: Capture default branch HEAD SHA
         if: steps.credentials.outputs.available == 'true'
         id: head
@@ -50,7 +57,7 @@ jobs:
         if: steps.credentials.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: python3 scripts/ci/refresh_action_shas.py
+        run: make refresh-action-shas
 
       - name: Detect workflow changes
         if: steps.credentials.outputs.available == 'true'

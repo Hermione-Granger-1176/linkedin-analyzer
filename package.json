@@ -12,6 +12,7 @@
     "format": "prettier --config config/prettierrc.json --ignore-path config/prettierignore --no-error-on-unmatched-pattern --write \"*.{json,md,yml,yaml}\" \"config/**/*.{json,js,mjs,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml,mjs}\" \"scripts/**/*.{js,mjs}\" \"web/*.config.js\" \"web/**/*.json\"",
     "format:check": "prettier --config config/prettierrc.json --ignore-path config/prettierignore --no-error-on-unmatched-pattern --check \"*.{json,md,yml,yaml}\" \"config/**/*.{json,js,mjs,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml,mjs}\" \"scripts/**/*.{js,mjs}\" \"web/*.config.js\" \"web/**/*.json\"",
     "lint": "eslint --config config/eslint.config.mjs \"web/src/**/*.js\" \"web/tests/**/*.js\" \"api/**/*.mjs\"",
+    "lint:css": "stylelint --config config/stylelint.config.mjs \"web/**/*.css\"",
     "typecheck:web": "tsc --noEmit --project config/jsconfig.json",
     "test": "vitest run --config web/vitest.config.js --coverage",
     "test:e2e": "playwright test --config config/playwright.config.js",
@@ -45,6 +46,9 @@
     "roughjs": "^4.6.6",
     "web-vitals": "^5.3.0",
     "write-excel-file": "^4.1.1"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8"
   },
   "size-limit": [
     {
@@ -85,6 +89,7 @@
     "knip": "^6.27.0",
     "prettier": "^3.9.5",
     "size-limit": "^12.0.0",
+    "stylelint": "^17.14.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.5",
     "vite-plugin-pwa": "^1.3.0",

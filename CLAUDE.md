@@ -5,10 +5,10 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 ## Rules
 
 1. **The Makefile is the only interface.** Never run `.venv/bin/*`, `pytest`, `ruff`, `mypy`, `npm run`, `npx`, `vite`, `playwright`, or `gh` directly. Always use `make <target>`. If unsure what's available, run `make help` first. The list is auto-generated from the Makefile.
-2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make ci-failures` over raw `gh`. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one). No `databaseId` lookup is needed. The PR number is auto-detected from the current branch (override with `pr_num=N`). Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
+2. **Use the `make pr`/`make issue`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make issue-summary`, `make ci-failures` over raw `gh`. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one). No `databaseId` lookup is needed. Every `pr-*` target accepts `pr_num=N`; without it the current branch's PR is used. Every body-taking target accepts `body_file=path`, and `body_file=-` reads from stdin: use that for anything multiline instead of fighting shell quoting. Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
 3. **If a target is missing, add it.** Put `## description` after the target name in the Makefile and it appears in `make help` automatically.
 4. **Each tool has one config file.** To change what gets linted/tested/typed, edit that tool's config, nowhere else. See the tool configuration table below.
-5. **Configs auto-discover from roots; never enumerate files.** Point tools at directory roots or globs (like coverage's `source = ["src/linkedin_analyzer"]`) so new files are covered automatically. Don't list individual source files. That rots the day someone adds a file and forgets. Tool _config-file_ location pointers (e.g. knip's `vite.config`) are fine; per-file source lists are not.
+5. **Configs auto-discover from roots; never enumerate files.** Point tools at directory roots or globs (like coverage's `source = ["src/linkedin_analyzer", "scripts"]`) so new files are covered automatically. Don't list individual source files. That rots the day someone adds a file and forgets. Tool _config-file_ location pointers (e.g. knip's `vite.config`) are fine; per-file source lists are not.
 6. **Read before acting.** Read the Makefile and existing code before proposing changes.
 7. **Don't run auto-fix commands** (`make fmt`, `make lock`, etc.) unless the user asks.
 8. **Don't commit, push, or open/merge PRs unless asked.** Make and verify changes in the working tree and stop there; the user decides when to commit and push. For small tooling/doc tweaks, fold them into the current in-progress branch instead of opening a separate PR.
@@ -20,13 +20,13 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 - `web/`: Vite SPA with `src/` (router, screens, cleaner, storage, telemetry, sentry), the `index.html` shell, `tests/` (Vitest unit), `e2e/` (Playwright), `vite.config.js`, and `vitest.config.js`
 - `api/`: Vercel Serverless Functions. `csp-report.mjs` collects CSP violation reports.
 - `tests/`: Python tests
-- `scripts/`: repo tooling
-- `config/`: shared JS/web tool configs (eslint, prettier, playwright, jsconfig)
+- `scripts/`: repo tooling. `gh/` (GitHub PR/issue/CI helpers behind the `pr-*`/`issue-*`/`ci-*` targets), `lib/` (shared stdlib-only helpers: gh retry policy, `gh api` wrapper, safe staging, workspace status), `ci/` (parallel check runner, action SHA refresh, policy-driven dependency audits), `lint/` (editorconfig, doc-command, and Make-target checks), `checks/`, `setup/`
+- `config/`: shared JS/web tool configs (eslint, stylelint, prettier, playwright, jsconfig) plus `security_audit.json`
 - `docs/`: developer documentation (see Docs below)
 
 ## Local commands
 
-**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, deadcode, test, web, checks, quality, deps, util, git, pr, ci. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
+**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, deadcode, test, web, checks, quality, deps, util, git, pr, issue, ci. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
 
 Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 
@@ -41,7 +41,7 @@ Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 - `make fmt`: auto-fix Python, JS, and metadata formatting
 - `make web`: start the Vite dev server
 - `make security`: dependency and override audits
-- `make pr` / `make git`: drill into PR and git sub-commands (`make help-ci` lists the CI sub-commands)
+- `make pr` / `make issue` / `make git`: drill into PR, issue, and git sub-commands (`make help-ci` lists the CI sub-commands)
 - `make status`: quick workspace health check
 
 Playwright uses native host platform detection. On Debian or Ubuntu hosts that lack browser libraries, `make setup-playwright-local` prepares a private no-sudo library runtime below the ignored `.playwright/` cache and installs browsers into Playwright's shared `~/.cache/ms-playwright` cache (reused across projects). Use `local_libs=1` with browser targets to run through that prepared runtime. `make clean` and `make playwright-local-clean` remove only `.playwright/`, never the shared browsers. `make setup-all` installs dependencies and browsers without system packages, while CI retains Playwright's `--with-deps` setup.
@@ -59,7 +59,11 @@ High-frequency loops (full surface via `make help`). The PR/CI targets wrap a te
 | Reply only / resolve only | `make pr-reply thread=PRRT_... body="..."` / `make pr-resolve thread=PRRT_...` |
 | PR overview (state, CI, open threads) | `make pr-summary` |
 | Why is CI red | `make ci-failures` |
+| Issue overview | `make issue-summary issue=N` |
 | New branch off `main` | `make branch name=X` |
+| Stage / commit / push | `make stage files="..."` / `make commit message="..."` / `make push` |
+| Long commit or comment body | `make commit message_file=-` / `make pr-comment body_file=-` (heredoc) |
+| Rebase onto fresh `main` | `make rebase` (fetches first) |
 | Full local gate / parallel | `make ci` / `make ci-fast` |
 | Discover commands | `make help` → `make help-<group>` → `make help-json` |
 
@@ -67,20 +71,24 @@ High-frequency loops (full surface via `make help`). The PR/CI targets wrap a te
 
 Each tool has one config file that owns its scope. The Makefile just calls tools.
 
-| Tool       | Config (source of truth)      | What it defines                                 |
-| ---------- | ----------------------------- | ----------------------------------------------- |
-| ruff       | `pyproject.toml`              | Python lint/format rules                        |
-| mypy       | `pyproject.toml`              | Python type checking                            |
-| pytest     | `pyproject.toml`              | Test paths and options                          |
-| coverage   | `pyproject.toml`              | Coverage source and report thresholds           |
-| vulture    | `pyproject.toml`              | Python dead-code detection                      |
-| ESLint     | `config/eslint.config.mjs`    | JS lint rules                                   |
-| Prettier   | `config/prettierrc.json`      | JS/JSON/MD/YAML formatting (+ `prettierignore`) |
-| Playwright | `config/playwright.config.js` | Browser e2e test config                         |
-| Vite       | `web/vite.config.js`          | Web build + generated PWA manifest              |
-| Vitest     | `web/vitest.config.js`        | Web unit test config                            |
-| jsconfig   | `config/jsconfig.json`        | JS editor/type hints                            |
-| knip       | `config/knip.json`            | JS dead-code, unused exports and deps           |
+| Tool | Config (source of truth) | What it defines |
+| --- | --- | --- |
+| ruff | `pyproject.toml` | Python lint/format rules |
+| mypy | `pyproject.toml` | Python type checking |
+| pytest | `pyproject.toml` | Test paths and options |
+| coverage | `pyproject.toml` | Coverage source and report thresholds |
+| vulture | `pyproject.toml` | Python dead-code detection |
+| ESLint | `config/eslint.config.mjs` | JS lint rules |
+| stylelint | `config/stylelint.config.mjs` | CSS lint rules |
+| yamllint | `.yamllint.yml` | YAML lint rules |
+| Prettier | `config/prettierrc.json` | JS/JSON/MD/YAML formatting (+ `prettierignore`) |
+| Playwright | `config/playwright.config.js` | Browser e2e test config |
+| Vite | `web/vite.config.js` | Web build + generated PWA manifest |
+| Vitest | `web/vitest.config.js` | Web unit test config |
+| jsconfig | `config/jsconfig.json` | JS editor/type hints |
+| knip | `config/knip.json` | JS dead-code, unused exports and deps |
+| EditorConfig | `.editorconfig` | Line endings, final newline, indentation |
+| Dep audits | `config/security_audit.json` | Reviewed vulnerability exceptions (both ecosystems) |
 
 ## Deployment
 
@@ -103,4 +111,5 @@ Developer documentation lives in `docs/`:
 ## Conventions
 
 - Commit subjects: imperative, sentence case, no Conventional Commit prefix; short `-` bullet body for non-trivial commits.
+- Commit with `make commit message="Subject"`, or `make commit message_file=- <<'EOF'` for a subject plus bullet body. The message is linted for leaked shell before `git commit` runs.
 - Branch from `main` with `make branch name=X`; open PRs against `main`.

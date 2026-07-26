@@ -101,3 +101,37 @@ def test_failure_digest_empty_logs() -> None:
     digest = ci_status.failure_digest(99, run_fn=runner)
 
     assert "(no failed-step logs returned)" in digest
+
+
+def test_latest_run_rejects_a_non_list_payload() -> None:
+    """A malformed `gh run list` payload is reported rather than indexed into."""
+    runner = FakeGh([(has("run"), completed_process(0, json.dumps({"not": "a list"})))])
+
+    with pytest.raises(GhError, match="No workflow runs found for branch 'feature'"):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
+def test_latest_run_rejects_a_non_mapping_run_entry() -> None:
+    """A run entry that is not an object is reported by branch."""
+    runner = FakeGh([(has("run"), completed_process(0, json.dumps(["nope"])))])
+
+    with pytest.raises(GhError, match="Unexpected workflow run payload for branch 'feature'"):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
+def test_latest_run_requires_a_database_id() -> None:
+    """A run without a databaseId cannot be addressed later, so it fails loudly."""
+    payload = json.dumps([{"status": "completed", "conclusion": "success"}])
+    runner = FakeGh([(has("run"), completed_process(0, payload))])
+
+    with pytest.raises(GhError, match="missing databaseId"):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
+def test_latest_run_rejects_a_non_integer_database_id() -> None:
+    """A non-numeric databaseId names the offending value."""
+    payload = json.dumps([{"databaseId": "not-a-number", "status": "completed"}])
+    runner = FakeGh([(has("run"), completed_process(0, payload))])
+
+    with pytest.raises(GhError, match="databaseId is not an integer"):
+        ci_status.latest_run("feature", run_fn=runner)

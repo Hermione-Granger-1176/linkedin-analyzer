@@ -631,3 +631,210 @@ def test_main_delete_comment_invokes_helper(
     assert exit_code == 0
     assert deleted == ["PRRC_x"]
     assert "Deleted PRRC_x" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({}, "No pull request in GraphQL response"),
+        ({"repository": "nope"}, "No pull request in GraphQL response"),
+        ({"repository": {"pullRequest": None}}, "No pull request in GraphQL response"),
+        (
+            {"repository": {"pullRequest": {"reviewThreads": "nope"}}},
+            "No review threads in GraphQL response",
+        ),
+    ],
+)
+def test_review_threads_rejects_malformed_envelopes(payload: Any, message: str) -> None:
+    """Each layer of the reviewThreads envelope is shape-checked."""
+    with pytest.raises(GhError, match=message):
+        pr_review._review_threads(payload)
+
+
+def test_review_thread_nodes_rejects_a_non_list() -> None:
+    """A non-list nodes field is rejected before iteration."""
+    with pytest.raises(GhError, match=r"Unexpected reviewThreads\.nodes shape"):
+        pr_review._review_thread_nodes({"nodes": "nope"})
+
+
+@pytest.mark.parametrize(
+    ("nodes", "message"),
+    [
+        ("nope", "Unexpected reviewThreads.nodes shape"),
+        (["nope"], "Unexpected review thread node shape"),
+        ([{}], "Review thread node missing id"),
+        ([{"id": "T_1", "comments": "nope"}], "Unexpected review thread comments shape"),
+        (
+            [{"id": "T_1", "comments": {"nodes": "nope"}}],
+            "Unexpected review thread comments nodes shape",
+        ),
+        (
+            [{"id": "T_1", "comments": {"nodes": ["nope"]}}],
+            "Unexpected review thread comment node shape",
+        ),
+        (
+            [{"id": "T_1", "comments": {"nodes": [{"author": "nope"}]}}],
+            "Unexpected review comment author shape",
+        ),
+    ],
+)
+def test_parse_nodes_rejects_malformed_thread_nodes(nodes: Any, message: str) -> None:
+    """Every malformed review-thread node shape raises a named GhError."""
+    with pytest.raises(GhError, match=message):
+        pr_review._parse_nodes(nodes)
+
+
+def test_page_info_rejects_a_non_mapping() -> None:
+    """A malformed pageInfo is reported with the caller's message."""
+    with pytest.raises(GhError, match="bad page info"):
+        pr_review._page_info({"pageInfo": "nope"}, "bad page info")
+
+
+def test_page_has_next_rejects_a_non_boolean() -> None:
+    """The hasNextPage field is non-null in the schema, so a non-boolean is malformed."""
+    with pytest.raises(GhError, match="bad has-next"):
+        pr_review._page_has_next({"hasNextPage": "yes"}, "bad has-next")
+
+
+@pytest.mark.parametrize("cursor", [None, "", 7])
+def test_require_end_cursor_rejects_unusable_cursors(cursor: Any) -> None:
+    """Pagination refuses to continue from a missing or empty cursor."""
+    with pytest.raises(GhError, match="bad cursor"):
+        pr_review._require_end_cursor({"endCursor": cursor}, "bad cursor")
+
+
+@pytest.mark.parametrize(
+    ("nodes", "message"),
+    [
+        ("nope", "Unexpected review comment nodes shape"),
+        (["nope"], "Unexpected review comment node shape"),
+        ([{}], "Review comment node missing id"),
+        ([{"id": "RC_1", "author": "nope"}], "Unexpected review comment author shape"),
+    ],
+)
+def test_parse_comment_nodes_rejects_malformed_nodes(nodes: Any, message: str) -> None:
+    """Every malformed review-comment node shape raises a named GhError."""
+    with pytest.raises(GhError, match=message):
+        pr_review._parse_comment_nodes(nodes)
+
+
+@pytest.mark.parametrize(
+    ("node", "message"),
+    [
+        ("nope", "Unexpected review thread node shape"),
+        ({}, "Review thread node missing id"),
+        ({"id": "T_1", "comments": "nope"}, "Unexpected thread comments shape"),
+    ],
+)
+def test_thread_comments_connection_rejects_malformed_nodes(node: Any, message: str) -> None:
+    """The per-thread comments connection is shape-checked before paging."""
+    with pytest.raises(GhError, match=message):
+        pr_review._thread_comments_connection(node)
+
+
+def test_remaining_thread_comments_rejects_a_non_mapping_page_info() -> None:
+    """A malformed pageInfo names the thread it belongs to."""
+    with pytest.raises(GhError, match="Unexpected review thread pageInfo shape for T_1"):
+        pr_review._remaining_thread_comments("T_1", "nope")
+
+
+def test_pr_summary_rejects_a_non_mapping_meta() -> None:
+    """A malformed `gh pr view` payload is reported by PR number."""
+    runner = FakeGh([(has("view"), completed_process(0, json.dumps(["nope"])))])
+
+    with pytest.raises(GhError, match="Unexpected PR view response shape for PR 9"):
+        pr_review.pr_summary(9, run_fn=runner)
+
+
+def test_edit_pr_requires_something_to_change() -> None:
+    """Editing with no title, body, or body file is a usage error."""
+    with pytest.raises(GhError, match=r"Provide a title, body, or body file to edit\."):
+        pr_review.edit_pr(9)
+
+
+def test_rollup_summary_reports_none_for_an_empty_rollup() -> None:
+    """A PR with no checks summarises as "none"."""
+    assert pr_review.rollup_summary([]) == "none"
+
+
+def test_rollup_summary_rejects_a_malformed_entry() -> None:
+    """A non-mapping rollup entry is reported rather than counted."""
+    with pytest.raises(GhError, match="Unexpected statusCheckRollup entry shape"):
+        pr_review.rollup_summary(["nope"])
+
+
+def test_owner_name_rejects_an_invalid_slug(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A slug missing either half cannot address the repository."""
+    monkeypatch.setattr(gh_runner, "resolve_repo", lambda **_kwargs: "/name")
+
+    with pytest.raises(GhError, match="Invalid repository slug: /name"):
+        pr_review._owner_name()
+
+
+@pytest.mark.parametrize(
+    ("result", "message"),
+    [
+        (["nope"], "Unexpected review thread response shape for T_1"),
+        ({"node": "nope"}, "Review thread T_1 not found or inaccessible"),
+        ({"node": {}}, "Review thread T_1 not found or inaccessible"),
+        ({"node": {"comments": "nope"}}, "Unexpected review thread comments shape for T_1"),
+    ],
+)
+def test_remaining_thread_comments_rejects_malformed_pages(
+    result: Any, message: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each layer of a follow-up comments page is shape-checked."""
+    monkeypatch.setattr(gh_runner, "graphql", lambda *_a, **_k: result)
+    page_info = {"hasNextPage": True, "endCursor": "cursor-1"}
+
+    with pytest.raises(GhError, match=message):
+        pr_review._remaining_thread_comments("T_1", page_info)
+
+
+def test_pr_summary_omits_the_thread_block_when_none_are_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR with no open threads renders the meta lines only."""
+    meta = {"number": 9, "state": "OPEN", "title": "T", "url": "https://example/pr"}
+    runner = FakeGh([(has("view"), completed_process(0, json.dumps(meta)))])
+    monkeypatch.setattr(pr_review, "list_threads", lambda *_a, **_k: [])
+
+    summary = pr_review.pr_summary(9, run_fn=runner)
+
+    assert summary.endswith("open review threads: 0")
+
+
+def test_edit_pr_forwards_title_body_and_pr_number() -> None:
+    """An inline body is forwarded as --body alongside --title."""
+    runner = FakeGh([(has("edit"), completed_process(0, ""))])
+
+    pr_review.edit_pr(9, title="New", body="Body", run_fn=runner)
+
+    assert runner.calls[0] == [
+        "gh",
+        "pr",
+        "edit",
+        "9",
+        "--title",
+        "New",
+        "--body",
+        "Body",
+    ]
+
+
+def test_edit_pr_prefers_body_file_over_inline_body() -> None:
+    """--body-file wins so gh reads large bodies itself."""
+    runner = FakeGh([(has("edit"), completed_process(0, ""))])
+
+    pr_review.edit_pr(body="ignored", body_file="-", run_fn=runner)
+
+    assert runner.calls[0] == ["gh", "pr", "edit", "--body-file", "-"]
+
+
+def test_edit_pr_with_only_a_title_sends_no_body_flag() -> None:
+    """A title-only edit must not invent an empty body."""
+    runner = FakeGh([(has("edit"), completed_process(0, ""))])
+
+    pr_review.edit_pr(title="Only title", run_fn=runner)
+
+    assert runner.calls[0] == ["gh", "pr", "edit", "--title", "Only title"]

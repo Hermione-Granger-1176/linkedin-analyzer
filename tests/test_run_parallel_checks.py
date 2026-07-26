@@ -107,3 +107,74 @@ def test_main_uses_timeout_for_targets(
     assert exit_code == 0
     assert calls == [(["lint"], 42)]
     assert "✓ lint" in captured.out
+
+
+def test_run_check_reports_a_timeout() -> None:
+    """A target that exceeds the timeout fails with an explanatory line."""
+
+    def _timeout(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(["make", "lint"], 5)
+
+    result = run_parallel_checks.run_check("lint", timeout=5, run_fn=_timeout)
+
+    assert result.passed is False
+    assert result.output == "Timed out after 5s"
+
+
+def test_run_check_reports_a_spawn_failure() -> None:
+    """An OS-level spawn failure is reported rather than crashing the batch."""
+
+    def _boom(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise OSError("no such executable")
+
+    result = run_parallel_checks.run_check("lint", run_fn=_boom)
+
+    assert result.passed is False
+    assert result.output == "Failed to run: no such executable"
+
+
+def test_main_without_targets_prints_usage(capsys: pytest.CaptureFixture[str]) -> None:
+    """Calling the runner with no targets is a usage error."""
+    assert run_parallel_checks.main([]) == 1
+    assert "Usage: run_parallel_checks.py" in capsys.readouterr().out
+
+
+def test_main_rejects_a_trailing_timeout_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    """`--timeout` as the last argument has no value to consume."""
+    assert run_parallel_checks.main(["--timeout"]) == 1
+    assert "--timeout requires an integer value" in capsys.readouterr().out
+
+
+def test_main_rejects_a_non_integer_timeout(capsys: pytest.CaptureFixture[str]) -> None:
+    """A non-numeric timeout names the offending value."""
+    assert run_parallel_checks.main(["--timeout", "soon", "lint"]) == 1
+    assert "invalid timeout value: 'soon'" in capsys.readouterr().out
+
+
+def test_main_rejects_a_non_positive_timeout(capsys: pytest.CaptureFixture[str]) -> None:
+    """A zero or negative timeout would make every target fail instantly."""
+    assert run_parallel_checks.main(["--timeout", "0", "lint"]) == 1
+    assert "timeout must be positive, got 0" in capsys.readouterr().out
+
+
+def test_main_reports_a_failing_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed check makes the whole batch exit non-zero."""
+    monkeypatch.setattr(
+        run_parallel_checks,
+        "run_checks",
+        lambda *_args, **_kwargs: (run_parallel_checks.CheckResult("lint", False, 0.1, "boom"),),
+    )
+
+    assert run_parallel_checks.main(["lint"]) == 1
+
+
+def test_main_defaults_to_sys_argv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Omitting argv falls back to the process command line."""
+    monkeypatch.setattr(run_parallel_checks.sys, "argv", ["run_parallel_checks.py", "lint"])
+    monkeypatch.setattr(
+        run_parallel_checks,
+        "run_checks",
+        lambda *_args, **_kwargs: (run_parallel_checks.CheckResult("lint", True, 0.1, "ok"),),
+    )
+
+    assert run_parallel_checks.main() == 0

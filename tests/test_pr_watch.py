@@ -143,23 +143,37 @@ def test_copilot_reviews_rejects_malformed_payloads(reviews: object) -> None:
 def test_watch_baseline_returns_existing_review_and_thread_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The baseline captures reviews and open threads before a new request."""
+    """The baseline captures reviews and every thread before a new request."""
     runner = _poll_runner(
         reviews=[_review("old"), _review("other", login="octocat")],
         rollup=[],
     )
+    calls: list[dict[str, object]] = []
     monkeypatch.setattr(
         pr_review,
         "list_threads",
-        lambda *_args, **_kwargs: [
-            pr_review.ReviewThread("PRRT_old", "open", "f", 1, "copilot", "body", "url")
-        ],
+        lambda *_args, **kwargs: (
+            calls.append(kwargs)
+            or [
+                pr_review.ReviewThread("PRRT_open", "open", "f", 1, "copilot", "body", "url"),
+                pr_review.ReviewThread(
+                    "PRRT_resolved",
+                    "resolved",
+                    "f",
+                    2,
+                    "copilot",
+                    "body",
+                    "url",
+                ),
+            ]
+        ),
     )
 
     assert pr_watch.watch_baseline(12, run_fn=runner) == pr_watch.WatchBaseline(
         frozenset({"old"}),
-        frozenset({"PRRT_old"}),
+        frozenset({"PRRT_open", "PRRT_resolved"}),
     )
+    assert calls == [{"include_resolved": True, "run_fn": runner}]
 
 
 @pytest.mark.parametrize(
@@ -589,6 +603,40 @@ def test_watch_pr_clean_review_with_older_open_thread_is_not_merge_ready(
 
     assert "latest Copilot review: generated no new comments" in report
     assert "open review threads: 1" in report
+    assert "merge ready: no" in report
+
+
+def test_watch_pr_counts_resolved_fresh_threads_but_reports_only_open_threads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A quickly resolved fresh comment cannot leave the watcher polling."""
+    resolved = pr_review.ReviewThread(
+        "PRRT_new",
+        "resolved",
+        "f",
+        1,
+        "copilot",
+        "body",
+        "url",
+    )
+    calls: list[dict[str, object]] = []
+    _watch_stubs(
+        monkeypatch,
+        [_status(settled=True, review=_parsed_review(count=1))],
+        thread_batches=[[resolved]],
+    )
+    original = pr_review.list_threads
+    monkeypatch.setattr(
+        pr_review,
+        "list_threads",
+        lambda *_args, **kwargs: calls.append(kwargs) or original(),
+    )
+
+    report = pr_watch.watch_pr(12, interval=0, max_polls=1)
+
+    assert calls == [{"include_resolved": True, "run_fn": None}]
+    assert "open review threads: 0" in report
+    assert "thread=PRRT_new" not in report
     assert "merge ready: no" in report
 
 

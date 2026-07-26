@@ -55,7 +55,7 @@ class WatchBaseline:
     """Review and thread identities captured before requesting Copilot."""
 
     review_ids: frozenset[str]
-    open_thread_ids: frozenset[str]
+    thread_ids: frozenset[str]
 
 
 def _parse_timestamp(value: str, context: str) -> datetime:
@@ -132,10 +132,11 @@ def watch_baseline(pr: int, *, run_fn: RunFunction | None = None) -> WatchBaseli
     """Capture existing Copilot reviews and open threads before a request."""
     payload = _review_payload(pr, run_fn=run_fn)
     review_ids = frozenset(review.review_id for review in _copilot_reviews(payload.get("reviews")))
-    open_thread_ids = frozenset(
-        thread.thread_id for thread in pr_review.list_threads(pr, run_fn=run_fn)
+    thread_ids = frozenset(
+        thread.thread_id
+        for thread in pr_review.list_threads(pr, include_resolved=True, run_fn=run_fn)
     )
-    return WatchBaseline(review_ids, open_thread_ids)
+    return WatchBaseline(review_ids, thread_ids)
 
 
 def _check_status(
@@ -297,14 +298,14 @@ def watch_pr(
             checks_only or status.fresh_review is not None
         )
         if ready_for_threads:
-            threads = pr_review.list_threads(pr, run_fn=run_fn)
+            all_threads = pr_review.list_threads(pr, include_resolved=True, run_fn=run_fn)
             review_count = (
                 status.fresh_review.generated_comment_count
                 if status.fresh_review is not None
                 else 0
             )
             fresh_thread_count = sum(
-                thread.thread_id not in baseline.open_thread_ids for thread in threads
+                thread.thread_id not in baseline.thread_ids for thread in all_threads
             )
             waiting_for_threads = review_count is not None and review_count > fresh_thread_count
             if not waiting_for_threads:
@@ -316,6 +317,7 @@ def watch_pr(
                         "The fresh Copilot review overview could not be classified; "
                         "inspect `make pr-comments` before merging."
                     )
+                threads = [thread for thread in all_threads if thread.state == "open"]
                 return _watch_report(
                     pr=pr,
                     poll_count=poll_count,

@@ -113,10 +113,13 @@ def test_iter_workspace_files_skips_dependency_and_build_directories(
 
 
 def test_iter_workspace_files_skips_symlinks(tmp_path: Path) -> None:
-    """Workspace scans do not follow file symlinks."""
+    """Workspace scans do not follow file or directory symlinks."""
     target = tmp_path / "target.py"
     write_text(target, "print('safe')\n")
     (tmp_path / "linked.py").symlink_to(target)
+    external = tmp_path.parent / "external-editorconfig-dir"
+    write_text(external / "outside.py", "print('outside')\n")
+    (tmp_path / "linked-directory").symlink_to(external, target_is_directory=True)
 
     files = check_editorconfig.iter_workspace_files(tmp_path)
 
@@ -308,6 +311,22 @@ def test_main_rejects_symlink(
     monkeypatch.setattr(check_editorconfig, "REPO_ROOT", tmp_path)
 
     exit_code = check_editorconfig.main(["linked.txt"])
+
+    assert exit_code == 1
+    assert "symbolic links are not supported" in capsys.readouterr().out
+
+
+def test_main_rejects_path_through_symlinked_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Main rejects paths reached through symbolic-link directories."""
+    write_text(tmp_path / ".editorconfig", "[*.txt]\ninsert_final_newline = true\n")
+    target_directory = tmp_path / "target-directory"
+    write_text(target_directory / "target.txt", "safe\n")
+    (tmp_path / "linked-directory").symlink_to(target_directory, target_is_directory=True)
+    monkeypatch.setattr(check_editorconfig, "REPO_ROOT", tmp_path)
+
+    exit_code = check_editorconfig.main(["linked-directory/target.txt"])
 
     assert exit_code == 1
     assert "symbolic links are not supported" in capsys.readouterr().out

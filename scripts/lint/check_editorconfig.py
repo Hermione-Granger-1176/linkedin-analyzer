@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,13 +130,24 @@ def should_check_file(sections: list[EditorConfigSection], relative_path: str) -
 def iter_workspace_files(root: Path | None = None) -> list[Path]:
     """Return repository files, skipping cache, build, dependency, and VCS directories."""
     workspace_root = root or REPO_ROOT
-    return [
-        path
-        for path in sorted(workspace_root.rglob("*"))
-        if path.is_file()
-        and not path.is_symlink()
-        and not any(part in SKIP_DIRECTORIES for part in path.relative_to(workspace_root).parts)
-    ]
+    files: list[Path] = []
+    for current_root, directory_names, file_names in os.walk(
+        workspace_root,
+        topdown=True,
+        followlinks=False,
+    ):
+        current_path = Path(current_root)
+        directory_names[:] = sorted(
+            name
+            for name in directory_names
+            if name not in SKIP_DIRECTORIES and not (current_path / name).is_symlink()
+        )
+        files.extend(
+            path
+            for name in sorted(file_names)
+            if (path := current_path / name).is_file() and not path.is_symlink()
+        )
+    return files
 
 
 def _decode_text_file(path: Path) -> str | None:
@@ -223,6 +235,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _contains_symlink(path: Path, root: Path) -> bool:
+    """Return whether any repository-relative path component is a symbolic link."""
+    current = root
+    for part in path.relative_to(root).parts:
+        current /= part
+        if current.is_symlink():
+            return True
+    return False
+
+
 def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:
     """Resolve safe repository-relative file paths and return validation errors."""
     resolved_paths: list[Path] = []
@@ -235,7 +257,7 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
             continue
 
         candidate = root / relative
-        if candidate.is_symlink():
+        if _contains_symlink(candidate, root):
             errors.append(f"{raw}: symbolic links are not supported")
             continue
 

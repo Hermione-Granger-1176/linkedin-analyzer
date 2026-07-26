@@ -494,7 +494,7 @@ release-create: ## Tag and publish a GitHub release (make release-create tag=vX.
 
 # ─── Pull requests @pr ────────────────────────────────────────────────────────────
 
-.PHONY: pr pr-create pr-edit pr-list pr-status pr-checks pr-diff pr-comments pr-comment pr-review-comments pr-reply pr-resolve pr-address pr-comments-list pr-comment-delete pr-summary pr-merge pr-merge-admin pr-reviewers pr-copilot pr-label pr-close
+.PHONY: pr pr-create pr-edit pr-list pr-status pr-checks pr-diff pr-comments pr-comment pr-review-comments pr-reply pr-resolve pr-address pr-comments-list pr-comment-delete pr-summary pr-watch pr-merge pr-merge-admin pr-reviewers pr-copilot pr-label pr-close
 
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
@@ -557,6 +557,9 @@ pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete
 
 pr-summary: ## One-screen PR overview: state, CI rollup, open threads (make pr-summary [pr_num=N])
 	@$(GH) summary $(if $(pr_num),--pr $(pr_num))
+
+pr-watch: ## Request Copilot and wait for fresh review plus checks (make pr-watch [pr_num=N] [interval=S] [max_polls=K] [expected_checks=N] [checks_only=1])
+	@$(GH) watch $(if $(pr_num),--pr $(pr_num)) $(if $(interval),--interval $(interval)) $(if $(max_polls),--max-polls $(max_polls)) $(if $(expected_checks),--expected-checks $(expected_checks)) $(if $(filter 1,$(checks_only)),--checks-only)
 
 pr-merge: ## Merge the current PR (squash, delete branch) (make pr-merge [pr_num=N])
 	gh pr merge $(if $(pr_num),$(pr_num)) --squash --delete-branch

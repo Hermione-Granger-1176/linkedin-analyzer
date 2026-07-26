@@ -5,7 +5,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 ## Rules
 
 1. **The Makefile is the only interface.** Never run `.venv/bin/*`, `pytest`, `ruff`, `mypy`, `npm run`, `npx`, `vite`, `playwright`, or `gh` directly. Always use `make <target>`. If unsure what's available, run `make help` first. The list is auto-generated from the Makefile.
-2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make ci-failures` over raw `gh`. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one). No `databaseId` lookup is needed. The PR number is auto-detected from the current branch (override with `pr_num=N`). Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
+2. **Use the `make pr`/`make git`/`make ci` targets for GitHub work.** Prefer `make pr-create`, `make pr-watch`, `make pr-review-comments`, `make pr-address`, `make pr-summary`, `make ci-failures` over raw `gh`. After a push, `make pr-watch` captures the existing review baseline, requests Copilot, waits for a genuinely new review and the expected successful checks, then prints only the latest merge readiness and open threads. `make pr-review-comments` prints a `thread=PRRT_...` id for each review thread; pass that id straight to `make pr-reply thread=... body="..."`, `make pr-resolve thread=...`, or `make pr-address thread=... body="..."` (reply + resolve in one). No `databaseId` lookup is needed. The PR number is auto-detected from the current branch (override with `pr_num=N`). Never pass extra flags like `--jq` to a make target, since make parses them itself and errors.
 3. **If a target is missing, add it.** Put `## description` after the target name in the Makefile and it appears in `make help` automatically.
 4. **Each tool has one config file.** To change what gets linted/tested/typed, edit that tool's config, nowhere else. See the tool configuration table below.
 5. **Configs auto-discover from roots; never enumerate files.** Point tools at directory roots or globs (like coverage's `source = ["src/linkedin_analyzer"]`) so new files are covered automatically. Don't list individual source files. That rots the day someone adds a file and forgets. Tool _config-file_ location pointers (e.g. knip's `vite.config`) are fine; per-file source lists are not.
@@ -57,6 +57,7 @@ High-frequency loops (full surface via `make help`). The PR/CI targets wrap a te
 | Review threads (with `thread=` ids) | `make pr-review-comments` |
 | Reply to **and** resolve a thread | `make pr-address thread=PRRT_... body="..."` |
 | Reply only / resolve only | `make pr-reply thread=PRRT_... body="..."` / `make pr-resolve thread=PRRT_...` |
+| Request Copilot and wait for the latest merge state | `make pr-watch` |
 | PR overview (state, CI, open threads) | `make pr-summary` |
 | Why is CI red | `make ci-failures` |
 | New branch off `main` | `make branch name=X` |

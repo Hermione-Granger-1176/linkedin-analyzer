@@ -87,12 +87,16 @@ def check_structure(
     expected_headers = list(expected["headers"])
     if len(header) != len(expected_headers):
         failures.append(
-            f"HEADER   FAIL check=length expected-cols={len(expected_headers)} actual-cols={len(header)}"
+            f"HEADER   FAIL check=length expected-cols={len(expected_headers)} "
+            f"actual-cols={len(header)}"
         )
     elif header != expected_headers:
         first_mismatch = next(
             index
-            for index, (actual, want) in enumerate(zip(header, expected_headers), start=1)
+            for index, (actual, want) in enumerate(
+                zip(header, expected_headers, strict=True),
+                start=1,
+            )
             if actual != want
         )
         failures.append(f"HEADER   FAIL check=values first-mismatch-column={first_mismatch}")
@@ -166,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         expected = load_expectations(args.expected)
         sheet_names, header, data_rows = read_workbook(args.workbook)
-    except Exception as error:  # noqa: BLE001 - report the failure class, not content
+    except Exception as error:
         print(f"RESULT   FAILED reason=load-error error={type(error).__name__}")
         return 1
 

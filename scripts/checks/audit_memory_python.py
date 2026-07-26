@@ -103,7 +103,8 @@ def run_audit(input_dir: Path, strict: bool) -> int:
             measured = measure(type_name, input_path, output_dir)
             if measured is None:
                 errors += 1
-                print(f"{type_name:<12} ERROR      input-bytes={input_bytes} measurement-failures=1")
+                details = f"{type_name:<12} ERROR      input-bytes={input_bytes}"
+                print(f"{details} measurement-failures=1")
                 continue
 
             rows, peak_rss_kib, status = measured

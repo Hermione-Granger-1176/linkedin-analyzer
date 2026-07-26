@@ -136,7 +136,7 @@ def test_iter_workspace_files_skips_symlinks(tmp_path: Path) -> None:
     target = tmp_path / "target.py"
     write_text(target, "print('safe')\n")
     (tmp_path / "linked.py").symlink_to(target)
-    external = tmp_path.parent / "external-editorconfig-dir"
+    external = tmp_path.parent / f"{tmp_path.name}-external-editorconfig-dir"
     write_text(external / "outside.py", "print('outside')\n")
     (tmp_path / "linked-directory").symlink_to(external, target_is_directory=True)
 
@@ -310,7 +310,7 @@ def test_main_rejects_path_outside_repository(
 ) -> None:
     """Main rejects explicit paths outside the repository."""
     write_text(tmp_path / ".editorconfig", "[*.txt]\ninsert_final_newline = true\n")
-    outside = tmp_path.parent / "outside.txt"
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.txt"
     write_text(outside, "outside\n")
     monkeypatch.setattr(check_editorconfig, "REPO_ROOT", tmp_path)
 

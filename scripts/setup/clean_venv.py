@@ -18,6 +18,14 @@ class CleanVenvError(RuntimeError):
     """A virtual-environment path is unsafe or cannot be removed."""
 
 
+def require_real_directory(path: Path, mode: int) -> None:
+    """Reject anything except a non-symlinked directory."""
+    if stat.S_ISLNK(mode):
+        raise CleanVenvError(f"VENV must not be a symlink: {path}")
+    if not stat.S_ISDIR(mode):
+        raise CleanVenvError(f"VENV must be a directory: {path}")
+
+
 def validated_venv_path(repo_root: Path, value: str) -> Path:
     """Return a safe direct child of the resolved repository root."""
     try:
@@ -42,10 +50,7 @@ def validated_venv_path(repo_root: Path, value: str) -> Path:
     except OSError as error:
         raise CleanVenvError(f"cannot inspect virtual environment {candidate}: {error}") from error
 
-    if stat.S_ISLNK(mode):
-        raise CleanVenvError(f"VENV must not be a symlink: {candidate}")
-    if not stat.S_ISDIR(mode):
-        raise CleanVenvError(f"VENV must be a directory: {candidate}")
+    require_real_directory(candidate, mode)
     return candidate
 
 
@@ -53,12 +58,13 @@ def remove_venv(repo_root: Path, value: str) -> bool:
     """Remove the validated virtual environment and report whether it existed."""
     path = validated_venv_path(repo_root, value)
     try:
-        path.lstat()
+        mode = path.lstat().st_mode
     except FileNotFoundError:
         return False
     except OSError as error:
         raise CleanVenvError(f"cannot inspect virtual environment {path}: {error}") from error
 
+    require_real_directory(path, mode)
     try:
         shutil.rmtree(path)
     except OSError as error:

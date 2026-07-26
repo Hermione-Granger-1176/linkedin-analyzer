@@ -136,6 +136,29 @@ def test_remove_venv_reports_a_post_validation_inspection_error(
         clean_venv.remove_venv(tmp_path, ".venv")
 
 
+@pytest.mark.parametrize("replacement", ("file", "symlink"))
+def test_remove_venv_revalidates_the_path_before_deletion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replacement: str,
+) -> None:
+    """A path swapped after initial validation fails closed."""
+    environment = tmp_path / ".venv"
+    if replacement == "file":
+        environment.write_text("keep", encoding="utf-8")
+        expected = "must be a directory"
+    else:
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        environment.symlink_to(outside, target_is_directory=True)
+        expected = "must not be a symlink"
+
+    monkeypatch.setattr(clean_venv, "validated_venv_path", lambda *_args: environment)
+
+    with pytest.raises(clean_venv.CleanVenvError, match=expected):
+        clean_venv.remove_venv(tmp_path, ".venv")
+
+
 def test_remove_venv_reports_deletion_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

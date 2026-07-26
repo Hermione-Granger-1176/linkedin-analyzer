@@ -44,6 +44,18 @@ def test_ci_playwright_setup_installs_system_dependencies() -> None:
     assert "playwright install --with-deps $(PLAYWRIGHT_BROWSERS)" in recipe
 
 
+def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
+    """Keep selective installs constrained to supported engine names and CI dependency mode."""
+    recipe = _target_recipe("setup-playwright-engines")
+
+    assert "unsupported Playwright engine(s): $(PLAYWRIGHT_INVALID_ENGINES)" in recipe
+    assert "engines must not contain duplicates" in recipe
+    assert "with_deps must be one value" in recipe
+    assert "with_deps must be 1 when provided" in recipe
+    assert "$(if $(filter 1,$(with_deps)),--with-deps)" in recipe
+    assert "$(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))" in recipe
+
+
 def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> None:
     """Prepare private libraries around a shared, sudo-free browser install."""
     recipe = _target_recipe("setup-playwright-local")

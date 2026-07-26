@@ -16,6 +16,9 @@ from scripts.lib import gh_policy
         ("HTTP 502: Bad Gateway", "transient"),
         ("502 Bad Gateway", "transient"),
         ("504 Gateway Time-out", "transient"),
+        ("HTTP 500: Internal Server Error", "transient"),
+        # 501 stays fatal: "Not Implemented" never clears on a retry.
+        ("HTTP 501: Not Implemented", "fatal"),
     ],
 )
 def test_classify_gh_failure_covers_each_shared_outcome(message: str, expected: str) -> None:

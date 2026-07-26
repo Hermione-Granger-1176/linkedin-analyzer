@@ -31,11 +31,15 @@ GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
     (
         "transient",
         re.compile(
-            # 5xx codes only count when the message marks them as an HTTP status
-            # or pairs them with their reason phrase. A bare ``502`` would also
-            # match line numbers, object ids, and byte counts.
-            r"\bHTTP 50[234]\b|"
-            r"\b50[234] (?:bad gateway|service unavailable|gateway time-?out)\b|"
+            # Retry 500, 502, 503, and 504: GitHub returns these for overloaded
+            # or proxy-layer failures that usually clear. 501 is excluded on
+            # purpose, because "Not Implemented" never becomes available by
+            # retrying. Codes only count when the message marks them as an HTTP
+            # status or pairs them with their reason phrase; a bare ``502`` would
+            # also match line numbers, object ids, and byte counts.
+            r"\bHTTP 50[0234]\b|"
+            r"\b50[0234] (?:internal server error|bad gateway|"
+            r"service unavailable|gateway time-?out)\b|"
             r"timed out|timeout|ECONNRESET|connection reset|"
             r"connection refused|could not resolve host|no such host|network|"
             r"tls handshake|i/o timeout|temporary failure|unexpected eof",

@@ -41,7 +41,7 @@ make audit-fix-node
 make security
 ```
 
-The npm audit gates every reported severity by default. A finding may be temporarily accepted only through a reviewed entry in `config/security_audit.json`. Each entry records the package, advisory ID, reason, and ISO `review_by` date. Set `ignore_only_without_fix` to `true` when the exception must fail as soon as npm reports an available fix. The audit also fails for expired, unused, duplicate, or ambiguous exceptions so that the policy cannot silently rot.
+The npm and Python audits use the reviewed exception policy in `config/security_audit.json`. A finding may be temporarily accepted only through an ecosystem-specific entry recording the package, advisory ID, reason, and ISO `review_by` date. Set `ignore_only_without_fix` to `true` when the exception must fail as soon as the package manager reports an available fix. Both audits fail for expired, unused, duplicate, or ambiguous exceptions so that the policy cannot silently rot. The Python gate also preserves `pip-audit --strict` behavior and rejects skipped dependencies or malformed report data.
 
 For a narrower local investigation, select the lowest severity to review:
 
@@ -212,11 +212,10 @@ Run the primary non-browser workflow locally with `make ci-platform-checks`. It 
 
 See `.github/workflows/ci.yml`.
 
-A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
+A weekly `dependency-audit.yml` workflow also runs two audit jobs every Monday:
 
-- `make audit-node` for the policy-driven npm audit, including reviewed exceptions from `config/security_audit.json`
-- `make audit-python` for the Python dependency audit
-- `make check-overrides` to verify npm overrides remain necessary (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md))
+- `npm-audit` runs `make audit-node` with reviewed npm exceptions from `config/security_audit.json`, then runs `make check-overrides` to verify npm overrides remain necessary (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)).
+- `pip-audit` runs `make audit-python` against a private temporary export of `uv.lock`, including reviewed Python exceptions from the same config.
 
 If either audit job fails, a `report-failure` job opens (or comments on the existing) `dependency-audit`-labeled issue with a link to the run, so a scheduled failure is visible without watching the Actions tab.
 

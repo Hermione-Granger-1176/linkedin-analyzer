@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SECURITY_AUDIT_CONFIG_FILE = REPO_ROOT / "config" / "security_audit.json"
 
 NPM_EXCEPTIONS_KEY = "npm_vulnerability_exceptions"
+PYTHON_EXCEPTIONS_KEY = "python_vulnerability_exceptions"
 
 
 @dataclass(frozen=True)

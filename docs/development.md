@@ -148,7 +148,7 @@ See `.github/workflows/ci.yml`.
 A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
 
 - `make audit-node` and `make audit-python` for the npm and Python dependency audits
-- `make check-overrides` to verify any future npm overrides remain necessary; the original overrides have been removed (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md))
+- `make check-overrides` to verify npm overrides remain necessary (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md))
 
 If either audit job fails, a `report-failure` job opens (or comments on the existing) `dependency-audit`-labeled issue with a link to the run, so a scheduled failure is visible without watching the Actions tab.
 

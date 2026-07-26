@@ -92,6 +92,9 @@ make lint-js
 # Lint stylesheets
 make lint-css
 
+# Lint YAML files
+make lint-yaml
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 

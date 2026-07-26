@@ -40,6 +40,7 @@ jobs:
           --timeout 1200
           lint-workflows
           lint-py
+          lint-yaml
           format-py-check
           typecheck-py
           dead-code-py

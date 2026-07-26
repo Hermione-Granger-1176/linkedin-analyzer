@@ -1,0 +1,16 @@
+extends: default
+
+ignore: |
+  node_modules/
+  .venv/
+  .playwright/
+  coverage/
+  web/dist/
+  playwright-report/
+  test-results/
+
+rules:
+  comments: disable
+  document-start: disable
+  line-length: disable
+  truthy: disable

@@ -76,6 +76,7 @@ Each tool has one config file that owns its scope. The Makefile just calls tools
 | vulture    | `pyproject.toml`              | Python dead-code detection                      |
 | ESLint     | `config/eslint.config.mjs`    | JS lint rules                                   |
 | stylelint  | `config/stylelint.config.mjs` | CSS lint rules                                  |
+| yamllint   | `.yamllint.yml`               | YAML lint rules                                 |
 | Prettier   | `config/prettierrc.json`      | JS/JSON/MD/YAML formatting (+ `prettierignore`) |
 | Playwright | `config/playwright.config.js` | Browser e2e test config                         |
 | Vite       | `web/vite.config.js`          | Web build + generated PWA manifest              |

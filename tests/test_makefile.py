@@ -48,8 +48,9 @@ def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
     """Keep selective installs constrained to supported engine names and CI dependency mode."""
     recipe = _target_recipe("setup-playwright-engines")
 
-    assert "$(PLAYWRIGHT_INVALID_ENGINES)" in recipe
+    assert "unsupported Playwright engine(s): $(PLAYWRIGHT_INVALID_ENGINES)" in recipe
     assert "engines must not contain duplicates" in recipe
+    assert "with_deps must be one value" in recipe
     assert "with_deps must be 1 when provided" in recipe
     assert "$(if $(filter 1,$(with_deps)),--with-deps)" in recipe
     assert "$(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))" in recipe

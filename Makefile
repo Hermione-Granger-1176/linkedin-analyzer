@@ -63,8 +63,9 @@ setup-playwright-engines: ## Install selected engines (make setup-playwright-eng
 	$(if $(filter-out 1,$(words $(strip $(engines)))),$(error engines must be one hyphen-separated value),)
 	$(if $(filter -% %-,$(strip $(engines))),$(error engines must not start or end with a hyphen),)
 	$(if $(findstring --,$(strip $(engines))),$(error engines must not contain empty names),)
-	$(if $(PLAYWRIGHT_INVALID_ENGINES),$(error unsupported Playwright engine),)
+	$(if $(PLAYWRIGHT_INVALID_ENGINES),$(error unsupported Playwright engine(s): $(PLAYWRIGHT_INVALID_ENGINES)),)
 	$(if $(filter-out $(words $(sort $(PLAYWRIGHT_ENGINE_ARGS))),$(words $(PLAYWRIGHT_ENGINE_ARGS))),$(error engines must not contain duplicates),)
+	$(if $(filter-out 0 1,$(words $(strip $(with_deps)))),$(error with_deps must be one value),)
 	$(if $(filter-out 1,$(strip $(with_deps))),$(error with_deps must be 1 when provided),)
 	$(NPX) playwright install $(if $(filter 1,$(with_deps)),--with-deps) $(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))
 

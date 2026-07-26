@@ -67,6 +67,20 @@ def test_clean_removes_the_repository_local_playwright_cache() -> None:
     assert " .playwright " in recipe
 
 
+def test_clean_delegates_virtual_environment_removal_to_the_safety_guard() -> None:
+    """Never interpolate the configurable virtual-environment path into rm."""
+    recipe = _target_recipe("clean")
+    venv_recipe = _target_recipe("clean-venv")
+
+    assert "clean: clean-venv" in MAKEFILE_TEXT
+    assert "-m scripts.setup.clean_venv" in venv_recipe
+    assert "clean-venv: export CLEAN_REPO_ROOT := $(CURDIR)" in MAKEFILE_TEXT
+    assert "clean-venv: export CLEAN_VENV := $(VENV)" in MAKEFILE_TEXT
+    assert re.search(r"^clean-venv:\n\t", MAKEFILE_TEXT, re.MULTILINE)
+    assert "$(VENV)" not in venv_recipe
+    assert "rm -rf $(VENV)" not in recipe
+
+
 def test_browser_targets_share_the_local_runtime_wrapper() -> None:
     """Require local_libs=1 to route every existing browser target through one wrapper."""
     assert (

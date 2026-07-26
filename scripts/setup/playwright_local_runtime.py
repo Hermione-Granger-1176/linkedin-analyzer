@@ -158,11 +158,26 @@ def fail(message: str) -> RuntimeSetupError:
     return RuntimeSetupError(message)
 
 
+def resolve_for_containment(path: Path) -> Path:
+    """Resolve a path while rejecting broken or cyclic symlink ancestors."""
+    absolute_path = path.absolute()
+    current = Path(absolute_path.anchor)
+    for part in absolute_path.parts[1:]:
+        current /= part
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(mode):
+            current.resolve(strict=True)
+    return absolute_path.resolve(strict=False)
+
+
 def is_within(path: Path, parent: Path) -> bool:
     """Return whether a resolved path remains under the resolved parent."""
     try:
-        path.resolve(strict=False).relative_to(parent.resolve(strict=False))
-    except ValueError:
+        resolve_for_containment(path).relative_to(resolve_for_containment(parent))
+    except (OSError, RuntimeError, ValueError):
         return False
     return True
 

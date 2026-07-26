@@ -6,6 +6,7 @@
 # if it is not already available. Override for older supported versions, e.g.
 # `make install PYTHON=3.12` (see docs/development.md).
 PYTHON              ?= 3.14
+SYSTEM_PYTHON       ?= python3
 UV                  ?= uv
 UVX                 ?= uvx
 VENV                ?= .venv
@@ -332,7 +333,7 @@ fix-deps: ## Refresh locks and reinstall local environments
 
 # ─── Utilities @util ────────────────────────────────────────────────────────────────
 
-.PHONY: run-cli gen-parity-corpus status clean help help-json
+.PHONY: run-cli gen-parity-corpus status clean-venv clean help help-json
 
 run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connections|all ...")
 	$(VENV)/bin/linkedin-analyzer $(args)
@@ -358,8 +359,14 @@ status: ## Show workspace health
 	@echo "=== Pull request ==="
 	@$(GH) summary || true
 
-clean: ## Remove local environments, build outputs, and caches (keeps shared Playwright browsers)
-	rm -rf $(VENV) node_modules web/dist .artifacts .playwright .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
+clean-venv: ## Safely remove the repository-local Python virtual environment
+clean-venv: export CLEAN_REPO_ROOT := $(CURDIR)
+clean-venv: export CLEAN_VENV := $(VENV)
+clean-venv:
+	@PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.setup.clean_venv
+
+clean: clean-venv ## Remove local environments, build outputs, and caches (keeps shared Playwright browsers)
+	rm -rf node_modules web/dist .artifacts .playwright .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
 
 help: ## Show command groups (expand one with make help-<group>)
 	@printf '\n  \033[1mmake <target>\033[0m   ·   expand a group: \033[1mmake help-<group>\033[0m   ·   machine-readable: \033[1mmake help-json\033[0m\n'

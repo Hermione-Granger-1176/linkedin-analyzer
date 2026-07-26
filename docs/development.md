@@ -47,7 +47,7 @@ The `make install` target builds the `.venv` against the interpreter named by th
 
 ```bash
 # Build the .venv against a specific Python (uv fetches it if missing)
-rm -rf .venv && make install PYTHON=3.12
+make clean-venv && make install PYTHON=3.12
 
 # Subsequent targets use that .venv directly. No override is needed.
 make test-py
@@ -57,8 +57,10 @@ make typecheck-py
 `PYTHON` only affects `make install`, which is what creates the `.venv` (it defaults to `3.14`); the other targets always run the `.venv` interpreter you built. uv keeps an existing compatible `.venv` rather than rebuilding it, so remove `.venv` first when you want the interpreter to actually change. To switch back to the default:
 
 ```bash
-rm -rf .venv && make install
+make clean-venv && make install
 ```
+
+`make clean-venv` fails closed unless `VENV` names a real, non-symlinked directory directly below the repository root. This prevents an inherited or mistyped `VENV` value from redirecting recursive deletion elsewhere.
 
 You can also point `PYTHON` at an explicit interpreter name on your `PATH` (for example `make install PYTHON=python3.11`). The lockfile (`uv.lock`) is universal and resolves across Python 3.11-3.14, so no lock changes are needed to switch versions. Type checking (`mypy`) and linting (`ruff`) always target the Python 3.11 floor regardless of the interpreter you run, so newer-only syntax is caught early.
 

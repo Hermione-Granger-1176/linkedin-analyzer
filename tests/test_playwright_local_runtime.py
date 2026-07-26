@@ -212,6 +212,38 @@ def test_browser_cache_ready_accepts_a_symlinked_shared_cache(tmp_path: Path) ->
     assert runtime.browser_cache_ready(paths)
 
 
+def test_is_within_fails_closed_for_a_symlink_loop(tmp_path: Path) -> None:
+    """Containment checks reject paths whose symlink chain cannot resolve."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop, target_is_directory=True)
+
+    assert not runtime.is_within(loop / "child", tmp_path)
+
+
+def test_is_within_handles_missing_children_and_escape_attempts(tmp_path: Path) -> None:
+    """Missing descendants stay valid while resolved paths outside the root do not."""
+    assert runtime.is_within(tmp_path / "missing" / "child", tmp_path)
+    assert not runtime.is_within(tmp_path.parent, tmp_path)
+
+
+def test_is_within_fails_closed_for_inaccessible_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Operating-system resolution errors cannot bypass containment."""
+    original_resolve = Path.resolve
+    inaccessible = tmp_path / "inaccessible"
+
+    def fail_for_inaccessible(path: Path, *, strict: bool = False) -> Path:
+        if path == inaccessible:
+            raise OSError("permission denied")
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", fail_for_inaccessible)
+
+    assert not runtime.is_within(inaccessible, tmp_path)
+
+
 def test_cache_root_refuses_dangling_symlink(tmp_path: Path) -> None:
     """Reject a broken symlink root that exists() would silently skip."""
     (tmp_path / ".playwright").symlink_to(tmp_path / "missing", target_is_directory=True)

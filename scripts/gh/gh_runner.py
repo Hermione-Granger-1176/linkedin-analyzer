@@ -76,8 +76,9 @@ def _run(
         cmd: The full command vector (e.g. ``["gh", "api", ...]``).
         run_fn: Optional injected subprocess runner.
         timeout: Per-attempt timeout in seconds.
-        retries: Extra attempts allowed for transient failures (5xx, network,
-            timeout). Rate limits and other errors are never retried.
+        retries: Extra attempts allowed for transient failures (HTTP 500, 502,
+            503, 504, network, and timeout). Rate limits, forbidden responses,
+            and every other error are never retried.
 
     Raises:
         GhRateLimitError: If GitHub reports a rate limit.
@@ -108,6 +109,11 @@ def _run(
             raise GhRateLimitError(
                 f"GitHub rate limit hit running {_label(cmd)}: {detail}\n"
                 "Wait for the limit window to reset before retrying."
+            )
+        if kind == "forbidden":
+            raise GhError(
+                f"{_label(cmd)} was refused: {detail}\n"
+                "The token is missing a permission or scope this call needs."
             )
         if kind == "transient" and attempt < retries:
             _sleep(gh_policy.retry_backoff_seconds(attempt))

@@ -62,7 +62,7 @@ def test_backoff_never_exceeds_cap() -> None:
 
 
 def test_run_retries_transient_then_succeeds(_no_sleep: list[float]) -> None:
-    """A transient 5xx is retried with backoff until it succeeds."""
+    """A transient HTTP 502 is retried with backoff until it succeeds."""
     runner = SequenceRunner(
         [
             completed_process(1, "", "Server Error (HTTP 502)"),
@@ -100,6 +100,22 @@ def test_run_fails_fast_on_rate_limit() -> None:
     with pytest.raises(GhRateLimitError):
         gh_runner.run_gh(["pr", "view"], run_fn=runner, retries=5)
 
+    assert runner.calls == 1
+
+
+def test_run_names_the_missing_permission_without_retrying() -> None:
+    """A forbidden response fails immediately with an actionable message."""
+    runner = SequenceRunner(
+        [
+            completed_process(1, "", "Resource not accessible by integration"),
+            completed_process(0, "unused"),
+        ]
+    )
+
+    with pytest.raises(GhError, match="missing a permission or scope") as excinfo:
+        gh_runner.run_gh(["pr", "view"], run_fn=runner, retries=5)
+
+    assert not isinstance(excinfo.value, GhRateLimitError)
     assert runner.calls == 1
 
 

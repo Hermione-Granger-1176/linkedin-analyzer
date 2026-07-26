@@ -25,7 +25,12 @@ GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
     (
         "rate_limit",
         re.compile(
-            r"rate limit|submitted too quickly|abuse detection|secondary rate|\b429\b",
+            # 429 needs the same HTTP anchoring as the server codes below: a bare
+            # ``429`` also appears in run numbers and line numbers, and a false
+            # rate-limit verdict aborts with a misleading "wait for the window
+            # to reset" message instead of surfacing the real failure.
+            r"rate limit|submitted too quickly|abuse detection|secondary rate|"
+            r"\bHTTP 429\b|\b429 too many requests\b",
             re.IGNORECASE,
         ),
     ),
@@ -51,9 +56,11 @@ GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
 )
 
 # Idempotent GitHub calls get two retries. The delay grows exponentially and
-# includes bounded jitter so concurrent workflows do not retry in lockstep.
+# includes bounded jitter so concurrent workflows do not retry in lockstep. The
+# 1.0s base keeps the first retry a full second out, matching the backoff the
+# gh wrappers used before this policy was extracted.
 DEFAULT_GH_RETRIES = 2
-RETRY_BACKOFF_BASE_SECONDS = 0.5
+RETRY_BACKOFF_BASE_SECONDS = 1.0
 RETRY_BACKOFF_CAP_SECONDS = 8.0
 RETRY_BACKOFF_JITTER_SECONDS = 0.5
 

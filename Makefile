@@ -313,8 +313,8 @@ fix: fmt ci ## Auto-fix formatting, then run the full local CI gate
 
 security: audit-python audit-node check-overrides ## Run dependency and override audits
 
-audit-node: ## Run npm audit
-	$(NPM) audit --audit-level=high
+audit-node: ## Run policy-driven npm dependency audit (make audit-node [audit_level=high])
+	@PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.ci.run_npm_audit --npm "$(NPM)" $(if $(audit_level),--audit-level "$(audit_level)")
 
 audit-fix-node: ## Apply available npm audit fixes to package-lock.json
 	$(NPM) audit fix --package-lock-only

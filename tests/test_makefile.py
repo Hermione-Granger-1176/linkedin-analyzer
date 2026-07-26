@@ -56,6 +56,15 @@ def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
     assert "$(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))" in recipe
 
 
+def test_node_audit_uses_policy_runner_and_optional_severity_filter() -> None:
+    """Keep CI on the reviewed policy while allowing a narrower local audit."""
+    recipe = _target_recipe("audit-node")
+
+    assert "-m scripts.ci.run_npm_audit" in recipe
+    assert '--npm "$(NPM)"' in recipe
+    assert '$(if $(audit_level),--audit-level "$(audit_level)")' in recipe
+
+
 def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> None:
     """Prepare private libraries around a shared, sudo-free browser install."""
     recipe = _target_recipe("setup-playwright-local")

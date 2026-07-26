@@ -110,6 +110,12 @@ make lint-doc-commands
 # Check selected contributor documents
 make lint-doc-commands paths="README.md docs/development.md"
 
+# Check documented Make targets exist
+make lint-make-targets
+
+# Check Make targets in selected Markdown files
+make lint-make-targets paths="README.md docs/development.md"
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 

@@ -130,7 +130,7 @@ linkedin-analyzer/
 │   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)
 │   ├── ci/                             # Local CI parallel-runner and GitHub Actions workflow helpers
 │   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
-│   ├── lint/                           # EditorConfig and other repository lint helpers
+│   ├── lint/                           # EditorConfig and contributor-documentation lint helpers
 │   └── web-smoke.mjs                   # Post-deploy HTTP smoke check (shell + headers + CSP endpoint)
 ├── data/                               # Local workspace; contents gitignored (only .gitkeep placeholders are tracked)
 │   ├── input/                          # Place CSVs here

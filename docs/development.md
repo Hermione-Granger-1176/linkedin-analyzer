@@ -104,6 +104,12 @@ make editorconfig-check
 # Check EditorConfig rules for selected files
 make editorconfig-check paths="Makefile web/src/app.js"
 
+# Check contributor documentation uses supported Make targets
+make lint-doc-commands
+
+# Check selected contributor documents
+make lint-doc-commands paths="README.md docs/development.md"
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 

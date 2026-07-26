@@ -146,6 +146,15 @@ make format-py-diff paths="src/linkedin_analyzer tests"
 
 `make setup` is the fast default and does not install browsers. `make setup-all` installs Chromium, Firefox, and WebKit in Playwright's normal user-local browser cache. It is browser-only, does not install system packages, and does not require sudo. Use it when the host already provides the libraries Playwright needs.
 
+To install only a validated subset of browser engines, use a hyphen-separated selection:
+
+```bash
+make setup-playwright-engines engines=chromium
+make setup-playwright-engines engines=chromium-webkit
+```
+
+The target accepts only `chromium`, `firefox`, and `webkit`, rejects duplicates and malformed selections, and installs without system packages by default. Use `with_deps=1` only on an ephemeral CI runner that should also install the selected engines' operating-system dependencies.
+
 On a Debian or Ubuntu host that lacks those libraries, run `make setup-playwright-local`. It downloads package archives from the already configured APT repositories and extracts them only into this repository's ignored `.playwright/local-libs/` cache. Browsers install into Playwright's shared `~/.cache/ms-playwright` cache, so every project on the machine reuses one copy instead of duplicating roughly a gigabyte per repository. The setup uses APT simulation, `apt download`, and `dpkg-deb -x`; it never invokes package installation, sudo, or `dpkg -i`, and it does not change the system package database. The library cache has a manifest that is rebuilt when the operating system, architecture, Playwright version, browser engine set, or resolved package versions change.
 
 Browser-running Make targets accept `local_libs=1`, including `test-e2e`, `test-e2e-headed`, `test-e2e-ui`, and `web-screens`. This wrapper requires the cache to have been prepared already, points `PLAYWRIGHT_BROWSERS_PATH` at the shared browser cache, keeps browser home, cache, configuration, runtime, and temporary files under `.playwright/runtime/`, and adds only discovered extracted library and browser-data paths to the child environment. Preparing the runtime also patches the shared WebKit bundle launcher to append any inherited `LD_LIBRARY_PATH` after its own bundle directories. Plain (non-`local_libs`) runs that do not set `LD_LIBRARY_PATH` behave exactly as before; a value set outside the wrapper is appended at lower priority instead of being dropped. The wrapper never downloads packages during a test run. Use native Playwright host detection. Do not set `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE`.

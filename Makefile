@@ -19,6 +19,8 @@ NODE                ?= node
 PY_PATHS            := src/ tests/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PY_TYPE_PATHS       := src/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
+PLAYWRIGHT_ENGINE_ARGS = $(subst -, ,$(strip $(engines)))
+PLAYWRIGHT_INVALID_ENGINES = $(filter-out $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))
 
 # Browser targets opt into the private Linux runtime only with local_libs=1.
 # Browsers install into Playwright's shared cache so every project reuses one
@@ -34,7 +36,7 @@ GH = PYTHONPATH=. $(VENV_PYTHON) -m scripts.gh.cli
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
-.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci setup-playwright setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
+.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci setup-playwright setup-playwright-engines setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
 
 install: ## Install locked Python deps into the uv-managed virtual environment
 	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-groups --frozen --python $(PYTHON)
@@ -55,6 +57,16 @@ setup-ci: setup-base setup-playwright-ci ## CI-only setup with Playwright browse
 
 setup-playwright: ## Install Playwright browsers locally, no system deps or sudo
 	$(NPX) playwright install $(PLAYWRIGHT_BROWSERS)
+
+setup-playwright-engines: ## Install selected engines (make setup-playwright-engines engines=chromium-webkit [with_deps=1])
+	$(if $(strip $(engines)),,$(error Usage: make setup-playwright-engines engines=chromium-webkit [with_deps=1]))
+	$(if $(filter-out 1,$(words $(strip $(engines)))),$(error engines must be one hyphen-separated value),)
+	$(if $(filter -% %-,$(strip $(engines))),$(error engines must not start or end with a hyphen),)
+	$(if $(findstring --,$(strip $(engines))),$(error engines must not contain empty names),)
+	$(if $(PLAYWRIGHT_INVALID_ENGINES),$(error unsupported Playwright engine),)
+	$(if $(filter-out $(words $(sort $(PLAYWRIGHT_ENGINE_ARGS))),$(words $(PLAYWRIGHT_ENGINE_ARGS))),$(error engines must not contain duplicates),)
+	$(if $(filter-out 1,$(strip $(with_deps))),$(error with_deps must be 1 when provided),)
+	$(NPX) playwright install $(if $(filter 1,$(with_deps)),--with-deps) $(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))
 
 setup-playwright-ci: ## Install Playwright browsers with system deps for CI
 	$(NPX) playwright install --with-deps $(PLAYWRIGHT_BROWSERS)

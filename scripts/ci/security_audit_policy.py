@@ -63,7 +63,7 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
 def _validated_id(value: object, *, entry_path: str) -> str:
     """Return one non-empty string or non-negative numeric advisory id."""
     if isinstance(value, str) and value.strip():
-        return value
+        return value.strip()
     if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
         return str(value)
     raise ValueError(
@@ -75,7 +75,7 @@ def _validated_id(value: object, *, entry_path: str) -> str:
 def _validated_text_field(value: object, *, field: str, entry_path: str) -> str:
     """Return one required non-empty string field."""
     if isinstance(value, str) and value.strip():
-        return value
+        return value.strip()
     raise ValueError(f"Security audit exception '{field}' must be a non-empty string: {entry_path}")
 
 

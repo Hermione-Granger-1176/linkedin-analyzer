@@ -77,9 +77,34 @@ def test_advisory_ids_falls_back_to_numeric_source() -> None:
     assert aliases == ()
 
 
+@pytest.mark.parametrize("source", [True, -1, "42", {}, [], None])
+def test_advisory_ids_rejects_invalid_numeric_source(source: object) -> None:
+    """Malformed npm source ids fail closed instead of becoming bogus aliases."""
+    with pytest.raises(ValueError, match="'source' must be a non-negative integer"):
+        run_npm_audit._advisory_ids(
+            {
+                "url": "https://github.com/advisories/GHSA-aaaa-bbbb-cccc",
+                "source": source,
+            }
+        )
+
+
+def test_advisory_ids_rejects_non_string_url() -> None:
+    """Malformed advisory URLs cannot be stringified into trusted input."""
+    with pytest.raises(ValueError, match="'url' must be a string"):
+        run_npm_audit._advisory_ids({"url": {}, "source": 42})
+
+
 def test_parse_advisory_skips_bare_package_reference() -> None:
     """Parse advisory skips bare package reference."""
     assert run_npm_audit._parse_advisory("upstream-pkg", package="dep", fix_available=False) is None
+
+
+@pytest.mark.parametrize("via", [None, 42, [], "", " "])
+def test_parse_advisory_rejects_invalid_via_entry(via: object) -> None:
+    """Only advisory objects and non-empty package references are accepted."""
+    with pytest.raises(ValueError, match="'via' entries must be"):
+        run_npm_audit._parse_advisory(via, package="dep", fix_available=False)
 
 
 def test_parse_advisory_rejects_advisory_without_id() -> None:
@@ -98,6 +123,17 @@ def test_parse_advisory_builds_finding() -> None:
     assert finding == _finding(
         advisory_id="GHSA-AAAA-BBBB-CCCC", package="dep", severity="moderate", fix_available=True
     )
+
+
+@pytest.mark.parametrize("severity", [None, "", "HIGH", "unknown", 1])
+def test_parse_advisory_rejects_invalid_severity(severity: object) -> None:
+    """Malformed severities cannot pass through a reviewed exception."""
+    with pytest.raises(ValueError, match="invalid severity"):
+        run_npm_audit._parse_advisory(
+            {"source": 42, "severity": severity},
+            package="dep",
+            fix_available=False,
+        )
 
 
 def test_parse_npm_audit_collects_findings() -> None:
@@ -147,6 +183,22 @@ def test_parse_npm_audit_defaults_package_name_to_key() -> None:
     assert findings == (
         _finding(advisory_id="7", package="lodash", severity="low", fix_available=False),
     )
+
+
+@pytest.mark.parametrize("name", [None, "", " ", 42])
+def test_parse_npm_audit_rejects_invalid_package_name(name: object) -> None:
+    """Malformed package names cannot be coerced into exception identities."""
+    payload = {
+        "vulnerabilities": {
+            "left-pad": {
+                "name": name,
+                "via": [{"source": 7, "severity": "high"}],
+            }
+        }
+    }
+
+    with pytest.raises(ValueError, match="invalid package name"):
+        run_npm_audit._parse_npm_audit(payload)
 
 
 @pytest.mark.parametrize("fix_available", ["false", 1, [], None])

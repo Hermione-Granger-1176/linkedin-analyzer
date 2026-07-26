@@ -72,12 +72,19 @@ def _advisory_ids(via: dict[str, object]) -> tuple[str, tuple[str, ...]]:
     ``url``. The GHSA id is preferred as the stable primary id; the numeric
     source id is kept as an alias so either form matches a reviewed exception.
     """
-    url = str(via.get("url", ""))
+    url_value = via.get("url", "")
+    if not isinstance(url_value, str):
+        raise ValueError("npm audit advisory 'url' must be a string")
+    url = url_value
     ghsa_match = _GHSA_PATTERN.search(url)
     ghsa = ghsa_match.group(0).upper() if ghsa_match else ""
 
-    source = via.get("source")
-    source_id = str(source) if source is not None else ""
+    source_id = ""
+    if "source" in via:
+        source = via["source"]
+        if not isinstance(source, int) or isinstance(source, bool) or source < 0:
+            raise ValueError("npm audit advisory 'source' must be a non-negative integer")
+        source_id = str(source)
 
     if ghsa:
         aliases = (source_id,) if source_id else ()
@@ -90,20 +97,27 @@ def _parse_advisory(
 ) -> NpmVulnerabilityFinding | None:
     """Parse one ``via`` entry into a finding, or None for a package reference."""
     # ``via`` items are either advisory objects or bare package-name strings
-    # that point at another vulnerable dependency; only objects are advisories.
-    if not isinstance(via, dict):
+    # that point at another vulnerable dependency.
+    if isinstance(via, str) and via.strip():
         return None
+    if not isinstance(via, dict):
+        raise ValueError(
+            f"npm audit 'via' entries must be advisory objects or package names: {package}"
+        )
 
     advisory_id, aliases = _advisory_ids(via)
     if not advisory_id:
         raise ValueError(
             f"npm audit advisory is missing both a GHSA url and a numeric source id: {package}"
         )
+    severity = via.get("severity")
+    if not isinstance(severity, str) or severity not in SEVERITY_ORDER:
+        raise ValueError(f"npm audit advisory has an invalid severity for package: {package}")
     return NpmVulnerabilityFinding(
         advisory_id=advisory_id,
         aliases=aliases,
         package=package,
-        severity=str(via.get("severity", "")),
+        severity=severity,
         fix_available=fix_available,
     )
 
@@ -128,7 +142,10 @@ def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFindin
         if not isinstance(fix_value, (bool, dict)):
             raise ValueError(f"npm audit 'fixAvailable' must be a boolean or object: {name}")
         fix_available = fix_value is True or isinstance(fix_value, dict)
-        package = str(node.get("name", name))
+        package_value = node.get("name", name)
+        if not isinstance(package_value, str) or not package_value.strip():
+            raise ValueError(f"npm audit vulnerability has an invalid package name: {name}")
+        package = package_value.strip()
         for entry in via:
             finding = _parse_advisory(entry, package=package, fix_available=fix_available)
             if finding is not None:

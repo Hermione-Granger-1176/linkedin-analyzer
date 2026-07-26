@@ -212,6 +212,33 @@ def test_load_exceptions_accepts_zero_numeric_id(tmp_path: Path) -> None:
     assert exception.vulnerability_id == "0"
 
 
+def test_load_exceptions_normalizes_surrounding_whitespace(tmp_path: Path) -> None:
+    """Policy identities and values do not retain accidental outer whitespace."""
+    config_file = _write_config(
+        tmp_path / "security_audit.json",
+        """
+{
+  "npm_vulnerability_exceptions": [{
+    "id": " GHSA-aaaa-bbbb-cccc ",
+    "package": " left-pad ",
+    "reason": " Reviewed with maintainers. ",
+    "review_by": " 2026-08-25 "
+  }]
+}
+""".strip(),
+    )
+
+    exception = security_audit_policy.load_security_audit_exceptions(
+        config_file,
+        config_key=security_audit_policy.NPM_EXCEPTIONS_KEY,
+    )[0]
+
+    assert exception.vulnerability_id == "GHSA-aaaa-bbbb-cccc"
+    assert exception.package == "left-pad"
+    assert exception.reason == "Reviewed with maintainers."
+    assert exception.review_by == date(2026, 8, 25)
+
+
 def test_load_exceptions_rejects_unknown_fields(tmp_path: Path) -> None:
     """Typos in security-sensitive options cannot be ignored."""
     config_file = _write_config(

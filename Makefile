@@ -15,8 +15,8 @@ NPX                 ?= npx
 NODE                ?= node
 # A glob for the scripts root so top-level modules there are never skipped;
 # scripts/checks/ stays out until its local-only helpers are lint and type clean.
-PY_PATHS            := src/ tests/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/setup/
-PY_TYPE_PATHS       := src/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/setup/
+PY_PATHS            := src/ tests/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
+PY_TYPE_PATHS       := src/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
 
 # Browser targets opt into the private Linux runtime only with local_libs=1.
@@ -74,9 +74,12 @@ playwright-local-clean: ## Remove only the repository-local Playwright cache (ke
 
 # ─── Lint @lint ─────────────────────────────────────────────────────────────────────
 
-.PHONY: lint lint-py lint-js lint-css lint-yaml lint-workflows workflow-lint check-overrides
+.PHONY: lint editorconfig-check lint-py lint-js lint-css lint-yaml lint-workflows workflow-lint check-overrides
 
-lint: lint-py lint-js lint-css lint-yaml lint-workflows ## Run all linters
+lint: editorconfig-check lint-py lint-js lint-css lint-yaml lint-workflows ## Run all linters
+
+editorconfig-check: ## Check EditorConfig rules [paths=...]
+	$(VENV_PYTHON) -m scripts.lint.check_editorconfig $(if $(paths),$(paths))
 
 lint-py: ## Run Python linter only
 	$(VENV_PYTHON) -m ruff check $(PY_PATHS)
@@ -251,14 +254,14 @@ explore: ## Print ad-hoc statistics over your export
 
 .PHONY: ci-python ci-web ci ci-fast check-local check fix security audit-node audit-python
 
-ci-python: lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py ## Python CI gate
+ci-python: editorconfig-check lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py ## Python CI gate
 
 ci-web: format-js-check lint-js lint-css typecheck-web dead-code-js test-js web-build-size ## Web CI gate
 
 ci: ci-python lint-workflows ci-web ## Full local CI gate
 
 ci-fast: ## Run the non-browser CI checks in parallel (excludes web-build-size)
-	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
+	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py editorconfig-check lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
 
 check-local: ci ## Alias for the full local CI gate
 

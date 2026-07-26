@@ -67,22 +67,23 @@ High-frequency loops (full surface via `make help`). The PR/CI targets wrap a te
 
 Each tool has one config file that owns its scope. The Makefile just calls tools.
 
-| Tool       | Config (source of truth)      | What it defines                                 |
-| ---------- | ----------------------------- | ----------------------------------------------- |
-| ruff       | `pyproject.toml`              | Python lint/format rules                        |
-| mypy       | `pyproject.toml`              | Python type checking                            |
-| pytest     | `pyproject.toml`              | Test paths and options                          |
-| coverage   | `pyproject.toml`              | Coverage source and report thresholds           |
-| vulture    | `pyproject.toml`              | Python dead-code detection                      |
-| ESLint     | `config/eslint.config.mjs`    | JS lint rules                                   |
-| stylelint  | `config/stylelint.config.mjs` | CSS lint rules                                  |
-| yamllint   | `.yamllint.yml`               | YAML lint rules                                 |
-| Prettier   | `config/prettierrc.json`      | JS/JSON/MD/YAML formatting (+ `prettierignore`) |
-| Playwright | `config/playwright.config.js` | Browser e2e test config                         |
-| Vite       | `web/vite.config.js`          | Web build + generated PWA manifest              |
-| Vitest     | `web/vitest.config.js`        | Web unit test config                            |
-| jsconfig   | `config/jsconfig.json`        | JS editor/type hints                            |
-| knip       | `config/knip.json`            | JS dead-code, unused exports and deps           |
+| Tool         | Config (source of truth)      | What it defines                                 |
+| ------------ | ----------------------------- | ----------------------------------------------- |
+| ruff         | `pyproject.toml`              | Python lint/format rules                        |
+| mypy         | `pyproject.toml`              | Python type checking                            |
+| pytest       | `pyproject.toml`              | Test paths and options                          |
+| coverage     | `pyproject.toml`              | Coverage source and report thresholds           |
+| vulture      | `pyproject.toml`              | Python dead-code detection                      |
+| ESLint       | `config/eslint.config.mjs`    | JS lint rules                                   |
+| stylelint    | `config/stylelint.config.mjs` | CSS lint rules                                  |
+| yamllint     | `.yamllint.yml`               | YAML lint rules                                 |
+| Prettier     | `config/prettierrc.json`      | JS/JSON/MD/YAML formatting (+ `prettierignore`) |
+| Playwright   | `config/playwright.config.js` | Browser e2e test config                         |
+| Vite         | `web/vite.config.js`          | Web build + generated PWA manifest              |
+| Vitest       | `web/vitest.config.js`        | Web unit test config                            |
+| jsconfig     | `config/jsconfig.json`        | JS editor/type hints                            |
+| knip         | `config/knip.json`            | JS dead-code, unused exports and deps           |
+| EditorConfig | `.editorconfig`               | Line endings, final newline, and indentation    |
 
 ## Deployment
 

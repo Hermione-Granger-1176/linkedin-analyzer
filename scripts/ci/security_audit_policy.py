@@ -33,10 +33,12 @@ def _load_security_audit_config(
     config_file: Path = SECURITY_AUDIT_CONFIG_FILE,
 ) -> dict[str, object]:
     """Load the full security audit JSON config."""
-    if config_file.is_symlink() or not config_file.is_file():
-        raise FileNotFoundError(
-            f"Security audit config must be a regular file, not a symlink: {config_file}"
-        )
+    if config_file.is_symlink():
+        raise ValueError(f"Security audit config must not be a symlink: {config_file}")
+    if not config_file.exists():
+        raise FileNotFoundError(f"Security audit config file not found: {config_file}")
+    if not config_file.is_file():
+        raise ValueError(f"Security audit config must be a regular file: {config_file}")
 
     try:
         payload = json.loads(

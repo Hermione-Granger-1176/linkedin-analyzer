@@ -53,18 +53,26 @@ def test_load_exceptions_reads_valid_config(tmp_path: Path) -> None:
 
 def test_load_config_rejects_missing_file(tmp_path: Path) -> None:
     """A missing policy file fails closed."""
-    with pytest.raises(FileNotFoundError, match="must be a regular file"):
+    with pytest.raises(FileNotFoundError, match="config file not found"):
         security_audit_policy._load_security_audit_config(tmp_path / "missing.json")
 
 
-def test_load_config_rejects_directory_and_symlink(tmp_path: Path) -> None:
-    """Policy loading never follows a symlink or reads a directory."""
-    real_config = _write_config(tmp_path / "real.json", "{}")
-    symlink = tmp_path / "linked.json"
-    symlink.symlink_to(real_config)
+def test_load_config_rejects_directory(tmp_path: Path) -> None:
+    """A directory is reported as the wrong input type."""
+    with pytest.raises(ValueError, match="must be a regular file"):
+        security_audit_policy._load_security_audit_config(tmp_path)
 
-    for invalid_path in (tmp_path, symlink):
-        with pytest.raises(FileNotFoundError, match="regular file, not a symlink"):
+
+def test_load_config_rejects_symlink(tmp_path: Path) -> None:
+    """Policy loading never follows a valid or dangling symlink."""
+    real_config = _write_config(tmp_path / "real.json", "{}")
+    valid_symlink = tmp_path / "linked.json"
+    valid_symlink.symlink_to(real_config)
+    dangling_symlink = tmp_path / "dangling.json"
+    dangling_symlink.symlink_to(tmp_path / "missing.json")
+
+    for invalid_path in (valid_symlink, dangling_symlink):
+        with pytest.raises(ValueError, match="must not be a symlink"):
             security_audit_policy._load_security_audit_config(invalid_path)
 
 

@@ -6,23 +6,26 @@ repository. Keeping the GitHub plumbing here means the PR and CI helpers share
 one place for repository and pull-request detection, timeouts, and retries.
 
 ``gh api`` has no built-in retry and treats a single 5xx, network blip, or
-rate-limit response as a hard non-zero exit, so the retry/backoff policy lives
-here. Per GitHub's API guidance we retry only transient infrastructure errors
-(5xx/network/timeout) with bounded exponential backoff, and we fail fast on
-rate limits rather than hammering the API (which can get an integration
-banned). Non-idempotent mutations (posting a reply) opt out of retries so a
-lost response never double-posts.
+rate-limit response as a hard non-zero exit. Per GitHub's API guidance the
+shared policy in ``scripts.lib.gh_policy`` retries only transient
+infrastructure errors (HTTP 500, 502, 503, and 504 plus network and timeout
+failures) with bounded exponential backoff, and fails fast on rate limits
+rather than hammering the API (which can get an integration banned). HTTP 501
+is treated as fatal, since "Not Implemented" never clears on a retry.
+Non-idempotent mutations (posting a reply) opt out of retries so a lost
+response never double-posts.
 """
 
 from __future__ import annotations
 
 import json
-import random
 import subprocess
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import urlparse
+
+from scripts.lib import gh_policy
 
 RunFunction = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -31,35 +34,11 @@ RunFunction = Callable[..., subprocess.CompletedProcess[str]]
 DEFAULT_TIMEOUT = 30
 LOG_TIMEOUT = 120
 
-# Retry budget (extra attempts beyond the first) for idempotent calls, with
-# bounded exponential backoff plus jitter.
-DEFAULT_RETRIES = 2
-BACKOFF_BASE = 1.0
-BACKOFF_CAP = 8.0
-BACKOFF_JITTER = 0.5
-
-# Substrings (matched case-insensitively against stderr) that mark a response
-# as a rate limit (fail fast) or a transient infrastructure error (retry).
-_RATE_LIMIT_MARKERS = (
-    "rate limit",
-    "submitted too quickly",
-    "abuse detection",
-    "(http 429)",
-)
-_TRANSIENT_MARKERS = (
-    "(http 502)",
-    "(http 503)",
-    "(http 504)",
-    "timeout",
-    "timed out",
-    "connection reset",
-    "connection refused",
-    "no such host",
-    "tls handshake",
-    "i/o timeout",
-    "temporary failure",
-    "unexpected eof",
-)
+# Retry budget (extra attempts beyond the first) for idempotent calls. The
+# classification rules and the bounded exponential backoff live in
+# ``scripts.lib.gh_policy`` so every ``gh`` caller in this repository shares one
+# rate-limit and transient-failure policy.
+DEFAULT_RETRIES = gh_policy.DEFAULT_GH_RETRIES
 
 
 class GhError(RuntimeError):
@@ -84,26 +63,6 @@ def _sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
-def _backoff_seconds(attempt: int) -> float:
-    """Return the backoff delay (seconds) for a zero-based retry ``attempt``.
-
-    Exponential growth plus jitter, clamped so the result never exceeds
-    ``BACKOFF_CAP``. The cap is applied after the jitter to keep that bound.
-    """
-    delay = BACKOFF_BASE * (2.0**attempt) + random.uniform(0, BACKOFF_JITTER)
-    return min(BACKOFF_CAP, delay)
-
-
-def _classify(detail: str) -> str:
-    """Classify a failure's stderr as ``rate_limit``, ``transient``, or ``fatal``."""
-    low = detail.lower()
-    if any(marker in low for marker in _RATE_LIMIT_MARKERS):
-        return "rate_limit"
-    if any(marker in low for marker in _TRANSIENT_MARKERS):
-        return "transient"
-    return "fatal"
-
-
 def _run(
     cmd: list[str],
     *,
@@ -117,8 +76,9 @@ def _run(
         cmd: The full command vector (e.g. ``["gh", "api", ...]``).
         run_fn: Optional injected subprocess runner.
         timeout: Per-attempt timeout in seconds.
-        retries: Extra attempts allowed for transient failures (5xx, network,
-            timeout). Rate limits and other errors are never retried.
+        retries: Extra attempts allowed for transient failures (HTTP 500, 502,
+            503, 504, network, and timeout). Rate limits, forbidden responses,
+            and every other error are never retried.
 
     Raises:
         GhRateLimitError: If GitHub reports a rate limit.
@@ -131,7 +91,7 @@ def _run(
             result = runner(cmd, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
             if attempt < retries:
-                _sleep(_backoff_seconds(attempt))
+                _sleep(gh_policy.retry_backoff_seconds(attempt))
                 attempt += 1
                 continue
             raise GhError(f"{_label(cmd)} timed out after {timeout}s") from exc
@@ -143,18 +103,26 @@ def _run(
         if result.returncode == 0:
             return result
 
+        # Classify on the real output, but never raise a bare "failed:" when the
+        # command exited quietly: the exit code is the only clue left.
         detail = (result.stderr or result.stdout or "").strip()
-        kind = _classify(detail)
+        reported = detail or f"no output (exit code {result.returncode})"
+        kind = gh_policy.classify_gh_failure(detail)
         if kind == "rate_limit":
             raise GhRateLimitError(
                 f"GitHub rate limit hit running {_label(cmd)}: {detail}\n"
                 "Wait for the limit window to reset before retrying."
             )
+        if kind == "forbidden":
+            raise GhError(
+                f"{_label(cmd)} was refused: {detail}\n"
+                "The token is missing a permission or scope this call needs."
+            )
         if kind == "transient" and attempt < retries:
-            _sleep(_backoff_seconds(attempt))
+            _sleep(gh_policy.retry_backoff_seconds(attempt))
             attempt += 1
             continue
-        raise GhError(f"{_label(cmd)} failed: {detail}")
+        raise GhError(f"{_label(cmd)} failed: {reported}")
 
 
 def run_gh(
@@ -245,7 +213,7 @@ def graphql(
         rate_limited = any(
             isinstance(error, dict) and error.get("type") == "RATE_LIMITED" for error in errors
         )
-        if rate_limited or _classify(message) == "rate_limit":
+        if rate_limited or gh_policy.classify_gh_failure(message) == "rate_limit":
             raise GhRateLimitError(f"GitHub rate limit reported by GraphQL: {message}")
         raise GhError(f"GraphQL errors: {message}")
     if "data" not in payload:
@@ -319,7 +287,10 @@ def current_pr_number(*, run_fn: RunFunction | None = None) -> int:
     except GhRateLimitError:
         raise
     except GhError as exc:
-        raise GhError("No pull request found for the current branch.") from exc
+        detail = str(exc).lower()
+        if "no pull request" in detail or "could not resolve to a" in detail:
+            raise GhError("No pull request found for the current branch.") from exc
+        raise
     try:
         return int(data["number"])
     except (KeyError, TypeError, ValueError) as exc:

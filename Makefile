@@ -13,8 +13,10 @@ VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
 NPX                 ?= npx
 NODE                ?= node
-PY_PATHS            := src/ tests/ scripts/ci/ scripts/gh/ scripts/setup/
-PY_TYPE_PATHS       := src/ scripts/ci/ scripts/gh/ scripts/setup/
+# A glob for the scripts root so top-level modules there are never skipped;
+# scripts/checks/ stays out until its local-only helpers are lint and type clean.
+PY_PATHS            := src/ tests/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/setup/
+PY_TYPE_PATHS       := src/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
 
 # Browser targets opt into the private Linux runtime only with local_libs=1.

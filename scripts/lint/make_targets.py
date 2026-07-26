@@ -17,8 +17,10 @@ GROUP_PATTERN = re.compile(
     re.MULTILINE,
 )
 MAKE_REFERENCE_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_./$-])"
     r"(?:[A-Z_][A-Z0-9_]*=(?:\"[^\"]*\"|'[^']*'|[^\s\"']+)\s+)*"
-    r"make\s+([A-Za-z][A-Za-z0-9_-]*)\b(?![A-Za-z0-9_?*-])"
+    r"make\s+([A-Za-z][A-Za-z0-9_-]*)\b"
+    r"(?![A-Za-z0-9_?*./:=+%-])"
 )
 INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
 

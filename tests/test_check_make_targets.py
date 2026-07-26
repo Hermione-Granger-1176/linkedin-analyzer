@@ -60,14 +60,26 @@ def test_extract_make_references_handles_environment_prefixes() -> None:
 
 
 def test_extract_make_references_ignores_plain_prose() -> None:
-    """Plain prose and wildcard target families are not interpreted as commands."""
+    """Prose and incomplete target tokens are not interpreted as commands."""
     references = make_targets.extract_make_references(
         "Adding a new make target with a description makes it appear automatically.\n"
         "CI and local workflows use the same make targets.\n"
         "The two `make audit-memory-*` targets measure memory usage.\n"
+        "Examples include `make lint-py=value` and `make lint-py.extra`.\n"
     )
 
     assert references == []
+
+
+def test_extract_make_references_requires_standalone_make_command() -> None:
+    """Executable-name substrings and paths are not mistaken for Make commands."""
+    references = make_targets.extract_make_references(
+        "Ignore `remake check-local`, `gmake check-local`, and `foo-make check-local`.\n"
+        "Ignore `./make check-local` and `$make check-local`.\n"
+        "Accept `make check-local&&make lint-py`.\n"
+    )
+
+    assert [reference.target for reference in references] == ["check-local", "lint-py"]
 
 
 def test_iter_markdown_files_prunes_local_and_dependency_directories(tmp_path: Path) -> None:

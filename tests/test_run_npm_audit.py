@@ -201,7 +201,23 @@ def test_parse_npm_audit_rejects_invalid_package_name(name: object) -> None:
         run_npm_audit._parse_npm_audit(payload)
 
 
-@pytest.mark.parametrize("fix_available", ["false", 1, [], None])
+@pytest.mark.parametrize(
+    "fix_available",
+    [
+        "false",
+        1,
+        [],
+        None,
+        {},
+        {"name": "left-pad"},
+        {"version": "2.0.0"},
+        {"name": "", "version": "2.0.0"},
+        {"name": "left-pad", "version": ""},
+        {"name": 42, "version": "2.0.0"},
+        {"name": "left-pad", "version": 2},
+        {"name": "left-pad", "version": "2.0.0", "isSemVerMajor": "false"},
+    ],
+)
 def test_parse_npm_audit_rejects_invalid_fix_available(fix_available: object) -> None:
     """Unexpected fix metadata fails closed instead of changing policy truthiness."""
     payload = {
@@ -222,7 +238,11 @@ def test_parse_npm_audit_accepts_fix_description_object() -> None:
     payload = {
         "vulnerabilities": {
             "left-pad": {
-                "fixAvailable": {"name": "left-pad", "version": "2.0.0"},
+                "fixAvailable": {
+                    "name": "left-pad",
+                    "version": "2.0.0",
+                    "isSemVerMajor": False,
+                },
                 "via": [{"source": 7, "severity": "high"}],
             }
         }

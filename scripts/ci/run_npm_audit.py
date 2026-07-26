@@ -123,6 +123,27 @@ def _parse_advisory(
     )
 
 
+def _fix_is_available(value: object, *, package: str) -> bool:
+    """Validate npm fix metadata and return whether a fix is available."""
+    if isinstance(value, bool):
+        return value
+    if not isinstance(value, dict):
+        raise ValueError(f"npm audit 'fixAvailable' must be a boolean or object: {package}")
+
+    for field in ("name", "version"):
+        field_value = value.get(field)
+        if not isinstance(field_value, str) or not field_value.strip():
+            raise ValueError(
+                "npm audit 'fixAvailable' object must include non-empty "
+                f"name and version strings: {package}"
+            )
+
+    is_major = value.get("isSemVerMajor")
+    if is_major is not None and not isinstance(is_major, bool):
+        raise ValueError(f"npm audit 'fixAvailable.isSemVerMajor' must be a boolean: {package}")
+    return True
+
+
 def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFinding, ...]:
     """Parse ``npm audit --json`` output into vulnerability findings."""
     vulnerabilities = payload.get("vulnerabilities", {})
@@ -140,9 +161,7 @@ def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFindin
 
         # ``fixAvailable`` is False, True, or an object describing the fix.
         fix_value = node.get("fixAvailable", False)
-        if not isinstance(fix_value, (bool, dict)):
-            raise ValueError(f"npm audit 'fixAvailable' must be a boolean or object: {name}")
-        fix_available = fix_value is True or isinstance(fix_value, dict)
+        fix_available = _fix_is_available(fix_value, package=str(name))
         package_value = node.get("name", name)
         if not isinstance(package_value, str) or not package_value.strip():
             raise ValueError(f"npm audit vulnerability has an invalid package name: {name}")

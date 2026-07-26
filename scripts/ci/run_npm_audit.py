@@ -210,9 +210,14 @@ def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, .
         raise ValueError("npm audit JSON must be an object")
 
     error = payload.get("error")
-    if error:
-        summary = error.get("summary") if isinstance(error, dict) else str(error)
-        raise RuntimeError(f"npm audit reported an error: {summary or 'unknown error'}")
+    if error is not None:
+        summary_value = error.get("summary") if isinstance(error, dict) else error
+        summary = (
+            summary_value.strip()
+            if isinstance(summary_value, str) and summary_value.strip()
+            else "unknown error"
+        )
+        raise RuntimeError(f"npm audit reported an error: {summary}")
 
     return _parse_npm_audit(payload)
 

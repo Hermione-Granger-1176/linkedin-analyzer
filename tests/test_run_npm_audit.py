@@ -278,6 +278,21 @@ def test_run_npm_audit_parses_clean_report(monkeypatch: pytest.MonkeyPatch) -> N
     assert run_npm_audit._run_npm_audit("npm") == ()
 
 
+def test_run_npm_audit_accepts_explicit_null_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A null npm error field still represents a clean audit response."""
+    monkeypatch.setattr(
+        run_npm_audit.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout='{"error": null, "vulnerabilities": {}}',
+            stderr="",
+        ),
+    )
+
+    assert run_npm_audit._run_npm_audit("npm") == ()
+
+
 def test_run_npm_audit_splits_command_with_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run npm audit shlex-splits an npm override that carries flags."""
     captured: dict[str, object] = {}
@@ -362,6 +377,10 @@ def test_run_npm_audit_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) 
         ('{"error": {"summary": "no lockfile"}}', "no lockfile"),
         ('{"error": {"code": "EAUDIT"}}', "unknown error"),
         ('{"error": "boom"}', "boom"),
+        ('{"error": {}}', "unknown error"),
+        ('{"error": ""}', "unknown error"),
+        ('{"error": false}', "unknown error"),
+        ('{"error": []}', "unknown error"),
     ],
 )
 def test_run_npm_audit_reports_audit_errors(

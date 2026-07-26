@@ -1,8 +1,7 @@
 """Shared fakes for the ``scripts.gh`` test suite.
 
-Kept in a dedicated support module (mirroring
-``tests/ci/workflow_helpers_test_support.py``) so individual test modules
-don't import helpers from one another.
+Kept in a dedicated support module so individual test modules don't import
+helpers from one another.
 """
 
 from __future__ import annotations

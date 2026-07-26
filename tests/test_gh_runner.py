@@ -9,7 +9,7 @@ from scripts.gh import gh_runner, pr_review
 from scripts.gh.gh_runner import GhError, GhRateLimitError
 from scripts.lib import gh_policy
 
-from tests.test_pr_review import completed_process
+from tests.gh_test_support import completed_process
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

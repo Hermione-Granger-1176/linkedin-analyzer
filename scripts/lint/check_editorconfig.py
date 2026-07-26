@@ -276,6 +276,13 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
     return resolved_paths, errors
 
 
+def print_failures(messages: list[str]) -> None:
+    """Print EditorConfig failures with consistent CI-friendly context."""
+    print("EditorConfig check failed:")
+    for message in messages:
+        print(f"  {message}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI entry point and return a shell exit code."""
     args = parse_args(argv)
@@ -287,8 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         candidate_paths, path_errors = resolve_requested_paths(args.paths, workspace_root)
         if path_errors:
-            for error in path_errors:
-                print(f"  {error}")
+            print_failures(path_errors)
             return 1
 
     checked_paths = [
@@ -302,9 +308,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"EditorConfig check passed for {len(checked_paths)} file(s)")
         return 0
 
-    print("EditorConfig check failed:")
-    for violation in violations:
-        print(violation)
+    print_failures(violations)
     return 1
 
 

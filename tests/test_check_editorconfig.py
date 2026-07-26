@@ -282,6 +282,7 @@ def test_main_rejects_missing_path(
 
     captured = capsys.readouterr().out
     assert exit_code == 1
+    assert captured.startswith("EditorConfig check failed:\n")
     assert "path does not exist" in captured
 
 
@@ -297,7 +298,9 @@ def test_main_rejects_path_outside_repository(
     exit_code = check_editorconfig.main([str(outside)])
 
     assert exit_code == 1
-    assert "path must stay within the repository" in capsys.readouterr().out
+    captured = capsys.readouterr().out
+    assert captured.startswith("EditorConfig check failed:\n")
+    assert "path must stay within the repository" in captured
 
 
 def test_main_rejects_symlink(
@@ -313,7 +316,9 @@ def test_main_rejects_symlink(
     exit_code = check_editorconfig.main(["linked.txt"])
 
     assert exit_code == 1
-    assert "symbolic links are not supported" in capsys.readouterr().out
+    captured = capsys.readouterr().out
+    assert captured.startswith("EditorConfig check failed:\n")
+    assert "symbolic links are not supported" in captured
 
 
 def test_main_rejects_path_through_symlinked_directory(
@@ -329,7 +334,9 @@ def test_main_rejects_path_through_symlinked_directory(
     exit_code = check_editorconfig.main(["linked-directory/target.txt"])
 
     assert exit_code == 1
-    assert "symbolic links are not supported" in capsys.readouterr().out
+    captured = capsys.readouterr().out
+    assert captured.startswith("EditorConfig check failed:\n")
+    assert "symbolic links are not supported" in captured
 
 
 def test_main_prints_failures_for_invalid_file(
@@ -355,5 +362,5 @@ trim_trailing_whitespace = true
 
     captured = capsys.readouterr().out
     assert exit_code == 1
-    assert "EditorConfig check failed:" in captured
+    assert captured.startswith("EditorConfig check failed:\n")
     assert "demo.md:1: trailing whitespace" in captured

@@ -79,6 +79,25 @@ def test_resolve_settings_expands_brace_patterns() -> None:
     assert check_editorconfig.resolve_settings(sections, "config/example.toml") == {}
 
 
+def test_resolve_settings_uses_separator_aware_globs() -> None:
+    """Single stars stay within a path segment while double stars recurse."""
+    sections = [
+        check_editorconfig.EditorConfigSection("*.md", {"scope": "basename"}),
+        check_editorconfig.EditorConfigSection("docs/*.md", {"depth": "direct"}),
+        check_editorconfig.EditorConfigSection("docs/**/guide.md", {"recursive": "true"}),
+    ]
+
+    assert check_editorconfig.resolve_settings(sections, "docs/guide.md") == {
+        "scope": "basename",
+        "depth": "direct",
+        "recursive": "true",
+    }
+    assert check_editorconfig.resolve_settings(sections, "docs/guides/guide.md") == {
+        "scope": "basename",
+        "recursive": "true",
+    }
+
+
 def test_parse_editorconfig_normalizes_property_names_and_values() -> None:
     """Parse property names and values case-insensitively."""
     sections = check_editorconfig.parse_editorconfig("[*.py]\nIndent_Style = SPACE\n")

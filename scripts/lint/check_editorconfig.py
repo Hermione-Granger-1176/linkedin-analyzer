@@ -8,6 +8,7 @@ import fnmatch
 import os
 import sys
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 from scripts.lint import SKIP_DIRECTORIES
@@ -101,7 +102,36 @@ def _expand_braces(pattern: str) -> list[str]:
 
 def _matches(pattern: str, relative_path: str) -> bool:
     """Return whether a repository-relative path matches an EditorConfig glob."""
-    return any(fnmatch.fnmatchcase(relative_path, item) for item in _expand_braces(pattern))
+    return any(_matches_expanded(item, relative_path) for item in _expand_braces(pattern))
+
+
+def _matches_expanded(pattern: str, relative_path: str) -> bool:
+    """Match one brace-expanded glob without allowing single stars to cross directories."""
+    normalized_pattern = pattern.removeprefix("/")
+    if "/" not in normalized_pattern:
+        return fnmatch.fnmatchcase(relative_path.rsplit("/", 1)[-1], normalized_pattern)
+
+    pattern_parts = tuple(normalized_pattern.split("/"))
+    path_parts = tuple(relative_path.split("/"))
+
+    @cache
+    def match_parts(pattern_index: int, path_index: int) -> bool:
+        if pattern_index == len(pattern_parts):
+            return path_index == len(path_parts)
+
+        part = pattern_parts[pattern_index]
+        if part == "**":
+            return match_parts(pattern_index + 1, path_index) or (
+                path_index < len(path_parts) and match_parts(pattern_index, path_index + 1)
+            )
+
+        return (
+            path_index < len(path_parts)
+            and fnmatch.fnmatchcase(path_parts[path_index], part)
+            and match_parts(pattern_index + 1, path_index + 1)
+        )
+
+    return match_parts(0, 0)
 
 
 def resolve_settings(sections: list[EditorConfigSection], relative_path: str) -> dict[str, str]:

@@ -176,3 +176,15 @@ def test_main_reads_make_values_from_the_environment(
     monkeypatch.setenv("CLEAN_VENV", ".venv")
 
     assert clean_venv.main([]) == 0
+    assert clean_venv.parse_args([]).repo_root == tmp_path
+
+
+def test_parse_args_treats_empty_environment_values_as_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty inherited values cannot silently select the current directory."""
+    monkeypatch.setenv("CLEAN_REPO_ROOT", "")
+    monkeypatch.setenv("CLEAN_VENV", "")
+
+    with pytest.raises(SystemExit):
+        clean_venv.parse_args([])

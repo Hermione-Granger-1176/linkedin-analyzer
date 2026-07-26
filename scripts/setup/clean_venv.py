@@ -69,8 +69,9 @@ def remove_venv(repo_root: Path, value: str) -> bool:
 def parse_args(arguments: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse the Make-facing command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
-    repo_root = os.environ.get("CLEAN_REPO_ROOT")
-    venv = os.environ.get("CLEAN_VENV")
+    repo_root_value = os.environ.get("CLEAN_REPO_ROOT")
+    repo_root = Path(repo_root_value) if repo_root_value else None
+    venv = os.environ.get("CLEAN_VENV") or None
     parser.add_argument("--repo-root", default=repo_root, required=repo_root is None, type=Path)
     parser.add_argument("--venv", default=venv, required=venv is None)
     return parser.parse_args(arguments)

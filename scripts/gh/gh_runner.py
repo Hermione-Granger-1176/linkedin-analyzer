@@ -8,10 +8,12 @@ one place for repository and pull-request detection, timeouts, and retries.
 ``gh api`` has no built-in retry and treats a single 5xx, network blip, or
 rate-limit response as a hard non-zero exit. Per GitHub's API guidance the
 shared policy in ``scripts.lib.gh_policy`` retries only transient
-infrastructure errors (5xx/network/timeout) with bounded exponential backoff
-and fails fast on rate limits rather than hammering the API (which can get an
-integration banned). Non-idempotent mutations (posting a reply) opt out of
-retries so a lost response never double-posts.
+infrastructure errors (HTTP 500, 502, 503, and 504 plus network and timeout
+failures) with bounded exponential backoff, and fails fast on rate limits
+rather than hammering the API (which can get an integration banned). HTTP 501
+is treated as fatal, since "Not Implemented" never clears on a retry.
+Non-idempotent mutations (posting a reply) opt out of retries so a lost
+response never double-posts.
 """
 
 from __future__ import annotations

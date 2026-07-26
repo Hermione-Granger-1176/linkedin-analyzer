@@ -189,12 +189,25 @@ def test_run_pip_audit_rejects_invalid_json(
         lambda *_args, **_kwargs: SimpleNamespace(
             returncode=1,
             stdout="not-json",
-            stderr="",
+            stderr="diagnostic detail",
         ),
     )
 
-    with pytest.raises(ValueError, match="invalid JSON"):
+    with pytest.raises(ValueError, match=r"invalid JSON.*diagnostic detail"):
         run_security_audit._run_pip_audit(requirements_file)
+
+
+def test_subprocess_error_detail_normalizes_and_bounds_output() -> None:
+    """Subprocess diagnostics stay readable without dumping unbounded output."""
+    oversized_detail = "prefix\n" + ("x" * run_security_audit.MAX_SUBPROCESS_ERROR_DETAIL_LENGTH)
+
+    detail = run_security_audit._subprocess_error_detail("", oversized_detail)
+
+    assert "\n" not in detail
+    assert detail.startswith("prefix ")
+    assert detail.endswith("...")
+    assert len(detail) <= run_security_audit.MAX_SUBPROCESS_ERROR_DETAIL_LENGTH + 3
+    assert run_security_audit._subprocess_error_detail(None, "  ") == "unknown error"
 
 
 @pytest.mark.parametrize(
@@ -527,11 +540,29 @@ def test_run_pip_audit_reports_a_missing_executable(
     monkeypatch.setattr(run_security_audit, "REPO_ROOT", repo_root)
 
     def _missing(*_args: object, **_kwargs: object) -> None:
-        raise FileNotFoundError("pip-audit")
+        error = FileNotFoundError("launcher missing")
+        error.filename = "uv"
+        raise error
 
     monkeypatch.setattr(run_security_audit.subprocess, "run", _missing)
 
-    with pytest.raises(RuntimeError, match="pip-audit executable not found"):
+    with pytest.raises(RuntimeError, match="pip-audit executable not found: uv"):
+        run_security_audit._run_pip_audit(requirements_file)
+
+
+def test_run_pip_audit_reports_launcher_start_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Other launcher failures are reported as audit errors with context."""
+    requirements_file = tmp_path / "requirements.txt"
+    write_text(requirements_file, "pkg==1.0\n")
+
+    def _permission_denied(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(run_security_audit.subprocess, "run", _permission_denied)
+
+    with pytest.raises(RuntimeError, match=r"could not start pip-audit.*permission denied"):
         run_security_audit._run_pip_audit(requirements_file)
 
 

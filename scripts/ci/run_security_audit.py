@@ -35,6 +35,7 @@ from scripts.ci.security_audit_policy import (
 # Default pip-audit invocation. The Makefile overrides this with the uv-managed
 # form so the audit runs against the same resolver that produced the lock.
 DEFAULT_PIP_AUDIT_COMMAND = "pip-audit"
+MAX_SUBPROCESS_ERROR_DETAIL_LENGTH = 500
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,18 @@ class VulnerabilityFinding:
     def all_ids(self) -> tuple[str, ...]:
         """Return the primary vulnerability id plus aliases."""
         return (self.vulnerability_id, *self.aliases)
+
+
+def _subprocess_error_detail(*outputs: object) -> str:
+    """Return one bounded, single-line detail from subprocess output."""
+    for output in outputs:
+        if not isinstance(output, str) or not output.strip():
+            continue
+        detail = " ".join(output.split())
+        if len(detail) > MAX_SUBPROCESS_ERROR_DETAIL_LENGTH:
+            return detail[:MAX_SUBPROCESS_ERROR_DETAIL_LENGTH].rstrip() + "..."
+        return detail
+    return "unknown error"
 
 
 def _relative_path(path: Path) -> str:
@@ -215,18 +228,23 @@ def _run_pip_audit(
             f"pip-audit timed out after 120 seconds for {_relative_path(requirements_file)}"
         ) from exc
     except FileNotFoundError as exc:
+        missing_executable = exc.filename or command_parts[0]
         raise RuntimeError(
-            f"pip-audit executable not found: {pip_audit_command}. Run `make setup` first."
+            f"pip-audit executable not found: {missing_executable} "
+            f"(command: {pip_audit_command}). Run `make setup` first."
         ) from exc
+    except OSError as exc:
+        raise RuntimeError(f"pip-audit could not start {command_parts[0]}: {exc}") from exc
     if result.returncode not in {0, 1}:
-        stderr = result.stderr.strip() or result.stdout.strip() or "unknown error"
-        raise RuntimeError(f"pip-audit failed for {_relative_path(requirements_file)}: {stderr}")
+        detail = _subprocess_error_detail(result.stderr, result.stdout)
+        raise RuntimeError(f"pip-audit failed for {_relative_path(requirements_file)}: {detail}")
 
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
+        detail = _subprocess_error_detail(result.stderr, result.stdout)
         raise ValueError(
-            f"pip-audit returned invalid JSON for {_relative_path(requirements_file)}"
+            f"pip-audit returned invalid JSON for {_relative_path(requirements_file)}: {detail}"
         ) from exc
 
     if not isinstance(payload, dict):

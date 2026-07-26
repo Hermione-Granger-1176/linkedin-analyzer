@@ -98,6 +98,12 @@ make lint-yaml
 # Lint selected YAML files
 make lint-yaml paths=".github/workflows/ci.yml .yamllint.yml"
 
+# Check EditorConfig rules across supported repository files
+make editorconfig-check
+
+# Check EditorConfig rules for selected files
+make editorconfig-check paths="Makefile web/src/app.js"
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 

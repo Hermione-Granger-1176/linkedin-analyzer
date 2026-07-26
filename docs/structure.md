@@ -130,7 +130,7 @@ linkedin-analyzer/
 │   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)
 │   ├── ci/                             # Local CI parallel-runner and GitHub Actions workflow helpers
 │   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
-│   ├── lint/                           # Local lint helpers
+│   ├── lint/                           # EditorConfig and other repository lint helpers
 │   └── web-smoke.mjs                   # Post-deploy HTTP smoke check (shell + headers + CSP endpoint)
 ├── data/                               # Local workspace; contents gitignored (only .gitkeep placeholders are tracked)
 │   ├── input/                          # Place CSVs here
@@ -145,7 +145,7 @@ linkedin-analyzer/
 │   └── workflows/                      # CI, audit, publish, and maintenance workflows
 ├── Dockerfile                          # CLI container image (multi-stage, non-root)
 ├── vercel.json                         # Vercel config
-├── .editorconfig                       # Editor whitespace and charset defaults
+├── .editorconfig                       # Editor rules enforced by make editorconfig-check
 ├── .yamllint.yml                       # yamllint rules
 ├── .pre-commit-config.yaml             # Local pre-commit hooks
 ├── Makefile                            # Local and CI command entrypoints

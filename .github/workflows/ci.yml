@@ -38,6 +38,7 @@ jobs:
         run: >-
           python scripts/ci/run_parallel_checks.py
           --timeout 1200
+          editorconfig-check
           lint-workflows
           lint-py
           lint-yaml

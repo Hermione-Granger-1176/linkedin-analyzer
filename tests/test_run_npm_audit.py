@@ -472,6 +472,55 @@ def test_audit_counts_exception_below_raised_threshold_as_used() -> None:
     assert errors == ()
 
 
+def test_audit_rejects_expired_exception_below_threshold() -> None:
+    """Severity filtering never bypasses exception expiry."""
+    ignored, errors = run_npm_audit._audit_npm_dependencies(
+        today=date(2026, 6, 1),
+        exceptions=(_exception(review_by=date(2026, 1, 1)),),
+        findings=(_finding(severity="moderate"),),
+        audit_level="high",
+    )
+
+    assert ignored == ()
+    assert errors == (
+        "Expired npm vulnerability exception: left-pad GHSA-aaaa-bbbb-cccc review_by=2026-01-01",
+    )
+
+
+def test_audit_evicts_fixed_exception_below_threshold() -> None:
+    """Severity filtering never hides a newly available fix."""
+    ignored, errors = run_npm_audit._audit_npm_dependencies(
+        today=date(2026, 1, 1),
+        exceptions=(_exception(ignore_only_without_fix=True),),
+        findings=(_finding(severity="moderate", fix_available=True),),
+        audit_level="high",
+    )
+
+    assert ignored == ()
+    assert errors == (
+        "npm vulnerability exception must be removed because a fix is available: "
+        "left-pad GHSA-aaaa-bbbb-cccc",
+    )
+
+
+def test_audit_rejects_ambiguous_exceptions_below_threshold() -> None:
+    """Severity filtering never hides ambiguous advisory policies."""
+    ignored, errors = run_npm_audit._audit_npm_dependencies(
+        today=date(2026, 1, 1),
+        exceptions=(
+            _exception(vulnerability_id="GHSA-aaaa-bbbb-cccc"),
+            _exception(vulnerability_id="42"),
+        ),
+        findings=(_finding(aliases=("42",), severity="moderate"),),
+        audit_level="high",
+    )
+
+    assert ignored == ()
+    assert errors == (
+        "Multiple npm vulnerability exceptions match one advisory: left-pad GHSA-aaaa-bbbb-cccc",
+    )
+
+
 def test_audit_rejects_multiple_exceptions_matching_one_advisory() -> None:
     """Alias and primary-id policies cannot ambiguously govern one finding."""
     ignored, errors = run_npm_audit._audit_npm_dependencies(

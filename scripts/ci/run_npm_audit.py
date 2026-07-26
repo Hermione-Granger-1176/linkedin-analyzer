@@ -232,16 +232,6 @@ def _audit_npm_dependencies(
             entry for entry in exceptions if _matches_exception(entry, finding)
         )
         matched_exception_keys.update(entry.key for entry in matching_exceptions)
-        if not _is_gated(finding.severity, audit_level):
-            continue
-
-        if not matching_exceptions:
-            errors.append(
-                "Unreviewed npm vulnerability: "
-                f"{finding.package} {finding.severity} {finding.advisory_id}"
-            )
-            continue
-
         if len(matching_exceptions) > 1:
             errors.append(
                 "Multiple npm vulnerability exceptions match one advisory: "
@@ -249,27 +239,35 @@ def _audit_npm_dependencies(
             )
             continue
 
-        finding_errors = []
-        for matching_exception in matching_exceptions:
+        matching_exception = matching_exceptions[0] if matching_exceptions else None
+        if matching_exception is not None:
             if today > matching_exception.review_by:
-                finding_errors.append(
+                errors.append(
                     "Expired npm vulnerability exception: "
                     f"{matching_exception.package} "
                     f"{matching_exception.vulnerability_id} "
                     f"review_by={matching_exception.review_by.isoformat()}"
                 )
-            elif matching_exception.ignore_only_without_fix and finding.fix_available:
-                finding_errors.append(
+                continue
+            if matching_exception.ignore_only_without_fix and finding.fix_available:
+                errors.append(
                     "npm vulnerability exception must be removed because a fix "
                     "is available: "
                     f"{finding.package} {finding.advisory_id}"
                 )
+                continue
 
-        if finding_errors:
-            errors.extend(finding_errors)
+        if not _is_gated(finding.severity, audit_level):
             continue
 
-        ignored.append((finding, matching_exceptions[0]))
+        if matching_exception is None:
+            errors.append(
+                "Unreviewed npm vulnerability: "
+                f"{finding.package} {finding.severity} {finding.advisory_id}"
+            )
+            continue
+
+        ignored.append((finding, matching_exception))
 
     for exception in exceptions:
         if exception.key not in matched_exception_keys:

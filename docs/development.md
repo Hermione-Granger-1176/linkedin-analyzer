@@ -92,6 +92,9 @@ make lint-js
 # Lint stylesheets
 make lint-css
 
+# Auto-fix stylesheet lint findings
+make fmt-css
+
 # Lint YAML files
 make lint-yaml
 

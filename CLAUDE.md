@@ -38,7 +38,7 @@ Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 - `make ci-python` / `make ci-web`: per-surface CI gates
 - `make test`: non-browser Python + JS tests; `make test-e2e` for Playwright
 - `make dead-code`: detect unused code (vulture for Python, knip for JS)
-- `make fmt`: auto-fix Python, JS, and metadata formatting
+- `make fmt`: auto-fix Python, JavaScript, CSS, and metadata formatting
 - `make web`: start the Vite dev server
 - `make security`: dependency and override audits
 - `make pr` / `make git`: drill into PR and git sub-commands (`make help-ci` lists the CI sub-commands)

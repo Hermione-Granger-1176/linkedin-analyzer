@@ -38,6 +38,8 @@ See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 - Python typecheck: `make typecheck-py`
 - Python tests: `make test-py`
 - Web lint: `make lint-js`
+- CSS lint: `make lint-css`
+- CSS auto-fix: `make fmt-css`
 - Web typecheck: `make typecheck-web`
 - Web format check: `make format-js-check`
 - Web tests: `make test-js`

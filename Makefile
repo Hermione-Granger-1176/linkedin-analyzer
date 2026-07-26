@@ -109,9 +109,9 @@ check-overrides: ## Check npm overrides are still needed
 
 # ─── Format @format ───────────────────────────────────────────────────────────────────
 
-.PHONY: fmt fmt-py fmt-js format format-check format-py-check format-js-check
+.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-js-check
 
-fmt: fmt-py fmt-js ## Auto-fix Python, JavaScript, and metadata formatting
+fmt: fmt-py fmt-js fmt-css ## Auto-fix Python, JavaScript, CSS, and metadata formatting
 
 fmt-py: ## Auto-fix Python with ruff
 	$(VENV_PYTHON) -m ruff check --fix $(PY_PATHS)
@@ -120,6 +120,9 @@ fmt-py: ## Auto-fix Python with ruff
 fmt-js: ## Auto-fix JavaScript and formatted metadata
 	$(NPM) run format
 	$(NPM) run lint -- --fix
+
+fmt-css: ## Auto-fix CSS with stylelint
+	$(NPM) run lint:css -- --fix
 
 format: fmt ## Alias for fmt
 

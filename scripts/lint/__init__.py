@@ -5,6 +5,9 @@ from __future__ import annotations
 SKIP_DIRECTORIES = frozenset(
     {
         ".artifacts",
+        ".agents",
+        ".claude",
+        ".codex",
         ".git",
         ".mypy_cache",
         ".playwright",

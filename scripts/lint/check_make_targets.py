@@ -1,0 +1,155 @@
+"""Check documented Make target references against the repository Makefile."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from scripts.lint.make_targets import (
+    MAKEFILE_PATH,
+    extract_make_references,
+    iter_markdown_files,
+    load_makefile_targets,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _contains_symlink(path: Path, root: Path) -> bool:
+    """Return whether any repository-relative path component is a symbolic link."""
+    current = root
+    for part in path.relative_to(root).parts:
+        current /= part
+        if current.is_symlink():
+            return True
+    return False
+
+
+def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:
+    """Resolve safe repository-relative Markdown paths and return validation errors."""
+    resolved_paths: list[Path] = []
+    errors: list[str] = []
+    resolved_root = root.resolve()
+
+    for raw in raw_paths:
+        relative = Path(raw)
+        if relative.is_absolute() or ".." in relative.parts:
+            errors.append(f"{raw}: path must stay within the repository")
+            continue
+        if relative.suffix.lower() != ".md":
+            errors.append(f"{raw}: path must be a Markdown file")
+            continue
+
+        candidate = root / relative
+        if _contains_symlink(candidate, root):
+            errors.append(f"{raw}: symbolic links are not supported")
+            continue
+
+        try:
+            resolved = candidate.resolve(strict=True)
+        except FileNotFoundError:
+            errors.append(f"{raw}: path does not exist")
+            continue
+        except OSError:
+            errors.append(f"{raw}: path could not be accessed")
+            continue
+
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError:
+            errors.append(f"{raw}: path resolves outside the repository")
+            continue
+
+        if not resolved.is_file():
+            errors.append(f"{raw}: path does not exist or is not a file")
+            continue
+        resolved_paths.append(resolved)
+
+    return resolved_paths, errors
+
+
+def check_file(path: Path, known_targets: set[str], root: Path) -> list[str]:
+    """Return unknown documented Make target references for one file."""
+    relative_path = path.relative_to(root).as_posix()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return [f"{relative_path}: not valid UTF-8 text ({exc.reason})"]
+
+    return [
+        f"{relative_path}:{reference.line_number}: unknown Make target `{reference.target}`"
+        for reference in extract_make_references(text)
+        if reference.target not in known_targets
+    ]
+
+
+def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list[str]:
+    """Run the documented Make target check and return all violations."""
+    workspace_root = root or REPO_ROOT
+    known_targets = load_makefile_targets(workspace_root / "Makefile")
+    candidate_paths = paths if paths is not None else iter_markdown_files(workspace_root)
+    violations: list[str] = []
+
+    for path in candidate_paths:
+        try:
+            relative_path = path.relative_to(workspace_root).as_posix()
+        except ValueError:
+            violations.append(f"{path}: path must stay within the repository")
+            continue
+
+        safe_paths, path_errors = resolve_requested_paths([relative_path], workspace_root)
+        if path_errors:
+            violations.extend(path_errors)
+            continue
+        violations.extend(check_file(safe_paths[0], known_targets, workspace_root))
+    return violations
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments for the documented Make target checker."""
+    parser = argparse.ArgumentParser(
+        description="Check documented make <target> references against the Makefile."
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="Optional repository-relative Markdown files to check",
+    )
+    return parser.parse_args(argv)
+
+
+def print_failures(messages: list[str]) -> None:
+    """Print Make target failures with consistent CI-friendly context."""
+    print("Make target check failed:")
+    for message in messages:
+        print(f"  {message}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the CLI entry point and return a shell exit code."""
+    args = parse_args(argv)
+    workspace_root = REPO_ROOT
+
+    if not args.paths:
+        candidate_paths = iter_markdown_files(workspace_root)
+    else:
+        candidate_paths, path_errors = resolve_requested_paths(args.paths, workspace_root)
+        if path_errors:
+            print_failures(path_errors)
+            return 1
+
+    violations = run_check(paths=candidate_paths, root=workspace_root)
+    if not violations:
+        print(
+            "Make target check passed for "
+            f"{len(candidate_paths)} file(s) against {MAKEFILE_PATH.name}"
+        )
+        return 0
+
+    print_failures(violations)
+    return 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

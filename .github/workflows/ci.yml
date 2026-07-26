@@ -46,6 +46,7 @@ jobs:
           test-py
           format-js-check
           lint-js
+          lint-css
           typecheck-web
           dead-code-js
           test-js

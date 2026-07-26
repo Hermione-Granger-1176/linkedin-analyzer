@@ -74,15 +74,18 @@ playwright-local-clean: ## Remove only the repository-local Playwright cache (ke
 
 # ─── Lint @lint ─────────────────────────────────────────────────────────────────────
 
-.PHONY: lint lint-py lint-js lint-workflows workflow-lint check-overrides
+.PHONY: lint lint-py lint-js lint-css lint-workflows workflow-lint check-overrides
 
-lint: lint-py lint-js lint-workflows ## Run all linters
+lint: lint-py lint-js lint-css lint-workflows ## Run all linters
 
 lint-py: ## Run Python linter only
 	$(VENV_PYTHON) -m ruff check $(PY_PATHS)
 
 lint-js: ## Run ESLint only
 	$(NPM) run lint
+
+lint-css: ## Run stylelint only
+	$(NPM) run lint:css
 
 lint-workflows: ## Run GitHub workflow linter only
 	$(NPM) run lint:workflows
@@ -247,12 +250,12 @@ explore: ## Print ad-hoc statistics over your export
 
 ci-python: lint-py format-py-check typecheck-py dead-code-py test-py ## Python CI gate
 
-ci-web: format-js-check lint-js typecheck-web dead-code-js test-js web-build-size ## Web CI gate
+ci-web: format-js-check lint-js lint-css typecheck-web dead-code-js test-js web-build-size ## Web CI gate
 
 ci: ci-python lint-workflows ci-web ## Full local CI gate
 
 ci-fast: ## Run the non-browser CI checks in parallel (excludes web-build-size)
-	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py lint-py format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js format-js-check typecheck-web dead-code-js test-js
+	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py lint-py format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
 
 check-local: ci ## Alias for the full local CI gate
 

@@ -123,7 +123,8 @@ linkedin-analyzer/
 │   ├── knip.json                       # JavaScript dead-code config
 │   ├── playwright.config.js            # Playwright browser test config
 │   ├── prettierignore                  # Prettier ignore rules
-│   └── prettierrc.json                 # Prettier formatting rules
+│   ├── prettierrc.json                 # Prettier formatting rules
+│   └── stylelint.config.mjs            # stylelint CSS rules
 ├── scripts/
 │   ├── check-overrides.mjs             # Validates npm overrides are still needed
 │   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)

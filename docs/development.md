@@ -89,6 +89,9 @@ make web-screens
 # Lint
 make lint-js
 
+# Lint stylesheets
+make lint-css
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 

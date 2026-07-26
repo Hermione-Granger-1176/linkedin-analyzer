@@ -21,7 +21,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 - `api/`: Vercel Serverless Functions. `csp-report.mjs` collects CSP violation reports.
 - `tests/`: Python tests
 - `scripts/`: repo tooling
-- `config/`: shared JS/web tool configs (eslint, prettier, playwright, jsconfig)
+- `config/`: shared JS/web tool configs (eslint, stylelint, prettier, playwright, jsconfig)
 - `docs/`: developer documentation (see Docs below)
 
 ## Local commands
@@ -75,6 +75,7 @@ Each tool has one config file that owns its scope. The Makefile just calls tools
 | coverage   | `pyproject.toml`              | Coverage source and report thresholds           |
 | vulture    | `pyproject.toml`              | Python dead-code detection                      |
 | ESLint     | `config/eslint.config.mjs`    | JS lint rules                                   |
+| stylelint  | `config/stylelint.config.mjs` | CSS lint rules                                  |
 | Prettier   | `config/prettierrc.json`      | JS/JSON/MD/YAML formatting (+ `prettierignore`) |
 | Playwright | `config/playwright.config.js` | Browser e2e test config                         |
 | Vite       | `web/vite.config.js`          | Web build + generated PWA manifest              |

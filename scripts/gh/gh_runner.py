@@ -103,7 +103,10 @@ def _run(
         if result.returncode == 0:
             return result
 
+        # Classify on the real output, but never raise a bare "failed:" when the
+        # command exited quietly: the exit code is the only clue left.
         detail = (result.stderr or result.stdout or "").strip()
+        reported = detail or f"no output (exit code {result.returncode})"
         kind = gh_policy.classify_gh_failure(detail)
         if kind == "rate_limit":
             raise GhRateLimitError(
@@ -119,7 +122,7 @@ def _run(
             _sleep(gh_policy.retry_backoff_seconds(attempt))
             attempt += 1
             continue
-        raise GhError(f"{_label(cmd)} failed: {detail}")
+        raise GhError(f"{_label(cmd)} failed: {reported}")
 
 
 def run_gh(

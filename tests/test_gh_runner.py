@@ -119,6 +119,14 @@ def test_run_names_the_missing_permission_without_retrying() -> None:
     assert runner.calls == 1
 
 
+def test_run_reports_the_exit_code_when_the_command_says_nothing() -> None:
+    """A silent non-zero exit still yields an actionable message."""
+    runner = SequenceRunner([completed_process(3, "", "")])
+
+    with pytest.raises(GhError, match=r"no output \(exit code 3\)"):
+        gh_runner.run_gh(["pr", "view"], run_fn=runner, retries=0)
+
+
 def test_run_does_not_retry_fatal_errors() -> None:
     """A non-transient error (404) is not retried."""
     runner = SequenceRunner([completed_process(1, "", "Not Found (HTTP 404)")])

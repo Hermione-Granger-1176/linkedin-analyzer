@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import os
 import sys
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-from scripts.lint import SKIP_DIRECTORIES
+from scripts.lint import iter_lint_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EDITORCONFIG_FILE = REPO_ROOT / ".editorconfig"
@@ -160,24 +159,7 @@ def should_check_file(sections: list[EditorConfigSection], relative_path: str) -
 def iter_workspace_files(root: Path | None = None) -> list[Path]:
     """Return repository files, skipping cache, build, dependency, and VCS directories."""
     workspace_root = root or REPO_ROOT
-    files: list[Path] = []
-    for current_root, directory_names, file_names in os.walk(
-        workspace_root,
-        topdown=True,
-        followlinks=False,
-    ):
-        current_path = Path(current_root)
-        directory_names[:] = sorted(
-            name
-            for name in directory_names
-            if name not in SKIP_DIRECTORIES and not (current_path / name).is_symlink()
-        )
-        files.extend(
-            path
-            for name in sorted(file_names)
-            if (path := current_path / name).is_file() and not path.is_symlink()
-        )
-    return files
+    return list(iter_lint_paths(workspace_root))
 
 
 def _decode_text_file(path: Path) -> str | None:

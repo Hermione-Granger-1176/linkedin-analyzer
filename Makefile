@@ -14,10 +14,9 @@ VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
 NPX                 ?= npx
 NODE                ?= node
-# A glob for the scripts root so top-level modules there are never skipped;
-# scripts/checks/ stays out until its local-only helpers are lint and type clean.
-PY_PATHS            := src/ tests/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
-PY_TYPE_PATHS       := src/ scripts/*.py scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
+# Keep top-level modules and every owned Python subpackage in the quality gates.
+PY_PATHS            := src/ tests/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
+PY_TYPE_PATHS       := src/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
 PLAYWRIGHT_ENGINE_ARGS = $(subst -, ,$(strip $(engines)))
 PLAYWRIGHT_INVALID_ENGINES = $(filter-out $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))

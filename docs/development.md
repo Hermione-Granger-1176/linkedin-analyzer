@@ -212,11 +212,10 @@ Run the primary non-browser workflow locally with `make ci-platform-checks`. It 
 
 See `.github/workflows/ci.yml`.
 
-A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
+A weekly `dependency-audit.yml` workflow also runs two audit jobs every Monday:
 
-- `make audit-node` for the policy-driven npm audit, including reviewed npm exceptions from `config/security_audit.json`
-- `make audit-python` for the policy-driven Python audit against a private temporary export of `uv.lock`, including reviewed Python exceptions from the same config
-- `make check-overrides` to verify npm overrides remain necessary (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md))
+- `npm-audit` runs `make audit-node` with reviewed npm exceptions from `config/security_audit.json`, then runs `make check-overrides` to verify npm overrides remain necessary (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)).
+- `pip-audit` runs `make audit-python` against a private temporary export of `uv.lock`, including reviewed Python exceptions from the same config.
 
 If either audit job fails, a `report-failure` job opens (or comments on the existing) `dependency-audit`-labeled issue with a link to the run, so a scheduled failure is visible without watching the Actions tab.
 

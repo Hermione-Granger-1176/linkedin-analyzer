@@ -18,8 +18,8 @@ env:
   PRIMARY_PYTHON_VERSION: "3.14"
 
 jobs:
-  quality-gate:
-    name: Quality gate
+  quick-gates:
+    name: Quick gates
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,35 +34,45 @@ jobs:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           python-version: ${{ env.PRIMARY_PYTHON_VERSION }}
 
-      - name: Run parallel checks
-        run: >-
-          python scripts/ci/run_parallel_checks.py
-          --timeout 1200
-          editorconfig-check
-          lint-doc-commands
-          lint-make-targets
-          lint-workflows
-          lint-py
-          lint-yaml
-          format-py-check
-          typecheck-py
-          dead-code-py
-          test-py
-          format-js-check
-          lint-js
-          lint-css
-          typecheck-web
-          dead-code-js
-          test-js
+      - name: Run quick gates
+        run: make ci-quick-gates
 
-      - name: Build web and enforce size budget
-        run: make web-build-size
-
-      - name: Summarize quality gate
+      - name: Summarize quick gates
         if: always()
         run: |
           {
-            echo "## Quality gate"
+            echo "## Quick gates"
+            echo
+            echo "- Python: ${{ env.PRIMARY_PYTHON_VERSION }}"
+            echo "- Node.js: ${{ env.PRIMARY_NODE_VERSION }}"
+            echo "- Commit: ${{ github.sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  heavy-checks:
+    name: Heavy checks
+    needs: quick-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+
+      - name: CI setup
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          python-version: ${{ env.PRIMARY_PYTHON_VERSION }}
+
+      - name: Run heavy checks
+        run: make ci-heavy-checks
+
+      - name: Summarize heavy checks
+        if: always()
+        run: |
+          {
+            echo "## Heavy checks"
             echo
             echo "- Python: ${{ env.PRIMARY_PYTHON_VERSION }}"
             echo "- Node.js: ${{ env.PRIMARY_NODE_VERSION }}"
@@ -71,6 +81,7 @@ jobs:
 
   python-compatibility:
     name: Python ${{ matrix.python-version }}
+    needs: quick-gates
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -95,6 +106,7 @@ jobs:
 
   node-compatibility:
     name: Node.js ${{ matrix.node-version }}
+    needs: quick-gates
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -119,6 +131,7 @@ jobs:
 
   web-e2e:
     name: Web E2E
+    needs: quick-gates
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -161,7 +174,8 @@ jobs:
     name: CI result
     if: always()
     needs:
-      - quality-gate
+      - quick-gates
+      - heavy-checks
       - python-compatibility
       - node-compatibility
       - web-e2e
@@ -170,7 +184,8 @@ jobs:
     steps:
       - name: Check required jobs
         run: |
-          if [ "${{ needs.quality-gate.result }}" != "success" ] ||
+          if [ "${{ needs.quick-gates.result }}" != "success" ] ||
+             [ "${{ needs.heavy-checks.result }}" != "success" ] ||
              [ "${{ needs.python-compatibility.result }}" != "success" ] ||
              [ "${{ needs.node-compatibility.result }}" != "success" ] ||
              [ "${{ needs.web-e2e.result }}" != "success" ]; then

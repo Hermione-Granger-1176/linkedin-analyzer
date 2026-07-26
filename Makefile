@@ -258,7 +258,7 @@ explore: ## Print ad-hoc statistics over your export
 
 # ─── Quality gates @quality ────────────────────────────────────────────────────────────
 
-.PHONY: ci-python ci-web ci ci-fast check-local check fix security audit-node audit-python
+.PHONY: ci-python ci-web ci ci-fast ci-platform-checks ci-quick-gates ci-heavy-checks check-local check fix security audit-node audit-python
 
 ci-python: editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py ## Python CI gate
 
@@ -268,6 +268,21 @@ ci: ci-python lint-workflows ci-web ## Full local CI gate
 
 ci-fast: ## Run the non-browser CI checks in parallel (excludes web-build-size)
 	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
+
+ci-platform-checks: ## Run quick and heavy non-browser CI gates in order
+	@$(MAKE) --no-print-directory ci-quick-gates
+	@$(MAKE) --no-print-directory ci-heavy-checks
+
+ci-quick-gates: ## Run fast formatting, lint, and type checks in parallel
+	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py --timeout 1200 \
+		editorconfig-check lint-doc-commands lint-make-targets \
+		lint-py lint-yaml format-py-check typecheck-py \
+		lint-workflows lint-js lint-css format-js-check typecheck-web
+
+ci-heavy-checks: ## Run tests, dead-code checks, and the production build
+	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py --timeout 1200 \
+		dead-code-py test-py dead-code-js test-js
+	@$(MAKE) --no-print-directory web-build-size
 
 check-local: ci ## Alias for the full local CI gate
 

@@ -47,6 +47,7 @@ See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
 - Web build: `make web-build`
 - Dead-code detection: `make dead-code` (vulture for Python, knip for JS)
 - Non-browser gate in parallel: `make ci-fast` (excludes `web-build-size`)
+- Non-browser gate alias: `make check-fast`
 - Full local gate: `make ci`
 
 ## Pull requests

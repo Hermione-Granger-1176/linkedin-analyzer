@@ -157,6 +157,28 @@ Configured automation:
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
 - `commit-python-locks.yml` validates the triggering workflow run against the live Dependabot PR, downloads a `uv.lock`-only artifact, validates its contents, revalidates the branch head, and commits only if it is still safe.
 
+### Workflow and cache operations
+
+Use the Makefile wrappers for manual GitHub Actions operations:
+
+```bash
+# Re-run every job, or only failed jobs, in an existing run
+make ci-rerun run=123456
+make ci-rerun run=123456 failed=1
+
+# Start a fresh workflow run, optionally on another ref
+make ci-dispatch workflow=dependency-audit.yml
+make ci-dispatch workflow=web-smoke.yml ref=main
+
+# Inspect cache usage and remove one retired entry
+make ci-caches
+make ci-caches key=playwright-
+make ci-cache-delete cache=1234
+make ci-cache-delete cache=my-cache-key ref=refs/heads/main
+```
+
+A rerun keeps the same run ID. Workflows that upload immutable artifacts must include `github.run_attempt` in each artifact name or enable safe overwriting. The CI workflow includes the attempt in Playwright failure artifacts. For another workflow that is not collision-safe, use a fresh dispatch only when it supports `workflow_dispatch`; otherwise fix its artifact naming before relying on reruns. Cache deletion accepts an entry ID or key. Prefer the ID because the same key can exist on multiple refs, and delete retired caches only after the replacement key is active on `main`.
+
 ### Python lock refresh flow
 
 The lock refresh pair preserves the existing writeback flow while making the workflow-run boundary stricter:

@@ -261,7 +261,7 @@ explore: ## Print ad-hoc statistics over your export
 
 # ─── Quality gates @quality ────────────────────────────────────────────────────────────
 
-.PHONY: ci-python ci-web ci ci-fast ci-platform-checks ci-quick-gates ci-heavy-checks check-local check fix security audit-node audit-python
+.PHONY: ci-python ci-web ci ci-fast ci-platform-checks ci-quick-gates ci-heavy-checks check-local check fix security audit-node audit-fix-node audit-python
 
 ci-python: editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py ## Python CI gate
 
@@ -297,6 +297,9 @@ security: audit-python audit-node check-overrides ## Run dependency and override
 
 audit-node: ## Run npm audit
 	$(NPM) audit --audit-level=high
+
+audit-fix-node: ## Apply available npm audit fixes to package-lock.json
+	$(NPM) audit fix --package-lock-only
 
 audit-python: ## Run pip-audit against the frozen uv lock export
 	$(UV) export --all-groups --frozen --no-emit-project --format requirements.txt --output-file /tmp/linkedin-analyzer-requirements.txt

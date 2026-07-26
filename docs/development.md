@@ -34,6 +34,13 @@ When only selected transitive Node packages need a security refresh, update them
 make lock-node-update packages="package-a package-b"
 ```
 
+When `make audit-node` reports an automatically fixable advisory, update only the lockfile and review the resulting dependency changes:
+
+```bash
+make audit-fix-node
+make security
+```
+
 ### Using an older Python version
 
 The `make install` target builds the `.venv` against the interpreter named by the `PYTHON` variable, which defaults to `3.14` (uv downloads it if it is not already installed). To work against an older supported version, override `PYTHON`. uv will download and manage the interpreter for you, so you do not need it installed system-wide:

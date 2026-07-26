@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -52,8 +53,38 @@ def test_load_exceptions_reads_valid_config(tmp_path: Path) -> None:
 
 def test_load_config_rejects_missing_file(tmp_path: Path) -> None:
     """A missing policy file fails closed."""
-    with pytest.raises(FileNotFoundError, match="Security audit config file not found"):
+    with pytest.raises(FileNotFoundError, match="must be a regular file"):
         security_audit_policy._load_security_audit_config(tmp_path / "missing.json")
+
+
+def test_load_config_rejects_directory_and_symlink(tmp_path: Path) -> None:
+    """Policy loading never follows a symlink or reads a directory."""
+    real_config = _write_config(tmp_path / "real.json", "{}")
+    symlink = tmp_path / "linked.json"
+    symlink.symlink_to(real_config)
+
+    for invalid_path in (tmp_path, symlink):
+        with pytest.raises(FileNotFoundError, match="regular file, not a symlink"):
+            security_audit_policy._load_security_audit_config(invalid_path)
+
+
+def test_load_config_reports_invalid_json_path(tmp_path: Path) -> None:
+    """Malformed JSON reports the policy path without leaking parser internals."""
+    config_file = _write_config(tmp_path / "security_audit.json", "{")
+
+    with pytest.raises(ValueError, match=rf"invalid JSON: {config_file}"):
+        security_audit_policy._load_security_audit_config(config_file)
+
+
+def test_load_config_rejects_duplicate_json_keys(tmp_path: Path) -> None:
+    """Duplicate object keys cannot silently replace security policy."""
+    config_file = _write_config(
+        tmp_path / "security_audit.json",
+        '{"npm_vulnerability_exceptions": [], "npm_vulnerability_exceptions": []}',
+    )
+
+    with pytest.raises(ValueError, match="duplicate key: npm_vulnerability_exceptions"):
+        security_audit_policy._load_security_audit_config(config_file)
 
 
 def test_load_config_rejects_non_object_root(tmp_path: Path) -> None:
@@ -113,6 +144,92 @@ def test_load_exceptions_rejects_missing_required_fields(tmp_path: Path) -> None
     )
 
     with pytest.raises(ValueError, match="must include package, reason, review_by"):
+        security_audit_policy.load_security_audit_exceptions(
+            config_file,
+            config_key=security_audit_policy.NPM_EXCEPTIONS_KEY,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("id", ""),
+        ("id", " "),
+        ("id", -1),
+        ("id", True),
+        ("package", ""),
+        ("package", 42),
+        ("reason", " "),
+        ("review_by", 20260825),
+    ],
+)
+def test_load_exceptions_rejects_invalid_required_values(
+    field: str,
+    value: object,
+    tmp_path: Path,
+) -> None:
+    """Present fields still need the type and content required by policy."""
+    entry: dict[str, object] = {
+        "id": "42",
+        "package": "left-pad",
+        "reason": "No fix.",
+        "review_by": "2026-08-25",
+    }
+    entry[field] = value
+    config_file = _write_config(
+        tmp_path / "security_audit.json",
+        '{"npm_vulnerability_exceptions": [' + json.dumps(entry) + "]}",
+    )
+
+    with pytest.raises(ValueError, match=rf"'{field}'"):
+        security_audit_policy.load_security_audit_exceptions(
+            config_file,
+            config_key=security_audit_policy.NPM_EXCEPTIONS_KEY,
+        )
+
+
+def test_load_exceptions_accepts_zero_numeric_id(tmp_path: Path) -> None:
+    """A numeric source id, including zero, is normalized to a string."""
+    config_file = _write_config(
+        tmp_path / "security_audit.json",
+        """
+{
+  "npm_vulnerability_exceptions": [{
+    "id": 0,
+    "package": "left-pad",
+    "reason": "No fix.",
+    "review_by": "2026-08-25"
+  }]
+}
+""".strip(),
+    )
+
+    exception = security_audit_policy.load_security_audit_exceptions(
+        config_file,
+        config_key=security_audit_policy.NPM_EXCEPTIONS_KEY,
+    )[0]
+
+    assert exception.vulnerability_id == "0"
+
+
+def test_load_exceptions_rejects_unknown_fields(tmp_path: Path) -> None:
+    """Typos in security-sensitive options cannot be ignored."""
+    config_file = _write_config(
+        tmp_path / "security_audit.json",
+        """
+{
+  "npm_vulnerability_exceptions": [{
+    "id": "42",
+    "package": "left-pad",
+    "reason": "No fix.",
+    "review_by": "2026-08-25",
+    "ignore_without_fix": true
+  }]
+}
+""".strip(),
+    )
+
+    with pytest.raises(ValueError, match="unknown fields ignore_without_fix"):
         security_audit_policy.load_security_audit_exceptions(
             config_file,
             config_key=security_audit_policy.NPM_EXCEPTIONS_KEY,

@@ -33,13 +33,50 @@ def _load_security_audit_config(
     config_file: Path = SECURITY_AUDIT_CONFIG_FILE,
 ) -> dict[str, object]:
     """Load the full security audit JSON config."""
-    if not config_file.exists():
-        raise FileNotFoundError(f"Security audit config file not found: {config_file}")
+    if config_file.is_symlink() or not config_file.is_file():
+        raise FileNotFoundError(
+            f"Security audit config must be a regular file, not a symlink: {config_file}"
+        )
 
-    payload = json.loads(config_file.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(
+            config_file.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Security audit config contains invalid JSON: {config_file}") from exc
     if not isinstance(payload, dict):
         raise ValueError("Security audit config must be a JSON object")
     return payload
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build a JSON object while rejecting keys that would be overwritten."""
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Security audit config contains a duplicate key: {key}")
+        result[key] = value
+    return result
+
+
+def _validated_id(value: object, *, entry_path: str) -> str:
+    """Return one non-empty string or non-negative numeric advisory id."""
+    if isinstance(value, str) and value.strip():
+        return value
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return str(value)
+    raise ValueError(
+        "Security audit exception 'id' must be a non-empty string or "
+        f"non-negative integer: {entry_path}"
+    )
+
+
+def _validated_text_field(value: object, *, field: str, entry_path: str) -> str:
+    """Return one required non-empty string field."""
+    if isinstance(value, str) and value.strip():
+        return value
+    raise ValueError(f"Security audit exception '{field}' must be a non-empty string: {entry_path}")
 
 
 def load_security_audit_exceptions(
@@ -60,11 +97,19 @@ def load_security_audit_exceptions(
         if not isinstance(entry, dict):
             raise ValueError(f"Security audit exceptions must be objects: {entry_path}")
 
-        required_fields = ("id", "package", "reason", "review_by")
-        missing = [field for field in required_fields if not entry.get(field)]
+        required_fields = {"id", "package", "reason", "review_by"}
+        optional_fields = {"ignore_only_without_fix"}
+        missing = sorted(required_fields - entry.keys())
         if missing:
             raise ValueError(
                 "Security audit exceptions must include " + ", ".join(missing) + f": {entry_path}"
+            )
+        unexpected = sorted(entry.keys() - required_fields - optional_fields)
+        if unexpected:
+            raise ValueError(
+                "Security audit exceptions contain unknown fields "
+                + ", ".join(unexpected)
+                + f": {entry_path}"
             )
 
         ignore_only_without_fix = entry.get("ignore_only_without_fix", False)
@@ -74,17 +119,33 @@ def load_security_audit_exceptions(
                 f"boolean: {entry_path}"
             )
 
+        vulnerability_id = _validated_id(entry["id"], entry_path=entry_path)
+        package = _validated_text_field(
+            entry["package"],
+            field="package",
+            entry_path=entry_path,
+        )
+        reason = _validated_text_field(
+            entry["reason"],
+            field="reason",
+            entry_path=entry_path,
+        )
+        review_by_value = _validated_text_field(
+            entry["review_by"],
+            field="review_by",
+            entry_path=entry_path,
+        )
         try:
-            review_by = date.fromisoformat(str(entry["review_by"]))
+            review_by = date.fromisoformat(review_by_value)
         except ValueError as exc:
             raise ValueError(
                 f"Security audit exception 'review_by' must use YYYY-MM-DD: {entry_path}"
             ) from exc
 
         exception = VulnerabilityExceptionEntry(
-            vulnerability_id=str(entry["id"]),
-            package=str(entry["package"]),
-            reason=str(entry["reason"]),
+            vulnerability_id=vulnerability_id,
+            package=package,
+            reason=reason,
             review_by=review_by,
             ignore_only_without_fix=ignore_only_without_fix,
         )

@@ -41,6 +41,16 @@ make audit-fix-node
 make security
 ```
 
+The npm audit gates every reported severity by default. A finding may be temporarily accepted only through a reviewed entry in `config/security_audit.json`. Each entry records the package, advisory ID, reason, and ISO `review_by` date. Set `ignore_only_without_fix` to `true` when the exception must fail as soon as npm reports an available fix. The audit also fails for expired, unused, duplicate, or ambiguous exceptions so that the policy cannot silently rot.
+
+For a narrower local investigation, select the lowest severity to review:
+
+```bash
+make audit-node audit_level=high
+```
+
+Omitting `audit_level` runs the full policy gate used by CI.
+
 ### Using an older Python version
 
 The `make install` target builds the `.venv` against the interpreter named by the `PYTHON` variable, which defaults to `3.14` (uv downloads it if it is not already installed). To work against an older supported version, override `PYTHON`. uv will download and manage the interpreter for you, so you do not need it installed system-wide:
@@ -204,7 +214,8 @@ See `.github/workflows/ci.yml`.
 
 A weekly `dependency-audit.yml` workflow also runs every Monday across two jobs:
 
-- `make audit-node` and `make audit-python` for the npm and Python dependency audits
+- `make audit-node` for the policy-driven npm audit, including reviewed exceptions from `config/security_audit.json`
+- `make audit-python` for the Python dependency audit
 - `make check-overrides` to verify npm overrides remain necessary (see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md))
 
 If either audit job fails, a `report-failure` job opens (or comments on the existing) `dependency-audit`-labeled issue with a link to the run, so a scheduled failure is visible without watching the Actions tab.

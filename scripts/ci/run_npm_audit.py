@@ -36,8 +36,9 @@ from scripts.ci.security_audit_policy import (
 
 _GHSA_PATTERN = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}", re.IGNORECASE)
 
-# npm's severity ladder, weakest first. An unknown or absent severity sorts
-# above every threshold so a malformed advisory is gated rather than dropped.
+# npm's severity ladder, weakest first. Parsing rejects unknown or absent
+# severities, while _is_gated still treats an unexpected value as gated
+# defensively.
 SEVERITY_ORDER = ("info", "low", "moderate", "high", "critical")
 DEFAULT_AUDIT_LEVEL = SEVERITY_ORDER[0]
 

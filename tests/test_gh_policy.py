@@ -13,11 +13,28 @@ from scripts.lib import gh_policy
         ("Service unavailable (HTTP 503)", "transient"),
         ("Resource not accessible by integration (HTTP 403)", "forbidden"),
         ("Not Found (HTTP 404)", "fatal"),
+        ("HTTP 502: Bad Gateway", "transient"),
+        ("502 Bad Gateway", "transient"),
+        ("504 Gateway Time-out", "transient"),
     ],
 )
 def test_classify_gh_failure_covers_each_shared_outcome(message: str, expected: str) -> None:
     """The ordered shared rules classify each supported GitHub failure kind."""
     assert gh_policy.classify_gh_failure(message) == expected
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "fatal: bad object 502abc1",
+        "error: parse failure at line 503, column 12",
+        "Validation failed: body is limited to 504 characters",
+        "Not Found (HTTP 404): run 5021 does not exist",
+    ],
+)
+def test_classify_gh_failure_does_not_retry_bare_5xx_lookalikes(message: str) -> None:
+    """Digits that merely resemble a 5xx status stay fatal instead of being retried."""
+    assert gh_policy.classify_gh_failure(message) == "fatal"
 
 
 def test_rate_limit_rule_wins_when_message_mentions_http_403() -> None:

@@ -31,7 +31,12 @@ GH_FAILURE_CLASSIFIERS: tuple[tuple[GhFailureKind, re.Pattern[str]], ...] = (
     (
         "transient",
         re.compile(
-            r"502|503|504|timed out|timeout|ECONNRESET|connection reset|"
+            # 5xx codes only count when the message marks them as an HTTP status
+            # or pairs them with their reason phrase. A bare ``502`` would also
+            # match line numbers, object ids, and byte counts.
+            r"\bHTTP 50[234]\b|"
+            r"\b50[234] (?:bad gateway|service unavailable|gateway time-?out)\b|"
+            r"timed out|timeout|ECONNRESET|connection reset|"
             r"connection refused|could not resolve host|no such host|network|"
             r"tls handshake|i/o timeout|temporary failure|unexpected eof",
             re.IGNORECASE,

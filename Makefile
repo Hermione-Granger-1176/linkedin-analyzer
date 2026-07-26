@@ -321,8 +321,9 @@ audit-fix-node: ## Apply available npm audit fixes to package-lock.json
 
 audit-python: ## Run policy-driven pip-audit against the frozen uv lock export
 	@set -eu; \
-	requirements_file="$$(mktemp)"; \
-	trap 'rm -f "$$requirements_file"' EXIT; \
+	requirements_file=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-requirements.XXXXXX"); \
+	chmod 600 "$$requirements_file"; \
+	trap 'rm -f -- "$$requirements_file"' EXIT; \
 	$(UV) export --quiet --all-groups --frozen --no-emit-project --format requirements.txt --output-file "$$requirements_file"; \
 	PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.ci.run_security_audit \
 		--requirements "$$requirements_file" \
@@ -485,9 +486,9 @@ release-create: ## Tag and publish a GitHub release (make release-create tag=vX.
 	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [notes="..."] [prerelease=1]\n' >&2; exit 1)
 	@set -e; \
 	tmp=""; \
-	trap 'test -n "$$tmp" && rm -f "$$tmp"' EXIT; \
+	trap 'test -n "$$tmp" && rm -f -- "$$tmp"' EXIT; \
 	set -- "$(tag)" --title "$(tag)"; \
-	if [ -n "$$RELEASE_NOTES" ]; then tmp=$$(mktemp); printf '%s' "$$RELEASE_NOTES" > "$$tmp"; set -- "$$@" --notes-file "$$tmp"; else set -- "$$@" --generate-notes; fi; \
+	if [ -n "$$RELEASE_NOTES" ]; then tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-release-notes.XXXXXX"); chmod 600 "$$tmp"; printf '%s' "$$RELEASE_NOTES" > "$$tmp"; set -- "$$@" --notes-file "$$tmp"; else set -- "$$@" --generate-notes; fi; \
 	if [ -n "$(prerelease)" ]; then set -- "$$@" --prerelease; fi; \
 	gh release create "$$@"
 
@@ -507,10 +508,10 @@ pr-edit: ## Edit the current PR title/body (make pr-edit title="..." [body="..."
 	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY" || { printf 'Usage: make pr-edit title="New title" [body="..."]\n' >&2; exit 1; }
 	@set -e; \
 	tmp=""; \
-	trap 'test -n "$$tmp" && rm -f "$$tmp"' EXIT; \
+	trap 'test -n "$$tmp" && rm -f -- "$$tmp"' EXIT; \
 	set -- $(if $(pr_num),$(pr_num)); \
 	if [ -n "$$PR_EDIT_TITLE" ]; then set -- "$$@" --title "$$PR_EDIT_TITLE"; fi; \
-	if [ -n "$$PR_EDIT_BODY" ]; then tmp=$$(mktemp); printf '%s' "$$PR_EDIT_BODY" > "$$tmp"; set -- "$$@" --body-file "$$tmp"; fi; \
+	if [ -n "$$PR_EDIT_BODY" ]; then tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-pr-body.XXXXXX"); chmod 600 "$$tmp"; printf '%s' "$$PR_EDIT_BODY" > "$$tmp"; set -- "$$@" --body-file "$$tmp"; fi; \
 	gh pr edit "$$@"
 
 pr-list: ## List open pull requests

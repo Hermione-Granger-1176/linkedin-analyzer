@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 MAKEFILE_TEXT = (Path(__file__).parents[1] / "Makefile").read_text(encoding="utf-8")
 
 
@@ -70,14 +72,37 @@ def test_python_audit_uses_policy_runner_and_private_temporary_export() -> None:
     recipe = _target_recipe("audit-python")
 
     assert "set -eu" in recipe
-    assert 'requirements_file="$$(mktemp)"' in recipe
-    assert "trap 'rm -f \"$$requirements_file\"' EXIT" in recipe
+    assert (
+        'requirements_file=$$(mktemp "$${TMPDIR:-/tmp}/'
+        'linkedin-analyzer-requirements.XXXXXX")' in recipe
+    )
+    assert 'chmod 600 "$$requirements_file"' in recipe
+    assert "trap 'rm -f -- \"$$requirements_file\"' EXIT" in recipe
     assert "$(UV) export --quiet" in recipe
     assert '--output-file "$$requirements_file"' in recipe
     assert "-m scripts.ci.run_security_audit" in recipe
     assert '--requirements "$$requirements_file"' in recipe
     assert '--pip-audit "$(UV) run --with pip-audit pip-audit"' in recipe
     assert "/tmp/linkedin-analyzer-requirements.txt" not in recipe
+
+
+@pytest.mark.parametrize(
+    ("target", "template"),
+    [
+        ("release-create", "linkedin-analyzer-release-notes.XXXXXX"),
+        ("pr-edit", "linkedin-analyzer-pr-body.XXXXXX"),
+    ],
+)
+def test_sensitive_message_files_use_portable_private_temp_paths(
+    target: str, template: str
+) -> None:
+    """Use TMPDIR-aware templates for temporary GitHub message files."""
+    recipe = _target_recipe(target)
+
+    assert f'mktemp "$${{TMPDIR:-/tmp}}/{template}"' in recipe
+    assert 'chmod 600 "$$tmp"' in recipe
+    assert 'rm -f -- "$$tmp"' in recipe
+    assert "$$(mktemp)" not in recipe
 
 
 def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> None:

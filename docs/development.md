@@ -95,6 +95,9 @@ make lint-css
 # Lint YAML files
 make lint-yaml
 
+# Lint selected YAML files
+make lint-yaml paths=".github/workflows/ci.yml .yamllint.yml"
+
 # Type-check JavaScript with checkJs
 make typecheck-web
 

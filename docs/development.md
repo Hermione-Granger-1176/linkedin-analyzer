@@ -134,6 +134,12 @@ make dead-code-js
 
 # Format check (docs/config files)
 make format-js-check
+
+# Preview all Python formatting changes without modifying files
+make format-py-diff
+
+# Preview Python formatting changes for selected paths
+make format-py-diff paths="src/linkedin_analyzer tests"
 ```
 
 `make setup` is the fast default and does not install browsers. `make setup-all` installs Chromium, Firefox, and WebKit in Playwright's normal user-local browser cache. It is browser-only, does not install system packages, and does not require sudo. Use it when the host already provides the libraries Playwright needs.

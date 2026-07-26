@@ -109,7 +109,7 @@ check-overrides: ## Check npm overrides are still needed
 
 # ─── Format @format ───────────────────────────────────────────────────────────────────
 
-.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-js-check
+.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-py-diff format-js-check
 
 fmt: fmt-py fmt-js fmt-css ## Auto-fix Python, JavaScript, CSS, and metadata formatting
 
@@ -130,6 +130,9 @@ format-check: format-py-check format-js-check ## Check Python and metadata forma
 
 format-py-check: ## Check Python formatting only
 	$(VENV_PYTHON) -m ruff format --check $(PY_PATHS)
+
+format-py-diff: ## Show Python formatting changes without modifying files [paths=...]
+	$(VENV_PYTHON) -m ruff format --check --diff $(if $(paths),$(paths),$(PY_PATHS))
 
 format-js-check: ## Check Prettier formatting only
 	$(NPM) run format:check
@@ -261,7 +264,7 @@ explore: ## Print ad-hoc statistics over your export
 
 # ─── Quality gates @quality ────────────────────────────────────────────────────────────
 
-.PHONY: ci-python ci-web ci ci-fast ci-platform-checks ci-quick-gates ci-heavy-checks check-local check fix security audit-node audit-fix-node audit-python
+.PHONY: ci-python ci-web ci ci-fast ci-platform-checks ci-quick-gates ci-heavy-checks check-local check-fast check fix security audit-node audit-fix-node audit-python
 
 ci-python: editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py ## Python CI gate
 
@@ -288,6 +291,8 @@ ci-heavy-checks: ## Run tests, dead-code checks, and the production build
 	@$(MAKE) --no-print-directory web-build-size
 
 check-local: ci ## Alias for the full local CI gate
+
+check-fast: ci-fast ## Alias for ci-fast
 
 check: check-local test-e2e ## Full gate including browser tests
 
@@ -550,7 +555,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-watch ci-failures issues
+.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete issues
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -560,6 +565,21 @@ ci-watch: ## Watch the latest CI run until done
 
 ci-failures: ## Show failed-step logs for this branch's latest run (make ci-failures [run=ID])
 	@$(GH) ci-failures $(if $(run),--run $(run))
+
+ci-rerun: ## Re-run a workflow run (make ci-rerun run=ID [failed=1])
+	@test -n "$(run)" || (printf 'Usage: make ci-rerun run=123456 [failed=1]\n' >&2; exit 1)
+	gh run rerun "$(run)" $(if $(filter 1,$(failed)),--failed)
+
+ci-dispatch: ## Start a workflow run (make ci-dispatch workflow=dependency-audit.yml [ref=branch] [inputs="key=value ..."])
+	@test -n "$(workflow)" || (printf 'Usage: make ci-dispatch workflow=dependency-audit.yml [ref=branch] [inputs="key=value ..."]\n' >&2; exit 1)
+	gh workflow run "$(workflow)" $(if $(ref),--ref "$(ref)") $(foreach kv,$(inputs),-f "$(kv)")
+
+ci-caches: ## List Actions caches, largest first (make ci-caches [limit=N] [key=prefix])
+	gh cache list --limit "$(if $(limit),$(limit),30)" --sort size_in_bytes --order desc $(if $(key),--key "$(key)")
+
+ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_key [ref=refs/heads/BRANCH])
+	@test -n "$(cache)" || (printf 'Usage: make ci-cache-delete cache=1234 [ref=refs/heads/main]\n' >&2; exit 1)
+	gh cache delete "$(cache)" $(if $(ref),--ref "$(ref)")
 
 issues: ## List open issues
 	gh issue list

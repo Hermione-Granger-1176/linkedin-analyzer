@@ -120,7 +120,7 @@ Diagnostics are **off until the user explicitly grants consent** (telemetry bann
 - CI actions are SHA-pinned.
 - Dependency review runs on pull requests.
 - Scheduled dependency audits run weekly for npm and Python dependencies resolved from `uv.lock`.
-- The weekly generic override-policy check verifies that any future npm overrides remain necessary; no overrides are currently configured (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md)).
+- The weekly generic override-policy check verifies that npm overrides remain necessary (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)).
 - Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
 
 ## Custody and Recovery

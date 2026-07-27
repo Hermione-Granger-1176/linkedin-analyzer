@@ -274,6 +274,30 @@ def test_extract_workflow_run_snippets_records_body_line_numbers() -> None:
     assert [(snippet.line_number, snippet.text) for snippet in snippets] == [(3, "make lint-py")]
 
 
+def test_extract_source_code_snippets_ignores_empty_backticks() -> None:
+    """A backticked span holding only whitespace is not a command."""
+    assert make_targets.extract_source_code_snippets("x = ` `  # ` `\n") == []
+
+
+def test_extract_workflow_run_snippets_ignores_an_empty_run_value() -> None:
+    """A `run:` key with no value and no block indicator yields nothing."""
+    assert make_targets.extract_workflow_run_snippets("steps:\n  run:\n") == []
+
+
+def test_extract_workflow_run_snippets_skips_blank_lines_inside_a_block() -> None:
+    """Blank lines inside a block scalar neither end it nor become snippets."""
+    snippets = make_targets.extract_workflow_run_snippets(
+        "  run: |\n    make lint-py\n\n    make test-py\n"
+    )
+
+    assert [snippet.text for snippet in snippets] == ["make lint-py", "make test-py"]
+
+
+def test_extract_path_make_references_returns_nothing_for_unscanned_paths() -> None:
+    """An unscanned path yields no references even when its text names a target."""
+    assert make_targets.extract_path_make_references(Path("notes.txt"), "run `make help`") == []
+
+
 def test_is_test_path_covers_directory_and_filename_conventions() -> None:
     """Test fixtures naming absent targets are excluded by path convention."""
     assert make_targets.is_test_path(Path("tests/test_check_make_targets.py"))
@@ -360,6 +384,79 @@ def test_run_check_reports_an_unknown_target_in_source_strings(tmp_path: Path) -
     assert violations == [
         "scripts/gh/pr_watch.py:1: unknown Make target `pr-comment-typo`",
     ]
+
+
+def test_resolve_requested_paths_reports_an_inaccessible_path(tmp_path: Path) -> None:
+    """Descending through a regular file is reported, not raised as a traceback."""
+    write_text(tmp_path / "README.md", "# Root\n")
+
+    _, errors = check_make_targets.resolve_requested_paths(["README.md/nested.md"], tmp_path)
+
+    assert errors == ["README.md/nested.md: path could not be accessed"]
+
+
+def test_resolve_requested_paths_rejects_a_directory(tmp_path: Path) -> None:
+    """A directory that merely looks like Markdown is not read as a file."""
+    (tmp_path / "docs.md").mkdir()
+
+    _, errors = check_make_targets.resolve_requested_paths(["docs.md"], tmp_path)
+
+    assert errors == ["docs.md: path does not exist or is not a file"]
+
+
+def test_resolve_requested_paths_rejects_a_path_resolving_outside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path that resolves out of the repository is refused before it is read."""
+    write_text(tmp_path / "README.md", "# Root\n")
+    outside = tmp_path.parent / f"{tmp_path.name}-outside" / "README.md"
+    original = Path.resolve
+
+    def escaping_resolve(self: Path, strict: bool = False) -> Path:
+        """Resolve the candidate file to a location outside the repository."""
+        if self.name == "README.md":
+            return outside
+        return original(self, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", escaping_resolve)
+
+    _, errors = check_make_targets.resolve_requested_paths(["README.md"], tmp_path)
+
+    assert errors == ["README.md: path resolves outside the repository"]
+
+
+def test_run_check_reports_a_candidate_outside_the_workspace(tmp_path: Path) -> None:
+    """A candidate from outside the workspace is refused rather than read."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\n")
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.md"
+
+    violations = check_make_targets.run_check(paths=[outside], root=tmp_path)
+
+    assert violations == [f"{outside}: path must stay within the repository"]
+
+
+def test_run_check_surfaces_path_errors_for_candidates(tmp_path: Path) -> None:
+    """A candidate that fails validation is reported instead of silently skipped."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\n")
+
+    violations = check_make_targets.run_check(paths=[tmp_path / "missing.md"], root=tmp_path)
+
+    assert violations == ["missing.md: path does not exist"]
+
+
+def test_main_without_paths_scans_the_whole_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Omitting paths falls back to the full repository scan."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\n")
+    write_text(tmp_path / "README.md", "Use `make help`.\n")
+    write_text(tmp_path / "scripts" / "tool.py", '"""Run `make help`."""\n')
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+
+    exit_code = check_make_targets.main([])
+
+    assert exit_code == 0
+    assert "Make target check passed for 2 file(s)" in capsys.readouterr().out
 
 
 def test_run_check_ignores_absent_targets_in_test_fixtures(tmp_path: Path) -> None:

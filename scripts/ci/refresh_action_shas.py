@@ -102,6 +102,8 @@ def make_resolver(
     sleep: Callable[[float], None] = time.sleep,
 ) -> ResolveSha:
     """Wrap a fetch function with per-repo caching and bounded retries."""
+    if max_attempts < 1:
+        raise ValueError(f"max_attempts must be at least 1, got {max_attempts}")
     cache: dict[str, str] = {}
 
     def resolve(action: str, ref: str) -> str:
@@ -109,20 +111,17 @@ def make_resolver(
         key = f"{repo}@{ref}"
         if key in cache:
             return cache[key]
-        last_error: Exception | None = None
-        for attempt in range(1, max_attempts + 1):
+        for attempt in range(1, max_attempts):
             try:
                 sha = fetch(repo, ref)
-            except Exception as exc:  # retried below, then re-raised on the last attempt
-                last_error = exc
-                if attempt == max_attempts:
-                    break
+            except Exception:  # retried below; the final attempt propagates instead
                 sleep(attempt * 0.25)
                 continue
             cache[key] = sha
             return sha
-        assert last_error is not None
-        raise last_error
+        sha = fetch(repo, ref)  # final attempt: let the failure reach the caller
+        cache[key] = sha
+        return sha
 
     return resolve
 

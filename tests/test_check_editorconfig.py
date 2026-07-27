@@ -383,3 +383,22 @@ trim_trailing_whitespace = true
     assert exit_code == 1
     assert captured.startswith("EditorConfig check failed:\n")
     assert "demo.md:1: trailing whitespace" in captured
+
+
+def test_expand_braces_keeps_an_unclosed_group_literal() -> None:
+    """A pattern with no closing brace is matched literally, not expanded."""
+    assert check_editorconfig._expand_braces("*.{js") == ["*.{js"]
+
+
+def test_expand_braces_keeps_a_single_choice_group_literal() -> None:
+    """A one-choice group is a literal brace, since EditorConfig needs two or more."""
+    assert check_editorconfig._expand_braces("*.{js}") == ["*.{js}"]
+
+
+def test_resolve_requested_paths_rejects_a_directory(tmp_path: Path) -> None:
+    """A directory is refused rather than read as a file."""
+    (tmp_path / "docs").mkdir()
+
+    _, errors = check_editorconfig.resolve_requested_paths(["docs"], tmp_path)
+
+    assert errors == ["docs: path does not exist or is not a file"]

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
 from pathlib import Path
+from urllib.request import Request
 
 import pytest
 from scripts.ci import refresh_action_shas as ras
@@ -132,6 +135,61 @@ def test_make_resolver_raises_after_max_attempts() -> None:
     resolve = ras.make_resolver(fetch, max_attempts=2, sleep=lambda _s: None)
     with pytest.raises(RuntimeError, match="always fails"):
         resolve("actions/checkout", "v4")
+
+
+def test_make_resolver_caches_a_sha_won_on_the_final_attempt() -> None:
+    """A success on the last allowed attempt is returned and cached like any other."""
+    attempts = {"n": 0}
+
+    def fetch(_repo: str, _ref: str) -> str:
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            raise RuntimeError("transient")
+        return SHA_A
+
+    resolve = ras.make_resolver(fetch, max_attempts=2, sleep=lambda _s: None)
+    assert resolve("actions/checkout", "v4") == SHA_A
+    assert resolve("actions/checkout", "v4") == SHA_A
+    assert attempts["n"] == 2
+
+
+@pytest.mark.parametrize("max_attempts", [0, -1])
+def test_make_resolver_rejects_an_attempt_budget_below_one(max_attempts: int) -> None:
+    """Reject a budget that would resolve nothing, at construction rather than at first use."""
+    with pytest.raises(ValueError, match="max_attempts must be at least 1"):
+        ras.make_resolver(lambda _repo, _ref: SHA_A, max_attempts=max_attempts)
+
+
+def test_make_resolver_makes_a_single_attempt_without_sleeping() -> None:
+    """A budget of one calls fetch once and never reaches the backoff sleep."""
+    slept: list[float] = []
+
+    def fetch(_repo: str, _ref: str) -> str:
+        raise RuntimeError("only attempt")
+
+    resolve = ras.make_resolver(fetch, max_attempts=1, sleep=slept.append)
+    with pytest.raises(RuntimeError, match="only attempt"):
+        resolve("actions/checkout", "v4")
+    assert slept == []
+
+
+def test_github_fetch_reads_the_commit_sha_with_an_authorized_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The commits API is queried for the ref with a bearer token and the SHA is returned."""
+    requests: list[Request] = []
+
+    def fake_urlopen(request: Request, timeout: float) -> io.BytesIO:
+        requests.append(request)
+        assert timeout == 15
+        return io.BytesIO(json.dumps({"sha": SHA_A}).encode("utf-8"))
+
+    monkeypatch.setattr(ras, "urlopen", fake_urlopen)
+
+    assert ras.github_fetch("actions/checkout", "v4", token="secret") == SHA_A
+    assert requests[0].full_url == "https://api.github.com/repos/actions/checkout/commits/v4"
+    assert requests[0].get_header("Authorization") == "Bearer secret"
+    assert requests[0].get_header("Accept") == "application/vnd.github+json"
 
 
 def test_main_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:

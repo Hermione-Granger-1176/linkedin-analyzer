@@ -262,6 +262,8 @@ make test-py ARGS="tests/test_text.py --no-cov" # Specific file
 make test-py ARGS="-k test_clean --no-cov"      # By name pattern
 ```
 
+The 100% statement and branch coverage gate covers `src/linkedin_analyzer/` and the repo tooling in `scripts/`. `scripts/setup/playwright_local_runtime.py` is the one exception: it is omitted in `[tool.coverage.run]` until it gets its own tests, so new work anywhere else under `scripts/` needs tests to land green.
+
 ### Web tests
 
 ```bash

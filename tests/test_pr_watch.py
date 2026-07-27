@@ -220,6 +220,28 @@ def test_check_status_waits_for_expected_count_and_pending_checks() -> None:
     assert pending[:3] == (False, False, 1)
 
 
+def test_check_status_accepts_a_successful_status_context() -> None:
+    """A legacy status context reporting SUCCESS settles like a completed check run."""
+    settled, successful, count, _ = pr_watch._check_status(
+        [{"state": "SUCCESS"}],
+        expected_checks=1,
+    )
+
+    assert (settled, successful, count) == (True, True, 1)
+
+
+def test_review_summary_flags_an_unrecognized_overview() -> None:
+    """Wording the classifier cannot read is reported rather than assumed clean."""
+    review = pr_watch.CopilotReview(
+        review_id="R_1",
+        submitted_at=datetime(2026, 7, 26, 12, tzinfo=UTC),
+        body="Copilot had thoughts",
+        generated_comment_count=None,
+    )
+
+    assert pr_watch._review_summary(review, requested=True) == "unrecognized Copilot overview"
+
+
 @pytest.mark.parametrize("conclusion", ["SUCCESS", "NEUTRAL", "SKIPPED"])
 def test_check_status_accepts_successful_terminal_outcomes(conclusion: str) -> None:
     """Successful, neutral, and skipped completed checks are acceptable."""

@@ -328,7 +328,7 @@ def watch_pr(
                 ):
                     raise GhError(
                         "The fresh Copilot review overview could not be classified; "
-                        "inspect `make pr-comments` before merging."
+                        "inspect `make pr-review-comments` before merging."
                     )
                 threads = [thread for thread in all_threads if thread.state == "open"]
                 return _watch_report(

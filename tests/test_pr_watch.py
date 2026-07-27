@@ -678,7 +678,9 @@ def test_watch_pr_rejects_unrecognized_fresh_overview(
         [_status(settled=True, review=_parsed_review(count=None))],
     )
 
-    with pytest.raises(GhError, match="could not be classified"):
+    # The remedy must name the review-thread target, since `make pr-comments`
+    # shows conversation comments and never surfaces review threads.
+    with pytest.raises(GhError, match=r"could not be classified.*make pr-review-comments"):
         pr_watch.watch_pr(12, interval=0, max_polls=1)
 
 

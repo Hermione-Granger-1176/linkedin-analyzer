@@ -85,6 +85,11 @@ def test_parse_timestamp_normalizes_utc_and_requires_timezone() -> None:
     parsed = pr_watch._parse_timestamp("2026-07-26T14:00:00+02:00", "review")
 
     assert parsed == datetime(2026, 7, 26, 12, tzinfo=UTC)
+    # GitHub stamps reviews with a trailing Z, which is valid ISO-8601 input
+    # for every Python this project supports (requires-python >= 3.11).
+    assert pr_watch._parse_timestamp(_SUBMITTED_AT, "review") == datetime(
+        2026, 7, 26, 12, tzinfo=UTC
+    )
     with pytest.raises(GhError, match="must include timezone"):
         pr_watch._parse_timestamp("2026-07-26T12:00:00", "review")
     with pytest.raises(GhError, match="not a valid ISO-8601"):

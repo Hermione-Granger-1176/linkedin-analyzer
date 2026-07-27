@@ -148,7 +148,12 @@ def extract_source_code_snippets(text: str) -> list[CodeSnippet]:
 
 
 def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
-    """Extract shell lines from workflow and composite-action ``run:`` values.
+    """Extract shell lines from ``run:`` values in any ``.github`` YAML file.
+
+    The whole directory is scanned rather than an enumerated list of workflow
+    and action paths, so a new kind of ``.github`` YAML that runs shell is
+    covered the day it is added. Files without a ``run:`` key simply yield
+    nothing.
 
     A ``run:`` value is shell, so every ``make`` word in it is a real
     invocation. These are the references that break CI silently when a target
@@ -163,8 +168,11 @@ def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
         if match is None:
             continue
 
+        # Only the indicator decides the scalar style: YAML allows a trailing
+        # comment after it, as in ``run: | # keep this shell in one step``.
         value = match.group(3).strip()
-        if not BLOCK_SCALAR_PATTERN.match(value):
+        indicator = value.split(maxsplit=1)[0] if value else ""
+        if not BLOCK_SCALAR_PATTERN.match(indicator):
             if value:
                 snippets.append(CodeSnippet(line_number=index, text=value))
             continue

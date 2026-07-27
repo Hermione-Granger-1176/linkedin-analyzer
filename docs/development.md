@@ -156,11 +156,11 @@ make format-py-diff paths="src/linkedin_analyzer tests"
 
 `make lint-make-targets` validates every `make <target>` reference in the repository, not only the ones in documentation, because a reference to a renamed target is a bug wherever it lives. Each file kind uses the rule that avoids its own false positives:
 
-| Where                                     | What counts as a reference                 |
-| ----------------------------------------- | ------------------------------------------ |
-| Markdown                                  | Inline code and fenced code blocks         |
-| `.github` workflows and composite actions | Anything in a `run:` value, which is shell |
-| Python and JavaScript source              | Backticked spans only                      |
+| Where                        | What counts as a reference                 |
+| ---------------------------- | ------------------------------------------ |
+| Markdown                     | Inline code and fenced code blocks         |
+| YAML under `.github`         | Anything in a `run:` value, which is shell |
+| Python and JavaScript source | Backticked spans only                      |
 
 Source files mix prose with commands, so an unquoted scan would read ordinary English such as "make sure it works" as a reference to a target named `sure`. **When naming a Make target inside a comment, docstring, or string, wrap it in backticks** so the linter can see it. Test files are skipped, since the checkers' own fixtures deliberately name targets that do not exist.
 

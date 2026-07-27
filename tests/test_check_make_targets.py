@@ -194,7 +194,7 @@ def test_main_rejects_invalid_paths_together(
     captured = capsys.readouterr().out
     assert exit_code == 1
     assert "missing.md: path does not exist" in captured
-    assert "notes.txt: path must be Markdown, a .github workflow or action" in captured
+    assert "notes.txt: path must be Markdown, YAML under .github" in captured
     assert "../outside.md: path must stay within the repository" in captured
 
 
@@ -258,6 +258,15 @@ def test_extract_workflow_run_snippets_stops_at_sibling_keys_of_a_dash_step() ->
     assert [snippet.text for snippet in snippets] == ["make lint-py"]
 
 
+def test_extract_workflow_run_snippets_allows_a_comment_after_the_indicator() -> None:
+    """A commented block indicator still opens a block, so its shell is not skipped."""
+    snippets = make_targets.extract_workflow_run_snippets(
+        "      - run: | # keep this in one step\n          make lint-py\n"
+    )
+
+    assert [snippet.text for snippet in snippets] == ["make lint-py"]
+
+
 def test_extract_workflow_run_snippets_records_body_line_numbers() -> None:
     """Reported line numbers point at the shell line, not the run key."""
     snippets = make_targets.extract_workflow_run_snippets("steps:\n  run: |\n    make lint-py\n")
@@ -287,6 +296,12 @@ def test_snippet_extractor_selects_a_rule_per_file_kind() -> None:
     )
     assert (
         make_targets.snippet_extractor(Path(".github/actions/ci-setup/action.yml"))
+        is make_targets.extract_workflow_run_snippets
+    )
+    # Scanned by directory rather than by an enumerated list of workflow paths,
+    # so YAML with no `run:` key is read and simply yields nothing.
+    assert (
+        make_targets.snippet_extractor(Path(".github/dependabot.yml"))
         is make_targets.extract_workflow_run_snippets
     )
     assert (

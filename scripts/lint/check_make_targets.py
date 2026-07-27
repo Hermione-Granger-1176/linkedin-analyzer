@@ -44,7 +44,7 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
             continue
         if snippet_extractor(relative) is None:
             errors.append(
-                f"{raw}: path must be Markdown, a .github workflow or action, "
+                f"{raw}: path must be Markdown, YAML under .github, "
                 "or non-test Python or JavaScript"
             )
             continue

@@ -709,3 +709,9 @@ def test_main_reports_errors(
     output = capsys.readouterr().out
     assert "Python dependency audit failed:" in output
     assert "- boom" in output
+
+
+def test_parse_dependency_findings_rejects_a_non_object_entry() -> None:
+    """A malformed pip-audit dependency entry fails closed rather than being skipped."""
+    with pytest.raises(ValueError, match="dependency entries must be objects"):
+        run_security_audit._parse_dependency_findings("not-an-object", Path("requirements.txt"))

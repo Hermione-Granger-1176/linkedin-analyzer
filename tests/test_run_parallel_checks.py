@@ -47,6 +47,18 @@ def test_run_check_reports_timeout() -> None:
     assert result.output == "Timed out after 7s"
 
 
+def test_run_check_reports_unlaunchable_target() -> None:
+    """Convert a process that never starts into a failed check instead of an exception."""
+
+    def failing_runner(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise OSError("make is not installed")
+
+    result = run_parallel_checks.run_check("lint", run_fn=failing_runner)
+
+    assert not result.passed
+    assert result.output == "Failed to run: make is not installed"
+
+
 def test_format_results_groups_success_and_expands_failures() -> None:
     """Format CI output with grouped passing logs and visible failures."""
     results = (
@@ -81,6 +93,36 @@ def test_main_rejects_invalid_timeout(capsys: pytest.CaptureFixture[str]) -> Non
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "invalid timeout value" in captured.out
+
+
+def test_main_rejects_timeout_without_a_value(capsys: pytest.CaptureFixture[str]) -> None:
+    """Reject a trailing --timeout flag rather than treating it as a target."""
+    exit_code = run_parallel_checks.main(["lint", "--timeout"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "--timeout requires an integer value" in captured.out
+    assert "Usage:" in captured.out
+
+
+def test_main_rejects_non_positive_timeout(capsys: pytest.CaptureFixture[str]) -> None:
+    """Reject timeouts that would abort every check before it can run."""
+    exit_code = run_parallel_checks.main(["--timeout", "0", "lint"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "timeout must be positive, got 0" in captured.out
+
+
+def test_main_requires_at_least_one_target(capsys: pytest.CaptureFixture[str]) -> None:
+    """Print usage and fail when no Make targets are given."""
+    exit_code = run_parallel_checks.main([])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out.strip() == (
+        "Usage: run_parallel_checks.py [--timeout N] target1 target2 ..."
+    )
 
 
 def test_main_uses_timeout_for_targets(

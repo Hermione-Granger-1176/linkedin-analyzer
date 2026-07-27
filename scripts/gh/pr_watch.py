@@ -17,8 +17,11 @@ if TYPE_CHECKING:
 _COPILOT_LOGIN = "copilot-pull-request-reviewer"
 _PENDING_STATES = {"EXPECTED", "PENDING"}
 _SUCCESSFUL_CHECK_OUTCOMES = {"NEUTRAL", "SKIPPED", "SUCCESS"}
+# Copilot writes "generated no comments" on a first review and "generated no new
+# comments" on a re-review, so "new" has to be optional or a clean first pass is
+# reported as unclassifiable.
 _COMMENT_COUNT_PATTERN = re.compile(
-    r"\bgenerated (?:(no new)|(\d+)) comments?\b",
+    r"\bgenerated (?:(no(?: new)?)|(\d+)) comments?\b",
     re.IGNORECASE,
 )
 
@@ -34,7 +37,12 @@ class CopilotReview:
 
     @property
     def is_explicitly_clean(self) -> bool:
-        """Return whether the overview explicitly reports no new comments."""
+        """Return whether the overview explicitly reports zero comments in words.
+
+        Both Copilot phrasings count: "generated no comments" on a first review
+        and "generated no new comments" on a re-review. A numeric "generated 0
+        comments" deliberately does not, so an unexpected wording fails closed.
+        """
         match = _COMMENT_COUNT_PATTERN.search(self.body)
         return match is not None and match.group(1) is not None
 
@@ -234,7 +242,7 @@ def _review_summary(review: CopilotReview | None, *, requested: bool) -> str:
     if review.generated_comment_count is None:
         return "unrecognized Copilot overview"
     if review.is_explicitly_clean:
-        return "generated no new comments"
+        return "generated no comments"
     return f"generated {review.generated_comment_count} comment(s)"
 
 

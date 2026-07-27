@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
+from scripts.ci import workflow_helpers
 from scripts.ci.workflow_helpers import (
     validate_lock_refresh_artifact,
     validate_lock_refresh_context,
@@ -21,6 +22,20 @@ def test_validate_lock_refresh_artifact_accepts_expected_files(tmp_path: Path) -
     write_valid_lock_artifact(tmp_path)
 
     validate_lock_refresh_artifact(tmp_path)
+
+
+def test_validate_lock_refresh_artifact_rejects_missing_root(tmp_path: Path) -> None:
+    """Reject an artifact root that was never downloaded instead of passing vacuously."""
+    with pytest.raises(ValueError, match="Artifact root does not exist"):
+        validate_lock_refresh_artifact(tmp_path / "never-downloaded")
+
+
+def test_artifact_files_ignores_entries_that_are_not_regular_files(tmp_path: Path) -> None:
+    """Collect only regular files, so a dangling symlink cannot be counted as artifact content."""
+    write_valid_lock_artifact(tmp_path)
+    (tmp_path / "dangling").symlink_to(tmp_path / "absent")
+
+    assert workflow_helpers._artifact_files(tmp_path) == {Path("uv.lock")}
 
 
 def test_validate_lock_refresh_artifact_rejects_symlink(tmp_path: Path) -> None:
@@ -127,3 +142,52 @@ def test_validate_lock_refresh_context_rejects_untrusted_values(
     """Reject values that cannot safely select a trusted writeback target."""
     with pytest.raises(ValueError, match=message):
         validate_lock_refresh_context(pr_number, head_sha, head_ref)
+
+
+def test_main_accepts_a_valid_lock_artifact(tmp_path: Path) -> None:
+    """The artifact subcommand succeeds for the shape the refresh workflow uploads."""
+    write_valid_lock_artifact(tmp_path)
+
+    assert workflow_helpers.main(["validate-lock-artifact", "--root", str(tmp_path)]) == 0
+
+
+def test_main_surfaces_artifact_validation_failures(tmp_path: Path) -> None:
+    """The artifact subcommand raises so the workflow step fails on a tampered download."""
+    write_valid_lock_artifact(tmp_path)
+    (tmp_path / "extra.txt").write_text("unexpected\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"Unexpected file\(s\)"):
+        workflow_helpers.main(["validate-lock-artifact", "--root", str(tmp_path)])
+
+
+def test_main_accepts_trusted_lock_context() -> None:
+    """The context subcommand succeeds for trusted Dependabot workflow-run values."""
+    exit_code = workflow_helpers.main(
+        [
+            "validate-lock-context",
+            "--pr-number",
+            "123",
+            "--head-sha",
+            "a" * 40,
+            "--head-ref",
+            "dependabot/uv/requests-2.32.0",
+        ]
+    )
+
+    assert exit_code == 0
+
+
+def test_main_surfaces_context_validation_failures() -> None:
+    """The context subcommand raises so the workflow step fails on an untrusted head ref."""
+    with pytest.raises(ValueError, match="head ref"):
+        workflow_helpers.main(
+            [
+                "validate-lock-context",
+                "--pr-number",
+                "123",
+                "--head-sha",
+                "a" * 40,
+                "--head-ref",
+                "feature/unsafe",
+            ]
+        )

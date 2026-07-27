@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
+import zipfile
 from pathlib import Path
 from types import ModuleType
 
@@ -15,6 +17,10 @@ SCRIPT_PATH = Path(__file__).parents[1] / "scripts/checks/xrt-diff.py"
 PRIVATE_MARKER = "PRIVATE_SYNTHETIC_MARKER_7f42"
 HEADER = ["Name", "Value"]
 BASE_ROWS = [["Ada", "same"]]
+SHEET_NAMESPACE = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+SHEET_PART = "xl/worksheets/sheet1.xml"
+WORKBOOK_PART = "xl/workbook.xml"
+SHEETS_PATTERN = re.compile(r"<sheets>.*?</sheets>", re.DOTALL)
 
 
 def load_xrt_diff() -> ModuleType:
@@ -40,6 +46,36 @@ def write_xlsx(path: Path, rows: list[list[str]]) -> None:
         worksheet.append(row)
     workbook.save(path)
     workbook.close()
+
+
+def replace_workbook_part(path: Path, part_name: str, xml: str) -> None:
+    """Rewrite one XML part of a saved workbook, leaving the rest of the archive intact."""
+    with zipfile.ZipFile(path) as archive:
+        parts = {item.filename: archive.read(item.filename) for item in archive.infolist()}
+    parts[part_name] = xml.encode("utf-8")
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in parts.items():
+            archive.writestr(name, data)
+
+
+def inline_row(row_number: int, values: list[str]) -> str:
+    """Render one worksheet row of inline string cells."""
+    cells = "".join(
+        f'<c r="{chr(ord("A") + index)}{row_number}" t="inlineStr"><is><t>{value}</t></is></c>'
+        for index, value in enumerate(values)
+    )
+    return f'<row r="{row_number}">{cells}</row>'
+
+
+def write_undimensioned_xlsx(path: Path, rows_xml: str) -> None:
+    """Write a workbook whose worksheet declares no dimension, so rows stay ragged."""
+    write_xlsx(path, [HEADER])
+    replace_workbook_part(
+        path,
+        SHEET_PART,
+        f'<?xml version="1.0"?><worksheet xmlns="{SHEET_NAMESPACE}">'
+        f"<sheetData>{rows_xml}</sheetData></worksheet>",
+    )
 
 
 def write_inputs(
@@ -79,12 +115,70 @@ def run_diff(
     return exit_code, f"{captured.out}{captured.err}"
 
 
-def test_read_xlsx_rows_preserves_values_and_header_width_padding(tmp_path: Path) -> None:
-    """Keep exact cell values while padding short rows to the header width."""
+def test_read_xlsx_rows_preserves_cell_values(tmp_path: Path) -> None:
+    """Keep exact cell values for a workbook openpyxl wrote itself.
+
+    This does not exercise the header-width padding, despite the shape of the
+    input: openpyxl pads short rows on write whenever the sheet declares a
+    dimension, so the reader never sees a ragged row here. The padding branch is
+    covered by the undimensioned-sheet test below.
+    """
     path = tmp_path / "synthetic.xlsx"
     write_xlsx(path, [HEADER, ["Ada"]])
 
     assert XRT_DIFF.read_xlsx_rows(path) == [HEADER, ["Ada", ""]]
+
+
+def test_read_xlsx_rows_pads_ragged_rows_from_an_undimensioned_sheet(tmp_path: Path) -> None:
+    """Pad rows that arrive narrower than the header when the sheet omits its dimension."""
+    path = tmp_path / "ragged.xlsx"
+    write_undimensioned_xlsx(path, inline_row(1, HEADER) + inline_row(2, ["Ada"]))
+
+    assert XRT_DIFF.read_xlsx_rows(path) == [HEADER, ["Ada", ""]]
+
+
+def test_workbook_without_a_worksheet_is_rejected(tmp_path: Path) -> None:
+    """Reject a workbook that declares no worksheet rather than indexing past its sheets."""
+    path = tmp_path / "sheetless.xlsx"
+    write_xlsx(path, [HEADER])
+    with zipfile.ZipFile(path) as archive:
+        workbook_xml = archive.read(WORKBOOK_PART).decode("utf-8")
+    replace_workbook_part(path, WORKBOOK_PART, SHEETS_PATTERN.sub("<sheets/>", workbook_xml))
+
+    with pytest.raises(ValueError, match="missing worksheet"):
+        XRT_DIFF.read_xlsx_rows(path)
+
+
+def test_workbook_without_rows_is_rejected(tmp_path: Path) -> None:
+    """Reject an empty worksheet, which carries no header to project web rows onto."""
+    xlsx_path = tmp_path / "empty.xlsx"
+    write_undimensioned_xlsx(xlsx_path, "")
+    json_path = tmp_path / "shares.json"
+    json_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing header row"):
+        XRT_DIFF.compare_type(xlsx_path, json_path)
+
+
+def test_workbook_with_an_empty_header_row_is_rejected(tmp_path: Path) -> None:
+    """Reject a header row without cells, which would project every web row to nothing."""
+    xlsx_path = tmp_path / "headerless.xlsx"
+    write_undimensioned_xlsx(xlsx_path, '<row r="1"/>' + inline_row(2, ["Ada"]))
+    json_path = tmp_path / "shares.json"
+    json_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="empty header row"):
+        XRT_DIFF.compare_type(xlsx_path, json_path)
+
+
+@pytest.mark.parametrize("payload", ['{"Name": "Ada"}', '["Ada"]', "[[]]"])
+def test_web_rows_that_are_not_a_list_of_objects_are_rejected(tmp_path: Path, payload: str) -> None:
+    """Reject row dumps that are not a list of column objects."""
+    json_path = tmp_path / "shares.json"
+    json_path.write_text(payload, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid row payload"):
+        XRT_DIFF.read_web_rows(json_path, HEADER)
 
 
 def test_changed_cell_fails_without_printing_private_content(

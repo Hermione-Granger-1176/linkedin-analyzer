@@ -19,6 +19,19 @@ def _query_arg(cmd: list[str]) -> str:
     return next(part for part in cmd if part.startswith("query="))
 
 
+EMPTY_THREADS_PAYLOAD = {
+    "data": {
+        "repository": {
+            "pullRequest": {
+                "reviewThreads": {
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "nodes": [],
+                }
+            }
+        }
+    }
+}
+
 THREADS_PAYLOAD = {
     "data": {
         "repository": {
@@ -291,6 +304,44 @@ def test_pr_summary_includes_meta_and_threads() -> None:
     assert "1 failure" in text and "1 success" in text
     assert "open review threads: 1" in text
     assert "thread=PRRT_open1" in text
+
+
+def test_pr_summary_omits_the_thread_block_when_none_are_open() -> None:
+    """A clean PR ends at the counts rather than printing an empty thread list."""
+    meta = {
+        "number": 7,
+        "title": "Add feature",
+        "state": "OPEN",
+        "url": "https://example/pr/7",
+        "statusCheckRollup": [{"conclusion": "SUCCESS"}],
+    }
+    runner = FakeGh(
+        [
+            (has("pr", "view"), completed_process(0, json.dumps(meta))),
+            (has("repo", "view"), completed_process(0, json.dumps({"nameWithOwner": "o/r"}))),
+            (
+                has("graphql"),
+                completed_process(0, json.dumps(EMPTY_THREADS_PAYLOAD)),
+            ),
+        ]
+    )
+
+    text = pr_review.pr_summary(7, run_fn=runner)
+
+    assert text.endswith("open review threads: 0")
+
+
+def test_rollup_summary_reports_none_without_any_checks() -> None:
+    """A PR with no checks reads as none rather than an empty tally."""
+    assert pr_review.rollup_summary([]) == "none"
+
+
+def test_owner_name_rejects_a_slug_missing_a_side(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A half-formed slug fails instead of producing an empty owner or name."""
+    monkeypatch.setattr(gh_runner, "resolve_repo", lambda **_kwargs: "owner/")
+
+    with pytest.raises(GhError, match="Invalid repository slug"):
+        pr_review._owner_name()
 
 
 def test_resolve_repo_falls_back_to_remote() -> None:

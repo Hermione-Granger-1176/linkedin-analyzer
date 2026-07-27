@@ -349,6 +349,15 @@ def test_read_detail_prefers_a_file_and_rejects_both_sources(tmp_path: Path) -> 
         issue_alerts._read_detail("inline", str(detail_file))
 
 
+def test_read_detail_rejects_a_non_utf8_file(tmp_path: Path) -> None:
+    """A detail file that is not UTF-8 text fails with the path that could not decode."""
+    detail_file = tmp_path / "detail.bin"
+    detail_file.write_bytes(b"\xff\xfe not utf-8")
+
+    with pytest.raises(GhError, match="must be UTF-8 text"):
+        issue_alerts._read_detail("", str(detail_file))
+
+
 def test_read_detail_reports_an_unreadable_file(tmp_path: Path) -> None:
     """A missing detail file fails with the path that could not be read."""
     with pytest.raises(GhError, match="Could not read alert detail file"):

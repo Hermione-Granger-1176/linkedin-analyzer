@@ -103,6 +103,13 @@ def test_find_replacement_targets_ignores_make_and_descriptive_mentions() -> Non
     assert check_doc_commands.find_replacement_targets("ruff scans Python files", {"lint-py"}) == []
 
 
+def test_find_replacement_targets_ignores_empty_command_segments() -> None:
+    """A dangling command separator leaves an empty segment that matches nothing."""
+    targets = check_doc_commands.find_replacement_targets("pytest && ", {"test-py"})
+
+    assert targets == ["test-py"]
+
+
 def test_check_doc_commands_reports_direct_commands(tmp_path: Path) -> None:
     """Actionable direct commands produce greppable replacement messages."""
     write_text(tmp_path / "Makefile", "test-py:\n\t@true\nlint-js:\n\t@true\n")
@@ -215,6 +222,62 @@ def test_run_check_reports_non_utf8_markdown(tmp_path: Path) -> None:
     violations = check_doc_commands.run_check(paths=[doc_path], root=tmp_path)
 
     assert violations == ["README.md: not valid UTF-8 text (invalid start byte)"]
+
+
+def test_run_check_rejects_paths_outside_the_workspace(tmp_path: Path) -> None:
+    """A candidate document from outside the workspace is refused before it is read."""
+    root = tmp_path / "repo"
+    write_text(root / "Makefile", "test-py:\n\t@true\n")
+    outside = tmp_path / "outside.md"
+    write_text(outside, "Run `pytest`.\n")
+
+    violations = check_doc_commands.run_check(paths=[outside], root=root)
+
+    assert violations == [f"{outside}: path must stay within the repository"]
+
+
+def test_resolve_requested_paths_reports_inaccessible_paths(tmp_path: Path) -> None:
+    """A path routed through a regular file is reported, not raised as a traceback."""
+    write_text(tmp_path / "notes.md", "# Notes\n")
+
+    resolved, errors = check_doc_commands.resolve_requested_paths(["notes.md/nested.md"], tmp_path)
+
+    assert resolved == []
+    assert errors == ["notes.md/nested.md: path could not be accessed"]
+
+
+def test_resolve_requested_paths_rejects_a_target_that_resolves_outside_the_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Re-check the resolved location, so a symlink planted after the guard still fails.
+
+    Every escape reachable today is already caught by ``_contains_symlink``, so
+    this containment check is defence in depth against a symlink created between
+    the guard and the resolve. That race cannot be produced from real filesystem
+    state inside a test, so the guard is stubbed out to stand in for losing it.
+    The escaping symlink itself is real.
+    """
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside.md"
+    write_text(outside, "# Outside\n")
+    (root / "linked.md").symlink_to(outside)
+    monkeypatch.setattr(check_doc_commands, "_contains_symlink", lambda _path, _root: False)
+
+    resolved, errors = check_doc_commands.resolve_requested_paths(["linked.md"], root)
+
+    assert resolved == []
+    assert errors == ["linked.md: path resolves outside the repository"]
+
+
+def test_resolve_requested_paths_rejects_directories(tmp_path: Path) -> None:
+    """A directory whose name ends in .md is not treated as a document."""
+    (tmp_path / "guides.md").mkdir()
+
+    resolved, errors = check_doc_commands.resolve_requested_paths(["guides.md"], tmp_path)
+
+    assert resolved == []
+    assert errors == ["guides.md: path does not exist or is not a file"]
 
 
 def test_main_uses_default_paths(

@@ -47,7 +47,7 @@ class CodeSnippet:
 
 @dataclass(frozen=True)
 class MakeReference:
-    """One documented ``make <target>`` reference."""
+    """One ``make <target>`` reference found in documentation, shell, or source."""
 
     target: str
     line_number: int

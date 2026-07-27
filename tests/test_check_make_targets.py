@@ -194,7 +194,7 @@ def test_main_rejects_invalid_paths_together(
     captured = capsys.readouterr().out
     assert exit_code == 1
     assert "missing.md: path does not exist" in captured
-    assert "notes.txt: path must be Markdown, a .github workflow" in captured
+    assert "notes.txt: path must be Markdown, a .github workflow or action" in captured
     assert "../outside.md: path must stay within the repository" in captured
 
 

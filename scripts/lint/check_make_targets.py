@@ -1,4 +1,8 @@
-"""Check documented Make target references against the repository Makefile."""
+"""Check every Make target reference in the repository against the Makefile.
+
+References are read from documentation, CI shell, and source code, since a
+reference to a renamed target is a bug wherever it lives.
+"""
 
 from __future__ import annotations
 
@@ -40,7 +44,7 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
             continue
         if snippet_extractor(relative) is None:
             errors.append(
-                f"{raw}: path must be Markdown, a .github workflow, "
+                f"{raw}: path must be Markdown, a .github workflow or action, "
                 "or non-test Python or JavaScript"
             )
             continue
@@ -74,7 +78,7 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
 
 
 def check_file(path: Path, known_targets: set[str], root: Path) -> list[str]:
-    """Return unknown documented Make target references for one file."""
+    """Return unknown Make target references for one file."""
     relative_path = path.relative_to(root).as_posix()
     try:
         text = path.read_text(encoding="utf-8")
@@ -89,7 +93,7 @@ def check_file(path: Path, known_targets: set[str], root: Path) -> list[str]:
 
 
 def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list[str]:
-    """Run the documented Make target check and return all violations."""
+    """Run the Make target reference check and return all violations."""
     workspace_root = root or REPO_ROOT
     known_targets = load_makefile_targets(workspace_root / "Makefile")
     candidate_paths = paths if paths is not None else iter_reference_files(workspace_root)
@@ -111,9 +115,9 @@ def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments for the documented Make target checker."""
+    """Parse CLI arguments for the Make target reference checker."""
     parser = argparse.ArgumentParser(
-        description="Check documented make <target> references against the Makefile."
+        description="Check make <target> references against the Makefile."
     )
     parser.add_argument(
         "paths",

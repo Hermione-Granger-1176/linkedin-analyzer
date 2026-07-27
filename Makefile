@@ -583,7 +583,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue issues
+.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog issues
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -620,6 +620,9 @@ ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..."
 		$(if $(repo),--repo "$(repo)") \
 		$(if $(detail),--detail "$(detail)") \
 		$(if $(detail_file),--detail-file "$(detail_file)")
+
+ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
+	@PYTHONPATH=. $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
 
 issues: ## List open issues
 	gh issue list

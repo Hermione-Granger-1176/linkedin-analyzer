@@ -177,7 +177,27 @@ Design notes worth knowing when adding a new alert:
 - Callers pass the issue identity as workflow inputs, which reach `make` through the environment and never through template interpolation inside a script body.
 - Because an open alert is closed automatically on recovery, an open alert always means a currently failing check. Do not close one by hand to silence it.
 
-Current callers are `dependency-audit.yml` and `web-smoke.yml`, each with a `report-failure` and a `report-recovery` job.
+Current callers are `dependency-audit.yml`, `web-smoke.yml`, and `schedule-watchdog.yml`, each with a `report-failure` and a `report-recovery` job.
+
+### Schedule watchdog
+
+Every alert above depends on a `cron` still firing, and GitHub auto-disables cron triggers after about 60 days of repository inactivity. A disabled schedule cannot open its own alert issue, so schedule failure is silent: the monitoring layer goes offline exactly when nobody is watching.
+
+`schedule-watchdog.yml` closes that gap. It runs on push to `main` and on `workflow_dispatch`, triggers GitHub never auto-disables, and checks every scheduled workflow two ways: that its `state` is still `active`, and that its most recent `event=schedule` run is newer than its cadence plus a three-day grace window. The second check matters because a schedule can stop firing while its state still reads `active`.
+
+```bash
+make ci-schedule-watchdog                 # current repository
+make ci-schedule-watchdog repo=OWNER/NAME
+```
+
+Cadences live in `SCHEDULED_WORKFLOW_CADENCES` in `scripts/ci/schedule_watchdog.py`. They are not derived from the cron expressions at runtime, so `test_cadences_cover_every_scheduled_workflow` fails when the table drifts from the crons actually declared in `.github/workflows/`. Adding a scheduled workflow without adding its cadence is a test failure, not a silently unwatched schedule.
+
+Two deliberate asymmetries:
+
+- A workflow with **no scheduled runs at all** is reported healthy, so a freshly added schedule that has not fired once does not raise a false alarm.
+- A run that exists but carries an **unreadable timestamp** fails closed and raises. A watchdog that swallowed that would report the schedule it cannot actually see as fine.
+
+When the issue fires, open the linked run to see which workflow is named. If it is disabled, re-enable it from the Actions tab; that is the auto-disable case, and any repository activity resets the 60-day clock. If it reports as stale while active, check whether its cron was edited or whether Actions is degraded. The issue closes itself on the next green watchdog run.
 
 `web-smoke.yml` additionally exposes a `checked` job output, because its check is skipped when `PRODUCTION_URL` is unset. A skipped run is neither a failure nor a recovery, so both alert jobs require `checked == 'true'`; a failure that never reached the check syncs `setup-failure` instead. To sync an alert by hand:
 

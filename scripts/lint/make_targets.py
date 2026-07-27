@@ -32,7 +32,7 @@ MAKE_REFERENCE_PATTERN = re.compile(
     r"(?![A-Za-z0-9_?*./:=+%-])"
 )
 INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
-RUN_KEY_PATTERN = re.compile(r"^(\s*)(?:-\s+)?run:\s*(.*)$")
+RUN_KEY_PATTERN = re.compile(r"^(\s*)(-\s+)?run:\s*(.*)$")
 BLOCK_SCALAR_PATTERN = re.compile(r"^[|>][+-]?\d*$")
 
 
@@ -163,16 +163,21 @@ def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
         if match is None:
             continue
 
-        indent, value = match.group(1), match.group(2).strip()
+        value = match.group(3).strip()
         if not BLOCK_SCALAR_PATTERN.match(value):
             if value:
                 snippets.append(CodeSnippet(line_number=index, text=value))
             continue
 
+        # The block ends at the first key indented no further than ``run:``
+        # itself. In a `- run: |` step the sequence dash sits left of the key,
+        # so sibling keys such as `shell:` and `env:` are more indented than
+        # the line's leading whitespace and would otherwise be read as shell.
+        key_indent = len(match.group(1)) + len(match.group(2) or "")
         while index < len(lines):
             body = lines[index]
             stripped = body.strip()
-            if stripped and len(body) - len(body.lstrip()) <= len(indent):
+            if stripped and len(body) - len(body.lstrip()) <= key_indent:
                 break
             if stripped:
                 snippets.append(CodeSnippet(line_number=index + 1, text=stripped))

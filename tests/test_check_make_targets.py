@@ -245,6 +245,19 @@ def test_extract_workflow_run_snippets_stops_at_the_next_key() -> None:
     assert [snippet.text for snippet in snippets] == ["make lint-py"]
 
 
+def test_extract_workflow_run_snippets_stops_at_sibling_keys_of_a_dash_step() -> None:
+    """A `- run: |` block ends at its own sibling keys, which sit left of the body."""
+    snippets = make_targets.extract_workflow_run_snippets(
+        "      - run: |\n"
+        "          make lint-py\n"
+        "        shell: bash\n"
+        "        env:\n"
+        "          CMD: make not-shell\n"
+    )
+
+    assert [snippet.text for snippet in snippets] == ["make lint-py"]
+
+
 def test_extract_workflow_run_snippets_records_body_line_numbers() -> None:
     """Reported line numbers point at the shell line, not the run key."""
     snippets = make_targets.extract_workflow_run_snippets("steps:\n  run: |\n    make lint-py\n")

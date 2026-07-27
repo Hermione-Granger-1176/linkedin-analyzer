@@ -1,0 +1,99 @@
+name: Schedule Watchdog
+
+# GitHub auto-disables cron triggers after about 60 days of repository
+# inactivity, and a disabled schedule cannot open its own alert issue. This
+# watchdog runs from the push trigger, which GitHub never auto-disables, so a
+# stale or disabled scheduled workflow becomes a visible alert issue instead of
+# silently taking the monitoring layer offline.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    # Alert jobs key off this so a run that failed before the check reported is
+    # treated as a setup failure rather than a stale schedule.
+    outputs:
+      checked: ${{ steps.watchdog.outputs.checked }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: CI setup
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ""
+          install-node-deps: "false"
+
+      # Exit 0 healthy and exit 1 stale both mean the watchdog reached a verdict.
+      # Anything else means it could not check at all, so `checked` stays unset
+      # and the setup-failure alert fires instead of a stale-schedule alert.
+      - name: Check scheduled workflow recency
+        id: watchdog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          make ci-schedule-watchdog
+          status=$?
+          set -e
+          if [ "$status" -le 1 ]; then
+            echo "checked=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
+
+  report-failure:
+    needs: watchdog
+    if: failure() && needs.watchdog.outputs.checked == 'true'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Scheduled workflows are stale or disabled
+      label: schedule-watchdog
+      state: open
+      detail: Re-enable the disabled workflow, or investigate why its schedule stopped firing.
+
+  # The watchdog never got far enough to report on the schedules, so this is a
+  # workflow setup failure rather than a stale schedule.
+  report-setup-failure:
+    needs: watchdog
+    if: failure() && needs.watchdog.outputs.checked != 'true'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Scheduled workflows are stale or disabled
+      label: schedule-watchdog
+      state: setup-failure
+
+  report-recovery:
+    needs: watchdog
+    if: success()
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Scheduled workflows are stale or disabled
+      label: schedule-watchdog
+      state: close

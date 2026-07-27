@@ -12,7 +12,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from . import ci_status, pr_review
+from . import ci_status, pr_review, pr_watch
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -65,6 +65,35 @@ def _build_parser() -> argparse.ArgumentParser:
 
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
     summary_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Request and wait for a fresh Copilot review and successful checks",
+    )
+    watch_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    watch_parser.add_argument(
+        "--interval",
+        type=float,
+        default=45.0,
+        help="Poll interval in seconds",
+    )
+    watch_parser.add_argument(
+        "--max-polls",
+        type=int,
+        default=40,
+        help="Maximum poll count",
+    )
+    watch_parser.add_argument(
+        "--expected-checks",
+        type=int,
+        default=15,
+        help="Minimum expected check count",
+    )
+    watch_parser.add_argument(
+        "--checks-only",
+        action="store_true",
+        help="Wait for checks without requesting a Copilot review",
+    )
 
     ci_parser = subparsers.add_parser(
         "ci-failures", help="Show failed-step logs for the latest run"
@@ -135,6 +164,20 @@ def _handle_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_watch(args: argparse.Namespace) -> int:
+    """Request and wait for the latest complete PR review state."""
+    print(
+        pr_watch.watch_pr(
+            args.pr,
+            interval=args.interval,
+            max_polls=args.max_polls,
+            expected_checks=args.expected_checks,
+            checks_only=args.checks_only,
+        )
+    )
+    return 0
+
+
 def _handle_ci_failures(args: argparse.Namespace) -> int:
     """Print failed-step logs for a run."""
     print(ci_status.failure_digest(args.run))
@@ -150,6 +193,7 @@ COMMAND_HANDLERS = {
     "delete-comment": _handle_delete_comment,
     "copilot-review": _handle_copilot_review,
     "summary": _handle_summary,
+    "watch": _handle_watch,
     "ci-failures": _handle_ci_failures,
 }
 

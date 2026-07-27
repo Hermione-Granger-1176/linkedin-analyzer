@@ -105,6 +105,19 @@ def test_sensitive_message_files_use_portable_private_temp_paths(
     assert "$$(mktemp)" not in recipe
 
 
+def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:
+    """Keep PR polling in the tested helper rather than a noisy shell loop."""
+    recipe = _target_recipe("pr-watch")
+
+    assert "$(GH) watch" in recipe
+    assert "$(if $(pr_num),--pr $(pr_num))" in recipe
+    assert "$(if $(interval),--interval $(interval))" in recipe
+    assert "$(if $(max_polls),--max-polls $(max_polls))" in recipe
+    assert "$(if $(expected_checks),--expected-checks $(expected_checks))" in recipe
+    assert "$(if $(filter 1,$(checks_only)),--checks-only)" in recipe
+    assert "gh pr checks --watch" not in recipe
+
+
 def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> None:
     """Prepare private libraries around a shared, sudo-free browser install."""
     recipe = _target_recipe("setup-playwright-local")

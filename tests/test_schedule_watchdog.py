@@ -83,7 +83,12 @@ def _max_gap_seconds(cron: str) -> int:
 
 
 def _declared_schedules() -> dict[str, int]:
-    """Return each workflow file that declares a cron, mapped to its longest gap."""
+    """Return each workflow file that declares a cron, mapped to its expected cadence.
+
+    A workflow may declare several crons. The cadence is the tightest of their
+    gaps, because the watchdog should notice the most frequent schedule stopping
+    rather than waiting for the slowest one to look overdue.
+    """
     schedules: dict[str, int] = {}
     for path in sorted(WORKFLOW_ROOT.glob("*.yml")):
         crons = CRON_PATTERN.findall(path.read_text(encoding="utf-8"))

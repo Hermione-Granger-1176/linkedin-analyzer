@@ -42,9 +42,10 @@ EXIT_PROBLEMS_FOUND = 1
 EXIT_CHECK_FAILED = 2
 
 # Maximum expected gap between scheduled runs for each workflow, derived from
-# its cron expression. `test_cadences_cover_every_scheduled_workflow` fails when
-# this drifts from the crons actually declared in .github/workflows/, so a new
-# schedule cannot be added without being watched.
+# its cron expression. `test_cadences_match_the_crons_declared_in_the_workflows`
+# re-derives these from the crons actually declared in .github/workflows/ and
+# compares names and values, so neither an unwatched schedule nor a cadence too
+# loose to notice one stopping can reach main.
 SCHEDULED_WORKFLOW_CADENCES: dict[str, int] = {
     "codeql.yml": 7 * DAY_SECONDS,  # "30 6 * * 1" weekly
     "dependency-audit.yml": 7 * DAY_SECONDS,  # "0 6 * * 1" weekly

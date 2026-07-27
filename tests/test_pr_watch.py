@@ -74,6 +74,12 @@ def test_generated_comment_count_classifies_overviews(body: str, expected: int |
     assert pr_watch._generated_comment_count(body) == expected
 
 
+def test_review_summary_distinguishes_absent_from_unrequested_reviews() -> None:
+    """A requested review that never arrived is not reported as unrequested."""
+    assert pr_watch._review_summary(None, requested=True) == "no new review yet"
+    assert pr_watch._review_summary(None, requested=False) == "not requested"
+
+
 def test_parse_timestamp_normalizes_utc_and_requires_timezone() -> None:
     """Timestamps compare as instants and cannot be timezone-naive."""
     parsed = pr_watch._parse_timestamp("2026-07-26T14:00:00+02:00", "review")
@@ -743,7 +749,7 @@ def test_watch_pr_timeout_reports_bounded_current_state(
 
     with pytest.raises(
         GhError,
-        match=r"15 total.*latest Copilot review: not requested",
+        match=r"15 total.*latest Copilot review: no new review yet",
     ):
         pr_watch.watch_pr(
             12,

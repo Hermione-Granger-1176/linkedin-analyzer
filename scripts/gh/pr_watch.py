@@ -52,7 +52,11 @@ class PollStatus:
 
 @dataclass(frozen=True)
 class WatchBaseline:
-    """Review and thread identities captured before requesting Copilot."""
+    """Copilot review ids and every review thread id seen before a request.
+
+    ``thread_ids`` deliberately includes resolved threads so that a thread
+    resolved between polls is never mistaken for a newly generated one.
+    """
 
     review_ids: frozenset[str]
     thread_ids: frozenset[str]
@@ -129,7 +133,11 @@ def _review_payload(pr: int, *, run_fn: RunFunction | None = None) -> dict[str, 
 
 
 def watch_baseline(pr: int, *, run_fn: RunFunction | None = None) -> WatchBaseline:
-    """Capture existing Copilot reviews and open threads before a request."""
+    """Capture existing Copilot reviews and every review thread before a request.
+
+    Resolved threads are captured alongside open ones so that later polls only
+    wait on threads the requested review actually created.
+    """
     payload = _review_payload(pr, run_fn=run_fn)
     review_ids = frozenset(review.review_id for review in _copilot_reviews(payload.get("reviews")))
     thread_ids = frozenset(
@@ -219,10 +227,10 @@ def poll_once(
     )
 
 
-def _review_summary(review: CopilotReview | None) -> str:
+def _review_summary(review: CopilotReview | None, *, requested: bool) -> str:
     """Return a compact classification for the latest fresh review."""
     if review is None:
-        return "not requested"
+        return "no new review yet" if requested else "not requested"
     if review.generated_comment_count is None:
         return "unrecognized Copilot overview"
     if review.is_explicitly_clean:
@@ -236,6 +244,7 @@ def _watch_report(
     poll_count: int,
     status: PollStatus,
     threads: list[pr_review.ReviewThread],
+    requested: bool,
 ) -> str:
     """Render the bounded final state from a completed watch."""
     merge_ready = (
@@ -248,7 +257,7 @@ def _watch_report(
         [
             f"PR #{pr} settled after {poll_count} poll(s)",
             f"checks: {status.rollup_tally} ({status.check_count} total)",
-            f"latest Copilot review: {_review_summary(status.fresh_review)}",
+            f"latest Copilot review: {_review_summary(status.fresh_review, requested=requested)}",
             f"open review threads: {len(threads)}",
             f"merge ready: {'yes' if merge_ready else 'no'}",
             "",
@@ -267,7 +276,11 @@ def watch_pr(
     run_fn: RunFunction | None = None,
     sleep_fn: Callable[[float], None] | None = None,
 ) -> str:
-    """Request a fresh Copilot review, then wait for its checks and threads."""
+    """Wait for settled successful checks and, unless ``checks_only``, a fresh review.
+
+    With ``checks_only`` no Copilot review is requested or awaited, so the
+    report classifies the review state as not requested.
+    """
     if interval < 0:
         raise GhError("interval must not be negative.")
     if max_polls < 1:
@@ -323,6 +336,7 @@ def watch_pr(
                     poll_count=poll_count,
                     status=status,
                     threads=threads,
+                    requested=not checks_only,
                 )
 
         if poll_count < max_polls:
@@ -331,5 +345,6 @@ def watch_pr(
     raise GhError(
         f"PR #{pr} did not settle after {max_polls} polls: "
         f"checks: {status.rollup_tally} ({status.check_count} total); "
-        f"latest Copilot review: {_review_summary(status.fresh_review)}."
+        f"latest Copilot review: "
+        f"{_review_summary(status.fresh_review, requested=not checks_only)}."
     )

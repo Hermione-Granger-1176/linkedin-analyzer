@@ -36,8 +36,8 @@ The check uses HTTP only, so it does not install or run Playwright. It verifies 
 `web-smoke.yml` runs the same check on a schedule (twice daily) and on manual `workflow_dispatch`, so a broken production deploy is caught without waiting for the next manual run.
 
 - The target URL comes from the `PRODUCTION_URL` repository variable. When it is unset, the job records a skipped summary and passes (following the graceful-degrade pattern used by `refresh-action-shas.yml`), so a fork or a fresh clone without the variable never fails CI. Set `PRODUCTION_URL` to the production origin (for example `https://your-production-domain.example`) to enable the check.
-- On a genuine failure a `report-failure` job opens (or comments on the existing) `web-smoke`-labeled issue with a link to the run, mirroring `dependency-audit.yml`.
-- When the issue fires: open the linked run, read which assertion failed (app shell status/markers, a missing or altered security header, or a non-204 from `/api/csp-report`), then reproduce locally with `make web-smoke url=<production-url>`. If the deploy is bad, roll back per [Rollback](#rollback); if only a header or CSP directive drifted, fix `vercel.json` and redeploy. Close the issue once the next scheduled or dispatched run is green.
+- On a genuine failure a `report-failure` job opens (or comments on the existing) `web-smoke`-labeled issue with a link to the run, mirroring `dependency-audit.yml`. A `report-recovery` job closes it on the next green run. Both call the shared `alert-issue.yml` workflow described in [Alert issues](#alert-issues).
+- When the issue fires: open the linked run, read which assertion failed (app shell status/markers, a missing or altered security header, or a non-204 from `/api/csp-report`), then reproduce locally with `make web-smoke url=<production-url>`. If the deploy is bad, roll back per [Rollback](#rollback); if only a header or CSP directive drifted, fix `vercel.json` and redeploy. The issue closes itself once the next scheduled or dispatched run is green, so there is no need to close it by hand.
 
 ## Versioning
 
@@ -157,6 +157,34 @@ Configured automation:
 - `refresh-action-shas.yml` runs monthly or manually and converts tag-based workflow/action `uses:` refs to full commit SHAs. It leaves already pinned refs unchanged; Dependabot updates action versions.
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
 - `commit-python-locks.yml` validates the triggering workflow run against the live Dependabot PR, downloads a `uv.lock`-only artifact, validates its contents, revalidates the branch head, and commits only if it is still safe.
+
+### Alert issues
+
+Scheduled workflows report their health through one tracking issue each, rather than one issue per failing run. `alert-issue.yml` is a reusable (`workflow_call`) workflow that every monitored schedule calls; it runs `make ci-alert-issue`, which is implemented and tested in `scripts/ci/issue_alerts.py`.
+
+An alert is identified by an exact issue title scoped to one label, and is synced to one of three states:
+
+| State | Meaning | Effect |
+| --- | --- | --- |
+| `open` | The monitored checks reported a failure | Creates the issue, or comments on the open one |
+| `close` | The monitored checks are passing again | Closes the issue with a recovery comment |
+| `setup-failure` | The workflow died before its checks could report | Same as `open`, with wording that points at the setup step |
+
+Design notes worth knowing when adding a new alert:
+
+- A repeat failure **comments** rather than rewriting the body, so the issue keeps the failure timeline.
+- Reusing the same label for unrelated issues is refused rather than risking a duplicate alert. Give each alert its own label.
+- Callers pass the issue identity as workflow inputs, which reach `make` through the environment and never through template interpolation inside a script body.
+- Because an open alert is closed automatically on recovery, an open alert always means a currently failing check. Do not close one by hand to silence it.
+
+Current callers are `dependency-audit.yml` and `web-smoke.yml`, each with a `report-failure` and a `report-recovery` job.
+
+`web-smoke.yml` additionally exposes a `checked` job output, because its check is skipped when `PRODUCTION_URL` is unset. A skipped run is neither a failure nor a recovery, so both alert jobs require `checked == 'true'`; a failure that never reached the check syncs `setup-failure` instead. To sync an alert by hand:
+
+```bash
+make ci-alert-issue title="Dependency audit failed" label=dependency-audit \
+  run_url=https://github.com/OWNER/REPO/actions/runs/123 state=close
+```
 
 ### Workflow and cache operations
 

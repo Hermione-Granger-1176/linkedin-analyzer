@@ -1,0 +1,66 @@
+name: Alert Issue
+
+# Shared by every scheduled workflow that reports its health through one
+# tracking issue. Callers supply the issue identity and the state to sync;
+# all issue handling lives in scripts/ci/issue_alerts.py.
+
+on:
+  workflow_call:
+    inputs:
+      title:
+        description: Exact alert issue title. Identifies the issue across runs.
+        required: true
+        type: string
+      label:
+        description: Label that scopes this alert to one workflow.
+        required: true
+        type: string
+      state:
+        description: open, close, or setup-failure.
+        required: true
+        type: string
+      detail:
+        description: Extra body text explaining what to inspect.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  sync-alert-issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: CI setup
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ""
+          install-node-deps: "false"
+
+      # Inputs reach make through the environment, never through template
+      # interpolation inside the script body.
+      - name: Sync the alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_TITLE: ${{ inputs.title }}
+          ALERT_LABEL: ${{ inputs.label }}
+          ALERT_STATE: ${{ inputs.state }}
+          ALERT_DETAIL: ${{ inputs.detail }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          make ci-alert-issue \
+            title="$ALERT_TITLE" \
+            label="$ALERT_LABEL" \
+            state="$ALERT_STATE" \
+            run_url="$RUN_URL" \
+            detail="$ALERT_DETAIL"

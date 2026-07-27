@@ -80,8 +80,13 @@ def test_review_summary_distinguishes_absent_from_unrequested_reviews() -> None:
     assert pr_watch._review_summary(None, requested=False) == "not requested"
 
 
-def test_parse_timestamp_normalizes_utc_and_requires_timezone() -> None:
-    """Timestamps compare as instants and cannot be timezone-naive."""
+def test_parse_timestamp_compares_as_instant_and_requires_timezone() -> None:
+    """Timestamps compare as instants and cannot be timezone-naive.
+
+    The parser preserves each payload's original offset rather than converting
+    to UTC. Aware datetimes already compare and order by instant, which is all
+    the watcher needs to pick the latest review.
+    """
     parsed = pr_watch._parse_timestamp("2026-07-26T14:00:00+02:00", "review")
 
     assert parsed == datetime(2026, 7, 26, 12, tzinfo=UTC)

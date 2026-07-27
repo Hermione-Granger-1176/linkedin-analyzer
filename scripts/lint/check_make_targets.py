@@ -1,4 +1,8 @@
-"""Check documented Make target references against the repository Makefile."""
+"""Check every Make target reference in the repository against the Makefile.
+
+References are read from documentation, CI shell, and source code, since a
+reference to a renamed target is a bug wherever it lives.
+"""
 
 from __future__ import annotations
 
@@ -8,9 +12,10 @@ from pathlib import Path
 
 from scripts.lint.make_targets import (
     MAKEFILE_PATH,
-    extract_make_references,
-    iter_markdown_files,
+    extract_path_make_references,
+    iter_reference_files,
     load_makefile_targets,
+    snippet_extractor,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -27,7 +32,7 @@ def _contains_symlink(path: Path, root: Path) -> bool:
 
 
 def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:
-    """Resolve safe repository-relative Markdown paths and return validation errors."""
+    """Resolve safe repository-relative scannable paths and return validation errors."""
     resolved_paths: list[Path] = []
     errors: list[str] = []
     resolved_root = root.resolve()
@@ -37,8 +42,11 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
         if relative.is_absolute() or ".." in relative.parts:
             errors.append(f"{raw}: path must stay within the repository")
             continue
-        if relative.suffix.lower() != ".md":
-            errors.append(f"{raw}: path must be a Markdown file")
+        if snippet_extractor(relative) is None:
+            errors.append(
+                f"{raw}: path must be Markdown, YAML under .github, "
+                "or non-test Python or JavaScript"
+            )
             continue
 
         candidate = root / relative
@@ -70,7 +78,7 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
 
 
 def check_file(path: Path, known_targets: set[str], root: Path) -> list[str]:
-    """Return unknown documented Make target references for one file."""
+    """Return unknown Make target references for one file."""
     relative_path = path.relative_to(root).as_posix()
     try:
         text = path.read_text(encoding="utf-8")
@@ -79,16 +87,16 @@ def check_file(path: Path, known_targets: set[str], root: Path) -> list[str]:
 
     return [
         f"{relative_path}:{reference.line_number}: unknown Make target `{reference.target}`"
-        for reference in extract_make_references(text)
+        for reference in extract_path_make_references(path.relative_to(root), text)
         if reference.target not in known_targets
     ]
 
 
 def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list[str]:
-    """Run the documented Make target check and return all violations."""
+    """Run the Make target reference check and return all violations."""
     workspace_root = root or REPO_ROOT
     known_targets = load_makefile_targets(workspace_root / "Makefile")
-    candidate_paths = paths if paths is not None else iter_markdown_files(workspace_root)
+    candidate_paths = paths if paths is not None else iter_reference_files(workspace_root)
     violations: list[str] = []
 
     for path in candidate_paths:
@@ -107,14 +115,14 @@ def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse CLI arguments for the documented Make target checker."""
+    """Parse CLI arguments for the Make target reference checker."""
     parser = argparse.ArgumentParser(
-        description="Check documented make <target> references against the Makefile."
+        description="Check make <target> references against the Makefile."
     )
     parser.add_argument(
         "paths",
         nargs="*",
-        help="Optional repository-relative Markdown files to check",
+        help="Optional repository-relative files to check",
     )
     return parser.parse_args(argv)
 
@@ -132,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     workspace_root = REPO_ROOT
 
     if not args.paths:
-        candidate_paths = iter_markdown_files(workspace_root)
+        candidate_paths = iter_reference_files(workspace_root)
     else:
         candidate_paths, path_errors = resolve_requested_paths(args.paths, workspace_root)
         if path_errors:

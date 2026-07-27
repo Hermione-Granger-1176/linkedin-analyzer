@@ -132,11 +132,11 @@ make lint-doc-commands
 # Check selected contributor documents
 make lint-doc-commands paths="README.md docs/development.md"
 
-# Check documented Make targets exist
+# Check every referenced Make target exists
 make lint-make-targets
 
-# Check Make targets in selected Markdown files
-make lint-make-targets paths="README.md docs/development.md"
+# Check Make targets in selected files
+make lint-make-targets paths="README.md scripts/gh/pr_watch.py"
 
 # Type-check JavaScript with checkJs
 make typecheck-web
@@ -153,6 +153,16 @@ make format-py-diff
 # Preview Python formatting changes for selected paths
 make format-py-diff paths="src/linkedin_analyzer tests"
 ```
+
+`make lint-make-targets` validates every `make <target>` reference in the repository, not only the ones in documentation, because a reference to a renamed target is a bug wherever it lives. Each file kind uses the rule that avoids its own false positives:
+
+| Where                        | What counts as a reference                 |
+| ---------------------------- | ------------------------------------------ |
+| Markdown                     | Inline code and fenced code blocks         |
+| YAML under `.github`         | Anything in a `run:` value, which is shell |
+| Python and JavaScript source | Backticked spans only                      |
+
+Source files mix prose with commands, so an unquoted scan would read ordinary English such as "make sure it works" as a reference to a target named `sure`. **When naming a Make target inside a comment, docstring, or string, wrap it in backticks** so the linter can see it. Test files are skipped, since the checkers' own fixtures deliberately name targets that do not exist.
 
 `make setup` is the fast default and does not install browsers. `make setup-all` installs Chromium, Firefox, and WebKit in Playwright's normal user-local browser cache. It is browser-only, does not install system packages, and does not require sudo. Use it when the host already provides the libraries Playwright needs.
 

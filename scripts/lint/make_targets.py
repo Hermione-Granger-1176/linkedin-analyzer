@@ -1,4 +1,4 @@
-"""Shared Markdown and Makefile parsing for repository documentation checks."""
+"""Shared Markdown, workflow, source, and Makefile parsing for repository checks."""
 
 from __future__ import annotations
 
@@ -6,11 +6,20 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from scripts.lint import SKIP_DIRECTORIES
+from scripts.lint import SKIP_DIRECTORIES, iter_lint_paths
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
+MARKDOWN_SUFFIX = ".md"
+SOURCE_SUFFIXES = frozenset({".py", ".mjs", ".js"})
+WORKFLOW_SUFFIXES = frozenset({".yml", ".yaml"})
+WORKFLOW_ROOT = ".github"
+TEST_DIRECTORY_NAMES = frozenset({"tests", "test", "e2e", "__tests__"})
 TARGET_PATTERN = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?!=)", re.MULTILINE)
 GROUP_PATTERN = re.compile(
     r"^# ─── .+? @([A-Za-z][A-Za-z0-9_-]*) .*",
@@ -23,6 +32,8 @@ MAKE_REFERENCE_PATTERN = re.compile(
     r"(?![A-Za-z0-9_?*./:=+%-])"
 )
 INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
+RUN_KEY_PATTERN = re.compile(r"^(\s*)(-\s+)?run:\s*(.*)$")
+BLOCK_SCALAR_PATTERN = re.compile(r"^[|>][+-]?\d*$")
 
 
 @dataclass(frozen=True)
@@ -36,7 +47,7 @@ class CodeSnippet:
 
 @dataclass(frozen=True)
 class MakeReference:
-    """One documented ``make <target>`` reference."""
+    """One ``make <target>`` reference found in documentation, shell, or source."""
 
     target: str
     line_number: int
@@ -113,10 +124,127 @@ def extract_markdown_code_snippets(text: str) -> list[CodeSnippet]:
     return snippets
 
 
+def extract_source_code_snippets(text: str) -> list[CodeSnippet]:
+    """Extract backticked spans from source comments, docstrings, and strings.
+
+    Source files mix prose with commands, and an unquoted scan would read
+    ordinary English such as "make sure" as a target reference. Backticks are
+    the convention this repository already uses when naming a command inside a
+    string, so they are what marks a span as a real reference.
+    """
+    snippets: list[CodeSnippet] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        for match in INLINE_CODE_PATTERN.finditer(line):
+            snippet = match.group(1)
+            if snippet.strip():
+                snippets.append(
+                    CodeSnippet(
+                        line_number=line_number,
+                        text=snippet,
+                        column_start=match.start(),
+                    )
+                )
+    return snippets
+
+
+def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
+    """Extract shell lines from ``run:`` values in any ``.github`` YAML file.
+
+    The whole directory is scanned rather than an enumerated list of workflow
+    and action paths, so a new kind of ``.github`` YAML that runs shell is
+    covered the day it is added. Files without a ``run:`` key simply yield
+    nothing.
+
+    A ``run:`` value is shell, so every ``make`` word in it is a real
+    invocation. These are the references that break CI silently when a target
+    is renamed, which is why they are read directly rather than via backticks.
+    """
+    snippets: list[CodeSnippet] = []
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        match = RUN_KEY_PATTERN.match(lines[index])
+        index += 1
+        if match is None:
+            continue
+
+        # Only the indicator decides the scalar style: YAML allows a trailing
+        # comment after it, as in ``run: | # keep this shell in one step``.
+        value = match.group(3).strip()
+        indicator = value.split(maxsplit=1)[0] if value else ""
+        if not BLOCK_SCALAR_PATTERN.match(indicator):
+            if value:
+                snippets.append(CodeSnippet(line_number=index, text=value))
+            continue
+
+        # The block ends at the first key indented no further than ``run:``
+        # itself. In a `- run: |` step the sequence dash sits left of the key,
+        # so sibling keys such as `shell:` and `env:` are more indented than
+        # the line's leading whitespace and would otherwise be read as shell.
+        key_indent = len(match.group(1)) + len(match.group(2) or "")
+        while index < len(lines):
+            body = lines[index]
+            stripped = body.strip()
+            if stripped and len(body) - len(body.lstrip()) <= key_indent:
+                break
+            if stripped:
+                snippets.append(CodeSnippet(line_number=index + 1, text=stripped))
+            index += 1
+    return snippets
+
+
+def is_test_path(relative_path: Path) -> bool:
+    """Return whether a repository-relative path holds test code.
+
+    Test files legitimately name targets that do not exist, as fixtures for
+    the checkers themselves, so they are excluded from source scanning.
+    """
+    if any(part in TEST_DIRECTORY_NAMES for part in relative_path.parts):
+        return True
+    name = relative_path.name
+    return name.startswith("test_") or ".test." in name or ".spec." in name
+
+
+def snippet_extractor(relative_path: Path) -> Callable[[str], list[CodeSnippet]] | None:
+    """Return the snippet extractor for a path, or ``None`` when unscanned."""
+    suffix = relative_path.suffix.lower()
+    if suffix == MARKDOWN_SUFFIX:
+        return extract_markdown_code_snippets
+    if is_test_path(relative_path):
+        return None
+    if suffix in WORKFLOW_SUFFIXES and relative_path.parts[:1] == (WORKFLOW_ROOT,):
+        return extract_workflow_run_snippets
+    if suffix in SOURCE_SUFFIXES:
+        return extract_source_code_snippets
+    return None
+
+
+def iter_reference_files(root: Path) -> list[Path]:
+    """Return every file whose ``make`` references are validated."""
+    return [
+        path
+        for path in iter_lint_paths(root)
+        if snippet_extractor(path.relative_to(root)) is not None
+    ]
+
+
 def extract_make_references(text: str) -> list[MakeReference]:
     """Extract documented ``make <target>`` references from Markdown code."""
+    return _references_from_snippets(extract_markdown_code_snippets(text))
+
+
+def extract_path_make_references(relative_path: Path, text: str) -> list[MakeReference]:
+    """Extract ``make <target>`` references using the rule for the path's kind."""
+    extractor = snippet_extractor(relative_path)
+    if extractor is None:
+        return []
+    return _references_from_snippets(extractor(text))
+
+
+def _references_from_snippets(snippets: list[CodeSnippet]) -> list[MakeReference]:
+    """Return every ``make <target>`` reference found in extracted snippets."""
     references: list[MakeReference] = []
-    for code_snippet in extract_markdown_code_snippets(text):
+    for code_snippet in snippets:
         for match in MAKE_REFERENCE_PATTERN.finditer(code_snippet.text):
             references.append(
                 MakeReference(

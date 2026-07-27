@@ -184,7 +184,7 @@ def test_main_reports_unknown_targets_consistently(
 def test_main_rejects_invalid_paths_together(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Missing, non-Markdown, and escaping paths are rejected together."""
+    """Missing, unscannable, and escaping paths are rejected together."""
     write_text(tmp_path / "Makefile", "help:\n\t@true\n")
     write_text(tmp_path / "notes.txt", "Use make help.\n")
     monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
@@ -194,8 +194,181 @@ def test_main_rejects_invalid_paths_together(
     captured = capsys.readouterr().out
     assert exit_code == 1
     assert "missing.md: path does not exist" in captured
-    assert "notes.txt: path must be a Markdown file" in captured
+    assert "notes.txt: path must be Markdown, YAML under .github" in captured
     assert "../outside.md: path must stay within the repository" in captured
+
+
+def test_extract_source_code_snippets_requires_backticks() -> None:
+    """Source prose is only a reference when the command is backticked."""
+    references = make_targets.extract_path_make_references(
+        Path("scripts/gh/pr_watch.py"),
+        "# Run `make lint-py` first.\n"
+        'raise GhError("inspect `make pr-review-comments` before merging")\n'
+        "# We should make sure this works and make it fast.\n",
+    )
+
+    assert [reference.target for reference in references] == ["lint-py", "pr-review-comments"]
+
+
+def test_extract_workflow_run_snippets_reads_block_scalars_and_inline_values() -> None:
+    """Workflow shell is read directly, since every make word there is an invocation."""
+    references = make_targets.extract_path_make_references(
+        Path(".github/workflows/ci.yml"),
+        "jobs:\n"
+        "  build:\n"
+        "    steps:\n"
+        "      - name: Audit\n"
+        "        run: |\n"
+        "          make audit-node\n"
+        "          make ci-alert-issue \\\n"
+        "            title=x\n"
+        "      - name: Lint\n"
+        "        run: make lint-py\n"
+        "      - name: Not shell\n"
+        "        with:\n"
+        "          args: make not-a-reference\n",
+    )
+
+    assert [reference.target for reference in references] == [
+        "audit-node",
+        "ci-alert-issue",
+        "lint-py",
+    ]
+
+
+def test_extract_workflow_run_snippets_stops_at_the_next_key() -> None:
+    """A block scalar ends at the next key rather than swallowing later steps."""
+    snippets = make_targets.extract_workflow_run_snippets(
+        "      - name: One\n        run: |\n          make lint-py\n      - name: Two\n"
+    )
+
+    assert [snippet.text for snippet in snippets] == ["make lint-py"]
+
+
+def test_extract_workflow_run_snippets_stops_at_sibling_keys_of_a_dash_step() -> None:
+    """A `- run: |` block ends at its own sibling keys, which sit left of the body."""
+    snippets = make_targets.extract_workflow_run_snippets(
+        "      - run: |\n"
+        "          make lint-py\n"
+        "        shell: bash\n"
+        "        env:\n"
+        "          CMD: make not-shell\n"
+    )
+
+    assert [snippet.text for snippet in snippets] == ["make lint-py"]
+
+
+def test_extract_workflow_run_snippets_allows_a_comment_after_the_indicator() -> None:
+    """A commented block indicator still opens a block, so its shell is not skipped."""
+    snippets = make_targets.extract_workflow_run_snippets(
+        "      - run: | # keep this in one step\n          make lint-py\n"
+    )
+
+    assert [snippet.text for snippet in snippets] == ["make lint-py"]
+
+
+def test_extract_workflow_run_snippets_records_body_line_numbers() -> None:
+    """Reported line numbers point at the shell line, not the run key."""
+    snippets = make_targets.extract_workflow_run_snippets("steps:\n  run: |\n    make lint-py\n")
+
+    assert [(snippet.line_number, snippet.text) for snippet in snippets] == [(3, "make lint-py")]
+
+
+def test_is_test_path_covers_directory_and_filename_conventions() -> None:
+    """Test fixtures naming absent targets are excluded by path convention."""
+    assert make_targets.is_test_path(Path("tests/test_check_make_targets.py"))
+    assert make_targets.is_test_path(Path("web/tests/tutorial.test.js"))
+    assert make_targets.is_test_path(Path("e2e/smoke.spec.js"))
+    assert make_targets.is_test_path(Path("scripts/gh/test_helper.py"))
+    assert not make_targets.is_test_path(Path("scripts/gh/pr_watch.py"))
+    assert not make_targets.is_test_path(Path("docs/development.md"))
+
+
+def test_snippet_extractor_selects_a_rule_per_file_kind() -> None:
+    """Each scanned kind gets the extractor that avoids its own false positives."""
+    assert (
+        make_targets.snippet_extractor(Path("README.md"))
+        is make_targets.extract_markdown_code_snippets
+    )
+    assert (
+        make_targets.snippet_extractor(Path(".github/workflows/ci.yml"))
+        is make_targets.extract_workflow_run_snippets
+    )
+    assert (
+        make_targets.snippet_extractor(Path(".github/actions/ci-setup/action.yml"))
+        is make_targets.extract_workflow_run_snippets
+    )
+    # Scanned by directory rather than by an enumerated list of workflow paths,
+    # so YAML with no `run:` key is read and simply yields nothing.
+    assert (
+        make_targets.snippet_extractor(Path(".github/dependabot.yml"))
+        is make_targets.extract_workflow_run_snippets
+    )
+    assert (
+        make_targets.snippet_extractor(Path("scripts/gh/pr_watch.py"))
+        is make_targets.extract_source_code_snippets
+    )
+
+
+def test_snippet_extractor_skips_unscanned_paths() -> None:
+    """Config YAML outside .github, test code, and other suffixes are not scanned."""
+    assert make_targets.snippet_extractor(Path("config/anything.yml")) is None
+    assert make_targets.snippet_extractor(Path("tests/test_pr_watch.py")) is None
+    assert make_targets.snippet_extractor(Path("notes.txt")) is None
+    assert make_targets.snippet_extractor(Path("web/src/styles.css")) is None
+
+
+def test_iter_reference_files_covers_workflows_and_source_but_not_tests(tmp_path: Path) -> None:
+    """The default scan reaches beyond Markdown without picking up fixtures."""
+    write_text(tmp_path / "README.md", "# Root\n")
+    write_text(tmp_path / ".github" / "workflows" / "ci.yml", "on: push\n")
+    write_text(tmp_path / "scripts" / "tool.py", "x = 1\n")
+    write_text(tmp_path / "tests" / "test_tool.py", "x = 1\n")
+    write_text(tmp_path / "config" / "tool.yml", "x: 1\n")
+    write_text(tmp_path / "node_modules" / "pkg" / "index.js", "x = 1\n")
+
+    files = make_targets.iter_reference_files(tmp_path)
+
+    assert sorted(path.relative_to(tmp_path).as_posix() for path in files) == [
+        ".github/workflows/ci.yml",
+        "README.md",
+        "scripts/tool.py",
+    ]
+
+
+def test_run_check_reports_an_unknown_target_in_workflow_shell(tmp_path: Path) -> None:
+    """A renamed target referenced by CI shell fails the lint, not the next CI run."""
+    write_text(tmp_path / "Makefile", "lint-py:\n\t@true\n")
+    workflow = tmp_path / ".github" / "workflows" / "ci.yml"
+    write_text(workflow, "steps:\n  - run: |\n      make lint-py\n      make lint-typo\n")
+
+    violations = check_make_targets.run_check(paths=[workflow], root=tmp_path)
+
+    assert violations == [
+        ".github/workflows/ci.yml:4: unknown Make target `lint-typo`",
+    ]
+
+
+def test_run_check_reports_an_unknown_target_in_source_strings(tmp_path: Path) -> None:
+    """A wrong target named in an error message is caught before it misleads anyone."""
+    write_text(tmp_path / "Makefile", "pr-review-comments:\n\t@true\n")
+    module = tmp_path / "scripts" / "gh" / "pr_watch.py"
+    write_text(module, 'raise GhError("inspect `make pr-comment-typo` before merging")\n')
+
+    violations = check_make_targets.run_check(paths=[module], root=tmp_path)
+
+    assert violations == [
+        "scripts/gh/pr_watch.py:1: unknown Make target `pr-comment-typo`",
+    ]
+
+
+def test_run_check_ignores_absent_targets_in_test_fixtures(tmp_path: Path) -> None:
+    """Checker fixtures may name targets that deliberately do not exist."""
+    write_text(tmp_path / "Makefile", "help:\n\t@true\n")
+    fixture = tmp_path / "tests" / "test_check_make_targets.py"
+    write_text(fixture, 'doc = "Use `make missing-target`."\n')
+
+    assert check_make_targets.run_check(root=tmp_path) == []
 
 
 def test_main_rejects_symlink_components(

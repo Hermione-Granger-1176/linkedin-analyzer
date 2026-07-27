@@ -192,6 +192,8 @@ make ci-schedule-watchdog repo=OWNER/NAME
 
 Cadences live in `SCHEDULED_WORKFLOW_CADENCES` in `scripts/ci/schedule_watchdog.py`. They are not derived from the cron expressions at runtime, so `test_cadences_cover_every_scheduled_workflow` fails when the table drifts from the crons actually declared in `.github/workflows/`. Adding a scheduled workflow without adding its cadence is a test failure, not a silently unwatched schedule.
 
+Exit codes are a contract with the workflow: `0` healthy, `1` stale or disabled schedules found, and `2` the check could not complete. The workflow sets its `checked` output only for `0` and `1`, the two codes that mean a real verdict about the schedules, so an API or setup failure syncs `setup-failure` instead of opening a stale-schedule alert.
+
 Two deliberate asymmetries:
 
 - A workflow with **no scheduled runs at all** is reported healthy, so a freshly added schedule that has not fired once does not raise a false alarm.

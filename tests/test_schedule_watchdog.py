@@ -20,7 +20,8 @@ from scripts.gh.gh_runner import GhError
 from tests.gh_test_support import FakeGh, completed_process, has
 
 WORKFLOW_ROOT = Path(__file__).parents[1] / ".github" / "workflows"
-CRON_PATTERN = re.compile(r"^\s*-\s*cron:", re.MULTILINE)
+CRON_PATTERN = re.compile(r"""^\s*-\s*cron:\s*["']?([^"'\n]+)["']?""", re.MULTILINE)
+DAY = schedule_watchdog.DAY_SECONDS
 NOW = datetime(2026, 7, 27, 12, tzinfo=UTC)
 WORKFLOW = "web-smoke.yml"
 
@@ -65,20 +66,49 @@ def _runs(created_at: object) -> dict[str, object]:
 # ─── Cadence table drift ─────────────────────────────────────────────────────
 
 
-def test_cadences_cover_every_scheduled_workflow() -> None:
-    """The cadence table must name exactly the workflows that declare a cron.
+def _max_gap_seconds(cron: str) -> int:
+    """Return the longest gap between firings of one cron expression.
 
-    A schedule missing from the table is invisible to the watchdog, which is the
-    failure this whole module exists to prevent. A stale entry means the table
-    describes a workflow that no longer has a schedule.
+    Covers the shapes this repository actually uses: a day-of-month field pins a
+    monthly run, a day-of-week field pins a weekly one, and otherwise the hour
+    field's entries divide the day evenly.
     """
-    scheduled = {
-        path.name
-        for path in WORKFLOW_ROOT.glob("*.yml")
-        if CRON_PATTERN.search(path.read_text(encoding="utf-8"))
-    }
+    minute, hour, day_of_month, _month, day_of_week = cron.split()
+    if day_of_month != "*":
+        return 31 * DAY  # longest month, so a healthy January is never stale
+    if day_of_week != "*":
+        return 7 * DAY
+    assert minute.count(",") == 0, f"unsupported multi-minute cron: {cron}"
+    return DAY // len(hour.split(","))
 
-    assert set(schedule_watchdog.SCHEDULED_WORKFLOW_CADENCES) == scheduled
+
+def _declared_schedules() -> dict[str, int]:
+    """Return each workflow file that declares a cron, mapped to its longest gap."""
+    schedules: dict[str, int] = {}
+    for path in sorted(WORKFLOW_ROOT.glob("*.yml")):
+        crons = CRON_PATTERN.findall(path.read_text(encoding="utf-8"))
+        if crons:
+            schedules[path.name] = min(_max_gap_seconds(cron.strip()) for cron in crons)
+    return schedules
+
+
+def test_cadences_match_the_crons_declared_in_the_workflows() -> None:
+    """The cadence table must match the crons actually declared, in both name and value.
+
+    A workflow missing from the table is invisible to the watchdog, which is the
+    failure this module exists to prevent. A cadence that is merely too generous
+    is the quieter version of the same bug: the schedule is watched, but a
+    watchdog that allows twice the real gap will not notice it stop.
+    """
+    assert _declared_schedules() == schedule_watchdog.SCHEDULED_WORKFLOW_CADENCES
+
+
+def test_the_gap_deriver_matches_each_cron_shape_in_use() -> None:
+    """Pin the helper the drift test depends on, so a wrong table cannot look right."""
+    assert _max_gap_seconds("0 3 1 * *") == 31 * DAY
+    assert _max_gap_seconds("30 6 * * 1") == 7 * DAY
+    assert _max_gap_seconds("0 7,19 * * *") == DAY // 2
+    assert _max_gap_seconds("0 6 * * *") == DAY
 
 
 def test_every_cadence_is_a_positive_duration() -> None:
@@ -307,8 +337,44 @@ def test_main_reports_success_for_a_healthy_repository(
     """A healthy check exits zero so the workflow closes the alert issue."""
     monkeypatch.setattr(schedule_watchdog, "check_scheduled_workflows", lambda **_kwargs: [])
 
-    assert schedule_watchdog.main(["--repo", "owner/name"]) == 0
+    assert schedule_watchdog.main(["--repo", "owner/name"]) == schedule_watchdog.EXIT_HEALTHY
     assert capsys.readouterr().out.strip() == "All scheduled workflows are active and recent"
+
+
+def test_a_check_that_cannot_complete_is_not_reported_as_a_verdict(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A watchdog that could not check exits with its own code, not the stale code.
+
+    The workflow keys `checked` off this: exit 0 or 1 means a real verdict about
+    the schedules, anything else is a setup failure. Collapsing the two would
+    open a stale-schedule alert every time the API call merely failed.
+    """
+
+    def explode(**_kwargs: object) -> list[str]:
+        raise GhError("gh api failed")
+
+    monkeypatch.setattr(schedule_watchdog, "check_scheduled_workflows", explode)
+
+    exit_code = schedule_watchdog.main(["--repo", "owner/name"])
+
+    assert exit_code == schedule_watchdog.EXIT_CHECK_FAILED
+    assert exit_code > schedule_watchdog.EXIT_PROBLEMS_FOUND
+    assert "could not complete its check: gh api failed" in capsys.readouterr().err
+
+
+def test_a_repository_that_cannot_be_resolved_is_a_check_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Failing to resolve the repository is a setup failure, not a stale schedule."""
+
+    def explode() -> str:
+        raise GhError("not a git repository")
+
+    monkeypatch.setattr(schedule_watchdog.gh_runner, "resolve_repo", explode)
+
+    assert schedule_watchdog.main([]) == schedule_watchdog.EXIT_CHECK_FAILED
+    assert "not a git repository" in capsys.readouterr().err
 
 
 def test_main_lists_every_problem_and_exits_non_zero(
@@ -321,7 +387,9 @@ def test_main_lists_every_problem_and_exits_non_zero(
         lambda **_kwargs: ["codeql.yml: stale", "web-smoke.yml: disabled"],
     )
 
-    assert schedule_watchdog.main(["--repo", "owner/name"]) == 1
+    exit_code = schedule_watchdog.main(["--repo", "owner/name"])
+
+    assert exit_code == schedule_watchdog.EXIT_PROBLEMS_FOUND
     out = capsys.readouterr().out
     assert "Scheduled workflow watchdog found problems:" in out
     assert "- codeql.yml: stale" in out

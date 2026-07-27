@@ -42,13 +42,22 @@ jobs:
           node-version: ""
           install-node-deps: "false"
 
+      # Exit 0 healthy and exit 1 stale both mean the watchdog reached a verdict.
+      # Anything else means it could not check at all, so `checked` stays unset
+      # and the setup-failure alert fires instead of a stale-schedule alert.
       - name: Check scheduled workflow recency
         id: watchdog
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "checked=true" >> "$GITHUB_OUTPUT"
+          set +e
           make ci-schedule-watchdog
+          status=$?
+          set -e
+          if [ "$status" -le 1 ]; then
+            echo "checked=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
 
   report-failure:
     needs: watchdog

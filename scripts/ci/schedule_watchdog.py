@@ -34,6 +34,13 @@ if TYPE_CHECKING:
 
 DAY_SECONDS = 86_400
 
+# Exit codes. The calling workflow needs to tell "the watchdog ran and found
+# stale schedules" apart from "the watchdog could not check at all", because the
+# first opens a stale-schedule alert and the second is a setup failure.
+EXIT_HEALTHY = 0
+EXIT_PROBLEMS_FOUND = 1
+EXIT_CHECK_FAILED = 2
+
 # Maximum expected gap between scheduled runs for each workflow, derived from
 # its cron expression. `test_cadences_cover_every_scheduled_workflow` fails when
 # this drifts from the crons actually declared in .github/workflows/, so a new
@@ -42,7 +49,7 @@ SCHEDULED_WORKFLOW_CADENCES: dict[str, int] = {
     "codeql.yml": 7 * DAY_SECONDS,  # "30 6 * * 1" weekly
     "dependency-audit.yml": 7 * DAY_SECONDS,  # "0 6 * * 1" weekly
     "refresh-action-shas.yml": 31 * DAY_SECONDS,  # "0 3 1 * *" monthly
-    "web-smoke.yml": DAY_SECONDS,  # "0 7,19 * * *" twice daily
+    "web-smoke.yml": DAY_SECONDS // 2,  # "0 7,19 * * *" twice daily, so a 12h gap
 }
 
 # Absorb runner backlog, delayed scheduling, and month-length variance so a
@@ -179,23 +186,29 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the watchdog and return a shell exit code (0 healthy, 1 stale)."""
+    """Run the watchdog and return one of the EXIT_* codes.
+
+    A failure to complete the check is reported as its own code rather than
+    reusing the stale-schedule code, so the caller cannot mistake an
+    infrastructure failure for a verdict about the schedules.
+    """
     args = _build_parser().parse_args(argv)
-    repo = args.repo or gh_runner.resolve_repo()
-    problems = check_scheduled_workflows(repo=repo)
+    try:
+        repo = args.repo or gh_runner.resolve_repo()
+        problems = check_scheduled_workflows(repo=repo)
+    except GhError as exc:
+        print(f"Schedule watchdog could not complete its check: {exc}", file=sys.stderr)
+        return EXIT_CHECK_FAILED
+
     if not problems:
         print("All scheduled workflows are active and recent")
-        return 0
+        return EXIT_HEALTHY
 
     print("Scheduled workflow watchdog found problems:")
     for problem in problems:
         print(f"- {problem}")
-    return 1
+    return EXIT_PROBLEMS_FOUND
 
 
 if __name__ == "__main__":  # pragma: no cover
-    try:
-        sys.exit(main())
-    except GhError as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(1)
+    sys.exit(main())

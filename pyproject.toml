@@ -142,10 +142,6 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["src/linkedin_analyzer", "scripts"]
 branch = true
-# Temporary: the Playwright runtime helper needs its own coverage PR (179
-# uncovered statements), too large to bundle with the scripts gate. Every other
-# module under scripts/ is held to the same 100% threshold as the package.
-omit = ["scripts/setup/playwright_local_runtime.py"]
 
 [tool.coverage.report]
 fail_under = 100

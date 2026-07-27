@@ -232,16 +232,22 @@ def cache_lock(paths: RuntimePaths) -> Iterator[None]:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | no_follow, 0o600)
     except OSError as error:
         raise fail(f"cannot open the repository-local Playwright cache lock: {error}") from error
+    # Validate and tighten the descriptor before wrapping it in a stream. Opening
+    # a stream over a non-regular file (a planted FIFO, say) can fail after it
+    # takes ownership of the descriptor, which would replace this guard's message
+    # with an unhandled double-close error.
     try:
-        lock_file = os.fdopen(descriptor, "a+b")
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise fail("Playwright cache lock must be a regular file")
+        os.fchmod(descriptor, 0o600)
     except OSError as error:
         os.close(descriptor)
         raise fail(f"cannot use the repository-local Playwright cache lock: {error}") from error
-    with lock_file:
+    except RuntimeSetupError:
+        os.close(descriptor)
+        raise
+    with os.fdopen(descriptor, "a+b") as lock_file:
         try:
-            if not stat.S_ISREG(os.fstat(lock_file.fileno()).st_mode):
-                raise fail("Playwright cache lock must be a regular file")
-            os.fchmod(lock_file.fileno(), 0o600)
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         except OSError as error:
             raise fail(f"cannot lock the repository-local Playwright cache: {error}") from error
@@ -750,8 +756,10 @@ def prepare_locked(paths: RuntimePaths) -> None:
         patch_webkit_launchers(paths)
         print("Prepared repository-local Playwright runtime.")
     finally:
-        if stage.exists():
-            shutil.rmtree(stage)
+        # ignore_errors keeps a cleanup problem from masking the real setup error
+        # this finally may be unwinding. Anything left behind is swept by
+        # remove_stale_staging on the next preparation.
+        shutil.rmtree(stage, ignore_errors=True)
 
 
 def discovered_directories(root: Path) -> dict[str, list[Path]]:
@@ -905,10 +913,13 @@ def require_ready(paths: RuntimePaths) -> None:
     require_regular_directory(paths.cache_root, "Playwright cache root")
     require_regular_directory(paths.local_libraries, "local library cache")
     require_regular_directory(paths.extracted_root, "extracted Playwright runtime root")
-    validate_extracted_root(paths.extracted_root)
+    # Establish that a cache exists at all before validating its contents, so an
+    # untouched repository is told to run setup instead of being handed a
+    # confusing extraction diagnostic.
     manifest = load_manifest(paths.manifest)
-    if manifest is None:
+    if manifest is None or not paths.extracted_root.is_dir():
         raise fail("local Playwright runtime is not prepared; run make setup-playwright-local")
+    validate_extracted_root(paths.extracted_root)
     if (
         manifest.host != current_host()
         or manifest.playwright_version != playwright_version(paths)

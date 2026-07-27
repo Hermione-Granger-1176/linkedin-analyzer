@@ -583,7 +583,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete issues
+.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue issues
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -608,6 +608,18 @@ ci-caches: ## List Actions caches, largest first (make ci-caches [limit=N] [key=
 ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_key [ref=refs/heads/BRANCH])
 	@test -n "$(cache)" || (printf 'Usage: make ci-cache-delete cache=1234 [ref=refs/heads/main]\n' >&2; exit 1)
 	gh cache delete "$(cache)" $(if $(ref),--ref "$(ref)")
+
+ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
+	@test -n "$(title)" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
+		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)
+	@PYTHONPATH=. $(VENV_PYTHON) -m scripts.ci.issue_alerts \
+		--title "$(title)" \
+		--label "$(label)" \
+		--run-url "$(run_url)" \
+		--state "$(state)" \
+		$(if $(repo),--repo "$(repo)") \
+		$(if $(detail),--detail "$(detail)") \
+		$(if $(detail_file),--detail-file "$(detail_file)")
 
 issues: ## List open issues
 	gh issue list

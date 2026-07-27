@@ -58,26 +58,24 @@ jobs:
   report-failure:
     needs: web-smoke
     if: failure()
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
+      contents: read
       issues: write
-    steps:
-      - name: Open or update the web-smoke issue
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          label="web-smoke"
-          gh label create "$label" -R "$REPO" --color B60205 \
-            --description "Scheduled post-deploy web smoke-check failures" 2>/dev/null || true
-          body="The scheduled post-deploy web smoke check failed. Review the app shell, security headers, and CSP report endpoint: $RUN_URL"
-          number="$(gh issue list -R "$REPO" --state open --label "$label" \
-            --json number --jq '.[0].number // empty')"
-          if [ -n "$number" ]; then
-            gh issue comment "$number" -R "$REPO" --body "$body"
-          else
-            gh issue create -R "$REPO" --title "Web smoke check failed" \
-              --label "$label" --body "$body"
-          fi
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Web smoke check failed
+      label: web-smoke
+      state: open
+      detail: Review the app shell, security headers, and CSP report endpoint from this run.
+
+  report-recovery:
+    needs: web-smoke
+    if: success()
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Web smoke check failed
+      label: web-smoke
+      state: close

@@ -17,8 +17,11 @@ if TYPE_CHECKING:
 _COPILOT_LOGIN = "copilot-pull-request-reviewer"
 _PENDING_STATES = {"EXPECTED", "PENDING"}
 _SUCCESSFUL_CHECK_OUTCOMES = {"NEUTRAL", "SKIPPED", "SUCCESS"}
+# Copilot writes "generated no comments" on a first review and "generated no new
+# comments" on a re-review, so "new" has to be optional or a clean first pass is
+# reported as unclassifiable.
 _COMMENT_COUNT_PATTERN = re.compile(
-    r"\bgenerated (?:(no new)|(\d+)) comments?\b",
+    r"\bgenerated (?:(no(?: new)?)|(\d+)) comments?\b",
     re.IGNORECASE,
 )
 
@@ -234,7 +237,7 @@ def _review_summary(review: CopilotReview | None, *, requested: bool) -> str:
     if review.generated_comment_count is None:
         return "unrecognized Copilot overview"
     if review.is_explicitly_clean:
-        return "generated no new comments"
+        return "generated no comments"
     return f"generated {review.generated_comment_count} comment(s)"
 
 

@@ -64,6 +64,7 @@ def _poll_runner(*, reviews: object, rollup: object) -> FakeGh:
     ("body", "expected"),
     [
         (_CLEAN_BODY, 0),
+        ("Copilot reviewed 15 out of 15 changed files and generated no comments.", 0),
         (_COMMENT_BODY, 2),
         ("generated 1 comment", 1),
         ("unrecognized overview", None),
@@ -121,9 +122,20 @@ def test_copilot_reviews_ignores_other_authors_and_parses_copilot() -> None:
 
 
 def test_copilot_review_requires_exact_clean_wording() -> None:
-    """A numeric zero does not replace the required no-new-comments wording."""
-    exact = pr_watch.CopilotReview(
-        "exact",
+    """A numeric zero does not replace the required no-comments wording.
+
+    Both the first-review and re-review phrasings count as clean. Copilot drops
+    "new" on a first pass, and treating that as unclassifiable stalls the watch
+    on exactly the PRs that had nothing wrong with them.
+    """
+    first_pass = pr_watch.CopilotReview(
+        "first-pass",
+        datetime(2026, 7, 26, 12, tzinfo=UTC),
+        "generated no comments",
+        0,
+    )
+    re_review = pr_watch.CopilotReview(
+        "re-review",
         datetime(2026, 7, 26, 12, tzinfo=UTC),
         "generated no new comments",
         0,
@@ -135,7 +147,8 @@ def test_copilot_review_requires_exact_clean_wording() -> None:
         0,
     )
 
-    assert exact.is_explicitly_clean
+    assert first_pass.is_explicitly_clean
+    assert re_review.is_explicitly_clean
     assert not numeric.is_explicitly_clean
 
 
@@ -472,7 +485,7 @@ def test_watch_pr_captures_baseline_before_request_and_reports_clean_state(
     report = pr_watch.watch_pr(12, interval=0, max_polls=1)
 
     assert order == ["baseline", "request"]
-    assert "latest Copilot review: generated no new comments" in report
+    assert "latest Copilot review: generated no comments" in report
     assert "open review threads: 0" in report
     assert "merge ready: yes" in report
 
@@ -639,7 +652,7 @@ def test_watch_pr_clean_review_with_older_open_thread_is_not_merge_ready(
 
     report = pr_watch.watch_pr(12, interval=0, max_polls=1)
 
-    assert "latest Copilot review: generated no new comments" in report
+    assert "latest Copilot review: generated no comments" in report
     assert "open review threads: 1" in report
     assert "merge ready: no" in report
 

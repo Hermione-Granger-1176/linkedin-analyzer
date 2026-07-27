@@ -231,11 +231,14 @@ def sync_alert_issue(
         )
         return ""
 
+    # Validated before commenting so a malformed payload cannot leave a comment
+    # behind on an issue this call then fails to report.
+    url = _issue_url(existing)
     gh_runner.run_gh(
         ["issue", "comment", str(number), "--repo", repo, "--body", body],
         run_fn=run_fn,
     )
-    return _issue_url(existing)
+    return url
 
 
 def _read_detail(detail: str, detail_file: str | None) -> str:

@@ -308,7 +308,7 @@ def test_sync_alert_issue_rejects_flag_like_identifiers(field: str, value: str) 
 def test_sync_alert_issue_validates_matched_issue_fields(
     issue: dict[str, object], message: str
 ) -> None:
-    """A malformed match cannot be commented on or reported blindly."""
+    """A malformed match is rejected before any comment is posted."""
     runner = FakeGh(
         [
             (has("label", "create"), completed_process(0, "")),
@@ -326,6 +326,8 @@ def test_sync_alert_issue_validates_matched_issue_fields(
             should_exist=True,
             run_fn=runner,
         )
+
+    assert not any("comment" in call for call in runner.calls)
 
 
 def test_ensure_label_reports_a_failure_with_context() -> None:

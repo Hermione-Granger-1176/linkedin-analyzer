@@ -177,7 +177,9 @@ Design notes worth knowing when adding a new alert:
 - Callers pass the issue identity as workflow inputs, which reach `make` through the environment and never through template interpolation inside a script body.
 - Because an open alert is closed automatically on recovery, an open alert always means a currently failing check. Do not close one by hand to silence it.
 
-Current callers are `dependency-audit.yml` and `web-smoke.yml`, each with a `report-failure` and a `report-recovery` job. To sync an alert by hand:
+Current callers are `dependency-audit.yml` and `web-smoke.yml`, each with a `report-failure` and a `report-recovery` job.
+
+`web-smoke.yml` additionally exposes a `checked` job output, because its check is skipped when `PRODUCTION_URL` is unset. A skipped run is neither a failure nor a recovery, so both alert jobs require `checked == 'true'`; a failure that never reached the check syncs `setup-failure` instead. To sync an alert by hand:
 
 ```bash
 make ci-alert-issue title="Dependency audit failed" label=dependency-audit \

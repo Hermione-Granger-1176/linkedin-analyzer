@@ -37,7 +37,12 @@ class CopilotReview:
 
     @property
     def is_explicitly_clean(self) -> bool:
-        """Return whether the overview explicitly reports no new comments."""
+        """Return whether the overview explicitly reports zero comments in words.
+
+        Both Copilot phrasings count: "generated no comments" on a first review
+        and "generated no new comments" on a re-review. A numeric "generated 0
+        comments" deliberately does not, so an unexpected wording fails closed.
+        """
         match = _COMMENT_COUNT_PATTERN.search(self.body)
         return match is not None and match.group(1) is not None
 

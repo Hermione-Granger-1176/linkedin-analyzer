@@ -22,6 +22,7 @@ REPO_PATH = f"repos/{REPO}"
 PROTECTION_PATH = f"{REPO_PATH}/branches/main/protection"
 VARIABLES_PATH = f"{REPO_PATH}/actions/variables"
 SECRETS_PATH = f"{REPO_PATH}/actions/secrets"
+EXPECTED_CHECKS = sorted(repo_audit.EXPECTED_REQUIRED_CHECKS)
 
 HEALTHY_REPOSITORY: dict[str, object] = {
     "default_branch": "main",
@@ -158,8 +159,22 @@ def test_checks_pinned_to_an_app_id_count_the_same_as_plain_contexts() -> None:
         {"contexts": None, "checks": None},
         {"contexts": ["", 7], "checks": [{"context": ""}, {"context": 7}, "not-a-dict"]},
         "not-an-object",
+        # A mapping keyed by the expected names. Iterating it yields those names
+        # as strings, so reading it without a list check would certify every
+        # required check from a payload that never required any of them.
+        {"contexts": dict.fromkeys(EXPECTED_CHECKS, 1)},
+        {"checks": dict.fromkeys(EXPECTED_CHECKS, 1)},
+        {"contexts": "CodeQL", "checks": "CodeQL"},
     ],
-    ids=["absent", "null-lists", "unusable-entries", "wrong-shape"],
+    ids=[
+        "absent",
+        "null-lists",
+        "unusable-entries",
+        "wrong-shape",
+        "contexts-as-a-mapping",
+        "checks-as-a-mapping",
+        "lists-as-strings",
+    ],
 )
 def test_an_unusable_required_checks_payload_reports_every_check_missing(
     required_status_checks: object,

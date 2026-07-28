@@ -173,6 +173,12 @@ def extract_required_checks(protection: dict[str, object]) -> set[str]:
     GitHub reports the same list twice, as plain ``contexts`` and as ``checks``
     entries pinned to an app id. Both are read so a repository configured
     through either the old or the new API surface audits the same.
+
+    Each must be a list before it is read. Iterating a dict yields its keys, so
+    a payload of the wrong shape would otherwise hand back check names that were
+    never actually required, which is the one direction this audit must never
+    fail in. Anything that is not a list contributes nothing, leaving every
+    expected check reported as missing.
     """
     required = protection.get("required_status_checks")
     if not isinstance(required, dict):
@@ -180,12 +186,17 @@ def extract_required_checks(protection: dict[str, object]) -> set[str]:
 
     contexts = required.get("contexts")
     checks = required.get("checks")
-    names = {value for value in contexts or [] if isinstance(value, str) and value}
-    names.update(
-        entry["context"]
-        for entry in checks or []
-        if isinstance(entry, dict) and isinstance(entry.get("context"), str) and entry["context"]
-    )
+    names: set[str] = set()
+    if isinstance(contexts, list):
+        names.update(value for value in contexts if isinstance(value, str) and value)
+    if isinstance(checks, list):
+        names.update(
+            entry["context"]
+            for entry in checks
+            if isinstance(entry, dict)
+            and isinstance(entry.get("context"), str)
+            and entry["context"]
+        )
     return names
 
 

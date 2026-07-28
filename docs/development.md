@@ -228,6 +228,27 @@ make commit message_file=NOTES.md
 make issue-summary issue=123
 ```
 
+Issues have their own group (`make help-issue`), covering both reading and writing:
+
+```bash
+# Read
+make issue-list state=open label=bug mine=1
+make issue-view issue=123
+make issue-summary issue=123
+
+# Write
+make issue-create title="Fix X" body="Steps to reproduce" labels="bug,ci"
+make issue-comment issue=123 body_file=notes.md
+make issue-edit issue=123 title="New title"
+make issue-close issue=123 reason="not planned" comment="Superseded by #99"
+make issue-reopen issue=123
+
+# Labels, assignees, and a linked branch
+make issue-label issue=123 labels="bug,ci"
+make issue-assign issue=123 mine=1
+make issue-develop issue=123 base=main
+```
+
 Three details are worth knowing:
 
 - **`make status` runs on the system interpreter**, not the venv one (`scripts/lib/workspace_status.py`). The first thing it has to be able to report is that the venv is missing, which it could not do from inside that venv. Every subprocess it runs is guarded, so a missing `uv`, `npm`, or `git` degrades to the failure branch instead of crashing the target, and a tool that cannot launch at all is named as `UNAVAILABLE` rather than leaving its section blank.
@@ -237,6 +258,8 @@ Three details are worth knowing:
 ### Free-text arguments
 
 No target interpolates free text into its recipe. A value like `body="..."` or `title="..."` is exported to the environment with `$(value ...)` and read back as `"$$VAR"`, so it never becomes shell source text: a newline no longer ends the line inside an open quote, a `"` no longer closes it, and backticks stay literal. `$(value ...)` also stops make from expanding its own syntax inside the text, so a body mentioning `$(x)` keeps those characters instead of silently losing them.
+
+An optional free-text value is also tested by the recipe's shell (`[ -n "$$VAR" ]`) rather than by a make conditional. `$(if $(search),--search "$$ISSUE_SEARCH")` reads as a presence test, but make has to expand `$(search)` to evaluate it, and that is a second expansion on top of the one below. A value containing `$(shell ...)` runs the command twice under a make conditional and once when the shell does the test.
 
 One limit is worth knowing, because no amount of quoting inside the Makefile removes it. **Make expands a command-line assignment while parsing it**, before any target sees the value. A body containing `$(shell ...)` therefore runs during that parse, and a body containing `$(ANYTHING)` is evaluated as a make reference. Use `body_file=` for text you did not write by hand, such as a quoted code snippet pasted from a review comment. The path is all that reaches make, so the content is never parsed.
 
@@ -254,7 +277,11 @@ make pr-reply thread=PRRT_... body_file=notes.md
 git log -1 --format=%B | make pr-address thread=PRRT_... body_file=-
 ```
 
-`make commit message_file=` and `make ci-alert-issue detail_file=` follow the same convention. `make pr-comment`, `make pr-reply`, `make pr-address`, and `make pr-edit` all run through `scripts/gh/cli.py` rather than raw `gh`, so the body arrives as one argument no matter what is in it. A guard test in `tests/test_makefile.py` fails if a recipe ever interpolates a free-text value again.
+Every target that takes free text follows this convention: `pr-comment`, `pr-reply`, `pr-address`, `pr-edit`, `pr-create`, `issue-create`, `issue-comment`, `issue-edit`, `commit` (as `message_file=`), `release-create` (as `notes_file=`), and `ci-alert-issue` (as `detail_file=`). The PR targets run through `scripts/gh/cli.py` rather than raw `gh`, so the body arrives as one argument no matter what is in it.
+
+Two targets are exceptions in one narrow respect. `make issue-close` and `make issue-reopen` take a `comment=` but have no file form, because `gh issue close` accepts `--comment` and offers no `--comment-file`. The text still travels through the environment, so a newline or a quote cannot end the command early; there is simply no way to bypass make's parse for it. Post a long comment with `make issue-comment issue=N body_file=path` and then close the issue.
+
+Guard tests in `tests/test_makefile.py` fail if a recipe interpolates a free-text value again, if a posting target stops piping its body, or if a count or comma-separated list is left unquoted. That last one is why the delete target names its argument `comment_id=` rather than `comment=`: one spelling meaning an opaque node id on a PR target and prose on an issue target is what makes an unsafe interpolation look fine to a reader.
 
 ## CI
 

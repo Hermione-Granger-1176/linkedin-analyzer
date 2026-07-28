@@ -265,10 +265,10 @@ xrt-diff: ## Stage one web ref and compare its rows with CLI xlsx output (make x
 	$(VENV_PYTHON) scripts/checks/xrt-diff.py --json-dir "$$temp_dir" $(if $(strict),--strict) $(if $(xlsx_dir),--xlsx-dir "$(xlsx_dir)")
 
 bench: ## Benchmark read, clean, and analytics on your export (make bench [runs=N])
-	$(NODE) scripts/checks/pipeline-bench.mjs $(runs)
+	$(NODE) scripts/checks/pipeline-bench.mjs $(if $(runs),"$(runs)")
 
 bench-decode: ## Benchmark and verify the upload decode layer (make bench-decode [runs=N])
-	$(NODE) scripts/checks/perf-bench.mjs $(runs)
+	$(NODE) scripts/checks/perf-bench.mjs $(if $(runs),"$(runs)")
 
 audit-memory-python: ## Measure per-cleaner peak RSS on your export (make audit-memory-python [strict=1] [input_dir=path])
 	$(VENV_PYTHON) scripts/checks/audit_memory_python.py $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
@@ -499,13 +499,16 @@ push: ## Push the current branch and set its upstream
 	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin -- "$$branch"
 
 release-create: export RELEASE_NOTES := $(value notes)
-release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..."] [prerelease=1])
-	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [notes="..."] [prerelease=1]\n' >&2; exit 1)
+release-create: export RELEASE_NOTES_FILE := $(value notes_file)
+release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..." | notes_file=path] [prerelease=1])
+	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [notes="..." OR notes_file=path] [prerelease=1]\n' >&2; exit 1)
 	@set -e; \
 	tmp=""; \
 	trap 'test -n "$$tmp" && rm -f -- "$$tmp"' EXIT; \
 	set -- "$(tag)" --title "$(tag)"; \
-	if [ -n "$$RELEASE_NOTES" ]; then tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-release-notes.XXXXXX"); chmod 600 "$$tmp"; printf '%s' "$$RELEASE_NOTES" > "$$tmp"; set -- "$$@" --notes-file "$$tmp"; else set -- "$$@" --generate-notes; fi; \
+	if [ -n "$$RELEASE_NOTES_FILE" ]; then set -- "$$@" --notes-file "$$RELEASE_NOTES_FILE"; \
+	elif [ -n "$$RELEASE_NOTES" ]; then tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-release-notes.XXXXXX"); chmod 600 "$$tmp"; printf '%s' "$$RELEASE_NOTES" > "$$tmp"; set -- "$$@" --notes-file "$$tmp"; \
+	else set -- "$$@" --generate-notes; fi; \
 	if [ -n "$(prerelease)" ]; then set -- "$$@" --prerelease; fi; \
 	gh release create "$$@"
 
@@ -516,8 +519,23 @@ release-create: ## Tag and publish a GitHub release (make release-create tag=vX.
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
 
-pr-create: ## Open a pull request for the current branch (make pr-create [base=branch] for a stacked PR)
-	gh pr create --fill $(if $(base),--base "$(base)")
+pr-create: export PR_CREATE_TITLE := $(value title)
+pr-create: export PR_CREATE_BODY := $(value body)
+pr-create: export PR_CREATE_BODY_FILE := $(value body_file)
+pr-create: ## Open a pull request for the current branch (make pr-create [base=branch] [title="..." body="..." | body_file=path, - reads stdin])
+	@# With no title or body, --fill takes both from the commits. Supplying one
+	@# without the other would leave gh prompting for the rest, which hangs a
+	@# non-interactive shell, so an explicit PR must supply both.
+	@set -e; \
+	if [ -z "$$PR_CREATE_TITLE$$PR_CREATE_BODY$$PR_CREATE_BODY_FILE" ]; then \
+		gh pr create --fill $(if $(base),--base "$(base)"); \
+	elif [ -z "$$PR_CREATE_TITLE" ] || [ -z "$$PR_CREATE_BODY$$PR_CREATE_BODY_FILE" ]; then \
+		printf 'Usage: make pr-create title="..." body="..." OR body_file=path (- reads stdin)\n' >&2; exit 1; \
+	elif [ -n "$$PR_CREATE_BODY_FILE" ]; then \
+		gh pr create $(if $(base),--base "$(base)") --title "$$PR_CREATE_TITLE" --body-file "$$PR_CREATE_BODY_FILE"; \
+	else \
+		printf '%s' "$$PR_CREATE_BODY" | gh pr create $(if $(base),--base "$(base)") --title "$$PR_CREATE_TITLE" --body-file -; \
+	fi
 
 pr-edit: export PR_EDIT_TITLE := $(value title)
 pr-edit: export PR_EDIT_BODY := $(value body)
@@ -599,9 +617,12 @@ pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT
 pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
 	@$(GH) list-comments $(if $(pr_num),--pr "$(pr_num)")
 
-pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete comment=PRRC_...)
-	@test -n "$(comment)" || (printf 'Usage: make pr-comment-delete comment=PRRC_...\n' >&2; exit 1)
-	@$(GH) delete-comment --comment "$(comment)"
+# Named comment_id rather than comment because comment= is free text on the
+# issue targets. One spelling meaning an opaque id here and prose there is what
+# makes an unsafe interpolation look fine to a reader.
+pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete comment_id=PRRC_...)
+	@test -n "$(comment_id)" || (printf 'Usage: make pr-comment-delete comment_id=PRRC_...\n' >&2; exit 1)
+	@$(GH) delete-comment --comment "$(comment_id)"
 
 pr-summary: ## One-screen PR overview: state, CI rollup, open threads (make pr-summary [pr_num=N])
 	@$(GH) summary $(if $(pr_num),--pr "$(pr_num)")
@@ -617,7 +638,7 @@ pr-merge-admin: ## Force merge bypassing branch protection (admin) (make pr-merg
 
 pr-reviewers: ## Add reviewers (make pr-reviewers users="user1,user2")
 	@test -n "$(users)" || (printf 'Usage: make pr-reviewers users="octocat"\n' >&2; exit 1)
-	gh pr edit --add-reviewer $(users)
+	gh pr edit --add-reviewer "$(users)"
 
 pr-copilot: ## Request (or re-request) a Copilot review on the PR (make pr-copilot [pr_num=N])
 	@$(GH) copilot-review $(if $(pr_num),--pr "$(pr_num)")
@@ -631,7 +652,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog issues issue-summary
+.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -667,21 +688,123 @@ ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)
 ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
 	@test -n "$$ALERT_ISSUE_TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)
-	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts \
-		--title "$$ALERT_ISSUE_TITLE" \
-		--label "$(label)" \
-		--run-url "$(run_url)" \
-		--state "$(state)" \
-		$(if $(repo),--repo "$(repo)") \
-		$(if $(detail),--detail "$$ALERT_ISSUE_DETAIL") \
-		$(if $(detail_file),--detail-file "$(detail_file)")
+	@set -e; \
+	set -- --title "$$ALERT_ISSUE_TITLE" --label "$(label)" --run-url "$(run_url)" --state "$(state)" \
+		$(if $(repo),--repo "$(repo)") $(if $(detail_file),--detail-file "$(detail_file)"); \
+	if [ -n "$$ALERT_ISSUE_DETAIL" ]; then set -- "$$@" --detail "$$ALERT_ISSUE_DETAIL"; fi; \
+	$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts "$$@"
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
 
-issues: ## List open issues
-	gh issue list
+# ─── Issues @issue ────────────────────────────────────────────────────────────────
+
+.PHONY: issue issue-list issue-view issue-summary issue-create issue-comment issue-edit issue-close issue-reopen issue-label issue-unlabel issue-assign issue-unassign issue-develop
+
+issue: ## Issue commands (make issue)
+	@$(MAKE) --no-print-directory help-issue
+
+issue-list: export ISSUE_SEARCH := $(value search)
+issue-list: ## List issues (make issue-list [state=open|closed|all] [label=bug] [assignee=user | mine=1] [author=user] [search="..."] [limit=N])
+	@test -z "$(and $(assignee),$(filter 1,$(mine)))" || \
+		(printf 'Use assignee=user or mine=1, not both.\n' >&2; exit 1)
+	@set -e; \
+	set -- $(if $(state),--state "$(state)") $(if $(label),--label "$(label)") \
+		$(if $(assignee),--assignee "$(assignee)") $(if $(filter 1,$(mine)),--assignee @me) \
+		$(if $(author),--author "$(author)") $(if $(limit),--limit "$(limit)"); \
+	if [ -n "$$ISSUE_SEARCH" ]; then set -- "$$@" --search "$$ISSUE_SEARCH"; fi; \
+	gh issue list "$$@"
+
+issue-view: ## Show an issue with its comments (make issue-view issue=N)
+	@test -n "$(issue)" || (printf 'Usage: make issue-view issue=123\n' >&2; exit 1)
+	@gh issue view "$(issue)" --comments
 
 issue-summary: ## One-screen issue overview: state, labels, assignees, recent comments (make issue-summary issue=N)
 	@test -n "$(issue)" || (printf 'Usage: make issue-summary issue=123\n' >&2; exit 1)
 	@$(GH) issue-summary --issue "$(issue)"
+
+issue-create: export ISSUE_TITLE := $(value title)
+issue-create: export ISSUE_BODY := $(value body)
+issue-create: export ISSUE_BODY_FILE := $(value body_file)
+issue-create: ## Open an issue (make issue-create title="..." body="..." | body_file=path, - reads stdin [labels="a,b"] [assignee=@me])
+	@test -n "$$ISSUE_TITLE" -a -n "$$ISSUE_BODY$$ISSUE_BODY_FILE" || \
+		(printf 'Usage: make issue-create title="Fix X" body="..." OR body_file=path (- reads stdin) [labels="bug,ci"] [assignee=@me]\n' >&2; exit 1)
+	@set -e; \
+	set -- --title "$$ISSUE_TITLE" $(if $(labels),--label "$(labels)") $(if $(assignee),--assignee "$(assignee)"); \
+	if [ -n "$$ISSUE_BODY_FILE" ]; then \
+		gh issue create "$$@" --body-file "$$ISSUE_BODY_FILE"; \
+	else \
+		printf '%s' "$$ISSUE_BODY" | gh issue create "$$@" --body-file -; \
+	fi
+
+issue-comment: export ISSUE_COMMENT_BODY := $(value body)
+issue-comment: export ISSUE_COMMENT_BODY_FILE := $(value body_file)
+issue-comment: ## Comment on an issue (make issue-comment issue=N body="..." | body_file=path, - reads stdin)
+	@test -n "$(issue)" -a -n "$$ISSUE_COMMENT_BODY$$ISSUE_COMMENT_BODY_FILE" || \
+		(printf 'Usage: make issue-comment issue=123 body="On it" OR body_file=path (- reads stdin)\n' >&2; exit 1)
+	@if [ -n "$$ISSUE_COMMENT_BODY_FILE" ]; then \
+		gh issue comment "$(issue)" --body-file "$$ISSUE_COMMENT_BODY_FILE"; \
+	else \
+		printf '%s' "$$ISSUE_COMMENT_BODY" | gh issue comment "$(issue)" --body-file -; \
+	fi
+
+issue-edit: export ISSUE_EDIT_TITLE := $(value title)
+issue-edit: export ISSUE_EDIT_BODY := $(value body)
+issue-edit: export ISSUE_EDIT_BODY_FILE := $(value body_file)
+issue-edit: ## Edit an issue title or body (make issue-edit issue=N [title="..."] [body="..." | body_file=path, - reads stdin])
+	@test -n "$(issue)" -a -n "$$ISSUE_EDIT_TITLE$$ISSUE_EDIT_BODY$$ISSUE_EDIT_BODY_FILE" || \
+		(printf 'Usage: make issue-edit issue=123 [title="New title"] [body="..." OR body_file=path (- reads stdin)]\n' >&2; exit 1)
+	@set -e; \
+	set -- "$(issue)"; \
+	if [ -n "$$ISSUE_EDIT_TITLE" ]; then set -- "$$@" --title "$$ISSUE_EDIT_TITLE"; fi; \
+	if [ -n "$$ISSUE_EDIT_BODY_FILE" ]; then \
+		gh issue edit "$$@" --body-file "$$ISSUE_EDIT_BODY_FILE"; \
+	elif [ -n "$$ISSUE_EDIT_BODY" ]; then \
+		printf '%s' "$$ISSUE_EDIT_BODY" | gh issue edit "$$@" --body-file -; \
+	else \
+		gh issue edit "$$@"; \
+	fi
+
+# gh issue close and reopen take a comment but offer no --comment-file, so the
+# text goes through the environment and stays out of the recipe.
+issue-close: export ISSUE_CLOSE_COMMENT := $(value comment)
+issue-close: ## Close an issue (make issue-close issue=N [reason=completed|"not planned"] [comment="..."])
+	@test -n "$(issue)" || (printf 'Usage: make issue-close issue=123 [reason=completed] [comment="..."]\n' >&2; exit 1)
+	@set -e; \
+	set -- "$(issue)" $(if $(reason),--reason "$(reason)"); \
+	if [ -n "$$ISSUE_CLOSE_COMMENT" ]; then set -- "$$@" --comment "$$ISSUE_CLOSE_COMMENT"; fi; \
+	gh issue close "$$@"
+
+issue-reopen: export ISSUE_REOPEN_COMMENT := $(value comment)
+issue-reopen: ## Reopen a closed issue (make issue-reopen issue=N [comment="..."])
+	@test -n "$(issue)" || (printf 'Usage: make issue-reopen issue=123 [comment="..."]\n' >&2; exit 1)
+	@set -e; \
+	set -- "$(issue)"; \
+	if [ -n "$$ISSUE_REOPEN_COMMENT" ]; then set -- "$$@" --comment "$$ISSUE_REOPEN_COMMENT"; fi; \
+	gh issue reopen "$$@"
+
+issue-label: ## Add labels to an issue (make issue-label issue=N labels="bug,ci")
+	@test -n "$(issue)" -a -n "$(labels)" || \
+		(printf 'Usage: make issue-label issue=123 labels="bug,ci"\n' >&2; exit 1)
+	@gh issue edit "$(issue)" --add-label "$(labels)"
+
+issue-unlabel: ## Remove labels from an issue (make issue-unlabel issue=N labels="bug,ci")
+	@test -n "$(issue)" -a -n "$(labels)" || \
+		(printf 'Usage: make issue-unlabel issue=123 labels="bug,ci"\n' >&2; exit 1)
+	@gh issue edit "$(issue)" --remove-label "$(labels)"
+
+issue-assign: ## Assign users to an issue (make issue-assign issue=N users="a,b" | mine=1)
+	@test -n "$(issue)" -a -n "$(users)$(if $(filter 1,$(mine)),me)" || \
+		(printf 'Usage: make issue-assign issue=123 users="octocat" OR mine=1\n' >&2; exit 1)
+	@gh issue edit "$(issue)" $(if $(filter 1,$(mine)),--add-assignee @me) \
+		$(if $(users),--add-assignee "$(users)")
+
+issue-unassign: ## Remove assignees from an issue (make issue-unassign issue=N users="a,b" | mine=1)
+	@test -n "$(issue)" -a -n "$(users)$(if $(filter 1,$(mine)),me)" || \
+		(printf 'Usage: make issue-unassign issue=123 users="octocat" OR mine=1\n' >&2; exit 1)
+	@gh issue edit "$(issue)" $(if $(filter 1,$(mine)),--remove-assignee @me) \
+		$(if $(users),--remove-assignee "$(users)")
+
+issue-develop: ## Create and check out a branch linked to an issue (make issue-develop issue=N [base=branch] [name=branch])
+	@test -n "$(issue)" || (printf 'Usage: make issue-develop issue=123 [base=main] [name=branch]\n' >&2; exit 1)
+	gh issue develop "$(issue)" --checkout $(if $(base),--base "$(base)") $(if $(name),--name "$(name)")

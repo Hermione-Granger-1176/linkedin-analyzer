@@ -192,7 +192,11 @@ make ci-schedule-watchdog repo=OWNER/NAME
 
 Cadences live in `SCHEDULED_WORKFLOW_CADENCES` in `scripts/ci/schedule_watchdog.py`. They are not derived from the cron expressions at runtime, so `test_cadences_match_the_crons_declared_in_the_workflows` re-derives them from the crons actually declared in `.github/workflows/` and compares both names and values. Adding a scheduled workflow without its cadence is a test failure rather than a silently unwatched schedule, and so is giving one a cadence too loose to notice it stopping.
 
-Exit codes are a contract with the workflow: `0` healthy, `1` stale or disabled schedules found, and `2` the check could not complete. The workflow sets its `checked` output only for `0` and `1`, the two codes that mean a real verdict about the schedules, so an API or setup failure syncs `setup-failure` instead of opening a stale-schedule alert.
+Exit codes distinguish the three outcomes for anyone running the module directly: `0` healthy, `1` stale or disabled schedules found, and `2` the check could not complete.
+
+The workflow cannot read the verdict off them. Every target is invoked through the Makefile, and **`make` reports its own status `2` for any failed recipe**, so `1` and `2` arrive identical. The watchdog therefore writes its own `checked` output to `$GITHUB_OUTPUT`: `true` once it has a verdict about the schedules either way, `false` when it could not check at all. An API or setup failure syncs `setup-failure` instead of opening a stale-schedule alert, and a run that dies before the watchdog writes anything leaves `checked` unset, which the setup-failure job already treats the same as `false`.
+
+This replaced a step that inferred `checked` from `$?` and compared it against `1`. Because make had already rewritten the status, the comparison never held: the stale-schedule alert could not fire, and a genuinely stale schedule opened the issue with `setup-failure` wording that pointed at the run logs for a setup step that was fine. `test_make_rewrites_every_failing_exit_code_to_its_own` pins the make behaviour that makes the indirection necessary, so the shortcut cannot come back.
 
 Two deliberate asymmetries:
 

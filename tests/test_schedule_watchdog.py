@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -351,9 +352,10 @@ def test_a_check_that_cannot_complete_is_not_reported_as_a_verdict(
 ) -> None:
     """A watchdog that could not check exits with its own code, not the stale code.
 
-    The workflow keys `checked` off this: exit 0 or 1 means a real verdict about
-    the schedules, anything else is a setup failure. Collapsing the two would
-    open a stale-schedule alert every time the API call merely failed.
+    The code is for a caller running this module directly; the workflow keys
+    `checked` off ``report_checked`` instead, because make rewrites both to 2.
+    Either way the two outcomes must stay distinct: collapsing them would open a
+    stale-schedule alert every time the API call merely failed.
     """
 
     def explode(**_kwargs: object) -> list[str]:
@@ -413,3 +415,123 @@ def test_main_defaults_to_the_current_repository(monkeypatch: pytest.MonkeyPatch
 
     assert schedule_watchdog.main([]) == 0
     assert seen == ["owner/name"]
+
+
+# ─── The verdict the workflow acts on ────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("reached_verdict", "expected"), [(True, "checked=true"), (False, "checked=false")]
+)
+def test_the_verdict_is_written_where_github_actions_reads_step_outputs(
+    tmp_path: Path, reached_verdict: bool, expected: str
+) -> None:
+    """The alert jobs pick between a stale schedule and a broken watchdog on this bit."""
+    output = tmp_path / "github-output"
+    schedule_watchdog.report_checked(
+        reached_verdict, env={schedule_watchdog.GITHUB_OUTPUT_ENV: str(output)}
+    )
+    assert output.read_text(encoding="utf-8") == f"{expected}\n"
+
+
+def test_the_verdict_is_appended_beside_any_other_step_output(tmp_path: Path) -> None:
+    """One file collects every output of the step; truncating it would drop the others."""
+    output = tmp_path / "github-output"
+    output.write_text("already=here\n", encoding="utf-8")
+
+    schedule_watchdog.report_checked(True, env={schedule_watchdog.GITHUB_OUTPUT_ENV: str(output)})
+
+    assert output.read_text(encoding="utf-8") == "already=here\nchecked=true\n"
+
+
+@pytest.mark.parametrize("env", [{}, {"GITHUB_OUTPUT": ""}], ids=["unset", "empty"])
+def test_nothing_is_written_outside_github_actions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env: dict[str, str]
+) -> None:
+    """`make ci-schedule-watchdog` at a terminal has no output file to write to.
+
+    A real path is left in the process environment so the assertion has
+    something to catch: writing anywhere at all would create it.
+    """
+    unwanted = tmp_path / "should-not-be-written"
+    monkeypatch.setenv(schedule_watchdog.GITHUB_OUTPUT_ENV, str(unwanted))
+
+    schedule_watchdog.report_checked(True, env=env)
+
+    assert not unwanted.exists()
+
+
+def test_the_everyday_terminal_run_needs_no_output_file(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Reporting the verdict must not become a reason the watchdog cannot run locally."""
+    monkeypatch.delenv(schedule_watchdog.GITHUB_OUTPUT_ENV, raising=False)
+    monkeypatch.setattr(schedule_watchdog, "check_scheduled_workflows", lambda **_kwargs: [])
+
+    assert schedule_watchdog.main(["--repo", "owner/name"]) == schedule_watchdog.EXIT_HEALTHY
+    assert "active and recent" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("problems", "exit_code"),
+    [([], schedule_watchdog.EXIT_HEALTHY), (["codeql.yml: stale"], 1)],
+    ids=["healthy", "stale"],
+)
+def test_both_real_verdicts_are_recorded_as_checked(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    problems: list[str],
+    exit_code: int,
+) -> None:
+    """Healthy and stale are both verdicts about the schedules, so both count as checked."""
+    output = tmp_path / "github-output"
+    monkeypatch.setenv(schedule_watchdog.GITHUB_OUTPUT_ENV, str(output))
+    monkeypatch.setattr(schedule_watchdog, "check_scheduled_workflows", lambda **_kwargs: problems)
+
+    assert schedule_watchdog.main(["--repo", "owner/name"]) == exit_code
+    assert output.read_text(encoding="utf-8") == "checked=true\n"
+
+
+def test_a_check_that_could_not_run_records_that_no_verdict_was_reached(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Otherwise a broken API call would open an alert claiming the schedules are stale."""
+    output = tmp_path / "github-output"
+    monkeypatch.setenv(schedule_watchdog.GITHUB_OUTPUT_ENV, str(output))
+
+    def explode(**_kwargs: object) -> list[str]:
+        raise GhError("gh api failed")
+
+    monkeypatch.setattr(schedule_watchdog, "check_scheduled_workflows", explode)
+
+    assert schedule_watchdog.main(["--repo", "owner/name"]) == 2
+    assert output.read_text(encoding="utf-8") == "checked=false\n"
+
+
+def test_make_rewrites_every_failing_exit_code_to_its_own(tmp_path: Path) -> None:
+    """The reason the verdict cannot travel as an exit code.
+
+    Every target is invoked through the Makefile, and make reports its own
+    status 2 for any failed recipe. `EXIT_PROBLEMS_FOUND` and
+    `EXIT_CHECK_FAILED` therefore arrive at the workflow indistinguishable, so
+    reading them there would have silently picked one alert forever.
+    """
+    (tmp_path / "Makefile").write_text("one:\n\t@exit 1\n\ntwo:\n\t@exit 2\n", encoding="utf-8")
+
+    statuses = [
+        subprocess.run(
+            ["make", target], cwd=tmp_path, capture_output=True, text=True, check=False
+        ).returncode
+        for target in ("one", "two")
+    ]
+
+    assert statuses == [2, 2]
+
+
+def test_the_workflow_reads_the_verdict_from_the_watchdog_not_from_an_exit_code() -> None:
+    """A regression guard for the bug this replaced: `checked` was never set at all."""
+    workflow = (WORKFLOW_ROOT / "schedule-watchdog.yml").read_text(encoding="utf-8")
+
+    assert "checked: ${{ steps.watchdog.outputs.checked }}" in workflow
+    assert "run: make ci-schedule-watchdog\n" in workflow
+    assert "$?" not in workflow

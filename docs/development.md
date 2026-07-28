@@ -220,9 +220,13 @@ make status
 make stage files="src/a.py src/b.py"
 make stage file="one path with spaces.txt"
 
-# Commit staged changes
-make commit title="Subject" body="- Detail"
-make commit message_file=NOTES.md
+# Commit staged changes (message on stdin)
+make commit < NOTES.md
+make commit <<'EOF'
+Subject
+
+- Detail
+EOF
 
 # One-screen issue overview: state, labels, assignees, recent comments
 make issue-summary issue=123
@@ -233,14 +237,15 @@ Issues have their own group (`make help-issue`), covering both reading and writi
 ```bash
 # Read
 make issue-list state=open label=bug mine=1
+SEARCH='retry loop' make issue-list
 make issue-view issue=123
 make issue-summary issue=123
 
-# Write
-make issue-create title="Fix X" body="Steps to reproduce" labels="bug,ci"
-make issue-comment issue=123 body_file=notes.md
-make issue-edit issue=123 title="New title"
-make issue-close issue=123 reason="not planned" comment="Superseded by #99"
+# Write (the body is stdin, the title is the environment)
+TITLE='Fix X' make issue-create labels="bug,ci" < steps.md
+make issue-comment issue=123 < notes.md
+TITLE='New title' make issue-edit issue=123
+COMMENT='Superseded by #99' make issue-close issue=123 reason="not planned"
 make issue-reopen issue=123
 
 # Labels, assignees, and a linked branch
@@ -253,35 +258,58 @@ Three details are worth knowing:
 
 - **`make status` runs on the system interpreter**, not the venv one (`scripts/lib/workspace_status.py`). The first thing it has to be able to report is that the venv is missing, which it could not do from inside that venv. Every subprocess it runs is guarded, so a missing `uv`, `npm`, or `git` degrades to the failure branch instead of crashing the target, and a tool that cannot launch at all is named as `UNAVAILABLE` rather than leaving its section blank.
 - **`make stage` never lets a shell see a path** (`scripts/lib/stage_files.py`). Paths arrive through the environment and are handed to `git add --` as separate argv entries, so spaces, globs, and metacharacters stay literal. `files=` splits on whitespace, except when its complete value names one existing or tracked path; `file=` is always taken verbatim.
-- **`make commit` screens the message before git sees it** (`scripts/gh/commit_message.py`). Both input forms are assembled into a private temporary file, checked for leaked shell fragments, and then passed to `git commit -F`. This exists because a mistyped heredoc terminator once recorded `EOF && make push 2>&1 | tail -3` inside a real commit message. The screen runs first by design: validating after the commit would report the leak only once it was already in history. It rejects heredoc openers, bare terminators, redirections, and pipes into a pager, and is deliberately narrow so prose like "Document EOF handling" is not a false positive.
+- **`make commit` screens the message before git sees it** (`scripts/gh/commit_message.py`). The message is read from stdin into a private temporary file, checked for leaked shell fragments, and then passed to `git commit -F`. This exists because a mistyped heredoc terminator once recorded `EOF && make push 2>&1 | tail -3` inside a real commit message. The screen runs first by design: validating after the commit would report the leak only once it was already in history. It rejects heredoc openers, bare terminators, redirections, and pipes into a pager, and is deliberately narrow so prose like "Document EOF handling" is not a false positive.
 
-### Free-text arguments
+### Free text
 
-No target interpolates free text into its recipe. A value like `body="..."` or `title="..."` is exported to the environment with `$(value ...)` and read back as `"$$VAR"`, so it never becomes shell source text: a newline no longer ends the line inside an open quote, a `"` no longer closes it, and backticks stay literal. `$(value ...)` also stops make from expanding its own syntax inside the text, so a body mentioning `$(x)` keeps those characters instead of silently losing them.
+**A body comes from standard input. A title comes from the environment. Neither is ever a make argument.**
 
-An optional free-text value is also tested by the recipe's shell (`[ -n "$$VAR" ]`) rather than by a make conditional. `$(if $(search),--search "$$ISSUE_SEARCH")` reads as a presence test, but make has to expand `$(search)` to evaluate it, and that is a second expansion on top of the one below. A value containing `$(shell ...)` runs the command twice under a make conditional and once when the shell does the test.
-
-One limit is worth knowing, because no amount of quoting inside the Makefile removes it. **Make expands a command-line assignment while parsing it**, before any target sees the value. A body containing `$(shell ...)` therefore runs during that parse, and a body containing `$(ANYTHING)` is evaluated as a make reference. Use `body_file=` for text you did not write by hand, such as a quoted code snippet pasted from a review comment. The path is all that reaches make, so the content is never parsed.
-
-Bodies go one step further. Because `--body-file -` already reads stdin, an inline `body=` is piped straight into the helper rather than written out, so the text never reaches disk at all and the targets need no `mktemp`, `chmod`, or cleanup `trap`. Where a real file is unavoidable, as in `make commit` and `make release-create`, it is created `chmod 600` and removed by a `trap`.
-
-That makes the file form a first-class input rather than a workaround, so the comment and reply targets accept `body_file=` in place of `body=`:
+A heredoc is the everyday form, since it needs no file on disk:
 
 ```bash
-# Inline body
-make pr-comment body="Looks good"
-
-# Body from a file, or from stdin with -
-make pr-comment body_file=notes.md
-make pr-reply thread=PRRT_... body_file=notes.md
-git log -1 --format=%B | make pr-address thread=PRRT_... body_file=-
+make pr-address thread=PRRT_... <<'EOF'
+Anything at all: quotes, $(shell date), backticks, >=3.11, blank lines.
+EOF
 ```
 
-Every target that takes free text follows this convention: `pr-comment`, `pr-reply`, `pr-address`, `pr-edit`, `pr-create`, `issue-create`, `issue-comment`, `issue-edit`, `commit` (as `message_file=`), `release-create` (as `notes_file=`), and `ci-alert-issue` (as `detail_file=`). The PR targets run through `scripts/gh/cli.py` rather than raw `gh`, so the body arrives as one argument no matter what is in it.
+A file or a pipe works the same way, and is what to reach for when the text is already somewhere, or when it might contain a line matching the heredoc terminator:
 
-Two targets are exceptions in one narrow respect. `make issue-close` and `make issue-reopen` take a `comment=` but have no file form, because `gh issue close` accepts `--comment` and offers no `--comment-file`. The text still travels through the environment, so a newline or a quote cannot end the command early; there is simply no way to bypass make's parse for it. Post a long comment with `make issue-comment issue=N body_file=path` and then close the issue.
+```bash
+make pr-comment < notes.md
+git log -1 --format=%B | make pr-address thread=PRRT_...
+TITLE='Fix the retry loop' make issue-create < issue.md
+```
 
-Guard tests in `tests/test_makefile.py` fail if a recipe interpolates a free-text value again, if a posting target stops piping its body, or if a count or comma-separated list is left unquoted. That last one is why the delete target names its argument `comment_id=` rather than `comment=`: one spelling meaning an opaque node id on a PR target and prose on an issue target is what makes an unsafe interpolation look fine to a reader.
+The reason is one property of make that nothing inside a Makefile can undo: **make expands a command-line assignment while it parses it**. By the time any target could protect the value, `body='$(shell rm -rf .)'` has already run the command, and `body='costs $(SOMETHING)'` has already lost those characters. Quoting does not help, and neither did the two rounds of hardening this convention replaced: exporting through `$(value ...)` kept the characters intact but only after the parse that mattered, and gating on `[ -n "$$VAR" ]` instead of `$(if $(x),...)` removed a _second_ expansion but not the first.
+
+Standard input never reaches that parser. It also needs no quoting from the caller, has no length limit, and has no argv escaping to get wrong, which is why it replaced the environment for bodies rather than joining it as a third option.
+
+A title is not a body. It is one short line, and every target that takes one also takes a body, so it cannot share the stream. It travels as a shell prefix, which make inherits and never expands:
+
+```bash
+TITLE='New title' make pr-edit
+TITLE='Dependency audit failed' make ci-alert-issue label=deps run_url=... state=open < detail.md
+```
+
+`make pr-edit TITLE=...` is refused at parse time rather than trusted, because the two spellings differ only in where the assignment sits and only one of them is safe. The retired `body=`, `title=`, `body_file=`, and friends are refused the same way: make silently ignores a command-line assignment no target reads, so a stale `body="Fixed"` would otherwise post a blank comment.
+
+Every posting target is now the single command it looks like:
+
+```make
+pr-comment: ## Add a comment to the current PR, body on stdin (make pr-comment < notes.md) [pr_num=N]
+	@$(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file -
+```
+
+Four targets need more than that, and each for a reason that is not about input:
+
+- **`make commit`** and **`make release-create`** read the stream into a private `chmod 600` file with a cleanup `trap`, because they have to look at it: `commit` screens the message before git sees it, and `release-create` falls back to `--generate-notes` when nothing was piped in.
+- **`make pr-edit`** and **`make issue-edit`** treat an empty stream as "leave the body alone" rather than "clear it", since changing a title and replacing a body are separate intents. That branch is on what to change, never on how the text arrived.
+
+- **`make issue-close`** and **`make issue-reopen`** take `COMMENT='...'` from the environment, because `gh issue close` accepts `--comment` and offers no `--comment-file`, so there is no stream to point at. For anything longer, post it with `make issue-comment issue=N < notes.md` first.
+
+Whether a target reads a terminal follows the same split. Where the text is required, reading it is the point: the target waits for what you are about to type, the way `cat` does. Where the text is optional and its absence means something, the read is guarded by `NO_TTY_READ`, or `TITLE='...' make pr-edit` would sit waiting for a body nobody intends to type and `make release-create tag=vX.Y.Z` would wait instead of generating notes.
+
+Guard tests in `tests/test_makefile.py` fail if a free-text name reappears as a make variable in any spelling, if a posting target grows a second input path, or if a count or comma-separated list is left unquoted. That last one is why the delete target names its argument `comment_id=` rather than `comment=`: one spelling meaning an opaque node id on a PR target and prose on an issue target is what makes an unsafe interpolation look fine to a reader.
 
 ## CI
 

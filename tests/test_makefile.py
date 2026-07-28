@@ -118,172 +118,194 @@ def test_no_recipe_clobbers_the_developers_python_path() -> None:
     assert "PYTHONPATH=. " not in MAKEFILE_TEXT
 
 
-def test_no_recipe_interpolates_free_text_into_a_shell_command() -> None:
-    """Free text reaches a target through the environment, never through the recipe.
+FREE_TEXT_NAMES = ("body", "title", "comment", "detail", "notes", "search")
 
-    An interpolated value becomes shell source text: a newline ends the line
-    mid-quote, a double quote closes it, and backticks are evaluated. Each broken
-    spelling is pinned by hand so a new target cannot reintroduce the bug by
-    copying an older line.
+
+@pytest.mark.parametrize("name", FREE_TEXT_NAMES)
+def test_free_text_never_becomes_a_make_variable(name: str) -> None:
+    """No target reads free text from make, in any spelling.
+
+    A body reaches its target on standard input and a title through the
+    environment, so make's parser never sees either. That closes three bugs at
+    once rather than policing them:
+
+    * ``--body "$(body)"`` makes the text shell source, where a newline ends the
+      line mid-quote, a ``"`` closes it, and backticks are evaluated.
+    * ``:= $(body)`` expands make syntax inside the text, so a body mentioning
+      ``$(x)`` silently loses it. ``$(value ...)`` fixed that but not the next one.
+    * make expands a command-line assignment *while parsing it*, so ``$(shell
+      ...)`` in a ``body=`` ran before any target could protect it. Nothing
+      inside the Makefile could prevent that; not accepting the argument can.
     """
-    for interpolation in (
-        '--body "$(body)"',
-        '--title "$(title)"',
-        '--detail "$(detail)"',
-        '--comment "$(comment)"',
-        '--search "$(search)"',
-        '--notes "$(notes)"',
-    ):
-        assert interpolation not in MAKEFILE_TEXT
+    assert f"$({name})" not in MAKEFILE_TEXT
+    assert f"$(value {name})" not in MAKEFILE_TEXT
+
+
+@pytest.mark.parametrize("name", FREE_TEXT_NAMES)
+def test_retired_free_text_arguments_are_refused_rather_than_ignored(name: str) -> None:
+    """A stale ``body="Fixed"`` fails the run instead of vanishing.
+
+    Make silently ignores a command-line assignment no target reads, so without
+    this the old spelling would drop the text and the target would go on to read
+    an empty body from stdin: a comment posted blank, or a PR body cleared.
+    """
+    retired = re.search(r"^RETIRED_TEXT_ARGS :=((?:.|\\\n)*?)\n\$", MAKEFILE_TEXT, re.MULTILINE)
+    assert retired is not None
+    assert name in retired.group(1).split()
+    assert "$(filter command line,$(origin $(v)))" in MAKEFILE_TEXT
+
+
+@pytest.mark.parametrize("name", ["TITLE", "COMMENT", "SEARCH"])
+def test_environment_text_is_refused_as_a_make_argument(name: str) -> None:
+    """``make x TITLE=...`` is rejected, because make would expand it.
+
+    Measured on a scratch Makefile: ``TITLE='$(shell touch X)' make demo`` hands
+    the recipe those characters untouched, while ``make demo TITLE='$(shell
+    touch X)'`` runs the command and passes on what is left. Both spellings
+    reach the recipe and they differ only in where the assignment sits, so the
+    unsafe one cannot be left to be noticed in review.
+    """
+    assert re.search(r"^FREE_TEXT_VARS :=.*\b" + name + r"\b", MAKEFILE_TEXT, re.MULTILINE)
 
 
 @pytest.mark.parametrize(
-    "assignment",
+    ("target", "command"),
     [
-        "PR_COMMENT_BODY := $(value body)",
-        "PR_REPLY_BODY := $(value body)",
-        "PR_ADDRESS_BODY := $(value body)",
-        "PR_EDIT_TITLE := $(value title)",
-        "PR_EDIT_BODY := $(value body)",
-        "ALERT_ISSUE_TITLE := $(value title)",
-        "ALERT_ISSUE_DETAIL := $(value detail)",
-        "COMMIT_TITLE := $(value title)",
-        "COMMIT_BODY := $(value body)",
-        "RELEASE_NOTES := $(value notes)",
-        "RELEASE_NOTES_FILE := $(value notes_file)",
-        "STAGE_FILES := $(value files)",
-        "STAGE_FILE := $(value file)",
-        "PR_CREATE_TITLE := $(value title)",
-        "PR_CREATE_BODY := $(value body)",
-        "ISSUE_SEARCH := $(value search)",
-        "ISSUE_TITLE := $(value title)",
-        "ISSUE_BODY := $(value body)",
-        "ISSUE_COMMENT_BODY := $(value body)",
-        "ISSUE_EDIT_TITLE := $(value title)",
-        "ISSUE_EDIT_BODY := $(value body)",
-        "ISSUE_CLOSE_COMMENT := $(value comment)",
-        "ISSUE_REOPEN_COMMENT := $(value comment)",
+        ("pr-comment", "$(GH) comment"),
+        ("pr-reply", "$(GH) reply"),
+        ("pr-address", "$(GH) address"),
+        ("issue-comment", "gh issue comment"),
+        ("issue-create", "gh issue create"),
     ],
 )
-def test_free_text_exports_keep_the_value_unexpanded(assignment: str) -> None:
-    """User-supplied text is exported with ``$(value ...)`` so make cannot rewrite it.
-
-    A plain ``:= $(body)`` expands make syntax inside the text, so a body
-    mentioning ``$(x)`` silently loses it. ``$(value ...)`` hands over the
-    characters the author typed.
-
-    This does not make a body inert. Make expands a command-line assignment
-    while parsing it, so ``$(shell ...)`` in a body still runs no matter how it
-    is exported later. ``body_file=`` is the input that avoids make entirely,
-    and it is what pasted text should use.
-    """
-    assert assignment in MAKEFILE_TEXT
-
-
-@pytest.mark.parametrize(
-    ("target", "subcommand", "variable"),
-    [
-        ("pr-comment", "comment", "PR_COMMENT"),
-        ("pr-reply", "reply", "PR_REPLY"),
-        ("pr-address", "address", "PR_ADDRESS"),
-        ("pr-edit", "edit-pr", "PR_EDIT"),
-    ],
-)
-def test_posting_targets_pipe_the_body_instead_of_writing_it_out(
-    target: str, subcommand: str, variable: str
+def test_posting_targets_take_the_body_from_stdin_and_nowhere_else(
+    target: str, command: str
 ) -> None:
-    """Bodies reach the helper over stdin, so they can be long, multi-line, or both.
+    """One input, so no target branches on how the text arrived.
 
-    ``--body-file -`` already reads stdin, so an inline body needs no temporary
-    file. That is one fewer place the text can be left behind on disk, and it
-    removes the mktemp, chmod, and trap dance these targets would otherwise
-    repeat verbatim.
+    ``--body-file -`` hands the stream straight to the helper: no length limit,
+    no argv escaping, no temporary file to chmod and trap, and nothing for the
+    caller to quote. These recipes are the single command they look like.
     """
     recipe = _target_recipe(target)
 
-    assert f"{target}: export {variable}_BODY := $(value body)" in MAKEFILE_TEXT
-    assert f"{target}: export {variable}_BODY_FILE := $(value body_file)" in MAKEFILE_TEXT
-    assert f"printf '%s' \"$${variable}_BODY\" | $(GH) {subcommand}" in recipe
-    assert f'--body-file "$${variable}_BODY_FILE"' in recipe
+    assert f"{command}" in recipe
     assert "--body-file -" in recipe
     assert "mktemp" not in recipe
+    assert "elif" not in recipe
 
 
-@pytest.mark.parametrize("argument", ["search", "comment", "detail", "body", "title", "notes"])
-def test_optional_free_text_is_gated_by_the_shell_not_by_make(argument: str) -> None:
-    """A free-text value is never the condition of a make function.
+@pytest.mark.parametrize("target", ["pr-edit", "issue-edit"])
+def test_edit_targets_leave_the_body_alone_when_no_body_arrives(target: str) -> None:
+    """Editing a title must not clear the body as a side effect.
 
-    ``$(if $(search),--search "$$ISSUE_SEARCH")`` reads as a presence test, but
-    make expands ``$(search)`` to evaluate it, and that is a *second* expansion
-    on top of the one make already performed while parsing the command-line
-    assignment. Measured on a scratch Makefile: a value containing
-    ``$(shell ...)`` runs the command twice under a make conditional and once
-    when the recipe tests ``[ -n "$$VAR" ]`` instead.
-
-    Gating in the shell also keeps one source of truth, since the value the
-    recipe passes and the value it tested are then the same variable.
-    """
-    assert f"$(if $({argument})," not in MAKEFILE_TEXT
-
-
-@pytest.mark.parametrize(
-    ("target", "command", "variable"),
-    [
-        ("issue-create", "gh issue create", "ISSUE"),
-        ("issue-comment", "gh issue comment", "ISSUE_COMMENT"),
-        ("issue-edit", "gh issue edit", "ISSUE_EDIT"),
-    ],
-)
-def test_issue_posting_targets_pipe_the_body_instead_of_writing_it_out(
-    target: str, command: str, variable: str
-) -> None:
-    """Issue bodies reach gh over stdin, on the same terms as the PR targets.
-
-    ``gh`` reads ``--body-file -`` from standard input, so an inline body needs
-    no temporary file and a pasted one can use ``body_file=`` to skip make's
-    parser entirely.
+    Changing a title and replacing a body are separate intents, so an empty
+    stream means "no new body" and ``TITLE='...' make pr-edit`` edits the title
+    alone. The branch left here is on what to change, never on how the text
+    arrived.
     """
     recipe = _target_recipe(target)
 
-    assert f"{target}: export {variable}_BODY := $(value body)" in MAKEFILE_TEXT
-    assert f"{target}: export {variable}_BODY_FILE := $(value body_file)" in MAKEFILE_TEXT
-    assert f"printf '%s' \"$${variable}_BODY\" | {command}" in recipe
-    assert f'--body-file "$${variable}_BODY_FILE"' in recipe
+    assert "body=$$(cat)" in recipe
+    assert 'if [ -n "$$body" ]' in recipe
     assert "--body-file -" in recipe
-    assert "mktemp" not in recipe
 
 
 @pytest.mark.parametrize(
-    ("target", "variable"),
-    [("issue-close", "ISSUE_CLOSE_COMMENT"), ("issue-reopen", "ISSUE_REOPEN_COMMENT")],
+    ("target", "read_command"),
+    [
+        ("pr-edit", "body=$$(cat)"),
+        ("issue-edit", "body=$$(cat)"),
+        ("release-create", 'cat > "$$tmp"'),
+        ("ci-alert-issue", 'set -- "$$@" --detail-file -'),
+    ],
 )
-def test_issue_state_changes_pass_their_comment_through_the_environment(
-    target: str, variable: str
-) -> None:
+def test_targets_with_optional_input_never_read_a_terminal(target: str, read_command: str) -> None:
+    """A target whose input is optional must not sit waiting for a terminal.
+
+    Reading a terminal is right where the text is required: the target waits for
+    what you are about to type, the way ``cat`` does. Where absence means
+    something instead -- keep the body, generate the notes, no detail -- an
+    unguarded read makes ``TITLE='...' make pr-edit`` hang until EOF on a body
+    nobody meant to supply. Empty-means-no-change still covers the piped case,
+    so the terminal test only removes the wait.
+    """
+    assert "NO_TTY_READ := [ -t 0 ] ||" in MAKEFILE_TEXT
+    assert f"$(NO_TTY_READ) {read_command}" in _target_recipe(target)
+
+
+def test_format_js_diff_fails_on_a_real_error_but_not_on_a_difference() -> None:
+    """Showing a diff must not turn a broken run into a passing one.
+
+    ``diff`` exits 1 whenever the files differ, which is this target's whole
+    purpose, so that status alone is tolerated. A blanket ``|| true`` would also
+    swallow exit 2 and above, and running Prettier through a pipe would discard
+    its status entirely, so a Prettier crash would look like "no changes".
+    """
+    recipe = _target_recipe("format-js-diff")
+
+    assert "|| true" not in recipe
+    assert "test $$? -eq 1" in recipe
+    assert '> "$$formatted"' in recipe
+    assert "trap 'rm -f -- \"$$formatted\"' EXIT" in recipe
+
+
+@pytest.mark.parametrize("target", ["issue-close", "issue-reopen"])
+def test_issue_state_changes_pass_their_comment_through_the_environment(target: str) -> None:
     """Closing and reopening carry their comment in the environment.
 
-    ``gh issue close`` and ``gh issue reopen`` accept ``--comment`` but offer no
-    ``--comment-file``, so the stdin trick the other targets use is unavailable.
-    The environment still keeps the text out of the recipe, which is what stops
-    a newline or a quote from ending the command early.
+    ``gh issue close`` and ``gh issue reopen`` accept ``--comment`` and offer no
+    ``--comment-file``, so there is no stream to point at and stdin cannot serve
+    them. The environment still keeps the text out of the recipe, which is what
+    stops a newline or a quote from ending the command early.
     """
     recipe = _target_recipe(target)
 
-    assert f'--comment "$${variable}"' in recipe
+    assert '--comment "$$COMMENT"' in recipe
     assert '--comment "$(comment)"' not in recipe
 
 
-def test_pr_create_refuses_a_half_specified_pull_request() -> None:
-    """A title without a body is rejected rather than passed to gh.
+def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> None:
+    """One variable selects the mode, so gh is never left half-specified.
 
     ``gh pr create`` prompts for whatever it was not given, which hangs a
-    non-interactive shell instead of failing. Supplying neither still means
-    ``--fill``, which takes both from the commits.
+    non-interactive shell instead of failing. Keying the choice to ``TITLE``
+    removes that state: without it ``--fill`` takes the title and body from the
+    commits, and with it the body comes from stdin.
     """
     recipe = _target_recipe("pr-create")
 
+    assert 'if [ -z "$$TITLE" ]' in recipe
     assert "gh pr create --fill" in recipe
-    assert '[ -z "$$PR_CREATE_TITLE" ] || [ -z "$$PR_CREATE_BODY$$PR_CREATE_BODY_FILE" ]' in recipe
+    assert '--title "$$TITLE" --body-file -' in recipe
+
+
+@pytest.mark.parametrize(
+    ("target", "template"),
+    [("commit", "commit-message"), ("release-create", "release-notes")],
+)
+def test_buffered_targets_read_stdin_once_into_a_private_file(target: str, template: str) -> None:
+    """The two targets that must inspect their input still take only stdin.
+
+    ``commit`` screens the message before git sees it and ``release-create`` has
+    to know whether notes were supplied at all, so both need the text on disk.
+    They read it from the same single input as everything else, and the file is
+    private and removed on exit.
+    """
+    recipe = _target_recipe(target)
+
+    assert 'cat > "$$tmp"' in recipe
+    assert f"linkedin-analyzer-{template}.XXXXXX" in recipe
+    assert 'chmod 600 "$$tmp"' in recipe
+
+
+def test_alert_issue_takes_its_detail_from_stdin() -> None:
+    """A failing workflow's output never has to survive a make command line."""
+    recipe = _target_recipe("ci-alert-issue")
+
+    assert "--detail-file -" in recipe
+    assert '--title "$$TITLE"' in recipe
+    assert "--detail " not in recipe
 
 
 @pytest.mark.parametrize(
@@ -311,17 +333,6 @@ def test_pr_edit_routes_through_the_tested_helper() -> None:
     assert "$(GH) edit-pr" in recipe
     assert "gh pr edit" not in recipe
     assert '$(if $(pr_num),--pr "$(pr_num)")' in recipe
-
-
-def test_alert_issue_passes_free_text_through_the_environment() -> None:
-    """The alert title and detail are workflow-authored prose, so they stay in the environment."""
-    recipe = _target_recipe("ci-alert-issue")
-
-    assert "ci-alert-issue: export ALERT_ISSUE_TITLE := $(value title)" in MAKEFILE_TEXT
-    assert "ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)" in MAKEFILE_TEXT
-    assert '--title "$$ALERT_ISSUE_TITLE"' in recipe
-    assert 'if [ -n "$$ALERT_ISSUE_DETAIL" ]; then set -- "$$@" --detail' in recipe
-    assert '$(if $(detail_file),--detail-file "$(detail_file)")' in recipe
 
 
 def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:

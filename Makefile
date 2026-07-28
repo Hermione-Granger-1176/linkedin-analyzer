@@ -28,10 +28,14 @@ PLAYWRIGHT_INVALID_ENGINES = $(filter-out $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_EN
 PLAYWRIGHT_LOCAL_RUNTIME := $(VENV_PYTHON) scripts/setup/playwright_local_runtime.py
 PLAYWRIGHT_LOCAL_RUN = $(if $(filter 1,$(local_libs)),$(PLAYWRIGHT_LOCAL_RUNTIME) run --,)
 
+# Put the repository root on the import path for `python -m scripts.*` without
+# discarding a PYTHONPATH the developer set for their own tooling.
+PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}
+
 # Entry point for the GitHub PR/CI helper (scripts/gh). The Makefile targets
 # below are thin wrappers; the testable logic (repo and PR auto-detection,
 # GraphQL, CI triage) lives in Python.
-GH = PYTHONPATH=. $(VENV_PYTHON) -m scripts.gh.cli
+GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
@@ -314,7 +318,7 @@ fix: fmt ci ## Auto-fix formatting, then run the full local CI gate
 security: audit-python audit-node check-overrides ## Run dependency and override audits
 
 audit-node: ## Run policy-driven npm dependency audit (make audit-node [audit_level=high])
-	@PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.ci.run_npm_audit --npm "$(NPM)" $(if $(audit_level),--audit-level "$(audit_level)")
+	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.ci.run_npm_audit --npm "$(NPM)" $(if $(audit_level),--audit-level "$(audit_level)")
 
 audit-fix-node: ## Apply available npm audit fixes to package-lock.json
 	$(NPM) audit fix --package-lock-only
@@ -325,7 +329,7 @@ audit-python: ## Run policy-driven pip-audit against the frozen uv lock export
 	chmod 600 "$$requirements_file"; \
 	trap 'rm -f -- "$$requirements_file"' EXIT; \
 	$(UV) export --quiet --all-groups --frozen --no-emit-project --format requirements.txt --output-file "$$requirements_file"; \
-	PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.ci.run_security_audit \
+	$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.ci.run_security_audit \
 		--requirements "$$requirements_file" \
 		--pip-audit "$(UV) run --with pip-audit pip-audit"
 
@@ -359,29 +363,17 @@ run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connec
 gen-parity-corpus: ## Regenerate the synthetic cross-runtime parity corpus fixtures
 	$(NODE) scripts/gen-parity-corpus.mjs
 
-status: ## Show workspace health
-	@echo "=== Git ==="
-	@git status -sb
-	@echo
-	@echo "=== Python ==="
-	@test -x $(VENV_PYTHON) && echo "OK: $(VENV_PYTHON) exists" || echo "MISSING: run make setup"
-	@$(UV) lock --check >/dev/null 2>&1 && echo "OK: uv.lock is current" || echo "STALE: run make lock"
-	@echo
-	@echo "=== Node ==="
-	@test -d node_modules && echo "OK: node_modules exists" || echo "MISSING: run make setup"
-	@$(NPM) install --package-lock-only --ignore-scripts --dry-run >/dev/null 2>&1 && echo "OK: package-lock.json is current" || echo "STALE: run make lock-node"
-	@echo
-	@echo "=== Web build ==="
-	@test -d web/dist && echo "OK: web/dist exists" || echo "NOT BUILT: run make web-build"
-	@echo
-	@echo "=== Pull request ==="
-	@$(GH) summary || true
+# Runs on the system interpreter, not the venv one, because the first thing it
+# has to be able to report is that the venv is missing.
+status: ## Show workspace health (git, Python, Node, web build, PR)
+	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.lib.workspace_status \
+		--venv-python "$(VENV_PYTHON)" --uv "$(UV)" --npm "$(NPM)"
 
 clean-venv: ## Safely remove the repository-local Python virtual environment
 clean-venv: export CLEAN_REPO_ROOT := $(CURDIR)
 clean-venv: export CLEAN_VENV := $(VENV)
 clean-venv:
-	@PYTHONPATH=. $(SYSTEM_PYTHON) -m scripts.setup.clean_venv
+	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.setup.clean_venv
 
 clean: clean-venv ## Remove local environments, build outputs, and caches (keeps shared Playwright browsers)
 	rm -rf node_modules web/dist .artifacts .playwright .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov coverage playwright-report test-results build dist *.egg-info
@@ -441,7 +433,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch branch-current rebase log diff diff-staged stage-all commit push release-create
+.PHONY: git branch branch-current rebase log diff diff-staged stage stage-all commit push release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -469,14 +461,39 @@ diff: ## Show unstaged changes
 diff-staged: ## Show staged changes
 	git diff --cached
 
+# Paths reach the helper through the environment, never interpolated into the
+# recipe, so a name containing a space or a shell metacharacter stays inert.
+stage: export STAGE_FILES := $(files)
+stage: export STAGE_FILE := $(file)
+stage: ## Stage selected files (make stage [files="path ..."] [file="one path with spaces"])
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.lib.stage_files
+
 stage-all: ## Stage all working tree changes
 	git add -A
 
+# Every message is assembled into a temporary file and screened before it
+# reaches git, because a mistyped heredoc terminator silently records shell text
+# (`EOF && make push 2>&1 | tail -3`) as part of the commit.
 commit: export COMMIT_TITLE := $(title)
 commit: export COMMIT_BODY := $(body)
-commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"])
-	@test -n "$$COMMIT_TITLE" || (printf 'Usage: make commit title="Subject" [body="- Detail"]\n' >&2; exit 1)
-	@if [ -n "$$COMMIT_BODY" ]; then git commit -m "$$COMMIT_TITLE" -m "$$COMMIT_BODY"; else git commit -m "$$COMMIT_TITLE"; fi
+commit: export COMMIT_MESSAGE_FILE := $(message_file)
+commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"] | make commit message_file=path, - reads stdin)
+	@test -n "$$COMMIT_TITLE$$COMMIT_MESSAGE_FILE" || \
+		(printf 'Usage: make commit title="Subject" [body="- Detail"] OR make commit message_file=path (- reads stdin)\n' >&2; exit 1)
+	@set -e; \
+	tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-commit-message.XXXXXX"); \
+	chmod 600 "$$tmp"; \
+	trap 'rm -f -- "$$tmp"' EXIT; \
+	if [ -z "$$COMMIT_MESSAGE_FILE" ]; then \
+		printf '%s\n' "$$COMMIT_TITLE" > "$$tmp"; \
+		test -z "$$COMMIT_BODY" || printf '\n%s\n' "$$COMMIT_BODY" >> "$$tmp"; \
+	elif [ "$$COMMIT_MESSAGE_FILE" = "-" ]; then \
+		cat > "$$tmp"; \
+	else \
+		cat -- "$$COMMIT_MESSAGE_FILE" > "$$tmp"; \
+	fi; \
+	$(GH) check-commit-message --message-file "$$tmp"; \
+	git commit -F "$$tmp"
 
 push: ## Push the current branch and set its upstream
 	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin -- "$$branch"
@@ -583,7 +600,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog issues
+.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog issues issue-summary
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -612,7 +629,7 @@ ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_k
 ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
 	@test -n "$(title)" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)
-	@PYTHONPATH=. $(VENV_PYTHON) -m scripts.ci.issue_alerts \
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts \
 		--title "$(title)" \
 		--label "$(label)" \
 		--run-url "$(run_url)" \
@@ -622,7 +639,11 @@ ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..."
 		$(if $(detail_file),--detail-file "$(detail_file)")
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
-	@PYTHONPATH=. $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
 
 issues: ## List open issues
 	gh issue list
+
+issue-summary: ## One-screen issue overview: state, labels, assignees, recent comments (make issue-summary issue=N)
+	@test -n "$(issue)" || (printf 'Usage: make issue-summary issue=123\n' >&2; exit 1)
+	@$(GH) issue-summary --issue "$(issue)"

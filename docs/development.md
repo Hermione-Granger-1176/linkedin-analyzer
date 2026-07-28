@@ -208,6 +208,32 @@ make dead-code-py
 make fmt
 ```
 
+## Git and issue helpers
+
+The local git targets that used to be inline shell now run through tested helpers in `scripts/`, for the same reason the PR and CI targets do: a path or a message that reaches a shell is a path or a message the shell can reinterpret.
+
+```bash
+# Workspace health: git, Python, Node, web build, PR
+make status
+
+# Stage selected paths
+make stage files="src/a.py src/b.py"
+make stage file="one path with spaces.txt"
+
+# Commit staged changes
+make commit title="Subject" body="- Detail"
+make commit message_file=NOTES.md
+
+# One-screen issue overview: state, labels, assignees, recent comments
+make issue-summary issue=123
+```
+
+Three details are worth knowing:
+
+- **`make status` runs on the system interpreter**, not the venv one (`scripts/lib/workspace_status.py`). The first thing it has to be able to report is that the venv is missing, which it could not do from inside that venv. Every subprocess it runs is guarded, so a missing `uv`, `npm`, or `git` degrades to the failure branch instead of crashing the target, and a tool that cannot launch at all is named as `UNAVAILABLE` rather than leaving its section blank.
+- **`make stage` never lets a shell see a path** (`scripts/lib/stage_files.py`). Paths arrive through the environment and are handed to `git add --` as separate argv entries, so spaces, globs, and metacharacters stay literal. `files=` splits on whitespace, except when its complete value names one existing or tracked path; `file=` is always taken verbatim.
+- **`make commit` screens the message before git sees it** (`scripts/gh/commit_message.py`). Both input forms are assembled into a private temporary file, checked for leaked shell fragments, and then passed to `git commit -F`. This exists because a mistyped heredoc terminator once recorded `EOF && make push 2>&1 | tail -3` inside a real commit message. The screen runs first by design: validating after the commit would report the leak only once it was already in history. It rejects heredoc openers, bare terminators, redirections, and pipes into a pager, and is deliberately narrow so prose like "Document EOF handling" is not a false positive.
+
 ## CI
 
 GitHub Actions runs on pull requests and pushes to `main`:

@@ -8,11 +8,14 @@ here is invisible until someone runs the target, so each one is pinned.
 from __future__ import annotations
 
 import argparse
+import io
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
-from scripts.gh import ci_status, cli, pr_review, pr_watch
+from scripts.gh import ci_status, cli, issues, pr_review, pr_watch
+from scripts.gh.gh_runner import GhError
 
 _THREAD = "PRRT_x"
 _COMMENT = "PRRC_x"
@@ -185,6 +188,49 @@ def test_delete_comment_reports_the_deleted_id(
     assert cli.main(["delete-comment", "--comment", _COMMENT]) == 0
     assert calls == [((_COMMENT,), {})]
     assert _COMMENT in capsys.readouterr().out
+
+
+def test_issue_summary_prints_the_overview(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """issue-summary forwards the issue number and prints the rendered overview."""
+    calls = _record(monkeypatch, issues, "issue_summary", "Issue #4 [OPEN] Title")
+
+    assert cli.main(["issue-summary", "--issue", "4"]) == 0
+    assert calls == [((4,), {})]
+    assert capsys.readouterr().out.strip() == "Issue #4 [OPEN] Title"
+
+
+def test_check_commit_message_accepts_a_clean_file(tmp_path: Path) -> None:
+    """A message file without shell fragments exits zero."""
+    message_file = tmp_path / "COMMIT_EDITMSG"
+    message_file.write_text("Add a helper\n\n- Detail\n", encoding="utf-8")
+
+    assert cli.main(["check-commit-message", "--message-file", str(message_file)]) == 0
+
+
+def test_check_commit_message_rejects_a_leaked_file(tmp_path: Path) -> None:
+    """A leaked heredoc terminator is re-raised as a GhError so the target fails."""
+    message_file = tmp_path / "COMMIT_EDITMSG"
+    message_file.write_text("Subject\n\nEOF && make push 2>&1 | tail -3\n", encoding="utf-8")
+
+    with pytest.raises(GhError, match="leaked shell text"):
+        cli.main(["check-commit-message", "--message-file", str(message_file)])
+
+
+def test_check_commit_message_reads_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A message file of - is read from stdin, which is how the heredoc form arrives."""
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO("Subject\n\n- Detail\n"))
+
+    assert cli.main(["check-commit-message", "--message-file", "-"]) == 0
+
+
+def test_check_commit_message_reports_an_unreadable_file(tmp_path: Path) -> None:
+    """A missing message file names the path instead of surfacing a bare OSError."""
+    missing = tmp_path / "nope"
+
+    with pytest.raises(GhError, match=str(missing)):
+        cli.main(["check-commit-message", "--message-file", str(missing)])
 
 
 def test_parser_exposes_a_handler_for_every_subcommand() -> None:

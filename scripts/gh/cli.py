@@ -11,8 +11,10 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from pathlib import Path
 
-from . import ci_status, pr_review, pr_watch
+from . import ci_status, commit_message, issues, pr_review, pr_watch
+from .gh_runner import GhError
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -65,6 +67,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
     summary_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+
+    issue_summary_parser = subparsers.add_parser("issue-summary", help="One-screen issue overview")
+    issue_summary_parser.add_argument("--issue", type=int, required=True, help="Issue number")
+
+    check_commit_parser = subparsers.add_parser(
+        "check-commit-message",
+        help="Reject a commit message that leaked shell text (heredoc fragments)",
+    )
+    check_commit_parser.add_argument(
+        "--message-file",
+        required=True,
+        help="Path to the commit message (- reads stdin)",
+    )
 
     watch_parser = subparsers.add_parser(
         "watch",
@@ -164,6 +179,33 @@ def _handle_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_issue_summary(args: argparse.Namespace) -> int:
+    """Print the issue overview."""
+    print(issues.issue_summary(args.issue))
+    return 0
+
+
+def _handle_check_commit_message(args: argparse.Namespace) -> int:
+    """Validate a commit message and reject leaked shell fragments.
+
+    The ``ValueError`` from the validator is re-raised as a ``GhError`` so the
+    module entry point prints it as a plain message and exits non-zero, the same
+    way every other command reports a refusal.
+    """
+    if args.message_file == "-":
+        message = sys.stdin.read()
+    else:
+        try:
+            message = Path(args.message_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise GhError(f"Could not read --message-file {args.message_file}: {exc}") from exc
+    try:
+        commit_message.validate_commit_message(message)
+    except ValueError as exc:
+        raise GhError(str(exc)) from exc
+    return 0
+
+
 def _handle_watch(args: argparse.Namespace) -> int:
     """Request and wait for the latest complete PR review state."""
     print(
@@ -193,6 +235,8 @@ COMMAND_HANDLERS = {
     "delete-comment": _handle_delete_comment,
     "copilot-review": _handle_copilot_review,
     "summary": _handle_summary,
+    "issue-summary": _handle_issue_summary,
+    "check-commit-message": _handle_check_commit_message,
     "watch": _handle_watch,
     "ci-failures": _handle_ci_failures,
 }

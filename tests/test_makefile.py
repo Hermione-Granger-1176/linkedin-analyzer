@@ -91,6 +91,7 @@ def test_python_audit_uses_policy_runner_and_private_temporary_export() -> None:
     [
         ("release-create", "linkedin-analyzer-release-notes.XXXXXX"),
         ("pr-edit", "linkedin-analyzer-pr-body.XXXXXX"),
+        ("commit", "linkedin-analyzer-commit-message.XXXXXX"),
     ],
 )
 def test_sensitive_message_files_use_portable_private_temp_paths(

@@ -196,20 +196,58 @@ def test_posting_targets_take_the_body_from_stdin_and_nowhere_else(
 
 
 @pytest.mark.parametrize("target", ["pr-edit", "issue-edit"])
-def test_edit_targets_leave_the_body_alone_when_stdin_is_empty(target: str) -> None:
+def test_edit_targets_leave_the_body_alone_when_no_body_arrives(target: str) -> None:
     """Editing a title must not clear the body as a side effect.
 
-    These two are the only targets that read stdin and may have nothing to do
-    with it, because changing a title and replacing a body are separate intents.
-    An empty stream means "no new body", so ``TITLE='...' make pr-edit`` from a
-    non-interactive shell edits the title alone. The branch left here is on what
-    to change, never on how the text arrived.
+    Changing a title and replacing a body are separate intents, so an empty
+    stream means "no new body" and ``TITLE='...' make pr-edit`` edits the title
+    alone. The branch left here is on what to change, never on how the text
+    arrived.
     """
     recipe = _target_recipe(target)
 
     assert "body=$$(cat)" in recipe
     assert 'if [ -n "$$body" ]' in recipe
     assert "--body-file -" in recipe
+
+
+@pytest.mark.parametrize(
+    ("target", "read_command"),
+    [
+        ("pr-edit", "body=$$(cat)"),
+        ("issue-edit", "body=$$(cat)"),
+        ("release-create", 'cat > "$$tmp"'),
+        ("ci-alert-issue", 'set -- "$$@" --detail-file -'),
+    ],
+)
+def test_targets_with_optional_input_never_read_a_terminal(target: str, read_command: str) -> None:
+    """A target whose input is optional must not sit waiting for a terminal.
+
+    Reading a terminal is right where the text is required: the target waits for
+    what you are about to type, the way ``cat`` does. Where absence means
+    something instead -- keep the body, generate the notes, no detail -- an
+    unguarded read makes ``TITLE='...' make pr-edit`` hang until EOF on a body
+    nobody meant to supply. Empty-means-no-change still covers the piped case,
+    so the terminal test only removes the wait.
+    """
+    assert "NO_TTY_READ := [ -t 0 ] ||" in MAKEFILE_TEXT
+    assert f"$(NO_TTY_READ) {read_command}" in _target_recipe(target)
+
+
+def test_format_js_diff_fails_on_a_real_error_but_not_on_a_difference() -> None:
+    """Showing a diff must not turn a broken run into a passing one.
+
+    ``diff`` exits 1 whenever the files differ, which is this target's whole
+    purpose, so that status alone is tolerated. A blanket ``|| true`` would also
+    swallow exit 2 and above, and running Prettier through a pipe would discard
+    its status entirely, so a Prettier crash would look like "no changes".
+    """
+    recipe = _target_recipe("format-js-diff")
+
+    assert "|| true" not in recipe
+    assert "test $$? -eq 1" in recipe
+    assert '> "$$formatted"' in recipe
+    assert "trap 'rm -f -- \"$$formatted\"' EXIT" in recipe
 
 
 @pytest.mark.parametrize("target", ["issue-close", "issue-reopen"])

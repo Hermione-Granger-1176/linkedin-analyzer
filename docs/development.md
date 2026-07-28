@@ -304,7 +304,10 @@ Four targets need more than that, and each for a reason that is not about input:
 
 - **`make commit`** and **`make release-create`** read the stream into a private `chmod 600` file with a cleanup `trap`, because they have to look at it: `commit` screens the message before git sees it, and `release-create` falls back to `--generate-notes` when nothing was piped in.
 - **`make pr-edit`** and **`make issue-edit`** treat an empty stream as "leave the body alone" rather than "clear it", since changing a title and replacing a body are separate intents. That branch is on what to change, never on how the text arrived.
+
 - **`make issue-close`** and **`make issue-reopen`** take `COMMENT='...'` from the environment, because `gh issue close` accepts `--comment` and offers no `--comment-file`, so there is no stream to point at. For anything longer, post it with `make issue-comment issue=N < notes.md` first.
+
+Whether a target reads a terminal follows the same split. Where the text is required, reading it is the point: the target waits for what you are about to type, the way `cat` does. Where the text is optional and its absence means something, the read is guarded by `NO_TTY_READ`, or `TITLE='...' make pr-edit` would sit waiting for a body nobody intends to type and `make release-create tag=vX.Y.Z` would wait instead of generating notes.
 
 Guard tests in `tests/test_makefile.py` fail if a free-text name reappears as a make variable in any spelling, if a posting target grows a second input path, or if a count or comma-separated list is left unquoted. That last one is why the delete target names its argument `comment_id=` rather than `comment=`: one spelling meaning an opaque node id on a PR target and prose on an issue target is what makes an unsafe interpolation look fine to a reader.
 

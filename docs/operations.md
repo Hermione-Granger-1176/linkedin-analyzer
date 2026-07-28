@@ -205,7 +205,7 @@ When the issue fires, open the linked run to see which workflow is named. If it 
 
 ```bash
 TITLE='Dependency audit failed' make ci-alert-issue label=dependency-audit \
-  run_url=https://github.com/OWNER/REPO/actions/runs/123 state=close < /dev/null
+  run_url=https://github.com/OWNER/REPO/actions/runs/123 state=close
 ```
 
 ### Workflow and cache operations

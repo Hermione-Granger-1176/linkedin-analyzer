@@ -65,6 +65,13 @@ GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
 # Paths stay ordinary make arguments (`files=`, `path=`). A path is structured,
 # and where one names a file the shell must not reinterpret, as in `stage`, the
 # target exports it with $(value ...) so it never becomes source text either.
+#
+# Where a target's text is *required*, reading a terminal is right: it waits for
+# what you are about to type, the way `cat` does. Where the text is optional and
+# its absence means something (keep the body, generate the notes, no detail),
+# a terminal must not be read at all, or the target would sit waiting for input
+# nobody intends to give. Those four guard the read with this.
+NO_TTY_READ := [ -t 0 ] ||
 FREE_TEXT_VARS := TITLE COMMENT SEARCH
 $(foreach v,$(FREE_TEXT_VARS),$(if $(filter command line,$(origin $(v))),$(error \
 $(v) was passed as a make argument, which make expands; use $(v)='...' make <target>)))
@@ -195,14 +202,23 @@ format-py-diff: ## Show Python formatting changes without modifying files [paths
 format-js-check: ## Check Prettier formatting only
 	$(NPM) run format:check
 
-# Prettier has no --diff, so the formatted result is printed and compared. This
+# Prettier has no --diff, so the formatted result is captured and compared. This
 # is the JavaScript-side counterpart to format-py-diff: it answers "what would
 # fmt change here" without running fmt, which matters when the only allowed way
 # to inspect a formatting failure would otherwise be to auto-fix the file.
+#
+# The result goes to a file rather than through a pipe so that a Prettier
+# failure is still an error; in a pipeline its status would be discarded. Only
+# diff's exit 1, "the files differ", is tolerated, since that is this target's
+# entire purpose. Exit 2 and above stay failures.
 format-js-diff: ## Show Prettier formatting changes without modifying files (make format-js-diff path=docs/x.md)
 	@test -n "$(path)" || (printf 'Usage: make format-js-diff path=docs/development.md\n' >&2; exit 1)
-	@$(NPX) prettier --config config/prettierrc.json --ignore-path config/prettierignore -- "$(path)" \
-		| diff -u -- "$(path)" - || true
+	@set -e; \
+	formatted=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-prettier.XXXXXX"); \
+	trap 'rm -f -- "$$formatted"' EXIT; \
+	$(NPX) prettier --config config/prettierrc.json --ignore-path config/prettierignore \
+		-- "$(path)" > "$$formatted"; \
+	diff -u -- "$(path)" "$$formatted" || test $$? -eq 1
 
 # ─── Typecheck @typecheck ────────────────────────────────────────────────────────────────
 
@@ -544,7 +560,7 @@ release-create: ## Tag and publish a GitHub release, notes on stdin or generated
 	tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-release-notes.XXXXXX"); \
 	chmod 600 "$$tmp"; \
 	trap 'rm -f -- "$$tmp"' EXIT; \
-	cat > "$$tmp"; \
+	$(NO_TTY_READ) cat > "$$tmp"; \
 	set -- "$(tag)" --title "$(tag)"; \
 	if [ -s "$$tmp" ]; then set -- "$$@" --notes-file "$$tmp"; else set -- "$$@" --generate-notes; fi; \
 	if [ -n "$(prerelease)" ]; then set -- "$$@" --prerelease; fi; \
@@ -567,13 +583,14 @@ pr-create: ## Open a pull request for the current branch (make pr-create [base=b
 		gh pr create $(if $(base),--base "$(base)") --title "$$TITLE" --body-file -; \
 	fi
 
-# The only target that reads stdin and may still have nothing to do with it.
-# Editing a title and replacing a body are separate intents, so an empty stdin
-# leaves the body alone rather than clearing it. The branch is on what to
-# change, not on how the text arrived.
+# One of the targets whose input is optional, so an empty stream means "leave
+# the body alone" rather than "clear it", and a terminal is not read at all.
+# Without the -t test, `TITLE='...' make pr-edit` would sit waiting for a body
+# nobody intends to type. The branch is on what to change, not on how the text
+# arrived. See NO_TTY_READ above.
 pr-edit: ## Edit the current PR (TITLE='...' make pr-edit; new body on stdin: make pr-edit < body.md) [pr_num=N]
 	@set -e; \
-	body=$$(cat); \
+	body=""; $(NO_TTY_READ) body=$$(cat); \
 	test -n "$$TITLE$$body" || \
 		{ printf "Usage: TITLE='New title' make pr-edit, or make pr-edit < body.md\n" >&2; exit 1; }; \
 	set -- $(if $(pr_num),--pr "$(pr_num)"); \
@@ -692,9 +709,11 @@ ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_k
 ci-alert-issue: ## Sync a monitored alert issue, detail on stdin (TITLE='...' make ci-alert-issue label=L run_url=URL state=open|close|setup-failure [repo=owner/name])
 	@test -n "$$TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf "Usage: TITLE='Dependency audit failed' make ci-alert-issue label=dependency-audit run_url=URL state=open|close|setup-failure [repo=owner/name] < detail.md\n" >&2; exit 1)
-	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts \
-		--title "$$TITLE" --label "$(label)" --run-url "$(run_url)" --state "$(state)" \
-		$(if $(repo),--repo "$(repo)") --detail-file -
+	@set -e; \
+	set -- --title "$$TITLE" --label "$(label)" --run-url "$(run_url)" --state "$(state)" \
+		$(if $(repo),--repo "$(repo)"); \
+	$(NO_TTY_READ) set -- "$$@" --detail-file -; \
+	$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts "$$@"
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
@@ -734,11 +753,11 @@ issue-comment: ## Comment on an issue, body on stdin (make issue-comment issue=N
 	@test -n "$(issue)" || (printf 'Usage: make issue-comment issue=123 < notes.md\n' >&2; exit 1)
 	@gh issue comment "$(issue)" --body-file -
 
-# Like pr-edit: an empty stdin leaves the body alone instead of clearing it.
+# Like pr-edit: an empty stream leaves the body alone, and a terminal is not read.
 issue-edit: ## Edit an issue (TITLE='...' make issue-edit issue=N; new body on stdin: make issue-edit issue=N < body.md)
 	@test -n "$(issue)" || (printf "Usage: TITLE='New title' make issue-edit issue=123, or make issue-edit issue=123 < body.md\n" >&2; exit 1)
 	@set -e; \
-	body=$$(cat); \
+	body=""; $(NO_TTY_READ) body=$$(cat); \
 	test -n "$$TITLE$$body" || \
 		{ printf "Nothing to change. Set TITLE='...' or pipe a new body in.\n" >&2; exit 1; }; \
 	set -- "$(issue)"; \

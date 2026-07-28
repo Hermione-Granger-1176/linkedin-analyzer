@@ -383,6 +383,49 @@ def request_copilot_review(pr: int | None = None, *, run_fn: RunFunction | None 
         raise GhError(f"Failed to request Copilot review on PR #{pr}: {exc}") from exc
 
 
+def comment_on_pr(pr: int | None, body: str, *, run_fn: RunFunction | None = None) -> None:
+    """Post a PR-level comment (on the current branch's PR when ``pr`` is omitted).
+
+    Commenting is not idempotent, so it does not auto-retry: a lost response
+    after a successful write would otherwise double-post the comment.
+    """
+    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    gh_runner.run_gh(["pr", "comment", str(pr), "--body", body], run_fn=run_fn, retries=0)
+
+
+def edit_pr(
+    pr: int | None = None,
+    *,
+    title: str | None = None,
+    body: str | None = None,
+    body_file: str | None = None,
+    run_fn: RunFunction | None = None,
+) -> None:
+    """Edit a pull request's title and/or body (current branch when ``pr`` is omitted).
+
+    ``body_file`` is forwarded straight to ``gh pr edit --body-file`` (``-`` reads
+    stdin) so gh reads the file itself, which avoids an "argument list too long"
+    failure for a large body. ``body`` is a small inline string forwarded as
+    ``--body``. Raises ``GhError`` when no title, body, or body file is supplied,
+    since gh would then open an interactive editor.
+
+    The pull request is resolved here rather than left to gh's own branch
+    lookup, matching every other PR-scoped helper in this module and giving one
+    recognizable error when the branch has no pull request.
+    """
+    if title is None and body is None and body_file is None:
+        raise GhError("Provide a title, body, or body file to edit.")
+    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    args = ["pr", "edit", str(pr)]
+    if title is not None:
+        args += ["--title", title]
+    if body_file is not None:
+        args += ["--body-file", body_file]
+    elif body is not None:
+        args += ["--body", body]
+    gh_runner.run_gh(args, run_fn=run_fn)
+
+
 def rollup_summary(rollup: list[dict[str, Any]]) -> str:
     """Summarize a ``statusCheckRollup`` list as a conclusion tally."""
     if not rollup:

@@ -234,6 +234,26 @@ Three details are worth knowing:
 - **`make stage` never lets a shell see a path** (`scripts/lib/stage_files.py`). Paths arrive through the environment and are handed to `git add --` as separate argv entries, so spaces, globs, and metacharacters stay literal. `files=` splits on whitespace, except when its complete value names one existing or tracked path; `file=` is always taken verbatim.
 - **`make commit` screens the message before git sees it** (`scripts/gh/commit_message.py`). Both input forms are assembled into a private temporary file, checked for leaked shell fragments, and then passed to `git commit -F`. This exists because a mistyped heredoc terminator once recorded `EOF && make push 2>&1 | tail -3` inside a real commit message. The screen runs first by design: validating after the commit would report the leak only once it was already in history. It rejects heredoc openers, bare terminators, redirections, and pipes into a pager, and is deliberately narrow so prose like "Document EOF handling" is not a false positive.
 
+### Free-text arguments
+
+No target interpolates free text into its recipe. A value like `body="..."` or `title="..."` is exported to the environment and read back as `"$$VAR"`, so it never becomes shell source text: a newline no longer ends the line inside an open quote, a `"` no longer closes it, and backticks stay literal.
+
+Bodies go one step further. Because `--body-file -` already reads stdin, an inline `body=` is piped straight into the helper rather than written out, so the text never reaches disk at all and the targets need no `mktemp`, `chmod`, or cleanup `trap`. Where a real file is unavoidable, as in `make commit` and `make release-create`, it is created `chmod 600` and removed by a `trap`.
+
+That makes the file form a first-class input rather than a workaround, so the comment and reply targets accept `body_file=` in place of `body=`:
+
+```bash
+# Inline body
+make pr-comment body="Looks good"
+
+# Body from a file, or from stdin with -
+make pr-comment body_file=notes.md
+make pr-reply thread=PRRT_... body_file=notes.md
+git log -1 --format=%B | make pr-address thread=PRRT_... body_file=-
+```
+
+`make commit message_file=` and `make ci-alert-issue detail_file=` follow the same convention. `make pr-comment`, `make pr-reply`, `make pr-address`, and `make pr-edit` all run through `scripts/gh/cli.py` rather than raw `gh`, so the body arrives as one argument no matter what is in it. A guard test in `tests/test_makefile.py` fails if a recipe ever interpolates a free-text value again.
+
 ## CI
 
 GitHub Actions runs on pull requests and pushes to `main`:

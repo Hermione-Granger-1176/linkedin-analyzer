@@ -521,15 +521,20 @@ pr-create: ## Open a pull request for the current branch (make pr-create [base=b
 
 pr-edit: export PR_EDIT_TITLE := $(title)
 pr-edit: export PR_EDIT_BODY := $(body)
-pr-edit: ## Edit the current PR title/body (make pr-edit title="..." [body="..."] [pr_num=N])
-	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY" || { printf 'Usage: make pr-edit title="New title" [body="..."]\n' >&2; exit 1; }
+pr-edit: export PR_EDIT_BODY_FILE := $(body_file)
+pr-edit: ## Edit the current PR title/body (make pr-edit [title="..."] [body="..." | body_file=path, - reads stdin] [pr_num=N])
+	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY$$PR_EDIT_BODY_FILE" || \
+		{ printf 'Usage: make pr-edit title="New title" [body="..." OR body_file=path (- reads stdin)]\n' >&2; exit 1; }
 	@set -e; \
-	tmp=""; \
-	trap 'test -n "$$tmp" && rm -f -- "$$tmp"' EXIT; \
-	set -- $(if $(pr_num),$(pr_num)); \
+	set -- $(if $(pr_num),--pr $(pr_num)); \
 	if [ -n "$$PR_EDIT_TITLE" ]; then set -- "$$@" --title "$$PR_EDIT_TITLE"; fi; \
-	if [ -n "$$PR_EDIT_BODY" ]; then tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-pr-body.XXXXXX"); chmod 600 "$$tmp"; printf '%s' "$$PR_EDIT_BODY" > "$$tmp"; set -- "$$@" --body-file "$$tmp"; fi; \
-	gh pr edit "$$@"
+	if [ -n "$$PR_EDIT_BODY_FILE" ]; then \
+		$(GH) edit-pr "$$@" --body-file "$$PR_EDIT_BODY_FILE"; \
+	elif [ -n "$$PR_EDIT_BODY" ]; then \
+		printf '%s' "$$PR_EDIT_BODY" | $(GH) edit-pr "$$@" --body-file -; \
+	else \
+		$(GH) edit-pr "$$@"; \
+	fi
 
 pr-list: ## List open pull requests
 	gh pr list
@@ -546,24 +551,50 @@ pr-diff: ## Show the diff for the current PR
 pr-comments: ## Show all comments on the current PR
 	gh pr view --comments
 
-pr-comment: ## Add a comment to the current PR (make pr-comment body="msg")
-	@test -n "$(body)" || (printf 'Usage: make pr-comment body="Looks good"\n' >&2; exit 1)
-	gh pr comment --body "$(body)"
+# Comment and reply text is prose: it carries newlines, quotes, backticks, and
+# version constraints like >=3.11. Interpolating it into the recipe hands all of
+# that to the shell as source text, so it reaches the helper through the
+# environment and then over a pipe instead. `--body-file -` already reads stdin,
+# so an inline body never needs a temporary file and never touches disk.
+pr-comment: export PR_COMMENT_BODY := $(body)
+pr-comment: export PR_COMMENT_BODY_FILE := $(body_file)
+pr-comment: ## Add a comment to the current PR (make pr-comment body="msg" | body_file=path, - reads stdin) [pr_num=N]
+	@test -n "$$PR_COMMENT_BODY$$PR_COMMENT_BODY_FILE" || \
+		(printf 'Usage: make pr-comment body="Looks good" OR make pr-comment body_file=path (- reads stdin)\n' >&2; exit 1)
+	@if [ -n "$$PR_COMMENT_BODY_FILE" ]; then \
+		$(GH) comment $(if $(pr_num),--pr $(pr_num)) --body-file "$$PR_COMMENT_BODY_FILE"; \
+	else \
+		printf '%s' "$$PR_COMMENT_BODY" | $(GH) comment $(if $(pr_num),--pr $(pr_num)) --body-file -; \
+	fi
 
 pr-review-comments: ## List review threads with ids (make pr-review-comments [pr_num=N] [show=all])
 	@$(GH) list $(if $(pr_num),--pr $(pr_num)) $(if $(filter all,$(show)),--all)
 
-pr-reply: ## Reply to a review thread (make pr-reply thread=PRRT_... body="msg")
-	@test -n "$(thread)" -a -n "$(body)" || (printf 'Usage: make pr-reply thread=PRRT_... body="Fixed"\n' >&2; exit 1)
-	@$(GH) reply --thread "$(thread)" --body "$(body)"
+pr-reply: export PR_REPLY_BODY := $(body)
+pr-reply: export PR_REPLY_BODY_FILE := $(body_file)
+pr-reply: ## Reply to a review thread (make pr-reply thread=PRRT_... body="msg" | body_file=path, - reads stdin)
+	@test -n "$(thread)" -a -n "$$PR_REPLY_BODY$$PR_REPLY_BODY_FILE" || \
+		(printf 'Usage: make pr-reply thread=PRRT_... body="Fixed" OR body_file=path (- reads stdin)\n' >&2; exit 1)
+	@if [ -n "$$PR_REPLY_BODY_FILE" ]; then \
+		$(GH) reply --thread "$(thread)" --body-file "$$PR_REPLY_BODY_FILE"; \
+	else \
+		printf '%s' "$$PR_REPLY_BODY" | $(GH) reply --thread "$(thread)" --body-file -; \
+	fi
 
 pr-resolve: ## Resolve a review thread (make pr-resolve thread=PRRT_...)
 	@test -n "$(thread)" || (printf 'Usage: make pr-resolve thread=PRRT_...\n' >&2; exit 1)
 	@$(GH) resolve --thread "$(thread)"
 
-pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT_... body="msg")
-	@test -n "$(thread)" -a -n "$(body)" || (printf 'Usage: make pr-address thread=PRRT_... body="Fixed in abc123"\n' >&2; exit 1)
-	@$(GH) address --thread "$(thread)" --body "$(body)"
+pr-address: export PR_ADDRESS_BODY := $(body)
+pr-address: export PR_ADDRESS_BODY_FILE := $(body_file)
+pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT_... body="msg" | body_file=path, - reads stdin)
+	@test -n "$(thread)" -a -n "$$PR_ADDRESS_BODY$$PR_ADDRESS_BODY_FILE" || \
+		(printf 'Usage: make pr-address thread=PRRT_... body="Fixed in abc123" OR body_file=path (- reads stdin)\n' >&2; exit 1)
+	@if [ -n "$$PR_ADDRESS_BODY_FILE" ]; then \
+		$(GH) address --thread "$(thread)" --body-file "$$PR_ADDRESS_BODY_FILE"; \
+	else \
+		printf '%s' "$$PR_ADDRESS_BODY" | $(GH) address --thread "$(thread)" --body-file -; \
+	fi
 
 pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
 	@$(GH) list-comments $(if $(pr_num),--pr $(pr_num))
@@ -626,16 +657,23 @@ ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_k
 	@test -n "$(cache)" || (printf 'Usage: make ci-cache-delete cache=1234 [ref=refs/heads/main]\n' >&2; exit 1)
 	gh cache delete "$(cache)" $(if $(ref),--ref "$(ref)")
 
+# The title and detail are free text written by a failing workflow, so they
+# reach the helper through the environment. The $(if ...) guards only test
+# whether the variable was set; they never expand its value into the recipe.
+# The names differ from the caller's own ALERT_* environment variables in
+# alert-issue.yml so a reader can tell the two apart at a glance.
+ci-alert-issue: export ALERT_ISSUE_TITLE := $(title)
+ci-alert-issue: export ALERT_ISSUE_DETAIL := $(detail)
 ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
-	@test -n "$(title)" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
+	@test -n "$$ALERT_ISSUE_TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts \
-		--title "$(title)" \
+		--title "$$ALERT_ISSUE_TITLE" \
 		--label "$(label)" \
 		--run-url "$(run_url)" \
 		--state "$(state)" \
 		$(if $(repo),--repo "$(repo)") \
-		$(if $(detail),--detail "$(detail)") \
+		$(if $(detail),--detail "$$ALERT_ISSUE_DETAIL") \
 		$(if $(detail_file),--detail-file "$(detail_file)")
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])

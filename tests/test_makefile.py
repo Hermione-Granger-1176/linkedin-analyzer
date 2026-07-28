@@ -90,7 +90,6 @@ def test_python_audit_uses_policy_runner_and_private_temporary_export() -> None:
     ("target", "template"),
     [
         ("release-create", "linkedin-analyzer-release-notes.XXXXXX"),
-        ("pr-edit", "linkedin-analyzer-pr-body.XXXXXX"),
         ("commit", "linkedin-analyzer-commit-message.XXXXXX"),
     ],
 )
@@ -117,6 +116,67 @@ def test_no_recipe_clobbers_the_developers_python_path() -> None:
     # The definition itself continues with $${...}, so a trailing space only
     # appears where a recipe assigned the bare value and dropped what was there.
     assert "PYTHONPATH=. " not in MAKEFILE_TEXT
+
+
+def test_no_recipe_interpolates_free_text_into_a_shell_command() -> None:
+    """Free text reaches a target through the environment, never through the recipe.
+
+    An interpolated value becomes shell source text: a newline ends the line
+    mid-quote, a double quote closes it, and backticks are evaluated. Each broken
+    spelling is pinned by hand so a new target cannot reintroduce the bug by
+    copying an older line.
+    """
+    for interpolation in ('--body "$(body)"', '--title "$(title)"', '--detail "$(detail)"'):
+        assert interpolation not in MAKEFILE_TEXT
+
+
+@pytest.mark.parametrize(
+    ("target", "subcommand", "variable"),
+    [
+        ("pr-comment", "comment", "PR_COMMENT"),
+        ("pr-reply", "reply", "PR_REPLY"),
+        ("pr-address", "address", "PR_ADDRESS"),
+        ("pr-edit", "edit-pr", "PR_EDIT"),
+    ],
+)
+def test_posting_targets_pipe_the_body_instead_of_writing_it_out(
+    target: str, subcommand: str, variable: str
+) -> None:
+    """Bodies reach the helper over stdin, so they can be long, multi-line, or both.
+
+    ``--body-file -`` already reads stdin, so an inline body needs no temporary
+    file. That is one fewer place the text can be left behind on disk, and it
+    removes the mktemp, chmod, and trap dance these targets would otherwise
+    repeat verbatim.
+    """
+    recipe = _target_recipe(target)
+
+    assert f"{target}: export {variable}_BODY := $(body)" in MAKEFILE_TEXT
+    assert f"{target}: export {variable}_BODY_FILE := $(body_file)" in MAKEFILE_TEXT
+    assert f"printf '%s' \"$${variable}_BODY\" | $(GH) {subcommand}" in recipe
+    assert f'--body-file "$${variable}_BODY_FILE"' in recipe
+    assert "--body-file -" in recipe
+    assert "mktemp" not in recipe
+
+
+def test_pr_edit_routes_through_the_tested_helper() -> None:
+    """Editing a PR goes through the helper subcommand rather than raw gh."""
+    recipe = _target_recipe("pr-edit")
+
+    assert "$(GH) edit-pr" in recipe
+    assert "gh pr edit" not in recipe
+    assert "$(if $(pr_num),--pr $(pr_num))" in recipe
+
+
+def test_alert_issue_passes_free_text_through_the_environment() -> None:
+    """The alert title and detail are workflow-authored prose, so they stay in the environment."""
+    recipe = _target_recipe("ci-alert-issue")
+
+    assert "ci-alert-issue: export ALERT_ISSUE_TITLE := $(title)" in MAKEFILE_TEXT
+    assert "ci-alert-issue: export ALERT_ISSUE_DETAIL := $(detail)" in MAKEFILE_TEXT
+    assert '--title "$$ALERT_ISSUE_TITLE"' in recipe
+    assert '$(if $(detail),--detail "$$ALERT_ISSUE_DETAIL")' in recipe
+    assert '$(if $(detail_file),--detail-file "$(detail_file)")' in recipe
 
 
 def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:

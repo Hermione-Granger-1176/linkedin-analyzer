@@ -17,6 +17,39 @@ from . import ci_status, commit_message, issues, pr_review, pr_watch
 from .gh_runner import GhError
 
 
+def _add_body_options(parser: argparse.ArgumentParser, *, required: bool = True) -> None:
+    """Add the shared body options (reply, comment, or PR body) to a subcommand parser.
+
+    Free text reaches these commands through a file wherever it can be long or
+    multi-line, so the Makefile never has to interpolate it into a recipe.
+    """
+    body_group = parser.add_mutually_exclusive_group(required=required)
+    body_group.add_argument("--body", help="Body text")
+    body_group.add_argument(
+        "--body-file", help="Path to a file containing the body text (- reads stdin)"
+    )
+
+
+def _body_text(args: argparse.Namespace) -> str:
+    """Return the body text from ``--body`` or ``--body-file`` (``-`` reads stdin).
+
+    Raises:
+        GhError: If the file cannot be read, or if neither option was supplied.
+            Only commands that make the body optional can reach the second case,
+            and they must forward the raw values rather than call this.
+    """
+    if args.body_file is not None:
+        if args.body_file == "-":
+            return sys.stdin.read()
+        try:
+            return Path(args.body_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise GhError(f"Could not read --body-file {args.body_file}: {exc}") from exc
+    if args.body is None:
+        raise GhError("Provide a body with --body or --body-file.")
+    return str(args.body)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gh-helper", description="GitHub pull-request and CI helper commands"
@@ -34,7 +67,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     reply_parser = subparsers.add_parser("reply", help="Reply to a review thread by id")
     reply_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
-    reply_parser.add_argument("--body", required=True, help="Reply text")
+    _add_body_options(reply_parser)
 
     resolve_parser = subparsers.add_parser("resolve", help="Resolve a review thread by id")
     resolve_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
@@ -43,7 +76,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "address", help="Reply to and resolve a review thread in one step"
     )
     address_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
-    address_parser.add_argument("--body", required=True, help="Reply text")
+    _add_body_options(address_parser)
 
     list_comments_parser = subparsers.add_parser(
         "list-comments", help="List individual review comments with node ids"
@@ -59,6 +92,15 @@ def _build_parser() -> argparse.ArgumentParser:
     delete_comment_parser.add_argument(
         "--comment", required=True, help="Comment node id (PRRC_...)"
     )
+
+    comment_parser = subparsers.add_parser("comment", help="Add a PR-level comment")
+    comment_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    _add_body_options(comment_parser)
+
+    edit_pr_parser = subparsers.add_parser("edit-pr", help="Edit a PR title and/or body")
+    edit_pr_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    edit_pr_parser.add_argument("--title", help="New PR title")
+    _add_body_options(edit_pr_parser, required=False)
 
     copilot_parser = subparsers.add_parser(
         "copilot-review", help="Request a Copilot code review on the PR"
@@ -130,7 +172,7 @@ def _handle_list(args: argparse.Namespace) -> int:
 
 def _handle_reply(args: argparse.Namespace) -> int:
     """Reply to a single review thread."""
-    pr_review.reply_to_thread(args.thread, args.body)
+    pr_review.reply_to_thread(args.thread, _body_text(args))
     print(f"Replied to {args.thread}")
     return 0
 
@@ -144,7 +186,7 @@ def _handle_resolve(args: argparse.Namespace) -> int:
 
 def _handle_address(args: argparse.Namespace) -> int:
     """Reply to and resolve a single review thread."""
-    pr_review.address_thread(args.thread, args.body)
+    pr_review.address_thread(args.thread, _body_text(args))
     print(f"Replied to and resolved {args.thread}")
     return 0
 
@@ -163,6 +205,25 @@ def _handle_delete_comment(args: argparse.Namespace) -> int:
     """Delete a single review comment by node id."""
     pr_review.delete_review_comment(args.comment)
     print(f"Deleted {args.comment}")
+    return 0
+
+
+def _handle_comment(args: argparse.Namespace) -> int:
+    """Post a PR-level comment."""
+    pr_review.comment_on_pr(args.pr, _body_text(args))
+    print("Commented on the PR")
+    return 0
+
+
+def _handle_edit_pr(args: argparse.Namespace) -> int:
+    """Edit a pull request's title and/or body.
+
+    The body file is forwarded to ``gh pr edit --body-file`` rather than read
+    here, so gh reads it itself and a large body never has to fit in the
+    argument list.
+    """
+    pr_review.edit_pr(args.pr, title=args.title, body=args.body, body_file=args.body_file)
+    print("Edited the PR")
     return 0
 
 
@@ -233,6 +294,8 @@ COMMAND_HANDLERS = {
     "address": _handle_address,
     "list-comments": _handle_list_comments,
     "delete-comment": _handle_delete_comment,
+    "comment": _handle_comment,
+    "edit-pr": _handle_edit_pr,
     "copilot-review": _handle_copilot_review,
     "summary": _handle_summary,
     "issue-summary": _handle_issue_summary,

@@ -69,10 +69,16 @@ jobs:
         run: make ci-heavy-checks
 
       # Runs even when a suite failed, so the summary still reports whatever
-      # coverage was reached before the failure.
+      # coverage was reached before the failure. The table also goes to the log
+      # because a step summary is readable only in the browser: a report that
+      # went missing degrades into a note rather than an error, and that must
+      # not be invisible from a terminal. pipefail keeps tee from swallowing a
+      # real failure the way the redirect could not.
       - name: Summarize coverage
         if: always()
-        run: make ci-coverage-summary >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          make ci-coverage-summary | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Summarize heavy checks
         if: always()

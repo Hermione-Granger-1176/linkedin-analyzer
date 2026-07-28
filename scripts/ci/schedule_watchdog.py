@@ -21,9 +21,11 @@ through the shared ``ci-alert-issue`` path.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from scripts.gh import gh_runner
@@ -34,12 +36,21 @@ if TYPE_CHECKING:
 
 DAY_SECONDS = 86_400
 
-# Exit codes. The calling workflow needs to tell "the watchdog ran and found
-# stale schedules" apart from "the watchdog could not check at all", because the
-# first opens a stale-schedule alert and the second is a setup failure.
+# Exit codes. They still distinguish the three outcomes for anyone running this
+# module directly, but the workflow must not read the verdict off them: `make`
+# collapses every non-zero recipe exit to 2 of its own, so "found stale
+# schedules" and "could not check" reach a caller behind the Makefile as the
+# same number. The `checked` output below is what carries that distinction.
 EXIT_HEALTHY = 0
 EXIT_PROBLEMS_FOUND = 1
 EXIT_CHECK_FAILED = 2
+
+# GitHub Actions reads step outputs from the file named by this variable. The
+# watchdog writes its own verdict there because it is the only party that knows
+# it: by the time the workflow shell sees an exit code, the one bit that picks
+# between a stale-schedule alert and a setup-failure alert is already gone.
+GITHUB_OUTPUT_ENV = "GITHUB_OUTPUT"
+CHECKED_OUTPUT = "checked"
 
 # Maximum expected gap between scheduled runs for each workflow, derived from
 # its cron expression. `test_cadences_match_the_crons_declared_in_the_workflows`
@@ -179,6 +190,26 @@ def check_scheduled_workflows(
     return problems
 
 
+def report_checked(reached_verdict: bool, *, env: Mapping[str, str] | None = None) -> None:
+    """Record whether the watchdog reached a verdict, for the calling workflow.
+
+    The alert jobs pick between "schedules are stale" and "the watchdog itself
+    broke" on this one bit, and it cannot travel as an exit code: `make`
+    rewrites every failing recipe's status to 2, so both outcomes arrive
+    identical to the workflow shell. Writing it here also keeps the shell thin,
+    which is the same reason every other decision lives in Python.
+
+    Outside GitHub Actions the variable is unset and nothing is written, so the
+    everyday `make ci-schedule-watchdog` is unaffected.
+    """
+    path = (os.environ if env is None else env).get(GITHUB_OUTPUT_ENV)
+    if not path:
+        return
+    value = "true" if reached_verdict else "false"
+    with Path(path).open("a", encoding="utf-8") as handle:
+        handle.write(f"{CHECKED_OUTPUT}={value}\n")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the watchdog command-line parser."""
     parser = argparse.ArgumentParser(description="Detect stale or disabled scheduled workflows")
@@ -189,18 +220,21 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Run the watchdog and return one of the EXIT_* codes.
 
-    A failure to complete the check is reported as its own code rather than
-    reusing the stale-schedule code, so the caller cannot mistake an
-    infrastructure failure for a verdict about the schedules.
+    A failure to complete the check is reported as its own code, and as
+    ``checked=false``, rather than reusing the stale-schedule code, so the
+    caller cannot mistake an infrastructure failure for a verdict about the
+    schedules.
     """
     args = _build_parser().parse_args(argv)
     try:
         repo = args.repo or gh_runner.resolve_repo()
         problems = check_scheduled_workflows(repo=repo)
     except GhError as exc:
+        report_checked(False)
         print(f"Schedule watchdog could not complete its check: {exc}", file=sys.stderr)
         return EXIT_CHECK_FAILED
 
+    report_checked(True)
     if not problems:
         print("All scheduled workflows are active and recent")
         return EXIT_HEALTHY

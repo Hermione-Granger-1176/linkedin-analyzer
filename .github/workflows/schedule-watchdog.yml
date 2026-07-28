@@ -42,22 +42,17 @@ jobs:
           node-version: ""
           install-node-deps: "false"
 
-      # Exit 0 healthy and exit 1 stale both mean the watchdog reached a verdict.
-      # Anything else means it could not check at all, so `checked` stays unset
-      # and the setup-failure alert fires instead of a stale-schedule alert.
+      # The watchdog writes `checked` itself. It cannot be inferred from an exit
+      # code out here: `make` rewrites every failing recipe's status to 2, so
+      # "found stale schedules" and "could not check" would arrive identical
+      # even though they pick different alerts. A run that dies before the
+      # watchdog writes anything leaves `checked` unset, which the setup-failure
+      # job already treats the same as false.
       - name: Check scheduled workflow recency
         id: watchdog
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          make ci-schedule-watchdog
-          status=$?
-          set -e
-          if [ "$status" -le 1 ]; then
-            echo "checked=true" >> "$GITHUB_OUTPUT"
-          fi
-          exit "$status"
+        run: make ci-schedule-watchdog
 
   report-failure:
     needs: watchdog

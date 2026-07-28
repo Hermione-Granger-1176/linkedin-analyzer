@@ -688,14 +688,11 @@ ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)
 ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
 	@test -n "$$ALERT_ISSUE_TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)
-	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts \
-		--title "$$ALERT_ISSUE_TITLE" \
-		--label "$(label)" \
-		--run-url "$(run_url)" \
-		--state "$(state)" \
-		$(if $(repo),--repo "$(repo)") \
-		$(if $(detail),--detail "$$ALERT_ISSUE_DETAIL") \
-		$(if $(detail_file),--detail-file "$(detail_file)")
+	@set -e; \
+	set -- --title "$$ALERT_ISSUE_TITLE" --label "$(label)" --run-url "$(run_url)" --state "$(state)" \
+		$(if $(repo),--repo "$(repo)") $(if $(detail_file),--detail-file "$(detail_file)"); \
+	if [ -n "$$ALERT_ISSUE_DETAIL" ]; then set -- "$$@" --detail "$$ALERT_ISSUE_DETAIL"; fi; \
+	$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts "$$@"
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
@@ -711,10 +708,12 @@ issue-list: export ISSUE_SEARCH := $(value search)
 issue-list: ## List issues (make issue-list [state=open|closed|all] [label=bug] [assignee=user | mine=1] [author=user] [search="..."] [limit=N])
 	@test -z "$(and $(assignee),$(filter 1,$(mine)))" || \
 		(printf 'Use assignee=user or mine=1, not both.\n' >&2; exit 1)
-	@gh issue list $(if $(state),--state "$(state)") $(if $(label),--label "$(label)") \
+	@set -e; \
+	set -- $(if $(state),--state "$(state)") $(if $(label),--label "$(label)") \
 		$(if $(assignee),--assignee "$(assignee)") $(if $(filter 1,$(mine)),--assignee @me) \
-		$(if $(author),--author "$(author)") $(if $(search),--search "$$ISSUE_SEARCH") \
-		$(if $(limit),--limit "$(limit)")
+		$(if $(author),--author "$(author)") $(if $(limit),--limit "$(limit)"); \
+	if [ -n "$$ISSUE_SEARCH" ]; then set -- "$$@" --search "$$ISSUE_SEARCH"; fi; \
+	gh issue list "$$@"
 
 issue-view: ## Show an issue with its comments (make issue-view issue=N)
 	@test -n "$(issue)" || (printf 'Usage: make issue-view issue=123\n' >&2; exit 1)
@@ -771,13 +770,18 @@ issue-edit: ## Edit an issue title or body (make issue-edit issue=N [title="..."
 issue-close: export ISSUE_CLOSE_COMMENT := $(value comment)
 issue-close: ## Close an issue (make issue-close issue=N [reason=completed|"not planned"] [comment="..."])
 	@test -n "$(issue)" || (printf 'Usage: make issue-close issue=123 [reason=completed] [comment="..."]\n' >&2; exit 1)
-	@gh issue close "$(issue)" $(if $(reason),--reason "$(reason)") \
-		$(if $(comment),--comment "$$ISSUE_CLOSE_COMMENT")
+	@set -e; \
+	set -- "$(issue)" $(if $(reason),--reason "$(reason)"); \
+	if [ -n "$$ISSUE_CLOSE_COMMENT" ]; then set -- "$$@" --comment "$$ISSUE_CLOSE_COMMENT"; fi; \
+	gh issue close "$$@"
 
 issue-reopen: export ISSUE_REOPEN_COMMENT := $(value comment)
 issue-reopen: ## Reopen a closed issue (make issue-reopen issue=N [comment="..."])
 	@test -n "$(issue)" || (printf 'Usage: make issue-reopen issue=123 [comment="..."]\n' >&2; exit 1)
-	@gh issue reopen "$(issue)" $(if $(comment),--comment "$$ISSUE_REOPEN_COMMENT")
+	@set -e; \
+	set -- "$(issue)"; \
+	if [ -n "$$ISSUE_REOPEN_COMMENT" ]; then set -- "$$@" --comment "$$ISSUE_REOPEN_COMMENT"; fi; \
+	gh issue reopen "$$@"
 
 issue-label: ## Add labels to an issue (make issue-label issue=N labels="bug,ci")
 	@test -n "$(issue)" -a -n "$(labels)" || \

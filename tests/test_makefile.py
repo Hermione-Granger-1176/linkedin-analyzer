@@ -209,6 +209,23 @@ def test_posting_targets_pipe_the_body_instead_of_writing_it_out(
     assert "mktemp" not in recipe
 
 
+@pytest.mark.parametrize("argument", ["search", "comment", "detail", "body", "title", "notes"])
+def test_optional_free_text_is_gated_by_the_shell_not_by_make(argument: str) -> None:
+    """A free-text value is never the condition of a make function.
+
+    ``$(if $(search),--search "$$ISSUE_SEARCH")`` reads as a presence test, but
+    make expands ``$(search)`` to evaluate it, and that is a *second* expansion
+    on top of the one make already performed while parsing the command-line
+    assignment. Measured on a scratch Makefile: a value containing
+    ``$(shell ...)`` runs the command twice under a make conditional and once
+    when the recipe tests ``[ -n "$$VAR" ]`` instead.
+
+    Gating in the shell also keeps one source of truth, since the value the
+    recipe passes and the value it tested are then the same variable.
+    """
+    assert f"$(if $({argument})," not in MAKEFILE_TEXT
+
+
 @pytest.mark.parametrize(
     ("target", "command", "variable"),
     [
@@ -303,7 +320,7 @@ def test_alert_issue_passes_free_text_through_the_environment() -> None:
     assert "ci-alert-issue: export ALERT_ISSUE_TITLE := $(value title)" in MAKEFILE_TEXT
     assert "ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)" in MAKEFILE_TEXT
     assert '--title "$$ALERT_ISSUE_TITLE"' in recipe
-    assert '$(if $(detail),--detail "$$ALERT_ISSUE_DETAIL")' in recipe
+    assert 'if [ -n "$$ALERT_ISSUE_DETAIL" ]; then set -- "$$@" --detail' in recipe
     assert '$(if $(detail_file),--detail-file "$(detail_file)")' in recipe
 
 

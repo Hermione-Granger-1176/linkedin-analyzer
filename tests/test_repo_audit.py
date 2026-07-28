@@ -118,10 +118,24 @@ def test_an_unprotected_branch_is_a_finding_not_a_failure_to_look() -> None:
     assert findings == ["main has no branch protection at all"]
 
 
-def test_an_unreadable_protection_response_still_fails_the_audit() -> None:
-    """Anything but a 404 is a failure to look, and is never softened into a finding."""
-    with pytest.raises(GhError, match="was refused"):
-        _audit(protection=GhError("gh api was refused: token missing a permission"))
+@pytest.mark.parametrize(
+    ("error", "match"),
+    [
+        ("gh api failed: Branch not found (HTTP 404)", "Branch not found"),
+        ("gh api was refused: token missing a permission", "was refused"),
+        ("gh api failed: Not Found (HTTP 404)", "Not Found"),
+    ],
+    ids=["missing-branch", "no-permission", "missing-repository"],
+)
+def test_only_an_unprotected_branch_is_softened_into_a_finding(error: str, match: str) -> None:
+    """A mistyped branch also answers 404, and reporting it as removed protection would lie.
+
+    GitHub separates "Branch not protected" from "Branch not found" by message
+    alone, both under HTTP 404, so matching the status would turn every wrong
+    branch or repository name into a confident claim that protection is gone.
+    """
+    with pytest.raises(GhError, match=match):
+        _audit(protection=GhError(error))
 
 
 def test_a_renamed_required_check_is_reported_by_name() -> None:
@@ -263,9 +277,15 @@ def test_a_missing_secret_is_reported() -> None:
 
 
 def test_unnamed_inventory_entries_are_ignored_rather_than_counted() -> None:
-    """An entry that names nothing satisfies no expectation, so it must not mask one."""
-    entries = {"variables": ["not-a-dict", {"name": 7}, {"name": "APP_ID"}]}
-    assert _audit(variables=entries) == []
+    """An entry that names nothing satisfies no expectation, so it must not mask one.
+
+    The malformed entries are checked twice: once beside the real one, where
+    they must not break the read, and once alone, where counting them would
+    wrongly certify that APP_ID exists.
+    """
+    malformed: list[object] = ["not-a-dict", {"name": 7}]
+    assert _audit(variables={"variables": [*malformed, {"name": "APP_ID"}]}) == []
+    assert _audit(variables={"variables": malformed}) == ["missing repository variables: APP_ID"]
 
 
 @pytest.mark.parametrize(

@@ -87,10 +87,9 @@ def test_js_totals_are_read_for_every_reported_metric(tmp_path: Path) -> None:
 def test_the_implicit_else_branch_metric_is_left_out(tmp_path: Path) -> None:
     """Vitest reports `branchesTrue` as 100% of zero, which would read as real coverage."""
     report = _js_report(tmp_path, {**JS_TOTAL, "branchesTrue": {"covered": 0, "total": 0}})
-    assert "branchesTrue" not in coverage_summary.read_js_metrics(report)[0].suite
-    assert [m.metric for m in coverage_summary.read_js_metrics(report)] == list(
-        coverage_summary.JS_METRICS
-    )
+    metrics = coverage_summary.read_js_metrics(report)
+    assert [m.metric for m in metrics] == list(coverage_summary.JS_METRICS)
+    assert "branchesTrue" not in coverage_summary.JS_METRICS
 
 
 # ─── Reports that cannot be trusted ──────────────────────────────────────────

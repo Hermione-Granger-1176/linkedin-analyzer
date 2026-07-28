@@ -91,9 +91,11 @@ EXPECTED_MERGE_METHODS = {
     "allow_rebase_merge": False,
 }
 
-# What `gh api` says when a branch has no protection at all. That is drift worth
-# reporting rather than a failure to look, so it is matched rather than raised.
-BRANCH_UNPROTECTED_MARKERS = ("branch not protected", "404")
+# What `gh api` says when a branch exists but carries no protection, as opposed
+# to "Branch not found" for one that does not exist. Both are HTTP 404, so the
+# status alone cannot separate them and only this phrase can: a mistyped
+# `branch=` must fail closed rather than be reported as removed protection.
+BRANCH_UNPROTECTED_MARKER = "branch not protected"
 
 
 def _fetch_object(
@@ -117,10 +119,12 @@ def _fetch_protection(
 ) -> dict[str, object] | None:
     """Fetch branch protection, returning None when the branch has none.
 
-    An unprotected branch answers with a 404, which is indistinguishable from a
-    missing repository at the transport level but means something very
-    different: it is the single worst drift this audit can find, so it is turned
-    into a finding rather than allowed to read as a failure to check.
+    A branch that exists but is unprotected answers with a 404, and so does a
+    branch that does not exist at all. Only the first is drift, and it is the
+    single worst drift this audit can find, so it becomes a finding. The second
+    means the audit was pointed somewhere wrong and must fail closed. GitHub
+    separates them by message and not by status, so the message is what is
+    matched, and anything else propagates.
     """
     try:
         return _fetch_object(
@@ -129,8 +133,7 @@ def _fetch_protection(
             run_fn=run_fn,
         )
     except GhError as exc:
-        message = str(exc).lower()
-        if any(marker in message for marker in BRANCH_UNPROTECTED_MARKERS):
+        if BRANCH_UNPROTECTED_MARKER in str(exc).lower():
             return None
         raise
 

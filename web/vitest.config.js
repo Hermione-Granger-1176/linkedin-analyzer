@@ -8,6 +8,9 @@ export default defineConfig({
         coverage: {
             provider: "v8",
             reportsDirectory: "./coverage",
+            // json-summary feeds `make ci-coverage-summary`; html stays for
+            // reading a local run, text keeps the terminal output unchanged.
+            reporter: ["text", "html", "json-summary"],
             all: true,
             include: ["web/src/**/*.js", "api/**/*.mjs"],
             thresholds: {

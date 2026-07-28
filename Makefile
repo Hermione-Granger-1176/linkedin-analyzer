@@ -676,7 +676,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog
+.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog ci-audit-repo-settings ci-coverage-summary
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -732,6 +732,18 @@ ci-alert-issue: ## Sync a monitored alert issue, detail on stdin (TITLE='...' ma
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
+
+# Run by hand, not from a workflow. Reading branch protection needs
+# 'administration: read' and listing secrets needs 'secrets: read', and
+# GITHUB_TOKEN can grant neither, so a workflow copy would only ever report
+# that it could not look.
+ci-audit-repo-settings: ## Report drift in GitHub repository settings (make ci-audit-repo-settings [repo=owner/name] [branch=main])
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.repo_audit \
+		$(if $(repo),--repo "$(repo)") $(if $(branch),--default-branch "$(branch)")
+
+# Reads the reports that test-py and test-js leave behind, so run it after them.
+ci-coverage-summary: ## Print the coverage totals as markdown for a job summary (make ci-coverage-summary)
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.coverage_summary
 
 # ─── Issues @issue ────────────────────────────────────────────────────────────────
 

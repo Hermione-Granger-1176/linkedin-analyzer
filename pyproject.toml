@@ -133,6 +133,11 @@ addopts = [
     "-ra",
     "--cov",
     "--cov-report=term-missing",
+    # Machine-readable totals for `make ci-coverage-summary`. Written on every
+    # run so the summary can never report a stale number from an earlier one.
+    # It lives outside coverage/ because Vitest wipes that directory before its
+    # own run, and ci-heavy-checks runs both suites in parallel.
+    "--cov-report=json:.artifacts/coverage/python-coverage.json",
     "--cov-fail-under=100",
 ]
 filterwarnings = [

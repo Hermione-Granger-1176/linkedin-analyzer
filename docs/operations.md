@@ -212,6 +212,45 @@ TITLE='Dependency audit failed' make ci-alert-issue label=dependency-audit \
   run_url=https://github.com/OWNER/REPO/actions/runs/123 state=close
 ```
 
+### Repository settings audit
+
+Branch protection, secret scanning, and the Actions inventory are configured in the GitHub web UI, which makes them the one part of this project no test, lint, or review can see. They drift silently: a required check renamed out of the protection list, or push protection switched off, changes nothing locally and shows up only the next time it was supposed to stop something.
+
+```bash
+make ci-audit-repo-settings                  # current repository
+make ci-audit-repo-settings repo=OWNER/NAME
+make ci-audit-repo-settings branch=release   # audit a branch other than main
+```
+
+Expectations live in `scripts/ci/repo_audit.py` as named constants, so changing a setting on purpose means changing the constant in the same commit. What it checks:
+
+| Group | Expectation |
+| --- | --- |
+| Repository | Default branch is `main`; squash is the only merge method; merged branches are deleted |
+| Security | Secret scanning, push protection, and Dependabot security updates are all enabled |
+| Branch protection | Required checks are `analyze-javascript`, `analyze-python`, `CodeQL`, and `CI result`; at least one approving review; signed commits, linear history, and conversation resolution required; force pushes and deletions refused |
+| Actions | Variable `APP_ID` and secret `APP_PRIVATE_KEY` exist |
+
+The script's exit codes match the schedule watchdog: `0` clean, `1` drift found and listed, `2` the audit could not complete. They are distinct because a failure to look must never read as a clean result, which is also why a setting the API declines to report is treated as missing rather than assumed correct. The one exception is a branch with no protection at all, which answers `404`: that is the single worst drift the audit can find, so it becomes a finding rather than a failure to check.
+
+Note that `make` collapses any non-zero recipe exit to `2` of its own, so `1` and `2` are only distinguishable to something running the module directly. At a terminal the printed output is the signal: drift is listed on stdout, and a failure to look prints to stderr with the two permissions it needed.
+
+**This target is run by hand, not from a workflow.** Reading branch protection needs `administration: read` and listing secrets needs `secrets: read`, and `GITHUB_TOKEN` can grant neither. The repository's App credentials exist for writeback and carry neither permission either, so a workflow copy would only ever report that it could not look. Run it after changing repository settings, and when a merge behaves in a way the protection rules should have prevented.
+
+Rulesets are deliberately not audited; this repository uses classic branch protection and has none. Migrating protection to a ruleset would empty the classic endpoint, which the audit already reports as unprotected.
+
+### Coverage summary
+
+`make ci-coverage-summary` renders the Python and JavaScript coverage totals as one markdown table. CI appends it to the job summary of the heavy-checks job, so the numbers are on the run page rather than at the end of a test log.
+
+```bash
+make test && make ci-coverage-summary
+```
+
+It adds no gate. Both suites already enforce their own floors and fail the build below them (100% statements and branches for Python, 99% statements, lines, and functions plus 95% branches for JavaScript). What the table adds is the number itself, which is what makes a slow slide visible before it reaches a threshold.
+
+Counts come from each tool's own machine-readable output, `coverage.json` from pytest-cov and `coverage/coverage-summary.json` from Vitest, both written on every test run so the summary can never report a stale number. Percentages are recomputed from the covered and total counts rather than read back from the reports, so a percentage can never disagree with the two numbers beside it. A report that is absent becomes a note instead of an error, because the CI step runs even when the suite that writes it failed first; a report that is present but unreadable is still an error.
+
 ### Workflow and cache operations
 
 Use the Makefile wrappers for manual GitHub Actions operations:

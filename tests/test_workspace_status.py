@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -157,7 +158,12 @@ def test_pr_summary_failure_never_fails_the_report(tmp_path: Path) -> None:
 
 
 def test_a_tool_that_cannot_launch_is_treated_as_a_plain_failure(tmp_path: Path) -> None:
-    """An OSError from any subprocess degrades to the failure branch, never a crash."""
+    """An OSError from any subprocess degrades to the failure branch, never a crash.
+
+    Degrading must stay visible: a section that prints its header and nothing
+    else is the least useful thing a health report can do on the exact
+    workstation it is meant to diagnose.
+    """
     venv_python = _make_venv(tmp_path)
     run = FakeRun(
         [
@@ -170,9 +176,38 @@ def test_a_tool_that_cannot_launch_is_treated_as_a_plain_failure(tmp_path: Path)
 
     report = _render(tmp_path, run, venv_python)
 
+    assert "UNAVAILABLE: git could not be launched" in report
     assert "STALE: run make lock" in report
     assert "STALE: run make lock-node" in report
-    assert "=== Pull request ===" in report
+    assert f"UNAVAILABLE: {venv_python} could not be launched" in report
+
+
+def test_child_env_prepends_the_root_without_dropping_an_existing_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A PYTHONPATH the developer set survives; the repository root goes first."""
+    monkeypatch.setenv("PYTHONPATH", f"/their/tools{os.pathsep}/more")
+
+    assert workspace_status._child_env(tmp_path)["PYTHONPATH"] == os.pathsep.join(
+        [str(tmp_path), "/their/tools", "/more"]
+    )
+
+
+def test_child_env_without_an_existing_path_has_only_the_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An unset or empty PYTHONPATH does not leave an empty entry behind.
+
+    An empty entry means the current directory, which would silently widen the
+    import path of every child process.
+    """
+    monkeypatch.setenv("PYTHONPATH", "")
+
+    assert workspace_status._child_env(tmp_path)["PYTHONPATH"] == str(tmp_path)
+
+    monkeypatch.delenv("PYTHONPATH")
+
+    assert workspace_status._child_env(tmp_path)["PYTHONPATH"] == str(tmp_path)
 
 
 def test_absolute_venv_python_is_not_rejoined_to_the_root(tmp_path: Path) -> None:

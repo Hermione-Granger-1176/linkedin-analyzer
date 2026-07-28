@@ -70,6 +70,18 @@ def _ok(result: subprocess.CompletedProcess[str] | None) -> bool:
     return result is not None and result.returncode == 0
 
 
+def _child_env(root: Path) -> dict[str, str]:
+    """Return the child environment with the repository root on the import path.
+
+    Prepends rather than replaces. A developer may have set ``PYTHONPATH`` for
+    their own tooling, and this only needs the repository root importable so
+    ``python -m scripts.gh.cli`` resolves.
+    """
+    inherited = os.environ.get("PYTHONPATH", "")
+    entries = [str(root), *(entry for entry in inherited.split(os.pathsep) if entry)]
+    return {**os.environ, "PYTHONPATH": os.pathsep.join(entries)}
+
+
 def _venv_python_path(venv_python: str, root: Path) -> Path:
     """Resolve the interpreter path used for the executable check."""
     candidate = Path(venv_python)
@@ -96,7 +108,12 @@ def write_status(
     # --- Git ---
     emit("=== Git ===")
     git = _succeeds(["git", "status", "-sb"], cwd=root, run_fn=run)
-    if git is not None:
+    if git is None:
+        # A launch failure must not fail the target, but printing the section
+        # header and nothing else is the least actionable thing a health report
+        # can do on the workstation it exists to diagnose.
+        emit("UNAVAILABLE: git could not be launched")
+    else:
         out.write(git.stdout)
         out.write(git.stderr)
     emit()
@@ -132,12 +149,15 @@ def write_status(
             [venv_python, "-m", "scripts.gh.cli", "summary"],
             cwd=root,
             run_fn=run,
-            env={**os.environ, "PYTHONPATH": "."},
+            env=_child_env(root),
         )
         # Old shell ran ``$(GH) summary || true``: any failure, including a
-        # launch failure, is swallowed and the target still succeeds. A launch
-        # failure yields ``None`` here, so nothing extra is printed.
-        if summary is not None:
+        # launch failure, is swallowed and the target still succeeds. The
+        # swallowing is about the exit status, not about staying quiet, so a
+        # launch failure still says so.
+        if summary is None:
+            emit(f"UNAVAILABLE: {venv_python} could not be launched")
+        else:
             out.write(summary.stdout)
             out.write(summary.stderr)
     else:

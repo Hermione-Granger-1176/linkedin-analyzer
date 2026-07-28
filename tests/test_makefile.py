@@ -106,6 +106,19 @@ def test_sensitive_message_files_use_portable_private_temp_paths(
     assert "$$(mktemp)" not in recipe
 
 
+def test_no_recipe_clobbers_the_developers_python_path() -> None:
+    """Recipes extend PYTHONPATH through the shared prefix instead of replacing it.
+
+    A bare ``PYTHONPATH=.`` discards a value the developer set for their own
+    tooling. One shared variable is used so a new ``python -m scripts.*`` target
+    cannot reintroduce the clobber by copying an older line.
+    """
+    assert "PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}" in MAKEFILE_TEXT
+    # The definition itself continues with $${...}, so a trailing space only
+    # appears where a recipe assigned the bare value and dropped what was there.
+    assert "PYTHONPATH=. " not in MAKEFILE_TEXT
+
+
 def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:
     """Keep PR polling in the tested helper rather than a noisy shell loop."""
     recipe = _target_recipe("pr-watch")

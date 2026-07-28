@@ -126,7 +126,14 @@ def test_no_recipe_interpolates_free_text_into_a_shell_command() -> None:
     spelling is pinned by hand so a new target cannot reintroduce the bug by
     copying an older line.
     """
-    for interpolation in ('--body "$(body)"', '--title "$(title)"', '--detail "$(detail)"'):
+    for interpolation in (
+        '--body "$(body)"',
+        '--title "$(title)"',
+        '--detail "$(detail)"',
+        '--comment "$(comment)"',
+        '--search "$(search)"',
+        '--notes "$(notes)"',
+    ):
         assert interpolation not in MAKEFILE_TEXT
 
 
@@ -143,8 +150,19 @@ def test_no_recipe_interpolates_free_text_into_a_shell_command() -> None:
         "COMMIT_TITLE := $(value title)",
         "COMMIT_BODY := $(value body)",
         "RELEASE_NOTES := $(value notes)",
+        "RELEASE_NOTES_FILE := $(value notes_file)",
         "STAGE_FILES := $(value files)",
         "STAGE_FILE := $(value file)",
+        "PR_CREATE_TITLE := $(value title)",
+        "PR_CREATE_BODY := $(value body)",
+        "ISSUE_SEARCH := $(value search)",
+        "ISSUE_TITLE := $(value title)",
+        "ISSUE_BODY := $(value body)",
+        "ISSUE_COMMENT_BODY := $(value body)",
+        "ISSUE_EDIT_TITLE := $(value title)",
+        "ISSUE_EDIT_BODY := $(value body)",
+        "ISSUE_CLOSE_COMMENT := $(value comment)",
+        "ISSUE_REOPEN_COMMENT := $(value comment)",
     ],
 )
 def test_free_text_exports_keep_the_value_unexpanded(assignment: str) -> None:
@@ -189,6 +207,84 @@ def test_posting_targets_pipe_the_body_instead_of_writing_it_out(
     assert f'--body-file "$${variable}_BODY_FILE"' in recipe
     assert "--body-file -" in recipe
     assert "mktemp" not in recipe
+
+
+@pytest.mark.parametrize(
+    ("target", "command", "variable"),
+    [
+        ("issue-create", "gh issue create", "ISSUE"),
+        ("issue-comment", "gh issue comment", "ISSUE_COMMENT"),
+        ("issue-edit", "gh issue edit", "ISSUE_EDIT"),
+    ],
+)
+def test_issue_posting_targets_pipe_the_body_instead_of_writing_it_out(
+    target: str, command: str, variable: str
+) -> None:
+    """Issue bodies reach gh over stdin, on the same terms as the PR targets.
+
+    ``gh`` reads ``--body-file -`` from standard input, so an inline body needs
+    no temporary file and a pasted one can use ``body_file=`` to skip make's
+    parser entirely.
+    """
+    recipe = _target_recipe(target)
+
+    assert f"{target}: export {variable}_BODY := $(value body)" in MAKEFILE_TEXT
+    assert f"{target}: export {variable}_BODY_FILE := $(value body_file)" in MAKEFILE_TEXT
+    assert f"printf '%s' \"$${variable}_BODY\" | {command}" in recipe
+    assert f'--body-file "$${variable}_BODY_FILE"' in recipe
+    assert "--body-file -" in recipe
+    assert "mktemp" not in recipe
+
+
+@pytest.mark.parametrize(
+    ("target", "variable"),
+    [("issue-close", "ISSUE_CLOSE_COMMENT"), ("issue-reopen", "ISSUE_REOPEN_COMMENT")],
+)
+def test_issue_state_changes_pass_their_comment_through_the_environment(
+    target: str, variable: str
+) -> None:
+    """Closing and reopening carry their comment in the environment.
+
+    ``gh issue close`` and ``gh issue reopen`` accept ``--comment`` but offer no
+    ``--comment-file``, so the stdin trick the other targets use is unavailable.
+    The environment still keeps the text out of the recipe, which is what stops
+    a newline or a quote from ending the command early.
+    """
+    recipe = _target_recipe(target)
+
+    assert f'--comment "$${variable}"' in recipe
+    assert '--comment "$(comment)"' not in recipe
+
+
+def test_pr_create_refuses_a_half_specified_pull_request() -> None:
+    """A title without a body is rejected rather than passed to gh.
+
+    ``gh pr create`` prompts for whatever it was not given, which hangs a
+    non-interactive shell instead of failing. Supplying neither still means
+    ``--fill``, which takes both from the commits.
+    """
+    recipe = _target_recipe("pr-create")
+
+    assert "gh pr create --fill" in recipe
+    assert '[ -z "$$PR_CREATE_TITLE" ] || [ -z "$$PR_CREATE_BODY$$PR_CREATE_BODY_FILE" ]' in recipe
+
+
+@pytest.mark.parametrize(
+    ("target", "interpolation"),
+    [
+        ("bench", '$(if $(runs),"$(runs)")'),
+        ("bench-decode", '$(if $(runs),"$(runs)")'),
+        ("pr-reviewers", '--add-reviewer "$(users)"'),
+    ],
+)
+def test_scalar_arguments_reach_their_command_as_one_word(target: str, interpolation: str) -> None:
+    """Counts and comma-separated lists are quoted so they stay a single argument.
+
+    An unquoted ``$(runs)`` or ``$(users)`` is split on whitespace by the shell,
+    which turns one argument into several. The ``$(if ...)`` wrapper keeps an
+    unset count from becoming an empty argument.
+    """
+    assert interpolation in _target_recipe(target)
 
 
 def test_pr_edit_routes_through_the_tested_helper() -> None:

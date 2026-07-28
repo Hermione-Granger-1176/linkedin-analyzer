@@ -26,7 +26,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 ## Local commands
 
-**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, deadcode, test, web, checks, quality, deps, util, git, pr, ci. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
+**Run `make help` for the command groups, then `make help-<group>` to expand one** (e.g. `make help-pr`, `make help-ci`); `make help-json` emits the whole surface as JSON for tooling. Groups: setup, lint, format, typecheck, deadcode, test, web, checks, quality, deps, util, git, pr, ci, issue. Everything is generated from `## comment` annotations and `# ─── Title @slug ───` section headers in the Makefile.
 
 Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 
@@ -41,7 +41,7 @@ Key entry points (requires Python 3.11+, uv, and Node.js 22.13.x or 24+):
 - `make fmt`: auto-fix Python, JavaScript, CSS, and metadata formatting
 - `make web`: start the Vite dev server
 - `make security`: dependency and override audits
-- `make pr` / `make git`: drill into PR and git sub-commands (`make help-ci` lists the CI sub-commands)
+- `make pr` / `make git` / `make issue`: drill into PR, git, and issue sub-commands (`make help-ci` lists the CI sub-commands)
 - `make status`: quick workspace health check
 
 Playwright uses native host platform detection. On Debian or Ubuntu hosts that lack browser libraries, `make setup-playwright-local` prepares a private no-sudo library runtime below the ignored `.playwright/` cache and installs browsers into Playwright's shared `~/.cache/ms-playwright` cache (reused across projects). Use `local_libs=1` with browser targets to run through that prepared runtime. `make clean` and `make playwright-local-clean` remove only `.playwright/`, never the shared browsers. `make setup-all` installs dependencies and browsers without system packages, while CI retains Playwright's `--with-deps` setup.

@@ -164,6 +164,10 @@ make format-py-diff paths="src/linkedin_analyzer tests"
 
 Source files mix prose with commands, so an unquoted scan would read ordinary English such as "make sure it works" as a reference to a target named `sure`. **When naming a Make target inside a comment, docstring, or string, wrap it in backticks** so the linter can see it. Test files are skipped, since the checkers' own fixtures deliberately name targets that do not exist.
 
+The same target also refuses a recipe line that begins raw shell control flow (`if`, `for`, `while`, `case`), so logic accumulates in `scripts/` behind tests instead of in the Makefile. The scan reads only tab-indented recipe lines and tracks quote state across backslash continuations, so `$(if ...)` (a Make function, not shell) and the `if` inside a quoted `awk` program in the help targets are both left alone.
+
+`CONTROL_FLOW_ALLOWLIST` in `scripts/lint/make_targets.py` grandfathers the recipes that predate the rule, each with its reason. It is a ratchet, not an escape hatch: `test_control_flow_allowlist_has_no_unused_entries` asserts the allowlist equals the set of targets that actually still violate, so cleaning one up forces its removal from the list. Most entries exist because of the free-text rule above, where an optional flag carrying prose cannot be added with `$(if ...)` and must be tested by the recipe's shell.
+
 `make setup` is the fast default and does not install browsers. `make setup-all` installs Chromium, Firefox, and WebKit in Playwright's normal user-local browser cache. It is browser-only, does not install system packages, and does not require sudo. Use it when the host already provides the libraries Playwright needs.
 
 To install only a validated subset of browser engines, use a hyphen-separated selection:

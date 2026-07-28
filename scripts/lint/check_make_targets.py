@@ -13,6 +13,7 @@ from pathlib import Path
 from scripts.lint.make_targets import (
     MAKEFILE_PATH,
     extract_path_make_references,
+    find_shell_control_flow,
     iter_reference_files,
     load_makefile_targets,
     snippet_extractor,
@@ -114,6 +115,21 @@ def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list
     return violations
 
 
+def run_control_flow_check(makefile_path: Path | None = None) -> list[str]:
+    """Return recipe lines that begin raw shell control flow in the Makefile.
+
+    This runs on the Makefile itself rather than on the reference files, so it
+    happens once regardless of which paths were requested.
+    """
+    path = makefile_path or MAKEFILE_PATH
+    return [
+        f"{path.name}:{violation.line_number}: recipe for `{violation.target}` begins "
+        f"raw shell control flow (`{violation.keyword}`); move the logic into scripts/ "
+        "or add the target to CONTROL_FLOW_ALLOWLIST with a reason"
+        for violation in find_shell_control_flow(path.read_text(encoding="utf-8"))
+    ]
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments for the Make target reference checker."""
     parser = argparse.ArgumentParser(
@@ -148,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     violations = run_check(paths=candidate_paths, root=workspace_root)
+    violations.extend(run_control_flow_check(workspace_root / "Makefile"))
     if not violations:
         print(
             "Make target check passed for "

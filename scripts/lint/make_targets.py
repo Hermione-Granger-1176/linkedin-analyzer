@@ -35,6 +35,36 @@ INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
 RUN_KEY_PATTERN = re.compile(r"^(\s*)(-\s+)?run:\s*(.*)$")
 BLOCK_SCALAR_PATTERN = re.compile(r"^[|>][+-]?\d*$")
 
+# A recipe line begins raw shell control flow when, after its leading tab and any
+# recipe prefix (@ - +), the first token is one of these keywords. ``$(if ...)``
+# is a Make function, not shell, and never matches because the stripped line then
+# begins with ``$``.
+SHELL_CONTROL_FLOW_PATTERN = re.compile(r"^(?:if|for|while|case)\b")
+RECIPE_PREFIX_PATTERN = re.compile(r"^[@\-+]+")
+
+# Targets whose recipes may keep inline shell control flow. Every entry is
+# argument assembly or git plumbing, not logic that belongs in scripts/, and the
+# list is a ratchet: ``test_control_flow_allowlist_has_no_unused_entries`` fails
+# if a target is fixed and left behind here.
+#
+# Seven of these exist *because* of the free-text rule. An optional flag whose
+# value is prose cannot be added with ``$(if $(COMMENT),--comment "$$COMMENT")``,
+# since a Make conditional expands the value and would run ``$(shell ...)`` inside
+# it. Testing in the recipe's shell is the only safe way to append the flag, so
+# the branch is mandatory rather than lazy. See docs/development.md.
+CONTROL_FLOW_ALLOWLIST = frozenset(
+    {
+        "branch",  # pull only when the base branch has an upstream
+        "release-create",  # optional gh flags around a trap-cleaned temp file
+        "pr-create",  # TITLE selects --fill or an explicit title and body
+        "pr-edit",  # which of title and body to change
+        "issue-edit",  # which of title and body to change
+        "issue-list",  # optional --search
+        "issue-close",  # optional --comment
+        "issue-reopen",  # optional --comment
+    }
+)
+
 
 @dataclass(frozen=True)
 class CodeSnippet:
@@ -52,6 +82,93 @@ class MakeReference:
     target: str
     line_number: int
     snippet: str
+
+
+@dataclass(frozen=True)
+class ShellControlFlow:
+    """One recipe line that begins a raw shell control-flow construct."""
+
+    line_number: int
+    target: str
+    keyword: str
+    text: str
+
+
+def _scan_quote_state(text: str, quote: str | None) -> str | None:
+    """Return the quote state after scanning ``text`` from ``quote``.
+
+    Outside a quote, either ``'`` or ``"`` opens a quoted span. While inside a
+    span only the matching quote character closes it, so the other quote is
+    literal until then. Tracking this across backslash-continued recipe lines
+    keeps control-flow keywords inside a quoted program body (for example the
+    ``@awk '...'`` help blocks) from being read as shell control flow.
+    """
+    for char in text:
+        if quote is None:
+            if char in {"'", '"'}:
+                quote = char
+        elif char == quote:
+            quote = None
+    return quote
+
+
+def find_shell_control_flow(
+    content: str, *, allowlist: frozenset[str] = CONTROL_FLOW_ALLOWLIST
+) -> list[ShellControlFlow]:
+    """Return recipe lines that begin a raw shell control-flow construct.
+
+    Only tab-indented recipe lines are considered. Lines inside ``define ...
+    endef`` blocks, variable-assignment continuations, and quoted program bodies
+    are ignored, and allowlisted targets are skipped, so future inline shell
+    logic is pushed into ``scripts/`` instead.
+    """
+    violations: list[ShellControlFlow] = []
+    in_define = False
+    prev_continues = False
+    logical_is_recipe = False
+    quote: str | None = None
+    current_target = ""
+
+    for line_number, raw in enumerate(content.splitlines(), start=1):
+        is_continuation = prev_continues
+        prev_continues = raw.endswith("\\")
+
+        if not is_continuation:
+            quote = None
+            stripped = raw.strip()
+            if in_define:
+                if stripped == "endef":
+                    in_define = False
+                logical_is_recipe = False
+                continue
+            if stripped == "define" or stripped.startswith("define "):
+                in_define = True
+                logical_is_recipe = False
+                continue
+            target_match = TARGET_PATTERN.match(raw)
+            if target_match:
+                current_target = target_match.group(1)
+            logical_is_recipe = raw.startswith("\t")
+
+        quote_at_start = quote
+        quote = _scan_quote_state(raw, quote)
+
+        if in_define or not logical_is_recipe or quote_at_start is not None:
+            continue
+        recipe_body = RECIPE_PREFIX_PATTERN.sub("", raw.lstrip("\t")).lstrip()
+        keyword_match = SHELL_CONTROL_FLOW_PATTERN.match(recipe_body)
+        if keyword_match is None or current_target in allowlist:
+            continue
+        violations.append(
+            ShellControlFlow(
+                line_number=line_number,
+                target=current_target,
+                keyword=keyword_match.group(0),
+                text=recipe_body,
+            )
+        )
+
+    return violations
 
 
 def parse_makefile_targets(content: str) -> set[str]:

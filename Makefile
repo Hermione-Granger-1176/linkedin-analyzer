@@ -149,7 +149,7 @@ editorconfig-check: ## Check EditorConfig rules [paths=...]
 lint-doc-commands: ## Check contributor docs use Make targets [paths=...]
 	$(VENV_PYTHON) -m scripts.lint.check_doc_commands $(if $(paths),$(paths))
 
-lint-make-targets: ## Check Make targets named in docs, CI, and source exist [paths=...]
+lint-make-targets: ## Check Make targets named in docs, CI, and source exist, and that no recipe holds raw shell control flow [paths=...]
 	$(VENV_PYTHON) -m scripts.lint.check_make_targets $(if $(paths),$(paths))
 
 lint-py: ## Run Python linter only

@@ -486,3 +486,131 @@ def test_main_rejects_symlink_components(
     captured = capsys.readouterr().out
     assert exit_code == 1
     assert captured.count("symbolic links are not supported") == 2
+
+
+def test_find_shell_control_flow_flags_if_and_for() -> None:
+    """Raw shell if/for at the start of a recipe line are flagged."""
+    violations = make_targets.find_shell_control_flow(
+        'target-a:\n\t@if [ -n "$(x)" ]; then echo hi; fi\n\tfor f in a b; do echo $$f; done\n'
+    )
+
+    assert [(v.target, v.keyword) for v in violations] == [
+        ("target-a", "if"),
+        ("target-a", "for"),
+    ]
+
+
+def test_find_shell_control_flow_ignores_make_if_function() -> None:
+    """The Make ``$(if ...)`` function is not shell control flow.
+
+    The stripped recipe line then begins with ``$``, so the keyword pattern
+    cannot match it. This matters because ``$(if $(pr_num),--pr "$(pr_num)")``
+    appears in most of the PR targets.
+    """
+    violations = make_targets.find_shell_control_flow(
+        "target-a:\n\t$(if $(src),--from-html $(src)) build\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_ignores_define_blocks() -> None:
+    """Control flow inside a define...endef helper is ignored."""
+    violations = make_targets.find_shell_control_flow(
+        "define helper\nif [ 1 ]; then true; fi\nendef\n\ntarget-a:\n\t@true\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_ignores_quoted_program_bodies() -> None:
+    """An if inside a quoted awk program spanning continuations is ignored.
+
+    The help targets embed awk programs whose own control flow is not shell
+    control flow. Quote state is tracked across backslash continuations so the
+    scan can tell the two apart.
+    """
+    violations = make_targets.find_shell_control_flow(
+        "target-a:\n\t@awk ' \\\n\t\tif (ti == 0) next; \\\n\t' $(FILE)\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_ignores_variable_continuations() -> None:
+    """A tab-indented shell continuation of a variable assignment is ignored."""
+    violations = make_targets.find_shell_control_flow(
+        "VAR ?= $(shell \\\n\tif [ -z x ]; then echo a; fi)\n"
+    )
+
+    assert violations == []
+
+
+def test_find_shell_control_flow_respects_allowlist() -> None:
+    """Allowlisted targets may keep inline control flow."""
+    content = 'release-create:\n\t@if [ -n "$(C)" ]; then a; else b; fi\n'
+
+    assert make_targets.find_shell_control_flow(content) == []
+    assert make_targets.find_shell_control_flow(content, allowlist=frozenset()) != []
+
+
+def test_repository_makefile_has_no_unallowlisted_shell_control_flow() -> None:
+    """The committed Makefile passes the raw shell control-flow check."""
+    content = make_targets.MAKEFILE_PATH.read_text(encoding="utf-8")
+
+    assert make_targets.find_shell_control_flow(content) == []
+
+
+def test_control_flow_allowlist_has_no_unused_entries() -> None:
+    """The allowlist is a ratchet: fixing a target must remove it from the list.
+
+    Without this, an entry outlives the recipe that needed it and quietly
+    re-permits inline shell in a target that had been cleaned up. Every name
+    here has to still be earning its place.
+    """
+    content = make_targets.MAKEFILE_PATH.read_text(encoding="utf-8")
+    offenders = {
+        violation.target
+        for violation in make_targets.find_shell_control_flow(content, allowlist=frozenset())
+    }
+
+    assert offenders == make_targets.CONTROL_FLOW_ALLOWLIST
+
+
+def test_run_control_flow_check_formats_violations(tmp_path: Path) -> None:
+    """run_control_flow_check renders a greppable violation line."""
+    makefile = tmp_path / "Makefile"
+    write_text(makefile, "target-a:\n\tfor f in a; do :; done\n")
+
+    violations = check_make_targets.run_control_flow_check(makefile)
+
+    assert violations == [
+        "Makefile:2: recipe for `target-a` begins raw shell control flow "
+        "(`for`); move the logic into scripts/ or add the target to "
+        "CONTROL_FLOW_ALLOWLIST with a reason"
+    ]
+
+
+def test_run_control_flow_check_defaults_to_repository_makefile() -> None:
+    """With no path, the check reads the committed Makefile and finds nothing."""
+    assert check_make_targets.run_control_flow_check() == []
+
+
+def test_main_reports_control_flow_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Raw shell control flow in the Makefile fails the make-targets lint.
+
+    The check runs on the Makefile itself, so it fires even when the requested
+    paths are clean and unrelated.
+    """
+    write_text(tmp_path / "Makefile", "check-local:\n\t@while true; do :; done\n")
+    write_text(tmp_path / "README.md", "Use `make check-local`.\n")
+    monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)
+
+    exit_code = check_make_targets.main(["README.md"])
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert "begins raw shell control flow" in captured
+    assert "`while`" in captured

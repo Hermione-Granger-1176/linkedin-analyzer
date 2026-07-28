@@ -131,6 +131,38 @@ def test_no_recipe_interpolates_free_text_into_a_shell_command() -> None:
 
 
 @pytest.mark.parametrize(
+    "assignment",
+    [
+        "PR_COMMENT_BODY := $(value body)",
+        "PR_REPLY_BODY := $(value body)",
+        "PR_ADDRESS_BODY := $(value body)",
+        "PR_EDIT_TITLE := $(value title)",
+        "PR_EDIT_BODY := $(value body)",
+        "ALERT_ISSUE_TITLE := $(value title)",
+        "ALERT_ISSUE_DETAIL := $(value detail)",
+        "COMMIT_TITLE := $(value title)",
+        "COMMIT_BODY := $(value body)",
+        "RELEASE_NOTES := $(value notes)",
+        "STAGE_FILES := $(value files)",
+        "STAGE_FILE := $(value file)",
+    ],
+)
+def test_free_text_exports_keep_the_value_unexpanded(assignment: str) -> None:
+    """User-supplied text is exported with ``$(value ...)`` so make cannot rewrite it.
+
+    A plain ``:= $(body)`` expands make syntax inside the text, so a body
+    mentioning ``$(x)`` silently loses it. ``$(value ...)`` hands over the
+    characters the author typed.
+
+    This does not make a body inert. Make expands a command-line assignment
+    while parsing it, so ``$(shell ...)`` in a body still runs no matter how it
+    is exported later. ``body_file=`` is the input that avoids make entirely,
+    and it is what pasted text should use.
+    """
+    assert assignment in MAKEFILE_TEXT
+
+
+@pytest.mark.parametrize(
     ("target", "subcommand", "variable"),
     [
         ("pr-comment", "comment", "PR_COMMENT"),
@@ -151,8 +183,8 @@ def test_posting_targets_pipe_the_body_instead_of_writing_it_out(
     """
     recipe = _target_recipe(target)
 
-    assert f"{target}: export {variable}_BODY := $(body)" in MAKEFILE_TEXT
-    assert f"{target}: export {variable}_BODY_FILE := $(body_file)" in MAKEFILE_TEXT
+    assert f"{target}: export {variable}_BODY := $(value body)" in MAKEFILE_TEXT
+    assert f"{target}: export {variable}_BODY_FILE := $(value body_file)" in MAKEFILE_TEXT
     assert f"printf '%s' \"$${variable}_BODY\" | $(GH) {subcommand}" in recipe
     assert f'--body-file "$${variable}_BODY_FILE"' in recipe
     assert "--body-file -" in recipe
@@ -165,15 +197,15 @@ def test_pr_edit_routes_through_the_tested_helper() -> None:
 
     assert "$(GH) edit-pr" in recipe
     assert "gh pr edit" not in recipe
-    assert "$(if $(pr_num),--pr $(pr_num))" in recipe
+    assert '$(if $(pr_num),--pr "$(pr_num)")' in recipe
 
 
 def test_alert_issue_passes_free_text_through_the_environment() -> None:
     """The alert title and detail are workflow-authored prose, so they stay in the environment."""
     recipe = _target_recipe("ci-alert-issue")
 
-    assert "ci-alert-issue: export ALERT_ISSUE_TITLE := $(title)" in MAKEFILE_TEXT
-    assert "ci-alert-issue: export ALERT_ISSUE_DETAIL := $(detail)" in MAKEFILE_TEXT
+    assert "ci-alert-issue: export ALERT_ISSUE_TITLE := $(value title)" in MAKEFILE_TEXT
+    assert "ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)" in MAKEFILE_TEXT
     assert '--title "$$ALERT_ISSUE_TITLE"' in recipe
     assert '$(if $(detail),--detail "$$ALERT_ISSUE_DETAIL")' in recipe
     assert '$(if $(detail_file),--detail-file "$(detail_file)")' in recipe
@@ -184,10 +216,10 @@ def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:
     recipe = _target_recipe("pr-watch")
 
     assert "$(GH) watch" in recipe
-    assert "$(if $(pr_num),--pr $(pr_num))" in recipe
-    assert "$(if $(interval),--interval $(interval))" in recipe
-    assert "$(if $(max_polls),--max-polls $(max_polls))" in recipe
-    assert "$(if $(expected_checks),--expected-checks $(expected_checks))" in recipe
+    assert '$(if $(pr_num),--pr "$(pr_num)")' in recipe
+    assert '$(if $(interval),--interval "$(interval)")' in recipe
+    assert '$(if $(max_polls),--max-polls "$(max_polls)")' in recipe
+    assert '$(if $(expected_checks),--expected-checks "$(expected_checks)")' in recipe
     assert "$(if $(filter 1,$(checks_only)),--checks-only)" in recipe
     assert "gh pr checks --watch" not in recipe
 

@@ -463,8 +463,8 @@ diff-staged: ## Show staged changes
 
 # Paths reach the helper through the environment, never interpolated into the
 # recipe, so a name containing a space or a shell metacharacter stays inert.
-stage: export STAGE_FILES := $(files)
-stage: export STAGE_FILE := $(file)
+stage: export STAGE_FILES := $(value files)
+stage: export STAGE_FILE := $(value file)
 stage: ## Stage selected files (make stage [files="path ..."] [file="one path with spaces"])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.lib.stage_files
 
@@ -474,9 +474,9 @@ stage-all: ## Stage all working tree changes
 # Every message is assembled into a temporary file and screened before it
 # reaches git, because a mistyped heredoc terminator silently records shell text
 # (`EOF && make push 2>&1 | tail -3`) as part of the commit.
-commit: export COMMIT_TITLE := $(title)
-commit: export COMMIT_BODY := $(body)
-commit: export COMMIT_MESSAGE_FILE := $(message_file)
+commit: export COMMIT_TITLE := $(value title)
+commit: export COMMIT_BODY := $(value body)
+commit: export COMMIT_MESSAGE_FILE := $(value message_file)
 commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"] | make commit message_file=path, - reads stdin)
 	@test -n "$$COMMIT_TITLE$$COMMIT_MESSAGE_FILE" || \
 		(printf 'Usage: make commit title="Subject" [body="- Detail"] OR make commit message_file=path (- reads stdin)\n' >&2; exit 1)
@@ -498,7 +498,7 @@ commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"] 
 push: ## Push the current branch and set its upstream
 	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin -- "$$branch"
 
-release-create: export RELEASE_NOTES := $(notes)
+release-create: export RELEASE_NOTES := $(value notes)
 release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..."] [prerelease=1])
 	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [notes="..."] [prerelease=1]\n' >&2; exit 1)
 	@set -e; \
@@ -519,14 +519,14 @@ pr: ## PR commands (make pr)
 pr-create: ## Open a pull request for the current branch (make pr-create [base=branch] for a stacked PR)
 	gh pr create --fill $(if $(base),--base "$(base)")
 
-pr-edit: export PR_EDIT_TITLE := $(title)
-pr-edit: export PR_EDIT_BODY := $(body)
-pr-edit: export PR_EDIT_BODY_FILE := $(body_file)
+pr-edit: export PR_EDIT_TITLE := $(value title)
+pr-edit: export PR_EDIT_BODY := $(value body)
+pr-edit: export PR_EDIT_BODY_FILE := $(value body_file)
 pr-edit: ## Edit the current PR title/body (make pr-edit [title="..."] [body="..." | body_file=path, - reads stdin] [pr_num=N])
 	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY$$PR_EDIT_BODY_FILE" || \
 		{ printf 'Usage: make pr-edit title="New title" [body="..." OR body_file=path (- reads stdin)]\n' >&2; exit 1; }
 	@set -e; \
-	set -- $(if $(pr_num),--pr $(pr_num)); \
+	set -- $(if $(pr_num),--pr "$(pr_num)"); \
 	if [ -n "$$PR_EDIT_TITLE" ]; then set -- "$$@" --title "$$PR_EDIT_TITLE"; fi; \
 	if [ -n "$$PR_EDIT_BODY_FILE" ]; then \
 		$(GH) edit-pr "$$@" --body-file "$$PR_EDIT_BODY_FILE"; \
@@ -556,22 +556,22 @@ pr-comments: ## Show all comments on the current PR
 # that to the shell as source text, so it reaches the helper through the
 # environment and then over a pipe instead. `--body-file -` already reads stdin,
 # so an inline body never needs a temporary file and never touches disk.
-pr-comment: export PR_COMMENT_BODY := $(body)
-pr-comment: export PR_COMMENT_BODY_FILE := $(body_file)
+pr-comment: export PR_COMMENT_BODY := $(value body)
+pr-comment: export PR_COMMENT_BODY_FILE := $(value body_file)
 pr-comment: ## Add a comment to the current PR (make pr-comment body="msg" | body_file=path, - reads stdin) [pr_num=N]
 	@test -n "$$PR_COMMENT_BODY$$PR_COMMENT_BODY_FILE" || \
 		(printf 'Usage: make pr-comment body="Looks good" OR make pr-comment body_file=path (- reads stdin)\n' >&2; exit 1)
 	@if [ -n "$$PR_COMMENT_BODY_FILE" ]; then \
-		$(GH) comment $(if $(pr_num),--pr $(pr_num)) --body-file "$$PR_COMMENT_BODY_FILE"; \
+		$(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file "$$PR_COMMENT_BODY_FILE"; \
 	else \
-		printf '%s' "$$PR_COMMENT_BODY" | $(GH) comment $(if $(pr_num),--pr $(pr_num)) --body-file -; \
+		printf '%s' "$$PR_COMMENT_BODY" | $(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file -; \
 	fi
 
 pr-review-comments: ## List review threads with ids (make pr-review-comments [pr_num=N] [show=all])
-	@$(GH) list $(if $(pr_num),--pr $(pr_num)) $(if $(filter all,$(show)),--all)
+	@$(GH) list $(if $(pr_num),--pr "$(pr_num)") $(if $(filter all,$(show)),--all)
 
-pr-reply: export PR_REPLY_BODY := $(body)
-pr-reply: export PR_REPLY_BODY_FILE := $(body_file)
+pr-reply: export PR_REPLY_BODY := $(value body)
+pr-reply: export PR_REPLY_BODY_FILE := $(value body_file)
 pr-reply: ## Reply to a review thread (make pr-reply thread=PRRT_... body="msg" | body_file=path, - reads stdin)
 	@test -n "$(thread)" -a -n "$$PR_REPLY_BODY$$PR_REPLY_BODY_FILE" || \
 		(printf 'Usage: make pr-reply thread=PRRT_... body="Fixed" OR body_file=path (- reads stdin)\n' >&2; exit 1)
@@ -585,8 +585,8 @@ pr-resolve: ## Resolve a review thread (make pr-resolve thread=PRRT_...)
 	@test -n "$(thread)" || (printf 'Usage: make pr-resolve thread=PRRT_...\n' >&2; exit 1)
 	@$(GH) resolve --thread "$(thread)"
 
-pr-address: export PR_ADDRESS_BODY := $(body)
-pr-address: export PR_ADDRESS_BODY_FILE := $(body_file)
+pr-address: export PR_ADDRESS_BODY := $(value body)
+pr-address: export PR_ADDRESS_BODY_FILE := $(value body_file)
 pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT_... body="msg" | body_file=path, - reads stdin)
 	@test -n "$(thread)" -a -n "$$PR_ADDRESS_BODY$$PR_ADDRESS_BODY_FILE" || \
 		(printf 'Usage: make pr-address thread=PRRT_... body="Fixed in abc123" OR body_file=path (- reads stdin)\n' >&2; exit 1)
@@ -597,30 +597,30 @@ pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT
 	fi
 
 pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
-	@$(GH) list-comments $(if $(pr_num),--pr $(pr_num))
+	@$(GH) list-comments $(if $(pr_num),--pr "$(pr_num)")
 
 pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete comment=PRRC_...)
 	@test -n "$(comment)" || (printf 'Usage: make pr-comment-delete comment=PRRC_...\n' >&2; exit 1)
 	@$(GH) delete-comment --comment "$(comment)"
 
 pr-summary: ## One-screen PR overview: state, CI rollup, open threads (make pr-summary [pr_num=N])
-	@$(GH) summary $(if $(pr_num),--pr $(pr_num))
+	@$(GH) summary $(if $(pr_num),--pr "$(pr_num)")
 
 pr-watch: ## Request Copilot and wait for fresh review plus checks (make pr-watch [pr_num=N] [interval=S] [max_polls=K] [expected_checks=N] [checks_only=1])
-	@$(GH) watch $(if $(pr_num),--pr $(pr_num)) $(if $(interval),--interval $(interval)) $(if $(max_polls),--max-polls $(max_polls)) $(if $(expected_checks),--expected-checks $(expected_checks)) $(if $(filter 1,$(checks_only)),--checks-only)
+	@$(GH) watch $(if $(pr_num),--pr "$(pr_num)") $(if $(interval),--interval "$(interval)") $(if $(max_polls),--max-polls "$(max_polls)") $(if $(expected_checks),--expected-checks "$(expected_checks)") $(if $(filter 1,$(checks_only)),--checks-only)
 
 pr-merge: ## Merge the current PR (squash, delete branch) (make pr-merge [pr_num=N])
-	gh pr merge $(if $(pr_num),$(pr_num)) --squash --delete-branch
+	gh pr merge $(if $(pr_num),"$(pr_num)") --squash --delete-branch
 
 pr-merge-admin: ## Force merge bypassing branch protection (admin) (make pr-merge-admin [pr_num=N])
-	gh pr merge $(if $(pr_num),$(pr_num)) --squash --delete-branch --admin
+	gh pr merge $(if $(pr_num),"$(pr_num)") --squash --delete-branch --admin
 
 pr-reviewers: ## Add reviewers (make pr-reviewers users="user1,user2")
 	@test -n "$(users)" || (printf 'Usage: make pr-reviewers users="octocat"\n' >&2; exit 1)
 	gh pr edit --add-reviewer $(users)
 
 pr-copilot: ## Request (or re-request) a Copilot review on the PR (make pr-copilot [pr_num=N])
-	@$(GH) copilot-review $(if $(pr_num),--pr $(pr_num))
+	@$(GH) copilot-review $(if $(pr_num),--pr "$(pr_num)")
 
 pr-label: ## Add labels (make pr-label labels="bug")
 	@test -n "$(labels)" || (printf 'Usage: make pr-label labels="bug"\n' >&2; exit 1)
@@ -640,7 +640,7 @@ ci-watch: ## Watch the latest CI run until done
 	gh run watch
 
 ci-failures: ## Show failed-step logs for this branch's latest run (make ci-failures [run=ID])
-	@$(GH) ci-failures $(if $(run),--run $(run))
+	@$(GH) ci-failures $(if $(run),--run "$(run)")
 
 ci-rerun: ## Re-run a workflow run (make ci-rerun run=ID [failed=1])
 	@test -n "$(run)" || (printf 'Usage: make ci-rerun run=123456 [failed=1]\n' >&2; exit 1)
@@ -662,8 +662,8 @@ ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_k
 # whether the variable was set; they never expand its value into the recipe.
 # The names differ from the caller's own ALERT_* environment variables in
 # alert-issue.yml so a reader can tell the two apart at a glance.
-ci-alert-issue: export ALERT_ISSUE_TITLE := $(title)
-ci-alert-issue: export ALERT_ISSUE_DETAIL := $(detail)
+ci-alert-issue: export ALERT_ISSUE_TITLE := $(value title)
+ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)
 ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
 	@test -n "$$ALERT_ISSUE_TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)

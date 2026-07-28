@@ -241,17 +241,16 @@ def sync_alert_issue(
     return url
 
 
-def _read_detail(detail: str, detail_file: str | None) -> str:
-    """Return the alert detail from an inline value, a file, or ``-`` for stdin.
+def _read_detail(detail_file: str | None) -> str:
+    """Return the alert detail from a file, from stdin for ``-``, or nothing.
 
     Stdin is how the Makefile passes the detail, so a failing workflow's output
-    never has to survive a make command line. An empty stream means the alert
+    never has to survive a make command line. An empty stream, and an omitted
+    ``--detail-file`` when the caller had no detail to give, both mean the alert
     has no detail, which ``build_alert_body`` already treats as "omit it".
     """
     if detail_file is None:
-        return detail
-    if detail:
-        raise GhError("Pass either --detail or --detail-file, not both.")
+        return ""
     if detail_file == "-":
         return sys.stdin.read()
     path = Path(detail_file)
@@ -270,7 +269,7 @@ def sync_from_args(args: argparse.Namespace) -> str:
     body = build_alert_body(
         state=state,
         run_url=args.run_url,
-        detail=_read_detail(args.detail, args.detail_file),
+        detail=_read_detail(args.detail_file),
     )
     return sync_alert_issue(
         repo=repo,
@@ -293,7 +292,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Alert state to sync",
     )
     parser.add_argument("--repo", help="owner/name (default: current repository)")
-    parser.add_argument("--detail", default="", help="Extra body text")
     parser.add_argument(
         "--detail-file", help="Read extra body text from a UTF-8 file (- reads stdin)"
     )

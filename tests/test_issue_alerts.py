@@ -340,15 +340,21 @@ def test_ensure_label_reports_a_failure_with_context() -> None:
         issue_alerts.ensure_label(_REPO, _LABEL, "desc", run_fn=runner)
 
 
-def test_read_detail_prefers_a_file_and_rejects_both_sources(tmp_path: Path) -> None:
-    """Detail comes from exactly one source."""
+def test_read_detail_reads_a_file(tmp_path: Path) -> None:
+    """A path names the file the detail is read from."""
     detail_file = tmp_path / "detail.txt"
     detail_file.write_text("from file", encoding="utf-8")
 
-    assert issue_alerts._read_detail("", str(detail_file)) == "from file"
-    assert issue_alerts._read_detail("inline", None) == "inline"
-    with pytest.raises(GhError, match="not both"):
-        issue_alerts._read_detail("inline", str(detail_file))
+    assert issue_alerts._read_detail(str(detail_file)) == "from file"
+
+
+def test_read_detail_treats_no_file_as_no_detail() -> None:
+    """An omitted --detail-file means the caller had no detail to give.
+
+    The Makefile leaves the flag off when stdin is a terminal, so this is the
+    ordinary path for a hand-run alert rather than an error.
+    """
+    assert issue_alerts._read_detail(None) == ""
 
 
 def test_read_detail_reads_stdin_for_a_dash(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -359,10 +365,10 @@ def test_read_detail_reads_stdin_for_a_dash(monkeypatch: pytest.MonkeyPatch) -> 
     ``build_alert_body`` already omits it.
     """
     monkeypatch.setattr(sys, "stdin", io.StringIO("piped detail\n"))
-    assert issue_alerts._read_detail("", "-") == "piped detail\n"
+    assert issue_alerts._read_detail("-") == "piped detail\n"
 
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))
-    assert issue_alerts._read_detail("", "-") == ""
+    assert issue_alerts._read_detail("-") == ""
 
 
 def test_read_detail_rejects_a_non_utf8_file(tmp_path: Path) -> None:
@@ -371,13 +377,13 @@ def test_read_detail_rejects_a_non_utf8_file(tmp_path: Path) -> None:
     detail_file.write_bytes(b"\xff\xfe not utf-8")
 
     with pytest.raises(GhError, match="must be UTF-8 text"):
-        issue_alerts._read_detail("", str(detail_file))
+        issue_alerts._read_detail(str(detail_file))
 
 
 def test_read_detail_reports_an_unreadable_file(tmp_path: Path) -> None:
     """A missing detail file fails with the path that could not be read."""
     with pytest.raises(GhError, match="Could not read alert detail file"):
-        issue_alerts._read_detail("", str(tmp_path / "absent.txt"))
+        issue_alerts._read_detail(str(tmp_path / "absent.txt"))
 
 
 def test_main_resolves_the_repo_and_prints_the_issue_url(

@@ -149,7 +149,7 @@ editorconfig-check: ## Check EditorConfig rules [paths=...]
 lint-doc-commands: ## Check contributor docs use Make targets [paths=...]
 	$(VENV_PYTHON) -m scripts.lint.check_doc_commands $(if $(paths),$(paths))
 
-lint-make-targets: ## Check Make targets named in docs, CI, and source exist [paths=...]
+lint-make-targets: ## Check Make targets named in docs, CI, and source exist, and that no recipe holds raw shell control flow [paths=...]
 	$(VENV_PYTHON) -m scripts.lint.check_make_targets $(if $(paths),$(paths))
 
 lint-py: ## Run Python linter only
@@ -676,16 +676,31 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-watch ci-failures ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog
+.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
+
+# ci-failures reads step logs, which GitHub withholds until a run completes, so
+# it cannot say anything about a run that is hanging. This reports per-job
+# status and elapsed time while the run is still going, which is what tells a
+# stuck job apart from a slow one.
+ci-jobs: ## Show per-job status for a run, including one still in progress (make ci-jobs run=ID)
+	@test -n "$(run)" || (printf 'Usage: make ci-jobs run=123456\n' >&2; exit 1)
+	gh run view "$(run)" --json jobs \
+		--template '{{range .jobs}}{{printf "%-12s %-10s %-8s %s\n" .status .conclusion .startedAt .name}}{{end}}'
 
 ci-watch: ## Watch the latest CI run until done
 	gh run watch
 
 ci-failures: ## Show failed-step logs for this branch's latest run (make ci-failures [run=ID])
 	@$(GH) ci-failures $(if $(run),--run "$(run)")
+
+# A hung job leaves the whole run in progress, and gh refuses to re-run a run
+# that has not finished, so cancelling first is the only way to retry one.
+ci-cancel: ## Cancel a workflow run that is still in progress (make ci-cancel run=ID)
+	@test -n "$(run)" || (printf 'Usage: make ci-cancel run=123456\n' >&2; exit 1)
+	gh run cancel "$(run)"
 
 ci-rerun: ## Re-run a workflow run (make ci-rerun run=ID [failed=1])
 	@test -n "$(run)" || (printf 'Usage: make ci-rerun run=123456 [failed=1]\n' >&2; exit 1)

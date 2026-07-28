@@ -68,6 +68,12 @@ jobs:
       - name: Run heavy checks
         run: make ci-heavy-checks
 
+      # Runs even when a suite failed, so the summary still reports whatever
+      # coverage was reached before the failure.
+      - name: Summarize coverage
+        if: always()
+        run: make ci-coverage-summary >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summarize heavy checks
         if: always()
         run: |

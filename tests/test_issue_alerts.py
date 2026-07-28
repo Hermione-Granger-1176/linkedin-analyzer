@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -347,6 +349,20 @@ def test_read_detail_prefers_a_file_and_rejects_both_sources(tmp_path: Path) -> 
     assert issue_alerts._read_detail("inline", None) == "inline"
     with pytest.raises(GhError, match="not both"):
         issue_alerts._read_detail("inline", str(detail_file))
+
+
+def test_read_detail_reads_stdin_for_a_dash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``-`` means standard input, which is how the Makefile passes the detail.
+
+    A failing workflow's output then never has to survive a make command line.
+    An empty stream is a valid answer: it means the alert has no detail, and
+    ``build_alert_body`` already omits it.
+    """
+    monkeypatch.setattr(sys, "stdin", io.StringIO("piped detail\n"))
+    assert issue_alerts._read_detail("", "-") == "piped detail\n"
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    assert issue_alerts._read_detail("", "-") == ""
 
 
 def test_read_detail_rejects_a_non_utf8_file(tmp_path: Path) -> None:

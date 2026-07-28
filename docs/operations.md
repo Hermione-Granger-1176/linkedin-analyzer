@@ -54,7 +54,7 @@ Releases are tag-driven: pushing a GitHub Release publishes the PyPI package and
 
 1. **Roll the changelog.** Move the `## [Unreleased]` entries in `CHANGELOG.md` into a new `## [X.Y.Z]` section with the date. Keep web-only changes out (the changelog is Python-package-only). Leave a fresh empty `Unreleased` heading.
 2. **Confirm green CI on the release commit.** `publish.yml`'s `require-ci` job refuses to publish unless the tagged commit's latest `CI result` check concluded `success`. Merge to `main` and let CI finish first, then tag that commit.
-3. **Tag and create the GitHub Release.** Run `make release-create tag=vX.Y.Z notes="..."` on the release commit (it tags and publishes the GitHub Release in one step; the workflow triggers on `release: published`). Mark pre-releases with `prerelease=1` so the floating `:latest` Docker tag is not re-pointed (`publish.yml` only adds `:latest` for non-prereleases; `:vX.Y.Z` and `:sha-<sha>` are always pushed).
+3. **Tag and create the GitHub Release.** Run `make release-create tag=vX.Y.Z < notes.md` on the release commit (omit the redirect to let GitHub generate the notes) (it tags and publishes the GitHub Release in one step; the workflow triggers on `release: published`). Mark pre-releases with `prerelease=1` so the floating `:latest` Docker tag is not re-pointed (`publish.yml` only adds `:latest` for non-prereleases; `:vX.Y.Z` and `:sha-<sha>` are always pushed).
 4. **Let the workflow self-verify.** `publish-pypi` builds, runs `twine check`, installs the wheel, and fails if `linkedin-analyzer --version` does not match the tag (minus the leading `v`); `publish-docker` repeats the version check on the built image and runs a Trivy HIGH/CRITICAL scan before pushing.
 5. **Set `VITE_APP_RELEASE`** on the next web build to the same tag/SHA so Sentry correlates web errors to the release (see Versioning above).
 
@@ -204,8 +204,8 @@ When the issue fires, open the linked run to see which workflow is named. If it 
 `web-smoke.yml` additionally exposes a `checked` job output, because its check is skipped when `PRODUCTION_URL` is unset. A skipped run is neither a failure nor a recovery, so both alert jobs require `checked == 'true'`; a failure that never reached the check syncs `setup-failure` instead. To sync an alert by hand:
 
 ```bash
-make ci-alert-issue title="Dependency audit failed" label=dependency-audit \
-  run_url=https://github.com/OWNER/REPO/actions/runs/123 state=close
+TITLE='Dependency audit failed' make ci-alert-issue label=dependency-audit \
+  run_url=https://github.com/OWNER/REPO/actions/runs/123 state=close < /dev/null
 ```
 
 ### Workflow and cache operations

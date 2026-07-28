@@ -37,6 +37,47 @@ PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}
 # GraphQL, CI triage) lives in Python.
 GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
 
+# ─── Free text ────────────────────────────────────────────────────────────────
+#
+# A body is read from standard input. That is the only way in, so no target
+# below branches on how the text arrived:
+#
+#     make pr-address thread=PRRT_... <<'EOF'
+#     git log -1 --format=%B | make pr-comment
+#     make issue-comment issue=7 < notes.md
+#
+# Text must not pass through make. Make expands a command-line assignment while
+# it parses it, so `make pr-comment body='$(shell rm -rf .)'` runs the command
+# before any recipe sees the value. Standard input never reaches that parser,
+# and it needs no quoting from the caller either, which the environment still
+# would. It also has no length limit and no argv escaping to get wrong.
+#
+# A title is not a body: it is one short line, and the targets that take one
+# also take a body, so it arrives in the environment as a shell prefix:
+#
+#     TITLE='Fix the retry loop' make issue-create < issue.md
+#
+# Make never expands a variable it inherited from its environment, so a prefix
+# arrives exactly as typed. `make issue-create TITLE=...` would be expanded, and
+# the two spellings differ only in where the assignment sits, so the unsafe one
+# is refused below rather than trusted to be caught in review.
+#
+# Paths stay ordinary make arguments (`files=`, `path=`). A path is structured,
+# and where one names a file the shell must not reinterpret, as in `stage`, the
+# target exports it with $(value ...) so it never becomes source text either.
+FREE_TEXT_VARS := TITLE COMMENT SEARCH
+$(foreach v,$(FREE_TEXT_VARS),$(if $(filter command line,$(origin $(v))),$(error \
+$(v) was passed as a make argument, which make expands; use $(v)='...' make <target>)))
+
+# The arguments these replaced. Make ignores an unused command-line assignment,
+# so without this a stale `body="Fixed"` would be dropped in silence and the
+# target would go on to read an empty body from stdin.
+RETIRED_TEXT_ARGS := body title comment notes search detail \
+body_file message_file notes_file detail_file
+$(foreach v,$(RETIRED_TEXT_ARGS),$(if $(filter command line,$(origin $(v))),$(error \
+$(v)= is no longer an argument: a body comes from stdin (make <target> < file) \
+and a title from the environment (TITLE='...' make <target>))))
+
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
 .PHONY: install node-install install-hooks setup-base setup setup-all setup-ci setup-playwright setup-playwright-engines setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
@@ -126,7 +167,7 @@ check-overrides: ## Check npm overrides are still needed
 
 # ─── Format @format ───────────────────────────────────────────────────────────────────
 
-.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-py-diff format-js-check
+.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-py-diff format-js-check format-js-diff
 
 fmt: fmt-py fmt-js fmt-css ## Auto-fix Python, JavaScript, CSS, and metadata formatting
 
@@ -153,6 +194,15 @@ format-py-diff: ## Show Python formatting changes without modifying files [paths
 
 format-js-check: ## Check Prettier formatting only
 	$(NPM) run format:check
+
+# Prettier has no --diff, so the formatted result is printed and compared. This
+# is the JavaScript-side counterpart to format-py-diff: it answers "what would
+# fmt change here" without running fmt, which matters when the only allowed way
+# to inspect a formatting failure would otherwise be to auto-fix the file.
+format-js-diff: ## Show Prettier formatting changes without modifying files (make format-js-diff path=docs/x.md)
+	@test -n "$(path)" || (printf 'Usage: make format-js-diff path=docs/development.md\n' >&2; exit 1)
+	@$(NPX) prettier --config config/prettierrc.json --ignore-path config/prettierignore -- "$(path)" \
+		| diff -u -- "$(path)" - || true
 
 # ─── Typecheck @typecheck ────────────────────────────────────────────────────────────────
 
@@ -474,41 +524,29 @@ stage-all: ## Stage all working tree changes
 # Every message is assembled into a temporary file and screened before it
 # reaches git, because a mistyped heredoc terminator silently records shell text
 # (`EOF && make push 2>&1 | tail -3`) as part of the commit.
-commit: export COMMIT_TITLE := $(value title)
-commit: export COMMIT_BODY := $(value body)
-commit: export COMMIT_MESSAGE_FILE := $(value message_file)
-commit: ## Commit staged changes (make commit title="Subject" [body="- Detail"] | make commit message_file=path, - reads stdin)
-	@test -n "$$COMMIT_TITLE$$COMMIT_MESSAGE_FILE" || \
-		(printf 'Usage: make commit title="Subject" [body="- Detail"] OR make commit message_file=path (- reads stdin)\n' >&2; exit 1)
+commit: ## Commit staged changes, message on stdin (make commit < msg.txt, or a heredoc)
 	@set -e; \
 	tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-commit-message.XXXXXX"); \
 	chmod 600 "$$tmp"; \
 	trap 'rm -f -- "$$tmp"' EXIT; \
-	if [ -z "$$COMMIT_MESSAGE_FILE" ]; then \
-		printf '%s\n' "$$COMMIT_TITLE" > "$$tmp"; \
-		test -z "$$COMMIT_BODY" || printf '\n%s\n' "$$COMMIT_BODY" >> "$$tmp"; \
-	elif [ "$$COMMIT_MESSAGE_FILE" = "-" ]; then \
-		cat > "$$tmp"; \
-	else \
-		cat -- "$$COMMIT_MESSAGE_FILE" > "$$tmp"; \
-	fi; \
+	cat > "$$tmp"; \
+	test -s "$$tmp" || \
+		{ printf 'Empty commit message. Usage: make commit < msg.txt, or a heredoc\n' >&2; exit 1; }; \
 	$(GH) check-commit-message --message-file "$$tmp"; \
 	git commit -F "$$tmp"
 
 push: ## Push the current branch and set its upstream
 	@branch=$$(git branch --show-current); test -n "$$branch" || { printf 'No current branch.\n' >&2; exit 1; }; git push -u origin -- "$$branch"
 
-release-create: export RELEASE_NOTES := $(value notes)
-release-create: export RELEASE_NOTES_FILE := $(value notes_file)
-release-create: ## Tag and publish a GitHub release (make release-create tag=vX.Y.Z [notes="..." | notes_file=path] [prerelease=1])
-	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [notes="..." OR notes_file=path] [prerelease=1]\n' >&2; exit 1)
+release-create: ## Tag and publish a GitHub release, notes on stdin or generated when empty (make release-create tag=vX.Y.Z [prerelease=1] < notes.md)
+	@test -n "$(tag)" || (printf 'Usage: make release-create tag=vX.Y.Z [prerelease=1] [< notes.md]\n' >&2; exit 1)
 	@set -e; \
-	tmp=""; \
-	trap 'test -n "$$tmp" && rm -f -- "$$tmp"' EXIT; \
+	tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-release-notes.XXXXXX"); \
+	chmod 600 "$$tmp"; \
+	trap 'rm -f -- "$$tmp"' EXIT; \
+	cat > "$$tmp"; \
 	set -- "$(tag)" --title "$(tag)"; \
-	if [ -n "$$RELEASE_NOTES_FILE" ]; then set -- "$$@" --notes-file "$$RELEASE_NOTES_FILE"; \
-	elif [ -n "$$RELEASE_NOTES" ]; then tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-release-notes.XXXXXX"); chmod 600 "$$tmp"; printf '%s' "$$RELEASE_NOTES" > "$$tmp"; set -- "$$@" --notes-file "$$tmp"; \
-	else set -- "$$@" --generate-notes; fi; \
+	if [ -s "$$tmp" ]; then set -- "$$@" --notes-file "$$tmp"; else set -- "$$@" --generate-notes; fi; \
 	if [ -n "$(prerelease)" ]; then set -- "$$@" --prerelease; fi; \
 	gh release create "$$@"
 
@@ -519,37 +557,29 @@ release-create: ## Tag and publish a GitHub release (make release-create tag=vX.
 pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
 
-pr-create: export PR_CREATE_TITLE := $(value title)
-pr-create: export PR_CREATE_BODY := $(value body)
-pr-create: export PR_CREATE_BODY_FILE := $(value body_file)
-pr-create: ## Open a pull request for the current branch (make pr-create [base=branch] [title="..." body="..." | body_file=path, - reads stdin])
-	@# With no title or body, --fill takes both from the commits. Supplying one
-	@# without the other would leave gh prompting for the rest, which hangs a
-	@# non-interactive shell, so an explicit PR must supply both.
-	@set -e; \
-	if [ -z "$$PR_CREATE_TITLE$$PR_CREATE_BODY$$PR_CREATE_BODY_FILE" ]; then \
+pr-create: ## Open a pull request for the current branch (make pr-create [base=branch]; TITLE='...' make pr-create < body.md for an explicit one)
+	@# TITLE alone selects the mode, so there is no half-specified state left for
+	@# gh to prompt about, which would hang a non-interactive shell. Without it,
+	@# --fill takes the title and body from the commits and stdin is not read.
+	@if [ -z "$$TITLE" ]; then \
 		gh pr create --fill $(if $(base),--base "$(base)"); \
-	elif [ -z "$$PR_CREATE_TITLE" ] || [ -z "$$PR_CREATE_BODY$$PR_CREATE_BODY_FILE" ]; then \
-		printf 'Usage: make pr-create title="..." body="..." OR body_file=path (- reads stdin)\n' >&2; exit 1; \
-	elif [ -n "$$PR_CREATE_BODY_FILE" ]; then \
-		gh pr create $(if $(base),--base "$(base)") --title "$$PR_CREATE_TITLE" --body-file "$$PR_CREATE_BODY_FILE"; \
 	else \
-		printf '%s' "$$PR_CREATE_BODY" | gh pr create $(if $(base),--base "$(base)") --title "$$PR_CREATE_TITLE" --body-file -; \
+		gh pr create $(if $(base),--base "$(base)") --title "$$TITLE" --body-file -; \
 	fi
 
-pr-edit: export PR_EDIT_TITLE := $(value title)
-pr-edit: export PR_EDIT_BODY := $(value body)
-pr-edit: export PR_EDIT_BODY_FILE := $(value body_file)
-pr-edit: ## Edit the current PR title/body (make pr-edit [title="..."] [body="..." | body_file=path, - reads stdin] [pr_num=N])
-	@test -n "$$PR_EDIT_TITLE$$PR_EDIT_BODY$$PR_EDIT_BODY_FILE" || \
-		{ printf 'Usage: make pr-edit title="New title" [body="..." OR body_file=path (- reads stdin)]\n' >&2; exit 1; }
+# The only target that reads stdin and may still have nothing to do with it.
+# Editing a title and replacing a body are separate intents, so an empty stdin
+# leaves the body alone rather than clearing it. The branch is on what to
+# change, not on how the text arrived.
+pr-edit: ## Edit the current PR (TITLE='...' make pr-edit; new body on stdin: make pr-edit < body.md) [pr_num=N]
 	@set -e; \
+	body=$$(cat); \
+	test -n "$$TITLE$$body" || \
+		{ printf "Usage: TITLE='New title' make pr-edit, or make pr-edit < body.md\n" >&2; exit 1; }; \
 	set -- $(if $(pr_num),--pr "$(pr_num)"); \
-	if [ -n "$$PR_EDIT_TITLE" ]; then set -- "$$@" --title "$$PR_EDIT_TITLE"; fi; \
-	if [ -n "$$PR_EDIT_BODY_FILE" ]; then \
-		$(GH) edit-pr "$$@" --body-file "$$PR_EDIT_BODY_FILE"; \
-	elif [ -n "$$PR_EDIT_BODY" ]; then \
-		printf '%s' "$$PR_EDIT_BODY" | $(GH) edit-pr "$$@" --body-file -; \
+	if [ -n "$$TITLE" ]; then set -- "$$@" --title "$$TITLE"; fi; \
+	if [ -n "$$body" ]; then \
+		printf '%s' "$$body" | $(GH) edit-pr "$$@" --body-file -; \
 	else \
 		$(GH) edit-pr "$$@"; \
 	fi
@@ -570,49 +600,26 @@ pr-comments: ## Show all comments on the current PR
 	gh pr view --comments
 
 # Comment and reply text is prose: it carries newlines, quotes, backticks, and
-# version constraints like >=3.11. Interpolating it into the recipe hands all of
-# that to the shell as source text, so it reaches the helper through the
-# environment and then over a pipe instead. `--body-file -` already reads stdin,
-# so an inline body never needs a temporary file and never touches disk.
-pr-comment: export PR_COMMENT_BODY := $(value body)
-pr-comment: export PR_COMMENT_BODY_FILE := $(value body_file)
-pr-comment: ## Add a comment to the current PR (make pr-comment body="msg" | body_file=path, - reads stdin) [pr_num=N]
-	@test -n "$$PR_COMMENT_BODY$$PR_COMMENT_BODY_FILE" || \
-		(printf 'Usage: make pr-comment body="Looks good" OR make pr-comment body_file=path (- reads stdin)\n' >&2; exit 1)
-	@if [ -n "$$PR_COMMENT_BODY_FILE" ]; then \
-		$(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file "$$PR_COMMENT_BODY_FILE"; \
-	else \
-		printf '%s' "$$PR_COMMENT_BODY" | $(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file -; \
-	fi
+# version constraints like >=3.11. `--body-file -` hands stdin to the helper
+# untouched, so none of that is ever shell source text, the body never reaches
+# disk, and the recipe is the one command it looks like.
+pr-comment: ## Add a comment to the current PR, body on stdin (make pr-comment < notes.md) [pr_num=N]
+	@$(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file -
 
 pr-review-comments: ## List review threads with ids (make pr-review-comments [pr_num=N] [show=all])
 	@$(GH) list $(if $(pr_num),--pr "$(pr_num)") $(if $(filter all,$(show)),--all)
 
-pr-reply: export PR_REPLY_BODY := $(value body)
-pr-reply: export PR_REPLY_BODY_FILE := $(value body_file)
-pr-reply: ## Reply to a review thread (make pr-reply thread=PRRT_... body="msg" | body_file=path, - reads stdin)
-	@test -n "$(thread)" -a -n "$$PR_REPLY_BODY$$PR_REPLY_BODY_FILE" || \
-		(printf 'Usage: make pr-reply thread=PRRT_... body="Fixed" OR body_file=path (- reads stdin)\n' >&2; exit 1)
-	@if [ -n "$$PR_REPLY_BODY_FILE" ]; then \
-		$(GH) reply --thread "$(thread)" --body-file "$$PR_REPLY_BODY_FILE"; \
-	else \
-		printf '%s' "$$PR_REPLY_BODY" | $(GH) reply --thread "$(thread)" --body-file -; \
-	fi
+pr-reply: ## Reply to a review thread, body on stdin (make pr-reply thread=PRRT_... < notes.md)
+	@test -n "$(thread)" || (printf 'Usage: make pr-reply thread=PRRT_... < notes.md\n' >&2; exit 1)
+	@$(GH) reply --thread "$(thread)" --body-file -
 
 pr-resolve: ## Resolve a review thread (make pr-resolve thread=PRRT_...)
 	@test -n "$(thread)" || (printf 'Usage: make pr-resolve thread=PRRT_...\n' >&2; exit 1)
 	@$(GH) resolve --thread "$(thread)"
 
-pr-address: export PR_ADDRESS_BODY := $(value body)
-pr-address: export PR_ADDRESS_BODY_FILE := $(value body_file)
-pr-address: ## Reply to and resolve a review thread (make pr-address thread=PRRT_... body="msg" | body_file=path, - reads stdin)
-	@test -n "$(thread)" -a -n "$$PR_ADDRESS_BODY$$PR_ADDRESS_BODY_FILE" || \
-		(printf 'Usage: make pr-address thread=PRRT_... body="Fixed in abc123" OR body_file=path (- reads stdin)\n' >&2; exit 1)
-	@if [ -n "$$PR_ADDRESS_BODY_FILE" ]; then \
-		$(GH) address --thread "$(thread)" --body-file "$$PR_ADDRESS_BODY_FILE"; \
-	else \
-		printf '%s' "$$PR_ADDRESS_BODY" | $(GH) address --thread "$(thread)" --body-file -; \
-	fi
+pr-address: ## Reply to and resolve a review thread, body on stdin (make pr-address thread=PRRT_... < notes.md)
+	@test -n "$(thread)" || (printf 'Usage: make pr-address thread=PRRT_... < notes.md\n' >&2; exit 1)
+	@$(GH) address --thread "$(thread)" --body-file -
 
 pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
 	@$(GH) list-comments $(if $(pr_num),--pr "$(pr_num)")
@@ -678,21 +685,16 @@ ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_k
 	@test -n "$(cache)" || (printf 'Usage: make ci-cache-delete cache=1234 [ref=refs/heads/main]\n' >&2; exit 1)
 	gh cache delete "$(cache)" $(if $(ref),--ref "$(ref)")
 
-# The title and detail are free text written by a failing workflow, so they
-# reach the helper through the environment. The $(if ...) guards only test
-# whether the variable was set; they never expand its value into the recipe.
-# The names differ from the caller's own ALERT_* environment variables in
-# alert-issue.yml so a reader can tell the two apart at a glance.
-ci-alert-issue: export ALERT_ISSUE_TITLE := $(value title)
-ci-alert-issue: export ALERT_ISSUE_DETAIL := $(value detail)
-ci-alert-issue: ## Sync a monitored alert issue (make ci-alert-issue title="..." label=L run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name])
-	@test -n "$$ALERT_ISSUE_TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
-		(printf 'Usage: make ci-alert-issue title="Dependency audit failed" label=dependency-audit run_url=URL state=open|close|setup-failure [detail="..."] [detail_file=path] [repo=owner/name]\n' >&2; exit 1)
-	@set -e; \
-	set -- --title "$$ALERT_ISSUE_TITLE" --label "$(label)" --run-url "$(run_url)" --state "$(state)" \
-		$(if $(repo),--repo "$(repo)") $(if $(detail_file),--detail-file "$(detail_file)"); \
-	if [ -n "$$ALERT_ISSUE_DETAIL" ]; then set -- "$$@" --detail "$$ALERT_ISSUE_DETAIL"; fi; \
-	$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts "$$@"
+# The title and detail are free text written by a failing workflow. The detail
+# is a body like any other and arrives on stdin; an empty stream just means the
+# alert has no detail. The title comes from the step environment, so the
+# workflow never builds a make command line out of its own inputs.
+ci-alert-issue: ## Sync a monitored alert issue, detail on stdin (TITLE='...' make ci-alert-issue label=L run_url=URL state=open|close|setup-failure [repo=owner/name])
+	@test -n "$$TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
+		(printf "Usage: TITLE='Dependency audit failed' make ci-alert-issue label=dependency-audit run_url=URL state=open|close|setup-failure [repo=owner/name] < detail.md\n" >&2; exit 1)
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts \
+		--title "$$TITLE" --label "$(label)" --run-url "$(run_url)" --state "$(state)" \
+		$(if $(repo),--repo "$(repo)") --detail-file -
 
 ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
@@ -704,15 +706,14 @@ ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disab
 issue: ## Issue commands (make issue)
 	@$(MAKE) --no-print-directory help-issue
 
-issue-list: export ISSUE_SEARCH := $(value search)
-issue-list: ## List issues (make issue-list [state=open|closed|all] [label=bug] [assignee=user | mine=1] [author=user] [search="..."] [limit=N])
+issue-list: ## List issues (make issue-list [state=open|closed|all] [label=bug] [assignee=user | mine=1] [author=user] [limit=N]; SEARCH='...' to filter)
 	@test -z "$(and $(assignee),$(filter 1,$(mine)))" || \
 		(printf 'Use assignee=user or mine=1, not both.\n' >&2; exit 1)
 	@set -e; \
 	set -- $(if $(state),--state "$(state)") $(if $(label),--label "$(label)") \
 		$(if $(assignee),--assignee "$(assignee)") $(if $(filter 1,$(mine)),--assignee @me) \
 		$(if $(author),--author "$(author)") $(if $(limit),--limit "$(limit)"); \
-	if [ -n "$$ISSUE_SEARCH" ]; then set -- "$$@" --search "$$ISSUE_SEARCH"; fi; \
+	if [ -n "$$SEARCH" ]; then set -- "$$@" --search "$$SEARCH"; fi; \
 	gh issue list "$$@"
 
 issue-view: ## Show an issue with its comments (make issue-view issue=N)
@@ -723,64 +724,47 @@ issue-summary: ## One-screen issue overview: state, labels, assignees, recent co
 	@test -n "$(issue)" || (printf 'Usage: make issue-summary issue=123\n' >&2; exit 1)
 	@$(GH) issue-summary --issue "$(issue)"
 
-issue-create: export ISSUE_TITLE := $(value title)
-issue-create: export ISSUE_BODY := $(value body)
-issue-create: export ISSUE_BODY_FILE := $(value body_file)
-issue-create: ## Open an issue (make issue-create title="..." body="..." | body_file=path, - reads stdin [labels="a,b"] [assignee=@me])
-	@test -n "$$ISSUE_TITLE" -a -n "$$ISSUE_BODY$$ISSUE_BODY_FILE" || \
-		(printf 'Usage: make issue-create title="Fix X" body="..." OR body_file=path (- reads stdin) [labels="bug,ci"] [assignee=@me]\n' >&2; exit 1)
-	@set -e; \
-	set -- --title "$$ISSUE_TITLE" $(if $(labels),--label "$(labels)") $(if $(assignee),--assignee "$(assignee)"); \
-	if [ -n "$$ISSUE_BODY_FILE" ]; then \
-		gh issue create "$$@" --body-file "$$ISSUE_BODY_FILE"; \
-	else \
-		printf '%s' "$$ISSUE_BODY" | gh issue create "$$@" --body-file -; \
-	fi
+issue-create: ## Open an issue, body on stdin (TITLE='Fix X' make issue-create < issue.md [labels="a,b"] [assignee=@me])
+	@test -n "$$TITLE" || \
+		(printf "Usage: TITLE='Fix X' make issue-create < issue.md [labels=\"bug,ci\"] [assignee=@me]\n" >&2; exit 1)
+	@gh issue create --title "$$TITLE" $(if $(labels),--label "$(labels)") \
+		$(if $(assignee),--assignee "$(assignee)") --body-file -
 
-issue-comment: export ISSUE_COMMENT_BODY := $(value body)
-issue-comment: export ISSUE_COMMENT_BODY_FILE := $(value body_file)
-issue-comment: ## Comment on an issue (make issue-comment issue=N body="..." | body_file=path, - reads stdin)
-	@test -n "$(issue)" -a -n "$$ISSUE_COMMENT_BODY$$ISSUE_COMMENT_BODY_FILE" || \
-		(printf 'Usage: make issue-comment issue=123 body="On it" OR body_file=path (- reads stdin)\n' >&2; exit 1)
-	@if [ -n "$$ISSUE_COMMENT_BODY_FILE" ]; then \
-		gh issue comment "$(issue)" --body-file "$$ISSUE_COMMENT_BODY_FILE"; \
-	else \
-		printf '%s' "$$ISSUE_COMMENT_BODY" | gh issue comment "$(issue)" --body-file -; \
-	fi
+issue-comment: ## Comment on an issue, body on stdin (make issue-comment issue=N < notes.md)
+	@test -n "$(issue)" || (printf 'Usage: make issue-comment issue=123 < notes.md\n' >&2; exit 1)
+	@gh issue comment "$(issue)" --body-file -
 
-issue-edit: export ISSUE_EDIT_TITLE := $(value title)
-issue-edit: export ISSUE_EDIT_BODY := $(value body)
-issue-edit: export ISSUE_EDIT_BODY_FILE := $(value body_file)
-issue-edit: ## Edit an issue title or body (make issue-edit issue=N [title="..."] [body="..." | body_file=path, - reads stdin])
-	@test -n "$(issue)" -a -n "$$ISSUE_EDIT_TITLE$$ISSUE_EDIT_BODY$$ISSUE_EDIT_BODY_FILE" || \
-		(printf 'Usage: make issue-edit issue=123 [title="New title"] [body="..." OR body_file=path (- reads stdin)]\n' >&2; exit 1)
+# Like pr-edit: an empty stdin leaves the body alone instead of clearing it.
+issue-edit: ## Edit an issue (TITLE='...' make issue-edit issue=N; new body on stdin: make issue-edit issue=N < body.md)
+	@test -n "$(issue)" || (printf "Usage: TITLE='New title' make issue-edit issue=123, or make issue-edit issue=123 < body.md\n" >&2; exit 1)
 	@set -e; \
+	body=$$(cat); \
+	test -n "$$TITLE$$body" || \
+		{ printf "Nothing to change. Set TITLE='...' or pipe a new body in.\n" >&2; exit 1; }; \
 	set -- "$(issue)"; \
-	if [ -n "$$ISSUE_EDIT_TITLE" ]; then set -- "$$@" --title "$$ISSUE_EDIT_TITLE"; fi; \
-	if [ -n "$$ISSUE_EDIT_BODY_FILE" ]; then \
-		gh issue edit "$$@" --body-file "$$ISSUE_EDIT_BODY_FILE"; \
-	elif [ -n "$$ISSUE_EDIT_BODY" ]; then \
-		printf '%s' "$$ISSUE_EDIT_BODY" | gh issue edit "$$@" --body-file -; \
+	if [ -n "$$TITLE" ]; then set -- "$$@" --title "$$TITLE"; fi; \
+	if [ -n "$$body" ]; then \
+		printf '%s' "$$body" | gh issue edit "$$@" --body-file -; \
 	else \
 		gh issue edit "$$@"; \
 	fi
 
-# gh issue close and reopen take a comment but offer no --comment-file, so the
-# text goes through the environment and stays out of the recipe.
-issue-close: export ISSUE_CLOSE_COMMENT := $(value comment)
-issue-close: ## Close an issue (make issue-close issue=N [reason=completed|"not planned"] [comment="..."])
-	@test -n "$(issue)" || (printf 'Usage: make issue-close issue=123 [reason=completed] [comment="..."]\n' >&2; exit 1)
+# The one place stdin cannot serve: gh issue close and reopen take --comment and
+# offer no --comment-file, so there is nothing to point at a stream. A short
+# note travels in the environment; anything longer belongs in its own comment,
+# posted with issue-comment first.
+issue-close: ## Close an issue (make issue-close issue=N [reason=completed|"not planned"]; COMMENT='...' to say why)
+	@test -n "$(issue)" || (printf "Usage: make issue-close issue=123 [reason=completed], COMMENT='...' optional\n" >&2; exit 1)
 	@set -e; \
 	set -- "$(issue)" $(if $(reason),--reason "$(reason)"); \
-	if [ -n "$$ISSUE_CLOSE_COMMENT" ]; then set -- "$$@" --comment "$$ISSUE_CLOSE_COMMENT"; fi; \
+	if [ -n "$$COMMENT" ]; then set -- "$$@" --comment "$$COMMENT"; fi; \
 	gh issue close "$$@"
 
-issue-reopen: export ISSUE_REOPEN_COMMENT := $(value comment)
-issue-reopen: ## Reopen a closed issue (make issue-reopen issue=N [comment="..."])
-	@test -n "$(issue)" || (printf 'Usage: make issue-reopen issue=123 [comment="..."]\n' >&2; exit 1)
+issue-reopen: ## Reopen a closed issue (make issue-reopen issue=N; COMMENT='...' to say why)
+	@test -n "$(issue)" || (printf "Usage: make issue-reopen issue=123, COMMENT='...' optional\n" >&2; exit 1)
 	@set -e; \
 	set -- "$(issue)"; \
-	if [ -n "$$ISSUE_REOPEN_COMMENT" ]; then set -- "$$@" --comment "$$ISSUE_REOPEN_COMMENT"; fi; \
+	if [ -n "$$COMMENT" ]; then set -- "$$@" --comment "$$COMMENT"; fi; \
 	gh issue reopen "$$@"
 
 issue-label: ## Add labels to an issue (make issue-label issue=N labels="bug,ci")

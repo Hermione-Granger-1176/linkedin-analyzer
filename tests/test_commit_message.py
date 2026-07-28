@@ -54,7 +54,7 @@ def test_bare_terminator_line_is_flagged() -> None:
 @pytest.mark.parametrize(
     "line",
     [
-        "make commit message_file=- <<'EOF'",
+        "make commit <<'EOF'",
         'run <<"MSG"',
         "cat <<EOF",
         "here is a heredoc: << HEREDOC",

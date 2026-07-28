@@ -47,20 +47,19 @@ jobs:
           node-version: ""
           install-node-deps: "false"
 
-      # Inputs reach make through the environment, never through template
-      # interpolation inside the script body.
+      # Inputs reach make through the environment and stdin, never through
+      # template interpolation inside the script body. The detail is the alert's
+      # body, so it is piped in; nothing has to quote it for a make command line.
       - name: Sync the alert issue
         env:
           GH_TOKEN: ${{ github.token }}
-          ALERT_TITLE: ${{ inputs.title }}
+          TITLE: ${{ inputs.title }}
           ALERT_LABEL: ${{ inputs.label }}
           ALERT_STATE: ${{ inputs.state }}
           ALERT_DETAIL: ${{ inputs.detail }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          make ci-alert-issue \
-            title="$ALERT_TITLE" \
+          printf '%s' "$ALERT_DETAIL" | make ci-alert-issue \
             label="$ALERT_LABEL" \
             state="$ALERT_STATE" \
-            run_url="$RUN_URL" \
-            detail="$ALERT_DETAIL"
+            run_url="$RUN_URL"

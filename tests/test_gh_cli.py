@@ -233,6 +233,105 @@ def test_check_commit_message_reports_an_unreadable_file(tmp_path: Path) -> None
         cli.main(["check-commit-message", "--message-file", str(missing)])
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["reply", "--thread", _THREAD],
+        ["address", "--thread", _THREAD],
+        ["comment"],
+    ],
+)
+def test_posting_commands_need_exactly_one_body_form(argv: list[str]) -> None:
+    """Every posting command requires one of --body and --body-file, never both."""
+    with pytest.raises(SystemExit):
+        cli.main(argv)
+    with pytest.raises(SystemExit):
+        cli.main([*argv, "--body", "inline", "--body-file", "body.md"])
+
+
+def test_reply_reads_the_body_from_a_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """--body-file carries text a command line would mangle, newlines included."""
+    calls = _record(monkeypatch, pr_review, "reply_to_thread")
+    body_file = tmp_path / "body.md"
+    body_file.write_text('needs >=3.11\nand a "quote"\n', encoding="utf-8")
+
+    assert cli.main(["reply", "--thread", _THREAD, "--body-file", str(body_file)]) == 0
+    assert calls == [((_THREAD, 'needs >=3.11\nand a "quote"\n'), {})]
+
+
+def test_address_reads_the_body_from_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A body file of - is read from stdin, which is how a piped body arrives."""
+    calls = _record(monkeypatch, pr_review, "address_thread")
+    monkeypatch.setattr(cli.sys, "stdin", io.StringIO("piped body\n"))
+
+    assert cli.main(["address", "--thread", _THREAD, "--body-file", "-"]) == 0
+    assert calls == [((_THREAD, "piped body\n"), {})]
+
+
+def test_body_file_reports_an_unreadable_path(tmp_path: Path) -> None:
+    """A missing body file names the path instead of surfacing a bare OSError."""
+    missing = tmp_path / "nope"
+
+    with pytest.raises(GhError, match=str(missing)):
+        cli.main(["reply", "--thread", _THREAD, "--body-file", str(missing)])
+
+
+def test_body_text_refuses_an_absent_body() -> None:
+    """An optional-body command must never post the string "None" as a body.
+
+    edit-pr forwards its raw values rather than calling this, so the guard is the
+    backstop for whichever optional-body subcommand comes next.
+    """
+    with pytest.raises(GhError, match="--body or --body-file"):
+        cli._body_text(argparse.Namespace(body=None, body_file=None))
+
+
+def test_comment_posts_to_the_named_pr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The comment command forwards the PR number and body, then confirms."""
+    calls = _record(monkeypatch, pr_review, "comment_on_pr")
+
+    assert cli.main(["comment", "--pr", "9", "--body", "looks good"]) == 0
+    assert calls == [((9, "looks good"), {})]
+    assert capsys.readouterr().out.strip() == "Commented on the PR"
+
+
+def test_comment_defaults_to_the_current_pr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Omitting --pr leaves PR detection to the helper."""
+    calls = _record(monkeypatch, pr_review, "comment_on_pr")
+
+    assert cli.main(["comment", "--body", "ack"]) == 0
+    assert calls == [((None, "ack"), {})]
+
+
+def test_edit_pr_forwards_the_body_file_unread(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The path reaches gh itself, so a large body never enters the argument list."""
+    calls = _record(monkeypatch, pr_review, "edit_pr")
+    body_file = tmp_path / "body.md"
+    body_file.write_text("never read here\n", encoding="utf-8")
+
+    assert cli.main(["edit-pr", "--pr", "9", "--title", "T", "--body-file", str(body_file)]) == 0
+    assert calls == [((9,), {"title": "T", "body": None, "body_file": str(body_file)})]
+    assert capsys.readouterr().out.strip() == "Edited the PR"
+
+
+def test_edit_pr_accepts_a_title_without_a_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The body is optional for edit-pr, unlike the posting commands."""
+    calls = _record(monkeypatch, pr_review, "edit_pr")
+
+    assert cli.main(["edit-pr", "--title", "Just the title"]) == 0
+    assert calls == [((None,), {"title": "Just the title", "body": None, "body_file": None})]
+
+
+def test_edit_pr_rejects_both_body_forms() -> None:
+    """An optional body is still one body form at most."""
+    with pytest.raises(SystemExit):
+        cli.main(["edit-pr", "--body", "inline", "--body-file", "body.md"])
+
+
 def test_parser_exposes_a_handler_for_every_subcommand() -> None:
     """The parser and the dispatch table cannot drift apart.
 

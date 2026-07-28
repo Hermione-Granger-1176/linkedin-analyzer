@@ -649,3 +649,86 @@ def test_main_delete_comment_invokes_helper(
     assert exit_code == 0
     assert deleted == ["PRRC_x"]
     assert "Deleted PRRC_x" in capsys.readouterr().out
+
+
+def test_comment_on_pr_posts_to_the_named_pr() -> None:
+    """A PR-level comment is posted with the body as one argument, newlines intact."""
+    runner = FakeGh([(has("pr", "comment"), completed_process(0, ""))])
+
+    pr_review.comment_on_pr(7, 'first\nsecond "quoted"', run_fn=runner)
+
+    (cmd,) = runner.calls
+    assert cmd == ["gh", "pr", "comment", "7", "--body", 'first\nsecond "quoted"']
+
+
+def test_comment_on_pr_defaults_to_current_pr() -> None:
+    """The PR number is resolved from the current branch when omitted."""
+    runner = FakeGh(
+        [
+            (has("pr", "view"), completed_process(0, json.dumps({"number": 7}))),
+            (has("pr", "comment"), completed_process(0, "")),
+        ]
+    )
+
+    pr_review.comment_on_pr(None, "ack", run_fn=runner)
+
+    assert ["gh", "pr", "comment", "7", "--body", "ack"] in runner.calls
+
+
+def test_comment_on_pr_does_not_retry() -> None:
+    """Commenting opts out of retries so a lost response never double-posts."""
+    runner = FakeGh([(has("pr", "comment"), completed_process(1, "", "(HTTP 502) bad gateway"))])
+
+    with pytest.raises(GhError):
+        pr_review.comment_on_pr(7, "ack", run_fn=runner)
+
+    assert len(runner.calls) == 1
+
+
+def test_edit_pr_requires_something_to_change() -> None:
+    """With nothing to set, gh would open an interactive editor, so refuse first."""
+    runner = FakeGh([])
+
+    with pytest.raises(GhError, match="title, body, or body file"):
+        pr_review.edit_pr(7, run_fn=runner)
+
+    assert runner.calls == []
+
+
+def test_edit_pr_sets_the_title_and_body() -> None:
+    """Both fields reach gh as separate arguments on the numbered PR."""
+    runner = FakeGh([(has("pr", "edit"), completed_process(0, ""))])
+
+    pr_review.edit_pr(7, title="New title", body="New body", run_fn=runner)
+
+    (cmd,) = runner.calls
+    assert cmd == ["gh", "pr", "edit", "7", "--title", "New title", "--body", "New body"]
+
+
+def test_edit_pr_prefers_the_body_file_over_the_inline_body() -> None:
+    """The file path wins, so a body too large to pass inline still reaches gh."""
+    runner = FakeGh([(has("pr", "edit"), completed_process(0, ""))])
+
+    pr_review.edit_pr(7, body="inline", body_file="/tmp/body.md", run_fn=runner)
+
+    (cmd,) = runner.calls
+    assert cmd == ["gh", "pr", "edit", "7", "--body-file", "/tmp/body.md"]
+    assert "--body" not in cmd
+
+
+def test_edit_pr_defaults_to_current_pr() -> None:
+    """The PR number is resolved here, not left to gh's own branch lookup.
+
+    Every other PR-scoped helper in the module resolves it the same way, so a
+    branch with no pull request fails with one recognizable error.
+    """
+    runner = FakeGh(
+        [
+            (has("pr", "view"), completed_process(0, json.dumps({"number": 7}))),
+            (has("pr", "edit"), completed_process(0, "")),
+        ]
+    )
+
+    pr_review.edit_pr(None, title="New title", run_fn=runner)
+
+    assert ["gh", "pr", "edit", "7", "--title", "New title"] in runner.calls

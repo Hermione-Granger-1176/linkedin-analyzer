@@ -37,6 +37,7 @@ linkedin-analyzer/
 │   │   ├── runtime.js                  # Global error handler
 │   │   ├── sentry.js                   # Sentry error reporting integration
 │   │   ├── telemetry.js                # Web-vitals and perf telemetry
+│   │   ├── telemetry-metrics.js        # Bounded telemetry metric helpers
 │   │   ├── perf.js                     # Shared frame/mark/measure helpers
 │   │   ├── session.js                  # Session management
 │   │   ├── theme.js                    # Theme toggle
@@ -124,13 +125,17 @@ linkedin-analyzer/
 │   ├── playwright.config.js            # Playwright browser test config
 │   ├── prettierignore                  # Prettier ignore rules
 │   ├── prettierrc.json                 # Prettier formatting rules
+│   ├── security_audit.json             # Reviewed dependency vulnerability exceptions
 │   └── stylelint.config.mjs            # stylelint CSS rules
 ├── scripts/
 │   ├── check-overrides.mjs             # Validates npm overrides are still needed
 │   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)
 │   ├── ci/                             # Local CI parallel-runner and GitHub Actions workflow helpers
+│   ├── gen-parity-corpus.mjs           # Regenerates synthetic cross-runtime parity fixtures
 │   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
+│   ├── lib/                            # Shared dependency-free Python tooling helpers
 │   ├── lint/                           # EditorConfig, documentation, and Make-target lint helpers
+│   ├── setup/                          # Safe environment and local browser runtime setup
 │   └── web-smoke.mjs                   # Post-deploy HTTP smoke check (shell + headers + CSP endpoint)
 ├── data/                               # Local workspace; contents gitignored (only .gitkeep placeholders are tracked)
 │   ├── input/                          # Place CSVs here

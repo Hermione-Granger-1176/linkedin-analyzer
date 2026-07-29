@@ -170,21 +170,17 @@ export const SketchCharts = (() => {
         if (!items) {
             return null;
         }
-        for (const item of items) {
-            if (item.hitTest && item.hitTest(x, y)) {
-                return item;
-            }
-            if (
-                typeof item.x === "number" &&
-                x >= item.x &&
-                x <= item.x + item.width &&
-                y >= item.y &&
-                y <= item.y + item.height
-            ) {
-                return item;
-            }
-        }
-        return null;
+        return (
+            items.find(
+                (item) =>
+                    (item.hitTest && item.hitTest(x, y)) ||
+                    (typeof item.x === "number" &&
+                        x >= item.x &&
+                        x <= item.x + item.width &&
+                        y >= item.y &&
+                        y <= item.y + item.height),
+            ) || null
+        );
     }
 
     /**
@@ -812,22 +808,39 @@ export const SketchCharts = (() => {
 
         // Render at high DPR, copy pixels to a temp canvas, restore immediately
         cancelAnimations();
+        const originalWidth = canvas.width;
+        const originalHeight = canvas.height;
         exportDpr = EXPORT_DPR;
-        redraw();
-        exportDpr = 0;
+        try {
+            redraw();
+        } catch (error) {
+            exportDpr = 0;
+            canvas.width = originalWidth;
+            canvas.height = originalHeight;
+            try {
+                redraw();
+            } catch {
+                // Preserve the export failure after restoring the backing-store dimensions.
+            }
+            throw error;
+        } finally {
+            exportDpr = 0;
+        }
 
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         const tempCtx = tempCanvas.getContext("2d");
+        if (tempCtx) {
+            tempCtx.drawImage(canvas, 0, 0);
+        }
+
+        // Restore on-screen canvas synchronously, no async gap
+        redraw();
         /* v8 ignore next */
         if (!tempCtx) {
             return;
         }
-        tempCtx.drawImage(canvas, 0, 0);
-
-        // Restore on-screen canvas synchronously, no async gap
-        redraw();
 
         // Export from the detached temp canvas (immune to further redraws)
         tempCanvas.toBlob((blob) => {

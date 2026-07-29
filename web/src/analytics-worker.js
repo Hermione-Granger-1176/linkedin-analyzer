@@ -9,7 +9,6 @@ let commentsData = null;
 let connectionsData = null;
 let analytics = null;
 let viewCache = new Map();
-let currentRequestId = 0;
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
 const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments", "connections"]);
@@ -324,8 +323,6 @@ function handleInitBase(payload) {
  * @param {object} filters - Filter parameters from the UI
  */
 function handleView(requestId, filters) {
-    currentRequestId = requestId;
-
     if (!analytics) {
         postError(requestId, "Analytics not ready.");
         return;
@@ -335,24 +332,18 @@ function handleView(requestId, filters) {
     const key = getViewKey(safeFilters);
 
     if (viewCache.has(key)) {
-        if (currentRequestId !== requestId) {
-            /* v8 ignore next */
-            return;
-        }
+        const cachedPayload = viewCache.get(key);
+        viewCache.delete(key);
+        viewCache.set(key, cachedPayload);
         self.postMessage({
             type: "view",
             requestId,
-            payload: viewCache.get(key),
+            payload: cachedPayload,
         });
         return;
     }
 
     const view = AnalyticsEngine.buildView(analytics, safeFilters);
-
-    if (currentRequestId !== requestId) {
-        /* v8 ignore next */
-        return;
-    }
 
     if (!view) {
         postError(requestId, "Unable to build analytics view.");
@@ -381,7 +372,6 @@ function handleClear() {
     commentsData = null;
     connectionsData = null;
     resetAnalyticsState();
-    currentRequestId = 0;
     self.postMessage({ type: "cleared" });
 }
 

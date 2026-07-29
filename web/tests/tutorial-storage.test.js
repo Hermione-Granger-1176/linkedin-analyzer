@@ -72,10 +72,8 @@ describe("safe localStorage wrappers", () => {
             expect(getStorageNumberValue("count", 0)).toBe(7);
         });
 
-        it("coerces a missing key to zero (Number(null))", () => {
-            // A missing key reads as null, and Number(null) is a finite 0, so the
-            // fallback only applies to genuinely non-numeric stored strings.
-            expect(getStorageNumberValue("absent", 42)).toBe(0);
+        it("returns the fallback for a missing key", () => {
+            expect(getStorageNumberValue("absent", 42)).toBe(42);
         });
 
         it("returns the fallback for a non-numeric value", () => {

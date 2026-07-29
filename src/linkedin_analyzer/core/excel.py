@@ -24,22 +24,25 @@ def format_excel_output(output_path: Path, config: CleanerConfig) -> None:
         RuntimeError: If the worksheet cannot be loaded
     """
     wb = load_workbook(output_path)
-    ws = wb.active
+    try:
+        ws = wb.active
 
-    if ws is None:
-        raise RuntimeError("Failed to load active worksheet")
+        if ws is None:
+            raise RuntimeError("Failed to load active worksheet")
 
-    for col_letter, width in config.column_widths.items():
-        ws.column_dimensions[col_letter].width = width
+        for col_letter, width in config.column_widths.items():
+            ws.column_dimensions[col_letter].width = width
 
-    wrap_columns = set(config.wrap_text_columns)
-    if wrap_columns:
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-            for cell in row:
-                if cell.column in wrap_columns:
-                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+        wrap_columns = set(config.wrap_text_columns)
+        if wrap_columns:
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+                for cell in row:
+                    if cell.column in wrap_columns:
+                        cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-    for cell in ws[1]:
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+        for cell in ws[1]:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    wb.save(output_path)
+        wb.save(output_path)
+    finally:
+        wb.close()

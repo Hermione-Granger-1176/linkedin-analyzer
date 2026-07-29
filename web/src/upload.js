@@ -183,11 +183,12 @@ export const UploadPage = (() => {
         lastPrimedSignature = null;
         initWorker();
         // Re-prime the new worker from cached files so analytics stay accurate after a crash.
-        if (worker) {
-            const cachedFiles = DataCache.get("storage:files");
-            if (cachedFiles) {
-                scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "idle" });
-            }
+        if (!worker) {
+            return;
+        }
+        const cachedFiles = DataCache.get("storage:files");
+        if (cachedFiles) {
+            scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "idle" });
         }
     }
 
@@ -992,11 +993,12 @@ export const UploadPage = (() => {
 
         const previous = primeInFlight || Promise.resolve();
         const run = previous.then(() => postPrimeToWorker(signature));
-        primeInFlight = run.finally(() => {
-            if (primeInFlight === run) {
+        const trackedRun = run.finally(() => {
+            if (primeInFlight === trackedRun) {
                 primeInFlight = null;
             }
         });
+        primeInFlight = trackedRun;
         return primeInFlight;
     }
 

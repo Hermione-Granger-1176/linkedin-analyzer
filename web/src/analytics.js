@@ -253,8 +253,7 @@ export const AnalyticsEngine = (() => {
         const connectionKeys = Array.from(monthlyConnections.keys()).sort();
         // The overlap is the later of the two start months to the earlier of the
         // two end months, the window where both series have real coverage.
-        const start =
-            postKeys[0] > connectionKeys[0] ? postKeys[0] : connectionKeys[0];
+        const start = postKeys[0] > connectionKeys[0] ? postKeys[0] : connectionKeys[0];
         const lastPost = postKeys[postKeys.length - 1];
         const lastConnection = connectionKeys[connectionKeys.length - 1];
         const end = lastPost < lastConnection ? lastPost : lastConnection;
@@ -874,15 +873,10 @@ export const AnalyticsEngine = (() => {
      * @returns {{ index: number, value: number }} Index and value of the peak element.
      */
     function getPeakFromArray(arr) {
-        let maxVal = 0,
-            maxIdx = 0;
-        for (let i = 0; i < arr.length; i++) {
-            if (arr[i] > maxVal) {
-                maxVal = arr[i];
-                maxIdx = i;
-            }
-        }
-        return { index: maxIdx, value: maxVal };
+        return arr.reduce((peak, value, index) => (value > peak.value ? { index, value } : peak), {
+            index: 0,
+            value: 0,
+        });
     }
 
     /**

@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.lint import contains_symlink as _contains_symlink
 from scripts.lint.make_targets import (
     INLINE_CODE_PATTERN,
     extract_markdown_code_snippets,
@@ -331,16 +332,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional repository-relative markdown files to check",
     )
     return parser.parse_args(argv)
-
-
-def _contains_symlink(path: Path, root: Path) -> bool:
-    """Return whether any repository-relative path component is a symbolic link."""
-    current = root
-    for part in path.relative_to(root).parts:
-        current /= part
-        if current.is_symlink():
-            return True
-    return False
 
 
 def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:

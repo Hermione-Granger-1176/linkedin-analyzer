@@ -17,9 +17,15 @@ def test_format_excel_output_raises_without_active_sheet(
 
     class DummyWorkbook:
         active = None
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    workbook = DummyWorkbook()
 
     def fake_load_workbook(_: Path) -> DummyWorkbook:
-        return DummyWorkbook()
+        return workbook
 
     monkeypatch.setattr(excel, "load_workbook", fake_load_workbook)
 
@@ -31,3 +37,4 @@ def test_format_excel_output_raises_without_active_sheet(
 
     with pytest.raises(RuntimeError, match="Failed to load active worksheet"):
         excel.format_excel_output(tmp_path / "output.xlsx", config)
+    assert workbook.closed

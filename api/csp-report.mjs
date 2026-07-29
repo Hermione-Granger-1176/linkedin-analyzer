@@ -3,9 +3,9 @@
 // The browser POSTs CSP reports here (configured via `report-uri` / `report-to`
 // + `Reporting-Endpoints` in vercel.json). Keeping the endpoint same-origin means
 // vercel.json never has to embed a Sentry org/project, and the forwarding secret
-// stays server-side. CSP reports contain only violation metadata (blocked URI,
-// violated directive, document URI), never uploaded file contents, so this
-// endpoint does not weaken the app's "data stays local" guarantee.
+// stays server-side. Before forwarding, reports are rebuilt from a bounded
+// allowlist of violation metadata and URL queries/fragments are removed. The app
+// never attaches uploaded file contents to these reports.
 //
 // Forwarding is opt-in and graceful: with no destination configured the function
 // absorbs reports and returns 204, so the CSP directive is always valid.
@@ -209,6 +209,125 @@ function sanitizeToken(value, maxLength) {
 }
 
 /**
+ * Read the first own property present under any supported report field name.
+ * @param {object} report - Raw CSP report.
+ * @param {string[]} names - Legacy and Reporting API field names.
+ * @returns {unknown} The first matching value, or undefined.
+ */
+function getReportField(report, names) {
+    for (const name of names) {
+        if (Object.prototype.hasOwnProperty.call(report, name)) {
+            return report[name];
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Normalize a CSP URL field without retaining credentials, query, or fragment.
+ * Non-hierarchical URLs such as data: are reduced to their scheme.
+ * @param {unknown} value - Raw URL-like report field.
+ * @returns {string|null} Reduced URL metadata, or null.
+ */
+function normalizeReportUrl(value) {
+    if (typeof value !== "string" || !value) {
+        return null;
+    }
+    const token = sanitizeToken(value, 2048);
+    if (CSP_KEYWORD.test(token)) {
+        return token;
+    }
+    try {
+        const url = new URL(token);
+        if (!url.host) {
+            return url.protocol || null;
+        }
+        return `${url.protocol}//${url.host}${url.pathname}`.slice(0, 2048);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Normalize a CSP directive name.
+ * @param {unknown} value - Raw directive field.
+ * @returns {string|null} Valid directive name, or null.
+ */
+function normalizeDirective(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const token = sanitizeToken(value, 64);
+    return CSP_KEYWORD.test(token) ? token : null;
+}
+
+/**
+ * Normalize a nonnegative CSP integer field.
+ * @param {unknown} value - Raw numeric field.
+ * @returns {number|null} Valid integer, or null.
+ */
+function normalizeReportInteger(value) {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Rebuild an untrusted CSP report from a strict, bounded metadata allowlist.
+ * The output uses the legacy report-uri field names expected by the forwarding
+ * endpoint regardless of which inbound report shape the browser used.
+ * @param {unknown} report - Raw extracted report body.
+ * @returns {object|null} Reduced report, or null when no known fields are valid.
+ */
+function reduceCspReport(report) {
+    if (!report || typeof report !== "object" || Array.isArray(report)) {
+        return null;
+    }
+
+    const reduced = {};
+    const directiveFields = [
+        ["effective-directive", ["effective-directive", "effectiveDirective"]],
+        ["violated-directive", ["violated-directive", "violatedDirective"]],
+    ];
+    for (const [outputName, inputNames] of directiveFields) {
+        const value = normalizeDirective(getReportField(report, inputNames));
+        if (value) {
+            reduced[outputName] = value;
+        }
+    }
+
+    const urlFields = [
+        ["blocked-uri", ["blocked-uri", "blockedURL"]],
+        ["document-uri", ["document-uri", "documentURL"]],
+        ["referrer", ["referrer"]],
+        ["source-file", ["source-file", "sourceFile"]],
+    ];
+    for (const [outputName, inputNames] of urlFields) {
+        const value = normalizeReportUrl(getReportField(report, inputNames));
+        if (value) {
+            reduced[outputName] = value;
+        }
+    }
+
+    const integerFields = [
+        ["status-code", ["status-code", "statusCode"]],
+        ["line-number", ["line-number", "lineNumber"]],
+        ["column-number", ["column-number", "columnNumber"]],
+    ];
+    for (const [outputName, inputNames] of integerFields) {
+        const value = normalizeReportInteger(getReportField(report, inputNames));
+        if (value !== null) {
+            reduced[outputName] = value;
+        }
+    }
+
+    const disposition = getReportField(report, ["disposition"]);
+    if (disposition === "enforce" || disposition === "report") {
+        reduced.disposition = disposition;
+    }
+
+    return Object.keys(reduced).length ? reduced : null;
+}
+
+/**
  * Build a single-line, host-only summary of a CSP violation for log search.
  * This endpoint is public, so every field is treated as untrusted: the blocked
  * value is reduced to a host, a scheme, or a known keyword (never a path/query),
@@ -272,7 +391,7 @@ export default async function handler(req, res) {
 
     // Drop anything that is not a recognizable CSP report. The endpoint is open,
     // so this prevents it from being used to relay arbitrary bodies upstream.
-    const report = body ? parseCspReport(body) : null;
+    const report = body ? reduceCspReport(parseCspReport(body)) : null;
     if (!report) {
         res.statusCode = 204;
         res.end();

@@ -36,6 +36,16 @@ SKIP_DIRECTORIES = frozenset(
 )
 
 
+def contains_symlink(path: Path, root: Path) -> bool:
+    """Return whether any repository-relative path component is a symbolic link."""
+    current = root
+    for part in path.relative_to(root).parts:
+        current /= part
+        if current.is_symlink():
+            return True
+    return False
+
+
 def iter_lint_paths(root: Path) -> Iterator[Path]:
     """Yield sorted real files without descending into ignored or symlinked trees."""
     for current_root, directory_names, file_names in os.walk(

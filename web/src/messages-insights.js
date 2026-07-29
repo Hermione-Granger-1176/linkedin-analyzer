@@ -255,6 +255,7 @@ export const MessagesPage = (() => {
             }
 
             if (!messagesFile) {
+                clearComputedState();
                 state.loadedSignature = signature;
                 setEmptyState(
                     "No messages data available yet",
@@ -270,6 +271,9 @@ export const MessagesPage = (() => {
                 state.connectionState = cachedState.connectionState;
                 state.connectionLoadError = cachedState.connectionLoadError;
                 state.hasConnectionsFile = cachedState.hasConnectionsFile;
+                state.totalInputRows = Number.isFinite(cachedState.totalInputRows)
+                    ? cachedState.totalInputRows
+                    : 0;
                 state.loadedSignature = signature;
                 markPerformance("messages:render:start");
                 renderView();
@@ -316,6 +320,7 @@ export const MessagesPage = (() => {
             );
 
             if (!processed.success) {
+                clearComputedState();
                 state.loadedSignature = signature;
                 setEmptyState(
                     "Messages parsing error",
@@ -336,6 +341,7 @@ export const MessagesPage = (() => {
                 state.messageState = buildMessageState(messagesData);
             }
             if (!state.messageState.events.length) {
+                clearComputedState();
                 state.loadedSignature = signature;
                 setEmptyState(
                     "No usable message rows",
@@ -428,7 +434,21 @@ export const MessagesPage = (() => {
             connectionState: state.connectionState,
             hasConnectionsFile: state.hasConnectionsFile,
             connectionLoadError: state.connectionLoadError,
+            totalInputRows: state.totalInputRows,
         });
+    }
+
+    /** Clear computed data after a missing or unusable messages dataset. */
+    function clearComputedState() {
+        state.messageState = null;
+        state.connectionState = null;
+        state.connectionLoadError = null;
+        state.totalInputRows = 0;
+        state.currentLists = {
+            topContacts: [],
+            silentConnections: [],
+            fadingConversations: [],
+        };
     }
 
     /**

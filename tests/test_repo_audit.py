@@ -291,16 +291,20 @@ def test_a_missing_secret_is_reported() -> None:
     assert _audit(secrets={"secrets": []}) == ["missing repository secrets: APP_PRIVATE_KEY"]
 
 
-def test_unnamed_inventory_entries_are_ignored_rather_than_counted() -> None:
-    """An entry that names nothing satisfies no expectation, so it must not mask one.
-
-    The malformed entries are checked twice: once beside the real one, where
-    they must not break the read, and once alone, where counting them would
-    wrongly certify that APP_ID exists.
-    """
-    malformed: list[object] = ["not-a-dict", {"name": 7}]
-    assert _audit(variables={"variables": [*malformed, {"name": "APP_ID"}]}) == []
-    assert _audit(variables={"variables": malformed}) == ["missing repository variables: APP_ID"]
+@pytest.mark.parametrize(
+    ("entry", "message"),
+    [
+        ("not-a-dict", "contains a non-object entry"),
+        ({}, "contains an entry without a name"),
+        ({"name": ""}, "contains an entry without a name"),
+        ({"name": 7}, "contains an entry without a name"),
+    ],
+    ids=["non-object", "missing-name", "empty-name", "non-string-name"],
+)
+def test_an_unreadable_inventory_entry_is_a_failure_to_look(entry: object, message: str) -> None:
+    """A malformed entry makes the inventory unreadable even beside the expected item."""
+    with pytest.raises(GhError, match=message):
+        _audit(variables={"variables": [entry, {"name": "APP_ID"}]})
 
 
 @pytest.mark.parametrize(

@@ -138,7 +138,10 @@ def github_fetch(repo: str, ref: str, *, token: str, timeout: float = 15) -> str
     )
     with urlopen(request, timeout=timeout) as response:
         data = json.load(response)
-    return str(data["sha"])
+    sha = data.get("sha") if isinstance(data, dict) else None
+    if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
+        raise ValueError(f"GitHub returned an invalid commit SHA for {repo}@{ref}")
+    return sha
 
 
 def main(argv: list[str] | None = None) -> int:

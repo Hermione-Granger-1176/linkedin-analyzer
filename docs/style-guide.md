@@ -61,7 +61,7 @@
 - Cover new logic and edge cases for every change.
 - Keep tests deterministic and isolated.
 - Prefer small, focused tests over one large test.
-- Maintain the 100% coverage threshold for the `linkedin_analyzer` package.
+- Maintain the 100% statement and branch coverage threshold for `src/linkedin_analyzer/` and `scripts/`.
 
 ## Documentation Updates
 

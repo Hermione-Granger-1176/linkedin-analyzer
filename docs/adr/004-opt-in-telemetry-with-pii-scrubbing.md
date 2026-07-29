@@ -16,6 +16,6 @@ Keep diagnostics off until the user explicitly opts in, and scrub aggressively w
 
 ## Consequences
 
-- Privacy is preserved by default and by construction: with no consent there is no SDK and no events.
+- Privacy is preserved by default and by construction: with no consent the bundled SDK is not initialized and no diagnostics events are emitted.
 - Error visibility is a lower bound, not a true rate. This blind spot is documented in `docs/operations.md` (Observability blind spot): the absence of events does not mean the absence of errors, and incident severity should not be sized from event counts. Prefer local reproduction with a matching fixture.
-- CSP violation reports (`/api/csp-report`) are the one signal that does not depend on consent, since they carry only violation metadata and never file contents.
+- CSP violation reports (`/api/csp-report`) are the one signal that does not depend on consent. The collector rebuilds them from a bounded violation-metadata allowlist, strips URL queries and fragments, and never attaches uploaded file contents.

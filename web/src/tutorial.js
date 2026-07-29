@@ -132,15 +132,17 @@ export const Tutorial = (() => {
             return;
         }
 
+        const isSameActiveRoute = state.active && state.routeName === normalized;
+        const isSamePendingRoute = !state.active && state.miniTipsRoute === normalized;
+        if (isSameActiveRoute || isSamePendingRoute) {
+            return;
+        }
+
         cancelPendingAutoStart();
         cancelPendingMiniTipStart();
         clearRetryTimer();
         clearMiniTipRetry();
         state.miniTipRetryCount = 0;
-
-        if (state.active && state.routeName === normalized) {
-            return;
-        }
 
         if (state.active) {
             teardownActiveTutorial(false);

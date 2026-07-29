@@ -63,4 +63,8 @@ describe("extractTopics", () => {
         const topics = extractTopics("design design DESIGN #design");
         expect(topics).toEqual(["design"]);
     });
+
+    it("keeps first-seen order while combining hashtags and words", () => {
+        expect(extractTopics("alpha #Beta gamma #beta")).toEqual(["beta", "alpha", "gamma"]);
+    });
 });

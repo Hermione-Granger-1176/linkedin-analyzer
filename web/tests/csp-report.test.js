@@ -235,8 +235,8 @@ describe("csp-report handler", () => {
         const [, init] = fetchMock.mock.calls[0];
         expect(JSON.parse(init.body)).toEqual({
             "csp-report": {
-                effectiveDirective: "img-src",
-                blockedURL: "https://evil.example/x.png",
+                "effective-directive": "img-src",
+                "blocked-uri": "https://evil.example/x.png",
             },
         });
         expect(init.headers["content-type"]).toBe("application/csp-report");
@@ -360,7 +360,7 @@ describe("csp-report handler", () => {
         logSpy.mockRestore();
     });
 
-    it("never logs a non-URL blocked-uri with a path, query, or newline", async () => {
+    it("drops a report when all recognized metadata is invalid", async () => {
         const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
         const res = mockResponse();
@@ -378,15 +378,53 @@ describe("csp-report handler", () => {
             res,
         );
 
-        const summary = logSpy.mock.calls[0][0];
-        // The newline-bearing directive fails the keyword check (-> "unknown") and the
-        // path/query blocked-uri becomes "(non-url)"; the line stays single and clean.
-        expect(summary).toBe("CSP violation: unknown blocked (non-url)");
-        expect(summary).not.toContain("secret");
-        expect(summary).not.toContain("tracker.gif");
-        expect(summary).not.toContain("injected");
-        expect(summary).not.toContain("\n");
+        expect(logSpy).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
         logSpy.mockRestore();
+    });
+
+    it("forwards only reduced CSP metadata without URL secrets or arbitrary fields", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "effective-directive": "script-src",
+                        "blocked-uri":
+                            "https://user:password@evil.example/path/file.js?token=secret#fragment",
+                        documentURL: "https://app.example/?session=secret#messages",
+                        sourceFile: "https://app.example/assets/index.js?debug=secret",
+                        statusCode: 0,
+                        lineNumber: 14,
+                        columnNumber: 9,
+                        disposition: "enforce",
+                        "script-sample": "uploaded or inline content",
+                        arbitrary: "must not leave the collector",
+                    },
+                },
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": {
+                "effective-directive": "script-src",
+                "blocked-uri": "https://evil.example/path/file.js",
+                "document-uri": "https://app.example/",
+                "source-file": "https://app.example/assets/index.js",
+                "status-code": 0,
+                "line-number": 14,
+                "column-number": 9,
+                disposition: "enforce",
+            },
+        });
     });
 
     it("summarizes a non-URL blocked-uri keyword verbatim", async () => {
@@ -486,7 +524,14 @@ describe("csp-report handler", () => {
         vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
         const res = mockResponse();
-        await handler({ method: "POST", headers: {}, body: { "csp-report": {} } }, res);
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: { "csp-report": { "violated-directive": "script-src" } },
+            },
+            res,
+        );
 
         expect(res.statusCode).toBe(204);
     });

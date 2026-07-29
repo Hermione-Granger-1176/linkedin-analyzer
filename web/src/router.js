@@ -53,7 +53,7 @@ export const AppRouter = (() => {
     /**
      * Navigate to a route and params.
      * @param {string} name - Route name
-     * @param {object|undefined} [params] - Query params; undefined reuses last known params for route
+     * @param {object|null|undefined} [params] - Query params; undefined reuses last known params for route
      * @param {{replaceHistory?: boolean}} [options] - Navigation options
      */
     function navigate(name, params, options) {
@@ -261,7 +261,7 @@ export const AppRouter = (() => {
      * Explicit params always win.
      * @param {object} nextParams - Params object that will be navigated to
      * @param {object} routeOptions - Registered route options
-     * @param {object|undefined} providedParams - Original navigate() params argument
+     * @param {object|null|undefined} providedParams - Original navigate() params argument
      */
     function applySharedParams(nextParams, routeOptions, providedParams) {
         const keys = Array.isArray(routeOptions.sharedParams) ? routeOptions.sharedParams : [];
@@ -271,6 +271,7 @@ export const AppRouter = (() => {
 
         keys.forEach(key => {
             const hasExplicitValue = providedParams !== undefined
+                && providedParams !== null
                 && Object.prototype.hasOwnProperty.call(providedParams, key);
 
             if (hasExplicitValue) {

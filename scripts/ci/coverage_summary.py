@@ -7,10 +7,11 @@ noticing a slow slide from 99.4% to 99.1% does not require opening a log and
 scrolling to the end of a test run.
 
 The two suites report through different tools, so the counts come from each
-one's own machine-readable output: ``coverage.json`` from pytest-cov and
-``coverage/coverage-summary.json`` from Vitest. Percentages are recomputed from
-the covered and total counts rather than read from the reports, so the
-percentage in a row can never disagree with the two numbers beside it.
+one's own machine-readable output: ``.artifacts/coverage/python-coverage.json``
+from pytest-cov and ``coverage/coverage-summary.json`` from Vitest. Percentages
+are recomputed from the covered and total counts rather than read from the
+reports, so the percentage in a row can never disagree with the two numbers
+beside it.
 
 A report that is absent becomes a note rather than an error, because the summary
 step runs even when the suite that writes it failed first. A report that is
@@ -57,6 +58,14 @@ class CoverageMetric:
     metric: str
     covered: int
     total: int
+
+    def __post_init__(self) -> None:
+        """Reject a metric whose covered count exceeds its total."""
+        if self.covered > self.total:
+            raise ValueError(
+                f"{self.suite} {self.metric} coverage has {self.covered} covered "
+                f"but only {self.total} total."
+            )
 
     @property
     def percent(self) -> float:

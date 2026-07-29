@@ -60,6 +60,9 @@ export function getStorageValue(key) {
  */
 export function getStorageNumberValue(key, fallbackValue) {
     const rawValue = getStorageValue(key);
+    if (rawValue === null) {
+        return fallbackValue;
+    }
     const parsed = Number(rawValue);
     if (!Number.isFinite(parsed)) {
         return fallbackValue;

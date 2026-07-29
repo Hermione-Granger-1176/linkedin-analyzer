@@ -1962,6 +1962,128 @@ describe("MessagesPage", () => {
         expect(document.getElementById("topContactsList").innerHTML).toBe(firstHtml);
     });
 
+    it("keeps the cached excluded-row denominator with its dataset", async () => {
+        const fileA = {
+            type: "messages",
+            name: "a.csv",
+            updatedAt: 181,
+            rowCount: 5,
+        };
+        const fileB = {
+            type: "messages",
+            name: "b.csv",
+            updatedAt: 182,
+            rowCount: 9,
+        };
+        const signatureFor = (file) =>
+            `messages:${file.name}:${file.updatedAt}:${file.rowCount}|connections:none`;
+        const cacheState = (file, skippedRows, totalInputRows) => {
+            DataCache.set(`messages:state:${signatureFor(file)}`, {
+                messageState: makeMessageState({ skippedRows }),
+                connectionState: null,
+                connectionLoadError: null,
+                hasConnectionsFile: false,
+                totalInputRows,
+            });
+        };
+        cacheState(fileA, 2, 5);
+        cacheState(fileB, 1, 9);
+        DataCache.set("storage:file:messages", fileA);
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+        expect(document.getElementById("msgStatMessages").textContent).toContain("2 of 5");
+
+        DataCache.set("storage:file:messages", fileB);
+        MessagesPage.onRouteChange({});
+        await tick();
+        expect(document.getElementById("msgStatMessages").textContent).toContain("1 of 9");
+
+        DataCache.set("storage:file:messages", fileA);
+        MessagesPage.onRouteChange({});
+        await tick();
+        expect(document.getElementById("msgStatMessages").textContent).toContain("2 of 5");
+    });
+
+    it("does not reuse stale computed state after the messages file is removed", async () => {
+        const messagesFile = {
+            type: "messages",
+            name: "removed.csv",
+            updatedAt: 183,
+            rowCount: 1,
+        };
+        const signature = `messages:${messagesFile.name}:${messagesFile.updatedAt}:${messagesFile.rowCount}|connections:none`;
+        DataCache.set("storage:file:messages", messagesFile);
+        DataCache.set(`messages:state:${signature}`, {
+            messageState: makeMessageState(),
+            connectionState: null,
+            connectionLoadError: null,
+            hasConnectionsFile: false,
+            totalInputRows: 1,
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+        expect(document.getElementById("messagesLayout").hidden).toBe(false);
+
+        DataCache._values.delete("storage:file:messages");
+        Storage.getAllFiles.mockResolvedValue([]);
+        MessagesPage.onRouteChange({});
+        await tick();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        expect(document.getElementById("messagesEmpty").querySelector("h2").textContent).toContain(
+            "No messages data available yet",
+        );
+        expect(document.getElementById("messagesLayout").hidden).toBe(true);
+        expect(document.getElementById("topContactsExportBtn").disabled).toBe(true);
+    });
+
+    it("does not reuse stale computed state after a replacement file fails to parse", async () => {
+        globalThis.Worker = undefined;
+        const validFile = {
+            type: "messages",
+            name: "valid.csv",
+            updatedAt: 184,
+            rowCount: 1,
+        };
+        const invalidFile = {
+            type: "messages",
+            name: "invalid.csv",
+            updatedAt: 185,
+            rowCount: 1,
+        };
+        const validSignature = `messages:${validFile.name}:${validFile.updatedAt}:${validFile.rowCount}|connections:none`;
+        DataCache.set("storage:file:messages", validFile);
+        DataCache.set(`messages:state:${validSignature}`, {
+            messageState: makeMessageState(),
+            connectionState: null,
+            connectionLoadError: null,
+            hasConnectionsFile: false,
+            totalInputRows: 1,
+        });
+
+        MessagesPage.init();
+        MessagesPage.onRouteChange({});
+        await tick();
+        expect(document.getElementById("messagesLayout").hidden).toBe(false);
+
+        DataCache.set("storage:file:messages", invalidFile);
+        LinkedInCleaner.process.mockReturnValue({ success: false, error: "Broken CSV." });
+        MessagesPage.onRouteChange({});
+        await tick();
+        MessagesPage.onRouteChange({});
+        await tick();
+
+        expect(document.getElementById("messagesEmpty").querySelector("h2").textContent).toContain(
+            "Messages parsing error",
+        );
+        expect(document.getElementById("messagesLayout").hidden).toBe(true);
+    });
+
     // --- Connection matching by nameKey (not URL) ----------------------------
 
     it("matches fading contact to connection by name key when URL missing", async () => {

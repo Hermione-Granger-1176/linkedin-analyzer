@@ -143,11 +143,15 @@ def collect_named_items(payload: dict[str, object], key: str) -> set[str]:
     items = payload.get(key)
     if not isinstance(items, list):
         raise GhError(f"Actions {key} response must include a {key} list.")
-    return {
-        item["name"]
-        for item in items
-        if isinstance(item, dict) and isinstance(item.get("name"), str)
-    }
+    names: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            raise GhError(f"Actions {key} response contains a non-object entry.")
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            raise GhError(f"Actions {key} response contains an entry without a name.")
+        names.add(name)
+    return names
 
 
 def enabled_security_features(repository: dict[str, object]) -> set[str]:

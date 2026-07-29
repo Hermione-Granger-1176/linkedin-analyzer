@@ -86,20 +86,18 @@ export function generateInsights(view) {
         accent: timeInsight.accent,
     });
 
-    if (view.trend) {
-        const trendDef = TREND_INSIGHTS[view.trend.direction];
-        if (trendDef) {
-            insights.push({
-                id: trendDef.id,
-                title: trendDef.title,
-                body: trendDef.template.replace(
-                    "{pct}",
-                    String(Math.abs(Math.round(view.trend.percent))),
-                ),
-                icon: trendDef.icon,
-                accent: trendDef.accent,
-            });
-        }
+    const trendDef = view.trend && TREND_INSIGHTS[view.trend.direction];
+    if (trendDef) {
+        insights.push({
+            id: trendDef.id,
+            title: trendDef.title,
+            body: trendDef.template.replace(
+                "{pct}",
+                String(Math.abs(Math.round(view.trend.percent))),
+            ),
+            icon: trendDef.icon,
+            accent: trendDef.accent,
+        });
     }
 
     if (view.topicShift) {

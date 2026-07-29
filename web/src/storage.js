@@ -94,8 +94,8 @@ export const Storage = (() => {
     const ANALYTICS_STORE = "analytics";
 
     /**
-     * Build the in-memory store used both when IndexedDB is unavailable at load
-     * time and as a runtime fallback if it later fails.
+     * Build the in-memory store used when IndexedDB is unavailable at load time
+     * or when opening the database later fails.
      * @returns {object} An object exposing the same async ops as the IDB store
      */
     function createMemoryStore() {

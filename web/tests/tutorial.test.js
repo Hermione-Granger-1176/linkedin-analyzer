@@ -737,6 +737,19 @@ describe("Tutorial.onRouteChange()", () => {
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 
+    it("does not count same-screen parameter updates as new route visits", () => {
+        vi.useFakeTimers();
+        buildHomeTargets();
+        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+
+        Tutorial.onRouteChange("home");
+        Tutorial.onRouteChange("home");
+
+        expect(window.localStorage.getItem(visitKey)).toBe("1");
+        vi.advanceTimersByTime(2000);
+        expect(document.body.classList.contains("tutorial-open")).toBe(true);
+    });
+
     it("second onRouteChange for same route while tutorial is active is a no-op", () => {
         buildHomeTargets();
 

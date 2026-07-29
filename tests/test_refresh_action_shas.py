@@ -192,6 +192,26 @@ def test_github_fetch_reads_the_commit_sha_with_an_authorized_request(
     assert requests[0].get_header("Accept") == "application/vnd.github+json"
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [[], {}, {"sha": None}, {"sha": 7}, {"sha": "abc"}, {"sha": "A" * 40}],
+    ids=["non-object", "missing", "null", "integer", "short", "uppercase"],
+)
+def test_github_fetch_rejects_an_invalid_commit_sha(
+    monkeypatch: pytest.MonkeyPatch, payload: object
+) -> None:
+    """Never write an API response that is not an immutable full commit SHA."""
+
+    def fake_urlopen(_request: Request, timeout: float) -> io.BytesIO:
+        assert timeout == 15
+        return io.BytesIO(json.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setattr(ras, "urlopen", fake_urlopen)
+
+    with pytest.raises(ValueError, match="invalid commit SHA"):
+        ras.github_fetch("actions/checkout", "v4", token="secret")
+
+
 def test_main_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """`main` exits non-zero when GH_TOKEN is absent."""
     monkeypatch.delenv("GH_TOKEN", raising=False)

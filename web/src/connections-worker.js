@@ -112,19 +112,13 @@ function computeStats(rows) {
     const total = rows.length;
     const now = Date.now();
 
-    let earliestMs = Infinity;
-
-    for (const row of rows) {
+    const earliestMs = rows.reduce((earliest, row) => {
         const date = parseConnectionDate(row["Connected On"]);
         if (!date) {
-            continue;
+            return earliest;
         }
-
-        const ms = date.getTime();
-        if (ms < earliestMs) {
-            earliestMs = ms;
-        }
-    }
+        return Math.min(earliest, date.getTime());
+    }, Infinity);
 
     /* Network age in whole months from earliest connection to now */
     const networkAgeMonths =
@@ -140,7 +134,8 @@ function computeStats(rows) {
 /**
  * Parse and aggregate a Connections CSV into analytics ready for the UI.
  * The cleaned rows are included in the response so the UI can apply its own
- * client-side filters (search, company drill-down) without another worker round-trip.
+ * time-range filter and build company and position summaries without another
+ * worker round-trip.
  *
  * @param {string} connectionsCsv - Raw CSV text from the Connections export
  * @returns {{success: boolean, analytics?: object, rows?: object[], error?: string}}

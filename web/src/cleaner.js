@@ -408,6 +408,37 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
+     * Try the large-file prefix-detection fast path.
+     * @param {unknown} csvText - Raw CSV text
+     * @param {Map<string, object>} parseCache - Full-file parse cache
+     * @returns {object|null} Successful process result, or null to use full detection
+     */
+    function processPrefixMatch(csvText, parseCache) {
+        if (typeof csvText !== "string" || csvText.length <= PREFIX_DETECT_CHARS) {
+            return null;
+        }
+
+        const fileType = detectTypeFromPrefix(csvText);
+        if (!fileType) {
+            return null;
+        }
+
+        const parsed = parseCSV(csvText, fileType, parseCache);
+        if (parsed.error || !validateColumns(parsed.headers, fileType).valid) {
+            return null;
+        }
+
+        const cleanedData = cleanData(parsed.data, fileType);
+        return makeResult(true, null, {
+            fileType,
+            detectedType: fileType,
+            headers: parsed.headers,
+            cleanedData,
+            rowCount: cleanedData.length,
+        });
+    }
+
+    /**
      * Process a CSV file completely
      * @param {string} csvText - Raw CSV text
      * @param {string} fileType - Supported file type or 'auto'
@@ -421,21 +452,9 @@ export const LinkedInCleaner = (() => {
             // full-parse only the matched type once. Falls through to full
             // multi-type detection on a prefix miss or if the matched type fails
             // to parse/validate on the whole file, so the result is unchanged.
-            if (typeof csvText === "string" && csvText.length > PREFIX_DETECT_CHARS) {
-                const prefixType = detectTypeFromPrefix(csvText);
-                if (prefixType) {
-                    const parsed = parseCSV(csvText, prefixType, parseCache);
-                    if (!parsed.error && validateColumns(parsed.headers, prefixType).valid) {
-                        const cleanedData = cleanData(parsed.data, prefixType);
-                        return makeResult(true, null, {
-                            fileType: prefixType,
-                            detectedType: prefixType,
-                            headers: parsed.headers,
-                            cleanedData,
-                            rowCount: cleanedData.length,
-                        });
-                    }
-                }
+            const prefixResult = processPrefixMatch(csvText, parseCache);
+            if (prefixResult) {
+                return prefixResult;
             }
 
             const matches = detectMatchingFileTypes(csvText, parseCache);

@@ -333,7 +333,7 @@ describe("handleView", () => {
         expect(errMsg.requestId).toBe(5);
     });
 
-    it("tracks the most recent requestId, each call sets currentRequestId", () => {
+    it("responds to each sequential view request", () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -813,5 +813,29 @@ describe("view cache LRU trimming", () => {
         // should have produced a view or error message without crashing.
         const viewAndError = messages.filter((m) => m.type === "view" || m.type === "error");
         expect(viewAndError.length).toBeGreaterThan(0);
+    });
+
+    it("keeps a recently read entry when trimming the oldest cache entries", () => {
+        AnalyticsEngine.generateInsights.mockReturnValue(makeInsights());
+
+        const stored = makeAnalytics();
+        stored.months["2025-01"].activeDays = ["2025-01-02"];
+        stored.activeDays = ["2025-01-02"];
+        handleInitBase(stored);
+
+        for (let i = 1; i <= 50; i += 1) {
+            AnalyticsEngine.buildView.mockReturnValue({ ...makeView(), _i: i });
+            handleView(i, { timeRange: `${i}m` });
+        }
+
+        // Refresh the oldest entry, then cross the cache limit. A real LRU cache
+        // retains the refreshed entry while trimming entries 2 through 21.
+        handleView(51, { timeRange: "1m" });
+        AnalyticsEngine.buildView.mockReturnValue({ ...makeView(), _i: 51 });
+        handleView(52, { timeRange: "51m" });
+
+        const buildCountAfterTrim = AnalyticsEngine.buildView.mock.calls.length;
+        handleView(53, { timeRange: "1m" });
+        expect(AnalyticsEngine.buildView).toHaveBeenCalledTimes(buildCountAfterTrim);
     });
 });

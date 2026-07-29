@@ -10,6 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from scripts.lint import contains_symlink as _contains_symlink
 from scripts.lint.make_targets import (
     MAKEFILE_PATH,
     extract_path_make_references,
@@ -20,16 +21,6 @@ from scripts.lint.make_targets import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _contains_symlink(path: Path, root: Path) -> bool:
-    """Return whether any repository-relative path component is a symbolic link."""
-    current = root
-    for part in path.relative_to(root).parts:
-        current /= part
-        if current.is_symlink():
-            return True
-    return False
 
 
 def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:

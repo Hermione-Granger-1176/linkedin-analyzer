@@ -279,6 +279,21 @@ describe("AppRouter start and navigate edge cases", () => {
         expect(AppRouter.parseHash(window.location.hash).name).toBe("null-params");
     });
 
+    it("navigate tolerates null params on a route with shared params", () => {
+        AppRouter.registerRoute("null-shared-params", {
+            sharedParams: ["nullsharedunique"],
+            defaultParams: { nullsharedunique: "default" },
+        });
+
+        expect(() =>
+            AppRouter.navigate("null-shared-params", null, { replaceHistory: true }),
+        ).not.toThrow();
+        expect(AppRouter.parseHash(window.location.hash)).toEqual({
+            name: "null-shared-params",
+            params: { nullsharedunique: "default" },
+        });
+    });
+
     it("setParams tolerates null params on the current route", () => {
         AppRouter.navigate("home", { a: "1" }, { replaceHistory: true });
         AppRouter.setParams(null, { replaceHistory: true });

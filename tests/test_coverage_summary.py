@@ -60,6 +60,12 @@ def test_nothing_to_cover_counts_as_fully_covered() -> None:
     assert coverage_summary.CoverageMetric("JavaScript", "branches", 0, 0).percent == 100.0
 
 
+def test_a_covered_count_above_the_total_is_an_error() -> None:
+    """An impossible count must not render as over 100 percent or positive-of-zero."""
+    with pytest.raises(ValueError, match="101 covered but only 100 total"):
+        coverage_summary.CoverageMetric("Python", "statements", 101, 100)
+
+
 # ─── Reading the two report formats ──────────────────────────────────────────
 
 

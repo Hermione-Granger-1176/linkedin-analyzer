@@ -104,6 +104,40 @@ describe("SketchCharts", () => {
         expect(revokeUrl).toHaveBeenCalled();
     });
 
+    it("exportPng restores normal resolution when the export redraw throws", () => {
+        const { canvas, ctx } = createCanvas({ width: 320, height: 160 });
+        const data = [{ key: "2025-01", label: "Jan 2025", value: 3 }];
+        SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);
+        canvas.getContext.mockImplementationOnce(() => {
+            throw new Error("export redraw failed");
+        });
+
+        expect(() => SketchCharts.exportPng(canvas, "chart.png")).toThrow(
+            "export redraw failed",
+        );
+
+        canvas.getContext.mockImplementation(() => ctx);
+        SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);
+        expect(canvas.width).toBe(320);
+    });
+
+    it("exportPng restores the on-screen canvas when the temporary context is unavailable", () => {
+        const { canvas } = createCanvas({ width: 320, height: 160 });
+        SketchCharts.drawTimeline(
+            canvas,
+            [{ key: "2025-01", label: "Jan 2025", value: 3 }],
+            "12m",
+            1,
+            0,
+        );
+        HTMLCanvasElement.prototype.getContext.mockImplementationOnce(() => null);
+
+        SketchCharts.exportPng(canvas, "chart.png");
+
+        expect(canvas.getContext).toHaveBeenCalledTimes(3);
+        expect(canvas.width).toBe(320);
+    });
+
     it("drawTimeline with >24 data points uses sparse value labels (line 242)", () => {
         // >24 points triggers showAllValues=false, valueEvery>1
         const data = [];

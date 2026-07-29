@@ -115,6 +115,8 @@ describe("SketchCharts", () => {
         expect(() => SketchCharts.exportPng(canvas, "chart.png")).toThrow(
             "export redraw failed",
         );
+        expect(canvas.width).toBe(320);
+        expect(canvas.height).toBe(160);
 
         canvas.getContext.mockImplementation(() => ctx);
         SketchCharts.drawTimeline(canvas, data, "12m", 1, 0);

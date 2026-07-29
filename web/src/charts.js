@@ -808,9 +808,21 @@ export const SketchCharts = (() => {
 
         // Render at high DPR, copy pixels to a temp canvas, restore immediately
         cancelAnimations();
+        const originalWidth = canvas.width;
+        const originalHeight = canvas.height;
         exportDpr = EXPORT_DPR;
         try {
             redraw();
+        } catch (error) {
+            exportDpr = 0;
+            canvas.width = originalWidth;
+            canvas.height = originalHeight;
+            try {
+                redraw();
+            } catch {
+                // Preserve the export failure after restoring the backing-store dimensions.
+            }
+            throw error;
         } finally {
             exportDpr = 0;
         }

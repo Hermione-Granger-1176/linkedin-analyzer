@@ -1,5 +1,5 @@
 /*
- * Differential check for web/src/cleaner.js over a local LinkedIn export.
+ * Differential check for the web cleaner over a local LinkedIn export.
  *
  * Usage (prefer the Makefile):
  *   make cleaner-diff
@@ -17,6 +17,7 @@ import {
     chmodSync,
     existsSync,
     lstatSync,
+    mkdirSync,
     mkdtempSync,
     readFileSync,
     rmSync,
@@ -24,7 +25,7 @@ import {
 } from "node:fs";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Resolve the repo root from this module's location so a direct script run is
@@ -46,12 +47,27 @@ const FILES = {
     messages: "messages.csv",
     connections: "Connections.csv",
 };
-const MODULES = [
-    "cleaner.js",
-    "constants.js",
-    "csv-parser.js",
-    "cleaner-configs.js",
-    "field-cleaners.js",
+const MODULE_LAYOUTS = [
+    {
+        entry: "features/cleaning/cleaner.js",
+        modules: [
+            "features/cleaning/cleaner.js",
+            "features/cleaning/configs.js",
+            "features/cleaning/csv-parser.js",
+            "features/cleaning/field-cleaners.js",
+            "shared/constants.js",
+        ],
+    },
+    {
+        entry: "cleaner.js",
+        modules: [
+            "cleaner.js",
+            "constants.js",
+            "csv-parser.js",
+            "cleaner-configs.js",
+            "field-cleaners.js",
+        ],
+    },
 ];
 
 /**
@@ -126,19 +142,28 @@ function stage(ref, repoDir, tempRoot) {
     chmodSync(directory, 0o700);
     try {
         writePrivateSync(join(directory, "package.json"), '{"type":"module"}\n');
-        for (const moduleName of MODULES) {
-            let source;
-            try {
-                source = readModuleSource(ref, repoDir, moduleName);
-            } catch {
-                if (ref === "worktree") {
-                    throw new Error("module staging failed");
+        for (const layout of MODULE_LAYOUTS) {
+            const sources = [];
+            let complete = true;
+            for (const moduleName of layout.modules) {
+                try {
+                    sources.push([moduleName, readModuleSource(ref, repoDir, moduleName)]);
+                } catch {
+                    complete = false;
+                    break;
                 }
+            }
+            if (!complete) {
                 continue;
             }
-            writePrivateSync(join(directory, moduleName), source);
+            for (const [moduleName, source] of sources) {
+                const destination = join(directory, moduleName);
+                mkdirSync(dirname(destination), { recursive: true });
+                writePrivateSync(destination, source);
+            }
+            return { directory, entry: layout.entry };
         }
-        return directory;
+        throw new Error("module staging failed");
     } catch {
         rmSync(directory, { force: true, recursive: true });
         throw new Error("module staging failed");
@@ -152,9 +177,9 @@ async function writePrivateRows(outputDir, type, contents, generatedFiles) {
 }
 
 async function runVariant(ref, options, outputDir, generatedFiles) {
-    const directory = stage(ref, options.repoDir, options.tempRoot);
+    const { directory, entry } = stage(ref, options.repoDir, options.tempRoot);
     try {
-        const moduleUrl = pathToFileURL(join(directory, "cleaner.js"));
+        const moduleUrl = pathToFileURL(join(directory, entry));
         const { LinkedInCleaner } = await import(moduleUrl.href);
         if (typeof LinkedInCleaner?.process !== "function") {
             throw new Error("cleaner module failed");

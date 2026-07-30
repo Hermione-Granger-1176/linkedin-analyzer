@@ -1,0 +1,538 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import handler, {
+    resetReportRateLimitForTests,
+    resolveReportEndpoint,
+    resolveReportMaxPerMinute,
+    sentryReportUriFromDsn,
+    shouldDropReportForRateLimit,
+} from "../../../api/csp-report.mjs";
+
+/**
+ * Build a mock request whose body is delivered as an async stream of chunks.
+ * @param {Array<string | Buffer>} chunks - Body chunks to yield.
+ * @param {object} [options] - Overrides for method, headers, and body.
+ * @returns {object} A request-like object.
+ */
+function streamRequest(chunks, options = {}) {
+    const { method = "POST", headers = {}, body } = options;
+    return {
+        method,
+        headers,
+        body,
+        async *[Symbol.asyncIterator]() {
+            for (const chunk of chunks) {
+                yield chunk;
+            }
+        },
+    };
+}
+
+/**
+ * Build a mock response capturing status, headers, and end state.
+ * @returns {object} A response-like object.
+ */
+function mockResponse() {
+    return {
+        statusCode: 0,
+        headers: {},
+        ended: false,
+        setHeader(key, value) {
+            this.headers[key] = value;
+        },
+        end() {
+            this.ended = true;
+        },
+    };
+}
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+    resetReportRateLimitForTests();
+    delete process.env.CSP_REPORT_URI;
+    delete process.env.CSP_REPORT_MAX_PER_MINUTE;
+    delete process.env.SENTRY_DSN;
+});
+
+describe("sentryReportUriFromDsn", () => {
+    it("derives the security endpoint from a valid DSN", () => {
+        expect(sentryReportUriFromDsn("https://abc123@o45.ingest.sentry.io/678")).toBe(
+            "https://o45.ingest.sentry.io/api/678/security/?sentry_key=abc123",
+        );
+    });
+
+    it("trims a trailing slash from the DSN project path", () => {
+        expect(sentryReportUriFromDsn("https://abc123@o45.ingest.sentry.io/678/")).toBe(
+            "https://o45.ingest.sentry.io/api/678/security/?sentry_key=abc123",
+        );
+    });
+
+    it("returns null when the DSN has no project id", () => {
+        expect(sentryReportUriFromDsn("https://abc123@o45.ingest.sentry.io/")).toBeNull();
+    });
+
+    it("returns null when the DSN has no public key", () => {
+        expect(sentryReportUriFromDsn("https://o45.ingest.sentry.io/678")).toBeNull();
+    });
+
+    it("returns null for a malformed DSN", () => {
+        expect(sentryReportUriFromDsn("not a url")).toBeNull();
+    });
+});
+
+describe("resolveReportEndpoint", () => {
+    it("prefers an explicit CSP_REPORT_URI", () => {
+        expect(
+            resolveReportEndpoint({
+                CSP_REPORT_URI: "https://collector.example/report",
+                SENTRY_DSN: "https://abc123@o45.ingest.sentry.io/678",
+            }),
+        ).toBe("https://collector.example/report");
+    });
+
+    it("derives from SENTRY_DSN when no explicit URI is set", () => {
+        expect(resolveReportEndpoint({ SENTRY_DSN: "https://abc123@o45.ingest.sentry.io/678" })).toBe(
+            "https://o45.ingest.sentry.io/api/678/security/?sentry_key=abc123",
+        );
+    });
+
+    it("returns null when nothing is configured", () => {
+        expect(resolveReportEndpoint({})).toBeNull();
+    });
+
+    it("returns null for a missing env object", () => {
+        expect(resolveReportEndpoint(undefined)).toBeNull();
+    });
+});
+
+describe("resolveReportMaxPerMinute", () => {
+    it("uses the default cap when unset", () => {
+        expect(resolveReportMaxPerMinute({})).toBe(120);
+    });
+
+    it("uses a configured non-negative cap", () => {
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "2" })).toBe(2);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: " 2 " })).toBe(2);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "0" })).toBe(0);
+    });
+
+    it("falls back to the default for invalid caps", () => {
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "-1" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "oops" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "12oops" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "" })).toBe(120);
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "9007199254740992" })).toBe(
+            120,
+        );
+        expect(resolveReportMaxPerMinute({ CSP_REPORT_MAX_PER_MINUTE: "9".repeat(400) })).toBe(
+            120,
+        );
+    });
+});
+
+describe("shouldDropReportForRateLimit", () => {
+    it("allows reports below the cap and drops reports above it", () => {
+        const logFn = vi.fn();
+        const env = { CSP_REPORT_MAX_PER_MINUTE: "1" };
+
+        expect(shouldDropReportForRateLimit(env, 1000, logFn)).toBe(false);
+        expect(shouldDropReportForRateLimit(env, 1001, logFn)).toBe(true);
+        expect(shouldDropReportForRateLimit(env, 1002, logFn)).toBe(true);
+
+        expect(logFn).toHaveBeenCalledTimes(1);
+    });
+
+    it("resets the cap after the window", () => {
+        const logFn = vi.fn();
+        const env = { CSP_REPORT_MAX_PER_MINUTE: "1" };
+
+        expect(shouldDropReportForRateLimit(env, 1000, logFn)).toBe(false);
+        expect(shouldDropReportForRateLimit(env, 1001, logFn)).toBe(true);
+        expect(shouldDropReportForRateLimit(env, 61000, logFn)).toBe(false);
+    });
+
+    it("disables the guard when configured to zero", () => {
+        const logFn = vi.fn();
+        const env = { CSP_REPORT_MAX_PER_MINUTE: "0" };
+
+        expect(shouldDropReportForRateLimit(env, 1000, logFn)).toBe(false);
+        expect(shouldDropReportForRateLimit(env, 1001, logFn)).toBe(false);
+        expect(logFn).not.toHaveBeenCalled();
+    });
+});
+
+describe("csp-report handler", () => {
+    it("rejects non-POST methods with 405", async () => {
+        const res = mockResponse();
+        await handler({ method: "GET", headers: {} }, res);
+        expect(res.statusCode).toBe(405);
+        expect(res.headers.Allow).toBe("POST");
+        expect(res.ended).toBe(true);
+    });
+
+    it("forwards a parsed object body to the configured endpoint and returns 204", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const report = { "csp-report": { "violated-directive": "style-src-attr" } };
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: report }, res);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe("https://collector.example/report");
+        expect(init.method).toBe("POST");
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": { "violated-directive": "style-src-attr" },
+        });
+        expect(init.headers["content-type"]).toBe("application/csp-report");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops valid CSP reports over the configured rate cap without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        process.env.CSP_REPORT_MAX_PER_MINUTE = "1";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const report = { "csp-report": { "violated-directive": "style-src-attr" } };
+        const first = mockResponse();
+        const second = mockResponse();
+        await handler({ method: "POST", headers: {}, body: report }, first);
+        await handler({ method: "POST", headers: {}, body: report }, second);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(first.statusCode).toBe(204);
+        expect(second.statusCode).toBe(204);
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        logSpy.mockRestore();
+    });
+
+    const REPORTS_JSON_BODY = JSON.stringify([
+        {
+            type: "csp-violation",
+            body: { effectiveDirective: "img-src", blockedURL: "https://evil.example/x.png" },
+        },
+    ]);
+
+    it("forwards a Reporting-API body in the CSP report envelope", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: { "content-type": "application/reports+json" },
+                body: REPORTS_JSON_BODY,
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": {
+                "effective-directive": "img-src",
+                "blocked-uri": "https://evil.example/x.png",
+            },
+        });
+        expect(init.headers["content-type"]).toBe("application/csp-report");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("ignores inbound content type when forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: { "content-type": "text/plain" },
+                body: { "csp-report": { "violated-directive": "script-src" } },
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers["content-type"]).toBe("application/csp-report");
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("does not relay sibling top-level keys when forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": { "violated-directive": "script-src" },
+                    attacker: { relayed: true },
+                },
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": { "violated-directive": "script-src" },
+        });
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops a body that is not a CSP report without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: { unrelated: "payload" } }, res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops an unparseable JSON body without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(["not json at all"]), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops a reports-API array that has no csp-violation entry", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(['[{"type":"deprecation","body":{}}]']), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("drops a JSON primitive body without forwarding", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(["42"]), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("summarizes a schemed blocked-uri by scheme only, never its content", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src",
+                        "blocked-uri": "data:image/png;base64,SECRETPAYLOAD",
+                    },
+                },
+            },
+            res,
+        );
+
+        const summary = logSpy.mock.calls[0][0];
+        expect(summary).toBe("CSP violation: img-src blocked data:");
+        expect(summary).not.toContain("SECRETPAYLOAD");
+        logSpy.mockRestore();
+    });
+
+    it("drops a report when all recognized metadata is invalid", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src\ninjected log line",
+                        "blocked-uri": "evil.example/tracker.gif?u=secret",
+                    },
+                },
+            },
+            res,
+        );
+
+        expect(logSpy).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+        logSpy.mockRestore();
+    });
+
+    it("forwards only reduced CSP metadata without URL secrets or arbitrary fields", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "effective-directive": "script-src",
+                        "blocked-uri":
+                            "https://user:password@evil.example/path/file.js?token=secret#fragment",
+                        documentURL: "https://app.example/?session=secret#messages",
+                        sourceFile: "https://app.example/assets/index.js?debug=secret",
+                        statusCode: 0,
+                        lineNumber: 14,
+                        columnNumber: 9,
+                        disposition: "enforce",
+                        "script-sample": "uploaded or inline content",
+                        arbitrary: "must not leave the collector",
+                    },
+                },
+            },
+            res,
+        );
+
+        const [, init] = fetchMock.mock.calls[0];
+        expect(JSON.parse(init.body)).toEqual({
+            "csp-report": {
+                "effective-directive": "script-src",
+                "blocked-uri": "https://evil.example/path/file.js",
+                "document-uri": "https://app.example/",
+                "source-file": "https://app.example/assets/index.js",
+                "status-code": 0,
+                "line-number": 14,
+                "column-number": 9,
+                disposition: "enforce",
+            },
+        });
+    });
+
+    it("summarizes a non-URL blocked-uri keyword verbatim", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "script-src-elem",
+                        "blocked-uri": "inline",
+                    },
+                },
+            },
+            res,
+        );
+
+        expect(logSpy.mock.calls[0][0]).toBe("CSP violation: script-src-elem blocked inline");
+        logSpy.mockRestore();
+    });
+
+    it("logs a host-only summary when no forwarding destination is configured", async () => {
+        const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: {
+                    "csp-report": {
+                        "violated-directive": "img-src",
+                        "blocked-uri": "https://evil.example/tracker.gif?u=secret",
+                    },
+                },
+            },
+            res,
+        );
+
+        expect(logSpy).toHaveBeenCalledTimes(1);
+        const summary = logSpy.mock.calls[0][0];
+        expect(summary).toContain("img-src");
+        expect(summary).toContain("evil.example");
+        // The path and query string (which could carry data) are never logged.
+        expect(summary).not.toContain("tracker.gif");
+        expect(summary).not.toContain("secret");
+
+        logSpy.mockRestore();
+    });
+
+    it("reads a streamed body and does not forward when no endpoint is configured", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest(['{"csp-report":', "{}}"], { body: null }), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("does not forward an empty body", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const res = mockResponse();
+        await handler(streamRequest([]), res);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("returns 413 when a parsed body exceeds the size cap", async () => {
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: { data: "a".repeat(70 * 1024) } }, res);
+        expect(res.statusCode).toBe(413);
+    });
+
+    it("returns 413 when a streamed body exceeds the size cap", async () => {
+        const res = mockResponse();
+        await handler(streamRequest([Buffer.alloc(70 * 1024, 0x61)]), res);
+        expect(res.statusCode).toBe(413);
+    });
+
+    it("returns 400 when the body cannot be read", async () => {
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {} }, res);
+        expect(res.statusCode).toBe(400);
+    });
+
+    it("still returns 204 when forwarding fails", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+        const res = mockResponse();
+        await handler(
+            {
+                method: "POST",
+                headers: {},
+                body: { "csp-report": { "violated-directive": "script-src" } },
+            },
+            res,
+        );
+
+        expect(res.statusCode).toBe(204);
+    });
+});

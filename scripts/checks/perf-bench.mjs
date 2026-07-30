@@ -28,7 +28,7 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
-import { concatChunks, decodeBytes } from "../../web/src/upload-decode.js";
+import { concatChunks, decodeBytes } from "../../web/src/features/upload/decode.js";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const INPUT = join(REPO, "data/input");
@@ -52,7 +52,9 @@ if (missing.length > 0) {
     process.exit(0);
 }
 
-const { LinkedInCleaner } = await import(new URL("../../web/src/cleaner.js", import.meta.url).href);
+const { LinkedInCleaner } = await import(
+    new URL("../../web/src/features/cleaning/cleaner.js", import.meta.url).href
+);
 
 function chunkize(bytes) {
     const out = [];

@@ -130,15 +130,15 @@ The project is maintained by a single person: Aditya Kumar Darak (GitHub `Hermio
 
 The monitored security mailbox is `adityadarak9314@outlook.com`, the contact published in `.github/SECURITY.md`. Keep that file as the single source of truth for the address; update it there if the published contact ever changes.
 
-| Surface | Holder / owner | Recovery path |
-| --- | --- | --- |
-| GitHub repository | `Hermione-Granger-1176` (org/user account) | GitHub account recovery on the owning account; the account uses 2FA, so keep the recovery codes safe. |
-| GitHub App (`APP_ID` variable, `APP_PRIVATE_KEY` secret) | Same GitHub account (App owner) | Rotate by generating a new private key in the App settings and updating the `APP_PRIVATE_KEY` repository secret. If the App is lost, the maintenance writeback workflows degrade gracefully (they skip when credentials are absent). |
-| Vercel project (web hosting) | Maintainer's Vercel account, linked to the GitHub repo | Vercel account recovery via its linked email/GitHub login; re-link the repository and re-add the environment variables listed under Web Deployment. |
-| Sentry org/project (opt-in diagnostics) | Maintainer's Sentry account | Sentry account recovery; rotate `VITE_SENTRY_DSN` / `SENTRY_AUTH_TOKEN` and update the Vercel environment variables. Telemetry is opt-in and non-critical, so an outage here does not affect users. |
-| PyPI trusted publisher | Maintainer's PyPI account (OIDC trusted publishing, no stored token) | PyPI account recovery; re-configure the trusted publisher for this repository under the project's publishing settings. No API token exists to rotate. |
-| GHCR (container registry) | Same GitHub account (packages under the repo) | Publishing uses the workflow `GITHUB_TOKEN`, so it is tied to repository access; recovering the GitHub account restores publish rights. |
-| Security mailbox | `adityadarak9314@outlook.com` | Standard mailbox provider account recovery. Update `.github/SECURITY.md` if the published contact ever changes. |
+| Surface                                                  | Holder / owner                                                       | Recovery path                                                                                                                                                                                                                        |
+| -------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GitHub repository                                        | `Hermione-Granger-1176` (org/user account)                           | GitHub account recovery on the owning account; the account uses 2FA, so keep the recovery codes safe.                                                                                                                                |
+| GitHub App (`APP_ID` variable, `APP_PRIVATE_KEY` secret) | Same GitHub account (App owner)                                      | Rotate by generating a new private key in the App settings and updating the `APP_PRIVATE_KEY` repository secret. If the App is lost, the maintenance writeback workflows degrade gracefully (they skip when credentials are absent). |
+| Vercel project (web hosting)                             | Maintainer's Vercel account, linked to the GitHub repo               | Vercel account recovery via its linked email/GitHub login; re-link the repository and re-add the environment variables listed under Web Deployment.                                                                                  |
+| Sentry org/project (opt-in diagnostics)                  | Maintainer's Sentry account                                          | Sentry account recovery; rotate `VITE_SENTRY_DSN` / `SENTRY_AUTH_TOKEN` and update the Vercel environment variables. Telemetry is opt-in and non-critical, so an outage here does not affect users.                                  |
+| PyPI trusted publisher                                   | Maintainer's PyPI account (OIDC trusted publishing, no stored token) | PyPI account recovery; re-configure the trusted publisher for this repository under the project's publishing settings. No API token exists to rotate.                                                                                |
+| GHCR (container registry)                                | Same GitHub account (packages under the repo)                        | Publishing uses the workflow `GITHUB_TOKEN`, so it is tied to repository access; recovering the GitHub account restores publish rights.                                                                                              |
+| Security mailbox                                         | `adityadarak9314@outlook.com`                                        | Standard mailbox provider account recovery. Update `.github/SECURITY.md` if the published contact ever changes.                                                                                                                      |
 
 If the sole maintainer becomes unavailable, the practical continuity path is a new maintainer forking the repository and reconfiguring their own Vercel, Sentry, and PyPI trusted-publisher links; nothing in the pipeline depends on a shared secret that cannot be regenerated from the owning accounts.
 
@@ -164,10 +164,10 @@ Scheduled workflows report their health through one tracking issue each, rather 
 
 An alert is identified by an exact issue title scoped to one label, and is synced to one of three states:
 
-| State | Meaning | Effect |
-| --- | --- | --- |
-| `open` | The monitored checks reported a failure | Creates the issue, or comments on the open one |
-| `close` | The monitored checks are passing again | Closes the issue with a recovery comment |
+| State           | Meaning                                          | Effect                                                     |
+| --------------- | ------------------------------------------------ | ---------------------------------------------------------- |
+| `open`          | The monitored checks reported a failure          | Creates the issue, or comments on the open one             |
+| `close`         | The monitored checks are passing again           | Closes the issue with a recovery comment                   |
 | `setup-failure` | The workflow died before its checks could report | Same as `open`, with wording that points at the setup step |
 
 Design notes worth knowing when adding a new alert:
@@ -224,12 +224,12 @@ make ci-audit-repo-settings branch=release   # audit a branch other than main
 
 Expectations live in `scripts/ci/repo_audit.py` as named constants, so changing a setting on purpose means changing the constant in the same commit. What it checks:
 
-| Group | Expectation |
-| --- | --- |
-| Repository | Default branch is `main`; squash is the only merge method; merged branches are deleted |
-| Security | Secret scanning, push protection, and Dependabot security updates are all enabled |
+| Group             | Expectation                                                                                                                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Repository        | Default branch is `main`; squash is the only merge method; merged branches are deleted                                                                                                                                         |
+| Security          | Secret scanning, push protection, and Dependabot security updates are all enabled                                                                                                                                              |
 | Branch protection | Required checks are `analyze-javascript`, `analyze-python`, `CodeQL`, and `CI result`; at least one approving review; signed commits, linear history, and conversation resolution required; force pushes and deletions refused |
-| Actions | Variable `APP_ID` and secret `APP_PRIVATE_KEY` exist |
+| Actions           | Variable `APP_ID` and secret `APP_PRIVATE_KEY` exist                                                                                                                                                                           |
 
 The script's exit codes match the schedule watchdog: `0` clean, `1` drift found and listed, `2` the audit could not complete. They are distinct because a failure to look must never read as a clean result, which is also why a setting the API declines to report is treated as missing rather than assumed correct. The one exception is a branch with no protection at all, which answers `404`: that is the single worst drift the audit can find, so it becomes a finding rather than a failure to check.
 
@@ -293,13 +293,13 @@ If they are missing, the action-SHA refresh workflow records a skipped summary i
 
 ## CLI Environment Variables
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `LINKEDIN_ANALYZER_DATA_DIR` | `data` | Base directory for input/output file paths |
-| `LINKEDIN_ANALYZER_MAX_INPUT_BYTES` | `104857600` | Maximum input CSV size in bytes; `0` disables the limit |
-| `LINKEDIN_ANALYZER_MAX_ROWS` | `1000000` | Maximum parsed row count; `0` disables the limit |
-| `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
-| `LOG_FORMAT` | `text` | Log output format: `text` for human-readable, `json` for structured JSON |
+| Variable                            | Default     | Description                                                              |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `LINKEDIN_ANALYZER_DATA_DIR`        | `data`      | Base directory for input/output file paths                               |
+| `LINKEDIN_ANALYZER_MAX_INPUT_BYTES` | `104857600` | Maximum input CSV size in bytes; `0` disables the limit                  |
+| `LINKEDIN_ANALYZER_MAX_ROWS`        | `1000000`   | Maximum parsed row count; `0` disables the limit                         |
+| `LOG_LEVEL`                         | `INFO`      | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)                    |
+| `LOG_FORMAT`                        | `text`      | Log output format: `text` for human-readable, `json` for structured JSON |
 
 ### Structured JSON logging
 

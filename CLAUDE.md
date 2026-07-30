@@ -20,7 +20,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 5. **Each tool has one config file, pointed at directory roots.** Change what gets linted, typed, or tested by editing that tool's config and nothing else: `pyproject.toml` owns ruff, mypy, pytest, coverage, and vulture; `config/` owns ESLint, stylelint, Prettier, Playwright, knip, and jsconfig; `web/` owns Vite and Vitest. Point them at roots or globs so a new file is covered the day it lands. Config-file _locations_ may be named; per-file source lists may not.
 6. **Coverage is 100% over `src/linkedin_analyzer` and `scripts`, statements and branches, with no `omit`.** A new script needs its tests in the same change.
 7. **Read before acting.** Read the Makefile and the existing code before proposing changes.
-8. **Auto-fix commands are the user's call** (`make fmt`, `make lock`). To see what a formatter would change, use `make format-py-diff` or `make format-js-diff path=...` and apply it by hand.
+8. **Auto-fix commands are the user's call** (`make fmt`, `make align-tables`, `make lock`). To see what a formatter would change, use `make format-py-diff` or `make format-js-diff path=...` and apply it by hand.
 9. **Committing, pushing, and opening or merging PRs are the user's call.** Make and verify changes in the working tree and stop there. Fold small tooling or doc tweaks into the branch in progress rather than opening a second PR.
 10. **CHANGELOG.md tracks the Python package only.** Web and Node changes do not go there.
 
@@ -28,32 +28,47 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 Enough to work without looking anything up. `make help` has the rest.
 
-| Need | Command |
-| --- | --- |
-| Full gate, serial / parallel | `make ci` / `make ci-fast` |
-| Tests only | `make test` (both) / `make test-py` / `make test-js` / `make test-e2e` |
-| Lint and types | `make lint-py` / `make lint-js` / `make typecheck-py` |
-| See what a formatter would change | `make format-py-diff` / `make format-js-diff path=...` |
-| Workspace health | `make status` |
-| Unused code | `make dead-code` |
-| Dev server | `make web` |
-| New branch off `main` | `make branch name=X` |
-| Stage and commit | `make stage files="a.py b.py"` then `make commit <<'EOF'` |
-| Open a PR | `make pr-create` (`--fill` from commits) or `TITLE='...' make pr-create <<'EOF'` |
-| Review threads, with `thread=` ids | `make pr-review-comments` |
-| Reply and resolve in one | `make pr-address thread=PRRT_... <<'EOF'` |
-| Wait for review and checks | `make pr-watch` (run it in the background) |
-| PR overview | `make pr-summary` |
-| Why CI is red | `make ci-failures` |
-| Issues | `make issue-list` / `make issue-view issue=N` / `TITLE='...' make issue-create <<'EOF'` |
+| Need                               | Command                                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| Full gate, serial / parallel       | `make ci` / `make ci-fast`                                                              |
+| Tests only                         | `make test` (both) / `make test-py` / `make test-js` / `make test-e2e`                  |
+| Lint and types                     | `make lint-py` / `make lint-js` / `make typecheck-py`                                   |
+| See what a formatter would change  | `make format-py-diff` / `make format-js-diff path=...`                                  |
+| Apply every repository formatter   | `make fmt`                                                                              |
+| Align Markdown table pipes         | `make align-tables [paths="README.md docs/example.md"]`                                 |
+| Workspace health                   | `make status`                                                                           |
+| Unused code                        | `make dead-code`                                                                        |
+| Dev server                         | `make web`                                                                              |
+| New branch off `main`              | `make branch name=X`                                                                    |
+| Stage and commit                   | `make stage files="a.py b.py"` then `make commit <<'EOF'`                               |
+| Open a PR                          | `make pr-create` (`--fill` from commits) or `TITLE='...' make pr-create <<'EOF'`        |
+| Review threads, with `thread=` ids | `make pr-review-comments`                                                               |
+| Reply and resolve in one           | `make pr-address thread=PRRT_... <<'EOF'`                                               |
+| Wait for review and checks         | `make pr-watch` (run it in the background)                                              |
+| PR overview                        | `make pr-summary`                                                                       |
+| Why CI is red                      | `make ci-failures`                                                                      |
+| Issues                             | `make issue-list` / `make issue-view issue=N` / `TITLE='...' make issue-create <<'EOF'` |
 
 ## Layout
 
-- `src/linkedin_analyzer/`: the package. `cli.py`, `core/` (text, types, paths, cleaner, excel, limits), `cleaners/` (comments, connections, messages, shares)
-- `web/`: Vite SPA. `src/` (router, screens, cleaner, storage, telemetry, sentry), `tests/` (Vitest), `e2e/` (Playwright)
-- `api/`: Vercel Serverless Functions; `csp-report.mjs` collects CSP violation reports
-- `scripts/`: repo tooling, including the tested `gh/` helpers behind the PR and CI targets
-- `tests/`: Python tests. `config/`: shared JS/web tool configs. `docs/`: developer documentation
+```text
+linkedin-analyzer/
+├── api/                         # Vercel functions
+├── config/                      # Shared JavaScript and web tool configuration
+├── docs/                        # Developer documentation and ADRs
+├── scripts/                     # Checks, CI, fixtures, GitHub, lint, and setup tooling
+├── src/linkedin_analyzer/       # Published Python package
+├── tests/                       # Package, integration, and repository-tooling tests
+└── web/
+    ├── e2e/                    # Playwright tests
+    ├── src/
+    │   ├── app/                # Application composition
+    │   ├── features/           # User-facing capabilities
+    │   ├── platform/           # Browser infrastructure
+    │   ├── shared/             # Reused application primitives
+    │   └── styles/             # Foundation, feature, and component styles
+    └── tests/                  # Vitest tests that mirror source ownership
+```
 
 Setup needs Python 3.11+, uv, and Node.js 22.13.x or 24+. `make setup` is the fast default; `make setup-all` adds Playwright browsers. On a host without browser libraries, `make setup-playwright-local` builds a private sudo-free runtime and `local_libs=1` routes browser targets through it. Python deps live in `pyproject.toml` (frozen in `uv.lock`), Node deps in `package.json` (frozen in `package-lock.json`).
 

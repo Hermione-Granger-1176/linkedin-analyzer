@@ -11,7 +11,7 @@ The web app (`web/`) processes LinkedIn exports entirely in the browser and keep
 
 ## Decision
 
-Build the app as a vanilla JavaScript single-page app with a small hand-written hash router (`web/src/router.js`) and no UI framework. Screens are plain modules that register routes like `#analytics` and read shared query params (for example `?range=3m`) from the router. Hash routing means the server only ever serves `index.html`, so deep links and reloads work on any static host without rewrite rules.
+Build the app as a vanilla JavaScript single-page app with a small hand-written hash router (`web/src/app/router.js`) and no UI framework. Screens are plain modules that register routes like `#analytics` and read shared query params (for example `?range=3m`) from the router. Hash routing means the server only ever serves `index.html`, so deep links and reloads work on any static host without rewrite rules.
 
 ## Consequences
 

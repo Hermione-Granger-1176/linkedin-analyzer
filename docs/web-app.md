@@ -43,7 +43,7 @@ Supported range values:
 
 ## Delegated Click Safety
 
-Delegated click handlers use `DomEvents.closest(event, selector)` from `web/src/dom-events.js`.
+Delegated click handlers use `DomEvents.closest(event, selector)` from `web/src/shared/dom-events.js`.
 
 - Prevents runtime errors when `event.target` is not an `Element` (for example text-node targets).
 - Keeps delegated handler guards consistent across screens.
@@ -129,9 +129,9 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
 - Active content is blurred while loading to keep the loading state clear.
 - Tutorial auto-start and mini-tip rendering are gated by loading state, so onboarding UI does not appear while loading overlays are active.
-- Analytics computation runs in `analytics-worker.js`.
-- Connections parsing runs in `connections-worker.js` with client-side filtering.
-- Messages/connections parsing runs in `messages-worker.js` with safe fallback.
+- Analytics computation runs in `features/analytics/analytics-worker.js`.
+- Connections parsing runs in `features/connections/connections-worker.js` with client-side filtering.
+- Messages/connections parsing runs in `features/messages/messages-worker.js` with safe fallback.
 - IndexedDB stores raw CSV text and analytics base when available so uploads can be restored after reloads; an in-memory fallback keeps the app functional but does not persist data across reloads.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms the storage-backed file cache only. Analytics priming is deferred until fresh uploads because dashboards read persisted analytics directly.
@@ -145,7 +145,7 @@ The web app enforces upload and parser caps to keep processing responsive and bo
 
 - 80 MB maximum per uploaded file (files above this are rejected before decoding).
 - 60 MB of decoded text per file (`MAX_CSV_CHARS`); multi-byte files between 60 MB and 80 MB on disk may still decode under this cap, so the byte gate stays at 80 MB.
-- 500000 parsed rows per file (`web/src/csv-parser.js`).
+- 500000 parsed rows per file (`web/src/features/cleaning/csv-parser.js`).
 - 256 columns per row and 200000 characters per field.
 
 These are independent of the CLI, which applies its own defaults (104857600 bytes and 1000000 rows, both configurable). See [Resource limits](cli.md#resource-limits) for the CLI caps.

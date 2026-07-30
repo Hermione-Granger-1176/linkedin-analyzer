@@ -9,8 +9,8 @@
     "dev": "vite --config web/vite.config.js",
     "build": "vite build --config web/vite.config.js",
     "preview": "vite preview --config web/vite.config.js",
-    "format": "prettier --config config/prettierrc.json --ignore-path config/prettierignore --no-error-on-unmatched-pattern --write \"*.{json,md,yml,yaml}\" \"config/**/*.{json,js,mjs,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml,mjs}\" \"scripts/**/*.{js,mjs}\" \"web/*.config.js\" \"web/**/*.json\"",
-    "format:check": "prettier --config config/prettierrc.json --ignore-path config/prettierignore --no-error-on-unmatched-pattern --check \"*.{json,md,yml,yaml}\" \"config/**/*.{json,js,mjs,yml,yaml}\" \"docs/**/*.md\" \".github/**/*.{json,md,yml,yaml,mjs}\" \"scripts/**/*.{js,mjs}\" \"web/*.config.js\" \"web/**/*.json\"",
+    "format": "prettier --config config/prettierrc.json --ignore-path config/prettierignore --no-error-on-unmatched-pattern --write \"*.{json,yml,yaml}\" \"config/**/*.{json,js,mjs,yml,yaml}\" \".github/**/*.{json,yml,yaml,mjs}\" \"scripts/**/*.{js,mjs}\" \"web/*.config.js\" \"web/**/*.json\"",
+    "format:check": "prettier --config config/prettierrc.json --ignore-path config/prettierignore --no-error-on-unmatched-pattern --check \"*.{json,yml,yaml}\" \"config/**/*.{json,js,mjs,yml,yaml}\" \".github/**/*.{json,yml,yaml,mjs}\" \"scripts/**/*.{js,mjs}\" \"web/*.config.js\" \"web/**/*.json\"",
     "lint": "eslint --config config/eslint.config.mjs \"web/src/**/*.js\" \"web/tests/**/*.js\" \"api/**/*.mjs\"",
     "lint:css": "stylelint --config config/stylelint.config.mjs \"web/**/*.css\"",
     "typecheck:web": "tsc --noEmit --project config/jsconfig.json",
@@ -23,7 +23,7 @@
     "size:check": "size-limit --limit",
     "ci:web": "make ci-web",
     "dead-code": "knip --config config/knip.json",
-    "check:overrides": "node scripts/check-overrides.mjs",
+    "check:overrides": "node scripts/checks/check-overrides.mjs",
     "lint:workflows": "node scripts/lint/lint-workflows.mjs"
   },
   "keywords": [

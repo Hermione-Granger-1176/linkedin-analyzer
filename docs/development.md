@@ -144,8 +144,17 @@ make typecheck-web
 # Detect unused JS code, exports, and deps (knip)
 make dead-code-js
 
-# Format check (docs/config files)
+# Check JavaScript metadata formatting
 make format-js-check
+
+# Align Markdown table pipes across the repository
+make align-tables
+
+# Check Markdown table alignment without modifying files
+make align-tables-check
+
+# Align Markdown table pipes in selected files
+make align-tables paths="README.md docs/development.md"
 
 # Preview all Python formatting changes without modifying files
 make format-py-diff
@@ -208,7 +217,7 @@ make lint-py
 # Detect unused Python code (vulture)
 make dead-code-py
 
-# Format Python, JavaScript, and metadata
+# Format owned code and metadata, then align Markdown tables
 make fmt
 ```
 
@@ -313,7 +322,7 @@ Four targets need more than that, and each for a reason that is not about input:
 
 Whether a target reads a terminal follows the same split. Where the text is required, reading it is the point: the target waits for what you are about to type, the way `cat` does. Where the text is optional and its absence means something, the read is guarded by `NO_TTY_READ`, or `TITLE='...' make pr-edit` would sit waiting for a body nobody intends to type and `make release-create tag=vX.Y.Z` would wait instead of generating notes.
 
-Guard tests in `tests/test_makefile.py` fail if a free-text name reappears as a make variable in any spelling, if a posting target grows a second input path, or if a count or comma-separated list is left unquoted. That last one is why the delete target names its argument `comment_id=` rather than `comment=`: one spelling meaning an opaque node id on a PR target and prose on an issue target is what makes an unsafe interpolation look fine to a reader.
+Guard tests in `tests/tooling/lint/test_makefile.py` fail if a free-text name reappears as a make variable in any spelling, if a posting target grows a second input path, or if a count or comma-separated list is left unquoted. That last one is why the delete target names its argument `comment_id=` rather than `comment=`: one spelling meaning an opaque node id on a PR target and prose on an issue target is what makes an unsafe interpolation look fine to a reader.
 
 ## CI
 
@@ -365,7 +374,7 @@ Most `devDependencies` track caret ranges, but `actionlint` is pinned to an exac
 
 ```bash
 make test-py                                    # Full suite (coverage gate)
-make test-py ARGS="tests/test_text.py --no-cov" # Specific file
+make test-py ARGS="tests/package/core/test_text.py --no-cov" # Specific file
 make test-py ARGS="-k test_clean --no-cov"      # By name pattern
 ```
 
@@ -383,9 +392,9 @@ Unit tests are in `web/tests/`; Playwright E2E tests are in `web/e2e/`.
 
 ### Cross-runtime cleaner parity
 
-The Python cleaner (`src/linkedin_analyzer/core/text.py`) and its web port (`web/src/field-cleaners.js`) must produce identical cleaned output. Two layers enforce this, both run by `make test`:
+The Python cleaner (`src/linkedin_analyzer/core/text.py`) and its web port (`web/src/features/cleaning/field-cleaners.js`) must produce identical cleaned output. Two layers enforce this, both run by `make test`:
 
-- Hand-written `tests/fixtures/*-parity.csv` fixtures pin exact expected values for readable, targeted cases. They are asserted by `tests/test_web_parity.py` and `web/tests/parity.test.js`.
+- Hand-written `tests/fixtures/*-parity.csv` fixtures pin exact expected values for readable, targeted cases. They are asserted by `tests/integration/test_web_parity.py` and `web/tests/integration/parity.test.js`.
 - A seeded synthetic corpus (`tests/fixtures/*-corpus.csv`) drives a few hundred rows per type through both cleaners. Both suites assert their cleaned output equals one checked-in expected file (`tests/fixtures/parity-corpus-expected.json`, produced by the web cleaner). A cleaning-behavior change in only one runtime then fails CI.
 
 Regenerate the corpus and its expected output after an intentional cleaning change with:
@@ -394,7 +403,7 @@ Regenerate the corpus and its expected output after an intentional cleaning chan
 make gen-parity-corpus
 ```
 
-The generator (`scripts/gen-parity-corpus.mjs`) is deterministic. Date columns cleaned by `cleanDate` use only impossible or unparseable values so the expected file stays timezone independent.
+The generator (`scripts/fixtures/gen-parity-corpus.mjs`) is deterministic. Date columns cleaned by `cleanDate` use only impossible or unparseable values so the expected file stays timezone independent.
 
 ## Local checks and benchmarks
 

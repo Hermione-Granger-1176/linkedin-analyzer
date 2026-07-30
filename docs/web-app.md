@@ -132,6 +132,8 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Analytics computation runs in `features/analytics/analytics-worker.js`.
 - Connections parsing runs in `features/connections/connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `features/messages/messages-worker.js` with safe fallback.
+- Cleaning resolves each file type's column cleaners once, then reuses that plan for every row instead of repeating configuration lookups for every cell.
+- Analytics topic extraction preserves hashtag-first ordering while inserting normalized tokens directly into one deduplicating set.
 - IndexedDB stores raw CSV text and analytics base when available so uploads can be restored after reloads; an in-memory fallback keeps the app functional but does not persist data across reloads.
 - On startup, a non-blocking session TTL sweep clears stale uploads and cached analytics from IndexedDB and in-memory cache. Screens wait for cleanup to finish before loading stored data.
 - Upload restore warms the storage-backed file cache only. Analytics priming is deferred until fresh uploads because dashboards read persisted analytics directly.

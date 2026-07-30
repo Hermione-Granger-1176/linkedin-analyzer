@@ -231,8 +231,18 @@ export function extractTopics(text) {
     const hashtags = normalized.match(/#([A-Za-z0-9_]+)/g) || [];
     const textWithoutTags = normalized.replace(/#[A-Za-z0-9_]+/g, " ");
     const words = textWithoutTags.match(/\b[a-zA-Z]{3,}\b/g) || [];
-    const tokens = [...hashtags, ...words]
-        .map((token) => token.replace(/^#/, "").toLowerCase())
-        .filter((token) => token && !STOP_WORDS.has(token));
-    return Array.from(new Set(tokens));
+    const tokens = new Set();
+    for (const hashtag of hashtags) {
+        const token = hashtag.slice(1).toLowerCase();
+        if (token && !STOP_WORDS.has(token)) {
+            tokens.add(token);
+        }
+    }
+    for (const word of words) {
+        const token = word.toLowerCase();
+        if (!STOP_WORDS.has(token)) {
+            tokens.add(token);
+        }
+    }
+    return Array.from(tokens);
 }

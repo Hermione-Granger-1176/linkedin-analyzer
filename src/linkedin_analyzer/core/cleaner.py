@@ -11,7 +11,7 @@ from typing import Any
 
 import pandas as pd
 
-from linkedin_analyzer.core.excel import format_excel_output
+from linkedin_analyzer.core.excel import format_excel_worksheet
 from linkedin_analyzer.core.text import (
     clean_value,
     escape_excel_formula,
@@ -184,9 +184,10 @@ def _write_excel_atomic(df: pd.DataFrame, output_path: Path, config: CleanerConf
     os.close(tmp_fd)
     tmp_path = Path(tmp_name)
     try:
-        df.to_excel(tmp_path, index=False, engine="openpyxl")
-        LOG.info("Formatting Excel output")
-        format_excel_output(tmp_path, config)
+        with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False)
+            LOG.info("Formatting Excel output")
+            format_excel_worksheet(writer.book.active, config)
         tmp_path.replace(output_path)
     except BaseException:
         tmp_path.unlink(missing_ok=True)

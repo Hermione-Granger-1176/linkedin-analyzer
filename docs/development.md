@@ -348,7 +348,7 @@ If either audit job fails, a `report-failure` job opens (or comments on the exis
 Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for same-repository Dependabot uv PRs through a validated artifact handoff. The artifact contains only `uv.lock`; a read-only job validates the triggering PR's current author, repository, ref, and SHA before a separate write-capable job can download it or create a commit. See [CI Automation and Verified Writebacks](operations.md#ci-automation-and-verified-writebacks) for the full flow and fallback behavior.
-- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact uv and pre-commit hook versions. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container.
+- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact uv and pre-commit hook versions. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container. TypeScript major releases are also excluded until their stricter JavaScript inference can be handled as a dedicated migration rather than hidden inside a grouped dependency update.
 
 ## Code Style
 

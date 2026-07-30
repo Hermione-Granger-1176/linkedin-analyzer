@@ -511,7 +511,7 @@ class TestRunCleaner:
         def boom(*_args: object, **_kwargs: object) -> None:
             raise RuntimeError("formatting blew up")
 
-        monkeypatch.setattr(cleaner_module, "format_excel_output", boom)
+        monkeypatch.setattr(cleaner_module, "format_excel_worksheet", boom)
 
         config = CleanerConfig(
             input_path=input_path,

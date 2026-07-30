@@ -25,6 +25,18 @@ import {
     removeIllegalChars,
 } from "./field-cleaners.js";
 
+const CLEANING_PLANS = Object.freeze(
+    Object.fromEntries(
+        FILE_TYPES.map((fileType) => [
+            fileType,
+            CONFIGS[fileType].columns.map((column) => ({
+                name: column.name,
+                clean: CLEANERS[column.cleaner] || cleanValue,
+            })),
+        ]),
+    ),
+);
+
 export const LinkedInCleaner = (() => {
     "use strict";
 
@@ -319,6 +331,7 @@ export const LinkedInCleaner = (() => {
      */
     function cleanData(data, fileType) {
         const config = CONFIGS[fileType];
+        const cleaningPlan = CLEANING_PLANS[fileType];
         // process() validates the file type before cleaning, so a missing config
         // here is defensive and unreachable.
         /* v8 ignore next 2 */
@@ -337,15 +350,13 @@ export const LinkedInCleaner = (() => {
         const cleanedRows = [];
         for (const row of data) {
             const cleanedRow = {};
-            config.columns.forEach((column) => {
-                const value = row[column.name];
-                const cleaner = column.cleaner ? CLEANERS[column.cleaner] : null;
-                const cleanedValue = cleaner ? cleaner(value) : cleanValue(value);
+            for (const column of cleaningPlan) {
+                const cleanedValue = column.clean(row[column.name]);
                 // Strip XML-illegal control characters before formula-escaping so a
                 // cell like "\u0001=SUM(...)" is both export-safe and still detected
                 // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
                 cleanedRow[column.name] = escapeFormula(removeIllegalChars(cleanedValue));
-            });
+            }
 
             if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
                 continue;

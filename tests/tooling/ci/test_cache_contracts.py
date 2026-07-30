@@ -20,7 +20,7 @@ def test_uv_setup_uses_one_pinned_version_without_a_duplicate_cache() -> None:
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert pyproject["tool"]["uv"]["required-version"] == "==0.11.32"
-    assert "astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b" in CI_SETUP
+    assert len(re.findall(r"astral-sh/setup-uv@[0-9a-f]{40} # v\d+\.\d+\.\d+", CI_SETUP)) == 1
     assert "enable-cache: false" in CI_SETUP
     assert "cache: pip" not in CI_SETUP
     assert "python -m pip install" not in CI_SETUP

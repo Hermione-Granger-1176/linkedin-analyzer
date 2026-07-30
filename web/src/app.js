@@ -1,29 +1,29 @@
 /* SPA bootstrap */
 
-import { AnalyticsPage } from "./analytics-ui.js";
-import { CleanPage } from "./clean.js";
-import { ConnectionsPage } from "./connections-ui.js";
-import { SESSION_CLEANUP_PROMISE_KEY } from "./constants.js";
-import { initDecorations } from "./decorations.js";
-import { DomEvents } from "./dom-events.js";
-import { InsightsPage } from "./insights-ui.js";
-import { MessagesPage } from "./messages-insights.js";
-import { NavMenu } from "./nav-menu.js";
-import { AppRouter } from "./router.js";
-import { initRuntime } from "./runtime.js";
-import { ScreenManager } from "./screen-manager.js";
+import { AppRouter } from "./app/router.js";
+import { initRuntime } from "./app/runtime.js";
+import { ScreenManager } from "./app/screen-manager.js";
+import { AnalyticsPage } from "./features/analytics/screen.js";
+import { CleanPage } from "./features/cleaning/screen.js";
+import { ConnectionsPage } from "./features/connections/screen.js";
+import { InsightsPage } from "./features/insights/screen.js";
+import { MessagesPage } from "./features/messages/screen.js";
+import { Tutorial } from "./features/tutorial/tutorial.js";
+import { UploadPage } from "./features/upload/upload.js";
 import {
     captureError,
     disableTelemetry,
     initSentry,
     setTelemetryConsent,
     telemetryConsentGranted,
-} from "./sentry.js";
-import { Session } from "./session.js";
-import { initTelemetry } from "./telemetry.js";
-import { Theme } from "./theme.js";
-import { Tutorial } from "./tutorial.js";
-import { UploadPage } from "./upload.js";
+} from "./platform/observability/sentry.js";
+import { initTelemetry } from "./platform/observability/telemetry.js";
+import { Session } from "./platform/persistence/session.js";
+import { SESSION_CLEANUP_PROMISE_KEY } from "./shared/constants.js";
+import { DomEvents } from "./shared/dom-events.js";
+import { initDecorations } from "./shared/ui/decorations.js";
+import { NavMenu } from "./shared/ui/nav-menu.js";
+import { Theme } from "./shared/ui/theme.js";
 
 function init() {
     "use strict";

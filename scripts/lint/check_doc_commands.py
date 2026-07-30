@@ -159,6 +159,11 @@ COMMAND_RULES = (
         "editorconfig-check",
         requires_full_snippet_match=True,
     ),
+    CommandRule(
+        re.compile(r"^\s*python(?:3(?:\.\d+)?)?\s+scripts/lint/align_tables\.py(?:\s+.*)?$"),
+        "align-tables",
+        requires_full_snippet_match=True,
+    ),
     CommandRule(re.compile(r"^\s*gh\s+pr\s+create\s*$"), "pr-create", True),
     CommandRule(re.compile(r"^\s*gh\s+pr\s+list\s*$"), "pr-list", True),
     CommandRule(re.compile(r"^\s*gh\s+pr\s+checks\s+--watch\s*$"), "pr-checks", True),

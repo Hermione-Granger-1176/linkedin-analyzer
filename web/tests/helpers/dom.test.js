@@ -7,7 +7,7 @@ import {
     mockResizeObserver,
     resetDom,
     setupDom
-} from "../helpers/dom.js";
+} from "./dom.js";
 
 describe("dom helpers", () => {
     it("setupDom and resetDom manage document state", () => {

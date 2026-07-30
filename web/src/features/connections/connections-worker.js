@@ -1,0 +1,277 @@
+/* LinkedIn Analyzer - Connections parsing & analytics worker */
+
+import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.js";
+import { MONTH_LABELS } from "../analytics/constants.js";
+import { parseLocalDate } from "../analytics/dates.js";
+import { LinkedInCleaner } from "../cleaning/cleaner.js";
+
+/* -- Constants --------------------------------------------------------------- */
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/* -- Date helpers ------------------------------------------------------------ */
+
+/**
+ * Parse a cleaned "Connected On" value into a Date.
+ * The cleaner's cleanConnectionsDate turns "01 Jan 2024" into "2024-01-01",
+ * which the shared strict parser turns into a local-midnight Date without the
+ * timezone-shifting pitfalls of Date.parse.
+ *
+ * @param {string} dateStr - ISO-style date string (YYYY-MM-DD)
+ * @returns {Date|null} Local-midnight Date, or null if unparseable
+ */
+function parseConnectionDate(dateStr) {
+    return parseLocalDate(dateStr);
+}
+
+/**
+ * Build a YYYY-MM key from a Date, used as the bucket identifier in the
+ * growth timeline so months are naturally sortable.
+ *
+ * @param {Date} date - Date to convert
+ * @returns {string} e.g. "2024-01"
+ */
+function toMonthKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+}
+
+/**
+ * Build a human-readable label from a YYYY-MM key, since chart axes
+ * should show "Jan 2024" rather than "2024-01".
+ *
+ * @param {string} key - e.g. "2024-01"
+ * @returns {string} e.g. "Jan 2024"
+ */
+function monthKeyToLabel(key) {
+    const [yearStr, monthStr] = key.split("-");
+    const monthIndex = Number(monthStr) - 1;
+    return `${MONTH_LABELS[monthIndex]} ${yearStr}`;
+}
+
+/* -- Growth timeline --------------------------------------------------------- */
+
+/**
+ * Bucket connections by month and fill gaps so the timeline has no missing
+ * months. Gaps look misleading on line/bar charts, so we insert zero-value
+ * entries for any month between the earliest and latest connection dates.
+ *
+ * @param {object[]} rows - Cleaned connection rows
+ * @returns {Array<{key: string, label: string, value: number}>} Sorted chronologically
+ */
+function buildGrowthTimeline(rows) {
+    const buckets = new Map();
+
+    for (const row of rows) {
+        const date = parseConnectionDate(row["Connected On"]);
+        if (!date) {
+            continue;
+        }
+        const key = toMonthKey(date);
+        buckets.set(key, (buckets.get(key) || 0) + 1);
+    }
+
+    if (buckets.size === 0) {
+        return [];
+    }
+
+    /* Fill gaps between earliest and latest month */
+    const sortedKeys = Array.from(buckets.keys()).sort();
+    const firstKey = sortedKeys[0];
+    const lastKey = sortedKeys[sortedKeys.length - 1];
+
+    const [startYear, startMonth] = firstKey.split("-").map(Number);
+    const [endYear, endMonth] = lastKey.split("-").map(Number);
+    const monthSpan = (endYear - startYear) * 12 + (endMonth - startMonth);
+
+    return Array.from({ length: monthSpan + 1 }, (_, offset) => {
+        const absoluteMonth = startMonth - 1 + offset;
+        const year = startYear + Math.floor(absoluteMonth / 12);
+        const month = (absoluteMonth % 12) + 1;
+        const key = `${year}-${String(month).padStart(2, "0")}`;
+        return {
+            key,
+            label: monthKeyToLabel(key),
+            value: buckets.get(key) || 0,
+        };
+    });
+}
+
+/* -- Summary stats ----------------------------------------------------------- */
+
+/**
+ * Compute high-level stats that feed the dashboard stat cards.
+ * Only total and networkAgeMonths are used by the UI. The UI recomputes
+ * filtered stats (recent adds, top company) client-side.
+ *
+ * @param {object[]} rows - Cleaned connection rows
+ * @returns {{total: number, networkAgeMonths: number}}
+ */
+function computeStats(rows) {
+    const total = rows.length;
+    const now = Date.now();
+
+    const earliestMs = rows.reduce((earliest, row) => {
+        const date = parseConnectionDate(row["Connected On"]);
+        if (!date) {
+            return earliest;
+        }
+        return Math.min(earliest, date.getTime());
+    }, Infinity);
+
+    /* Network age in whole months from earliest connection to now */
+    const networkAgeMonths =
+        earliestMs === Infinity
+            ? 0
+            : Math.max(0, Math.round((now - earliestMs) / (MS_PER_DAY * 30.44)));
+
+    return Object.freeze({ total, networkAgeMonths });
+}
+
+/* -- Main processing pipeline ------------------------------------------------ */
+
+/**
+ * Parse and aggregate a Connections CSV into analytics ready for the UI.
+ * The cleaned rows are included in the response so the UI can apply its own
+ * time-range filter and build company and position summaries without another
+ * worker round-trip.
+ *
+ * @param {string} connectionsCsv - Raw CSV text from the Connections export
+ * @returns {{success: boolean, analytics?: object, rows?: object[], error?: string}}
+ */
+function processConnections(connectionsCsv) {
+    if (!connectionsCsv || typeof connectionsCsv !== "string") {
+        return { success: false, error: "No connections CSV data provided." };
+    }
+
+    const result = LinkedInCleaner.process(connectionsCsv, "connections");
+    if (!result.success) {
+        return { success: false, error: result.error || "Unable to parse Connections.csv." };
+    }
+
+    const rows = result.cleanedData;
+    if (!rows.length) {
+        return { success: false, error: "Connections file contained no valid rows." };
+    }
+
+    const analytics = Object.freeze({
+        growthTimeline: buildGrowthTimeline(rows),
+        stats: computeStats(rows),
+    });
+
+    return { success: true, analytics, rows };
+}
+
+/**
+ * Convert unknown error values into a message string.
+ * @param {unknown} error - Error value to normalize
+ * @returns {string}
+ */
+function toErrorMessage(error) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    if (typeof error === "string" && error) {
+        return error;
+    }
+    return "Connections worker runtime failure.";
+}
+
+/**
+ * Post a normalized worker error payload.
+ * @param {number|string} requestId - Worker request identifier
+ * @param {unknown} error - Error value to normalize
+ */
+function postWorkerError(requestId, error) {
+    self.postMessage({
+        type: "error",
+        requestId,
+        payload: {
+            message: toErrorMessage(error),
+        },
+    });
+}
+
+/**
+ * Extract an error-like value from a worker error event.
+ * @param {unknown} event - Worker error event
+ * @returns {unknown}
+ */
+function extractWorkerError(event) {
+    /* v8 ignore next 3 */
+    if (!event || typeof event !== "object") {
+        return undefined;
+    }
+    if ("error" in event && event.error) {
+        return event.error;
+    }
+    if ("message" in event && event.message) {
+        return event.message;
+    }
+    return undefined;
+}
+
+/**
+ * Extract rejection reason from a worker unhandledrejection event.
+ * @param {unknown} event - Worker rejection event
+ * @returns {unknown}
+ */
+function extractWorkerRejection(event) {
+    if (!event || typeof event !== "object" || !("reason" in event)) {
+        return undefined;
+    }
+    return event.reason;
+}
+
+/* -- Worker message handler -------------------------------------------------- */
+
+if (typeof self !== "undefined") {
+    self.addEventListener("message", (event) => {
+        const rawMessage = event.data || {};
+        if (!rawMessage || rawMessage.type !== "process") {
+            return;
+        }
+
+        const parsed = parseConnectionsWorkerRequest(rawMessage);
+        if (!parsed.valid) {
+            postWorkerError(0, parsed.error || "Invalid worker request payload.");
+            return;
+        }
+
+        const message = parsed.value;
+        try {
+            const result = processConnections(message.payload.connectionsCsv);
+
+            self.postMessage({
+                type: "processed",
+                requestId: message.requestId,
+                payload: {
+                    success: result.success,
+                    analytics: result.analytics || null,
+                    rows: result.rows || null,
+                    error: result.error || null,
+                },
+            });
+        } catch (error) {
+            postWorkerError(message.requestId, error);
+        }
+    });
+
+    self.addEventListener("error", (event) => {
+        postWorkerError(0, extractWorkerError(event));
+    });
+
+    self.addEventListener("unhandledrejection", (event) => {
+        postWorkerError(0, extractWorkerRejection(event));
+    });
+}
+
+export {
+    parseConnectionDate,
+    toMonthKey,
+    monthKeyToLabel,
+    buildGrowthTimeline,
+    computeStats,
+    processConnections,
+};

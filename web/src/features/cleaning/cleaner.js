@@ -1,0 +1,546 @@
+/**
+ * LinkedIn CSV Cleaner - JavaScript port of Python cleaning logic
+ * Original: src/linkedin_analyzer/core/text.py
+ *
+ * Public facade composed from three focused modules:
+ * - csv-parser.js: low-level CSV tokenizing/row splitting
+ * - cleaner-configs.js: per-file-type column/validation/skip-row config
+ * - field-cleaners.js: cell-level value normalization
+ */
+
+import { FILE_TYPE_LABELS } from "../../shared/constants.js";
+
+import { CONFIGS, FILE_TYPES } from "./configs.js";
+import {
+    CSV_OPTIONS_COMMENTS,
+    CSV_OPTIONS_DEFAULT,
+    isRowEmpty,
+    parseCsvRows,
+} from "./csv-parser.js";
+import {
+    CLEANERS,
+    cleanValue,
+    escapeFormula,
+    isMissing,
+    removeIllegalChars,
+} from "./field-cleaners.js";
+
+export const LinkedInCleaner = (() => {
+    "use strict";
+
+    const EMPTY_CSV_ERROR = "CSV file is empty or has no data rows";
+
+    // Auto-detection only needs the header row, which sits at the top of the file
+    // (after at most a few skip rows). For large files, parse just this prefix to
+    // match a type, then full-parse the matched type once, instead of full-parsing
+    // the whole file up to three times (one per distinct option/skip-row combo).
+    // Files at or below this size skip the pre-pass and use the original full
+    // multi-type detection, so small uploads are unaffected.
+    const PREFIX_DETECT_CHARS = 64 * 1024;
+
+    /**
+     * Check if all required columns in a row have non-missing values.
+     * @param {object} row - Row object
+     * @param {string[]} requiredColumns - Columns that must be present
+     * @returns {boolean}
+     */
+    function hasRequiredRowValues(row, requiredColumns) {
+        // Every config defines a non-empty required-column set, so the empty
+        // guard is defensive and unreachable from process().
+        /* v8 ignore next 2 */
+        if (!requiredColumns.length) {
+            return true;
+        }
+        return requiredColumns.every((column) => !isMissing(row[column]));
+    }
+
+    /**
+     * Check if at least one column has a non-missing value.
+     * @param {object} row - Row object
+     * @param {string[]} columns - Columns to scan
+     * @returns {boolean}
+     */
+    function hasAnyRowValue(row, columns) {
+        // Only called when dropIfAllMissing is non-empty, so the empty guard is
+        // defensive and unreachable from cleanData().
+        /* v8 ignore next 2 */
+        if (!columns.length) {
+            return true;
+        }
+        return columns.some((column) => !isMissing(row[column]));
+    }
+
+    /**
+     * Strip BOM and whitespace from a single header string.
+     * @param {string} header - Raw header value
+     * @returns {string} Normalized header
+     */
+    function normalizeHeader(header) {
+        // Parsed CSV headers are always strings, so the type guard is defensive.
+        /* v8 ignore next 2 */
+        if (typeof header !== "string") {
+            return "";
+        }
+        return header.replace(/^\uFEFF/, "").trim();
+    }
+
+    /**
+     * Normalize an array of header strings.
+     * @param {string[]} headers - Raw header values
+     * @returns {string[]} Normalized headers
+     */
+    function normalizeHeaders(headers) {
+        return headers.map(normalizeHeader);
+    }
+
+    /**
+     * Find duplicate header names after normalization, preserving header order.
+     * @param {string[]} headers - Normalized headers
+     * @returns {string[]} Duplicate header names
+     */
+    function findDuplicateHeaders(headers) {
+        const seen = new Set();
+        const duplicateSet = new Set();
+        const duplicates = [];
+        for (const header of headers) {
+            if (seen.has(header) && !duplicateSet.has(header)) {
+                duplicateSet.add(header);
+                duplicates.push(header);
+            }
+            seen.add(header);
+        }
+        return duplicates;
+    }
+
+    /**
+     * Build the duplicate-header error used by the Python cleaner.
+     * @param {string[]} headers - Duplicate normalized header names
+     * @returns {string} User-facing error message
+     */
+    function buildDuplicateHeadersError(headers) {
+        const labels = headers.map((header) => (header === "" ? "(blank)" : header));
+        return `Duplicate columns after header normalization: ${labels.join(", ")}`;
+    }
+
+    /**
+     * Build parse cache key from file type options.
+     * @param {string} fileType - Target file type
+     * @returns {string}
+     */
+    function getParseCacheKey(fileType) {
+        const config = CONFIGS[fileType] || null;
+        const skipRows = config && Number.isInteger(config.skipRows) ? config.skipRows : 0;
+        const optionsKey = fileType === "comments" ? "comments" : "default";
+        return `${optionsKey}:${skipRows}`;
+    }
+
+    /**
+     * Parse CSV text into array of objects
+     * @param {string} csvText - Raw CSV text
+     * @param {string} [fileType='auto'] - Target file type for CSV options and skip rows
+     * @param {Map<string, object>|null} [parseCache=null] - Optional parse cache map
+     * @returns {{headers: string[], data: object[], error: string|null}}
+     */
+    function parseCSV(csvText, fileType = "auto", parseCache = null) {
+        const cacheKey = parseCache ? getParseCacheKey(fileType) : null;
+        if (parseCache && cacheKey && parseCache.has(cacheKey)) {
+            return parseCache.get(cacheKey);
+        }
+
+        const finish = (result) => {
+            if (parseCache && cacheKey) {
+                parseCache.set(cacheKey, result);
+            }
+            return result;
+        };
+
+        if (typeof csvText !== "string" || !csvText.trim()) {
+            return finish({ headers: [], data: [], error: EMPTY_CSV_ERROR });
+        }
+
+        const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+        const { rows, error } = parseCsvRows(csvText, csvOptions);
+        if (error) {
+            return finish({ headers: [], data: [], error });
+        }
+
+        if (!rows.length) {
+            return finish({ headers: [], data: [], error: EMPTY_CSV_ERROR });
+        }
+
+        const config = CONFIGS[fileType] || null;
+        const skipRows = config && Number.isInteger(config.skipRows) ? config.skipRows : 0;
+        const rowsAfterSkip = skipRows > 0 ? rows.slice(skipRows) : rows;
+        if (!rowsAfterSkip.length) {
+            return finish({
+                headers: [],
+                data: [],
+                error: "CSV file has no header rows after skip.",
+            });
+        }
+
+        const headers = normalizeHeaders(rowsAfterSkip[0]);
+        if (!headers.length || headers.every((header) => header === "")) {
+            return finish({ headers: [], data: [], error: "Could not parse CSV headers" });
+        }
+
+        const duplicateHeaders = findDuplicateHeaders(headers);
+        if (duplicateHeaders.length) {
+            return finish({
+                headers: [],
+                data: [],
+                error: buildDuplicateHeadersError(duplicateHeaders),
+            });
+        }
+
+        const headerCount = headers.length;
+        const data = [];
+        for (let r = 1; r < rowsAfterSkip.length; r += 1) {
+            const row = rowsAfterSkip[r];
+            if (isRowEmpty(row)) {
+                continue;
+            }
+            if (row.length > headerCount) {
+                return finish({
+                    headers: [],
+                    data: [],
+                    error: "CSV parsing error: data row has more fields than the header.",
+                });
+            }
+            // Null-prototype object: CSV headers are user-controlled, so keys
+            // like "__proto__" must not mutate the prototype chain.
+            const record = Object.create(null);
+            for (let c = 0; c < headerCount; c += 1) {
+                const value = row[c];
+                record[headers[c]] = value !== undefined ? value : "";
+            }
+            data.push(record);
+        }
+
+        return finish({ headers, data, error: null });
+    }
+
+    /**
+     * Auto-detect file type based on column headers
+     * @param {string[]} headers - Array of column headers
+     * @returns {string|null} File type or null if unknown
+     */
+    function detectFileType(headers) {
+        const normalizedHeaders = normalizeHeaders(headers);
+        const headerSet = new Set(normalizedHeaders);
+        const detectedType = FILE_TYPES.find((type) => {
+            const requiredColumns = CONFIGS[type].requiredColumns;
+            return requiredColumns.every((column) => headerSet.has(column));
+        });
+        return detectedType || null;
+    }
+
+    /**
+     * Find all supported file types that can parse and validate the given CSV text.
+     * @param {string} csvText - Raw CSV text
+     * @param {Map<string, object>|null} [parseCache=null] - Optional parse cache map
+     * @returns {Array<{type: string, headers: string[], data: object[]}>}
+     */
+    function detectMatchingFileTypes(csvText, parseCache = null) {
+        const matches = [];
+        for (const type of FILE_TYPES) {
+            const parsed = parseCSV(csvText, type, parseCache);
+            if (parsed.error) {
+                continue;
+            }
+            const validation = validateColumns(parsed.headers, type);
+            if (!validation.valid) {
+                continue;
+            }
+            matches.push({
+                type,
+                headers: parsed.headers,
+                data: parsed.data,
+            });
+        }
+        return matches;
+    }
+
+    /**
+     * Cheaply detect a file's type from its header row by parsing only a prefix
+     * of the text. Returns the first supported type (in FILE_TYPES order) whose
+     * required columns are present, or null when no prefix match is found.
+     *
+     * A truncated tail can only corrupt the prefix's last row, never the header
+     * at the top, so a positive match is reliable; a null result falls back to
+     * full multi-type detection in the caller, which keeps behavior identical.
+     * Uses a throwaway parse cache so truncated parses never poison the caller's
+     * full-parse cache.
+     * @param {string} csvText - Raw CSV text
+     * @returns {string|null} Detected file type, or null if unknown from the prefix
+     */
+    function detectTypeFromPrefix(csvText) {
+        const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
+        const prefixCache = new Map();
+        for (const type of FILE_TYPES) {
+            const parsed = parseCSV(prefix, type, prefixCache);
+            if (parsed.error) {
+                continue;
+            }
+            if (validateColumns(parsed.headers, type).valid) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validate that required columns exist in the data
+     * @param {string[]} headers - Array of column headers
+     * @param {string} fileType - Supported file type
+     * @returns {{valid: boolean, missing: string[]}}
+     */
+    function validateColumns(headers, fileType) {
+        const config = CONFIGS[fileType];
+        if (!config) {
+            return { valid: false, missing: ["Unknown file type"] };
+        }
+
+        const normalizedHeaders = normalizeHeaders(headers);
+        const headerSet = new Set(normalizedHeaders);
+        const missing = config.requiredColumns.filter((column) => !headerSet.has(column));
+
+        return {
+            valid: missing.length === 0,
+            missing,
+        };
+    }
+
+    /**
+     * Clean the parsed data based on file type
+     * @param {object[]} data - Parsed CSV data as array of objects
+     * @param {string} fileType - Supported file type
+     * @returns {object[]} Cleaned data
+     */
+    function cleanData(data, fileType) {
+        const config = CONFIGS[fileType];
+        // process() validates the file type before cleaning, so a missing config
+        // here is defensive and unreachable.
+        /* v8 ignore next 2 */
+        if (!config) {
+            return data;
+        }
+
+        const requiredRowColumns = Array.isArray(config.requiredRowColumns)
+            ? config.requiredRowColumns
+            : config.requiredColumns;
+        const dropIfAllMissing = Array.isArray(config.dropIfAllMissing)
+            ? config.dropIfAllMissing
+            : [];
+
+        // Clean and filter in a single pass to avoid intermediate arrays.
+        const cleanedRows = [];
+        for (const row of data) {
+            const cleanedRow = {};
+            config.columns.forEach((column) => {
+                const value = row[column.name];
+                const cleaner = column.cleaner ? CLEANERS[column.cleaner] : null;
+                const cleanedValue = cleaner ? cleaner(value) : cleanValue(value);
+                // Strip XML-illegal control characters before formula-escaping so a
+                // cell like "\u0001=SUM(...)" is both export-safe and still detected
+                // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
+                cleanedRow[column.name] = escapeFormula(removeIllegalChars(cleanedValue));
+            });
+
+            if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
+                continue;
+            }
+            if (dropIfAllMissing.length && !hasAnyRowValue(cleanedRow, dropIfAllMissing)) {
+                continue;
+            }
+            cleanedRows.push(cleanedRow);
+        }
+
+        return cleanedRows;
+    }
+
+    /**
+     * Build a user-friendly error message for column validation failures.
+     * @param {string} selectedType - The file type selected by the user ('shares', 'comments', 'messages', 'connections', or 'auto')
+     * @param {string|null} detectedType - The auto-detected file type, or null
+     * @param {string[]} missing - List of missing required column names
+     * @returns {string} Descriptive error message
+     */
+    function buildColumnErrorMessage(selectedType, detectedType, missing) {
+        if (selectedType !== "auto" && detectedType && detectedType !== selectedType) {
+            // Known file types always have labels, so the `|| type` fallbacks are defensive.
+            /* v8 ignore next 2 */
+            const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
+            const detectedLabel = FILE_TYPE_LABELS[detectedType] || detectedType;
+            return `This looks like a ${detectedLabel} file, but you selected ${selectedLabel}. Please switch to "${detectedLabel}" or "Auto-detect".`;
+        }
+
+        if (selectedType !== "auto" && !detectedType) {
+            /* v8 ignore next */
+            const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
+            return `This file doesn't appear to be a LinkedIn ${selectedLabel} export. Missing columns: ${missing.join(", ")}. Please check that you uploaded the correct file.`;
+        }
+
+        // Unreachable in practice: process() only calls this on the non-"auto"
+        // path, so selectedType is never "auto" and one of the branches above
+        // always returns. Kept as a defensive default.
+        /* v8 ignore next */
+        return `Missing required columns: ${missing.join(", ")}`;
+    }
+
+    /**
+     * Build a standardized process() result object.
+     * @param {boolean} success - Whether processing succeeded
+     * @param {string|null} error - Error message, or null on success
+     * @param {object} [overrides] - Fields that differ from the empty defaults
+     * @returns {object}
+     */
+    function makeResult(success, error, overrides = {}) {
+        return {
+            success,
+            fileType: null,
+            detectedType: null,
+            headers: [],
+            cleanedData: [],
+            rowCount: 0,
+            error,
+            ...overrides,
+        };
+    }
+
+    /**
+     * Try the large-file prefix-detection fast path.
+     * @param {unknown} csvText - Raw CSV text
+     * @param {Map<string, object>} parseCache - Full-file parse cache
+     * @returns {object|null} Successful process result, or null to use full detection
+     */
+    function processPrefixMatch(csvText, parseCache) {
+        if (typeof csvText !== "string" || csvText.length <= PREFIX_DETECT_CHARS) {
+            return null;
+        }
+
+        const fileType = detectTypeFromPrefix(csvText);
+        if (!fileType) {
+            return null;
+        }
+
+        const parsed = parseCSV(csvText, fileType, parseCache);
+        if (parsed.error || !validateColumns(parsed.headers, fileType).valid) {
+            return null;
+        }
+
+        const cleanedData = cleanData(parsed.data, fileType);
+        return makeResult(true, null, {
+            fileType,
+            detectedType: fileType,
+            headers: parsed.headers,
+            cleanedData,
+            rowCount: cleanedData.length,
+        });
+    }
+
+    /**
+     * Process a CSV file completely
+     * @param {string} csvText - Raw CSV text
+     * @param {string} fileType - Supported file type or 'auto'
+     * @returns {object}
+     */
+    function process(csvText, fileType = "auto") {
+        const parseCache = new Map();
+
+        if (fileType === "auto") {
+            // Fast path for large files: detect the type from a small prefix, then
+            // full-parse only the matched type once. Falls through to full
+            // multi-type detection on a prefix miss or if the matched type fails
+            // to parse/validate on the whole file, so the result is unchanged.
+            const prefixResult = processPrefixMatch(csvText, parseCache);
+            if (prefixResult) {
+                return prefixResult;
+            }
+
+            const matches = detectMatchingFileTypes(csvText, parseCache);
+            if (matches.length) {
+                const selected = matches[0];
+                const cleanedData = cleanData(selected.data, selected.type);
+                return makeResult(true, null, {
+                    fileType: selected.type,
+                    detectedType: selected.type,
+                    headers: selected.headers,
+                    cleanedData,
+                    rowCount: cleanedData.length,
+                });
+            }
+
+            const initialParse = parseCSV(csvText, "auto", parseCache);
+            if (initialParse.error) {
+                return makeResult(false, initialParse.error);
+            }
+            return makeResult(
+                false,
+                "Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.",
+                {
+                    headers: initialParse.headers,
+                    rowCount: initialParse.data.length,
+                },
+            );
+        }
+
+        const parsed = parseCSV(csvText, fileType, parseCache);
+        if (parsed.error) {
+            if (parsed.error.includes("data row has more fields than the header")) {
+                const alternateType = detectMatchingFileTypes(csvText, parseCache).find(
+                    (match) => match.type !== fileType,
+                )?.type;
+                if (alternateType) {
+                    const missing = CONFIGS[fileType]?.requiredColumns || [];
+                    return makeResult(
+                        false,
+                        buildColumnErrorMessage(fileType, alternateType, missing),
+                        { fileType, detectedType: alternateType },
+                    );
+                }
+            }
+            return makeResult(false, parsed.error);
+        }
+
+        const { headers, data } = parsed;
+        let detectedType = detectFileType(headers);
+        const validation = validateColumns(headers, fileType);
+        if (!validation.valid) {
+            detectedType =
+                detectedType ||
+                detectMatchingFileTypes(csvText, parseCache).find(
+                    (match) => match.type !== fileType,
+                )?.type ||
+                null;
+            return makeResult(
+                false,
+                buildColumnErrorMessage(fileType, detectedType, validation.missing),
+                {
+                    fileType,
+                    detectedType,
+                    headers,
+                    rowCount: data.length,
+                },
+            );
+        }
+
+        const cleanedData = cleanData(data, fileType);
+
+        return makeResult(true, null, {
+            fileType,
+            detectedType,
+            headers,
+            cleanedData,
+            rowCount: cleanedData.length,
+        });
+    }
+
+    return {
+        configs: CONFIGS,
+        process,
+        parseCSV,
+        detectFileType,
+        validateColumns,
+    };
+})();

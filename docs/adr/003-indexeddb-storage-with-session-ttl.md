@@ -11,7 +11,7 @@ The app processes uploads client-side and has no backend to persist state. Users
 
 ## Decision
 
-Persist raw CSV text and the analytics base in IndexedDB (`web/src/storage.js`), with an in-memory fallback that transparently takes over when IndexedDB is missing or errors. A session TTL sweep (`web/src/session.js`, `SESSION_TTL_MS = 24 * 60 * 60 * 1000`, that is 24 hours) runs on startup and clears uploads and cached analytics whose last activity is older than the TTL. Screens wait for the sweep before loading stored data, and a **Clear data** control lets the user purge immediately.
+Persist raw CSV text and the analytics base in IndexedDB (`web/src/platform/persistence/storage.js`), with an in-memory fallback that transparently takes over when IndexedDB is missing or errors. A session TTL sweep (`web/src/platform/persistence/session.js`, `SESSION_TTL_MS = 24 * 60 * 60 * 1000`, that is 24 hours) runs on startup and clears uploads and cached analytics whose last activity is older than the TTL. Screens wait for the sweep before loading stored data, and a **Clear data** control lets the user purge immediately.
 
 ## Consequences
 

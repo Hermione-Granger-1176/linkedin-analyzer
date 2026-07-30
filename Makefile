@@ -174,9 +174,9 @@ check-overrides: ## Check npm overrides are still needed
 
 # ─── Format @format ───────────────────────────────────────────────────────────────────
 
-.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-py-diff format-js-check format-js-diff
+.PHONY: fmt fmt-py fmt-js fmt-css format format-check format-py-check format-py-diff format-js-check format-js-diff align-tables align-tables-check
 
-fmt: fmt-py fmt-js fmt-css ## Auto-fix Python, JavaScript, CSS, and metadata formatting
+fmt: fmt-py fmt-js fmt-css align-tables ## Auto-fix owned code, metadata, and Markdown tables
 
 fmt-py: ## Auto-fix Python with ruff
 	$(VENV_PYTHON) -m ruff check --fix $(PY_PATHS)
@@ -199,7 +199,7 @@ format-py-check: ## Check Python formatting only
 format-py-diff: ## Show Python formatting changes without modifying files [paths=...]
 	$(VENV_PYTHON) -m ruff format --check --diff $(if $(paths),$(paths),$(PY_PATHS))
 
-format-js-check: ## Check Prettier formatting only
+format-js-check: align-tables-check ## Check Prettier formatting and Markdown table alignment
 	$(NPM) run format:check
 
 # Prettier has no --diff, so the formatted result is captured and compared. This
@@ -219,6 +219,12 @@ format-js-diff: ## Show Prettier formatting changes without modifying files (mak
 	$(NPX) prettier --config config/prettierrc.json --ignore-path config/prettierignore \
 		-- "$(path)" > "$$formatted"; \
 	diff -u -- "$(path)" "$$formatted" || test $$? -eq 1
+
+align-tables: ## Align Markdown table pipes [paths="README.md docs/example.md"]
+	$(VENV_PYTHON) -m scripts.lint.align_tables $(if $(paths),$(paths))
+
+align-tables-check: ## Check Markdown table pipe alignment [paths="README.md docs/example.md"]
+	$(VENV_PYTHON) -m scripts.lint.align_tables --check $(if $(paths),$(paths))
 
 # ─── Typecheck @typecheck ────────────────────────────────────────────────────────────────
 
@@ -304,7 +310,7 @@ web-build-size: web-build web-size-check ## Build web and enforce size budgets
 
 web-smoke: ## Smoke-check a deployed web app (make web-smoke url=https://example.com)
 	@test -n "$(url)" || (printf 'Usage: make web-smoke url=https://example.com\n' >&2; exit 1)
-	$(NODE) scripts/web-smoke.mjs "$(url)"
+	$(NODE) scripts/checks/web-smoke.mjs "$(url)"
 
 web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.artifacts/screens)
 	SCREENS_DIR="$(or $(dir),.artifacts/screens)" $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- --project=chromium web/e2e/screenshots.e2e.spec.js
@@ -427,7 +433,7 @@ run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connec
 	$(VENV)/bin/linkedin-analyzer $(args)
 
 gen-parity-corpus: ## Regenerate the synthetic cross-runtime parity corpus fixtures
-	$(NODE) scripts/gen-parity-corpus.mjs
+	$(NODE) scripts/fixtures/gen-parity-corpus.mjs
 
 # Runs on the system interpreter, not the venv one, because the first thing it
 # has to be able to report is that the venv is missing.

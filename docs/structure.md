@@ -1,226 +1,395 @@
 # Project Structure
 
-The tree below highlights the key directories and modules; it is a map, not an exhaustive file index. When in doubt, trust the directory layout over any single file line, and let the tooling configs discover sources from their roots (see CLAUDE.md rule 5).
+This document is a map of the repository. Trees show ownership and relationships directly. Tool configuration continues to discover files from directory roots, so adding a file inside an existing boundary automatically places it under the normal quality gates.
+
+## Repository
 
 ```text
 linkedin-analyzer/
-├── web/                                # Web app (SPA)
-│   ├── index.html                      # SPA shell containing all screens
-│   ├── public/
-│   │   ├── assets/
-│   │   │   ├── icon.svg                # SVG favicon (modern browsers)
-│   │   │   ├── favicon.ico             # ICO favicon (legacy browsers)
-│   │   │   ├── apple-touch-icon.png    # 180px icon (iOS home screen)
-│   │   │   ├── icon-192.png            # 192px icon (Android/PWA)
-│   │   │   └── icon-512.png            # 512px icon (PWA splash/OG cards)
-│   │   ├── fonts/
-│   │   │   ├── PatrickHand-Regular.woff2 # Self-hosted Patrick Hand font
-│   │   │   └── Caveat-Regular.woff2    # Self-hosted Caveat font
-│   │   └── robots.txt                  # Search engine directives
-│   ├── vite.config.js                  # Vite build + generated PWA manifest config
-│   ├── src/
-│   │   ├── css/
-│   │   │   ├── variables.css           # Theme variables + @font-face (light/dark)
-│   │   │   ├── base.css                # Reset, typography, background canvas, theme toggle
-│   │   │   ├── layout.css              # Containers, headers, top nav, buttons
-│   │   │   ├── upload.css              # Drop zone, hub, file selection, preview, download
-│   │   │   ├── filters.css             # Filter chips, selects, active-filter row
-│   │   │   ├── analytics.css           # Stat cards, charts, heatmap
-│   │   │   ├── insights.css            # Insights and messages insights panels
-│   │   │   ├── overlays.css            # Progress overlay and chart tooltip
-│   │   │   ├── responsive.css          # Responsive breakpoints (last of the style.css split)
-│   │   │   ├── screens.css             # Screen transitions + page animation rules
-│   │   │   ├── sketch.css              # Hand-drawn effects
-│   │   │   └── tutorial.css            # Tutorial overlays, popovers, and mini tips
-│   │   ├── constants.js                # Shared cross-module constants
-│   │   ├── dom-events.js               # Delegated DOM event target helpers
-│   │   ├── runtime.js                  # Global error handler
-│   │   ├── sentry.js                   # Sentry error reporting integration
-│   │   ├── telemetry.js                # Web-vitals and perf telemetry
-│   │   ├── telemetry-metrics.js        # Bounded telemetry metric helpers
-│   │   ├── perf.js                     # Shared frame/mark/measure helpers
-│   │   ├── session.js                  # Session management
-│   │   ├── theme.js                    # Theme toggle
-│   │   ├── nav-menu.js                 # Mobile hamburger nav toggle
-│   │   ├── decorations.js              # Background doodles (Rough.js)
-│   │   ├── avatar.js                   # Deterministic contact avatar generation
-│   │   ├── storage.js                  # IndexedDB helpers
-│   │   ├── data-cache.js               # In-memory cache across route switches
-│   │   ├── router.js                   # Hash router + shared query params
-│   │   ├── screen-manager.js           # Screen lifecycle + transitions
-│   │   ├── loading-overlay.js          # Shared loading overlay manager
-│   │   ├── app.js                      # SPA bootstrap wiring
-│   │   ├── upload.js                   # Home/upload logic
-│   │   ├── upload-decode.js            # Byte-decoding and storage-error helpers
-│   │   ├── upload-read.js              # File-to-text reading (streaming + FileReader)
-│   │   ├── upload-jobs.js              # Upload job id resolution helpers
-│   │   ├── upload-state.js             # File-state and hint helpers
-│   │   ├── upload-progress.js          # Sketch-style progress overlay controller
-│   │   ├── cleaner.js                  # CSV cleaning logic
-│   │   ├── cleaner-configs.js          # Per-file-type cleaner configuration
-│   │   ├── csv-parser.js               # Low-level CSV parsing primitives
-│   │   ├── field-cleaners.js           # Field-level cleaning primitives
-│   │   ├── clean.js                    # Clean screen UI logic
-│   │   ├── excel.js                    # Excel generation (write-excel-file)
-│   │   ├── analytics.js                # Analytics engine (compute + buildView)
-│   │   ├── analytics-constants.js      # Shared day/month label constants
-│   │   ├── analytics-text.js           # Text normalization and topic extraction
-│   │   ├── analytics-dates.js          # Date parsing and calendar math
-│   │   ├── analytics-stats.js          # Numeric helpers (pearson, average)
-│   │   ├── analytics-insights.js       # Narrative insight-card generation
-│   │   ├── analytics-worker.js         # Worker for analytics aggregates/views
-│   │   ├── analytics-ui.js             # Analytics screen controller
-│   │   ├── connections-worker.js       # Worker for connections network analytics
-│   │   ├── connections-ui.js           # Connections screen controller
-│   │   ├── messages-worker.js          # Worker for messages/connections parsing
-│   │   ├── messages-analytics.js       # Messages analytics computations
-│   │   ├── messages-format.js          # Formatting, range, and signature helpers
-│   │   ├── messages-relationships.js   # Top/silent/fading relationship queries
-│   │   ├── messages-parse.js           # Messages worker transport + main-thread fallback
-│   │   ├── messages-hydrate.js         # Rebuilds Map/Set state from worker payloads
-│   │   ├── messages-list-dom.js        # Message list row builders
-│   │   ├── messages-insights.js        # Messages screen controller
-│   │   ├── insights-ui.js              # Insights screen controller
-│   │   ├── tutorial-steps.js           # Per-route tutorial and mini-tip definitions
-│   │   ├── tutorial-geometry.js        # Geometry and math helpers for the overlay
-│   │   ├── tutorial-shell.js           # Builds the tutorial overlay DOM shell
-│   │   ├── tutorial-targets.js         # Step target resolution and visibility checks
-│   │   ├── tutorial-arrows.js          # Hand-drawn pointer arrow variants
-│   │   ├── tutorial-pacing.js          # Engagement-aware mini-tip pacing math
-│   │   ├── tutorial-storage.js         # Tutorial storage keys and safe localStorage
-│   │   ├── tutorial.js                 # Tutorial engine
-│   │   ├── charts.js                   # Canvas chart rendering (incl. PNG export)
-│   │   ├── worker-contracts.js         # Shared worker message contracts
-│   │   ├── ui/                         # Reusable UI modules (e.g. chart-tooltip.js)
-│   │   └── sw.js                       # Service Worker for PWA offline caching
-│   ├── tests/                          # Vitest unit tests
-│   └── e2e/                            # Playwright browser tests
-│
-├── src/linkedin_analyzer/              # Python package
-│   ├── __init__.py                     # Package exports
-│   ├── cli.py                          # argparse CLI
-│   ├── py.typed                        # PEP 561 marker
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── types.py                    # Type definitions
-│   │   ├── text.py                     # Text cleaning utilities
-│   │   ├── excel.py                    # Excel formatting
-│   │   ├── cleaner.py                  # Base cleaner
-│   │   ├── paths.py                    # Default paths
-│   │   └── limits.py                   # Resource limit constants
-│   └── cleaners/
-│       ├── __init__.py
-│       ├── shares.py                   # Shares CSV cleaner
-│       ├── comments.py                 # Comments CSV cleaner
-│       ├── messages.py                 # Messages CSV cleaner
-│       └── connections.py              # Connections CSV cleaner
-│
-├── tests/                              # Python tests
-├── docs/                               # Documentation
-│   └── adr/                            # Architecture Decision Records
-├── config/                             # Tooling config moved out of repo root
-│   ├── eslint.config.mjs               # ESLint flat config
-│   ├── jsconfig.json                   # Web JavaScript type-check config
-│   ├── knip.json                       # JavaScript dead-code config
-│   ├── playwright.config.js            # Playwright browser test config
-│   ├── prettierignore                  # Prettier ignore rules
-│   ├── prettierrc.json                 # Prettier formatting rules
-│   ├── security_audit.json             # Reviewed dependency vulnerability exceptions
-│   └── stylelint.config.mjs            # stylelint CSS rules
-├── scripts/
-│   ├── check-overrides.mjs             # Validates npm overrides are still needed
-│   ├── checks/                         # Local cleaner-diff, benchmark, and export-exploration tools (need data/input)
-│   ├── ci/                             # Local CI parallel-runner and GitHub Actions workflow helpers
-│   ├── gen-parity-corpus.mjs           # Regenerates synthetic cross-runtime parity fixtures
-│   ├── gh/                             # GitHub PR/CI helper (auto-detect repo/PR, GraphQL, CI triage)
-│   ├── lib/                            # Shared dependency-free Python tooling helpers
-│   ├── lint/                           # EditorConfig, documentation, and Make-target lint helpers
-│   ├── setup/                          # Safe environment and local browser runtime setup
-│   └── web-smoke.mjs                   # Post-deploy HTTP smoke check (shell + headers + CSP endpoint)
-├── data/                               # Local workspace; contents gitignored (only .gitkeep placeholders are tracked)
-│   ├── input/                          # Place CSVs here
-│   └── output/                         # Generated Excel files
-│
 ├── api/                                # Vercel serverless functions
 │   └── csp-report.mjs                  # CSP violation report collector
-├── .github/                            # GitHub metadata, workflows, and community docs
-│   ├── CONTRIBUTING.md                 # Contributor guide shown by GitHub
-│   ├── SECURITY.md                     # Coordinated disclosure policy
-│   ├── actions/                        # Composite actions (ci-setup, verified-commit)
-│   └── workflows/                      # CI, audit, publish, and maintenance workflows
-├── Dockerfile                          # CLI container image (multi-stage, non-root)
-├── vercel.json                         # Vercel config
-├── .editorconfig                       # Editor rules enforced by make editorconfig-check
-├── .yamllint.yml                       # yamllint rules
-├── .pre-commit-config.yaml             # Local pre-commit hooks
-├── Makefile                            # Local and CI command entrypoints
-├── package.json                        # NPM config
-├── pyproject.toml                      # Python config
-├── uv.lock                             # Locked Python dependency resolution
+├── config/                             # JavaScript and repository tool configuration
+│   ├── eslint.config.mjs
+│   ├── jsconfig.json
+│   ├── knip.json
+│   ├── playwright.config.js
+│   ├── prettierignore
+│   ├── prettierrc.json
+│   ├── security_audit.json
+│   └── stylelint.config.mjs
+├── constraints/
+│   └── container-build                 # Container-only Python constraints
+├── data/                               # Ignored local workspace
+│   ├── input/                          # LinkedIn CSV exports
+│   └── output/                         # Generated workbooks
+├── docs/                               # User and developer documentation
+│   ├── adr/                            # Architecture decision records
+│   ├── cli.md
+│   ├── development.md
+│   ├── operations.md
+│   ├── structure.md
+│   ├── style-guide.md
+│   └── web-app.md
+├── scripts/                            # Tested repository automation
+├── src/
+│   └── linkedin_analyzer/              # Published Python package
+├── tests/                              # Python package, integration, and tooling tests
+├── web/                                # Vite single-page application
+├── .github/                            # GitHub metadata, actions, and workflows
 ├── CHANGELOG.md                        # Python package changelog
-├── LICENSE                             # MIT license
-└── README.md
+├── CLAUDE.md                           # Shared repository agent guidance
+├── AGENTS.md                           # Symlink to CLAUDE.md
+├── Dockerfile                          # Python CLI container image
+├── LICENSE
+├── Makefile                            # Only command interface for the repository
+├── README.md
+├── package.json                        # Node dependencies and script definitions
+├── package-lock.json                   # Frozen Node dependency resolution
+├── pyproject.toml                      # Python build and quality configuration
+├── uv.lock                             # Frozen Python dependency resolution
+└── vercel.json                         # Vercel deployment configuration
 ```
 
-## Key Files
+The root intentionally retains files that package managers, deployment platforms, and contributors expect to find there. Moving those conventional entry points into another directory would reduce visible root files but increase operational surprise.
 
-### Web App Core
+## Web Application
 
-| File                         | Purpose                                                        |
-| ---------------------------- | -------------------------------------------------------------- |
-| `web/src/router.js`          | Hash route parsing, URL query params, shared param propagation |
-| `web/src/screen-manager.js`  | Screen transitions and controller lifecycle                    |
-| `web/src/app.js`             | Route registration and bootstrapping                           |
-| `web/src/loading-overlay.js` | Global content loading overlay + blur handling                 |
-| `web/src/data-cache.js`      | In-memory cache and cache notifications                        |
-| `web/src/session.js`         | Session TTL cleanup on startup                                 |
+The browser application uses feature-first ownership. Application composition, browser infrastructure, reusable modules, styles, and user-facing features have separate boundaries.
 
-### Assets & Meta
+```text
+web/
+├── e2e/                                # Playwright browser tests
+│   ├── fixtures/
+│   ├── app.e2e.spec.js
+│   ├── browser-xlsx.e2e.spec.js
+│   └── screenshots.e2e.spec.js
+├── public/
+│   ├── assets/                         # Icons and application images
+│   ├── fonts/                          # Self-hosted fonts
+│   └── robots.txt
+├── src/
+│   ├── app/                            # Application composition primitives
+│   │   ├── router.js                   # Hash routes and shared query parameters
+│   │   ├── runtime.js                  # Global runtime and service worker setup
+│   │   ├── screen-manager.js           # Screen lifecycle and transitions
+│   │   └── worker-contracts.js         # Shared worker message contracts
+│   ├── features/                       # User-facing capabilities
+│   │   ├── analytics/
+│   │   ├── cleaning/
+│   │   ├── connections/
+│   │   ├── insights/
+│   │   ├── messages/
+│   │   ├── tutorial/
+│   │   └── upload/
+│   ├── platform/                       # Browser and operational infrastructure
+│   │   ├── observability/
+│   │   └── persistence/
+│   ├── shared/                         # Reused application primitives
+│   │   └── ui/
+│   ├── styles/                         # Styles grouped by responsibility
+│   │   ├── components/
+│   │   ├── features/
+│   │   └── foundations/
+│   ├── app.js                          # SPA bootstrap and route registration
+│   └── sw.js                           # PWA source kept here for VitePWA
+├── tests/                              # Vitest tests mirroring source ownership
+│   ├── app/
+│   ├── features/
+│   ├── helpers/
+│   ├── integration/
+│   ├── platform/
+│   └── shared/
+├── index.html                          # SPA document and screen markup
+├── vite.config.js                      # Vite and PWA build configuration
+└── vitest.config.js                    # Vitest and coverage configuration
+```
 
-| File                                     | Purpose                                              |
-| ---------------------------------------- | ---------------------------------------------------- |
-| `web/public/assets/icon.svg`             | SVG favicon served to modern browsers                |
-| `web/public/assets/favicon.ico`          | 32px ICO fallback for legacy browsers                |
-| `web/public/assets/apple-touch-icon.png` | 180px PNG for iOS home screen bookmark               |
-| `web/public/assets/icon-192.png`         | 192px PNG for Android and PWA icon                   |
-| `web/public/assets/icon-512.png`         | 512px PNG for PWA splash screen and OG cards         |
-| `web/vite.config.js`                     | Build config and source for generated PWA metadata   |
-| `web/public/robots.txt`                  | Allows all crawlers                                  |
-| `web/index.html` `<head>`                | OG, Twitter Card, theme-color, and favicon link tags |
+### Application Composition
 
-### Processing
+```text
+web/src/
+├── app.js
+└── app/
+    ├── router.js
+    ├── runtime.js
+    ├── screen-manager.js
+    └── worker-contracts.js
+```
 
-| File                            | Purpose                                               |
-| ------------------------------- | ----------------------------------------------------- |
-| `web/src/cleaner.js`            | CSV parsing/cleaning logic used by web workers and UI |
-| `web/src/analytics-worker.js`   | Builds analytics views off main thread                |
-| `web/src/connections-worker.js` | Parses connections and computes network analytics     |
-| `web/src/messages-worker.js`    | Parses messages/connections off main thread           |
-| `web/src/messages-analytics.js` | Shared messages analytics helpers for UI + worker     |
-| `web/src/excel.js`              | `.xlsx` generation and download helpers               |
+`app.js` wires the application together. Modules under `app/` define cross-feature composition and lifecycle behavior. Feature implementation does not belong in this boundary.
+
+### Features
+
+```text
+web/src/features/
+├── analytics/
+│   ├── analytics-worker.js             # Aggregate and view computation worker
+│   ├── analytics.js                    # Analytics engine
+│   ├── constants.js                    # Calendar labels and analytics constants
+│   ├── dates.js                        # Date parsing and calendar calculations
+│   ├── insights.js                     # Narrative insight generation
+│   ├── screen.js                       # Analytics screen controller
+│   ├── stats.js                        # Numeric helpers
+│   └── text.js                         # Topic and text normalization
+├── cleaning/
+│   ├── cleaner.js                      # Browser cleaner facade
+│   ├── configs.js                      # Per-export cleaner configuration
+│   ├── csv-parser.js                   # Bounded CSV parser
+│   ├── excel.js                        # Workbook generation and download
+│   ├── field-cleaners.js               # Field-level normalization
+│   └── screen.js                       # Clean screen controller
+├── connections/
+│   ├── connections-worker.js           # Network analytics worker
+│   └── screen.js                       # Connections screen controller
+├── insights/
+│   └── screen.js                       # Cross-export insights controller
+├── messages/
+│   ├── analytics.js                    # Message analytics
+│   ├── format.js                       # Formatting and range helpers
+│   ├── hydrate.js                      # Map and Set state hydration
+│   ├── list-dom.js                     # Message list row builders
+│   ├── messages-worker.js              # Message parsing worker
+│   ├── parse.js                        # Worker transport and fallback
+│   ├── relationships.js                # Relationship queries
+│   └── screen.js                       # Messages screen controller
+├── tutorial/
+│   ├── arrows.js                       # Pointer arrow variants
+│   ├── geometry.js                     # Overlay geometry
+│   ├── pacing.js                       # Mini-tip pacing
+│   ├── shell.js                        # Overlay DOM shell
+│   ├── steps.js                        # Route tutorial definitions
+│   ├── storage.js                      # Tutorial persistence
+│   ├── targets.js                      # Target resolution
+│   └── tutorial.js                     # Tutorial engine
+└── upload/
+    ├── decode.js                       # Byte decoding
+    ├── jobs.js                         # Upload job identity
+    ├── progress.js                     # Progress overlay controller
+    ├── read.js                         # Streaming and FileReader input
+    ├── state.js                        # File state and hints
+    └── upload.js                       # Upload screen controller
+```
+
+Each feature owns its screen, domain logic, and worker when applicable. A module moves to `shared/` only after multiple features genuinely depend on it.
+
+### Platform
+
+```text
+web/src/platform/
+├── observability/
+│   ├── metrics.js                      # Bounded telemetry metric helpers
+│   ├── perf.js                         # Frame, mark, and measure helpers
+│   ├── sentry.js                       # Opt-in error reporting
+│   └── telemetry.js                    # Web vitals and performance telemetry
+└── persistence/
+    ├── data-cache.js                   # In-memory route cache
+    ├── session.js                      # Session lifetime management
+    └── storage.js                      # IndexedDB with memory fallback
+```
+
+Platform modules integrate with browser capabilities or operational services. They do not implement one user-facing feature.
+
+### Shared Modules
+
+```text
+web/src/shared/
+├── constants.js                        # Dependency-free cross-feature constants
+├── dom-events.js                       # Delegated event target helpers
+└── ui/
+    ├── avatar.js                       # Deterministic contact avatars
+    ├── chart-tooltip.js                # Shared chart tooltip
+    ├── charts.js                       # Canvas chart rendering and export
+    ├── decorations.js                  # Rough.js background decorations
+    ├── loading-overlay.js              # Shared loading overlay
+    ├── nav-menu.js                     # Mobile navigation
+    └── theme.js                        # Theme selection
+```
+
+`shared/` is not a general utility bucket. Modules remain with their owning feature until reuse is concrete.
+
+### Styles
+
+```text
+web/src/styles/
+├── components/
+│   └── overlays.css
+├── features/
+│   ├── analytics.css
+│   ├── filters.css
+│   ├── insights.css
+│   ├── tutorial.css
+│   └── upload.css
+├── foundations/
+│   ├── base.css
+│   ├── layout.css
+│   └── variables.css
+├── responsive.css
+├── screens.css
+└── sketch.css
+```
+
+Foundation styles load first. Feature and component styles build on those foundations. Cross-cutting responsive and visual treatment files load last.
+
+### Web Tests
+
+```text
+web/tests/
+├── app/                                # app/ and app.js behavior
+├── features/
+│   ├── analytics/
+│   ├── cleaning/
+│   ├── connections/
+│   ├── insights/
+│   ├── messages/
+│   ├── tutorial/
+│   └── upload/
+├── helpers/                            # Test-only DOM support
+├── integration/
+│   ├── cleaner-diff.test.js
+│   ├── csp-report.test.js
+│   ├── parity.test.js
+│   ├── verified-commit.test.js
+│   └── web-smoke.test.js
+├── platform/
+│   ├── observability/
+│   ├── persistence/
+│   └── pwa/
+└── shared/
+    └── ui/
+```
+
+Unit tests mirror the source boundary they verify. Integration tests cross application, runtime, or repository boundaries.
+
+## Python Package
+
+The Python package remains intentionally compact. Its existing package boundaries are already proportional to its size.
+
+```text
+src/linkedin_analyzer/
+├── cleaners/
+│   ├── __init__.py
+│   ├── comments.py                      # Comments export cleaner
+│   ├── connections.py                  # Connections export cleaner
+│   ├── messages.py                     # Messages export cleaner
+│   └── shares.py                       # Shares export cleaner
+├── core/
+│   ├── __init__.py
+│   ├── cleaner.py                      # Shared cleaner pipeline
+│   ├── excel.py                        # Workbook formatting
+│   ├── limits.py                       # Resource limits
+│   ├── paths.py                        # Default input and output paths
+│   ├── text.py                         # Text and date normalization
+│   └── types.py                        # Cleaner configuration and results
+├── __init__.py                         # Package exports and version
+├── cli.py                              # argparse command dispatch
+└── py.typed                            # PEP 561 marker
+```
+
+Adding more Python package layers now would create navigation overhead without clarifying an existing ownership problem.
+
+## Python Tests
+
+Python tests distinguish published package behavior, cross-surface integration, reusable support, and repository tooling.
+
+```text
+tests/
+├── fixtures/                           # Shared cleaner and parity fixtures
+├── integration/
+│   ├── test_package.py
+│   └── test_web_parity.py
+├── package/
+│   ├── cleaners/
+│   │   ├── test_connections.py
+│   │   └── test_messages.py
+│   ├── core/
+│   │   ├── test_excel.py
+│   │   ├── test_paths.py
+│   │   ├── test_text.py
+│   │   └── test_types.py
+│   ├── test_cleaner.py
+│   └── test_cli.py
+├── support/
+│   └── gh.py                           # Shared GitHub test doubles
+└── tooling/
+    ├── checks/                         # Tests for scripts/checks
+    ├── ci/                             # Tests for scripts/ci
+    ├── gh/                             # Tests for scripts/gh
+    ├── lib/                            # Tests for scripts/lib
+    ├── lint/                           # Tests for scripts/lint and Makefile policy
+    └── setup/                          # Tests for scripts/setup
+```
+
+The nested Python test directories are packages. Their `__init__.py` files give duplicate test basenames unambiguous import names.
+
+## Repository Scripts
+
+```text
+scripts/
+├── checks/
+│   ├── audit_memory_python.py
+│   ├── check-overrides.mjs
+│   ├── cleaner-diff.mjs
+│   ├── heap-audit.mjs
+│   ├── li_explore.py
+│   ├── perf-bench.mjs
+│   ├── pipeline-bench.mjs
+│   ├── validate_browser_xlsx.py
+│   ├── web-smoke.mjs
+│   └── xrt-diff.py
+├── ci/
+│   ├── coverage_summary.py
+│   ├── issue_alerts.py
+│   ├── refresh_action_shas.py
+│   ├── repo_audit.py
+│   ├── run_npm_audit.py
+│   ├── run_parallel_checks.py
+│   ├── run_security_audit.py
+│   ├── schedule_watchdog.py
+│   ├── security_audit_policy.py
+│   └── workflow_helpers.py
+├── fixtures/
+│   └── gen-parity-corpus.mjs
+├── gh/
+│   ├── ci_status.py
+│   ├── cli.py
+│   ├── commit_message.py
+│   ├── gh_runner.py
+│   ├── issues.py
+│   ├── pr_review.py
+│   └── pr_watch.py
+├── lib/
+│   ├── gh_policy.py
+│   ├── stage_files.py
+│   └── workspace_status.py
+├── lint/
+│   ├── align_tables.py
+│   ├── check_doc_commands.py
+│   ├── check_editorconfig.py
+│   ├── check_make_targets.py
+│   ├── lint-workflows.mjs
+│   └── make_targets.py
+└── setup/
+    ├── clean_venv.py
+    └── playwright_local_runtime.py
+```
+
+Every script is invoked through a documented Make target. Direct script paths exist for implementation and testing, not as a second user interface.
+
+## Data Flow
+
+### Web
+
+1. `features/upload/` reads and decodes selected CSV files.
+2. `features/cleaning/` validates, cleans, and exports those files.
+3. `platform/persistence/` stores raw input and prepared analytics locally.
+4. Feature workers prepare analytics away from the main thread.
+5. Feature screen controllers read through persistence and shared UI modules.
+6. `app/router.js` and `app/screen-manager.js` coordinate route changes.
 
 ### Python CLI
 
-| File | Purpose |
-| --- | --- |
-| `src/linkedin_analyzer/cli.py` | Commands: `shares`, `comments`, `messages`, `connections`, `all` |
-| `src/linkedin_analyzer/core/text.py` | Quote/date/value normalization rules |
-| `src/linkedin_analyzer/core/excel.py` | Excel formatting with `openpyxl` |
-
-## Data Flow (Web)
-
-1. User uploads CSV files on `#home`.
-2. Raw CSV text is stored via `storage.js` in IndexedDB for restore when available, with an in-memory fallback otherwise.
-3. On startup, a non-blocking TTL sweep clears stale session data while caches hydrate. Screens wait for cleanup to finish before loading stored data.
-4. Analytics and Insights aggregates are prepared in `analytics-worker.js` after fresh uploads; restored dashboards read persisted analytics directly. Connections analytics runs in `connections-worker.js`.
-5. Screen controllers load cached/persisted data through `data-cache.js` and `storage.js`.
-6. Route changes swap screens without full page reload.
-7. URL query params (for example `range`) are used to restore filter state.
-
-## Data Flow (CLI)
-
-1. User runs a CLI command (for example `linkedin-analyzer messages`).
-2. `cli.py` parses args and dispatches cleaner functions.
-3. Cleaner modules read CSV with pandas.
-4. Shared text/date cleaning rules are applied.
-5. Formatted `.xlsx` output is written to configured path.
+1. `cli.py` parses the command and selects a cleaner.
+2. `cleaners/` provides export-specific configuration.
+3. `core/cleaner.py` runs the shared pipeline.
+4. `core/text.py` applies normalization.
+5. `core/excel.py` formats the generated workbook.

@@ -68,6 +68,7 @@
 - Update docs whenever behavior, flags, or outputs change.
 - Keep docs short; link to deeper references when needed.
 - Use consistent terminology across web and CLI docs.
+- Align Markdown table pipes with `make align-tables`.
 
 ## Refactoring Philosophy
 

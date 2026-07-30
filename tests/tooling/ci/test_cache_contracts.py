@@ -97,7 +97,9 @@ def test_specialized_workflows_share_setup_or_intentionally_skip_dependency_cach
     assert "cache: pip" not in AUDIT_WORKFLOW
     assert "actions/cache@" not in AUDIT_WORKFLOW
 
-    assert "astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b" in (REFRESH_WORKFLOW)
+    assert (
+        len(re.findall(r"astral-sh/setup-uv@[0-9a-f]{40} # v\d+\.\d+\.\d+", REFRESH_WORKFLOW)) == 1
+    )
     assert "enable-cache: false" in REFRESH_WORKFLOW
     assert "actions/cache@" not in REFRESH_WORKFLOW
     assert "python -m pip install" not in REFRESH_WORKFLOW

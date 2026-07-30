@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import tomllib
 from pathlib import Path
 
@@ -66,21 +68,26 @@ def test_python_sync_refreshes_revision_derived_editable_metadata() -> None:
     assert sync_block.index("make install") < sync_block.index('if [ "$VENV_CACHE_HIT"')
 
 
-def test_playwright_cache_uses_the_installed_package_and_exact_engines() -> None:
-    """Reuse browsers only across compatible Playwright installations."""
-    assert "playwright-engines: chromium-firefox-webkit" in CI_WORKFLOW
-    assert CI_WORKFLOW.count("- name: Cache Playwright browsers") == 0
-    assert "playwright-engines requires node-version and install-node-deps=true" in CI_SETUP
-    assert (
-        "playwright-${{ runner.os }}-${{ runner.arch }}"
-        "-${{ steps.playwright-version.outputs.version }}"
-        "-${{ inputs.playwright-engines }}"
-    ) in CI_SETUP
-    browser_block = CI_SETUP.split("- name: Cache Playwright browsers", maxsplit=1)[1].split(
-        "- name:", maxsplit=1
-    )[0]
-    assert "restore-keys" not in browser_block
-    assert 'engines="$PLAYWRIGHT_ENGINES" with_deps=1' in CI_SETUP
+def test_e2e_uses_an_immutable_version_matched_playwright_container() -> None:
+    """Run browsers from the exact project-compatible image without host installation."""
+    package_lock = json.loads((REPO_ROOT / "package-lock.json").read_text(encoding="utf-8"))
+    package_version = package_lock["packages"]["node_modules/@playwright/test"]["version"]
+    image_match = re.search(
+        r"image: mcr\.microsoft\.com/playwright:v(?P<version>[^-]+)-noble"
+        r"@sha256:(?P<digest>[0-9a-f]{64})",
+        CI_WORKFLOW,
+    )
+
+    assert image_match is not None
+    assert image_match.group("version") == package_version
+    assert image_match.group("digest") == (
+        "baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07"
+    )
+    assert "options: --user 1001" in CI_WORKFLOW
+    assert "playwright-engines" not in CI_SETUP
+    assert "Cache Playwright browsers" not in CI_SETUP
+    assert "Install Playwright browsers" not in CI_SETUP
+    assert "playwright install" not in CI_SETUP
 
 
 def test_specialized_workflows_share_setup_or_intentionally_skip_dependency_caches() -> None:

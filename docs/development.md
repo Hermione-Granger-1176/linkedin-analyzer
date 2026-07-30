@@ -99,7 +99,7 @@ make playwright-local-gate
 # Run browser E2E tests through the prepared private runtime
 make test-e2e local_libs=1
 
-# CI-only setup that may install Playwright system packages through --with-deps
+# Fallback setup for a non-container ephemeral CI runner
 make setup-ci
 
 # Capture screens at mobile/tablet/desktop viewports (writes to .artifacts/screens by default)
@@ -194,7 +194,7 @@ Browser-running Make targets accept `local_libs=1`, including `test-e2e`, `test-
 
 `make playwright-local-clean` and `make clean` both remove only this repository's `.playwright/` cache (the extracted libraries and per-run scratch). Neither touches the shared browser cache, since other projects depend on it; manage shared browsers with Playwright's own tooling.
 
-Reserve `make setup-ci` for CI and ephemeral runners. It retains Playwright's `--with-deps` mode, which may install operating-system packages on the disposable runner.
+Reserve `make setup-ci` for a non-container ephemeral CI runner. GitHub-hosted E2E runs use the digest-pinned official Playwright container instead, so they do not call APT or install browser binaries during the job. The fallback target retains Playwright's `--with-deps` mode for other disposable runners.
 
 ## Python CLI
 

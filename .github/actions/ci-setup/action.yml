@@ -18,23 +18,10 @@ inputs:
     description: Whether to restore Node package dependencies.
     required: false
     default: "true"
-  playwright-engines:
-    description: Hyphen-separated Playwright engines to install, or empty to skip browsers.
-    required: false
-    default: ""
 
 runs:
   using: composite
   steps:
-    - name: Validate Playwright setup inputs
-      if: >-
-        inputs.playwright-engines != ''
-        && (inputs.node-version == '' || inputs.install-node-deps != 'true')
-      shell: bash
-      run: |
-        echo "playwright-engines requires node-version and install-node-deps=true." >&2
-        exit 1
-
     - name: Set up Python
       id: setup-python
       if: inputs.python-version != ''
@@ -124,24 +111,3 @@ runs:
         && steps.node-modules-cache.outputs.cache-hit != 'true'
       shell: bash
       run: make node-install
-
-    - name: Resolve Playwright version
-      id: playwright-version
-      if: inputs.playwright-engines != ''
-      shell: bash
-      run: echo "version=$(make --no-print-directory playwright-version)" >> "$GITHUB_OUTPUT"
-
-    - name: Cache Playwright browsers
-      id: playwright-cache
-      if: inputs.playwright-engines != ''
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}-${{ inputs.playwright-engines }}
-
-    - name: Install Playwright browsers
-      if: inputs.playwright-engines != ''
-      shell: bash
-      env:
-        PLAYWRIGHT_ENGINES: ${{ inputs.playwright-engines }}
-      run: make setup-playwright-engines engines="$PLAYWRIGHT_ENGINES" with_deps=1

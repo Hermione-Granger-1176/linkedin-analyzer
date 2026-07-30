@@ -87,7 +87,7 @@ and a title from the environment (TITLE='...' make <target>))))
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
-.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci ci-prune-uv-cache playwright-version setup-playwright setup-playwright-engines setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
+.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci ci-prune-uv-cache setup-playwright setup-playwright-engines setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
 
 install: ## Install locked Python deps into the uv-managed virtual environment
 	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-groups --frozen --python $(PYTHON)
@@ -108,9 +108,6 @@ setup-ci: setup-base setup-playwright-ci ## CI-only setup with Playwright browse
 
 ci-prune-uv-cache: ## Remove uv cache entries that are inefficient to persist in CI
 	$(UV) cache prune --ci
-
-playwright-version: ## Print the installed Playwright package version
-	@$(NODE) -p "require('./node_modules/@playwright/test/package.json').version"
 
 setup-playwright: ## Install Playwright browsers locally, no system deps or sudo
 	$(NPX) playwright install $(PLAYWRIGHT_BROWSERS)

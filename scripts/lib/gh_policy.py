@@ -14,8 +14,6 @@ import re
 from collections.abc import Callable
 from typing import Literal
 
-# Plain aliases rather than PEP 695 ``type`` statements: this repository's floor
-# is Python 3.11 (see ``requires-python`` in pyproject.toml).
 GhFailureKind = Literal["rate_limit", "transient", "forbidden", "fatal"]
 RandomFunction = Callable[[], float]
 

@@ -623,7 +623,7 @@ pr-comments: ## Show all comments on the current PR
 	gh pr view --comments
 
 # Comment and reply text is prose: it carries newlines, quotes, backticks, and
-# version constraints like >=3.11. `--body-file -` hands stdin to the helper
+# version constraints like >=3.12. `--body-file -` hands stdin to the helper
 # untouched, so none of that is ever shell source text, the body never reaches
 # disk, and the recipe is the one command it looks like.
 pr-comment: ## Add a comment to the current PR, body on stdin (make pr-comment < notes.md) [pr_num=N]

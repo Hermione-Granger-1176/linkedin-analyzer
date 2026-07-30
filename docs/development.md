@@ -2,11 +2,11 @@
 
 ## Prerequisites
 
-- Python 3.14 (default; 3.11+ supported, see [Using an older Python version](#using-an-older-python-version)). The Docker runtime and primary CI gate use 3.14.
+- Python 3.14 (default; 3.12+ supported, see [Using an older Python version](#using-an-older-python-version)). The Docker runtime and primary CI gate use 3.14.
 - Node.js 22.13.x or 24+
 - [uv](https://docs.astral.sh/uv/)
 
-The project supports Python 3.11-3.14. Python 3.14 is the default for local development, the container image, and the primary CI quality gate. Python 3.11-3.13 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against Python 3.11, 3.12, or 3.13.
+The project supports Python 3.12-3.14. Python 3.14 is the default for local development, the container image, and the primary CI quality gate. Python 3.12-3.14 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against Python 3.12 or 3.13.
 
 ## Initial setup
 
@@ -72,7 +72,7 @@ make clean-venv && make install
 
 `make clean-venv` fails closed unless `VENV` names a real, non-symlinked directory directly below the repository root. This prevents an inherited or mistyped `VENV` value from redirecting recursive deletion elsewhere.
 
-You can also point `PYTHON` at an explicit interpreter name on your `PATH` (for example `make install PYTHON=python3.11`). The lockfile (`uv.lock`) is universal and resolves across Python 3.11-3.14, so no lock changes are needed to switch versions. Type checking (`mypy`) and linting (`ruff`) always target the Python 3.11 floor regardless of the interpreter you run, so newer-only syntax is caught early.
+You can also point `PYTHON` at an explicit interpreter name on your `PATH` (for example `make install PYTHON=python3.12`). The lockfile (`uv.lock`) is universal and resolves across Python 3.12-3.14, so no lock changes are needed to switch versions. Type checking (`mypy`) and linting (`ruff`) always target the Python 3.12 floor regardless of the interpreter you run, so newer-only syntax is caught early.
 
 ## Web App
 
@@ -281,7 +281,7 @@ A heredoc is the everyday form, since it needs no file on disk:
 
 ```bash
 make pr-address thread=PRRT_... <<'EOF'
-Anything at all: quotes, $(shell date), backticks, >=3.11, blank lines.
+Anything at all: quotes, $(shell date), backticks, >=3.12, blank lines.
 EOF
 ```
 
@@ -330,7 +330,7 @@ GitHub Actions runs on pull requests and pushes to `main`:
 
 - **Quick gates**: formatting, lint, and type checks run first through `make ci-quick-gates`
 - **Heavy checks**: tests, dead-code checks, and the production build run through `make ci-heavy-checks` after quick gates pass
-- **Compatibility**: Python 3.11/3.12/3.13 and Node.js 22/24 matrix jobs start after quick gates (the primary gates use Python 3.14)
+- **Compatibility**: Python 3.12/3.13/3.14 and Node.js 22/24 matrix jobs start after quick gates (the primary gates use Python 3.14)
 - **Browser checks**: Playwright E2E starts after quick gates, runs with four workers, and uploads failure artifacts
 - **Result**: one stable `CI result` job aggregates every required job for branch protection
 

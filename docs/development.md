@@ -331,7 +331,7 @@ GitHub Actions runs on pull requests and pushes to `main`:
 - **Quick gates**: formatting, lint, and type checks run first through `make ci-quick-gates`
 - **Heavy checks**: tests, dead-code checks, and the production build run through `make ci-heavy-checks` after quick gates pass
 - **Compatibility**: Python 3.11/3.12/3.13 and Node.js 22/24 matrix jobs start after quick gates (the primary gates use Python 3.14)
-- **Browser checks**: Playwright E2E starts after quick gates and uploads failure artifacts
+- **Browser checks**: Playwright E2E starts after quick gates, runs with four workers, and uploads failure artifacts
 - **Result**: one stable `CI result` job aggregates every required job for branch protection
 
 Run the primary non-browser workflow locally with `make ci-platform-checks`. It runs the quick and heavy gates in the same order as GitHub Actions.

@@ -192,7 +192,7 @@ Recommended production setup:
 ## Browser Compatibility
 
 - Vite production builds target `es2022`
-- Playwright E2E coverage currently runs on Chromium, Firefox, and WebKit
+- Playwright E2E coverage currently runs on Chromium, Firefox, and WebKit with four workers
 - Hash routing (`#...`) avoids server-side rewrite requirements
 
 ## Icons and Meta

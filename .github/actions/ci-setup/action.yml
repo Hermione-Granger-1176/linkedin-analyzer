@@ -1,79 +1,147 @@
 name: CI setup
-description: Set up Python, Node.js, and workspace dependencies.
+description: Set up exact toolchains and restore strictly keyed workspace dependencies.
 
 inputs:
   python-version:
     description: Python version to install. Leave empty to skip Python setup.
     required: false
     default: "3.14"
-  python-cache-dependency-path:
-    description: File path used to key the Python package-manager caches.
-    required: false
-    default: uv.lock
   node-version:
     description: Node.js version to install. Leave empty to skip Node setup.
     required: false
     default: "22"
-  npm-cache-dependency-path:
-    description: File path used to key the npm cache.
-    required: false
-    default: package-lock.json
   install-python-deps:
-    description: Whether to install Python package dependencies.
+    description: Whether to restore and synchronize Python package dependencies.
     required: false
     default: "true"
   install-node-deps:
-    description: Whether to install Node package dependencies.
+    description: Whether to restore Node package dependencies.
     required: false
     default: "true"
-  install-playwright:
-    description: Whether to install Playwright browsers and OS dependencies.
+  playwright-engines:
+    description: Hyphen-separated Playwright engines to install, or empty to skip browsers.
     required: false
-    default: "false"
+    default: ""
 
 runs:
   using: composite
   steps:
+    - name: Validate Playwright setup inputs
+      if: >-
+        inputs.playwright-engines != ''
+        && (inputs.node-version == '' || inputs.install-node-deps != 'true')
+      shell: bash
+      run: |
+        echo "playwright-engines requires node-version and install-node-deps=true." >&2
+        exit 1
+
     - name: Set up Python
+      id: setup-python
       if: inputs.python-version != ''
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: ${{ inputs.python-version }}
-        cache: pip
-        cache-dependency-path: ${{ inputs.python-cache-dependency-path }}
+
+    # setup-uv reads tool.uv.required-version from pyproject.toml. Its built-in
+    # dependency cache stays off because the conditional cache below is restored
+    # only when a .venv miss means dependency archives may be consumed.
+    - name: Set up uv
+      if: inputs.install-python-deps == 'true' && inputs.python-version != ''
+      uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      with:
+        enable-cache: false
+
+    - name: Cache virtual environment
+      id: venv-cache
+      if: inputs.install-python-deps == 'true' && inputs.python-version != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
 
     - name: Cache uv downloads
-      if: inputs.python-version != ''
+      if: >-
+        inputs.install-python-deps == 'true' && inputs.python-version != ''
+        && steps.venv-cache.outputs.cache-hit != 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/uv
-        key: uv-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles('uv.lock') }}
+        key: uv-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
         restore-keys: |
-          uv-${{ runner.os }}-${{ inputs.python-version }}-
-          uv-${{ runner.os }}-
+          uv-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-python.outputs.python-version }}-
+          uv-${{ runner.os }}-${{ runner.arch }}-
+
+    # Synchronize even after a .venv hit. The project uses hatch-vcs, so its
+    # editable distribution metadata includes the checked-out revision and must
+    # be refreshed when source commits change even if dependencies do not.
+    - name: Synchronize Python dependencies
+      if: inputs.install-python-deps == 'true' && inputs.python-version != ''
+      shell: bash
+      env:
+        VENV_CACHE_HIT: ${{ steps.venv-cache.outputs.cache-hit }}
+      run: |
+        python_bin="$(python -c 'import sys; print(sys.executable)')"
+        make install PYTHON="$python_bin"
+        if [ "$VENV_CACHE_HIT" != "true" ]; then
+          make ci-prune-uv-cache
+        fi
 
     - name: Set up Node.js
       if: inputs.node-version != ''
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: ${{ inputs.node-version }}
-        cache: npm
-        cache-dependency-path: ${{ inputs.npm-cache-dependency-path }}
 
-    - name: Install Python dependencies
-      if: inputs.install-python-deps == 'true' && inputs.python-version != ''
-      shell: bash
-      run: |
-        python -m pip install --upgrade pip uv
-        python_bin="$(python -c 'import sys; print(sys.executable)')"
-        uv sync --all-groups --frozen --python "$python_bin"
-
-    - name: Install Node dependencies
+    - name: Resolve Node.js version
+      id: node-version
       if: inputs.install-node-deps == 'true' && inputs.node-version != ''
       shell: bash
-      run: npm ci
+      run: echo "version=$(node --version)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache node modules
+      id: node-modules-cache
+      if: inputs.install-node-deps == 'true' && inputs.node-version != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node-version.outputs.version }}-${{ hashFiles('package.json', 'package-lock.json') }}
+
+    - name: Cache npm downloads
+      if: >-
+        inputs.install-node-deps == 'true' && inputs.node-version != ''
+        && steps.node-modules-cache.outputs.cache-hit != 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ runner.arch }}-${{ steps.node-version.outputs.version }}-${{ hashFiles('package.json', 'package-lock.json') }}
+        restore-keys: |
+          npm-${{ runner.os }}-${{ runner.arch }}-${{ steps.node-version.outputs.version }}-
+          npm-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Install Node dependencies
+      if: >-
+        inputs.install-node-deps == 'true' && inputs.node-version != ''
+        && steps.node-modules-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: make node-install
+
+    - name: Resolve Playwright version
+      id: playwright-version
+      if: inputs.playwright-engines != ''
+      shell: bash
+      run: echo "version=$(make --no-print-directory playwright-version)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browsers
+      id: playwright-cache
+      if: inputs.playwright-engines != ''
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}-${{ inputs.playwright-engines }}
 
     - name: Install Playwright browsers
-      if: inputs.install-playwright == 'true'
+      if: inputs.playwright-engines != ''
       shell: bash
-      run: make setup-playwright-ci
+      env:
+        PLAYWRIGHT_ENGINES: ${{ inputs.playwright-engines }}
+      run: make setup-playwright-engines engines="$PLAYWRIGHT_ENGINES" with_deps=1

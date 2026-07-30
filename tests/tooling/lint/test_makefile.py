@@ -46,13 +46,10 @@ def test_ci_playwright_setup_installs_system_dependencies() -> None:
     assert "playwright install --with-deps $(PLAYWRIGHT_BROWSERS)" in recipe
 
 
-def test_ci_cache_helpers_report_playwright_and_prune_uv() -> None:
-    """Keep cache metadata and cleanup behind explicit Make targets."""
-    playwright_recipe = _target_recipe("playwright-version")
+def test_ci_cache_helper_prunes_uv() -> None:
+    """Keep uv cache cleanup behind an explicit Make target."""
     prune_recipe = _target_recipe("ci-prune-uv-cache")
 
-    assert "@playwright/test/package.json" in playwright_recipe
-    assert ".version" in playwright_recipe
     assert "$(UV) cache prune --ci" in prune_recipe
 
 
@@ -66,6 +63,18 @@ def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
     assert "with_deps must be 1 when provided" in recipe
     assert "$(if $(filter 1,$(with_deps)),--with-deps)" in recipe
     assert "$(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))" in recipe
+
+
+def test_containerized_playwright_runs_through_the_pinned_image() -> None:
+    """Keep hosted E2E outside the image that intentionally omits GNU make."""
+    recipe = _target_recipe("test-e2e-container")
+
+    assert "$(DOCKER) run --rm --init --ipc=host" in recipe
+    assert '--user "$$(id -u):$$(id -g)"' in recipe
+    assert "--env CI=true" in recipe
+    assert '--volume "$(CURDIR):/work"' in recipe
+    assert "$(PLAYWRIGHT_CI_IMAGE)" in recipe
+    assert "$(NPM) run test:e2e" in recipe
 
 
 def test_node_audit_uses_policy_runner_and_optional_severity_filter() -> None:

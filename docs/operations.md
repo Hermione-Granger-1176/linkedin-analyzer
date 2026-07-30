@@ -154,7 +154,7 @@ The workflow structure mirrors the stricter automation pattern used in the `arti
 
 Configured automation:
 
-- `refresh-action-shas.yml` runs monthly or manually and converts tag-based workflow/action `uses:` refs to full commit SHAs. It leaves already pinned refs unchanged; Dependabot updates action versions.
+- `refresh-action-shas.yml` runs monthly or manually and refreshes the pins Dependabot cannot safely couple. It aligns `@playwright/test` with the immutable Playwright container, refreshes exact uv and pre-commit hook versions, and converts tag-based workflow/action `uses:` refs to full commit SHAs. Dependabot owns the remaining npm, Python, Dockerfile, and GitHub Action updates.
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
 - `commit-python-locks.yml` validates the triggering workflow run against the live Dependabot PR, downloads a `uv.lock`-only artifact, validates its contents, revalidates the branch head, and commits only if it is still safe.
 
@@ -273,11 +273,11 @@ make ci-cache-delete cache=my-cache-key ref=refs/heads/main
 
 A rerun keeps the same run ID. Workflows that upload immutable artifacts must include `github.run_attempt` in each artifact name or enable safe overwriting. The CI workflow includes the attempt in Playwright failure artifacts. For another workflow that is not collision-safe, use a fresh dispatch only when it supports `workflow_dispatch`; otherwise fix its artifact naming before relying on reruns.
 
-CI caching has three layers:
+CI dependency reuse has three layers:
 
 1. `.venv` and `node_modules` are materialized environment caches. Their exact keys include the operating system, architecture, resolved toolchain version, dependency manifest, and lockfile. They have no fallback keys. A manifest, lockfile, platform, or toolchain change therefore runs the package manager again. Python still runs the frozen synchronization after a `.venv` hit because hatch-vcs derives editable package metadata from the checked-out revision.
 2. `~/.cache/uv` and `~/.npm` are download caches. They are restored only when the corresponding materialized environment misses. Their fallback keys may reuse unchanged, content-addressed package archives, but uv or npm must resolve and download every changed or missing package. uv prunes entries that are inefficient to persist before a new cache is saved.
-3. Playwright browsers are keyed by the installed Playwright version, requested browser engines, operating system, and architecture. There are no fallback keys. Changing Playwright or the engine set downloads fresh browser binaries. Linux system packages are installed on every browser job because they are part of the ephemeral runner, not the browser cache.
+3. Hosted E2E invokes the official Playwright Noble container through a Make target on the GitHub runner. The image tag must exactly match the installed `@playwright/test` version, and its digest makes the complete browser and Linux-library runtime immutable. The repository is mounted read-write under the runner's unprivileged user, and the container receives no host network installation step. The E2E job therefore restores neither a browser cache nor APT packages. A contract test rejects package and image version drift.
 
 Dependency audits use the same shared setup action, but still query current advisory data. Dependabot lock refresh deliberately disables dependency caching and resolves through the package index. Release container builds use a trusted GHCR registry cache at the `buildcache` tag, which makes reusable multi-platform layers available across release refs instead of isolating them in a tag-scoped Actions cache.
 

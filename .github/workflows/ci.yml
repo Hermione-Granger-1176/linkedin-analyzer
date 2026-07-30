@@ -158,10 +158,9 @@ jobs:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           python-version: ""
           install-python-deps: "false"
-          playwright-engines: chromium-firefox-webkit
 
       - name: Test web E2E
-        run: make web-e2e
+        run: make web-e2e-container
 
       - name: Upload Playwright artifacts
         if: failure()

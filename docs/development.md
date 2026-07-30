@@ -144,11 +144,14 @@ make typecheck-web
 # Detect unused JS code, exports, and deps (knip)
 make dead-code-js
 
-# Format check (docs/config files)
+# Check JavaScript metadata formatting
 make format-js-check
 
 # Align Markdown table pipes across the repository
 make align-tables
+
+# Check Markdown table alignment without modifying files
+make align-tables-check
 
 # Align Markdown table pipes in selected files
 make align-tables paths="README.md docs/development.md"

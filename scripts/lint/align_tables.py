@@ -125,7 +125,8 @@ def main() -> None:
             print(f"Skipping {path} (not found)")
             continue
         if check_only:
-            if align_document(path.read_text(encoding="utf-8")) != path.read_text(encoding="utf-8"):
+            original = path.read_text(encoding="utf-8")
+            if align_document(original) != original:
                 changed_count += 1
                 print(f"Table alignment needed in {path}")
         elif process_file(path):

@@ -191,7 +191,7 @@ fmt-css: ## Auto-fix CSS with stylelint
 
 format: fmt ## Alias for fmt
 
-format-check: format-py-check format-js-check ## Check Python and metadata formatting
+format-check: format-py-check format-js-check align-tables-check ## Check code, metadata, and Markdown table formatting
 
 format-py-check: ## Check Python formatting only
 	$(VENV_PYTHON) -m ruff format --check $(PY_PATHS)
@@ -199,7 +199,7 @@ format-py-check: ## Check Python formatting only
 format-py-diff: ## Show Python formatting changes without modifying files [paths=...]
 	$(VENV_PYTHON) -m ruff format --check --diff $(if $(paths),$(paths),$(PY_PATHS))
 
-format-js-check: align-tables-check ## Check Prettier formatting and Markdown table alignment
+format-js-check: ## Check Prettier formatting only
 	$(NPM) run format:check
 
 # Prettier has no --diff, so the formatted result is captured and compared. This
@@ -355,14 +355,14 @@ explore: ## Print ad-hoc statistics over your export
 
 .PHONY: ci-python ci-web ci ci-fast ci-platform-checks ci-quick-gates ci-heavy-checks check-local check-fast check fix security audit-node audit-fix-node audit-python
 
-ci-python: editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py ## Python CI gate
+ci-python: editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check align-tables-check typecheck-py dead-code-py test-py ## Python CI gate
 
 ci-web: format-js-check lint-js lint-css typecheck-web dead-code-js test-js web-build-size ## Web CI gate
 
 ci: ci-python lint-workflows ci-web ## Full local CI gate
 
 ci-fast: ## Run the non-browser CI checks in parallel (excludes web-build-size)
-	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
+	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check align-tables-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
 
 ci-platform-checks: ## Run quick and heavy non-browser CI gates in order
 	@$(MAKE) --no-print-directory ci-quick-gates

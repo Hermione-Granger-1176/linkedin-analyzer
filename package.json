@@ -38,7 +38,7 @@
     "url": "https://github.com/Hermione-Granger-1176/linkedin-analyzer"
   },
   "engines": {
-    "node": "^22.13.0 || >=24"
+    "node": "^22.22.2 || ^24.15.0"
   },
   "browserslist": "> 0.5%, last 2 versions, not dead",
   "dependencies": {

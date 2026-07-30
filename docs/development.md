@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.14 (default; 3.12+ supported, see [Using an older Python version](#using-an-older-python-version)). The Docker runtime and primary CI gate use 3.14.
-- Node.js 22.13.x or 24+
+- Node.js 22.22.2+ or 24.15.0+ within those supported major lines
 - [uv](https://docs.astral.sh/uv/)
 
 The project supports Python 3.12-3.14. Python 3.14 is the default for local development, the container image, and the primary CI quality gate. Python 3.12-3.14 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against Python 3.12 or 3.13.

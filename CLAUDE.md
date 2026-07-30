@@ -70,7 +70,7 @@ linkedin-analyzer/
     └── tests/                  # Vitest tests that mirror source ownership
 ```
 
-Setup needs Python 3.12+, uv, and Node.js 22.13.x or 24+. `make setup` is the fast default; `make setup-all` adds Playwright browsers. On a host without browser libraries, `make setup-playwright-local` builds a private sudo-free runtime and `local_libs=1` routes browser targets through it. Python deps live in `pyproject.toml` (frozen in `uv.lock`), Node deps in `package.json` (frozen in `package-lock.json`).
+Setup needs Python 3.12+, uv, and Node.js 22.22.2+ or 24.15.0+ within those supported major lines. `make setup` is the fast default; `make setup-all` adds Playwright browsers. On a host without browser libraries, `make setup-playwright-local` builds a private sudo-free runtime and `local_libs=1` routes browser targets through it. Python deps live in `pyproject.toml` (frozen in `uv.lock`), Node deps in `package.json` (frozen in `package-lock.json`).
 
 ## Conventions
 

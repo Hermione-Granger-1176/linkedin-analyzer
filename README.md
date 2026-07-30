@@ -31,7 +31,7 @@ Upload your files, get clean Excel outputs. Plus analytics dashboards, relations
 **Development:** Install locked Python and Node dependencies:
 
 ```bash
-# Requires Python 3.12+, uv, and Node.js 22.13.x or 24+
+# Requires Python 3.12+, uv, and Node.js 22.22.2+ or 24.15.0+
 make setup
 ```
 

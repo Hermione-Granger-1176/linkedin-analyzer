@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.14 (default; 3.12+ supported, see [Using an older Python version](#using-an-older-python-version)). The Docker runtime and primary CI gate use 3.14.
-- Node.js 22.13.x or 24+
+- Node.js 22.22.2+ or 24.15.0+ within those supported major lines
 - [uv](https://docs.astral.sh/uv/)
 
 The project supports Python 3.12-3.14. Python 3.14 is the default for local development, the container image, and the primary CI quality gate. Python 3.12-3.14 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against Python 3.12 or 3.13.
@@ -348,7 +348,7 @@ If either audit job fails, a `report-failure` job opens (or comments on the exis
 Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for same-repository Dependabot uv PRs through a validated artifact handoff. The artifact contains only `uv.lock`; a read-only job validates the triggering PR's current author, repository, ref, and SHA before a separate write-capable job can download it or create a commit. See [CI Automation and Verified Writebacks](operations.md#ci-automation-and-verified-writebacks) for the full flow and fallback behavior.
-- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact uv and pre-commit hook versions. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container.
+- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact uv and pre-commit hook versions. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container. TypeScript major releases are also excluded until their stricter JavaScript inference can be handled as a dedicated migration rather than hidden inside a grouped dependency update.
 
 ## Code Style
 

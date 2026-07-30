@@ -73,9 +73,9 @@ def test_e2e_uses_an_immutable_version_matched_playwright_container() -> None:
     package_lock = json.loads((REPO_ROOT / "package-lock.json").read_text(encoding="utf-8"))
     package_version = package_lock["packages"]["node_modules/@playwright/test"]["version"]
     image_match = re.search(
-        r"image: mcr\.microsoft\.com/playwright:v(?P<version>[^-]+)-noble"
+        r"PLAYWRIGHT_CI_IMAGE := mcr\.microsoft\.com/playwright:v(?P<version>[^-]+)-noble"
         r"@sha256:(?P<digest>[0-9a-f]{64})",
-        CI_WORKFLOW,
+        (REPO_ROOT / "Makefile").read_text(encoding="utf-8"),
     )
 
     assert image_match is not None
@@ -83,7 +83,7 @@ def test_e2e_uses_an_immutable_version_matched_playwright_container() -> None:
     assert image_match.group("digest") == (
         "baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07"
     )
-    assert "options: --user 1001" in CI_WORKFLOW
+    assert "run: make web-e2e-container" in CI_WORKFLOW
     assert "playwright-engines" not in CI_SETUP
     assert "Cache Playwright browsers" not in CI_SETUP
     assert "Install Playwright browsers" not in CI_SETUP

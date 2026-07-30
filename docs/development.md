@@ -194,7 +194,7 @@ Browser-running Make targets accept `local_libs=1`, including `test-e2e`, `test-
 
 `make playwright-local-clean` and `make clean` both remove only this repository's `.playwright/` cache (the extracted libraries and per-run scratch). Neither touches the shared browser cache, since other projects depend on it; manage shared browsers with Playwright's own tooling.
 
-Reserve `make setup-ci` for a non-container ephemeral CI runner. GitHub-hosted E2E runs use the digest-pinned official Playwright container instead, so they do not call APT or install browser binaries during the job. The fallback target retains Playwright's `--with-deps` mode for other disposable runners.
+Reserve `make setup-ci` for a non-container ephemeral CI runner. GitHub-hosted E2E calls `make web-e2e-container`, which launches the digest-pinned official Playwright container without calling APT or installing browser binaries during the job. The Make process remains on the runner because the upstream image intentionally does not include GNU make. The fallback target retains Playwright's `--with-deps` mode for other disposable runners.
 
 ## Python CLI
 
@@ -348,7 +348,7 @@ If either audit job fails, a `report-failure` job opens (or comments on the exis
 Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for same-repository Dependabot uv PRs through a validated artifact handoff. The artifact contains only `uv.lock`; a read-only job validates the triggering PR's current author, repository, ref, and SHA before a separate write-capable job can download it or create a commit. See [CI Automation and Verified Writebacks](operations.md#ci-automation-and-verified-writebacks) for the full flow and fallback behavior.
-- `refresh-action-shas.yml` converts tag-based GitHub Action references to full commit SHAs when app credentials are configured. Already pinned references are left unchanged; Dependabot handles action-version updates.
+- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact uv and pre-commit hook versions. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container.
 
 ## Code Style
 

@@ -9,6 +9,7 @@ updates:
       day: monday
     open-pull-requests-limit: 1
     ignore:
+      - dependency-name: "@playwright/test"
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
@@ -23,6 +24,7 @@ updates:
       interval: monthly
     open-pull-requests-limit: 1
     ignore:
+      - dependency-name: "@playwright/test"
       - dependency-name: "*"
         update-types:
           - "version-update:semver-minor"

@@ -14,10 +14,12 @@ VENV_PYTHON         := $(VENV)/bin/python
 NPM                 ?= npm
 NPX                 ?= npx
 NODE                ?= node
+DOCKER              ?= docker
 # Keep top-level modules and every owned Python subpackage in the quality gates.
 PY_PATHS            := src/ tests/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PY_TYPE_PATHS       := src/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
+PLAYWRIGHT_CI_IMAGE := mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07
 PLAYWRIGHT_ENGINE_ARGS = $(subst -, ,$(strip $(engines)))
 PLAYWRIGHT_INVALID_ENGINES = $(filter-out $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))
 
@@ -87,7 +89,7 @@ and a title from the environment (TITLE='...' make <target>))))
 
 # ─── Setup @setup ────────────────────────────────────────────────────────────────────
 
-.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci ci-prune-uv-cache setup-playwright setup-playwright-engines setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
+.PHONY: install node-install install-hooks setup-base setup setup-all setup-ci ci-prune-uv-cache refresh-ci-pins setup-playwright setup-playwright-engines setup-playwright-ci setup-playwright-local playwright-local-status playwright-local-gate playwright-local-clean
 
 install: ## Install locked Python deps into the uv-managed virtual environment
 	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --all-groups --frozen --python $(PYTHON)
@@ -108,6 +110,10 @@ setup-ci: setup-base setup-playwright-ci ## CI-only setup with Playwright browse
 
 ci-prune-uv-cache: ## Remove uv cache entries that are inefficient to persist in CI
 	$(UV) cache prune --ci
+
+refresh-ci-pins: ## Refresh Playwright, uv, pre-commit, and GitHub Action pins
+	$(NPM) install --package-lock-only --save-dev @playwright/test@latest
+	$(SYSTEM_PYTHON) -m scripts.ci.refresh_ci_pins
 
 setup-playwright: ## Install Playwright browsers locally, no system deps or sudo
 	$(NPX) playwright install $(PLAYWRIGHT_BROWSERS)
@@ -255,7 +261,7 @@ dead-code-js: ## Detect unused JS code, exports, and deps (knip)
 
 # ─── Test @test ─────────────────────────────────────────────────────────────────────
 
-.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-headed test-e2e-ui test-browser-xlsx
+.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-container test-e2e-headed test-e2e-ui test-browser-xlsx
 
 test: test-py test-js ## Run non-browser Python and JS tests
 
@@ -270,6 +276,15 @@ test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick 
 
 test-e2e: ## Run Playwright browser tests (make test-e2e ARGS="--project=chromium web/e2e/app.e2e.spec.js")
 	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- $(ARGS)
+
+test-e2e-container: ## Run Playwright tests in the immutable hosted-CI container
+	$(DOCKER) run --rm --init --ipc=host \
+		--user "$$(id -u):$$(id -g)" \
+		--env CI=true \
+		--volume "$(CURDIR):/work" \
+		--workdir /work \
+		$(PLAYWRIGHT_CI_IMAGE) \
+		$(NPM) run test:e2e -- $(ARGS)
 
 test-e2e-headed: ## Run Playwright browser tests in headed mode
 	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e:headed
@@ -287,7 +302,7 @@ test-browser-xlsx: ## Download the real browser xlsx (chromium) and validate it 
 
 # ─── Web @web ──────────────────────────────────────────────────────────────────────
 
-.PHONY: web web-preview web-lint web-format-check web-typecheck web-test web-build web-size-check web-build-size web-smoke web-screens web-e2e
+.PHONY: web web-preview web-lint web-format-check web-typecheck web-test web-build web-size-check web-build-size web-smoke web-screens web-e2e web-e2e-container
 
 web: ## Start the Vite dev server
 	$(NPM) run dev
@@ -319,6 +334,8 @@ web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.art
 	SCREENS_DIR="$(or $(dir),.artifacts/screens)" $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- --project=chromium web/e2e/screenshots.e2e.spec.js
 
 web-e2e: test-e2e ## Alias for test-e2e
+
+web-e2e-container: test-e2e-container ## Alias for test-e2e-container
 
 # ─── Checks @checks ──────────────────────────────────────────────────────────────────
 # Local-only tools that run against your private export in data/input (never

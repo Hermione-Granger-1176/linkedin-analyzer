@@ -65,6 +65,18 @@ def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
     assert "$(filter $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))" in recipe
 
 
+def test_containerized_playwright_runs_through_the_pinned_image() -> None:
+    """Keep hosted E2E outside the image that intentionally omits GNU make."""
+    recipe = _target_recipe("test-e2e-container")
+
+    assert "$(DOCKER) run --rm --init --ipc=host" in recipe
+    assert '--user "$$(id -u):$$(id -g)"' in recipe
+    assert "--env CI=true" in recipe
+    assert '--volume "$(CURDIR):/work"' in recipe
+    assert "$(PLAYWRIGHT_CI_IMAGE)" in recipe
+    assert "$(NPM) run test:e2e" in recipe
+
+
 def test_node_audit_uses_policy_runner_and_optional_severity_filter() -> None:
     """Keep CI on the reviewed policy while allowing a narrower local audit."""
     recipe = _target_recipe("audit-node")

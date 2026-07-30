@@ -253,10 +253,10 @@ def test_reply_reads_the_body_from_a_file(monkeypatch: pytest.MonkeyPatch, tmp_p
     """--body-file carries text a command line would mangle, newlines included."""
     calls = _record(monkeypatch, pr_review, "reply_to_thread")
     body_file = tmp_path / "body.md"
-    body_file.write_text('needs >=3.11\nand a "quote"\n', encoding="utf-8")
+    body_file.write_text('needs >=3.12\nand a "quote"\n', encoding="utf-8")
 
     assert cli.main(["reply", "--thread", _THREAD, "--body-file", str(body_file)]) == 0
-    assert calls == [((_THREAD, 'needs >=3.11\nand a "quote"\n'), {})]
+    assert calls == [((_THREAD, 'needs >=3.12\nand a "quote"\n'), {})]
 
 
 def test_address_reads_the_body_from_stdin(monkeypatch: pytest.MonkeyPatch) -> None:

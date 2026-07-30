@@ -281,7 +281,7 @@ A heredoc is the everyday form, since it needs no file on disk:
 
 ```bash
 make pr-address thread=PRRT_... <<'EOF'
-Anything at all: quotes, $(shell date), backticks, >=3.11, blank lines.
+Anything at all: quotes, $(shell date), backticks, >=3.12, blank lines.
 EOF
 ```
 

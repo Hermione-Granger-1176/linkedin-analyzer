@@ -271,7 +271,17 @@ make ci-cache-delete cache=1234
 make ci-cache-delete cache=my-cache-key ref=refs/heads/main
 ```
 
-A rerun keeps the same run ID. Workflows that upload immutable artifacts must include `github.run_attempt` in each artifact name or enable safe overwriting. The CI workflow includes the attempt in Playwright failure artifacts. For another workflow that is not collision-safe, use a fresh dispatch only when it supports `workflow_dispatch`; otherwise fix its artifact naming before relying on reruns. Cache deletion accepts an entry ID or key. Prefer the ID because the same key can exist on multiple refs, and delete retired caches only after the replacement key is active on `main`.
+A rerun keeps the same run ID. Workflows that upload immutable artifacts must include `github.run_attempt` in each artifact name or enable safe overwriting. The CI workflow includes the attempt in Playwright failure artifacts. For another workflow that is not collision-safe, use a fresh dispatch only when it supports `workflow_dispatch`; otherwise fix its artifact naming before relying on reruns.
+
+CI caching has three layers:
+
+1. `.venv` and `node_modules` are materialized environment caches. Their exact keys include the operating system, architecture, resolved toolchain version, dependency manifest, and lockfile. They have no fallback keys. A manifest, lockfile, platform, or toolchain change therefore runs the package manager again. Python still runs the frozen synchronization after a `.venv` hit because hatch-vcs derives editable package metadata from the checked-out revision.
+2. `~/.cache/uv` and `~/.npm` are download caches. They are restored only when the corresponding materialized environment misses. Their fallback keys may reuse unchanged, content-addressed package archives, but uv or npm must resolve and download every changed or missing package. uv prunes entries that are inefficient to persist before a new cache is saved.
+3. Playwright browsers are keyed by the installed Playwright version, requested browser engines, operating system, and architecture. There are no fallback keys. Changing Playwright or the engine set downloads fresh browser binaries. Linux system packages are installed on every browser job because they are part of the ephemeral runner, not the browser cache.
+
+Dependency audits use the same shared setup action, but still query current advisory data. Dependabot lock refresh deliberately disables dependency caching and resolves through the package index. Release container builds use a trusted GHCR registry cache at the `buildcache` tag, which makes reusable multi-platform layers available across release refs instead of isolating them in a tag-scoped Actions cache.
+
+Cache deletion accepts an entry ID or key. Prefer the ID because the same key can exist on multiple refs. Delete retired caches only after the replacement key is active on `main`, otherwise a scheduled or pull request run on the old workflow can recreate them.
 
 ### Python lock refresh flow
 

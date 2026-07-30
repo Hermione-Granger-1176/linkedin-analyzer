@@ -129,8 +129,8 @@ jobs:
           context: .
           load: true
           tags: ${{ steps.image-meta.outputs.image }}:scan
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ steps.image-meta.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.image-meta.outputs.image }}:buildcache,mode=max
           build-args: |
             VERSION=${{ steps.image-meta.outputs.version }}
             REVISION=${{ steps.image-meta.outputs.revision }}
@@ -157,7 +157,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          cache-from: type=gha
+          cache-from: type=registry,ref=${{ steps.image-meta.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.image-meta.outputs.image }}:buildcache,mode=max
           tags: ${{ steps.image-meta.outputs.tags }}
           build-args: |
             VERSION=${{ steps.image-meta.outputs.version }}

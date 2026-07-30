@@ -46,6 +46,16 @@ def test_ci_playwright_setup_installs_system_dependencies() -> None:
     assert "playwright install --with-deps $(PLAYWRIGHT_BROWSERS)" in recipe
 
 
+def test_ci_cache_helpers_report_playwright_and_prune_uv() -> None:
+    """Keep cache metadata and cleanup behind explicit Make targets."""
+    playwright_recipe = _target_recipe("playwright-version")
+    prune_recipe = _target_recipe("ci-prune-uv-cache")
+
+    assert "@playwright/test/package.json" in playwright_recipe
+    assert ".version" in playwright_recipe
+    assert "$(UV) cache prune --ci" in prune_recipe
+
+
 def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
     """Keep selective installs constrained to supported engine names and CI dependency mode."""
     recipe = _target_recipe("setup-playwright-engines")

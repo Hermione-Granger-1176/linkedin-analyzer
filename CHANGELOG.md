@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the minimum supported Python version to 3.12 and verify Python 3.12, 3.13, and 3.14 in the compatibility matrix.
+
 ## [0.6.0] - 2026-07-03
 
 ### Added

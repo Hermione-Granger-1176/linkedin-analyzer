@@ -92,7 +92,7 @@ def test_parse_timestamp_compares_as_instant_and_requires_timezone() -> None:
 
     assert parsed == datetime(2026, 7, 26, 12, tzinfo=UTC)
     # GitHub stamps reviews with a trailing Z, which is valid ISO-8601 input
-    # for every Python this project supports (requires-python >= 3.11).
+    # for every Python this project supports (requires-python >= 3.12).
     assert pr_watch._parse_timestamp(_SUBMITTED_AT, "review") == datetime(
         2026, 7, 26, 12, tzinfo=UTC
     )

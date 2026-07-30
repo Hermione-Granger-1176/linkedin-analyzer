@@ -147,6 +147,7 @@ linkedin-analyzer all \
 - NA-like values are treated as missing.
 - Rows missing required fields are dropped.
 - Cell values that start with Excel formula prefixes are quote-prefixed to avoid spreadsheet formula execution.
+- Excel output is written atomically in one workbook pass. Column widths, wrapped text, header alignment, and blank-cell normalization are applied before one save replaces any existing output.
 - Encoding is auto-detected when `--encoding` is not set: UTF-8 (BOM-aware) is tried first, then WHATWG Windows-1252, matching browser `TextDecoder` behavior across the full C1 byte range. On fallback the CLI logs a WARNING suggesting `--encoding`; pass it if characters look wrong.
 - Connections CSV skips the first 3 header rows before parsing.
 - Connections rows missing all of First Name, Last Name, and URL are dropped.

@@ -18,6 +18,12 @@ import { loadRecentThreads } from "./threads-transport.js";
 const ANALYTICS_BASE_CACHE_KEY = "storage:analyticsBase";
 const WORKER_TIMEOUT_MS = 30000;
 
+/**
+ * The analytics worker run in flight, so a cancelled export can end it.
+ * @type {{cancel: () => void}|null}
+ */
+let activeAnalyticsRun = null;
+
 // Same shape the Insights screen sends, so the worker produces the same view.
 const DEFAULT_FILTERS = Object.freeze({
     timeRange: "12m",
@@ -135,17 +141,9 @@ function runAnalyticsWorker(analyticsBase) {
     return new Promise((resolve) => {
         const requestId = 1;
         let timeoutId = null;
+        let settled = false;
 
-        const finish = (value) => {
-            if (timeoutId !== null) {
-                window.clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-            worker.terminate();
-            resolve(value);
-        };
-
-        worker.addEventListener("message", (event) => {
+        const onMessage = (event) => {
             const parsed = parseAnalyticsWorkerMessage(event.data || {});
             if (!parsed.valid) {
                 return;
@@ -156,7 +154,7 @@ function runAnalyticsWorker(analyticsBase) {
                     finish(empty);
                     return;
                 }
-                worker.postMessage({ type: "view", requestId, filters: { ...DEFAULT_FILTERS } });
+                post({ type: "view", requestId, filters: { ...DEFAULT_FILTERS } });
                 return;
             }
             if (message.type === "view" && message.requestId === requestId) {
@@ -176,7 +174,7 @@ function runAnalyticsWorker(analyticsBase) {
                 });
                 finish(empty);
             }
-        });
+        };
 
         const handleError = () => {
             captureError(new Error("Analytics worker failed during export."), {
@@ -185,6 +183,52 @@ function runAnalyticsWorker(analyticsBase) {
             });
             finish(empty);
         };
+
+        /**
+         * Settle once and release the worker, whatever ended it.
+         * @param {object} value - Resolution value
+         */
+        function finish(value) {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+            worker.removeEventListener("message", onMessage);
+            worker.removeEventListener("error", handleError);
+            worker.removeEventListener("messageerror", handleError);
+            worker.terminate();
+            if (activeAnalyticsRun && activeAnalyticsRun.cancel === cancel) {
+                activeAnalyticsRun = null;
+            }
+            resolve(value);
+        }
+
+        /** Abandon the run because the export was cancelled. */
+        function cancel() {
+            finish(empty);
+        }
+
+        /**
+         * Post to the worker, settling if the structured clone throws.
+         * @param {object} message - Message to post
+         */
+        function post(message) {
+            try {
+                worker.postMessage(message);
+            } catch {
+                captureError(new Error("Analytics worker request could not be sent."), {
+                    module: "pdf-export",
+                    operation: "analytics-worker-post",
+                });
+                finish(empty);
+            }
+        }
+
+        worker.addEventListener("message", onMessage);
         worker.addEventListener("error", handleError);
         worker.addEventListener("messageerror", handleError);
 
@@ -197,8 +241,23 @@ function runAnalyticsWorker(analyticsBase) {
             finish(empty);
         }, WORKER_TIMEOUT_MS);
 
-        worker.postMessage({ type: "initBase", payload: analyticsBase });
+        activeAnalyticsRun = { cancel };
+        post({ type: "initBase", payload: analyticsBase });
     });
+}
+
+/**
+ * Abandon an analytics worker still running for a cancelled export.
+ *
+ * Cancelling used to leave it churning until it answered or its 30-second
+ * watchdog fired. The generation token already stopped a late answer from being
+ * used, but the worker itself, its listeners and the analytics base it was
+ * handed all stayed alive for the wait.
+ */
+export function terminateAnalyticsWorker() {
+    if (activeAnalyticsRun) {
+        activeAnalyticsRun.cancel();
+    }
 }
 
 /**

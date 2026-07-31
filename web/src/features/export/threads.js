@@ -30,9 +30,67 @@ const DEFAULT_MESSAGES_PER_PERSON = 5;
 
 const UNKNOWN_NAME = "Unknown";
 const UNKNOWN_NAME_KEY = "unknown";
+const ANONYMOUS_NAME = "LinkedIn Member";
+const ANONYMOUS_NAME_KEY = "linkedin member";
 
 /** A self context that matches nobody, used before self has been resolved. */
 const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
+
+/**
+ * Extract a row's non-self participants for the export.
+ *
+ * `MessagesAnalytics.extractParticipantsFromRow` drops anyone named "LinkedIn
+ * Member" outright, which is right for analytics - those placeholders belong to
+ * different people and must not be counted as one contact - but wrong here. The
+ * export promises the last people you messaged, and dropping the placeholder
+ * leaves a conversation with no correspondent at all, so `foldIntoThreads`
+ * discards it and a recent exchange disappears from the document entirely.
+ *
+ * So the placeholder is kept when the row carries a `CONVERSATION ID`, which
+ * gives it a scope to be anonymous within: `canonicalContactKey` keys it to that
+ * conversation, so two unrelated anonymous conversations never merge into one
+ * person. Without an id there is no such scope and nothing to attribute the row
+ * to, so it is dropped as before.
+ * @param {object} row - Parsed message row
+ * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+ * @param {boolean} keepAnonymous - Whether the row has a conversation to scope anonymity to
+ * @returns {Array<{name: string, url: string, anonymous: boolean}>} Participants
+ */
+function exportParticipants(row, context, keepAnonymous) {
+    const named = MessagesAnalytics.extractParticipantsFromRow(row, context).map(
+        (participant) => ({ ...participant, anonymous: false }),
+    );
+    if (!keepAnonymous) {
+        return named;
+    }
+
+    const seen = new Set(named.map((participant) => MessagesAnalytics.buildContactKey(participant)));
+    const anonymous = [];
+    const add = (rawName, rawUrl) => {
+        const name = MessagesAnalytics.cleanText(rawName);
+        if (MessagesAnalytics.normalizeName(name) !== ANONYMOUS_NAME_KEY) {
+            return;
+        }
+        const url = MessagesAnalytics.normalizeUrl(rawUrl);
+        if (MessagesAnalytics.isSelfContact(name, url, context)) {
+            return;
+        }
+        const participant = { name: ANONYMOUS_NAME, url, anonymous: true };
+        const key = MessagesAnalytics.buildContactKey(participant);
+        if (seen.has(key)) {
+            return;
+        }
+        seen.add(key);
+        anonymous.push(participant);
+    };
+
+    add(row.FROM, row["SENDER PROFILE URL"]);
+    const recipientUrls = MessagesAnalytics.normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
+    const recipientNames = MessagesAnalytics.parseRecipientNames(row.TO, recipientUrls.length);
+    recipientNames.forEach((name, index) => add(name, recipientUrls[index] || ""));
+
+    return named.concat(anonymous);
+}
 
 /**
  * Coerce an option to a positive integer, falling back when unusable.
@@ -113,13 +171,19 @@ function buildNameToUrl(rows) {
 
 /**
  * Resolve the canonical contact key for a participant.
- * @param {{name: string, url: string}} participant - Sanitized participant
+ * @param {{name: string, url: string, anonymous?: boolean}} participant - Sanitized participant
  * @param {Map<string, string>} nameToUrl - Name to canonical URL lookup
+ * @param {string} scope - Conversation scope, for participants with no identity of their own
  * @returns {string} Contact key
  */
-function canonicalContactKey(participant, nameToUrl) {
+function canonicalContactKey(participant, nameToUrl, scope) {
     if (participant.url) {
         return MessagesAnalytics.buildContactKey(participant);
+    }
+    // "LinkedIn Member" is not a name, so it can only ever mean "the other
+    // person in this conversation".
+    if (participant.anonymous) {
+        return `anon:${scope}`;
     }
     const nameKey = MessagesAnalytics.normalizeName(participant.name);
     const knownUrl = nameToUrl.get(nameKey);
@@ -133,15 +197,17 @@ function canonicalContactKey(participant, nameToUrl) {
  * Resolve the canonical contact key of a row's sender.
  * @param {object} row - Parsed message row
  * @param {Map<string, string>} nameToUrl - Name to canonical URL lookup
+ * @param {string} scope - Conversation scope
  * @returns {string} Contact key, or "" when the sender cannot be identified
  */
-function senderContactKey(row, nameToUrl) {
+function senderContactKey(row, nameToUrl, scope) {
     const name = MessagesAnalytics.cleanText(row.FROM);
     const url = MessagesAnalytics.normalizeUrl(row["SENDER PROFILE URL"]);
     if (!name && !url) {
         return "";
     }
-    return canonicalContactKey({ name: name || UNKNOWN_NAME, url }, nameToUrl);
+    const anonymous = MessagesAnalytics.normalizeName(name) === ANONYMOUS_NAME_KEY;
+    return canonicalContactKey({ name: name || UNKNOWN_NAME, url, anonymous }, nameToUrl, scope);
 }
 
 /**
@@ -152,6 +218,76 @@ function senderContactKey(row, nameToUrl) {
  */
 function conversationKeyForRow(row, index) {
     return MessagesAnalytics.cleanText(row["CONVERSATION ID"]) || `row-${index}`;
+}
+
+/**
+ * Link a one-to-one conversation's URL-less aliases to that conversation's URL.
+ *
+ * `buildNameToUrl` can only join a name to a URL when it has seen that exact
+ * name carrying that URL. A contact who is renamed mid-thread and whose new name
+ * never appears with a profile URL - "Ada Lovelace" with a URL, then "Ada L."
+ * without one - therefore stays two identities: the conversation looks like a
+ * group of two, and a later conversation under the URL becomes a separate
+ * thread, burning two of the ten slots on one person.
+ *
+ * A conversation whose every row has exactly one correspondent settles it: every
+ * alias in it is the same person, so any URL seen there is theirs. Only
+ * conversations with a real `CONVERSATION ID` qualify, because a synthesized key
+ * is built from the very identities this is trying to reconcile.
+ * @param {Array<{row: object, date: Date}>} dated - Dated message rows
+ * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Resolved self context
+ * @returns {Map<string, string>} Normalized name to profile URL
+ */
+function buildConversationAliases(dated, context) {
+    const conversations = new Map();
+
+    for (const { row } of dated) {
+        const conversationId = MessagesAnalytics.cleanText(row["CONVERSATION ID"]);
+        if (!conversationId) {
+            continue;
+        }
+
+        let entry = conversations.get(conversationId);
+        if (!entry) {
+            entry = { urls: new Set(), names: new Set(), oneToOne: true };
+            conversations.set(conversationId, entry);
+        }
+
+        const participants = MessagesAnalytics.extractParticipantsFromRow(row, context);
+        // A row naming nobody is silent about the shape of the conversation; a
+        // row naming several people proves it is a group.
+        if (participants.length !== 1) {
+            entry.oneToOne = entry.oneToOne && participants.length === 0;
+            continue;
+        }
+
+        const [participant] = participants;
+        if (participant.url) {
+            entry.urls.add(participant.url);
+            continue;
+        }
+        const nameKey = MessagesAnalytics.normalizeName(participant.name);
+        if (nameKey && nameKey !== UNKNOWN_NAME_KEY) {
+            entry.names.add(nameKey);
+        }
+    }
+
+    const aliases = new Map();
+    for (const entry of conversations.values()) {
+        // Two URLs in a one-to-one conversation means the correspondent is
+        // already resolvable both ways; there is nothing to disambiguate to.
+        if (!entry.oneToOne || entry.urls.size !== 1) {
+            continue;
+        }
+        const [url] = entry.urls;
+        for (const nameKey of entry.names) {
+            if (!aliases.has(nameKey)) {
+                aliases.set(nameKey, url);
+            }
+        }
+    }
+
+    return aliases;
 }
 
 /**
@@ -170,10 +306,13 @@ function buildIdentityIndex(rows, nameToUrl) {
 
     rows.forEach((row, index) => {
         const conversationKey = conversationKeyForRow(row, index);
-        const senderKey = senderContactKey(row, nameToUrl);
+        const senderKey = senderContactKey(row, nameToUrl, conversationKey);
 
+        // Anonymous participants are deliberately absent: "LinkedIn Member" is
+        // never the account owner, and each one is scoped to its own
+        // conversation, so they would only add noise to the coverage count.
         for (const participant of MessagesAnalytics.extractParticipantsFromRow(row, NO_SELF)) {
-            const key = canonicalContactKey(participant, nameToUrl);
+            const key = canonicalContactKey(participant, nameToUrl, conversationKey);
             let entry = identities.get(key);
             if (!entry) {
                 entry = {
@@ -330,11 +469,12 @@ function groupConversations(dated, context, selfKnown, nameToUrl) {
     const conversations = new Map();
 
     dated.forEach(({ row, date }, index) => {
-        const participants = MessagesAnalytics.extractParticipantsFromRow(row, context);
-        const participantKeys = participants.map((participant) =>
-            canonicalContactKey(participant, nameToUrl),
-        );
         const conversationId = MessagesAnalytics.cleanText(row["CONVERSATION ID"]);
+        const scope = conversationKeyForRow(row, index);
+        const participants = exportParticipants(row, context, Boolean(conversationId));
+        const participantKeys = participants.map((participant) =>
+            canonicalContactKey(participant, nameToUrl, scope),
+        );
         const key = conversationId
             ? `id:${conversationId}`
             : participantKeys.length
@@ -342,8 +482,8 @@ function groupConversations(dated, context, selfKnown, nameToUrl) {
               : "";
 
         // A blank conversation id on a row with no identifiable correspondent
-        // (self-only, or an anonymous "LinkedIn Member") cannot be attributed to
-        // anyone at all.
+        // (self-only, or an anonymous "LinkedIn Member" with no conversation to
+        // be anonymous within) cannot be attributed to anyone at all.
         if (!key) {
             return;
         }
@@ -455,6 +595,13 @@ export function selectRecentThreads(rows, options = {}) {
     const nameToUrl = buildNameToUrl(datedRows);
     const self = resolveSelfContext(buildIdentityIndex(datedRows, nameToUrl));
     const context = self || NO_SELF;
+    // Aliasing needs to know who self is, so it runs once self is settled and
+    // only fills gaps: a name already seen carrying its own URL keeps that URL.
+    for (const [nameKey, url] of buildConversationAliases(dated, context)) {
+        if (!nameToUrl.has(nameKey)) {
+            nameToUrl.set(nameKey, url);
+        }
+    }
     const conversations = groupConversations(dated, context, Boolean(self), nameToUrl);
 
     return Array.from(foldIntoThreads(conversations).values())

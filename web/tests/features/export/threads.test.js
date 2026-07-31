@@ -480,6 +480,118 @@ describe("selectRecentThreads", () => {
         expect(ada[0].messages.map((entry) => entry.body)).toEqual(["one", "two"]);
     });
 
+    it("resolves a renamed URL-less alias to the same person across conversations", () => {
+        const adaUrl = "https://www.linkedin.com/in/ada";
+        const threads = selectRecentThreads([
+            message({
+                name: "Ada Lovelace",
+                url: adaUrl,
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "one",
+            }),
+            // Renamed mid-conversation, and this display name never appears
+            // anywhere carrying a profile URL.
+            message({
+                name: "Ada L.",
+                url: "",
+                conversationId: "c1",
+                date: "2026-01-02 10:00:00",
+                body: "two",
+            }),
+            // A separate conversation, under the URL only.
+            message({
+                name: "Ada Lovelace",
+                url: adaUrl,
+                conversationId: "c2",
+                date: "2026-01-03 10:00:00",
+                body: "three",
+            }),
+            message({ name: "bob", conversationId: "c3", date: "2026-01-01 08:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.filter((thread) => thread.name.includes("Ada"));
+        expect(ada).toHaveLength(1);
+        // One person, not a two-member group, and the URL survives.
+        expect(ada[0].name).toBe("Ada Lovelace");
+        expect(ada[0].url).toBe(adaUrl);
+        expect(ada[0].messageCount).toBe(3);
+        expect(ada[0].messages.map((entry) => entry.body)).toEqual(["one", "two", "three"]);
+    });
+
+    it("keeps an anonymous conversation instead of dropping it", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "old" }),
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 11:00:00", body: "old reply", fromContact: true }),
+            row({
+                FROM: "LinkedIn Member",
+                "SENDER PROFILE URL": "",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+                DATE: "2026-02-01 10:00:00",
+                CONTENT: "anonymous hello",
+                "CONVERSATION ID": "c9",
+            }),
+        ]);
+
+        const anonymous = threads.find((thread) => thread.name === "LinkedIn Member");
+        expect(anonymous).toBeDefined();
+        expect(anonymous.messages.map((entry) => entry.body)).toEqual(["anonymous hello"]);
+        expect(anonymous.messages[0].direction).toBe("received");
+        // Most recent, so it leads the document.
+        expect(threads[0]).toBe(anonymous);
+    });
+
+    it("keeps two anonymous conversations apart", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 11:00:00", body: "hers", fromContact: true }),
+            row({
+                FROM: "LinkedIn Member",
+                "SENDER PROFILE URL": "",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+                DATE: "2026-02-01 10:00:00",
+                CONTENT: "first stranger",
+                "CONVERSATION ID": "c8",
+            }),
+            row({
+                FROM: "LinkedIn Member",
+                "SENDER PROFILE URL": "",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+                DATE: "2026-02-02 10:00:00",
+                CONTENT: "second stranger",
+                "CONVERSATION ID": "c9",
+            }),
+        ]);
+
+        const anonymous = threads.filter((thread) => thread.name === "LinkedIn Member");
+        expect(anonymous).toHaveLength(2);
+        expect(anonymous.flatMap((thread) => thread.messages.map((entry) => entry.body))).toEqual([
+            "second stranger",
+            "first stranger",
+        ]);
+    });
+
+    it("still drops an anonymous row with no conversation to scope it to", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 11:00:00", body: "hers", fromContact: true }),
+            row({
+                FROM: "LinkedIn Member",
+                "SENDER PROFILE URL": "",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+                DATE: "2026-02-01 10:00:00",
+                CONTENT: "unattributable",
+                "CONVERSATION ID": "",
+            }),
+        ]);
+
+        expect(threads.some((thread) => thread.name === "LinkedIn Member")).toBe(false);
+    });
+
     it("keeps a group conversation as its own thread", () => {
         const threads = selectRecentThreads([
             message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "solo" }),

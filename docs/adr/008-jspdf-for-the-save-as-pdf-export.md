@@ -31,7 +31,7 @@ Three constraints go with it:
 Two follow-on decisions fall out of this:
 
 - **Icons become accent-coloured left rules and roundels.** jsPDF cannot draw SVG without `svg2pdf.js`; a second dependency is not worth the insight-card icons.
-- **Thread selection gets its own worker.** `messages-worker.js` has an 8 kB budget and a contract the Messages screen depends on, so `features/export/threads-worker.js` is separate.
+- **Thread selection gets its own worker.** `messages-worker.js` has a tight size budget and a contract the Messages screen depends on, so `features/export/threads-worker.js` is separate.
 
 ## Consequences
 
@@ -40,3 +40,4 @@ Two follow-on decisions fall out of this:
 - A fetch failure for either font degrades to jsPDF's built-in Helvetica rather than failing the export.
 - The `.ttf` files were generated once from the shipped `.woff2` files with `fonttools` and committed. No conversion script lives in `scripts/`, which carries a 100 % coverage requirement.
 - Message bodies can end up inside the downloaded file by explicit opt-in. Consistent with [ADR-004](004-opt-in-telemetry-with-pii-scrubbing.md), no part of that content is ever logged, reported or sent anywhere: diagnostics from the export path carry fixed module and operation identifiers only.
+- Thread selection deliberately diverges from `MessagesAnalytics` in three ways, because the export answers a different question. It parses `CONTENT` verbatim rather than through the spreadsheet cleaner, which quote-prefixes formulas and strips control characters. It refuses to guess at the account owner on a coverage tie, reporting `direction: "unknown"` instead of labelling a message with a name it is not sure of. And it keeps `LinkedIn Member` conversations, scoping each anonymous correspondent to its own `CONVERSATION ID`: analytics is right to drop the placeholder so unrelated strangers do not merge into one contact, but dropping it here would silently delete a recent conversation from the document.

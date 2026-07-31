@@ -160,7 +160,7 @@ button {
     color: var(--text-primary);
 }
 
-.pdf-export-btn:hover:not(:disabled) {
+.pdf-export-btn:hover:not(:disabled):not([aria-disabled="true"]) {
     transform: scale(1.06) rotate(-8deg);
     box-shadow: var(--shadow-md);
 }
@@ -170,7 +170,8 @@ button {
     outline-offset: 2px;
 }
 
-.pdf-export-btn:disabled {
+.pdf-export-btn:disabled,
+.pdf-export-btn[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.45;
     box-shadow: none;

@@ -21,6 +21,7 @@ vi.mock("../../../src/shared/ui/loading-overlay.js", () => ({
 vi.mock("../../../src/features/export/collect.js", () => ({
     collectExportData: vi.fn(),
     hasExportableData: vi.fn(),
+    terminateAnalyticsWorker: vi.fn(),
 }));
 
 vi.mock("../../../src/features/export/fonts.js", () => ({
@@ -44,10 +45,12 @@ vi.mock("../../../src/features/export/threads-transport.js", () => ({
 const MARKUP = `
     <button
         id="pdfExportBtn"
-        disabled
+        aria-disabled="true"
         aria-label="Save as PDF, unavailable until you upload a LinkedIn export"
+        aria-describedby="pdfExportBtnHint"
         title="Save as PDF, unavailable until you upload a LinkedIn export"
     ></button>
+    <span class="sr-only" id="pdfExportBtnHint">Upload a LinkedIn export to enable saving as PDF.</span>
     <div class="export-dialog-backdrop" id="pdfExportDialogBackdrop" hidden>
         <div id="pdfExportDialog" role="dialog" aria-modal="true">
             <input type="checkbox" id="pdfExportIncludeMessages" />
@@ -63,6 +66,7 @@ let docStub = null;
 let PdfExport;
 let collectExportData;
 let hasExportableData;
+let terminateAnalyticsWorker;
 let registerPdfFonts;
 let readPdfPalette;
 let renderPdfDocument;
@@ -80,7 +84,7 @@ let LoadingOverlay;
  */
 async function loadModules() {
     vi.resetModules();
-    ({ collectExportData, hasExportableData } = await import(
+    ({ collectExportData, hasExportableData, terminateAnalyticsWorker } = await import(
         "../../../src/features/export/collect.js"
     ));
     ({ registerPdfFonts } = await import("../../../src/features/export/fonts.js"));
@@ -102,6 +106,7 @@ async function loadModules() {
 function ui() {
     return {
         trigger: document.getElementById("pdfExportBtn"),
+        hint: document.getElementById("pdfExportBtnHint"),
         backdrop: document.getElementById("pdfExportDialogBackdrop"),
         checkbox: document.getElementById("pdfExportIncludeMessages"),
         error: document.getElementById("pdfExportDialogError"),
@@ -288,13 +293,22 @@ describe("PdfExport", () => {
     it("disables the trigger with an accessible reason when there is no data", async () => {
         await setup(() => hasExportableData.mockResolvedValue(false));
 
-        expect(ui().trigger.disabled).toBe(true);
+        // aria-disabled, not the disabled property: the button has to stay in
+        // the tab order for the reason on it to be reachable at all.
+        expect(ui().trigger.disabled).toBe(false);
+        expect(ui().trigger.getAttribute("aria-disabled")).toBe("true");
         expect(ui().trigger.getAttribute("aria-label")).toBe(
             "Save as PDF, unavailable until you upload a LinkedIn export",
         );
         expect(ui().trigger.title).toBe(
             "Save as PDF, unavailable until you upload a LinkedIn export",
         );
+        expect(ui().trigger.getAttribute("aria-describedby")).toBe("pdfExportBtnHint");
+        expect(ui().hint.textContent).toBe("Upload a LinkedIn export to enable saving as PDF.");
+
+        // Clicking it anyway must not open the dialog over data that is not there.
+        ui().trigger.click();
+        expect(ui().backdrop.hidden).toBe(true);
     });
 
     it("keeps the trigger disabled while the availability check is pending", async () => {
@@ -307,21 +321,24 @@ describe("PdfExport", () => {
             ),
         );
 
-        expect(ui().trigger.disabled).toBe(true);
+        expect(ui().trigger.getAttribute("aria-disabled")).toBe("true");
         expect(ui().trigger.getAttribute("aria-label")).toBe(
             "Save as PDF, unavailable until you upload a LinkedIn export",
         );
         expect(ui().trigger.title).toBe(
             "Save as PDF, unavailable until you upload a LinkedIn export",
         );
+        ui().trigger.click();
+        expect(ui().backdrop.hidden).toBe(true);
 
         settle(true);
-        await vi.waitFor(() => expect(ui().trigger.disabled).toBe(false));
+        await vi.waitFor(() => expect(ui().trigger.getAttribute("aria-disabled")).toBe("false"));
         expect(ui().trigger.getAttribute("aria-label")).toBe("Save your insights as a PDF");
+        expect(ui().hint.textContent).toBe("");
     });
 
     it("enables the trigger when data exists", () => {
-        expect(ui().trigger.disabled).toBe(false);
+        expect(ui().trigger.getAttribute("aria-disabled")).toBe("false");
         expect(ui().trigger.getAttribute("aria-label")).toBe("Save your insights as a PDF");
     });
 
@@ -339,7 +356,7 @@ describe("PdfExport", () => {
     it("keeps the trigger disabled when the availability check fails", async () => {
         await setup(() => hasExportableData.mockRejectedValue(new Error("storage gone")));
 
-        expect(ui().trigger.disabled).toBe(true);
+        expect(ui().trigger.getAttribute("aria-disabled")).toBe("true");
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "pdf-export",
             operation: "check-availability",
@@ -536,6 +553,7 @@ describe("PdfExport", () => {
 
         expect(ui().backdrop.hidden).toBe(true);
         expect(terminateThreadsWorker).toHaveBeenCalled();
+        expect(terminateAnalyticsWorker).toHaveBeenCalled();
         expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
     });
 

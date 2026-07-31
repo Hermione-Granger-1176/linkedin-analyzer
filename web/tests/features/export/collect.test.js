@@ -4,6 +4,7 @@ import {
     collectExportData,
     formatRangeLabel,
     hasExportableData,
+    terminateAnalyticsWorker,
 } from "../../../src/features/export/collect.js";
 import { loadRecentThreads } from "../../../src/features/export/threads-transport.js";
 import { captureError } from "../../../src/platform/observability/sentry.js";
@@ -64,6 +65,25 @@ class MockWorker {
         const existing = this.listeners.get(type) || [];
         existing.push(callback);
         this.listeners.set(type, existing);
+    }
+
+    removeEventListener(type, callback) {
+        const existing = this.listeners.get(type) || [];
+        this.listeners.set(
+            type,
+            existing.filter((entry) => entry !== callback),
+        );
+    }
+
+    /**
+     * Count the listeners still attached.
+     * @returns {number} Listener count
+     */
+    listenerCount() {
+        return Array.from(this.listeners.values()).reduce(
+            (total, entries) => total + entries.length,
+            0,
+        );
     }
 
     emit(type, event) {
@@ -222,6 +242,57 @@ describe("collectExportData", () => {
         expect(data.tip).toBe("A tip.");
         expect(data.allTime[0]).toEqual({ label: "Network growth", value: "2.1x" });
         expect(worker.terminate).toHaveBeenCalled();
+        expect(worker.listenerCount()).toBe(0);
+    });
+
+    it("ends the analytics worker when the export is cancelled", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2026-01": {} } });
+
+        const pending = collectExportData();
+        await vi.waitFor(() => expect(workerInstance).not.toBeNull());
+        const worker = workerInstance;
+
+        terminateAnalyticsWorker();
+
+        // The promise settles at once rather than waiting out the 30s watchdog,
+        // and nothing is left holding the analytics base.
+        const data = await pending;
+        expect(data.insights).toEqual([]);
+        expect(worker.terminate).toHaveBeenCalled();
+        expect(worker.listenerCount()).toBe(0);
+
+        // A late answer from a worker that was already told to stop changes
+        // nothing, and cancelling twice is harmless.
+        worker.reply({ type: "init", payload: { hasData: true } });
+        terminateAnalyticsWorker();
+        expect(worker.terminate).toHaveBeenCalledTimes(1);
+    });
+
+    it("does nothing when there is no analytics worker to cancel", () => {
+        expect(() => terminateAnalyticsWorker()).not.toThrow();
+    });
+
+    it("settles when the analytics request cannot be posted", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2026-01": {} } });
+        const postFailure = piiError();
+
+        const pending = collectExportData();
+        await vi.waitFor(() => expect(workerInstance).not.toBeNull());
+        const worker = workerInstance;
+        worker.postMessage.mockImplementation(() => {
+            throw postFailure;
+        });
+
+        worker.reply({ type: "init", payload: { hasData: true } });
+
+        const data = await pending;
+        expect(data.insights).toEqual([]);
+        expect(worker.terminate).toHaveBeenCalled();
+        expect(worker.listenerCount()).toBe(0);
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, postFailure);
+        expect(context).toEqual({ module: "pdf-export", operation: "analytics-worker-post" });
     });
 
     it("prefers the cached analytics base over a storage read", async () => {

@@ -91,13 +91,17 @@
 
         <!-- Availability is resolved asynchronously after boot, so the resting
         state is unavailable: an enabled button here would open an export dialog
-        over data that may not exist yet, under a label that claims it does. -->
+        over data that may not exist yet, under a label that claims it does.
+        aria-disabled rather than the disabled attribute, so the button keeps its
+        place in the tab order and a keyboard or screen-reader user can reach it
+        and hear why it is unavailable; open() refuses the click instead. -->
         <button
             class="pdf-export-btn"
             id="pdfExportBtn"
             type="button"
-            disabled
+            aria-disabled="true"
             aria-label="Save as PDF, unavailable until you upload a LinkedIn export"
+            aria-describedby="pdfExportBtnHint"
             title="Save as PDF, unavailable until you upload a LinkedIn export"
         >
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -119,6 +123,9 @@
                 />
             </svg>
         </button>
+        <span class="sr-only" id="pdfExportBtnHint"
+            >Upload a LinkedIn export to enable saving as PDF.</span
+        >
 
         <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
             <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true">

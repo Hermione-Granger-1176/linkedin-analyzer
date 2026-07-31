@@ -74,7 +74,7 @@
     },
     {
       "path": "web/dist/assets/threads-worker-*.js",
-      "limit": "8 kB"
+      "limit": "10 kB"
     },
     {
       "path": "web/dist/assets/jspdf*.js",

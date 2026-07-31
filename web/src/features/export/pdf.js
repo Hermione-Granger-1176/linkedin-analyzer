@@ -17,7 +17,7 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
-import { collectExportData, hasExportableData } from "./collect.js";
+import { collectExportData, hasExportableData, terminateAnalyticsWorker } from "./collect.js";
 import { registerPdfFonts } from "./fonts.js";
 import { readPdfPalette } from "./palette.js";
 import { renderPdfDocument } from "./pdf-document.js";
@@ -29,6 +29,7 @@ const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), [href]"
 
 const ENABLED_LABEL = "Save your insights as a PDF";
 const DISABLED_LABEL = "Save as PDF, unavailable until you upload a LinkedIn export";
+const DISABLED_HINT = "Upload a LinkedIn export to enable saving as PDF.";
 const GENERIC_ERROR = "Something went wrong while building the PDF. Please try again.";
 
 export const PdfExport = (() => {
@@ -38,6 +39,9 @@ export const PdfExport = (() => {
     let initialized = false;
     let isOpen = false;
     let isGenerating = false;
+    // The trigger is aria-disabled rather than natively disabled, so it can
+    // still be clicked and activated by keyboard; open() consults this instead.
+    let isAvailable = false;
     let lastFocused = null;
     // Bumped whenever an export starts or is abandoned. A run whose token is no
     // longer the current one has been cancelled: it must not download, touch the
@@ -51,6 +55,7 @@ export const PdfExport = (() => {
     function resolveElements() {
         return {
             trigger: document.getElementById("pdfExportBtn"),
+            hint: document.getElementById("pdfExportBtnHint"),
             backdrop: document.getElementById("pdfExportDialogBackdrop"),
             dialog: document.getElementById("pdfExportDialog"),
             includeMessages: /** @type {HTMLInputElement|null} */ (
@@ -96,6 +101,12 @@ export const PdfExport = (() => {
 
     /**
      * Enable or disable the trigger, with a reason a screen reader can read.
+     *
+     * `aria-disabled` rather than the `disabled` property: a natively disabled
+     * button leaves the tab order entirely, so the reason for it being
+     * unavailable - which lives on the button - can never be reached by the
+     * people who most need it. The button stays focusable and `open()` refuses
+     * to act on it instead.
      * @returns {Promise<void>}
      */
     async function refreshAvailability() {
@@ -108,14 +119,18 @@ export const PdfExport = (() => {
                 operation: "check-availability",
             });
         }
-        elements.trigger.disabled = !available;
+        isAvailable = available;
+        elements.trigger.setAttribute("aria-disabled", available ? "false" : "true");
         elements.trigger.setAttribute("aria-label", available ? ENABLED_LABEL : DISABLED_LABEL);
         elements.trigger.title = available ? ENABLED_LABEL : DISABLED_LABEL;
+        if (elements.hint) {
+            elements.hint.textContent = available ? "" : DISABLED_HINT;
+        }
     }
 
     /** Open the confirmation dialog. */
     function open() {
-        if (isOpen) {
+        if (isOpen || !isAvailable) {
             return;
         }
         isOpen = true;
@@ -162,10 +177,18 @@ export const PdfExport = (() => {
         target.focus();
     }
 
-    /** Abandon the running export and put the dialog back in its resting state. */
+    /**
+     * Abandon the running export and put the dialog back in its resting state.
+     *
+     * Both workers are ended: an export cancelled early is usually still in the
+     * analytics worker, and one cancelled with messages included is usually in
+     * the threads worker. Bumping the token alone would stop the result being
+     * used but leave the worker running, and holding its data, until it answered.
+     */
     function cancelGeneration() {
         generationToken += 1;
         terminateThreadsWorker();
+        terminateAnalyticsWorker();
         setBusy(false);
         LoadingOverlay.hide(OVERLAY_SOURCE);
     }

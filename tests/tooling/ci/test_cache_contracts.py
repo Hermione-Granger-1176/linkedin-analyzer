@@ -19,7 +19,9 @@ def test_uv_setup_uses_one_pinned_version_without_a_duplicate_cache() -> None:
     """Install uv from the project pin and keep one dependency cache owner."""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert pyproject["tool"]["uv"]["required-version"] == "==0.11.32"
+    # A floor rather than an exact pin, so an install a few patches behind still
+    # runs; setup-uv resolves the newest release that satisfies it.
+    assert pyproject["tool"]["uv"]["required-version"].startswith(">=")
     assert len(re.findall(r"astral-sh/setup-uv@[0-9a-f]{40} # v\d+\.\d+\.\d+", CI_SETUP)) == 1
     assert "enable-cache: false" in CI_SETUP
     assert "cache: pip" not in CI_SETUP

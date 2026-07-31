@@ -86,7 +86,7 @@ jobs:
             - Type: CI maintenance
             - Pin GitHub Actions to full commit SHAs for reproducible runs
             - Align the Playwright package and immutable CI image
-            - Refresh the exact uv and pre-commit hook versions
+            - Refresh the exact pre-commit hook version (uv is a hand-raised floor)
           pathspec: |
             .github/workflows
             .github/actions

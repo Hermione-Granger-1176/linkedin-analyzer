@@ -154,7 +154,7 @@ The workflow structure mirrors the stricter automation pattern used in the `arti
 
 Configured automation:
 
-- `refresh-action-shas.yml` runs monthly or manually and refreshes the pins Dependabot cannot safely couple. It aligns `@playwright/test` with the immutable Playwright container, refreshes exact uv and pre-commit hook versions, and converts tag-based workflow/action `uses:` refs to full commit SHAs. Dependabot owns the remaining npm, Python, Dockerfile, and GitHub Action updates. TypeScript major releases remain explicitly deferred until a dedicated migration can adapt the JavaScript type-checking surface.
+- `refresh-action-shas.yml` runs monthly or manually and refreshes the pins Dependabot cannot safely couple. It aligns `@playwright/test` with the immutable Playwright container, refreshes the exact pre-commit hook version, and converts tag-based workflow/action `uses:` refs to full commit SHAs. uv is not among them: `tool.uv.required-version` is a minimum rather than an exact pin, and it is raised by hand when a newer uv is actually needed. Dependabot owns the remaining npm, Python, Dockerfile, and GitHub Action updates. TypeScript major releases remain explicitly deferred until a dedicated migration can adapt the JavaScript type-checking surface.
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
 - `commit-python-locks.yml` validates the triggering workflow run against the live Dependabot PR, downloads a `uv.lock`-only artifact, validates its contents, revalidates the branch head, and commits only if it is still safe.
 

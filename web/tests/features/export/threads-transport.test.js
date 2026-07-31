@@ -103,14 +103,18 @@ describe("loadRecentThreads", () => {
         expect(worker.terminate).toHaveBeenCalled();
     });
 
-    it("ignores responses for other requests and invalid envelopes", async () => {
+    it("ignores stale successes for other requests and invalid envelopes", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV);
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
         worker.emit("message", { data: { type: "nope" } });
         worker.emit("message", {
-            data: { type: "threads", requestId: request.requestId + 99, payload: {} },
+            data: {
+                type: "threads",
+                requestId: request.requestId + 99,
+                payload: { success: true, threads: [{ name: "Stale" }] },
+            },
         });
         worker.emit("message", {
             data: {
@@ -142,6 +146,33 @@ describe("loadRecentThreads", () => {
         });
 
         expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
+    });
+
+    it("treats a failure envelope as terminal even under another request id", async () => {
+        vi.useFakeTimers();
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        const worker = workerInstance;
+        const [request] = worker.postMessage.mock.calls[0];
+
+        // A worker that could not read the request cannot echo its id in every
+        // browser; the single in-flight request must still end here rather than
+        // sitting out the watchdog.
+        worker.emit("message", {
+            data: {
+                type: "threads",
+                requestId: request.requestId + 99,
+                payload: { success: false, error: "invalid request" },
+            },
+        });
+        vi.useRealTimers();
+
+        expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
+        expect(worker.terminate).toHaveBeenCalled();
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "threads-worker-failure",
+            requestId: request.requestId,
+        });
     });
 
     it("falls back to the main thread when the worker errors", async () => {

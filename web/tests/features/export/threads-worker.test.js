@@ -153,20 +153,27 @@ describe("threads worker listeners", () => {
         expect(message.payload.threads).toHaveLength(2);
     });
 
-    it("reports an invalid request payload", () => {
+    it("reports an invalid request payload under the id it arrived with", () => {
         spyOnPostMessage();
-        dispatch("message", { data: { type: "threads", payload: {} } });
+        dispatch("message", { data: { type: "threads", requestId: 12, payload: {} } });
 
         const [message] = postMessageSpy.mock.calls[0];
+        // Answering under id 0 would leave the main thread waiting out its whole
+        // size-scaled watchdog, which for a large stored CSV looks like a hang.
+        expect(message.requestId).toBe(12);
         expect(message.payload.success).toBe(false);
         expect(message.payload.error).toContain("Missing messagesCsv payload");
     });
 
-    it("forwards runtime error events", () => {
+    it("forwards runtime error events under the active request id", () => {
         spyOnPostMessage();
+        dispatch("message", {
+            data: { type: "threads", requestId: 21, payload: { messagesCsv: MESSAGES_CSV } },
+        });
         dispatch("error", { error: new Error("threads-runtime") });
 
-        const [message] = postMessageSpy.mock.calls[0];
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(21);
         expect(message.payload.error).toContain("threads-runtime");
     });
 

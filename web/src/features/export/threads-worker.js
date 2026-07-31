@@ -96,7 +96,11 @@ function extractWorkerRejection(event) {
     return event.reason;
 }
 
-/* v8 ignore next 16 */
+// The id of the request being served, so a runtime failure is answered under an
+// id the main thread is actually waiting on rather than a placeholder it drops.
+let activeRequestId = 0;
+
+/* v8 ignore next 17 */
 if (typeof self !== "undefined") {
     self.addEventListener("message", (event) => {
         const rawMessage = event.data || {};
@@ -105,8 +109,9 @@ if (typeof self !== "undefined") {
         }
 
         const parsed = parseThreadsWorkerRequest(rawMessage);
+        activeRequestId = parsed.valid ? parsed.value.requestId : parsed.requestId;
         if (!parsed.valid) {
-            postThreadsError(0, parsed.error || "Invalid worker request payload.");
+            postThreadsError(activeRequestId, parsed.error || "Invalid worker request payload.");
             return;
         }
 
@@ -123,11 +128,11 @@ if (typeof self !== "undefined") {
     });
 
     self.addEventListener("error", (event) => {
-        postThreadsError(0, extractWorkerError(event));
+        postThreadsError(activeRequestId, extractWorkerError(event));
     });
 
     self.addEventListener("unhandledrejection", (event) => {
-        postThreadsError(0, extractWorkerRejection(event));
+        postThreadsError(activeRequestId, extractWorkerRejection(event));
     });
 }
 

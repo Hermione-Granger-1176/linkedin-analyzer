@@ -132,7 +132,18 @@ function requestThreadsFromWorker(messagesCsv, options) {
 
             const message = parsed.value;
             if (message.requestId !== requestId) {
-                return;
+                // A stale success belongs to a request nobody is waiting on. A
+                // failure is different: only one request is ever in flight, so a
+                // failure envelope under any id is this request failing, and
+                // waiting out the watchdog would look like a hang.
+                if (message.payload.success) {
+                    return;
+                }
+                captureError(new Error("Threads worker reported a failure."), {
+                    module: "pdf-export",
+                    operation: "threads-worker-failure",
+                    requestId,
+                });
             }
             finishRequest();
             resolve(message.payload.success ? message.payload.threads : null);

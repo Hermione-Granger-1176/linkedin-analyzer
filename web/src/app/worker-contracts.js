@@ -415,19 +415,25 @@ export function parseMessagesWorkerMessage(message) {
 /**
  * Parse threads worker request envelope.
  * @param {unknown} message - Raw request
- * @returns {{valid: boolean, value?: object, error?: string}}
+ * @returns {{valid: boolean, value?: object, error?: string, requestId?: number|string}}
  */
 export function parseThreadsWorkerRequest(message) {
+    // A rejected request still has to be answered under the id it arrived with:
+    // the main thread ignores any other id and would otherwise sit out the whole
+    // size-scaled watchdog before giving up.
+    const requestId = normalizeRequestId(isPlainObject(message) ? message.requestId : 0);
+    const rejected = (error) => ({ ...invalid(error), requestId });
+
     if (!isPlainObject(message) || message.type !== "threads") {
-        return invalid("Invalid threads worker request envelope");
+        return rejected("Invalid threads worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
     const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
     if (!messagesCsv) {
-        return invalid("Missing messagesCsv payload");
+        return rejected("Missing messagesCsv payload");
     }
     if (messagesCsv.length > LIMITS.maxCsvChars) {
-        return invalid("messagesCsv payload exceeds allowed size");
+        return rejected("messagesCsv payload exceeds allowed size");
     }
     return valid({
         type: "threads",

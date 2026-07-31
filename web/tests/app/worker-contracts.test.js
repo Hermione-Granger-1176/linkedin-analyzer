@@ -514,6 +514,18 @@ describe("worker contracts", () => {
         ).toBe(false);
     });
 
+    it("keeps the request id on a rejected threads worker request", () => {
+        // The worker answers a rejection under this id; without it the main
+        // thread ignores the reply and waits out its whole watchdog.
+        expect(parseThreadsWorkerRequest({ type: "threads", requestId: 8 }).requestId).toBe(8);
+        expect(
+            parseThreadsWorkerRequest({ type: "threads", requestId: "job-1", payload: {} })
+                .requestId,
+        ).toBe("job-1");
+        expect(parseThreadsWorkerRequest({ type: "process", requestId: 3 }).requestId).toBe(3);
+        expect(parseThreadsWorkerRequest(null).requestId).toBe(0);
+    });
+
     it("rejects oversized threads worker CSV payloads", () => {
         const parsed = parseThreadsWorkerRequest({
             type: "threads",

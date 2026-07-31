@@ -430,7 +430,7 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsTimeRangeSelect").value).toBe("3m");
     });
 
-    it("hides insightTip when tip is null in renderInsights (line 341)", async () => {
+    it("hides insightTip when tip is null in renderInsights", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -458,7 +458,7 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightTip").hidden).toBe(true);
     });
 
-    it("syncRouteRange skips setParams when not on insights route (line 397-398)", async () => {
+    it("syncRouteRange skips setParams when not on insights route", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -473,7 +473,7 @@ describe("InsightsPage", () => {
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 
-    it("updateVisibility shows grid when state.hasData is true (line 311)", async () => {
+    it("updateVisibility shows grid when state.hasData is true", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -506,7 +506,7 @@ describe("InsightsPage", () => {
         expect(LoadingOverlay.hide).toHaveBeenCalledWith("insights");
     });
 
-    it("handleCacheChange resets state for known cache events (lines 122-129)", async () => {
+    it("handleCacheChange resets state for known cache events", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -527,7 +527,7 @@ describe("InsightsPage", () => {
         expect(DataCache.subscribe).toHaveBeenCalled();
     });
 
-    it("handleWorkerError sets empty state (lines 241-242)", async () => {
+    it("handleWorkerError sets empty state", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -540,7 +540,7 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsEmpty").hidden).toBe(false);
     });
 
-    it("ignores worker view message with mismatched requestId (line 204)", async () => {
+    it("ignores worker view message with mismatched requestId", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -579,7 +579,7 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsGrid").innerHTML).toBe(initialGridInnerHTML);
     });
 
-    it("loadBase catch block sets empty state on storage error (lines 183-184)", async () => {
+    it("loadBase catch block sets empty state on storage error", async () => {
         Storage.getAnalytics.mockRejectedValue(new Error("Storage failure"));
         DataCache.get.mockReturnValue(null);
 
@@ -593,7 +593,7 @@ describe("InsightsPage", () => {
         );
     });
 
-    it("onRouteChange calls updateVisibility when analyticsReady=true hasData=false (line 78-80)", async () => {
+    it("onRouteChange calls updateVisibility when analyticsReady=true hasData=false", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 
@@ -613,7 +613,7 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsEmpty").hidden).toBe(false);
     });
 
-    it("uses cached analytics base from DataCache when available (line 164)", async () => {
+    it("uses cached analytics base from DataCache when available", async () => {
         const analyticsBase = { months: { "2024-01": {} } };
         DataCache.get.mockImplementation((key) =>
             key === "storage:analyticsBase" ? analyticsBase : null,
@@ -628,7 +628,7 @@ describe("InsightsPage", () => {
         expect(Storage.getAnalytics.mock.calls.length).toBe(callsBefore);
     });
 
-    it("resetFilters button calls syncRouteRange and requestView (lines 275-278)", async () => {
+    it("resetFilters button calls syncRouteRange and requestView", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
 

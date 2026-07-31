@@ -526,7 +526,7 @@ describe("MessagesAnalytics", () => {
         expect(state.events.length).toBe(0);
     });
 
-    it("sanitizeParticipant returns null when both name and url are empty (line 412)", () => {
+    it("sanitizeParticipant returns null when both name and url are empty", () => {
         // A row where FROM is blank and no sender URL → participant has no name and no url
         const rows = [
             {

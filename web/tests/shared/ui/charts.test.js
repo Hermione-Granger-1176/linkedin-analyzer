@@ -139,7 +139,7 @@ describe("SketchCharts", () => {
         expect(canvas.width).toBe(320);
     });
 
-    it("drawTimeline with >24 data points uses sparse value labels (line 242)", () => {
+    it("drawTimeline with >24 data points uses sparse value labels", () => {
         // >24 points triggers showAllValues=false, valueEvery>1
         const data = [];
         for (let i = 1; i <= 26; i++) {
@@ -194,12 +194,12 @@ describe("SketchCharts", () => {
         expect(ctx.rotate).toHaveBeenCalled();
     });
 
-    it("drawTopics handles empty data array gracefully (line 319)", () => {
+    it("drawTopics handles empty data array gracefully", () => {
         const { canvas } = createCanvas({ width: 300, height: 200 });
         expect(() => SketchCharts.drawTopics(canvas, [], 1)).not.toThrow();
     });
 
-    it("drawHeatmap handles empty/null grid gracefully (line 390)", () => {
+    it("drawHeatmap handles empty/null grid gracefully", () => {
         const { canvas } = createCanvas({ width: 360, height: 220 });
         expect(() => SketchCharts.drawHeatmap(canvas, [])).not.toThrow();
     });
@@ -216,7 +216,7 @@ describe("SketchCharts", () => {
         expect(item).toBeNull();
     });
 
-    it("drawTimeline with progress < 1 renders partial chart (lines 167-170)", () => {
+    it("drawTimeline with progress < 1 renders partial chart", () => {
         const { canvas } = createCanvas({ width: 400, height: 200 });
         const data = [
             { key: "2025-01", label: "Jan 2025", value: 2 },

@@ -241,7 +241,7 @@ describe("CleanPage", () => {
         expect(hint).toContain("Only one file");
     });
 
-    it("onRouteChange calls init when not yet initialized (lines 73-75)", async () => {
+    it("onRouteChange calls init when not yet initialized", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
 
         // onRouteChange before init(), should call init internally

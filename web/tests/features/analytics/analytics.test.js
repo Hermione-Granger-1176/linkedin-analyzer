@@ -361,7 +361,7 @@ describe("AnalyticsEngine", () => {
 
     // ── buildWeeklyTimeline with hour filter active (lines 675-679) ───────────
 
-    it("buildView weekly timeline with hour filter applies hourRatio (lines 675-679)", () => {
+    it("buildView weekly timeline with hour filter applies hourRatio", () => {
         // Two posts in the same week, one at hour 9, one at hour 14
         const shares = [
             {
@@ -433,7 +433,7 @@ describe("AnalyticsEngine", () => {
 
     // ── generateInsights, quiet-stretch insight (line 858) ──────────────────
 
-    it("generateInsights adds quiet-stretch insight when total < 12 (line 858)", () => {
+    it("generateInsights adds quiet-stretch insight when total < 12", () => {
         const view = {
             totals: { total: 5, posts: 5, comments: 0 },
             peakHour: { hour: 10, count: 2 },
@@ -451,7 +451,7 @@ describe("AnalyticsEngine", () => {
 
     // ── buildWeeklyTimeline with day filter zeroing non-matching days (line 664) ──
 
-    it("buildView weekly timeline zeroes days that do not match day filter (line 664)", () => {
+    it("buildView weekly timeline zeroes days that do not match day filter", () => {
         // Posts on Monday (day=0) and Tuesday (day=1)
         const shares = [
             {
@@ -488,7 +488,7 @@ describe("AnalyticsEngine", () => {
 
     // ── buildWeeklyTimeline with topic filter ratio (lines 669-672) ─────────
 
-    it("buildView weekly timeline applies topicRatio when topic filter active (lines 669-672)", () => {
+    it("buildView weekly timeline applies topicRatio when topic filter active", () => {
         const shares = [
             {
                 Date: "2025-02-03 09:00:00",
@@ -522,7 +522,7 @@ describe("AnalyticsEngine", () => {
 
     // ── calculateStreaksFromDays with empty daySet (line 749) ─────────────────
 
-    it("calculateStreaksFromDays returns zeros when passed empty data (line 749)", () => {
+    it("calculateStreaksFromDays returns zeros when passed empty data", () => {
         // An analytics object with no active days → calculateStreaksFromDays gets empty set
         const analyticsEmpty = AnalyticsEngine.compute([], []);
         const view = AnalyticsEngine.buildView(analyticsEmpty, {
@@ -540,7 +540,7 @@ describe("AnalyticsEngine", () => {
 
     // ── getMonthKeysInRange with monthFocus (line 434) ────────────────────────
 
-    it("buildView with monthFocus returns single-month timeline (line 434)", () => {
+    it("buildView with monthFocus returns single-month timeline", () => {
         const shares = [
             {
                 Date: "2025-01-05 09:00:00",
@@ -574,7 +574,7 @@ describe("AnalyticsEngine", () => {
 
     // ── filterMonthBucket with topic that has 0 count → useMonth=false (line 392) ──
 
-    it("buildView with topic that has zero count for a month sets useMonth=false (line 392)", () => {
+    it("buildView with topic that has zero count for a month sets useMonth=false", () => {
         // Jan has AI topic, Feb has Excel topic. Filter for AI → Feb month gets useMonth=false
         const shares = [
             {
@@ -640,7 +640,7 @@ describe("AnalyticsEngine", () => {
 
     // ── buildWeeklyTimeline typeKey branch when shareTypes is falsy (line 658) ─
 
-    it("buildView weekly timeline falls back to 0 when entry has no shareTypes (line 658)", () => {
+    it("buildView weekly timeline falls back to 0 when entry has no shareTypes", () => {
         const shares = [
             {
                 Date: "2025-02-03 09:00:00",
@@ -669,7 +669,7 @@ describe("AnalyticsEngine", () => {
         view.timeline.forEach(entry => expect(typeof entry.value).toBe("number"));
     });
 
-    it("generateInsights adds trending-up insight when trend direction is up (line 849)", () => {
+    it("generateInsights adds trending-up insight when trend direction is up", () => {
         const view = {
             totals: { total: 30, posts: 20, comments: 10 },
             peakHour: { hour: 10, count: 5 },

@@ -218,14 +218,15 @@ Platform modules integrate with browser capabilities or operational services. Th
 web/src/shared/
 ├── constants.js                        # Dependency-free cross-feature constants
 ├── dom-events.js                       # Delegated event target helpers
-└── ui/
-    ├── avatar.js                       # Deterministic contact avatars
-    ├── chart-tooltip.js                # Shared chart tooltip
-    ├── charts.js                       # Canvas chart rendering and export
-    ├── decorations.js                  # Rough.js background decorations
-    ├── loading-overlay.js              # Shared loading overlay
-    ├── nav-menu.js                     # Mobile navigation
-    └── theme.js                        # Theme selection
+├── ui/
+│   ├── avatar.js                       # Deterministic contact avatars
+│   ├── chart-tooltip.js                # Shared chart tooltip
+│   ├── charts.js                       # Canvas chart rendering and export
+│   ├── decorations.js                  # Rough.js background decorations
+│   ├── loading-overlay.js              # Shared loading overlay
+│   ├── nav-menu.js                     # Mobile navigation
+│   └── theme.js                        # Theme selection
+└── worker-timeout.js                   # Size-scaled watchdog budget for parsing workers
 ```
 
 `shared/` is not a general utility bucket. Modules remain with their owning feature until reuse is concrete.

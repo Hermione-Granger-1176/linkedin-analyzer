@@ -20,8 +20,13 @@ def test_uv_setup_uses_one_pinned_version_without_a_duplicate_cache() -> None:
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     # A floor rather than an exact pin, so an install a few patches behind still
-    # runs; setup-uv resolves the newest release that satisfies it.
-    assert pyproject["tool"]["uv"]["required-version"].startswith(">=")
+    # runs; setup-uv resolves the newest release that satisfies it. The floor may
+    # be raised, but it may not drop below the version the project has actually
+    # been exercised against, nor take a shape that stops being a floor at all.
+    required_uv = pyproject["tool"]["uv"]["required-version"]
+    floor = re.fullmatch(r">=(\d+)\.(\d+)\.(\d+)", required_uv)
+    assert floor is not None, f"uv required-version must be a >=X.Y.Z floor, got {required_uv!r}"
+    assert tuple(int(part) for part in floor.groups()) >= (0, 11, 0)
     assert len(re.findall(r"astral-sh/setup-uv@[0-9a-f]{40} # v\d+\.\d+\.\d+", CI_SETUP)) == 1
     assert "enable-cache: false" in CI_SETUP
     assert "cache: pip" not in CI_SETUP

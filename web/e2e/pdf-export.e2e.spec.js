@@ -4,9 +4,21 @@ const path = require("path");
 const AxeBuilder = require("@axe-core/playwright").default;
 const { expect, test } = require("@playwright/test");
 
+const { extractPdfText } = require("./helpers/pdf-text");
+
 const SHARES_CSV = path.join(__dirname, "fixtures", "Shares.csv");
 const COMMENTS_CSV = path.join(__dirname, "fixtures", "Comments.csv");
 const MESSAGES_CSV = path.join(__dirname, "fixtures", "Messages.csv");
+const MESSAGE_THREADS_CSV = path.join(__dirname, "fixtures", "MessagesThreads.csv");
+
+// Every body in MessagesThreads.csv starts with a character the spreadsheet
+// cleaner quote-prefixes, which is right for a workbook and wrong here.
+const EXPORTED_BODIES = [
+    "+1, that works for me",
+    "=totally fine by me",
+    "@Bob could you take a look",
+    "-2 days later is fine",
+];
 
 /**
  * Upload one or more CSV fixtures using the hidden file input.
@@ -76,6 +88,49 @@ test("save as PDF downloads a real PDF including message contents", async ({ pag
 
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
+});
+
+test("the opted-in PDF really contains the message text", async ({ page }, testInfo) => {
+    // The document is drawn with embedded TrueType subsets, whose text is written
+    // as glyph ids. Blocking the font files takes the documented Helvetica
+    // fallback instead, where the text is readable in the content stream, so the
+    // assertions below are about the bodies rather than the byte count.
+    await page.route("**/fonts/*.ttf", (route) => route.abort());
+
+    await uploadFiles(page, [SHARES_CSV, MESSAGE_THREADS_CSV]);
+    await waitForLoadedStatus(page, "sharesStatus");
+    await waitForLoadedStatus(page, "messagesStatus");
+
+    const trigger = page.locator("#pdfExportBtn");
+    await expect(trigger).toBeEnabled({ timeout: 20000 });
+    await trigger.click();
+    await page.locator("#pdfExportIncludeMessages").check();
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.locator("#pdfExportConfirmBtn").click();
+    const download = await downloadPromise;
+
+    const outputPath = testInfo.outputPath("linkedin-insights-threads.pdf");
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    await download.saveAs(outputPath);
+
+    const text = extractPdfText(fs.readFileSync(outputPath));
+
+    expect(text).toContain("Recent conversations");
+    expect(text).toContain("Ada Lovelace");
+    expect(text).toContain("Bob Smith");
+    for (const body of EXPORTED_BODIES) {
+        expect(text).toContain(body);
+    }
+    // The spreadsheet path would have written "'+1, that works for me".
+    expect(text).not.toContain("'+1");
+    expect(text).not.toContain("'=");
+    expect(text).not.toContain("'@");
+    // Two conversations, each with a message in both directions, so the account
+    // owner is unambiguous and the chips say so.
+    expect(text).toContain("Sent");
+    expect(text).toContain("Received");
+    expect(text).not.toContain("Sam Self");
 });
 
 test("save as PDF works in dark mode and closes on Escape", async ({ page }) => {

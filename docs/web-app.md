@@ -134,7 +134,8 @@ The PDF is a document in its own right, not a screenshot. It is laid out and dra
 - It is **always light and warm-palette**, whichever theme the app is in. The colors are read back out of the stylesheet at export time (`features/export/palette.js` mounts a detached `.theme-light` probe), so the document cannot drift from the site palette.
 - Fonts are the same handwritten faces the app uses on screen, shipped as TrueType next to the `.woff2` files and fetched only when an export runs. A fetch failure falls back to Helvetica and still produces a valid PDF.
 - `jspdf` is loaded with a dynamic `import()`, so it never enters the initial bundle.
-- The button is disabled, with the reason in its accessible name, until there is something to export.
+- The button ships disabled, with the reason in its accessible name, and is enabled only once the availability check has resolved. Availability is asynchronous, so its resting state has to be the unavailable one.
+- Escape closes the dialog at any point, including mid-generation, which cancels the export: the thread worker is terminated and a late result cannot download, reopen the dialog or take focus back.
 
 ### Message contents are opt-in
 

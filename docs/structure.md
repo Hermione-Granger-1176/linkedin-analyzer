@@ -60,6 +60,7 @@ The browser application uses feature-first ownership. Application composition, b
 web/
 ├── e2e/                                # Playwright browser tests
 │   ├── fixtures/
+│   ├── helpers/                        # Shared spec helpers, such as PDF text extraction
 │   ├── app.e2e.spec.js
 │   ├── browser-xlsx.e2e.spec.js
 │   ├── pdf-export.e2e.spec.js

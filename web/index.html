@@ -1600,6 +1600,7 @@
                 id="pdfExportDialog"
                 role="dialog"
                 aria-modal="true"
+                aria-busy="false"
                 aria-labelledby="pdfExportDialogTitle"
                 aria-describedby="pdfExportDialogSummary"
             >
@@ -1611,7 +1612,10 @@
                 <ul class="export-dialog-contents">
                     <li>Your insight cards and the closing pro tip</li>
                     <li>The active time range and today's date</li>
-                    <li>All-time stats: network growth, outreach, replies, unanswered</li>
+                    <li>
+                        All-time stats: network growth, outreach, replies, unanswered, sent to
+                        received
+                    </li>
                 </ul>
                 <label class="export-dialog-option" for="pdfExportIncludeMessages">
                     <input type="checkbox" id="pdfExportIncludeMessages" />

@@ -91,13 +91,20 @@
 }
 
 /*
- * Emptiness, not `hidden`, is what takes these off the page. `hidden` drops an
- * element out of the accessibility tree, and a live region that is unhidden
- * with its text already in it is not reliably announced - which would defeat
- * the point of announcing generation progress through one.
+ * Emptiness is what takes these off the page, and it collapses the box rather
+ * than removing it. `hidden` and `display: none` both drop an element out of
+ * the accessibility tree, and a live region that re-enters the tree with its
+ * text already in place is not reliably announced - which would defeat the
+ * point of announcing generation progress and failures through one. Collapsing
+ * instead leaves the region present the whole time, so the text arriving is
+ * what assistive technology sees. The dialog is a plain block with no gap, so
+ * an empty paragraph with no box takes up no room.
  */
-.export-dialog-error:empty {
-    display: none;
+.export-dialog-error:empty,
+.export-dialog-status:empty {
+    margin: 0;
+    padding: 0;
+    border: 0;
 }
 
 .export-dialog-status {
@@ -107,10 +114,6 @@
     border-radius: var(--radius-md);
     background: var(--accent-yellow-bg);
     color: var(--text-secondary-strong);
-}
-
-.export-dialog-status:empty {
-    display: none;
 }
 
 .export-dialog-actions {
@@ -147,12 +150,18 @@
     opacity: 0.6;
 }
 
-/* --accent-blue is a marker tone, not a text background: white on it is only
-   3.6:1. --accent-blue-contrast is the darkened pair kept for exactly this. */
+/*
+ * --accent-blue is a marker tone, not a text background: white on it is only
+ * 3.6:1. --accent-blue-contrast is the paired tone kept for exactly this, but it
+ * darkens in the light theme and lightens in the dark one, so the label has to
+ * take --bg-primary rather than a fixed white: white on the dark theme's
+ * #A5D8FF is 1.51:1, and --bg-primary gives 7.17:1 light and 11.55:1 dark. Same
+ * pairing .reset-btn uses.
+ */
 .export-dialog-btn--primary {
     background: var(--accent-blue-contrast);
     border-color: var(--accent-blue-contrast);
-    color: var(--text-on-accent);
+    color: var(--bg-primary);
 }
 
 @media (max-width: 540px) {
@@ -169,9 +178,17 @@
     }
 }
 
+/*
+ * The hover rules that set these transforms are more specific than a bare class
+ * selector, so cancelling the motion means matching them: without the hover
+ * selectors here, `transform: none` only ever applied to a resting state that
+ * had no transform to begin with.
+ */
 @media (prefers-reduced-motion: reduce) {
     .export-dialog-btn,
-    .pdf-export-btn {
+    .export-dialog-btn:hover:not(:disabled),
+    .pdf-export-btn,
+    .pdf-export-btn:hover:not([aria-disabled="true"]) {
         transition: none;
         transform: none;
     }

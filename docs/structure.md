@@ -147,6 +147,7 @@ web/src/features/
 ├── export/
 │   ├── collect.js                      # PDF document model assembly
 │   ├── fonts.js                        # TrueType loading for jsPDF
+│   ├── messages-parse.js               # CSV parsing that keeps message bodies verbatim
 │   ├── palette.js                      # Light palette read from the stylesheet
 │   ├── pdf-document.js                 # A4 measure-and-draw layout engine
 │   ├── pdf.js                          # Export button, dialog, and orchestration

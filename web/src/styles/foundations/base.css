@@ -160,7 +160,9 @@ button {
     color: var(--text-primary);
 }
 
-.pdf-export-btn:hover:not(:disabled):not([aria-disabled="true"]) {
+/* No :disabled half: this button is never natively disabled, deliberately, so
+   it keeps its place in the tab order and the reason on it stays reachable. */
+.pdf-export-btn:hover:not([aria-disabled="true"]) {
     transform: scale(1.06) rotate(-8deg);
     box-shadow: var(--shadow-md);
 }
@@ -170,7 +172,6 @@ button {
     outline-offset: 2px;
 }
 
-.pdf-export-btn:disabled,
 .pdf-export-btn[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.45;

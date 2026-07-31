@@ -159,7 +159,7 @@ async function setup(configure) {
     });
     hasExportableData.mockResolvedValue(true);
     readPdfPalette.mockReturnValue({ "--bg-primary": { r: 255, g: 253, b: 247 } });
-    registerPdfFonts.mockResolvedValue({ body: "PatrickHand", accent: "Caveat", embedded: true });
+    registerPdfFonts.mockResolvedValue({ body: "PatrickHand", accent: "Caveat" });
     collectExportData.mockResolvedValue({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
 
     globalThis.URL.createObjectURL = vi.fn(() => "blob:pdf");
@@ -497,7 +497,7 @@ describe("PdfExport", () => {
             expect.objectContaining({ rangeLabel: "Last 12 months", insights: [], threads: [] }),
             {
                 palette: { "--bg-primary": { r: 255, g: 253, b: 247 } },
-                fonts: { body: "PatrickHand", accent: "Caveat", embedded: true },
+                fonts: { body: "PatrickHand", accent: "Caveat" },
             },
         );
         // "In order" is the test's name, so the order is asserted rather than
@@ -762,7 +762,7 @@ describe("PdfExport", () => {
         await vi.waitFor(() => expect(registerPdfFonts).toHaveBeenCalled());
 
         press("Escape");
-        settleFonts({ body: "helvetica", accent: "helvetica", embedded: false });
+        settleFonts({ body: "helvetica", accent: "helvetica" });
         await Promise.resolve();
         await Promise.resolve();
 

@@ -22,11 +22,15 @@ const FONT_TIMEOUT_MS = 10000;
 // jsPDF's built-in core font, used when the TrueType files cannot be fetched.
 const FALLBACK_FAMILY = "helvetica";
 
-/** Font families available to the layout engine when embedding fails. */
+/**
+ * Font families available to the layout engine when embedding fails.
+ *
+ * No separate "did this embed" flag: it is the family names that say so, and a
+ * second field carrying the same fact is one more thing to keep true.
+ */
 export const FALLBACK_FONTS = Object.freeze({
     body: FALLBACK_FAMILY,
     accent: FALLBACK_FAMILY,
-    embedded: false,
 });
 
 // btoa() takes a binary string, and spreading a multi-megabyte array into
@@ -78,13 +82,13 @@ async function fetchFont(file) {
  * core face would look broken, so a single failure falls back to Helvetica for
  * everything.
  * @param {object} doc - jsPDF document instance
- * @returns {Promise<Readonly<{body: string, accent: string, embedded: boolean}>>} Registered family names
+ * @returns {Promise<Readonly<{body: string, accent: string}>>} Registered family names
  */
 export async function registerPdfFonts(doc) {
     try {
         const buffers = await Promise.all(FONT_ASSETS.map((asset) => fetchFont(asset.file)));
 
-        const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY, embedded: true };
+        const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY };
         FONT_ASSETS.forEach((asset, index) => {
             doc.addFileToVFS(asset.file, encodeFontBytes(buffers[index]));
             doc.addFont(asset.file, asset.family, "normal");

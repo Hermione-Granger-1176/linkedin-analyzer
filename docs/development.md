@@ -4,7 +4,7 @@
 
 - Python 3.14 (default; 3.12+ supported, see [Using an older Python version](#using-an-older-python-version)). The Docker runtime and primary CI gate use 3.14.
 - Node.js 22.22.2+ or 24.15.0+ within those supported major lines
-- [uv](https://docs.astral.sh/uv/)
+- [uv](https://docs.astral.sh/uv/) 0.11.0 or newer (see [uv version](#uv-version))
 
 The project supports Python 3.12-3.14. Python 3.14 is the default for local development, the container image, and the primary CI quality gate. Python 3.12-3.14 are verified in the CI compatibility matrix. See [Using an older Python version](#using-an-older-python-version) if you need to develop or test against Python 3.12 or 3.13.
 
@@ -348,7 +348,7 @@ If either audit job fails, a `report-failure` job opens (or comments on the exis
 Maintenance workflows also keep generated repository state current:
 
 - `refresh-python-locks.yml` + `commit-python-locks.yml` refresh `uv.lock` for same-repository Dependabot uv PRs through a validated artifact handoff. The artifact contains only `uv.lock`; a read-only job validates the triggering PR's current author, repository, ref, and SHA before a separate write-capable job can download it or create a commit. See [CI Automation and Verified Writebacks](operations.md#ci-automation-and-verified-writebacks) for the full flow and fallback behavior.
-- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact uv and pre-commit hook versions. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container. TypeScript major releases are also excluded until their stricter JavaScript inference can be handled as a dedicated migration rather than hidden inside a grouped dependency update.
+- `refresh-action-shas.yml` is the monthly CI pin owner. It converts tag-based GitHub Action references to full commit SHAs, updates the Playwright package and matching image digest together, and refreshes the exact pre-commit hook version. It deliberately leaves uv alone: `tool.uv.required-version` is a floor rather than a pin (see [uv version](#uv-version)), and rewriting a floor to the newest release every month would defeat it. Dependabot continues to own normal npm, Python, Dockerfile, and GitHub Action updates, but ignores `@playwright/test` so it cannot separate that package from its required container. TypeScript major releases are also excluded until their stricter JavaScript inference can be handled as a dedicated migration rather than hidden inside a grouped dependency update.
 
 ## Code Style
 
@@ -367,6 +367,16 @@ Maintenance workflows also keep generated repository state current:
 ### Tool pinning
 
 Most `devDependencies` track caret ranges, but `actionlint` is pinned to an exact version. It gates the workflow files in CI, and new patch releases can add lint rules; an exact pin keeps `make lint-workflows` reproducible so a tool bump that fails CI is always a deliberate, reviewed change rather than a surprise. Bump it like any other dependency when you want the newer rules.
+
+### uv version
+
+`tool.uv.required-version` in `pyproject.toml` is a floor (`>=0.11.0`), not an exact pin, and `astral-sh/setup-uv` reads it so CI installs the newest release that satisfies it.
+
+No Ubuntu release ships a `uv` package, so a contributor installs it from Astral's standalone installer, snap or pipx and lands on whatever is current that day. An exact pin turned every one of those installs into a mandatory `uv self update` before any target would run, including on a machine that was only a few patch releases behind.
+
+The lockfile does not force a newer uv. `uv.lock` carries both a `version` and a `revision`: `version` is the breaking field and is still `1`, while `revision` bumps are [documented as backward compatible](https://docs.astral.sh/uv/concepts/resolution/#lockfile-versioning) and cannot make an older uv error. uv 0.11.0 reads the current `revision = 3` lockfile and syncs from it.
+
+Raise the floor only when something actually needs a newer uv, and say why in the commit. `refresh-action-shas.yml` deliberately does not touch it: a floor rewritten to the newest release every month is not a floor.
 
 ## Testing
 

@@ -17,14 +17,15 @@ from scripts.ci import refresh_action_shas
 REPO_ROOT = Path()
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 PACKAGE_LOCK_PATH = REPO_ROOT / "package-lock.json"
-PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 PRE_COMMIT_PATH = REPO_ROOT / ".pre-commit-config.yaml"
 
 PLAYWRIGHT_IMAGE_PATTERN = re.compile(
     r"(?m)^PLAYWRIGHT_CI_IMAGE := "
     r"mcr\.microsoft\.com/playwright:v[^-\s]+-noble@sha256:[0-9a-f]{64}$"
 )
-UV_VERSION_PATTERN = re.compile(r'(?m)^required-version = "==[^"]+"$')
+# uv is deliberately absent: tool.uv.required-version is a floor, and a floor
+# that is rewritten to the newest release on every monthly run is not a floor.
+# Raise it by hand when something actually needs a newer uv.
 PRE_COMMIT_HOOKS_PATTERN = re.compile(
     r"(?m)(^\s*-\s+repo:\s+https://github\.com/pre-commit/pre-commit-hooks\s*$"
     r".*?^\s+rev:\s*)\S+",
@@ -114,20 +115,12 @@ def replace_one(path: Path, pattern: re.Pattern[str], replacement: str, *, label
 
 def refresh_project_pins(
     *,
-    uv_version: str,
     pre_commit_hooks_version: str,
     playwright_version: str,
     playwright_digest: str,
 ) -> list[Path]:
     """Refresh every non-Dependabot pin owned by the project."""
     changed: list[Path] = []
-    if replace_one(
-        PYPROJECT_PATH,
-        UV_VERSION_PATTERN,
-        f'required-version = "=={uv_version}"',
-        label="uv version pin",
-    ):
-        changed.append(PYPROJECT_PATH)
     if replace_one(
         PRE_COMMIT_PATH,
         PRE_COMMIT_HOOKS_PATTERN,
@@ -164,7 +157,6 @@ def main(argv: list[str] | None = None) -> int:
     playwright_image = f"mcr.microsoft.com/playwright:v{playwright_version}-noble"
     changed.extend(
         refresh_project_pins(
-            uv_version=retry(lambda: github_latest_version("astral-sh/uv", token=token)),
             pre_commit_hooks_version=retry(
                 lambda: github_latest_version("pre-commit/pre-commit-hooks", token=token)
             ),

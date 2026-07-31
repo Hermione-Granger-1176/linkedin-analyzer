@@ -166,11 +166,9 @@ def test_replace_one_rejects_missing_or_duplicate_pins(tmp_path: Path, text: str
 def test_refresh_project_pins_updates_each_owned_file(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Update uv, pre-commit, and Playwright pins as one maintenance unit."""
-    pyproject = tmp_path / "pyproject.toml"
+    """Update the pre-commit and Playwright pins as one maintenance unit."""
     pre_commit = tmp_path / ".pre-commit-config.yaml"
     makefile = tmp_path / "Makefile"
-    pyproject.write_text('required-version = "==0.1.0"\n', encoding="utf-8")
     pre_commit.write_text(
         "repos:\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v4.0.0\n",
         encoding="utf-8",
@@ -179,19 +177,18 @@ def test_refresh_project_pins_updates_each_owned_file(
         f"PLAYWRIGHT_CI_IMAGE := mcr.microsoft.com/playwright:v1.1.0-noble@{DIGEST}\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(pins, "PYPROJECT_PATH", pyproject)
     monkeypatch.setattr(pins, "PRE_COMMIT_PATH", pre_commit)
     monkeypatch.setattr(pins, "MAKEFILE_PATH", makefile)
 
     changed = pins.refresh_project_pins(
-        uv_version="0.11.32",
         pre_commit_hooks_version="6.0.0",
         playwright_version="1.62.0",
         playwright_digest=f"sha256:{'b' * 64}",
     )
 
-    assert changed == [pyproject, pre_commit, makefile]
-    assert 'required-version = "==0.11.32"' in pyproject.read_text(encoding="utf-8")
+    # No pyproject.toml among them: uv's required-version is a hand-raised
+    # floor, so this script has no business rewriting it.
+    assert changed == [pre_commit, makefile]
     assert "rev: v6.0.0" in pre_commit.read_text(encoding="utf-8")
     assert "v1.62.0-noble@sha256:" in makefile.read_text(encoding="utf-8")
 
@@ -200,10 +197,8 @@ def test_refresh_project_pins_reports_no_changes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Leave already current project pins untouched."""
-    pyproject = tmp_path / "pyproject.toml"
     pre_commit = tmp_path / ".pre-commit-config.yaml"
     makefile = tmp_path / "Makefile"
-    pyproject.write_text('required-version = "==0.11.32"\n', encoding="utf-8")
     pre_commit.write_text(
         "repos:\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v6.0.0\n",
         encoding="utf-8",
@@ -212,13 +207,11 @@ def test_refresh_project_pins_reports_no_changes(
         f"PLAYWRIGHT_CI_IMAGE := mcr.microsoft.com/playwright:v1.62.0-noble@{DIGEST}\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(pins, "PYPROJECT_PATH", pyproject)
     monkeypatch.setattr(pins, "PRE_COMMIT_PATH", pre_commit)
     monkeypatch.setattr(pins, "MAKEFILE_PATH", makefile)
 
     assert (
         pins.refresh_project_pins(
-            uv_version="0.11.32",
             pre_commit_hooks_version="6.0.0",
             playwright_version="1.62.0",
             playwright_digest=DIGEST,
@@ -258,10 +251,7 @@ def test_main_refreshes_actions_and_project_pins(
     monkeypatch.setattr(
         pins,
         "github_latest_version",
-        lambda repo, **_kwargs: {
-            "astral-sh/uv": "0.11.32",
-            "pre-commit/pre-commit-hooks": "6.0.0",
-        }[repo],
+        lambda repo, **_kwargs: {"pre-commit/pre-commit-hooks": "6.0.0"}[repo],
     )
     monkeypatch.setattr(pins, "registry_digest", lambda _image: DIGEST)
     monkeypatch.setattr(

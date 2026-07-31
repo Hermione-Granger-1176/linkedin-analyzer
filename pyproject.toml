@@ -42,7 +42,14 @@ dev = [
 ]
 
 [tool.uv]
-required-version = "==0.11.32"
+# A floor, not a pin. Ubuntu ships no uv package, so a contributor installs it
+# from Astral's installer, snap or pipx and lands on whatever is current that
+# day; an exact pin turned every such install into a mandatory `uv self update`
+# before anything would run. The lockfile does not constrain this: its `version`
+# is the breaking field and is still 1, while `revision` bumps are documented as
+# backward compatible and cannot make an older uv error. Raise this only when
+# something actually needs a newer uv.
+required-version = ">=0.11.0"
 
 [project.scripts]
 linkedin-analyzer = "linkedin_analyzer.cli:main"

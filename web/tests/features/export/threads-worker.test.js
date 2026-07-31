@@ -163,6 +163,20 @@ describe("threads worker listeners", () => {
     }
 
     /**
+     * Serve one thread request, so the worker has an active id to answer under.
+     *
+     * `activeRequestId` is module-level state that outlives a test. Setting it
+     * explicitly is what lets each failure test assert the id it is answered
+     * under rather than inheriting whichever one the previous test left behind.
+     * @param {number} requestId - Request id to serve
+     */
+    function serveRequest(requestId) {
+        dispatch("message", {
+            data: { type: "threads", requestId, payload: { messagesCsv: MESSAGES_CSV } },
+        });
+    }
+
+    /**
      * Assert a posted failure payload carries nothing of the user's.
      * @param {object} message - Posted worker message
      */
@@ -226,44 +240,59 @@ describe("threads worker listeners", () => {
 
     it("never forwards the text of a string-only error event", () => {
         spyOnPostMessage();
+        serveRequest(41);
         const event = dispatch("error", { message: `boom ${PII_MARKER}` });
 
         expect(event.defaultPrevented).toBe(true);
-        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(41);
+        expectFixedFailure(message);
     });
 
     it("answers an error event that carries nothing", () => {
         spyOnPostMessage();
+        serveRequest(42);
         const event = dispatch("error");
 
         expect(event.defaultPrevented).toBe(true);
-        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(42);
+        expectFixedFailure(message);
     });
 
     it("never forwards the reason of an unhandled rejection", () => {
         spyOnPostMessage();
+        serveRequest(43);
         const event = dispatch("unhandledrejection", { reason: piiError("worker-rejection") });
 
         expect(event.defaultPrevented).toBe(true);
-        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(43);
+        expectFixedFailure(message);
     });
 
     it("never forwards an opaque rejection reason", () => {
         spyOnPostMessage();
+        serveRequest(44);
         const event = dispatch("unhandledrejection", {
             reason: { kind: "opaque", body: PII_MARKER },
         });
 
         expect(event.defaultPrevented).toBe(true);
-        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(44);
+        expectFixedFailure(message);
     });
 
     it("answers a rejection event that carries no reason", () => {
         spyOnPostMessage();
+        serveRequest(45);
         const event = dispatch("unhandledrejection");
 
         expect(event.defaultPrevented).toBe(true);
-        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(45);
+        expectFixedFailure(message);
     });
 
     it("never forwards the text of a failure thrown while answering", () => {

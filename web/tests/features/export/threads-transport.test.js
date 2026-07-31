@@ -423,4 +423,42 @@ describe("loadRecentThreads", () => {
         expect(huge.length).toBeGreaterThan(5 * 1024 * 1024);
         expect(await loadRecentThreads(huge)).toEqual([]);
     });
+
+    it("still selects on the main thread just under the fallback ceiling", async () => {
+        // The positive control for the test above: same padded shape, only
+        // shorter. Without this, an empty result there could equally mean the
+        // padding broke the parser, and deleting the size guard would not fail.
+        delete globalThis.Worker;
+        const padded = `${MESSAGES_CSV}\n${"# padding\n".repeat(10)}`;
+
+        expect(padded.length).toBeLessThan(5 * 1024 * 1024);
+        expect((await loadRecentThreads(padded)).map((thread) => thread.name)).toEqual([
+            "Bob",
+            "Ada",
+        ]);
+    });
+
+    it("scales the watchdog with the size of the export", async () => {
+        // 15s base plus 5s per whole megabyte. The only other timeout test
+        // advances 60s against a three-line CSV, so it would pass for a constant.
+        vi.useFakeTimers();
+        const threeMb = `${MESSAGES_CSV}\n${"# padding\n".repeat(320000)}`;
+        expect(threeMb.length).toBeGreaterThan(3 * 1024 * 1024);
+        expect(threeMb.length).toBeLessThan(4 * 1024 * 1024);
+
+        const pending = loadRecentThreads(threeMb);
+
+        vi.advanceTimersByTime(29999);
+        expect(captureError).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(2);
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "threads-worker-timeout",
+            requestId: expect.any(Number),
+        });
+
+        vi.useRealTimers();
+        await pending;
+    });
 });

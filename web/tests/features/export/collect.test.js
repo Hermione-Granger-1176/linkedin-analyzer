@@ -127,9 +127,28 @@ describe("collectExportData", () => {
     });
 
     afterEach(() => {
+        // Module-level state in collect.js: a run left active leaks into the
+        // next test's cancellation behaviour.
+        terminateAnalyticsWorker();
         delete globalThis.Worker;
         vi.useRealTimers();
     });
+
+    /**
+     * Find the captureError call made for one operation.
+     *
+     * Addressed by operation rather than by index: collection walks several
+     * reads before the one under test, so a diagnostic added anywhere earlier
+     * would silently shift index 0 and the assertions would start describing a
+     * different call while still passing.
+     * @param {string} operation - Fixed diagnostic operation
+     * @returns {[unknown, object]} Reported value and its context
+     */
+    function capturedFor(operation) {
+        const call = captureError.mock.calls.find(([, context]) => context.operation === operation);
+        expect(call, `no captureError for ${operation}`).toBeDefined();
+        return call;
+    }
 
     it("uses the Insights screen snapshot when there is one", async () => {
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
@@ -324,7 +343,12 @@ describe("collectExportData", () => {
     });
 
     it("does nothing when there is no analytics worker to cancel", () => {
-        expect(() => terminateAnalyticsWorker()).not.toThrow();
+        terminateAnalyticsWorker();
+
+        // Stronger than "did not throw", which would also pass while quietly
+        // cancelling a run left active by an earlier test.
+        expect(workerInstance).toBeNull();
+        expect(captureError).not.toHaveBeenCalled();
     });
 
     it("settles when the analytics request cannot be posted", async () => {
@@ -345,7 +369,7 @@ describe("collectExportData", () => {
         expect(worker.terminate).toHaveBeenCalled();
         expect(worker.listenerCount()).toBe(0);
 
-        const [reported, context] = captureError.mock.calls[0];
+        const [reported, context] = capturedFor("analytics-worker-post");
         expectFixedError(reported, postFailure);
         expect(context).toEqual({ module: "pdf-export", operation: "analytics-worker-post" });
     });
@@ -537,7 +561,7 @@ describe("collectExportData", () => {
 
         await collectExportData({ includeMessages: true });
 
-        const [reported, context] = captureError.mock.calls[0];
+        const [reported, context] = capturedFor("load-connections");
         expectFixedError(reported, thrown);
         expect(context).toEqual({ module: "pdf-export", operation: "load-connections" });
         expect(loadRecentThreads.mock.calls[0][1].contactKeys).toEqual([]);
@@ -557,12 +581,9 @@ describe("collectExportData", () => {
 
         await collectExportData({ includeMessages: true });
 
-        const call = captureError.mock.calls.find(
-            ([, context]) => context.operation === "load-connections-file",
-        );
-        expect(call).toBeDefined();
-        expectFixedError(call[0], thrown);
-        expect(call[1]).toEqual({ module: "pdf-export", operation: "load-connections-file" });
+        const [reported, context] = capturedFor("load-connections-file");
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "load-connections-file" });
         expect(loadRecentThreads.mock.calls[0][1].contactKeys).toEqual([]);
     });
 
@@ -616,7 +637,7 @@ describe("collectExportData", () => {
 
         await collectExportData({ includeMessages: true });
 
-        const [reported, context] = captureError.mock.calls[0];
+        const [reported, context] = capturedFor("select-threads");
         expectFixedError(reported, thrown);
         expect(context).toEqual({ module: "pdf-export", operation: "select-threads" });
     });
@@ -627,7 +648,7 @@ describe("collectExportData", () => {
 
         expect((await collectExportData({ includeMessages: true })).threads).toEqual([]);
 
-        const [reported, context] = captureError.mock.calls[0];
+        const [reported, context] = capturedFor("load-messages-file");
         expectFixedError(reported, thrown);
         expect(context).toEqual({ module: "pdf-export", operation: "load-messages-file" });
     });

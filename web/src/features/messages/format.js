@@ -81,12 +81,17 @@ export function formatShortDate(timestamp) {
 
 /**
  * Compute a size-scaled worker watchdog timeout.
- * @param {string} messagesCsv - Raw messages CSV text
- * @param {string} connectionsCsv - Raw connections CSV text
+ *
+ * Variadic so each caller passes only the files it actually hands the worker.
+ * The connections transport used to pad the call with an empty messages file it
+ * does not have, which read as a fact about that transport rather than as
+ * filler for a fixed second parameter.
+ * @param {...string} texts - Raw CSV text for every file the worker is given
  * @returns {number} Timeout in milliseconds
  */
-export function computeWorkerTimeout(messagesCsv, connectionsCsv) {
-    const megabytes = (messagesCsv.length + connectionsCsv.length) / BYTES_PER_MB;
+export function computeWorkerTimeout(...texts) {
+    const characters = texts.reduce((total, text) => total + text.length, 0);
+    const megabytes = characters / BYTES_PER_MB;
     return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
 }
 

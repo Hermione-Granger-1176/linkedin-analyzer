@@ -4,27 +4,19 @@
  * The dashboard used to clean and aggregate the connections export inline, on
  * the UI thread, in the middle of `collectExportData`. A real export runs to
  * tens of thousands of rows, and while that block held the thread nothing else
- * could run on it - including the Escape key handler the dialog promises will
+ * could run on it, including the Escape key handler the dialog promises will
  * cancel an export at any point, mid-generation included. The Connections screen
  * has done this same work in a worker from the start, so the export runs that
  * worker rather than a second copy of the arithmetic.
  *
- * Owned outright rather than borrowed from that screen, exactly as
- * `messages-transport.js` is: the screen keeps its worker, its watchdog and its
- * request counter in one module-level set, so a screen loading while an export
- * runs would clear the other's watchdog and leave its promise pending for the
- * life of the page, and the export could not terminate it on cancellation
- * without killing a worker the screen might be mid-request on.
+ * The worker is owned outright rather than borrowed from that screen;
+ * `worker-transport.js` carries why, and everything about owning it. What is
+ * here is what the connections dashboard asks for and how it reads the reply.
  *
- * Termination is a settling event, not just a teardown. Killing the worker
- * removes every event that could have answered the in-flight request, so
- * `terminateConnectionsWorker()` settles it explicitly; a request left pending
- * would keep its frame, and the raw connections CSV inside it, alive.
- *
- * Nothing the worker was handed is ever reported. Every catch and every worker
- * error here discards what it was given and reports a fixed error instead,
- * because a failure while parsing the user's connections can carry the names,
- * employers and profile URLs of everyone they know.
+ * Nothing the worker was handed is ever reported. Every catch here discards what
+ * it was given and reports a fixed error instead, because a failure while
+ * parsing the user's connections can carry the names, employers and profile URLs
+ * of everyone they know.
  */
 
 import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.js";
@@ -33,47 +25,21 @@ import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { buildGrowthTimeline, computeStats, normalizeConnectionRows } from "../connections/view.js";
 import { computeWorkerTimeout } from "../messages/format.js";
 
-// Above this size, re-parsing on the UI thread would freeze the page, so the
-// export drops the dashboard rather than blocking on it.
-const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
+import {
+    CANCELLED,
+    createWorkerTransport,
+    FAILED,
+    MAIN_THREAD_FALLBACK_MAX_CHARS,
+    PENDING,
+} from "./worker-transport.js";
 
-/**
- * Outcome of a request the caller explicitly cancelled.
- *
- * Distinct from the null "the worker could not answer" outcome, because the
- * main-thread fallback must not re-run the very work that was cancelled.
- */
-const CANCELLED = Symbol("connections-request-cancelled");
-
-/**
- * Outcome of a request the worker answered with a definite failure.
- *
- * Also distinct from null: the worker has already run this exact CSV through
- * this exact code and reported that it cannot parse it, so the main thread
- * would only freeze the page to reach the same answer.
- */
-const FAILED = Symbol("connections-request-failed");
-
-let connectionsWorker = null;
-let connectionsRequestId = 0;
-// Set and cleared with pendingRequest: a watchdog exists exactly while a
-// request is in flight.
-let connectionsTimeoutId = null;
-/**
- * Settle hook for the one request that can be in flight, so termination can end
- * it and drop every reference the request was holding.
- * @type {{cancel: () => void}|null}
- */
-let pendingRequest = null;
-
-/** Clear any in-flight worker watchdog timeout. */
-function clearWorkerTimeout() {
-    if (!connectionsTimeoutId) {
-        return;
-    }
-    window.clearTimeout(connectionsTimeoutId);
-    connectionsTimeoutId = null;
-}
+const transport = createWorkerTransport({
+    name: "connections",
+    createWorker: () =>
+        new Worker(new URL("../connections/connections-worker.js", import.meta.url), {
+            type: "module",
+        }),
+});
 
 /**
  * Terminate the export's connections worker and end whatever it was answering.
@@ -81,36 +47,7 @@ function clearWorkerTimeout() {
  * Safe to call when nothing is running, and safe to call twice.
  */
 export function terminateConnectionsWorker() {
-    if (connectionsWorker) {
-        connectionsWorker.terminate();
-    }
-    // Settled before the handle is dropped, so the request still detaches its
-    // listeners from the worker it was listening to.
-    if (pendingRequest) {
-        pendingRequest.cancel();
-    }
-    connectionsWorker = null;
-    clearWorkerTimeout();
-}
-
-/** Create the connections worker, leaving it null when workers are unavailable. */
-function initWorker() {
-    if (connectionsWorker || typeof Worker === "undefined") {
-        return;
-    }
-
-    try {
-        connectionsWorker = new Worker(
-            new URL("../connections/connections-worker.js", import.meta.url),
-            { type: "module" },
-        );
-    } catch {
-        connectionsWorker = null;
-        captureError(new Error("Connections worker could not start during export."), {
-            module: "pdf-export",
-            operation: "init-connections-worker",
-        });
-    }
+    transport.terminate();
 }
 
 /**
@@ -144,7 +81,6 @@ export async function loadConnectionsData(connectionsCsv, options = {}) {
         return null;
     }
 
-    initWorker();
     const outcome = await requestDataFromWorker(text);
     if (outcome === CANCELLED) {
         // Falling back here would redo on the UI thread precisely the work the
@@ -173,174 +109,62 @@ export async function loadConnectionsData(connectionsCsv, options = {}) {
  * @returns {Promise<ConnectionsData|null|typeof CANCELLED|typeof FAILED>} Data, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */
 function requestDataFromWorker(connectionsCsv) {
-    if (!connectionsWorker) {
-        return Promise.resolve(null);
-    }
-    // Only one request can own the module-level watchdog and settle hook. A
-    // second arriving while the first is in flight would adopt both, and the
-    // first to be answered would then clear the second's watchdog and null its
-    // settle hook, leaving that promise pending for the life of the page.
-    if (pendingRequest) {
-        pendingRequest.cancel();
-    }
-
-    const requestId = ++connectionsRequestId;
-
-    return new Promise((resolve) => {
-        clearWorkerTimeout();
-
-        const finishRequest = () => {
-            clearWorkerTimeout();
-            // handleError can fire after terminateConnectionsWorker() has
-            // already nulled the handle, so the guard is load-bearing.
-            /* v8 ignore next 3 */
-            if (!connectionsWorker) {
-                return;
-            }
-            connectionsWorker.removeEventListener("message", handleMessage);
-            connectionsWorker.removeEventListener("error", handleError);
-            connectionsWorker.removeEventListener("messageerror", handleError);
-        };
-
-        /**
-         * End the request, dropping everything it was holding.
-         * @param {ConnectionsData|null|typeof CANCELLED|typeof FAILED} result - Outcome for the caller
-         */
-        const settle = (result) => {
-            // Identity-guarded, as both sibling transports' own hooks are. Every
-            // settle path detaches the listeners and clears the watchdog before
-            // it returns, so nothing can settle a request twice today and the
-            // guard is defensive: it exists so that stops being something the
-            // next reader has to re-derive before adding a path.
-            /* v8 ignore next 3 */
-            if (pendingRequest === request) {
-                pendingRequest = null;
-            }
-            finishRequest();
-            resolve(result);
-        };
-
-        const handleMessage = (event) => {
-            const parsed = parseConnectionsWorkerMessage(event.data || {});
-            if (!parsed.valid) {
-                captureError(new Error("Invalid connections worker response."), {
-                    module: "pdf-export",
-                    operation: "connections-message-parse",
-                    requestId,
-                });
-                return;
-            }
-
-            const message = parsed.value;
-            if (message.type === "error") {
-                // The worker posts this envelope under whatever id it could
-                // read, which is zero when it could not read the request at all,
-                // so it settles the one request in flight whatever id it names.
-                // FAILED rather than null: it either threw parsing this exact
-                // file, or refused a payload so large the main-thread ceiling
-                // below would turn it away anyway.
-                captureError(new Error("Connections worker reported an error."), {
-                    module: "pdf-export",
-                    operation: "connections-worker-error-payload",
-                    requestId,
-                });
-                settle(FAILED);
-                return;
-            }
-            // The contract parser normalizes every field of a processed payload
-            // and always hands back an object, so there is nothing to guard
-            // before reading `success` - unlike its messages sibling, which
-            // passes the payload through and nulls one that is not an object.
-            if (!message.payload.success) {
-                // Settled whatever id it arrived under: only one request is ever
-                // in flight, so a failure envelope is this request failing, and
-                // waiting out the watchdog would look like a hang.
-                captureError(new Error("Connections worker reported a failure."), {
-                    module: "pdf-export",
-                    operation: "connections-worker-failure",
-                    requestId,
-                });
-                settle(FAILED);
-                return;
-            }
-            // A stale success belongs to a request nobody is waiting on. It is
-            // dropped before the emptied-payload check below rather than after
-            // it, as the messages transport does: an emptied payload settles
-            // this request, and the reply that settles it has to be its own.
-            if (message.requestId !== requestId) {
-                return;
-            }
-            const data = toConnectionsData(message.payload);
-            if (!data) {
-                captureError(new Error("Connections worker response carried no data."), {
-                    module: "pdf-export",
-                    operation: "connections-message-parse",
-                    requestId,
-                });
-                // Settled rather than left to the watchdog, for the same reason
-                // the failure envelope above is. Null rather than FAILED,
-                // because a reply the parser had to empty out says nothing about
-                // whether the file itself can be parsed.
-                settle(null);
-                return;
-            }
-            settle(data);
-        };
-
-        const handleError = (event) => {
-            // Cancelling the event suppresses the browser's own reporting of it,
-            // which would otherwise print the worker's error, and anything of the
-            // user's caught up in it, to the console.
-            if (event && typeof event.preventDefault === "function") {
-                event.preventDefault();
-            }
-            // event.error is never forwarded: this worker parses the raw
-            // connections CSV, so a runtime failure inside it can carry the
-            // names and employers it was reading.
-            captureError(new Error("Connections worker failed during export."), {
-                module: "pdf-export",
-                operation: "connections-worker-error-event",
-                requestId,
-            });
-            settle(null);
-        };
-
-        const request = { cancel: () => settle(CANCELLED) };
-        pendingRequest = request;
-
-        connectionsWorker.addEventListener("message", handleMessage);
-        connectionsWorker.addEventListener("error", handleError);
-        connectionsWorker.addEventListener("messageerror", handleError);
-
-        connectionsTimeoutId = window.setTimeout(() => {
-            connectionsTimeoutId = null;
-            captureError(new Error("Connections worker timed out during export."), {
-                module: "pdf-export",
-                operation: "connections-worker-timeout",
-                requestId,
-            });
-            settle(null);
-            // The same size-scaled budget the messages parse is given, with no
-            // messages file in it: a fixed watchdog would fire early on the
-            // large connections export this transport exists for and send the
-            // parse the worker was still doing to the UI thread instead.
-        }, computeWorkerTimeout("", connectionsCsv));
-
-        try {
-            connectionsWorker.postMessage({
-                type: "process",
-                requestId,
-                payload: { connectionsCsv },
-            });
-        } catch {
-            captureError(new Error("Connections worker request could not be sent."), {
-                module: "pdf-export",
-                operation: "connections-worker-post-message",
-                requestId,
-            });
-            settle(null);
-        }
+    return transport.request({
+        envelope: { type: "process", payload: { connectionsCsv } },
+        parse: parseConnectionsWorkerMessage,
+        interpret: interpretReply,
+        // The same size-scaled budget the messages parse is given, over the one
+        // file this transport holds: a fixed watchdog would fire early on the
+        // large connections export this transport exists for and send the parse
+        // the worker was still doing to the UI thread instead.
+        timeoutMs: computeWorkerTimeout(connectionsCsv),
     });
+}
+
+/**
+ * Read one valid worker reply into an outcome for the request in flight.
+ * @param {object} message - Parsed worker message
+ * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
+ * @returns {ConnectionsData|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
+ */
+function interpretReply(message, context) {
+    if (message.type === "error") {
+        // The worker posts this envelope under whatever id it could read, which
+        // is zero when it could not read the request at all, so it settles the
+        // one request in flight whatever id it names. FAILED rather than null:
+        // it either threw parsing this exact file, or refused a payload so large
+        // the main-thread ceiling would turn it away anyway.
+        context.report("Connections worker reported an error.", "connections-worker-error-payload");
+        return FAILED;
+    }
+    // The contract parser normalizes every field of a processed payload and
+    // always hands back an object, so there is nothing to guard before reading
+    // `success`, unlike its messages sibling, which passes the payload through
+    // and nulls one that is not an object.
+    if (!message.payload.success) {
+        // Settled whatever id it arrived under: only one request is ever in
+        // flight, so a failure envelope is this request failing, and waiting out
+        // the watchdog would look like a hang.
+        context.report("Connections worker reported a failure.", "connections-worker-failure");
+        return FAILED;
+    }
+    // A stale success belongs to a request nobody is waiting on. It is dropped
+    // before the emptied-payload check below rather than after it, as the
+    // messages transport does: an emptied payload settles this request, and the
+    // reply that settles it has to be its own.
+    if (message.requestId !== context.requestId) {
+        return PENDING;
+    }
+    const data = toConnectionsData(message.payload);
+    if (!data) {
+        context.report("Connections worker response carried no data.", "connections-message-parse");
+        // Settled rather than left to the watchdog, for the same reason the
+        // failure envelope above is. Null rather than FAILED, because a reply the
+        // parser had to empty out says nothing about whether the file itself can
+        // be parsed.
+        return null;
+    }
+    return data;
 }
 
 /**

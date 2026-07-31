@@ -162,7 +162,8 @@ web/src/features/
 │   ├── pdf.js                          # Export button, dialog, and orchestration
 │   ├── threads-transport.js            # Thread worker transport and fallback
 │   ├── threads-worker.js               # Message thread selection worker
-│   └── threads.js                      # Recent-thread selection
+│   ├── threads.js                      # Recent-thread selection
+│   └── worker-transport.js             # Worker ownership, watchdog, and settling for all three
 ├── insights/
 │   └── screen.js                       # Cross-export insights controller
 ├── messages/

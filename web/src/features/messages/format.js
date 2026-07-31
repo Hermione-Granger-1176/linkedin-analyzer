@@ -18,12 +18,6 @@ const RANGE_MONTHS = Object.freeze({
 
 /** Milliseconds in one day. */
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
-// Worker watchdog scales with input size: a base allowance plus more time per
-// megabyte of CSV so large exports are not cut off prematurely.
-const WORKER_TIMEOUT_BASE_MS = 30000;
-const WORKER_TIMEOUT_PER_MB_MS = 5000;
-const BYTES_PER_MB = 1024 * 1024;
-
 const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "2-digit",
@@ -77,22 +71,6 @@ export function getRangeStart(range, latestTimestamp) {
  */
 export function formatShortDate(timestamp) {
     return SHORT_DATE_FORMATTER.format(new Date(timestamp));
-}
-
-/**
- * Compute a size-scaled worker watchdog timeout.
- *
- * Variadic so each caller passes only the files it actually hands the worker.
- * The connections transport used to pad the call with an empty messages file it
- * does not have, which read as a fact about that transport rather than as
- * filler for a fixed second parameter.
- * @param {...string} texts - Raw CSV text for every file the worker is given
- * @returns {number} Timeout in milliseconds
- */
-export function computeWorkerTimeout(...texts) {
-    const characters = texts.reduce((total, text) => total + text.length, 0);
-    const megabytes = characters / BYTES_PER_MB;
-    return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
 }
 
 /**

@@ -41,7 +41,13 @@ async function waitForLoadedStatus(page, id) {
  * @param {import('@playwright/test').Page} page - Playwright page instance
  */
 async function runAxeScan(page) {
-    await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 5000 });
+    // The same twenty seconds waitForLoadedStatus gives a worker above, because
+    // this waits on the same thing: callers arrive here directly after an action
+    // that sends the analytics worker a fresh view request, and the loading
+    // class clears when it answers. Five seconds was never a statement about how
+    // long that may take, and on webkit under four parallel workers on a CI
+    // runner it was simply too short. It is what made this file's only flake.
+    await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 20000 });
     await page.waitForFunction(
         () =>
             document

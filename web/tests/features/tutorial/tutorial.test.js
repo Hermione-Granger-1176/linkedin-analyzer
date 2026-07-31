@@ -2454,7 +2454,7 @@ describe("getRouteConfigItems edge cases", () => {
 // ===========================================================================
 
 describe("scheduleMiniTips early returns and canStartMiniTips", () => {
-    it("does not schedule mini-tips when tutorial is active (state.active guard, line 1558)", () => {
+    it("does not schedule mini-tips when the tutorial is active", () => {
         vi.useFakeTimers();
 
         buildHomeTargets();
@@ -2472,7 +2472,7 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
         expect(document.querySelectorAll(".tutorial-mini-tip").length).toBe(0);
     });
 
-    it("canStartMiniTips returns false when token is stale (line 1591)", () => {
+    it("canStartMiniTips returns false when token is stale", () => {
         vi.useFakeTimers();
 
         const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
@@ -2493,7 +2493,7 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
         expect(document.querySelectorAll(".tutorial-mini-tip").length).toBe(0);
     });
 
-    it("scheduleMiniTipStart reschedules when loading is active at fire time (lines 1607-1611)", async () => {
+    it("scheduleMiniTipStart reschedules when loading is active at fire time", async () => {
         vi.useFakeTimers();
 
         const { LoadingOverlay } = await import("../../../src/shared/ui/loading-overlay.js");
@@ -2526,7 +2526,7 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
 // ===========================================================================
 
 describe("isLoadingActive DOM overlay checks", () => {
-    it("returns true when #contentLoadingOverlay is visible (line 1746)", () => {
+    it("returns true when #contentLoadingOverlay is visible", () => {
         vi.useFakeTimers();
 
         // Add a visible contentLoadingOverlay
@@ -2545,7 +2545,7 @@ describe("isLoadingActive DOM overlay checks", () => {
         expect(document.body.classList.contains("tutorial-open")).toBe(false);
     });
 
-    it("returns true when #progressOverlay is visible (line 1751)", () => {
+    it("returns true when #progressOverlay is visible", () => {
         vi.useFakeTimers();
 
         const overlay = document.createElement("div");
@@ -2565,7 +2565,7 @@ describe("isLoadingActive DOM overlay checks", () => {
 // ===========================================================================
 
 describe("localStorage error resilience", () => {
-    it("getStorageValue catches errors from localStorage.getItem (line 1862)", () => {
+    it("getStorageValue catches errors from localStorage.getItem", () => {
         vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
             throw new Error("storage quota exceeded");
         });
@@ -2574,7 +2574,7 @@ describe("localStorage error resilience", () => {
         expect(Tutorial.isComplete("home")).toBe(false);
     });
 
-    it("setStorageValue catches errors from localStorage.setItem (line 1890)", () => {
+    it("setStorageValue catches errors from localStorage.setItem", () => {
         vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
             throw new Error("storage quota exceeded");
         });
@@ -2589,7 +2589,7 @@ describe("localStorage error resilience", () => {
         expect(() => document.dispatchEvent(escEvent)).not.toThrow();
     });
 
-    it("removeStorageValue catches errors from localStorage.removeItem (line 1902)", () => {
+    it("removeStorageValue catches errors from localStorage.removeItem", () => {
         vi.spyOn(window.localStorage, "removeItem").mockImplementation(() => {
             throw new Error("storage error");
         });
@@ -2605,7 +2605,7 @@ describe("localStorage error resilience", () => {
 // ===========================================================================
 
 describe("handler guard returns", () => {
-    it("handleBackClick returns early when step.allowBack is false (line 368)", () => {
+    it("handleBackClick returns early when step.allowBack is false", () => {
         // noback route: step 0 is allowBack=undefined, step 1 is allowBack:false
         Tutorial.start("noback");
         // Advance to step 1 (click Next)
@@ -2613,7 +2613,7 @@ describe("handler guard returns", () => {
         expect(() => ui_backButton().click()).not.toThrow();
     });
 
-    it("handleDotClick returns early when dot data-step-index is NaN (line 425)", () => {
+    it("handleDotClick returns early when dot data-step-index is NaN", () => {
         buildHomeTargets();
         Tutorial.start("home");
 
@@ -2628,14 +2628,14 @@ describe("handler guard returns", () => {
         expect(() => popover.dispatchEvent(event)).not.toThrow();
     });
 
-    it("handleSkipClick returns early when step.allowSkip is false (line 444)", () => {
+    it("handleSkipClick returns early when step.allowSkip is false", () => {
         Tutorial.start("noskip");
         expect(() => ui_skipButton().click()).not.toThrow();
         // Tutorial should still be open (skip was blocked)
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 
-    it("shouldUseNativeEnter returns false for null target (line 583)", () => {
+    it("shouldUseNativeEnter returns false for null target", () => {
         buildHomeTargets();
         Tutorial.start("home");
         // Fire Enter with a null-like target (no event.target set)

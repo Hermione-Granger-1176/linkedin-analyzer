@@ -454,7 +454,7 @@ describe("ConnectionsPage", () => {
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 
-    it("syncRouteRange skips setParams when not on connections route (line 690)", async () => {
+    it("syncRouteRange leaves the route alone when another screen owns it", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);
 
@@ -471,7 +471,7 @@ describe("ConnectionsPage", () => {
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 
-    it("showConnectionsLoading returns early when connectionsGrid is absent (line 764)", async () => {
+    it("showConnectionsLoading does nothing when the grid is absent", async () => {
         // Remove the connectionsGrid element from DOM before init
         document.getElementById("connectionsGrid").remove();
 
@@ -486,7 +486,7 @@ describe("ConnectionsPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    it("showTooltip returns early when chartTooltip element is absent (line 730)", async () => {
+    it("showTooltip does nothing when the tooltip element is absent", async () => {
         document.getElementById("chartTooltip").remove();
 
         Storage.getFile.mockResolvedValue({ text: "csv" });
@@ -524,7 +524,7 @@ describe("ConnectionsPage", () => {
         expect(SketchCharts.drawTimeline).not.toHaveBeenCalled();
     });
 
-    it("themechange event triggers re-render when currentView is set (lines 147-149)", async () => {
+    it("themechange event triggers re-render when currentView is set", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);
 
@@ -553,7 +553,7 @@ describe("ConnectionsPage", () => {
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
     });
 
-    it("visibilitychange event triggers re-render when visible (lines 152-155)", async () => {
+    it("visibilitychange event triggers re-render when visible", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);
 
@@ -584,7 +584,7 @@ describe("ConnectionsPage", () => {
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
     });
 
-    it("terminateWorker fires on beforeunload (lines 181-187)", async () => {
+    it("terminateWorker fires on beforeunload", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);
 
@@ -597,7 +597,7 @@ describe("ConnectionsPage", () => {
         window.dispatchEvent(new Event("beforeunload"));
     });
 
-    it("handleCacheChange resets state for valid cache events (lines 204-216)", async () => {
+    it("handleCacheChange resets state for valid cache events", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);
 
@@ -621,7 +621,7 @@ describe("ConnectionsPage", () => {
         expect(DataCache.subscribe).toHaveBeenCalled();
     });
 
-    it("onRouteChange goes to updateVisibility when dataReady=true but hasData=false (lines 94-96)", async () => {
+    it("onRouteChange goes to updateVisibility when dataReady=true but hasData=false", async () => {
         Storage.getFile.mockResolvedValue({ text: "csv" });
         DataCache.get.mockReturnValue(null);
 

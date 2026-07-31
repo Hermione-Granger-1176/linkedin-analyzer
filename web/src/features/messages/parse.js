@@ -9,9 +9,8 @@
 
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-
-import { computeWorkerTimeout } from "./format.js";
 
 // Above this combined CSV size, re-parsing on the UI thread would freeze the
 // page, so the main-thread fallback is skipped in favor of an empty state.

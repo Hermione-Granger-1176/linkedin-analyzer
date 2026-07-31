@@ -12,7 +12,7 @@
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
-import { computeWorkerTimeout } from "../messages/format.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";

@@ -13,9 +13,9 @@
 
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { MessagesAnalytics } from "../messages/analytics.js";
-import { computeWorkerTimeout } from "../messages/format.js";
 import { hydrateConnectionState, hydrateMessageState } from "../messages/hydrate.js";
 
 import {

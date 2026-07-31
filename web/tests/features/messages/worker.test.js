@@ -58,13 +58,13 @@ describe("messages worker", () => {
         expect(result.connectionError).toBe(null);
     });
 
-    it("processPayload handles non-string messagesCsv (line 12 false branch)", () => {
+    it("processPayload handles a non-string messagesCsv", () => {
         // When messagesCsv is not a string, it defaults to '' which causes a parse failure
         const result = processPayload({ messagesCsv: null });
         expect(result.success).toBe(false);
     });
 
-    it("processPayload handles non-string connectionsCsv (line 13 false branch)", () => {
+    it("processPayload handles a non-string connectionsCsv", () => {
         const result = processPayload({ messagesCsv: VALID_MESSAGES_CSV, connectionsCsv: 42 });
         // connectionsCsv coerces to '' which means no connections parsed, success=true
         expect(result.success).toBe(true);

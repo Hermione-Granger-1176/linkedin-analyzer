@@ -859,7 +859,7 @@ describe("AnalyticsPage", () => {
         expect(SketchCharts.animateDraw).not.toHaveBeenCalled();
     });
 
-    it("tooltip overflow clamps to viewport edges (lines 789, 792)", async () => {
+    it("tooltip overflow clamps to viewport edges", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
@@ -892,7 +892,7 @@ describe("AnalyticsPage", () => {
         Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
     });
 
-    it("syncRouteFromFilters skips when isApplyingRouteParams is true (line 904)", async () => {
+    it("syncRouteFromFilters skips when isApplyingRouteParams is true", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
@@ -948,14 +948,14 @@ describe("AnalyticsPage", () => {
         vi.useRealTimers();
     });
 
-    it("onRouteChange returns early when init fails (no analyticsGrid) (lines 136-139)", async () => {
+    it("onRouteChange returns early when init fails (no analyticsGrid)", async () => {
         // Remove required elements so init() fails
         document.body.innerHTML = '<div id="analyticsEmpty"><h2></h2><p></p></div>';
         // onRouteChange should not throw, just return early
         expect(() => AnalyticsPage.onRouteChange({})).not.toThrow();
     });
 
-    it("onRouteChange goes to updateVisibility when analyticsReady=true but hasData=false (lines 150-152)", async () => {
+    it("onRouteChange goes to updateVisibility when analyticsReady=true but hasData=false", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
@@ -974,7 +974,7 @@ describe("AnalyticsPage", () => {
         expect(document.getElementById("analyticsEmpty").hidden).toBe(false);
     });
 
-    it("themechange event triggers re-render when currentView is set (lines 208-210)", async () => {
+    it("themechange event triggers re-render when currentView is set", async () => {
         const requestId = await bootstrapWithData({});
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -985,7 +985,7 @@ describe("AnalyticsPage", () => {
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
     });
 
-    it("visibilitychange event triggers re-render when visible (lines 213-216)", async () => {
+    it("visibilitychange event triggers re-render when visible", async () => {
         const requestId = await bootstrapWithData({});
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1000,7 +1000,7 @@ describe("AnalyticsPage", () => {
         expect(SketchCharts.drawTimeline).toHaveBeenCalled();
     });
 
-    it("terminateWorker fires on beforeunload (lines 245-249)", async () => {
+    it("terminateWorker fires on beforeunload", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
@@ -1012,7 +1012,7 @@ describe("AnalyticsPage", () => {
         window.dispatchEvent(new Event("beforeunload"));
     });
 
-    it("handleCacheChange invalidates state and sets needsBaseReload (lines 257-266)", async () => {
+    it("handleCacheChange invalidates state and sets needsBaseReload", async () => {
         const requestId = await bootstrapWithData({});
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1032,7 +1032,7 @@ describe("AnalyticsPage", () => {
         expect(DataCache.subscribe).toHaveBeenCalled();
     });
 
-    it("loadBase catch block sets empty state on storage error (lines 301-302)", async () => {
+    it("loadBase catch block sets empty state on storage error", async () => {
         Storage.getAnalytics.mockRejectedValue(new Error("IDB error"));
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
@@ -1045,7 +1045,7 @@ describe("AnalyticsPage", () => {
         );
     });
 
-    it("applyWorkerViewPayload shows loading=false when view is null (lines 341-342)", async () => {
+    it("applyWorkerViewPayload shows loading=false when view is null", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
@@ -1067,7 +1067,7 @@ describe("AnalyticsPage", () => {
         expect(document.getElementById("analyticsEmpty").hidden).toBe(true); // empty is hidden since it wasn't shown
     });
 
-    it("resetFilters button clears all filters and calls syncRouteFromFilters (lines 611-615)", async () => {
+    it("resetFilters button clears all filters and calls syncRouteFromFilters", async () => {
         const requestId = await bootstrapWithData({ topic: "AI", day: "2", hour: "9" });
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1078,7 +1078,7 @@ describe("AnalyticsPage", () => {
         expect(AppRouter.setParams).toHaveBeenCalled();
     });
 
-    it("week chart click sets monthFocus to item.monthKey (lines 749-751)", async () => {
+    it("week chart click sets monthFocus to item.monthKey", async () => {
         await bootstrapWithData({});
 
         SketchCharts.getItemAt.mockReturnValue({
@@ -1095,7 +1095,7 @@ describe("AnalyticsPage", () => {
         expect(call[0]).toMatchObject({ month: "2024-03" });
     });
 
-    it("filter chip click removes day and hour filters (lines 659, 666-667)", async () => {
+    it("filter chip click removes day and hour filters", async () => {
         const requestId = await bootstrapWithData({ day: "3", hour: "14" });
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1119,7 +1119,7 @@ describe("AnalyticsPage", () => {
         expect(AppRouter.setParams).toHaveBeenCalled();
     });
 
-    it("renderAnalyticsView handles isRendering guard (line 542)", async () => {
+    it("renderAnalyticsView handles isRendering guard", async () => {
         const requestId = await bootstrapWithData({});
         sendViewResponse(requestId);
         await new Promise((resolve) => setTimeout(resolve, 0));

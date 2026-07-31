@@ -21,9 +21,9 @@
 
 import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { buildGrowthTimeline, computeStats, normalizeConnectionRows } from "../connections/view.js";
-import { computeWorkerTimeout } from "../messages/format.js";
 
 import {
     CANCELLED,

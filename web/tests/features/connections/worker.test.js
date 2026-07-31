@@ -2,106 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { processConnections } from "../../../src/features/connections/connections-worker.js";
-import {
-    buildGrowthTimeline,
-    computeStats,
-    monthKeyToLabel,
-    parseConnectionDate,
-    toMonthKey
-} from "../../../src/features/connections/view.js";
 
-describe("connections worker helpers", () => {
-    it("parseConnectionDate returns Date for valid ISO string", () => {
-        const date = parseConnectionDate("2024-06-15");
-        expect(date).toBeInstanceOf(Date);
-        expect(date.getFullYear()).toBe(2024);
-        expect(date.getMonth()).toBe(5);
-        expect(date.getDate()).toBe(15);
-    });
-
-    it("parseConnectionDate returns null for invalid input", () => {
-        expect(parseConnectionDate(null)).toBe(null);
-        expect(parseConnectionDate("")).toBe(null);
-        expect(parseConnectionDate("not-a-date")).toBe(null);
-        expect(parseConnectionDate("2024-13-01")).toBe(null);
-        expect(parseConnectionDate("2024-00-15")).toBe(null);
-        expect(parseConnectionDate("2024-06-32")).toBe(null);
-        expect(parseConnectionDate("2024-04-31")).toBe(null);
-        expect(parseConnectionDate("2023-02-29")).toBe(null);
-        expect(parseConnectionDate("2024/06/15")).toBe(null);
-        expect(parseConnectionDate(42)).toBe(null);
-    });
-
-    it("parseConnectionDate accepts leap day in a leap year", () => {
-        expect(parseConnectionDate("2024-02-29")).toEqual(new Date(2024, 1, 29));
-    });
-
-    it("toMonthKey formats Date as YYYY-MM with zero-padding", () => {
-        expect(toMonthKey(new Date(2024, 0, 1))).toBe("2024-01");
-        expect(toMonthKey(new Date(2024, 11, 31))).toBe("2024-12");
-        expect(toMonthKey(new Date(2025, 5, 15))).toBe("2025-06");
-    });
-
-    it("monthKeyToLabel converts YYYY-MM to readable label", () => {
-        expect(monthKeyToLabel("2024-01")).toBe("Jan 2024");
-        expect(monthKeyToLabel("2025-12")).toBe("Dec 2025");
-        expect(monthKeyToLabel("2023-06")).toBe("Jun 2023");
-    });
-
-    it("buildGrowthTimeline buckets by month and fills gaps", () => {
-        const rows = [
-            { "Connected On": "2024-01-10" },
-            { "Connected On": "2024-01-20" },
-            { "Connected On": "2024-03-05" }
-        ];
-
-        const timeline = buildGrowthTimeline(rows);
-
-        expect(timeline.length).toBe(3);
-        expect(timeline[0].key).toBe("2024-01");
-        expect(timeline[0].value).toBe(2);
-        expect(timeline[0].label).toBe("Jan 2024");
-        expect(timeline[1].key).toBe("2024-02");
-        expect(timeline[1].value).toBe(0);
-        expect(timeline[2].key).toBe("2024-03");
-        expect(timeline[2].value).toBe(1);
-    });
-
-    it("buildGrowthTimeline returns empty array when no valid dates", () => {
-        expect(buildGrowthTimeline([])).toEqual([]);
-        expect(buildGrowthTimeline([{ "Connected On": "" }])).toEqual([]);
-        expect(buildGrowthTimeline([{ "Connected On": "invalid" }])).toEqual([]);
-    });
-
-    it("buildGrowthTimeline excludes impossible dates from analytics", () => {
-        const timeline = buildGrowthTimeline([
-            { "Connected On": "2024-02-29" },
-            { "Connected On": "2023-02-29" },
-            { "Connected On": "2024-04-31" }
-        ]);
-
-        expect(timeline).toEqual([{ key: "2024-02", label: "Feb 2024", value: 1 }]);
-    });
-
-    it("computeStats returns total and positive network age", () => {
-        const rows = [
-            { "Connected On": "2020-01-01" },
-            { "Connected On": "2024-06-15" },
-            { "Connected On": "2025-01-01" }
-        ];
-
-        const stats = computeStats(rows);
-
-        expect(stats.total).toBe(3);
-        expect(stats.networkAgeMonths).toBeGreaterThan(0);
-    });
-
-    it("computeStats handles empty rows", () => {
-        const stats = computeStats([]);
-        expect(stats.total).toBe(0);
-        expect(stats.networkAgeMonths).toBe(0);
-    });
-
+describe("connections worker", () => {
     it("processConnections succeeds with valid CSV", () => {
         const csv = [
             "Notes:",
@@ -141,41 +43,7 @@ describe("connections worker helpers", () => {
         processSpy.mockRestore();
     });
 
-    // ── computeStats edge cases (lines 167, 172) ──────────────────────────────
-
-    it("computeStats with a single connection has networkAgeMonths >= 0 (line 167)", () => {
-        const rows = [{ "Connected On": "2023-06-01" }];
-        const stats = computeStats(rows);
-        expect(stats.total).toBe(1);
-        expect(stats.networkAgeMonths).toBeGreaterThan(0);
-    });
-
-    it("computeStats skips rows with unparseable dates and still counts them (line 172)", () => {
-        // Rows with missing dates still contribute to total but not to earliestMs
-        const rows = [
-            { "Connected On": "" },
-            { "Connected On": "bad" },
-            { "Connected On": "2024-03-01" }
-        ];
-        const stats = computeStats(rows);
-        // total counts ALL rows regardless of date validity
-        expect(stats.total).toBe(3);
-        expect(stats.networkAgeMonths).toBeGreaterThan(0);
-    });
-
-    it("computeStats with all invalid dates returns networkAgeMonths of 0 (line 143)", () => {
-        const rows = [
-            { "Connected On": "" },
-            { "Connected On": "not-a-date" }
-        ];
-        const stats = computeStats(rows);
-        expect(stats.total).toBe(2);
-        expect(stats.networkAgeMonths).toBe(0);
-    });
-
-    // ── processConnections empty-rows path (lines 187-194) ───────────────────
-
-    it("processConnections returns error when CSV parses but yields no valid rows (line 172)", () => {
+    it("processConnections reports an error when the CSV parses but yields no valid rows", () => {
         // A valid connections header but every row is empty (all identity fields missing)
         const csv = [
             "Notes:",

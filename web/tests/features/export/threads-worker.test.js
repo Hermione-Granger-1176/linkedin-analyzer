@@ -200,12 +200,17 @@ describe("threads worker", () => {
         expect(bodies.Bob).toBe('she said "yes" twice');
     });
 
-    it("reports an error for an unparseable CSV", () => {
-        const result = processPayload({ messagesCsv: "not,a,valid,csv" });
+    it("reports a fixed error for an unparseable CSV", () => {
+        // The only test of the one string this worker is allowed to emit, and
+        // truthiness was all it used to ask for. This worker holds the raw
+        // messages CSV, so returning the head of it as the "error" would have
+        // put message text across the worker boundary and still passed.
+        const result = processPayload({ messagesCsv: `not,a,valid,csv ${PII_MARKER}` });
 
         expect(result.success).toBe(false);
         expect(result.threads).toEqual([]);
-        expect(result.error).toBeTruthy();
+        expect(result.error).toBe("This file is missing required Messages columns: FROM, TO, DATE, CONTENT.");
+        expect(JSON.stringify(result)).not.toContain(PII_MARKER);
     });
 
     it("treats a non-string CSV as empty", () => {

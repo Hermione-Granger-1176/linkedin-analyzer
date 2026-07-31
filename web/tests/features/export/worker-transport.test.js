@@ -8,6 +8,7 @@ import {
     loadMessagesState,
     terminateMessagesWorker,
 } from "../../../src/features/export/messages-transport.js";
+import { createWorkerHarness } from "../../helpers/mock-worker.js";
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
     captureError: vi.fn(),
@@ -47,37 +48,7 @@ const WORKER_CONNECTIONS_PAYLOAD = Object.freeze({
     },
 });
 
-let workers = [];
-
-class MockWorker {
-    constructor(url) {
-        this.url = String(url);
-        this.listeners = new Map();
-        this.terminate = vi.fn();
-        this.postMessage = vi.fn();
-        workers.push(this);
-    }
-
-    addEventListener(type, callback) {
-        const existing = this.listeners.get(type) || [];
-        existing.push(callback);
-        this.listeners.set(type, existing);
-    }
-
-    removeEventListener(type, callback) {
-        const existing = this.listeners.get(type) || [];
-        this.listeners.set(
-            type,
-            existing.filter((entry) => entry !== callback),
-        );
-    }
-
-    emit(type, event) {
-        for (const callback of [...(this.listeners.get(type) || [])]) {
-            callback(event);
-        }
-    }
-}
+const harness = createWorkerHarness();
 
 // The mechanism the three export transports share is exercised through them
 // everywhere else in the suite, one transport per file. What no single-transport
@@ -89,30 +60,29 @@ class MockWorker {
 describe("transports built on the shared worker mechanism", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        workers = [];
-        globalThis.Worker = MockWorker;
+        harness.install();
     });
 
     afterEach(() => {
         terminateMessagesWorker();
         terminateConnectionsWorker();
         vi.restoreAllMocks();
-        delete globalThis.Worker;
+        harness.uninstall();
     });
 
     it("gives each transport a worker of its own", () => {
         loadMessagesState(MESSAGES_CSV, "");
         loadConnectionsData(CONNECTIONS_CSV);
 
-        expect(workers).toHaveLength(2);
-        expect(workers[0].url).toContain("messages-worker.js");
-        expect(workers[1].url).toContain("connections-worker.js");
+        expect(harness.created).toHaveLength(2);
+        expect(harness.created[0].url).toContain("messages-worker.js");
+        expect(harness.created[1].url).toContain("connections-worker.js");
     });
 
     it("leaves one transport's request alone when the other is terminated", async () => {
         const messages = loadMessagesState(MESSAGES_CSV, "");
         const connections = loadConnectionsData(CONNECTIONS_CSV);
-        const [messagesWorker, connectionsWorker] = workers;
+        const [messagesWorker, connectionsWorker] = harness.created;
 
         terminateMessagesWorker();
 
@@ -137,7 +107,7 @@ describe("transports built on the shared worker mechanism", () => {
     it("counts request ids per transport rather than across them", async () => {
         loadMessagesState(MESSAGES_CSV, "");
         const supersededConnections = loadConnectionsData(CONNECTIONS_CSV);
-        const [, connectionsWorker] = workers;
+        const [, connectionsWorker] = harness.created;
         const [firstRequest] = connectionsWorker.postMessage.mock.calls[0];
 
         // Another request on the other transport in between. A counter shared

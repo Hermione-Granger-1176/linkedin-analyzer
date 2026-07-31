@@ -197,7 +197,7 @@ export const TutorialSteps = Object.freeze({
         createPdfExportStep({
             route: "analytics",
             title: "Save this as a PDF",
-            body: "Download your charts, key metrics, and insights as a PDF. Message contents are left out unless you tick the box in the dialog.",
+            body: "Download your charts, key metrics, and insights as a PDF, with a dashboard page per screen. Contact names and message contents are each left out unless you opt in.",
             fallbackTarget: "#screen-analytics .screen-header"
         })
     ],

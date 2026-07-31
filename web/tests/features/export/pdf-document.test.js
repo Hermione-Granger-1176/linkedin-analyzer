@@ -21,7 +21,7 @@ import {
 const palette = Object.fromEntries(
     PDF_PALETTE_TOKENS.map((token, index) => [token, { r: index, g: index, b: index }]),
 );
-const fonts = { body: "PatrickHand", accent: "Caveat", embedded: true };
+const fonts = { body: "PatrickHand", accent: "Caveat" };
 const theme = { palette, fonts };
 
 /**

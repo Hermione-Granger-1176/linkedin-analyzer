@@ -80,7 +80,7 @@ describe("registerPdfFonts", () => {
             "/fonts/PatrickHand-Regular.ttf",
             "/fonts/Caveat-Regular.ttf",
         ]);
-        expect(families).toEqual({ body: "PatrickHand", accent: "Caveat", embedded: true });
+        expect(families).toEqual({ body: "PatrickHand", accent: "Caveat" });
         expect(Object.isFrozen(families)).toBe(true);
         expect(doc.vfs.map((entry) => entry.file)).toEqual([
             "PatrickHand-Regular.ttf",
@@ -98,11 +98,7 @@ describe("registerPdfFonts", () => {
         const doc = createDocStub();
 
         expect(await registerPdfFonts(doc)).toBe(FALLBACK_FONTS);
-        expect(FALLBACK_FONTS).toEqual({
-            body: "helvetica",
-            accent: "helvetica",
-            embedded: false,
-        });
+        expect(FALLBACK_FONTS).toEqual({ body: "helvetica", accent: "helvetica" });
         expect(doc.addFont).not.toHaveBeenCalled();
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "pdf-export",

@@ -6,6 +6,12 @@
  * this path, and nothing about them is ever reported: every catch and every
  * worker error event here discards what it was handed and reports a fixed
  * error instead.
+ *
+ * Termination is a settling event, not just a teardown. Killing the worker
+ * removes every event that could have answered the in-flight request, so
+ * `terminateThreadsWorker()` settles it explicitly. A request left pending
+ * would keep `loadRecentThreads()` suspended for the life of the page, and its
+ * frame holds the raw messages CSV.
  */
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
@@ -22,9 +28,20 @@ const BYTES_PER_MB = 1024 * 1024;
 // export drops the threads section rather than blocking on it.
 const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
+/**
+ * Outcome of a request the caller explicitly cancelled.
+ *
+ * Distinct from the null "the worker could not answer" outcome, because the
+ * main-thread fallback must not re-run the very work that was cancelled.
+ */
+const CANCELLED = Symbol("threads-request-cancelled");
+
 let threadsWorker = null;
 let threadsRequestId = 0;
 let threadsTimeoutId = null;
+// Settle hook for the one request that can be in flight, so termination can end
+// it and drop every reference the request was holding.
+let pendingRequest = null;
 
 /**
  * Scale the watchdog with the size of the export being parsed.
@@ -36,12 +53,20 @@ function computeTimeout(messagesCsv) {
     return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
 }
 
-/** Terminate the threads worker if one is running. */
+/**
+ * Terminate the threads worker and end whatever it was answering.
+ *
+ * Safe to call when nothing is running, and safe to call twice.
+ */
 export function terminateThreadsWorker() {
-    if (!threadsWorker) {
-        return;
+    if (threadsWorker) {
+        threadsWorker.terminate();
     }
-    threadsWorker.terminate();
+    // Settled before the handle is dropped, so the request still detaches its
+    // listeners from the worker it was listening to.
+    if (pendingRequest) {
+        pendingRequest.cancel();
+    }
     threadsWorker = null;
     clearWorkerTimeout();
 }
@@ -92,6 +117,11 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
 
     initWorker();
     const workerThreads = await requestThreadsFromWorker(text, options);
+    if (workerThreads === CANCELLED) {
+        // Falling back here would redo on the UI thread precisely the work the
+        // user asked to stop, holding the CSV for as long as it took.
+        return [];
+    }
     terminateThreadsWorker();
     if (workerThreads) {
         return workerThreads;
@@ -107,7 +137,7 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
  * Ask the worker for the thread selection.
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
- * @returns {Promise<object[]|null>} Threads, or null when the worker could not answer
+ * @returns {Promise<object[]|null|typeof CANCELLED>} Threads, null when the worker could not answer, or CANCELLED
  */
 function requestThreadsFromWorker(messagesCsv, options) {
     if (!threadsWorker) {
@@ -118,6 +148,20 @@ function requestThreadsFromWorker(messagesCsv, options) {
 
     return new Promise((resolve) => {
         clearWorkerTimeout();
+
+        /**
+         * End the request, dropping everything it was holding.
+         *
+         * Resolving twice is harmless, and detaching twice is guarded, so this
+         * needs no latch of its own: the watchdog, a worker event and an
+         * explicit cancellation may all reach it.
+         * @param {object[]|null|typeof CANCELLED} result - Outcome for the caller
+         */
+        const settle = (result) => {
+            pendingRequest = null;
+            finishRequest();
+            resolve(result);
+        };
 
         const handleMessage = (event) => {
             const parsed = parseThreadsWorkerMessage(event.data || {});
@@ -145,8 +189,7 @@ function requestThreadsFromWorker(messagesCsv, options) {
                     requestId,
                 });
             }
-            finishRequest();
-            resolve(message.payload.success ? message.payload.threads : null);
+            settle(message.payload.success ? message.payload.threads : null);
         };
 
         const handleError = (event) => {
@@ -163,8 +206,7 @@ function requestThreadsFromWorker(messagesCsv, options) {
                 operation: "threads-worker-error-event",
                 requestId,
             });
-            finishRequest();
-            resolve(null);
+            settle(null);
         };
 
         const finishRequest = () => {
@@ -179,14 +221,15 @@ function requestThreadsFromWorker(messagesCsv, options) {
             clearWorkerTimeout();
         };
 
+        pendingRequest = { cancel: () => settle(CANCELLED) };
+
         threadsTimeoutId = window.setTimeout(() => {
             captureError(new Error("Threads worker request timed out."), {
                 module: "pdf-export",
                 operation: "threads-worker-timeout",
                 requestId,
             });
-            finishRequest();
-            resolve(null);
+            settle(null);
         }, computeTimeout(messagesCsv));
 
         try {
@@ -210,8 +253,7 @@ function requestThreadsFromWorker(messagesCsv, options) {
                 operation: "threads-worker-post-message",
                 requestId,
             });
-            finishRequest();
-            resolve(null);
+            settle(null);
         }
     });
 }

@@ -224,6 +224,85 @@ describe("loadRecentThreads", () => {
         expectFixedError(captureError.mock.calls[0][0], postMessageError);
     });
 
+    it("settles a terminated request instead of leaving it pending", async () => {
+        vi.useFakeTimers();
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        const worker = workerInstance;
+        expect(worker.postMessage).toHaveBeenCalled();
+
+        terminateThreadsWorker();
+        // No timer is advanced and no event is emitted: terminating removed
+        // every one of them, so cancellation alone has to end the request.
+        // Left pending, loadRecentThreads() never returns and its frame keeps
+        // the whole raw messages CSV alive for the life of the page.
+        const threads = await pending;
+
+        expect(threads).toEqual([]);
+        expect(vi.getTimerCount()).toBe(0);
+        vi.useRealTimers();
+    });
+
+    it("does not re-parse on the main thread after a cancellation", async () => {
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        terminateThreadsWorker();
+
+        // The main-thread fallback would answer with these threads; redoing the
+        // parse is exactly the work the user cancelled.
+        expect(await pending).toEqual([]);
+        expect(captureError).not.toHaveBeenCalled();
+    });
+
+    it("detaches a cancelled request from the worker it was listening to", async () => {
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        const worker = workerInstance;
+        const [request] = worker.postMessage.mock.calls[0];
+
+        terminateThreadsWorker();
+        await pending;
+
+        expect(worker.listeners.get("message")).toEqual([]);
+        expect(worker.listeners.get("error")).toEqual([]);
+        expect(worker.listeners.get("messageerror")).toEqual([]);
+
+        // A late answer from a worker that was already killed changes nothing.
+        worker.emit("message", {
+            data: {
+                type: "threads",
+                requestId: request.requestId,
+                payload: { success: true, threads: [{ name: "Late" }] },
+            },
+        });
+        expect(await pending).toEqual([]);
+    });
+
+    it("tolerates a second termination with nothing in flight", async () => {
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        terminateThreadsWorker();
+        await pending;
+
+        expect(() => terminateThreadsWorker()).not.toThrow();
+        expect(workerInstance.terminate).toHaveBeenCalledTimes(1);
+    });
+
+    it("runs a fresh request after a cancelled one", async () => {
+        const cancelled = loadRecentThreads(MESSAGES_CSV);
+        terminateThreadsWorker();
+        expect(await cancelled).toEqual([]);
+
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        const worker = workerInstance;
+        const [request] = worker.postMessage.mock.calls[0];
+        worker.emit("message", {
+            data: {
+                type: "threads",
+                requestId: request.requestId,
+                payload: { success: true, threads: [{ name: "Ada" }] },
+            },
+        });
+
+        expect(await pending).toEqual([{ name: "Ada" }]);
+    });
+
     it("falls back to the main thread when the worker times out", async () => {
         vi.useFakeTimers();
         const pending = loadRecentThreads(MESSAGES_CSV);

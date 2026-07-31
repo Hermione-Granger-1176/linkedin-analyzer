@@ -167,7 +167,7 @@ describe("collectExportData", () => {
         expect(data.generatedAt).toEqual(new Date(2026, 6, 31));
         expect(data.threads).toEqual([]);
         expect(data.allTime).toEqual([
-            { label: "Network growth", value: "3.4x" },
+            { label: "Network growth", value: "3.4×" },
             { label: "Outreach initiated", value: "128" },
             { label: "Reply rate", value: "42%" },
             { label: "Unanswered", value: "37" },
@@ -193,7 +193,7 @@ describe("collectExportData", () => {
 
         expect(data.rangeLabel).toBe("Last 3 months");
         expect(data.insights).toEqual([]);
-        expect(data.allTime[0]).toEqual({ label: "Network growth", value: "3.4x" });
+        expect(data.allTime[0]).toEqual({ label: "Network growth", value: "3.4×" });
         expect(Storage.getAnalytics).not.toHaveBeenCalled();
         expect(workerInstance).toBeNull();
     });
@@ -314,7 +314,7 @@ describe("collectExportData", () => {
         const data = await pending;
         expect(data.insights).toEqual([{ title: "From the worker", body: "…" }]);
         expect(data.tip).toBe("A tip.");
-        expect(data.allTime[0]).toEqual({ label: "Network growth", value: "2.1x" });
+        expect(data.allTime[0]).toEqual({ label: "Network growth", value: "2.1×" });
         expect(worker.terminate).toHaveBeenCalled();
         expect(worker.listenerCount()).toBe(0);
     });

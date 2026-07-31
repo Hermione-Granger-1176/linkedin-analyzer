@@ -81,7 +81,10 @@ function formatSentRatio(ratio) {
 function buildAllTimeStats(networkGrowth, outreach) {
     const stats = [];
     if (networkGrowth && typeof networkGrowth.multiplier === "number") {
-        stats.push({ label: "Network growth", value: `${networkGrowth.multiplier}x` });
+        // The same multiplication sign the Insights screen uses. Both embedded
+        // faces carry U+00D7, and it is in WinAnsi, so the Helvetica fallback
+        // renders it too.
+        stats.push({ label: "Network growth", value: `${networkGrowth.multiplier}×` });
     }
     if (outreach) {
         stats.push(

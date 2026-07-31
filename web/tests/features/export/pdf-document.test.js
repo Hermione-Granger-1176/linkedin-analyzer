@@ -80,7 +80,7 @@ const SAMPLE = {
     ],
     tip: "Reply within a day.",
     allTime: [
-        { label: "Network growth", value: "3.4x" },
+        { label: "Network growth", value: "3.4×" },
         { label: "Outreach initiated", value: "128" },
         { label: "Reply rate", value: "42%" },
     ],
@@ -473,7 +473,7 @@ describe("buildBlocks", () => {
         expect(drawn).toContain("Sent");
         expect(drawn).toContain("Received");
         expect(drawn).toContain("Network growth");
-        expect(drawn).toContain("3.4x");
+        expect(drawn).toContain("3.4×");
         // The message bodies themselves, not just the chrome around them: this
         // is the behaviour the whole opt-in exists for.
         expect(drawn).toContain("Hello");

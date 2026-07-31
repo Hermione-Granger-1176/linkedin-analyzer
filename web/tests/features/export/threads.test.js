@@ -798,6 +798,43 @@ describe("selectRecentThreads", () => {
         expect(threads[0]).toBe(anonymous);
     });
 
+    it("keeps every anonymized recipient a group row names", () => {
+        // Two recipient URLs against a single "LinkedIn Member" token in TO:
+        // parseRecipientNames collapses the whole field into one name, and
+        // extractParticipantsFromRow drops both as anonymous, so walking the
+        // names here added only the first URL's person and silently deleted the
+        // other from the document.
+        const threads = selectRecentThreads([
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "mine",
+            }),
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 11:00:00",
+                body: "hers",
+                fromContact: true,
+            }),
+            row({
+                FROM: SELF_NAME,
+                "SENDER PROFILE URL": SELF_URL,
+                TO: "LinkedIn Member",
+                "RECIPIENT PROFILE URLS":
+                    "https://www.linkedin.com/in/stranger-a,https://www.linkedin.com/in/stranger-b",
+                DATE: "2026-02-01 10:00:00",
+                CONTENT: "hello both",
+                "CONVERSATION ID": "c7",
+            }),
+        ]);
+
+        const group = threads.find((thread) => thread.messages[0].body === "hello both");
+        expect(group.name).toBe("LinkedIn Member, LinkedIn Member");
+        expect(group.url).toBe("");
+    });
+
     it("keeps two anonymous conversations apart", () => {
         const threads = selectRecentThreads([
             message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),

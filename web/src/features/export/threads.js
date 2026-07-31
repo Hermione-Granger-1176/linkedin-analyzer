@@ -103,7 +103,19 @@ function exportParticipants(row, context, keepAnonymous) {
     add(row.FROM, row["SENDER PROFILE URL"]);
     const recipientUrls = MessagesAnalytics.normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
     const recipientNames = MessagesAnalytics.parseRecipientNames(row.TO, recipientUrls.length);
-    recipientNames.forEach((name, index) => add(name, recipientUrls[index] || ""));
+    if (recipientUrls.length) {
+        // Paired by URL, exactly as extractParticipantsFromRow pairs them, so
+        // the two passes agree on how many people a row names. Walking the names
+        // instead stopped at the first: `parseRecipientNames` collapses the whole
+        // TO field into one name whenever a row carries at most one URL, and a
+        // group of anonymized recipients is one name against several URLs. Every
+        // recipient past the first was then added by neither pass and vanished.
+        recipientUrls.forEach((url, index) =>
+            add(recipientNames[index] || recipientNames[0] || "", url),
+        );
+    } else {
+        recipientNames.forEach((name) => add(name, ""));
+    }
 
     return named.concat(anonymous);
 }

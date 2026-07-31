@@ -29,6 +29,7 @@ import {
     CANCELLED,
     createWorkerTransport,
     FAILED,
+    failureOutcome,
     MAIN_THREAD_FALLBACK_MAX_CHARS,
     PENDING,
 } from "./worker-transport.js";
@@ -129,24 +130,23 @@ function requestDataFromWorker(connectionsCsv) {
  */
 function interpretReply(message, context) {
     if (message.type === "error") {
-        // The worker posts this envelope under whatever id it could read, which
-        // is zero when it could not read the request at all, so it settles the
-        // one request in flight whatever id it names. FAILED rather than null:
-        // it either threw parsing this exact file, or refused a payload so large
-        // the main-thread ceiling would turn it away anyway.
+        // This worker answers a request it threw on under that request's own id,
+        // and a global failure or a request it could not read at all under id
+        // zero. It settles the one request in flight either way; which of the
+        // two it is decides what it settles as, per `failureOutcome`.
         context.report("Connections worker reported an error.", "connections-worker-error-payload");
-        return FAILED;
+        return failureOutcome(message, context);
     }
     // The contract parser normalizes every field of a processed payload and
     // always hands back an object, so there is nothing to guard before reading
     // `success`, unlike its messages sibling, which passes the payload through
     // and nulls one that is not an object.
     if (!message.payload.success) {
-        // Settled whatever id it arrived under: only one request is ever in
-        // flight, so a failure envelope is this request failing, and waiting out
-        // the watchdog would look like a hang.
+        // Settled whatever id it arrived under, because only one request is ever
+        // in flight and waiting out the watchdog would look like a hang. What it
+        // settles as does turn on the id: see `failureOutcome`.
         context.report("Connections worker reported a failure.", "connections-worker-failure");
-        return FAILED;
+        return failureOutcome(message, context);
     }
     // A stale success belongs to a request nobody is waiting on. It is dropped
     // before the emptied-payload check below rather than after it, as the

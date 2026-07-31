@@ -21,6 +21,7 @@ import {
     CANCELLED,
     createWorkerTransport,
     FAILED,
+    failureOutcome,
     MAIN_THREAD_FALLBACK_MAX_CHARS,
     PENDING,
 } from "./worker-transport.js";
@@ -136,17 +137,19 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
  * Read one valid worker reply into an outcome for the request in flight.
  * @param {object} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
- * @returns {object[]|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
+ * @returns {object[]|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
 function interpretReply(message, context) {
     if (!message.payload.success) {
-        // Settled whatever id it arrived under: only one request is ever in
-        // flight, so a failure envelope is this request failing, and waiting out
-        // the watchdog would look like a hang. The worker declining to parse a
-        // file the user uploaded is the same event under either id, so it is
-        // reported either way.
+        // Settled whatever id it arrived under, because only one request is ever
+        // in flight and waiting out the watchdog would look like a hang. The
+        // worker declining to parse a file the user uploaded is the same event
+        // under either id, so it is reported either way; what it settles as
+        // turns on the id, per `failureOutcome`. This worker answers a global
+        // failure under the request it was serving rather than under zero, so
+        // only a failure raised before it ever read a request lands there.
         context.report("Threads worker reported a failure.", "threads-worker-failure");
-        return FAILED;
+        return failureOutcome(message, context);
     }
     // A stale success belongs to a request nobody is waiting on.
     if (message.requestId !== context.requestId) {

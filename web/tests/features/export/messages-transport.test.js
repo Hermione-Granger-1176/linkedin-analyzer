@@ -353,17 +353,61 @@ describe("loadMessagesState", () => {
         });
     });
 
-    it("treats a failure envelope as terminal even under another request id", async () => {
+    it("falls back when a failure envelope names no request it was given", async () => {
+        // The worker answers under the request's own id when it read the request
+        // and the parse is what failed, and under id zero when it fell over
+        // before or outside of that. Only the first is evidence about the file.
+        // This one never touched the CSV, so the small export is still parsed
+        // here rather than dropped, which is what the test above pins for a
+        // failure the worker did attribute to its request.
+        //
+        // It settles at once either way: no timer is advanced, so a request left
+        // to sit out its watchdog fails this test.
         vi.useFakeTimers();
         const pending = loadMessagesState(MESSAGES_CSV, "");
-        // A worker that could not read the request cannot echo its id in every
-        // browser; the single in-flight request must still end here rather than
-        // sitting out the watchdog.
         replyToRequest({ success: false, error: "invalid request" }, 99);
         vi.useRealTimers();
 
-        expect(await pending).toBeNull();
+        // Two contacts, because the main thread parsed the whole file: the
+        // worker fixture elsewhere in this suite carries only the first.
+        expect((await pending).messageState.contacts.size).toBe(2);
         expect(workerInstance.terminate).toHaveBeenCalled();
+    });
+
+    it("answers a crash the same way whichever of its two routes lands first", async () => {
+        // A crash inside this worker reaches the main thread twice over: as the
+        // posted failure envelope under id zero, and as a propagated error event
+        // on the Worker object, which this worker does not cancel. Nothing in
+        // the spec orders the two, so what the export does must not depend on
+        // which one wins.
+        const postCrashEnvelope = (worker) => {
+            worker.emit("message", {
+                data: {
+                    type: "processed",
+                    requestId: 0,
+                    payload: { success: false, error: "runtime failure" },
+                },
+            });
+        };
+        const propagateErrorEvent = (worker) => {
+            worker.emit("error", { type: "error", error: new Error("worker blew up") });
+        };
+
+        const outcomes = [];
+        for (const routes of [
+            [postCrashEnvelope, propagateErrorEvent],
+            [propagateErrorEvent, postCrashEnvelope],
+        ]) {
+            const pending = loadMessagesState(MESSAGES_CSV, "");
+            const worker = workerInstance;
+            for (const route of routes) {
+                route(worker);
+            }
+            outcomes.push(await pending);
+        }
+
+        // Both fall back, because neither route said anything about the file.
+        expect(outcomes.map((state) => state.messageState.contacts.size)).toEqual([2, 2]);
     });
 
     it("ignores stale successes for other requests and invalid envelopes", async () => {

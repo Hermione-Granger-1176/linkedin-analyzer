@@ -257,15 +257,19 @@ describe("loadRecentThreads", () => {
         });
     });
 
-    it("treats a failure envelope as terminal even under another request id", async () => {
+    it("falls back when a failure envelope names no request it was given", async () => {
+        // This worker answers a global failure under the request it was serving,
+        // so an id it was never given means it fell over before reading one at
+        // all. It never touched the CSV, and that is not the same event as the
+        // test above, where it read this request and declined the file.
+        //
+        // It settles at once either way: no timer is advanced, so a request left
+        // to sit out its watchdog fails this test.
         vi.useFakeTimers();
         const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
-        // A worker that could not read the request cannot echo its id in every
-        // browser; the single in-flight request must still end here rather than
-        // sitting out the watchdog.
         worker.emit("message", {
             data: {
                 type: "threads",
@@ -275,7 +279,7 @@ describe("loadRecentThreads", () => {
         });
         vi.useRealTimers();
 
-        expect(await pending).toEqual([]);
+        expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
         expect(worker.terminate).toHaveBeenCalled();
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "pdf-export",

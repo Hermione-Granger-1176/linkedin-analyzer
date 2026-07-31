@@ -89,6 +89,37 @@ export const PENDING = Symbol("export-request-pending");
  */
 
 /**
+ * Read a reported failure by whether the worker attributed it to this request.
+ *
+ * The workers answer under the id they were asked under when they read the
+ * request and it was the parse itself that failed, and under id 0 when they
+ * fell over before or outside of that: a request the contract parser rejected,
+ * a global `error`, an unhandled rejection. Real ids start at 1, so the two
+ * cases are always told apart.
+ *
+ * Only the first is evidence about the file, so only the first is FAILED. A
+ * worker that never read the request never touched the CSV, and a worker that
+ * fell over says nothing about whether the file can be parsed, so both leave
+ * the small-export fallback its job.
+ *
+ * That also settles what used to be a race. A crash inside the messages or
+ * connections worker reaches the main thread twice, as the posted envelope
+ * under id 0 and as a propagated `error` event on the Worker object, and
+ * nothing in the spec orders them. Both routes now answer null, so whichever
+ * arrives first no longer decides what the export does.
+ *
+ * The request ends here either way rather than sitting out its watchdog: only
+ * one request is ever in flight, and a worker that has reported it cannot
+ * answer is not going to answer.
+ * @param {object} message - Parsed reply reporting a failure
+ * @param {ReplyContext} context - The request's id and error reporter
+ * @returns {null|typeof FAILED} FAILED when the worker attributed the failure to this request, null otherwise
+ */
+export function failureOutcome(message, context) {
+    return message.requestId === context.requestId ? FAILED : null;
+}
+
+/**
  * Create the worker-owning half of an export transport.
  * @param {{name: string, createWorker: () => Worker}} config - Lowercase transport name, and how to construct its worker
  * @returns {WorkerTransport} A transport owning one worker at a time

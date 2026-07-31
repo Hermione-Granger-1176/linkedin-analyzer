@@ -280,6 +280,199 @@ describe("selectRecentThreads", () => {
         expect(threads.find((thread) => thread.name === "ada").messages[0].body).toHaveLength(20000);
     });
 
+    it("names the sender of a single received message, not the account owner", () => {
+        const threads = selectRecentThreads([
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "hello",
+                fromContact: true,
+            }),
+        ]);
+
+        expect(threads).toHaveLength(1);
+        expect(threads[0].name).toContain("ada");
+        // Both people tie on every piece of evidence there is, so the export
+        // refuses to call this received message "sent".
+        expect(threads[0].messages[0].direction).toBe("unknown");
+    });
+
+    it("does not claim a direction for a single sent message either", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "hi" }),
+        ]);
+
+        expect(threads[0].messages[0].direction).toBe("unknown");
+        expect(threads[0].name).toContain("ada");
+    });
+
+    it("does not guess self from a received-only one-person conversation", () => {
+        const rows = ["one", "two", "three"].map((body, index) =>
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: `2026-01-0${index + 1} 10:00:00`,
+                body,
+                fromContact: true,
+            }),
+        );
+
+        const [thread] = selectRecentThreads(rows);
+
+        expect(thread.messages.map((entry) => entry.direction)).toEqual([
+            "unknown",
+            "unknown",
+            "unknown",
+        ]);
+    });
+
+    it("does not guess self from a sent-only one-person conversation", () => {
+        const rows = ["one", "two", "three"].map((body, index) =>
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: `2026-01-0${index + 1} 10:00:00`,
+                body,
+            }),
+        );
+
+        const [thread] = selectRecentThreads(rows);
+
+        expect(thread.messages.every((entry) => entry.direction === "unknown")).toBe(true);
+    });
+
+    it("identifies self from a one-directional export across conversations", () => {
+        const rows = ["ada", "bob", "cy"].map((name, index) =>
+            message({
+                name,
+                conversationId: `c${index}`,
+                date: `2026-01-0${index + 1} 10:00:00`,
+                body: "hi",
+            }),
+        );
+
+        const threads = selectRecentThreads(rows);
+
+        expect(threads.map((thread) => thread.name)).toEqual(["cy", "bob", "ada"]);
+        expect(threads.every((thread) => thread.messages[0].direction === "sent")).toBe(true);
+    });
+
+    it("keeps a conversation together when its first row names nobody", () => {
+        const threads = selectRecentThreads([
+            // The unattributable row comes first: grouping must not depend on
+            // having already seen an attributable row in this conversation.
+            row({
+                DATE: "2026-01-01 10:00:00",
+                CONTENT: "one",
+                "CONVERSATION ID": "c1",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+            }),
+            message({ name: "ada", conversationId: "c1", date: "2026-01-02 10:00:00", body: "two" }),
+            message({ name: "bob", conversationId: "c2", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.find((thread) => thread.name === "ada");
+        expect(ada.messageCount).toBe(2);
+        expect(ada.messages.map((entry) => entry.body)).toEqual(["one", "two"]);
+    });
+
+    it("keeps one thread when a contact is renamed mid-conversation", () => {
+        const threads = selectRecentThreads([
+            // No profile URL on either row, so only the CONVERSATION ID says
+            // these two displayed names are the same conversation.
+            message({
+                name: "Ada Lovelace",
+                url: "",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "one",
+            }),
+            message({
+                name: "Ada Byron",
+                url: "",
+                conversationId: "c1",
+                date: "2026-01-02 10:00:00",
+                body: "two",
+            }),
+            message({ name: "bob", conversationId: "c2", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.filter((thread) => thread.name.includes("Ada"));
+        expect(ada).toHaveLength(1);
+        expect(ada[0].messageCount).toBe(2);
+        expect(ada[0].name).toBe("Ada Lovelace, Ada Byron");
+    });
+
+    it("keeps one thread when a conversation mixes named and URL-less rows", () => {
+        const threads = selectRecentThreads([
+            message({
+                name: "Ada Lovelace",
+                url: "https://www.linkedin.com/in/ada",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "one",
+            }),
+            // Same conversation, no URL and a different displayed name: only the
+            // CONVERSATION ID ties these two rows together.
+            message({
+                name: "Ada L.",
+                url: "",
+                conversationId: "c1",
+                date: "2026-01-02 10:00:00",
+                body: "two",
+            }),
+            message({ name: "bob", conversationId: "c2", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.filter((thread) => thread.name.includes("Ada"));
+        expect(ada).toHaveLength(1);
+        expect(ada[0].messageCount).toBe(2);
+        expect(ada[0].messages.map((entry) => entry.body)).toEqual(["one", "two"]);
+    });
+
+    it("keeps a group conversation as its own thread", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "solo" }),
+            row({
+                DATE: "2026-01-02 10:00:00",
+                CONTENT: "group",
+                "CONVERSATION ID": "c2",
+                TO: "ada,bob",
+                "RECIPIENT PROFILE URLS":
+                    "https://www.linkedin.com/in/ada,https://www.linkedin.com/in/bob",
+            }),
+            message({ name: "cy", conversationId: "c3", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const group = threads.find((thread) => thread.name.includes(",") && thread.name.includes("bob"));
+        expect(group.name).toBe("ada, bob");
+        expect(group.messageCount).toBe(1);
+        expect(group.url).toBe("");
+
+        const solo = threads.find((thread) => thread.name === "ada");
+        expect(solo.messageCount).toBe(1);
+        expect(solo.messages.map((entry) => entry.body)).toEqual(["solo"]);
+    });
+
+    it("falls back to a profile URL when a correspondent has no name", () => {
+        const contactUrl = "https://www.linkedin.com/in/anonymous-person";
+        const threads = selectRecentThreads([
+            row({
+                DATE: "2026-01-02 10:00:00",
+                CONTENT: "hi",
+                "CONVERSATION ID": "c1",
+                TO: "",
+                "RECIPIENT PROFILE URLS": contactUrl,
+            }),
+            message({ name: "bob", conversationId: "c2", date: "2026-01-01 09:00:00", body: "yo" }),
+        ]);
+
+        const anonymous = threads.find((thread) => thread.name !== "bob");
+        expect(anonymous.name).toBe(contactUrl);
+    });
+
     it("keeps identical timestamps in row order", () => {
         const threads = selectRecentThreads([
             message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "one" }),

@@ -544,6 +544,38 @@ function buildThreadHeaderBlock(painter, thread) {
 }
 
 /**
+ * Resolve the chip a message's direction is drawn with.
+ *
+ * A one-conversation export gives the selector no way to tell the account owner
+ * from the other person, and it says so rather than guessing; a neutral chip is
+ * how that reads on the page.
+ * @param {object} palette - Palette from readPdfPalette()
+ * @param {string} direction - Message direction
+ * @returns {{accent: object, chipFill: object, chipLabel: string}} Chip styling
+ */
+function messageChip(palette, direction) {
+    if (direction === "sent") {
+        return {
+            accent: palette["--accent-blue"],
+            chipFill: palette["--accent-blue-bg"],
+            chipLabel: "Sent",
+        };
+    }
+    if (direction === "received") {
+        return {
+            accent: palette["--accent-green"],
+            chipFill: palette["--accent-green-bg"],
+            chipLabel: "Received",
+        };
+    }
+    return {
+        accent: palette["--text-muted"],
+        chipFill: palette["--bg-tertiary"],
+        chipLabel: "Message",
+    };
+}
+
+/**
  * Build one message block, chip and all.
  * @param {object} painter - Drawing helpers
  * @param {{direction: string, timestamp: number, body: string}} message - Message
@@ -555,10 +587,7 @@ function buildMessageBlock(painter, message) {
     const bodySize = 9.5;
     const indent = CARD_GUTTER;
     const textWidth = CONTENT_WIDTH - indent - CARD_PADDING;
-    const sent = message.direction === "sent";
-    const accent = sent ? palette["--accent-blue"] : palette["--accent-green"];
-    const chipFill = sent ? palette["--accent-blue-bg"] : palette["--accent-green-bg"];
-    const chipLabel = sent ? "Sent" : "Received";
+    const { accent, chipFill, chipLabel } = messageChip(palette, message.direction);
 
     const lines = painter.wrap(message.body, textWidth, fonts.body, bodySize);
     const rows = [

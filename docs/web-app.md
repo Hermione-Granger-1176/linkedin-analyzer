@@ -140,7 +140,11 @@ The PDF is a document in its own right, not a screenshot. It is laid out and dra
 
 The confirmation dialog offers one extra section, **unchecked by default**: the last 5 messages of your 10 most recently messaged contacts, in full.
 
-The hydrated message state the app keeps in memory deliberately discards message text, so this section re-reads the stored CSV and selects the threads in a dedicated worker (`features/export/threads-worker.js`).
+The hydrated message state the app keeps in memory deliberately discards message text, so this section re-reads the stored CSV and selects the threads in a dedicated worker (`features/export/threads-worker.js`). That re-read uses `features/export/messages-parse.js`, not the spreadsheet cleaner: formula-injection escaping and cell trimming are what a workbook needs, and they would turn "+1, that works for me" into "'+1, that works for me" on the page. Dates, names and URLs are still normalized the same way.
+
+Threads are grouped by `CONVERSATION ID` first. Every row of a conversation is collected before its correspondents are worked out, so a contact who is renamed halfway through, or whose profile URL appears on only some rows, never splits the conversation in two, and a row that names nobody joins its conversation whichever order it arrives in. Rows with a blank id group by their correspondents instead. A conversation with more than one correspondent stays its own thread, titled with all of them, rather than merging into anyone's one-to-one thread.
+
+Message direction comes from the account owner, who is identified as the person who both sends and receives across the widest set of conversations. In an export where that is a tie (a single message, or one conversation on its own, where the two people are indistinguishable) the export says so: the messages carry a neutral **Message** chip instead of **Sent** or **Received**, and both people are listed as correspondents.
 
 Message bodies leave the app only inside the file you download, to the location you choose. Nothing is uploaded, and nothing about the threads (bodies, contact names or the file name) is ever attached to diagnostics. Leaving the box unchecked means no message text appears in the output at all.
 

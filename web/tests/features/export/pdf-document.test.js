@@ -395,6 +395,36 @@ describe("buildBlocks", () => {
         );
     });
 
+    it("draws a neutral chip when the direction is unknown", () => {
+        const doc = createDocStub();
+        renderPdfDocument(
+            doc,
+            {
+                ...SAMPLE,
+                threads: [
+                    {
+                        name: "Ada Lovelace",
+                        messageCount: 1,
+                        lastTimestamp: new Date(2026, 5, 2).getTime(),
+                        messages: [
+                            {
+                                direction: "unknown",
+                                timestamp: new Date(2026, 5, 2).getTime(),
+                                body: "Hi",
+                            },
+                        ],
+                    },
+                ],
+            },
+            theme,
+        );
+
+        const drawn = doc.calls.text.map((entry) => entry.value);
+        expect(drawn).toContain("Message");
+        expect(drawn).not.toContain("Sent");
+        expect(drawn).not.toContain("Received");
+    });
+
     it("tolerates a thread with no messages array", () => {
         const doc = createDocStub();
         renderPdfDocument(

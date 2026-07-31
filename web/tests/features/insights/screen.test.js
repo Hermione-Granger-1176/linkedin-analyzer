@@ -688,6 +688,40 @@ describe("InsightsPage", () => {
         expect(lastSnapshot().view).not.toBeNull();
     });
 
+    it("withholds a view built at another range when the outreach read lands first", async () => {
+        // The route to the guard is not the range control. Within one visit the
+        // outreach latch is already closed, so nothing publishes between a range
+        // change and the view arriving, and the two are always equal by the time
+        // anything is written. Leaving the screen opens that latch again.
+        //
+        // So: return at a range other than the last one, and two things race.
+        // The outreach read publishes the moment it resolves, and the worker has
+        // not answered yet, so the only view on hand is the one built for the
+        // range that was on screen last time.
+        const id = await primeInsights("12m");
+        sendView(id, { insights: { insights: [], tip: null }, view: { timeline: [] } });
+        expect(lastSnapshot().view).not.toBeNull();
+
+        InsightsPage.onRouteLeave();
+        Storage.getOutreach.mockResolvedValue({
+            selfInitiated: 4,
+            replyRate: 0.5,
+            unansweredContacts: 1,
+            sentReceivedRatio: 2,
+        });
+
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const snapshot = lastSnapshot();
+        // Published by the outreach read, with the worker's answer for "3m"
+        // still outstanding. Without the guard the twelve-month timeline goes
+        // out under a three-month caption, which is the bug this shipped once.
+        expect(snapshot.timeRange).toBe("3m");
+        expect(snapshot.outreach).not.toBeNull();
+        expect(snapshot.view).toBeNull();
+    });
+
     it("is a no-op when init runs a second time", () => {
         InsightsPage.init();
         expect(() => InsightsPage.init()).not.toThrow();

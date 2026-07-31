@@ -441,6 +441,15 @@ export const InsightsPage = (() => {
             // Withheld when it was built at a range the snapshot is no longer
             // describing, so the export falls back to its own worker run rather
             // than plotting one range under the caption of another.
+            //
+            // Not the range control, which cannot produce that mismatch: within
+            // a visit the outreach latch is already closed, so nothing publishes
+            // between the filter changing and the view arriving, and the two are
+            // equal every time this runs. Returning to the screen is what does
+            // it. Leaving opens the latch, so a re-entry at a different range
+            // has the outreach read publishing the moment it resolves while the
+            // worker is still answering, and the only view on hand until it does
+            // is the one built for the range that was on screen last time.
             view: state.currentViewRange === state.filters.timeRange ? state.currentView : null,
             networkGrowth: state.networkGrowth,
             outreach: state.outreach,

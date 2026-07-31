@@ -68,6 +68,7 @@ Tutorial controls:
 Special behavior:
 
 - Only the **Home** tutorial includes the dark/light mode step (`#themeToggle`).
+- **Home** and **Analytics** both introduce Save as PDF (`#pdfExportBtn`). The button is global, so both steps come from one `createPdfExportStep()` factory in `steps.js`: pass a route, its wording, and a route-scoped fallback target to add the step to another screen. Home explains that the button waits on an upload; Analytics explains the message-contents opt-in.
 - Use the floating `?` help button in the bottom-right corner to replay the tutorial for the current page.
 - Completing or skipping marks that page tutorial as done; the floating help button resets and replays it.
 - Tutorial auto-start waits until active loading overlays finish, then adds a brief visible pause before opening.

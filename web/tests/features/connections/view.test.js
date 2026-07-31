@@ -337,5 +337,4 @@ describe("computeStats", () => {
         expect(stats.networkAgeMonths).toBe(0);
     });
 
-    // ── processConnections empty-rows path (lines 187-194) ───────────────────
 });

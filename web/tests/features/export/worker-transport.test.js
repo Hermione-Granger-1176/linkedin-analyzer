@@ -53,7 +53,7 @@ const harness = createWorkerHarness();
 // The mechanism the three export transports share is exercised through them
 // everywhere else in the suite, one transport per file. What no single-transport
 // file can see is whether the state behind it is per transport or shared between
-// them, and that is the whole reason the export owns these harness.created rather than
+// them, and that is the whole reason the export owns these workers rather than
 // borrowing the screens': a screen keeps its worker, its watchdog and its
 // request counter in module scope, so two users of one set clear each other's.
 // Made module-level inside the factory, the rest of the suite would still pass.

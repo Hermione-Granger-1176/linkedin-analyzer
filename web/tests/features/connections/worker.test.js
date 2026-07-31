@@ -43,8 +43,7 @@ describe("connections worker", () => {
         processSpy.mockRestore();
     });
 
-
-    it("processConnections returns error when CSV parses but yields no valid rows (line 172)", () => {
+    it("processConnections reports an error when the CSV parses but yields no valid rows", () => {
         // A valid connections header but every row is empty (all identity fields missing)
         const csv = [
             "Notes:",

@@ -10,9 +10,10 @@ const LIMITS = Object.freeze({
     maxJobIdChars: 128,
     maxMessageChars: 500,
     // Ceilings for the PDF export's thread selection. They bound the work the
-    // worker will do, and double as the defaults.
-    threadPeople: 10,
-    threadMessagesPerPerson: 5,
+    // worker will do, and double as the defaults, so they must match
+    // DEFAULT_PEOPLE and DEFAULT_MESSAGES_PER_PERSON in features/export/threads.js.
+    maxThreadPeople: 10,
+    maxThreadMessagesPerPerson: 5,
     // The self-detection tiebreak keys, one or two per connection. The ceiling
     // is well past the largest connections list LinkedIn will export; anything
     // beyond it is truncated rather than rejected, because a partial tiebreak
@@ -470,15 +471,20 @@ export function parseThreadsWorkerRequest(message) {
     }
     return valid({
         type: "threads",
-        requestId: normalizeRequestId(message.requestId),
+        requestId,
         payload: {
             messagesCsv,
-            people: normalizeNumber(payload.people, LIMITS.threadPeople, 1, LIMITS.threadPeople),
+            people: normalizeNumber(
+                payload.people,
+                LIMITS.maxThreadPeople,
+                1,
+                LIMITS.maxThreadPeople,
+            ),
             messagesPerPerson: normalizeNumber(
                 payload.messagesPerPerson,
-                LIMITS.threadMessagesPerPerson,
+                LIMITS.maxThreadMessagesPerPerson,
                 1,
-                LIMITS.threadMessagesPerPerson,
+                LIMITS.maxThreadMessagesPerPerson,
             ),
             contactKeys: normalizeStringArray(
                 payload.contactKeys,

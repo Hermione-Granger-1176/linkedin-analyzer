@@ -49,9 +49,14 @@ const FAILED = Symbol("threads-request-failed");
 
 let threadsWorker = null;
 let threadsRequestId = 0;
+// Set and cleared with pendingRequest: a watchdog exists exactly while a
+// request is in flight.
 let threadsTimeoutId = null;
-// Settle hook for the one request that can be in flight, so termination can end
-// it and drop every reference the request was holding.
+/**
+ * Settle hook for the one request that can be in flight, so termination can end
+ * it and drop every reference the request was holding.
+ * @type {{cancel: () => void}|null}
+ */
 let pendingRequest = null;
 
 /**
@@ -135,18 +140,21 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
     }
 
     initWorker();
-    const workerThreads = await requestThreadsFromWorker(text, options);
-    if (workerThreads === CANCELLED) {
+    const outcome = await requestThreadsFromWorker(text, options);
+    if (outcome === CANCELLED) {
         // Falling back here would redo on the UI thread precisely the work the
-        // user asked to stop, holding the CSV for as long as it took.
+        // user asked to stop, holding the CSV for as long as it took. Whoever
+        // cancelled owns the worker: either it is already terminated, or a newer
+        // request is still using it.
         return [];
     }
+    // Every remaining outcome is final, so the worker has nothing left to do.
     terminateThreadsWorker();
-    if (workerThreads === FAILED) {
+    if (outcome === FAILED) {
         return [];
     }
-    if (workerThreads) {
-        return workerThreads;
+    if (outcome !== null) {
+        return outcome;
     }
 
     if (text.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
@@ -178,6 +186,19 @@ function requestThreadsFromWorker(messagesCsv, options) {
     return new Promise((resolve) => {
         clearWorkerTimeout();
 
+        const finishRequest = () => {
+            clearWorkerTimeout();
+            // handleError can fire after terminateThreadsWorker() has already
+            // nulled the handle, so the guard is load-bearing.
+            /* v8 ignore next 3 */
+            if (!threadsWorker) {
+                return;
+            }
+            threadsWorker.removeEventListener("message", handleMessage);
+            threadsWorker.removeEventListener("error", handleError);
+            threadsWorker.removeEventListener("messageerror", handleError);
+        };
+
         /**
          * End the request, dropping everything it was holding.
          *
@@ -187,7 +208,15 @@ function requestThreadsFromWorker(messagesCsv, options) {
          * @param {object[]|null|typeof CANCELLED|typeof FAILED} result - Outcome for the caller
          */
         const settle = (result) => {
-            pendingRequest = null;
+            // Identity-guarded, as the analytics run's own hook is. Every settle
+            // path detaches the listeners and clears the watchdog before it
+            // returns, so nothing can settle a request twice today and the guard
+            // is defensive: it exists so that stops being something the next
+            // reader has to re-derive before adding a path.
+            /* v8 ignore next 3 */
+            if (pendingRequest === request) {
+                pendingRequest = null;
+            }
             finishRequest();
             resolve(result);
         };
@@ -204,23 +233,22 @@ function requestThreadsFromWorker(messagesCsv, options) {
             }
 
             const message = parsed.value;
-            // A stale success belongs to a request nobody is waiting on. A
-            // failure is different: only one request is ever in flight, so a
-            // failure envelope under any id is this request failing, and
-            // waiting out the watchdog would look like a hang.
-            if (message.requestId !== requestId && message.payload.success) {
-                return;
-            }
             if (!message.payload.success) {
-                // Reported whatever id it arrived under: the worker declining to
-                // parse a file the user has uploaded is the same event either
-                // way, and only the mismatched case used to be reported at all.
+                // Settled whatever id it arrived under: only one request is ever
+                // in flight, so a failure envelope is this request failing, and
+                // waiting out the watchdog would look like a hang. The worker
+                // declining to parse a file the user uploaded is the same event
+                // under either id, so it is reported either way.
                 captureError(new Error("Threads worker reported a failure."), {
                     module: "pdf-export",
                     operation: "threads-worker-failure",
                     requestId,
                 });
                 settle(FAILED);
+                return;
+            }
+            // A stale success belongs to a request nobody is waiting on.
+            if (message.requestId !== requestId) {
                 return;
             }
             settle(message.payload.threads);
@@ -243,19 +271,8 @@ function requestThreadsFromWorker(messagesCsv, options) {
             settle(null);
         };
 
-        const finishRequest = () => {
-            // handleError can fire after terminateThreadsWorker() has already
-            // nulled the handle, so the guard is load-bearing.
-            /* v8 ignore next 3 */
-            if (threadsWorker) {
-                threadsWorker.removeEventListener("message", handleMessage);
-                threadsWorker.removeEventListener("error", handleError);
-                threadsWorker.removeEventListener("messageerror", handleError);
-            }
-            clearWorkerTimeout();
-        };
-
-        pendingRequest = { cancel: () => settle(CANCELLED) };
+        const request = { cancel: () => settle(CANCELLED) };
+        pendingRequest = request;
 
         threadsTimeoutId = window.setTimeout(() => {
             captureError(new Error("Threads worker request timed out."), {

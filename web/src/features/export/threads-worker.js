@@ -16,6 +16,10 @@ import { selectRecentThreads } from "./threads.js";
 
 const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
+// The id of the request being served, so a runtime failure is answered under an
+// id the main thread is actually waiting on rather than a placeholder it drops.
+let activeRequestId = 0;
+
 /**
  * Parse the messages CSV and pick the recent threads for the export.
  * @param {{messagesCsv?: string, people?: number, messagesPerPerson?: number, contactKeys?: string[]}} payload - Raw payload
@@ -77,10 +81,6 @@ function postThreadsError(requestId, message) {
 function silenceDefaultReporting(event) {
     event.preventDefault();
 }
-
-// The id of the request being served, so a runtime failure is answered under an
-// id the main thread is actually waiting on rather than a placeholder it drops.
-let activeRequestId = 0;
 
 /* v8 ignore next 17 */
 if (typeof self !== "undefined") {

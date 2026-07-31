@@ -688,6 +688,74 @@ describe("InsightsPage", () => {
         expect(lastSnapshot().view).not.toBeNull();
     });
 
+    it("withholds a view built at another range when the outreach read lands first", async () => {
+        // The guard is reachable only when something publishes between the
+        // filter changing and the view for it arriving. The worker's own handler
+        // never can: it assigns currentViewRange three lines before it renders.
+        // The one other publisher is loadOutreach, which fires once per open
+        // latch, and a successful read closes that latch for the rest of the
+        // visit. That is why a range change usually cannot get here.
+        //
+        // onRouteLeave opens it again. Returning at a range other than the last
+        // one then has the outreach read publishing the moment it resolves,
+        // while the worker is still answering, so the only view on hand is the
+        // one built for the range that was on screen last time. The test below
+        // covers the other open-latch case, a read still in flight.
+        const id = await primeInsights("12m");
+        sendView(id, { insights: { insights: [], tip: null }, view: { timeline: [] } });
+        expect(lastSnapshot().view).not.toBeNull();
+
+        InsightsPage.onRouteLeave();
+        Storage.getOutreach.mockResolvedValue({
+            selfInitiated: 4,
+            replyRate: 0.5,
+            unansweredContacts: 1,
+            sentReceivedRatio: 2,
+        });
+
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const snapshot = lastSnapshot();
+        // Published by the outreach read, with the worker's answer for "3m"
+        // still outstanding. Without the guard the twelve-month timeline goes
+        // out under a three-month caption, which is the bug this shipped once.
+        expect(snapshot.timeRange).toBe("3m");
+        expect(snapshot.outreach).not.toBeNull();
+        expect(snapshot.view).toBeNull();
+    });
+
+    it("withholds the view when the range changes with an outreach read still in flight", async () => {
+        // The same guard, reached without leaving the screen. The visit's first
+        // outreach read has latched but not resolved, so the publish it gates is
+        // still ahead of it, and a range change in that window lands in front of
+        // it. A read that failed and reopened the latch gets here the same way.
+        let releaseOutreach;
+        Storage.getOutreach.mockReturnValue(
+            new Promise((resolve) => {
+                releaseOutreach = resolve;
+            }),
+        );
+
+        const id = await primeInsights("12m");
+        sendView(id, { insights: { insights: [], tip: null }, view: { timeline: [] } });
+        expect(lastSnapshot().view).not.toBeNull();
+
+        document.querySelector('[data-range="3m"]').click();
+        releaseOutreach({
+            selfInitiated: 4,
+            replyRate: 0.5,
+            unansweredContacts: 1,
+            sentReceivedRatio: 2,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const snapshot = lastSnapshot();
+        expect(snapshot.timeRange).toBe("3m");
+        expect(snapshot.outreach).not.toBeNull();
+        expect(snapshot.view).toBeNull();
+    });
+
     it("is a no-op when init runs a second time", () => {
         InsightsPage.init();
         expect(() => InsightsPage.init()).not.toThrow();

@@ -441,6 +441,21 @@ export const InsightsPage = (() => {
             // Withheld when it was built at a range the snapshot is no longer
             // describing, so the export falls back to its own worker run rather
             // than plotting one range under the caption of another.
+            //
+            // Reachable only when something publishes between the filter
+            // changing and the view for it arriving. The worker's own handler
+            // never can, since it assigns currentViewRange three lines before it
+            // renders. The one other publisher is loadOutreach, which fires once
+            // per open latch, so the window is exactly as long as that latch is
+            // open: on a first entry, after onRouteLeave clears it, and after a
+            // failed read reopens it for a retry. A successful read closes it
+            // for the rest of the visit, which is why a range change usually
+            // finds nothing here to race.
+            //
+            // Both open-latch cases put a stale view in reach. Returning at a
+            // different range leaves the last visit's view on hand while the
+            // worker answers, and a range change while the read is still in
+            // flight lands in front of the publish it has yet to make.
             view: state.currentViewRange === state.filters.timeRange ? state.currentView : null,
             networkGrowth: state.networkGrowth,
             outreach: state.outreach,

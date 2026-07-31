@@ -15,7 +15,7 @@ import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-toolti
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
-import { buildConnectionsView, normalizeConnectionRows } from "./view.js";
+import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
 
 export const ConnectionsPage = (() => {
     "use strict";
@@ -25,7 +25,7 @@ export const ConnectionsPage = (() => {
         timeRange: "12m",
     });
 
-    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const RANGE_VALUES = new Set(RANGE_KEYS);
     const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
     const WORKER_TIMEOUT_MS = 30000;
 
@@ -533,10 +533,7 @@ export const ConnectionsPage = (() => {
 
         const view = buildConnectionsView(
             state.allRows,
-            // Assigned alongside allRows, which the guard above has already
-            // established, so this only ever stands in for the empty timeline
-            // the chart draws its own placeholder for.
-            state.allTimeline || [],
+            state.allTimeline,
             state.workerStats,
             state.filters.timeRange,
         );

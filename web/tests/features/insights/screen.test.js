@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { INSIGHTS_EXPORT_CACHE_KEY } from "../../../src/shared/constants.js";
+
 vi.mock("../../../src/platform/persistence/data-cache.js", () => {
     const values = new Map();
     return {
@@ -664,6 +666,27 @@ describe("InsightsPage", () => {
             data: { type: "view", requestId, payload },
         });
     }
+
+    /**
+     * The most recent snapshot published for the export.
+     * @returns {object} Snapshot payload
+     */
+    function lastSnapshot() {
+        const calls = DataCache.set.mock.calls.filter(
+            ([key]) => key === INSIGHTS_EXPORT_CACHE_KEY,
+        );
+        return calls[calls.length - 1][1];
+    }
+
+    it("publishes the view when it was built at the range on screen", async () => {
+        const id = await primeInsights("12m");
+        sendView(id, { insights: { insights: [], tip: null }, view: { timeline: [] } });
+
+        // The positive control for the test below. Without it, a null there
+        // could equally mean the view never reached the snapshot at all, and
+        // deleting the range guard would not fail.
+        expect(lastSnapshot().view).not.toBeNull();
+    });
 
     it("is a no-op when init runs a second time", () => {
         InsightsPage.init();

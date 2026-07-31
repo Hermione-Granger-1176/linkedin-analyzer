@@ -149,13 +149,15 @@ web/src/features/
 │   ├── availability.js                 # Stored-data reads and the export availability check
 │   ├── collect.js                      # PDF document model assembly
 │   ├── connections-transport.js        # Connections worker transport and fallback
+│   ├── contact-keys.js                 # Contact keys for the self-detection tiebreak
+│   ├── drawable-text.js                # Placeholders for characters the fonts cannot draw
 │   ├── fonts.js                        # TrueType loading for jsPDF
 │   ├── messages-parse.js               # CSV parsing that keeps message bodies verbatim
 │   ├── messages-transport.js           # Messages worker transport and fallback
 │   ├── palette.js                      # Light palette read from the stylesheet
 │   ├── pdf-charts.js                   # Vector chart drawing for the dashboards
 │   ├── pdf-document.js                 # A4 measure-and-draw layout engine
-│   ├── pdf-layout.js                   # Page geometry and colour arithmetic
+│   ├── pdf-layout.js                   # Page geometry and color arithmetic
 │   ├── pdf-runtime.js                  # Lazy entry point to everything a run needs
 │   ├── pdf.js                          # Export button, dialog, and orchestration
 │   ├── threads-transport.js            # Thread worker transport and fallback
@@ -290,7 +292,7 @@ The Python package remains intentionally compact. Its existing package boundarie
 src/linkedin_analyzer/
 ├── cleaners/
 │   ├── __init__.py
-│   ├── comments.py                      # Comments export cleaner
+│   ├── comments.py                     # Comments export cleaner
 │   ├── connections.py                  # Connections export cleaner
 │   ├── messages.py                     # Messages export cleaner
 │   └── shares.py                       # Shares export cleaner

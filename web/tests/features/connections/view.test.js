@@ -84,6 +84,20 @@ describe("connections view helpers", () => {
         expect(companies[0]).toEqual({ topic: "Company 11", count: 2 });
     });
 
+    it("findTopValue keeps whichever value reached the top count first", () => {
+        // The comparison is strictly greater, so a later value never displaces
+        // one already on the same count. Relaxing it to >= would silently change
+        // whose name the "Top company" tile carries for anyone with a tie.
+        const rows = [
+            { company: "Globex" },
+            { company: "Globex" },
+            { company: "Initech" },
+            { company: "Initech" },
+        ];
+
+        expect(findTopValue(rows, "company")).toBe("Globex");
+    });
+
     it("findTopValue returns a dash without rows", () => {
         expect(findTopValue([], "company")).toBe("-");
     });

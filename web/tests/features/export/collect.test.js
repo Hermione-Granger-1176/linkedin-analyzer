@@ -525,6 +525,24 @@ describe("collectExportData", () => {
         expect(workerInstance).toBeNull();
     });
 
+    it("leaves the growth tile out when the snapshot carries no multiple", async () => {
+        // A growth object with no multiplier on it, which is not the same as no
+        // growth object at all. Relaxed to a truthiness check, the guard would
+        // let this through and print a tile reading "undefined×".
+        DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
+            timeRange: "3m",
+            insights: [{ title: "Mornings win", body: "…" }],
+            tip: null,
+            networkGrowth: {},
+            outreach: OUTREACH,
+        });
+
+        const data = await collectExportData();
+
+        expect(data.allTime.map((stat) => stat.label)).not.toContain("Network growth");
+        expect(data.allTime[0].label).toBe("Outreach initiated");
+    });
+
     it("asks the worker for the range the snapshot is showing", async () => {
         // An older snapshot carries no view, so the worker supplies the charts -
         // and has to be asked for the same range the header will print. A
@@ -1455,13 +1473,18 @@ describe("collectExportData", () => {
             `Ada,Lovelace,${ADA_URL},,Acme,Engineer,01 Jan 2026`,
         ].join("\n");
         storeFiles({ messages: MESSAGES_CSV, connections });
+        // Both entry points: `parseCSV` is module-local and merely re-exposed
+        // on the object, so cleaner.js's own calls to it hit the local binding
+        // and this spy never sees them.
         const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
+        const processFile = vi.spyOn(LinkedInCleaner, "process");
 
         await collectExportData({ includeMessages: true });
 
         expect(loadRecentThreads.mock.calls[0][1]).toBe(connections);
         expect(loadRecentThreads.mock.calls[0][2].contactKeys).toBeUndefined();
         expect(parseCSV).not.toHaveBeenCalled();
+        expect(processFile).not.toHaveBeenCalled();
     });
 
     it("passes an empty string when there is no connections file", async () => {

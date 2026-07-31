@@ -1,0 +1,102 @@
+/**
+ * The Worker stand-in the export's transport suites share.
+ *
+ * All three transports run the same mechanism, so their suites should differ
+ * only where the transports do. Three private copies of this harness is how
+ * that stopped being true: the messages suite proved its watchdog on one of the
+ * two files it scales with while the threads suite proved both, and nothing
+ * made the omission visible, because the two files could not be read side by
+ * side. One harness makes them diffable.
+ *
+ * The worker it builds is inert. It records what was posted, hands out the
+ * listeners the transport attached so a test can drive them, and can be told to
+ * throw from its constructor or its `postMessage` for the paths that need a
+ * browser to refuse.
+ */
+
+import { vi } from "vitest";
+
+/**
+ * @typedef {object} MockWorkerInstance
+ * @property {string} url - Stringified URL the transport constructed it with
+ * @property {Map<string, Function[]>} listeners - Listeners by event type, as attached
+ * @property {import("vitest").Mock} terminate - Records termination
+ * @property {import("vitest").Mock} postMessage - Records each posted request
+ * @property {(type: string, event: object) => void} emit - Dispatch one event to its listeners
+ */
+
+/**
+ * @typedef {object} WorkerHarness
+ * @property {MockWorkerInstance|null} instance - Most recently constructed worker
+ * @property {MockWorkerInstance[]} created - Every worker constructed, in order
+ * @property {Error|null} constructorError - Set to make construction throw
+ * @property {Error|null} postMessageError - Set to make posting throw
+ * @property {() => void} install - Install the class and clear recorded state
+ * @property {() => void} uninstall - Remove the class from the global scope
+ */
+
+/**
+ * Build a Worker stand-in and the handle a suite drives it through.
+ * @returns {WorkerHarness} Harness holding the constructed workers and the knobs
+ */
+export function createWorkerHarness() {
+    class MockWorker {
+        constructor(url) {
+            if (harness.constructorError) {
+                throw harness.constructorError;
+            }
+            this.url = String(url);
+            this.listeners = new Map();
+            this.terminate = vi.fn();
+            this.postMessage = vi.fn(() => {
+                if (harness.postMessageError) {
+                    throw harness.postMessageError;
+                }
+            });
+            harness.instance = this;
+            harness.created.push(this);
+        }
+
+        addEventListener(type, callback) {
+            const existing = this.listeners.get(type) || [];
+            existing.push(callback);
+            this.listeners.set(type, existing);
+        }
+
+        removeEventListener(type, callback) {
+            const existing = this.listeners.get(type) || [];
+            this.listeners.set(
+                type,
+                existing.filter((entry) => entry !== callback),
+            );
+        }
+
+        emit(type, event) {
+            // Copied first: a listener that detaches itself while this runs
+            // must not shorten the list being walked.
+            for (const callback of [...(this.listeners.get(type) || [])]) {
+                callback(event);
+            }
+        }
+    }
+
+    /** @type {WorkerHarness} */
+    const harness = {
+        instance: null,
+        created: [],
+        constructorError: null,
+        postMessageError: null,
+        install: () => {
+            harness.instance = null;
+            harness.created = [];
+            harness.constructorError = null;
+            harness.postMessageError = null;
+            globalThis.Worker = MockWorker;
+        },
+        uninstall: () => {
+            delete globalThis.Worker;
+        },
+    };
+
+    return harness;
+}

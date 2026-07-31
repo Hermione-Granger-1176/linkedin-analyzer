@@ -268,7 +268,7 @@ web/tests/
 │   ├── messages/
 │   ├── tutorial/
 │   └── upload/
-├── helpers/                            # Test-only DOM support
+├── helpers/                            # Test-only DOM, telemetry, and Worker stand-ins
 ├── integration/
 │   ├── cleaner-diff.test.js
 │   ├── csp-report.test.js

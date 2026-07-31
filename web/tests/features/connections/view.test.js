@@ -3,11 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
     aggregateField,
     buildConnectionsView,
+    buildGrowthTimeline,
+    computeStats,
     filterRowsByRange,
     findTopValue,
     formatNetworkAge,
+    monthKeyToLabel,
     normalizeConnectionRows,
-    parseConnectedOnTimestamp
+    parseConnectedOnTimestamp,
+    parseConnectionDate,
+    toMonthKey
 } from "../../../src/features/connections/view.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -71,6 +76,18 @@ describe("connections view helpers", () => {
         const rows = [rowDaysAgo(400, "Acme", "Engineer")];
         expect(filterRowsByRange(rows, "all")).toBe(rows);
         expect(filterRowsByRange(rows, "6m")).toEqual([]);
+    });
+
+    it("filterRowsByRange cuts each range at the number of days it names", () => {
+        // Probed on both sides of every cutoff. Unpinned, "6m" could be changed
+        // from 182 days to 100 and every test in this file would still pass,
+        // while the Connections screen quietly showed a third less history.
+        const days = { "1m": 30, "3m": 91, "6m": 182, "12m": 365 };
+
+        for (const [range, span] of Object.entries(days)) {
+            expect(filterRowsByRange([rowDaysAgo(span - 1, "Acme", "Engineer")], range)).toHaveLength(1);
+            expect(filterRowsByRange([rowDaysAgo(span + 1, "Acme", "Engineer")], range)).toHaveLength(0);
+        }
     });
 
     it("aggregateField sorts by count and caps the list at ten entries", () => {
@@ -192,4 +209,133 @@ describe("buildConnectionsView", () => {
             networkAge: "-"
         });
     });
+});
+
+describe("connection date helpers", () => {
+    it("parseConnectionDate returns Date for valid ISO string", () => {
+        const date = parseConnectionDate("2024-06-15");
+        expect(date).toBeInstanceOf(Date);
+        expect(date.getFullYear()).toBe(2024);
+        expect(date.getMonth()).toBe(5);
+        expect(date.getDate()).toBe(15);
+    });
+
+    it("parseConnectionDate returns null for invalid input", () => {
+        expect(parseConnectionDate(null)).toBe(null);
+        expect(parseConnectionDate("")).toBe(null);
+        expect(parseConnectionDate("not-a-date")).toBe(null);
+        expect(parseConnectionDate("2024-13-01")).toBe(null);
+        expect(parseConnectionDate("2024-00-15")).toBe(null);
+        expect(parseConnectionDate("2024-06-32")).toBe(null);
+        expect(parseConnectionDate("2024-04-31")).toBe(null);
+        expect(parseConnectionDate("2023-02-29")).toBe(null);
+        expect(parseConnectionDate("2024/06/15")).toBe(null);
+        expect(parseConnectionDate(42)).toBe(null);
+    });
+
+    it("parseConnectionDate accepts leap day in a leap year", () => {
+        expect(parseConnectionDate("2024-02-29")).toEqual(new Date(2024, 1, 29));
+    });
+
+    it("toMonthKey formats Date as YYYY-MM with zero-padding", () => {
+        expect(toMonthKey(new Date(2024, 0, 1))).toBe("2024-01");
+        expect(toMonthKey(new Date(2024, 11, 31))).toBe("2024-12");
+        expect(toMonthKey(new Date(2025, 5, 15))).toBe("2025-06");
+    });
+
+    it("monthKeyToLabel converts YYYY-MM to readable label", () => {
+        expect(monthKeyToLabel("2024-01")).toBe("Jan 2024");
+        expect(monthKeyToLabel("2025-12")).toBe("Dec 2025");
+        expect(monthKeyToLabel("2023-06")).toBe("Jun 2023");
+    });
+});
+
+describe("buildGrowthTimeline", () => {
+    it("buckets by month and fills the gaps between them", () => {
+        const rows = [
+            { "Connected On": "2024-01-10" },
+            { "Connected On": "2024-01-20" },
+            { "Connected On": "2024-03-05" }
+        ];
+
+        const timeline = buildGrowthTimeline(rows);
+
+        expect(timeline.length).toBe(3);
+        expect(timeline[0].key).toBe("2024-01");
+        expect(timeline[0].value).toBe(2);
+        expect(timeline[0].label).toBe("Jan 2024");
+        expect(timeline[1].key).toBe("2024-02");
+        expect(timeline[1].value).toBe(0);
+        expect(timeline[2].key).toBe("2024-03");
+        expect(timeline[2].value).toBe(1);
+    });
+
+    it("returns an empty timeline when no row carries a readable date", () => {
+        expect(buildGrowthTimeline([])).toEqual([]);
+        expect(buildGrowthTimeline([{ "Connected On": "" }])).toEqual([]);
+        expect(buildGrowthTimeline([{ "Connected On": "invalid" }])).toEqual([]);
+    });
+
+    it("excludes impossible dates", () => {
+        const timeline = buildGrowthTimeline([
+            { "Connected On": "2024-02-29" },
+            { "Connected On": "2023-02-29" },
+            { "Connected On": "2024-04-31" }
+        ]);
+
+        expect(timeline).toEqual([{ key: "2024-02", label: "Feb 2024", value: 1 }]);
+    });
+});
+
+describe("computeStats", () => {
+    it("returns the total and a positive network age", () => {
+        const rows = [
+            { "Connected On": "2020-01-01" },
+            { "Connected On": "2024-06-15" },
+            { "Connected On": "2025-01-01" }
+        ];
+
+        const stats = computeStats(rows);
+
+        expect(stats.total).toBe(3);
+        expect(stats.networkAgeMonths).toBeGreaterThan(0);
+    });
+
+    it("handles empty rows", () => {
+        const stats = computeStats([]);
+        expect(stats.total).toBe(0);
+        expect(stats.networkAgeMonths).toBe(0);
+    });
+
+    it("gives a single connection a positive network age", () => {
+        const rows = [{ "Connected On": "2023-06-01" }];
+        const stats = computeStats(rows);
+        expect(stats.total).toBe(1);
+        expect(stats.networkAgeMonths).toBeGreaterThan(0);
+    });
+
+    it("counts a row with an unreadable date but does not date the network by it", () => {
+        // Rows with missing dates still contribute to total but not to earliestMs
+        const rows = [
+            { "Connected On": "" },
+            { "Connected On": "bad" },
+            { "Connected On": "2024-03-01" }
+        ];
+        const stats = computeStats(rows);
+        // total counts ALL rows regardless of date validity
+        expect(stats.total).toBe(3);
+        expect(stats.networkAgeMonths).toBeGreaterThan(0);
+    });
+
+    it("reports no network age when no row carries a readable date", () => {
+        const rows = [
+            { "Connected On": "" },
+            { "Connected On": "not-a-date" }
+        ];
+        const stats = computeStats(rows);
+        expect(stats.total).toBe(2);
+        expect(stats.networkAgeMonths).toBe(0);
+    });
+
+    // ── processConnections empty-rows path (lines 187-194) ───────────────────
 });

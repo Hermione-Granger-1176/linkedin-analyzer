@@ -246,8 +246,19 @@ describe("registerPdfFonts", () => {
         );
         const doc = createDocStub();
 
-        const pending = registerPdfFonts(doc);
-        await vi.advanceTimersByTimeAsync(10000);
+        let settled = false;
+        const pending = registerPdfFonts(doc).then((fonts) => {
+            settled = true;
+            return fonts;
+        });
+
+        // Bounded below as well as above. With only the upper bound, cutting
+        // the budget to a millisecond would still pass here while dropping the
+        // handwritten faces on any connection slower than instant.
+        await vi.advanceTimersByTimeAsync(9999);
+        expect(settled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(2);
 
         expect(await pending).toBe(FALLBACK_FONTS);
         expect(doc.addFont).not.toHaveBeenCalled();
@@ -329,6 +340,36 @@ describe("registerPdfFonts", () => {
 
         expect(coverage.has("A".codePointAt(0))).toBe(true);
         expect(coverage.has("0".codePointAt(0))).toBe(false);
+    });
+
+    it("stops reading a character map whose segment ends before it starts", async () => {
+        // A distinct guard from the ordering one above, and the only one of the
+        // three with nothing behind it. A segment that ends before it starts
+        // covers nothing either way, so the reading has to stop rather than
+        // carry on into the segments after it, which a corrupt table has given
+        // no reason to trust.
+        serveFont(
+            buildFontFile([
+                {
+                    format: 4,
+                    segments: [
+                        [0x41, 0x43],
+                        [0x5a, 0x50],
+                        [0x61, 0x7a],
+                    ],
+                },
+            ]),
+        );
+
+        await registerPdfFonts(createDocStub());
+        const coverage = readDrawableCoverage();
+
+        // A to C, read before the reading stopped. The backwards segment covers
+        // nothing whether or not the guard is there, so the segment after it is
+        // what tells the two apart: without the guard its lowercase range is
+        // claimed on the strength of a table already known to be broken.
+        expect(coverage.has("A".codePointAt(0))).toBe(true);
+        expect(coverage.has("a".codePointAt(0))).toBe(false);
     });
 
     it("falls back to WinAnsi coverage when the fonts never arrive", async () => {

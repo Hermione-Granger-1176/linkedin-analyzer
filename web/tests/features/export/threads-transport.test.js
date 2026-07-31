@@ -6,6 +6,7 @@ import {
     terminateThreadsWorker,
 } from "../../../src/features/export/threads-transport.js";
 import { captureError } from "../../../src/platform/observability/sentry.js";
+import { createWorkerHarness } from "../../helpers/mock-worker.js";
 import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
@@ -36,72 +37,31 @@ const CONNECTIONS_CSV = [
     "Ada,,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,",
 ].join("\n");
 
-let workerInstance = null;
-let constructorError = null;
-let postMessageError = null;
-
-class MockWorker {
-    constructor() {
-        if (constructorError) {
-            throw constructorError;
-        }
-        this.listeners = new Map();
-        this.terminate = vi.fn();
-        this.postMessage = vi.fn(() => {
-            if (postMessageError) {
-                throw postMessageError;
-            }
-        });
-        workerInstance = this;
-    }
-
-    addEventListener(type, callback) {
-        const existing = this.listeners.get(type) || [];
-        existing.push(callback);
-        this.listeners.set(type, existing);
-    }
-
-    removeEventListener(type, callback) {
-        const existing = this.listeners.get(type) || [];
-        this.listeners.set(
-            type,
-            existing.filter((entry) => entry !== callback),
-        );
-    }
-
-    emit(type, event) {
-        for (const callback of [...(this.listeners.get(type) || [])]) {
-            callback(event);
-        }
-    }
-}
+const harness = createWorkerHarness();
 
 describe("loadRecentThreads", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useRealTimers();
-        workerInstance = null;
-        constructorError = null;
-        postMessageError = null;
-        globalThis.Worker = MockWorker;
+        harness.install();
     });
 
     afterEach(() => {
         terminateThreadsWorker();
         vi.useRealTimers();
         vi.restoreAllMocks();
-        delete globalThis.Worker;
+        harness.uninstall();
     });
 
     it("returns nothing for blank input without starting a worker", async () => {
         expect(await loadRecentThreads("", "")).toEqual([]);
         expect(await loadRecentThreads(null, "")).toEqual([]);
-        expect(workerInstance).toBeNull();
+        expect(harness.instance).toBeNull();
     });
 
     it("resolves with the worker's threads and terminates it", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV, "", { people: 3, messagesPerPerson: 2 });
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
 
         expect(request.type).toBe("threads");
@@ -129,9 +89,15 @@ describe("loadRecentThreads", () => {
         // document reads "unknown". Deriving the keys on this side instead is
         // the whole-file parse that kept the Escape key from reaching its own
         // handler, so the file travels raw and the worker does the reading.
+        // Both entry points, because a spy on either alone leaves a hole.
+        // `parseCSV` is module-local and merely re-exposed on the object, so
+        // cleaner.js's own calls to it hit the local binding and this spy never
+        // sees them: reintroducing the UI-thread parse through
+        // `LinkedInCleaner.process` used to pass this test untouched.
         const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
+        const processFile = vi.spyOn(LinkedInCleaner, "process");
         const pending = loadRecentThreads(MESSAGES_CSV, CONNECTIONS_CSV);
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
 
         expect(request.payload.connectionsCsv).toBe(CONNECTIONS_CSV);
@@ -147,6 +113,7 @@ describe("loadRecentThreads", () => {
         await pending;
 
         expect(parseCSV).not.toHaveBeenCalled();
+        expect(processFile).not.toHaveBeenCalled();
     });
 
     it("scales the watchdog with the connections file as well", async () => {
@@ -178,7 +145,7 @@ describe("loadRecentThreads", () => {
 
     it("starts no worker for a run that has already been cancelled", async () => {
         expect(await loadRecentThreads(MESSAGES_CSV, "", { isCancelled: () => true })).toEqual([]);
-        expect(workerInstance).toBeNull();
+        expect(harness.instance).toBeNull();
     });
 
     it("ends an earlier request rather than letting two share the worker", async () => {
@@ -186,7 +153,7 @@ describe("loadRecentThreads", () => {
         // settle hook, and whichever the worker answered first would clear the
         // other's - leaving that promise pending for the life of the page.
         const first = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         const second = loadRecentThreads(MESSAGES_CSV, "");
         const [, secondRequest] = worker.postMessage.mock.calls;
 
@@ -206,7 +173,7 @@ describe("loadRecentThreads", () => {
 
     it("ignores stale successes for other requests and invalid envelopes", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
 
         worker.emit("message", { data: { type: "nope" } });
@@ -238,7 +205,7 @@ describe("loadRecentThreads", () => {
         // said it cannot yield threads. Re-running it on the UI thread freezes
         // the page to reach the same answer, so the section is simply dropped.
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
 
         worker.emit("message", {
@@ -267,7 +234,7 @@ describe("loadRecentThreads", () => {
         // to sit out its watchdog fails this test.
         vi.useFakeTimers();
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
 
         worker.emit("message", {
@@ -290,7 +257,7 @@ describe("loadRecentThreads", () => {
 
     it("falls back to the main thread when the worker errors", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        workerInstance.emit("error", { type: "error", error: new Error("worker blew up") });
+        harness.instance.emit("error", { type: "error", error: new Error("worker blew up") });
 
         expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
@@ -302,7 +269,7 @@ describe("loadRecentThreads", () => {
 
     it("reports a fixed error when the event carries none", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        workerInstance.emit("messageerror", { type: "messageerror" });
+        harness.instance.emit("messageerror", { type: "messageerror" });
         await pending;
 
         expect(captureError.mock.calls[0][0].message).toBe("Threads worker failed during export.");
@@ -311,7 +278,7 @@ describe("loadRecentThreads", () => {
     it("never reports the error a worker failure event carried", async () => {
         const thrown = piiError("worker");
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        workerInstance.emit("error", { type: "error", error: thrown });
+        harness.instance.emit("error", { type: "error", error: thrown });
         await pending;
 
         expectFixedError(captureError.mock.calls[0][0], thrown);
@@ -323,24 +290,24 @@ describe("loadRecentThreads", () => {
         // An uncancelled error event on a Worker is reported by the browser
         // itself, and that report reaches the console with the worker's own
         // message - here, text parsed straight out of the messages CSV.
-        workerInstance.emit("error", { type: "error", error: piiError("worker"), preventDefault });
+        harness.instance.emit("error", { type: "error", error: piiError("worker"), preventDefault });
         await pending;
 
         expect(preventDefault).toHaveBeenCalled();
     });
 
     it("never reports the error a failed postMessage carried", async () => {
-        postMessageError = piiError("clone");
+        harness.postMessageError = piiError("clone");
 
         await loadRecentThreads(MESSAGES_CSV, "");
 
-        expectFixedError(captureError.mock.calls[0][0], postMessageError);
+        expectFixedError(captureError.mock.calls[0][0], harness.postMessageError);
     });
 
     it("settles a terminated request instead of leaving it pending", async () => {
         vi.useFakeTimers();
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         expect(worker.postMessage).toHaveBeenCalled();
 
         terminateThreadsWorker();
@@ -367,7 +334,7 @@ describe("loadRecentThreads", () => {
 
     it("detaches a cancelled request from the worker it was listening to", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
 
         terminateThreadsWorker();
@@ -394,7 +361,7 @@ describe("loadRecentThreads", () => {
         await pending;
 
         expect(() => terminateThreadsWorker()).not.toThrow();
-        expect(workerInstance.terminate).toHaveBeenCalledTimes(1);
+        expect(harness.instance.terminate).toHaveBeenCalledTimes(1);
     });
 
     it("runs a fresh request after a cancelled one", async () => {
@@ -403,7 +370,7 @@ describe("loadRecentThreads", () => {
         expect(await cancelled).toEqual([]);
 
         const pending = loadRecentThreads(MESSAGES_CSV, "");
-        const worker = workerInstance;
+        const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];
         worker.emit("message", {
             data: {
@@ -431,7 +398,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("falls back to the main thread when posting to the worker throws", async () => {
-        postMessageError = new Error("clone failed");
+        harness.postMessageError = new Error("clone failed");
 
         expect((await loadRecentThreads(MESSAGES_CSV, "")).map((thread) => thread.name)).toEqual([
             "Bob",
@@ -445,7 +412,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("falls back to the main thread when the worker cannot be constructed", async () => {
-        constructorError = new Error("no workers here");
+        harness.constructorError = new Error("no workers here");
 
         expect((await loadRecentThreads(MESSAGES_CSV, "")).map((thread) => thread.name)).toEqual([
             "Bob",
@@ -458,7 +425,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("selects on the main thread when workers are unavailable", async () => {
-        delete globalThis.Worker;
+        harness.uninstall();
 
         expect((await loadRecentThreads(MESSAGES_CSV, "")).map((thread) => thread.name)).toEqual([
             "Bob",
@@ -472,7 +439,7 @@ describe("loadRecentThreads", () => {
         // that deserves every direction chip reading "unknown". Ada's row
         // carries no connection date, so a fallback that cleaned rather than
         // parsed would drop her and lose the tie.
-        delete globalThis.Worker;
+        harness.uninstall();
 
         const unaided = await loadRecentThreads(TIED_CSV, "");
         expect(unaided[0].messages.map((entry) => entry.direction)).toEqual([
@@ -485,7 +452,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("never reports what an unparseable connections file carried on the main thread", async () => {
-        delete globalThis.Worker;
+        harness.uninstall();
         const thrown = piiError("connections");
         const parseCSV = LinkedInCleaner.parseCSV;
         vi.spyOn(LinkedInCleaner, "parseCSV").mockImplementation((text, fileType) => {
@@ -511,13 +478,13 @@ describe("loadRecentThreads", () => {
     });
 
     it("returns nothing on the main thread when the CSV cannot be parsed", async () => {
-        delete globalThis.Worker;
+        harness.uninstall();
 
         expect(await loadRecentThreads("not,a,valid,csv", "")).toEqual([]);
     });
 
     it("skips the main-thread fallback for very large exports", async () => {
-        delete globalThis.Worker;
+        harness.uninstall();
         const huge = `${MESSAGES_CSV}\n${"# padding\n".repeat(600000)}`;
 
         expect(huge.length).toBeGreaterThan(5 * 1024 * 1024);
@@ -529,7 +496,7 @@ describe("loadRecentThreads", () => {
         // the connections export for the tiebreak keys. A ceiling that measured
         // only the first would wave through a small messages file beside a huge
         // connections one and then parse all of it on the UI thread.
-        delete globalThis.Worker;
+        harness.uninstall();
         const hugeContacts = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
 
         expect(MESSAGES_CSV.length).toBeLessThan(5 * 1024 * 1024);
@@ -541,7 +508,7 @@ describe("loadRecentThreads", () => {
         // The positive control for the test above: same padded shape, only
         // shorter. Without this, an empty result there could equally mean the
         // padding broke the parser, and deleting the size guard would not fail.
-        delete globalThis.Worker;
+        harness.uninstall();
         const padded = `${MESSAGES_CSV}\n${"# padding\n".repeat(10)}`;
 
         expect(padded.length).toBeLessThan(5 * 1024 * 1024);

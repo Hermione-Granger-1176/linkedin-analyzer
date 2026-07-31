@@ -116,6 +116,32 @@ describe("registerPdfFonts", () => {
         expect(captureError.mock.calls[0][0]).not.toBe(thrown);
     });
 
+    it("falls back to Helvetica when a font request never answers", async () => {
+        vi.useFakeTimers();
+        // A server that accepts the connection and then goes silent: the fetch
+        // only settles when its abort signal fires.
+        globalThis.fetch = vi.fn(
+            (url, init) =>
+                new Promise((resolve, reject) => {
+                    init.signal.addEventListener("abort", () =>
+                        reject(new DOMException("Aborted", "AbortError")),
+                    );
+                }),
+        );
+        const doc = createDocStub();
+
+        const pending = registerPdfFonts(doc);
+        await vi.advanceTimersByTimeAsync(10000);
+
+        expect(await pending).toBe(FALLBACK_FONTS);
+        expect(doc.addFont).not.toHaveBeenCalled();
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "register-fonts",
+        });
+        vi.useRealTimers();
+    });
+
     it("falls back to Helvetica when registration itself throws", async () => {
         globalThis.fetch = vi.fn(() =>
             Promise.resolve({

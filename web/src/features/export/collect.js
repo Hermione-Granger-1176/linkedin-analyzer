@@ -12,6 +12,8 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
+import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { MessagesAnalytics } from "../messages/analytics.js";
 
 import { loadRecentThreads } from "./threads-transport.js";
 
@@ -325,8 +327,53 @@ export async function hasExportableData() {
 }
 
 /**
- * Read the stored messages CSV and select the recent threads.
- * @returns {Promise<object[]>} Selected threads, or an empty list
+ * Collect the normalized names and profile URLs of the user's connections.
+ *
+ * Used only as a self-detection tiebreak: an export holding one conversation
+ * cannot say which of its two people is the account owner, but you are never in
+ * your own connections list, so whoever is in it is not you. A missing or
+ * unreadable connections file simply leaves the tie unresolved.
+ * @returns {Promise<string[]>} Normalized keys, empty when there is nothing to read
+ */
+async function collectContactKeys() {
+    const stored = await readSafely(() => Storage.getFile("connections"), "load-connections-file");
+    try {
+        const text = stored && stored.text ? stored.text : "";
+        if (!text) {
+            return [];
+        }
+        const parsed = LinkedInCleaner.parseCSV(text, "connections");
+        if (parsed.error) {
+            return [];
+        }
+        const keys = new Set();
+        for (const row of parsed.data || []) {
+            const name = MessagesAnalytics.normalizeName(
+                `${row["First Name"] || ""} ${row["Last Name"] || ""}`,
+            );
+            if (name) {
+                keys.add(name);
+            }
+            const url = MessagesAnalytics.normalizeUrl(row.URL);
+            if (url) {
+                keys.add(url);
+            }
+        }
+        return Array.from(keys);
+    } catch {
+        // A tiebreak is a nicety; losing it costs a direction label, not the
+        // export. The caught value came from the user's own connections file.
+        captureError(new Error("Connections read failed during export."), {
+            module: "pdf-export",
+            operation: "load-connections",
+        });
+        return [];
+    }
+}
+
+/**
+ * Select the recent threads, with message bodies, from the stored messages file.
+ * @returns {Promise<object[]>} Threads for the document
  */
 async function collectThreads() {
     const stored = await readSafely(() => Storage.getFile("messages"), "load-messages-file");
@@ -335,7 +382,7 @@ async function collectThreads() {
         return [];
     }
     try {
-        return await loadRecentThreads(text);
+        return await loadRecentThreads(text, { contactKeys: await collectContactKeys() });
     } catch {
         // A thread-selection failure drops the section rather than the export.
         // The caught value is discarded: it came from parsing the user's own

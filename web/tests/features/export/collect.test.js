@@ -411,7 +411,68 @@ describe("collectExportData", () => {
 
         const data = await collectExportData({ includeMessages: true });
         expect(data.threads).toEqual([{ name: "Ada", messages: [] }]);
-        expect(loadRecentThreads).toHaveBeenCalledWith("FROM,TO\na,b");
+        expect(loadRecentThreads).toHaveBeenCalledWith("FROM,TO\na,b", {
+            contactKeys: expect.any(Array),
+        });
+    });
+
+    it("passes the connections list through as a self-detection tiebreak", async () => {
+        Storage.getFile.mockImplementation((type) =>
+            Promise.resolve(
+                type === "connections"
+                    ? {
+                          // LinkedIn puts three notes rows above the header.
+                          text: [
+                              "Notes:",
+                              "",
+                              "",
+                              "First Name,Last Name,URL,Email Address,Company,Position,Connected On",
+                              "Ada,Lovelace,https://www.linkedin.com/in/ada,,Acme,Engineer,01 Jan 2026",
+                          ].join("\n"),
+                      }
+                    : { text: "FROM,TO\na,b" },
+            ),
+        );
+        loadRecentThreads.mockResolvedValue([]);
+
+        await collectExportData({ includeMessages: true });
+
+        const [, options] = loadRecentThreads.mock.calls[0];
+        expect(options.contactKeys).toContain("https://www.linkedin.com/in/ada");
+        expect(options.contactKeys).toContain("ada lovelace");
+    });
+
+    it("exports without a tiebreak when there is no connections file", async () => {
+        Storage.getFile.mockImplementation((type) =>
+            Promise.resolve(type === "connections" ? null : { text: "FROM,TO\na,b" }),
+        );
+        loadRecentThreads.mockResolvedValue([]);
+
+        await collectExportData({ includeMessages: true });
+
+        expect(loadRecentThreads.mock.calls[0][1].contactKeys).toEqual([]);
+    });
+
+    it("never reports the exception an unreadable connections file carried", async () => {
+        const thrown = piiError("connections");
+        Storage.getFile.mockImplementation((type) => {
+            if (type === "connections") {
+                return Promise.resolve({
+                    get text() {
+                        throw thrown;
+                    },
+                });
+            }
+            return Promise.resolve({ text: "FROM,TO\na,b" });
+        });
+        loadRecentThreads.mockResolvedValue([]);
+
+        await collectExportData({ includeMessages: true });
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "load-connections" });
+        expect(loadRecentThreads.mock.calls[0][1].contactKeys).toEqual([]);
     });
 
     it("omits threads when no messages file was uploaded", async () => {

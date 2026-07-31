@@ -372,19 +372,63 @@ function pickWidestCoverage(entries) {
 }
 
 /**
+ * Narrow tied candidates to the ones who are not in the user's connections.
+ *
+ * Coverage ties whenever the export holds a single conversation, however many
+ * messages it has: both people appear in exactly one, and both send and
+ * receive, so the message file alone genuinely cannot say which is the account
+ * owner. The connections file can. Someone you are connected to is in it; you
+ * are never in your own connections, so an identity that appears there is not
+ * you.
+ * @param {Array<{urls: Set<string>, names: Set<string>}>} entries - Tied candidates
+ * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
+ * @returns {Array<object>} Candidates that no connection matches
+ */
+function withoutKnownContacts(entries, contactKeys) {
+    if (!contactKeys.size) {
+        return entries;
+    }
+    return entries.filter((entry) => {
+        for (const url of entry.urls) {
+            if (contactKeys.has(url)) {
+                return false;
+            }
+        }
+        for (const name of entry.names) {
+            if (contactKeys.has(name)) {
+                return false;
+            }
+        }
+        return true;
+    });
+}
+
+/**
  * Resolve the account owner from the identity index.
  *
  * Someone who both sends and receives is the strongest evidence there is, so
  * those candidates are considered first; a one-directional export falls back to
  * whoever appears in the most conversations. Either way the winner has to be
- * unique.
+ * unique - a tie that the connections file cannot settle means self genuinely
+ * cannot be identified, and the export says so rather than guessing.
  * @param {Map<string, object>} identities - Identity index
+ * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
  * @returns {{selfUrls: Set<string>, selfNames: Set<string>}|null} Self context, or null when unidentifiable
  */
-function resolveSelfContext(identities) {
+function resolveSelfContext(identities, contactKeys) {
     const candidates = Array.from(identities.values());
     const balanced = candidates.filter((entry) => entry.sent > 0 && entry.received > 0);
-    const self = pickWidestCoverage(balanced.length ? balanced : candidates);
+    const pool = balanced.length ? balanced : candidates;
+
+    let self = pickWidestCoverage(pool);
+    if (!self) {
+        const strangers = withoutKnownContacts(pool, contactKeys);
+        // Only useful when it actually narrowed the field: if every candidate is
+        // a connection, or none is, there is nothing new to go on.
+        if (strangers.length && strangers.length < pool.length) {
+            self = pickWidestCoverage(strangers);
+        }
+    }
     if (!self) {
         return null;
     }
@@ -573,13 +617,51 @@ function foldIntoThreads(conversations) {
 }
 
 /**
+ * Take the most recent threads without exceeding the promised head count.
+ *
+ * The limit is a number of *people*, which is what the dialog promises and what
+ * bounds how much personal data the file carries. Counting threads instead let
+ * one eight-person group conversation plus nine one-to-one threads put
+ * seventeen people into a document configured for ten.
+ *
+ * A thread is taken only when everyone new in it fits the remaining budget, and
+ * later threads are still considered: skipping an oversized group does not stop
+ * a smaller, older one-to-one thread from being included. A single group larger
+ * than the whole budget therefore never appears, which is the honest reading of
+ * the promise rather than an edge case to work around.
+ * @param {Array<{correspondents: Map<string, object>}>} threads - Threads, most recent first
+ * @param {number} people - Maximum distinct correspondents
+ * @returns {Array<object>} Threads that fit
+ */
+function takeWithinPeopleBudget(threads, people) {
+    const taken = [];
+    const included = new Set();
+
+    for (const thread of threads) {
+        const added = Array.from(thread.correspondents.keys()).filter(
+            (key) => !included.has(key),
+        );
+        if (included.size + added.length > people) {
+            continue;
+        }
+        added.forEach((key) => included.add(key));
+        taken.push(thread);
+        if (included.size === people) {
+            break;
+        }
+    }
+
+    return taken;
+}
+
+/**
  * Pick the most recently messaged people and the tail of each conversation.
  *
  * Rows whose date cannot be parsed are skipped before anything else, exactly as
  * `MessagesAnalytics.buildMessageState` does, so they cannot influence which
  * identity is taken to be the account owner.
  * @param {object[]} rows - Parsed message rows, including CONTENT
- * @param {{people?: number, messagesPerPerson?: number}} [options] - Selection limits
+ * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} [options] - Selection limits and known connections
  * @returns {Array<{name: string, url: string, messageCount: number, lastTimestamp: number, messages: Array<{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}>}>} Threads, most recent first
  */
 export function selectRecentThreads(rows, options = {}) {
@@ -589,11 +671,12 @@ export function selectRecentThreads(rows, options = {}) {
         options.messagesPerPerson,
         DEFAULT_MESSAGES_PER_PERSON,
     );
+    const contactKeys = new Set(Array.isArray(options.contactKeys) ? options.contactKeys : []);
 
     const dated = withParsedDates(safeRows);
     const datedRows = dated.map((entry) => entry.row);
     const nameToUrl = buildNameToUrl(datedRows);
-    const self = resolveSelfContext(buildIdentityIndex(datedRows, nameToUrl));
+    const self = resolveSelfContext(buildIdentityIndex(datedRows, nameToUrl), contactKeys);
     const context = self || NO_SELF;
     // Aliasing needs to know who self is, so it runs once self is settled and
     // only fills gaps: a name already seen carrying its own URL keeps that URL.
@@ -604,18 +687,20 @@ export function selectRecentThreads(rows, options = {}) {
     }
     const conversations = groupConversations(dated, context, Boolean(self), nameToUrl);
 
-    return Array.from(foldIntoThreads(conversations).values())
-        .sort((left, right) => right.lastTimestamp - left.lastTimestamp)
-        .slice(0, people)
-        .map((thread) => {
-            const correspondents = Array.from(thread.correspondents.values());
-            return {
-                name: correspondents.map(correspondentLabel).join(", "),
-                // Only a one-to-one thread has a single profile to point at.
-                url: correspondents.length === 1 ? correspondents[0].url : "",
-                messageCount: thread.messageCount,
-                lastTimestamp: thread.lastTimestamp,
-                messages: tailMessages(thread.entries, messagesPerPerson),
-            };
-        });
+    return takeWithinPeopleBudget(
+        Array.from(foldIntoThreads(conversations).values()).sort(
+            (left, right) => right.lastTimestamp - left.lastTimestamp,
+        ),
+        people,
+    ).map((thread) => {
+        const correspondents = Array.from(thread.correspondents.values());
+        return {
+            name: correspondents.map(correspondentLabel).join(", "),
+            // Only a one-to-one thread has a single profile to point at.
+            url: correspondents.length === 1 ? correspondents[0].url : "",
+            messageCount: thread.messageCount,
+            lastTimestamp: thread.lastTimestamp,
+            messages: tailMessages(thread.entries, messagesPerPerson),
+        };
+    });
 }

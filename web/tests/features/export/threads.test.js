@@ -230,6 +230,82 @@ describe("selectRecentThreads", () => {
         expect(threads.some((thread) => thread.name === "carol")).toBe(false);
     });
 
+    it("counts people, not threads, against the head limit", () => {
+        const rows = [];
+        // Nine one-to-one threads, most recent first.
+        for (let index = 0; index < 9; index += 1) {
+            rows.push(
+                message({
+                    name: `solo${index}`,
+                    conversationId: `s${index}`,
+                    date: `2026-03-${String(index + 1).padStart(2, "0")} 10:00:00`,
+                    body: "hi",
+                }),
+                message({
+                    name: `solo${index}`,
+                    conversationId: `s${index}`,
+                    date: `2026-03-${String(index + 1).padStart(2, "0")} 11:00:00`,
+                    body: "hello",
+                    fromContact: true,
+                }),
+            );
+        }
+        // A four-person group, more recent than all of them.
+        rows.push(
+            row({
+                DATE: "2026-04-01 10:00:00",
+                CONTENT: "group",
+                "CONVERSATION ID": "g1",
+                TO: "gina,greg,gail,gus",
+                "RECIPIENT PROFILE URLS": [
+                    "https://www.linkedin.com/in/gina",
+                    "https://www.linkedin.com/in/greg",
+                    "https://www.linkedin.com/in/gail",
+                    "https://www.linkedin.com/in/gus",
+                ].join(","),
+            }),
+        );
+
+        const threads = selectRecentThreads(rows, { people: 10 });
+        const names = threads.flatMap((thread) => thread.name.split(", "));
+
+        expect(new Set(names).size).toBeLessThanOrEqual(10);
+        // The group leads, then only as many one-to-one threads as still fit.
+        expect(threads[0].name).toContain("gina");
+        expect(names).toHaveLength(10);
+    });
+
+    it("skips a group larger than the whole budget and keeps taking smaller threads", () => {
+        const threads = selectRecentThreads(
+            [
+                message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),
+                message({
+                    name: "ada",
+                    conversationId: "c1",
+                    date: "2026-01-01 11:00:00",
+                    body: "hers",
+                    fromContact: true,
+                }),
+                row({
+                    DATE: "2026-05-01 10:00:00",
+                    CONTENT: "crowd",
+                    "CONVERSATION ID": "g1",
+                    TO: "gina,greg,gail",
+                    "RECIPIENT PROFILE URLS": [
+                        "https://www.linkedin.com/in/gina",
+                        "https://www.linkedin.com/in/greg",
+                        "https://www.linkedin.com/in/gail",
+                    ].join(","),
+                }),
+            ],
+            { people: 2 },
+        );
+
+        // The three-person group cannot fit a budget of two, but skipping it
+        // must not also drop the older one-to-one thread that does fit.
+        expect(threads.map((thread) => thread.name)).toEqual(["ada"]);
+    });
+
     it("ranks people by their most recent message and caps the count", () => {        const rows = [];
         for (let index = 0; index < 14; index += 1) {
             rows.push(
@@ -328,8 +404,64 @@ describe("selectRecentThreads", () => {
         expect(threads.find((thread) => thread.name === "ada").messages[0].body).toHaveLength(20000);
     });
 
-    it("names the sender of a single received message, not the account owner", () => {
-        const threads = selectRecentThreads([
+    it("settles a single-conversation export from the connections list", () => {
+        const rows = [
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 11:00:00",
+                body: "hers",
+                fromContact: true,
+            }),
+        ];
+
+        // Nothing in the messages file separates the two people: one
+        // conversation each, both send and both receive.
+        const unaided = selectRecentThreads(rows);
+        expect(unaided[0].messages.map((entry) => entry.direction)).toEqual([
+            "unknown",
+            "unknown",
+        ]);
+
+        // Ada is a connection; the account owner never is.
+        const aided = selectRecentThreads(rows, {
+            contactKeys: ["https://www.linkedin.com/in/ada"],
+        });
+        expect(aided).toHaveLength(1);
+        expect(aided[0].name).toBe("ada");
+        expect(aided[0].messages.map((entry) => entry.direction)).toEqual(["sent", "received"]);
+    });
+
+    it("leaves the tie unresolved when connections cannot separate the two", () => {
+        const rows = [
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 11:00:00",
+                body: "hers",
+                fromContact: true,
+            }),
+        ];
+
+        // Every candidate is a connection, which is not evidence about either.
+        const both = selectRecentThreads(rows, {
+            contactKeys: ["https://www.linkedin.com/in/ada", SELF_URL],
+        });
+        expect(both[0].messages.every((entry) => entry.direction === "unknown")).toBe(true);
+
+        // An unrelated connections list says nothing either.
+        const neither = selectRecentThreads(rows, {
+            contactKeys: ["https://www.linkedin.com/in/zoe"],
+        });
+        expect(neither[0].messages.every((entry) => entry.direction === "unknown")).toBe(true);
+
+        // And a non-array option is ignored rather than throwing.
+        expect(selectRecentThreads(rows, { contactKeys: "nope" })).toHaveLength(1);
+    });
+
+    it("names the sender of a single received message, not the account owner", () => {        const threads = selectRecentThreads([
             message({
                 name: "ada",
                 conversationId: "c1",

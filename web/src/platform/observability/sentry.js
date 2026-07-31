@@ -31,6 +31,7 @@ const DIAGNOSTIC_TAG_VALUES = Object.freeze({
     operation: new Set([
         "analytics-worker-error-event",
         "analytics-worker-error-payload",
+        "analytics-worker-post",
         "analytics-worker-timeout",
         "check-availability",
         "clear-all",
@@ -44,6 +45,8 @@ const DIAGNOSTIC_TAG_VALUES = Object.freeze({
         "init-web-vitals",
         "init-worker",
         "load-analytics",
+        "load-connections",
+        "load-connections-file",
         "load-base",
         "load-data",
         "load-messages-file",

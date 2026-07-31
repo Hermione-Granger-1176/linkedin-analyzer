@@ -17,6 +17,7 @@ const FONT_ASSETS = Object.freeze([
 ]);
 
 const FONT_BASE_PATH = "/fonts/";
+const FONT_TIMEOUT_MS = 10000;
 
 // jsPDF's built-in core font, used when the TrueType files cannot be fetched.
 const FALLBACK_FAMILY = "helvetica";
@@ -47,16 +48,27 @@ export function encodeFontBytes(buffer) {
 }
 
 /**
- * Fetch one TrueType asset.
+ * Fetch one TrueType asset, giving up rather than hanging.
+ *
+ * A font server that accepts the connection and then never answers would
+ * otherwise leave the dialog busy and the overlay up forever: the export awaits
+ * these before it draws anything. An abort is treated like any other font
+ * failure, so the document falls back to Helvetica and still downloads.
  * @param {string} file - File name under the public fonts directory
  * @returns {Promise<ArrayBuffer>} Font bytes
  */
 async function fetchFont(file) {
-    const response = await fetch(`${FONT_BASE_PATH}${file}`);
-    if (!response.ok) {
-        throw new Error(`Font request failed with status ${response.status}`);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), FONT_TIMEOUT_MS);
+    try {
+        const response = await fetch(`${FONT_BASE_PATH}${file}`, { signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`Font request failed with status ${response.status}`);
+        }
+        return await response.arrayBuffer();
+    } finally {
+        window.clearTimeout(timeoutId);
     }
-    return response.arrayBuffer();
 }
 
 /**

@@ -106,7 +106,7 @@ function initWorker() {
  * small exports; a large export with no worker yields an empty list so the PDF
  * simply omits the section.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number}} [options] - Selection limits
+ * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} [options] - Selection limits and known connections
  * @returns {Promise<object[]>} Selected threads, newest conversation first
  */
 export async function loadRecentThreads(messagesCsv, options = {}) {
@@ -136,7 +136,7 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
 /**
  * Ask the worker for the thread selection.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
+ * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} options - Selection limits and known connections
  * @returns {Promise<object[]|null|typeof CANCELLED>} Threads, null when the worker could not answer, or CANCELLED
  */
 function requestThreadsFromWorker(messagesCsv, options) {
@@ -261,7 +261,7 @@ function requestThreadsFromWorker(messagesCsv, options) {
 /**
  * Select threads directly on the main thread as a fallback.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
+ * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} options - Selection limits and known connections
  * @returns {object[]} Selected threads
  */
 function selectThreadsOnMainThread(messagesCsv, options) {

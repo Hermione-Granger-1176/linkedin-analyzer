@@ -342,6 +342,38 @@ describe("PdfExport", () => {
         expect(ui().trigger.getAttribute("aria-label")).toBe("Save your insights as a PDF");
     });
 
+    it("ignores an availability check that finishes after a newer one", async () => {
+        let settleFirst = null;
+        await setup(() =>
+            hasExportableData.mockReturnValue(
+                new Promise((resolve) => {
+                    settleFirst = resolve;
+                }),
+            ),
+        );
+
+        const [listener] = DataCache.subscribe.mock.calls[0];
+        let settleSecond = null;
+        hasExportableData.mockReturnValue(
+            new Promise((resolve) => {
+                settleSecond = resolve;
+            }),
+        );
+        listener({ type: "filesChanged" });
+
+        // The newer check answers first and enables the button.
+        settleSecond(true);
+        await vi.waitFor(() => expect(ui().trigger.getAttribute("aria-disabled")).toBe("false"));
+
+        // The older read, against storage as it was before the upload, must not
+        // now disable it again for the rest of the session.
+        settleFirst(false);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(ui().trigger.getAttribute("aria-disabled")).toBe("false");
+        expect(ui().trigger.getAttribute("aria-label")).toBe("Save your insights as a PDF");
+    });
+
     it("re-checks availability when the cache says the data changed", async () => {
         const [listener] = DataCache.subscribe.mock.calls[0];
         hasExportableData.mockClear();

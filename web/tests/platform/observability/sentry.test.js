@@ -474,28 +474,38 @@ describe("sentry", () => {
 
     it("keeps the PDF export's module and every operation it reports", async () => {
         const { options } = await enableSentry();
-        // Every operation the Save as PDF path passes to captureError. Without
-        // all of them on the allowlist the reduced event collapses to
-        // "captured-error" and the feature's diagnostics are indistinguishable.
-        const operations = [
-            "analytics-worker-error-event",
-            "analytics-worker-error-payload",
-            "analytics-worker-timeout",
-            "check-availability",
-            "generate",
-            "init-analytics-worker",
-            "init-threads-worker",
-            "load-analytics",
-            "load-messages-file",
-            "load-outreach",
-            "register-fonts",
-            "select-threads",
-            "threads-message-parse",
-            "threads-worker-error-event",
-            "threads-worker-failure",
-            "threads-worker-post-message",
-            "threads-worker-timeout",
+        // Derived from the source, not hand-listed: an operation added to the
+        // export without a matching allowlist entry silently collapses the
+        // reduced event to "captured-error", and a hand-maintained copy of the
+        // list here is exactly the thing that failed to notice last time.
+        const sources = import.meta.glob("../../../src/features/export/*.js", {
+            query: "?raw",
+            import: "default",
+            eager: true,
+        });
+        // Reported either inline as `operation: "x"` or as the label argument
+        // of collect.js's readSafely wrapper.
+        const patterns = [
+            /operation:\s*"([a-z0-9-]+)"/g,
+            // The readSafely label is always the hyphenated last argument, so
+            // requiring a hyphen keeps plain arguments like "messages" out.
+            /readSafely\([\s\S]{0,200}?"([a-z0-9]+(?:-[a-z0-9]+)+)"\s*\)/g,
         ];
+        const operations = Array.from(
+            new Set(
+                Object.values(sources).flatMap((source) =>
+                    patterns.flatMap((pattern) =>
+                        Array.from(source.matchAll(pattern)).map((match) => match[1]),
+                    ),
+                ),
+            ),
+        ).sort();
+
+        // A tripwire on the derivation itself: if a refactor stops the patterns
+        // matching, the loop below would vacuously pass.
+        expect(operations).toContain("analytics-worker-post");
+        expect(operations).toContain("load-analytics");
+        expect(operations.length).toBeGreaterThan(15);
 
         const values = operations.map((operation) => {
             const reduced = options.beforeSend({

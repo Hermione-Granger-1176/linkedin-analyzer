@@ -42,6 +42,9 @@ export const PdfExport = (() => {
     // The trigger is aria-disabled rather than natively disabled, so it can
     // still be clicked and activated by keyboard; open() consults this instead.
     let isAvailable = false;
+    // Bumped on every availability check so an older storage read that finishes
+    // late cannot overwrite a newer answer.
+    let availabilityToken = 0;
     let lastFocused = null;
     // Bumped whenever an export starts or is abandoned. A run whose token is no
     // longer the current one has been cancelled: it must not download, touch the
@@ -110,6 +113,7 @@ export const PdfExport = (() => {
      * @returns {Promise<void>}
      */
     async function refreshAvailability() {
+        const token = ++availabilityToken;
         let available = false;
         try {
             available = await hasExportableData();
@@ -118,6 +122,13 @@ export const PdfExport = (() => {
                 module: "pdf-export",
                 operation: "check-availability",
             });
+        }
+        // A check started before this one may still be in flight; whichever
+        // storage read finishes last would otherwise win, and an upload's
+        // "available" could be overwritten by a stale "unavailable" for the
+        // rest of the session.
+        if (token !== availabilityToken) {
+            return;
         }
         isAvailable = available;
         elements.trigger.setAttribute("aria-disabled", available ? "false" : "true");

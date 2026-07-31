@@ -89,11 +89,16 @@
 
         <a class="skip-link" href="#appMain">Skip to main content</a>
 
+        <!-- Availability is resolved asynchronously after boot, so the resting
+        state is unavailable: an enabled button here would open an export dialog
+        over data that may not exist yet, under a label that claims it does. -->
         <button
             class="pdf-export-btn"
             id="pdfExportBtn"
             type="button"
-            aria-label="Save your insights as a PDF"
+            disabled
+            aria-label="Save as PDF, unavailable until you upload a LinkedIn export"
+            title="Save as PDF, unavailable until you upload a LinkedIn export"
         >
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path

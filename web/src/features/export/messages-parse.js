@@ -35,6 +35,9 @@ const COLUMNS = Object.freeze(
  * @returns {string} Message body, verbatim
  */
 function decodeMessageBody(value) {
+    // CONTENT is a required column and the parser fills every cell, so a missing
+    // body cannot reach here; the guard is defensive.
+    /* v8 ignore next 3 */
     if (value === null || value === undefined) {
         return "";
     }

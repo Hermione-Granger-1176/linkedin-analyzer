@@ -395,6 +395,47 @@ describe("buildBlocks", () => {
         );
     });
 
+    it("wraps a long thread heading rather than running past the margin", () => {
+        // The stub measures at 0.05 mm per character per point of font size, and
+        // thread names are drawn at 12.5pt.
+        const maxChars = Math.floor(CONTENT_WIDTH / (12.5 * 0.05));
+        const headings = [
+            "Ada Lovelace ".repeat(60).trim(),
+            `https://www.linkedin.com/in/${"a-very-long-vanity-name".repeat(20)}`,
+        ];
+
+        for (const name of headings) {
+            const doc = createDocStub();
+            renderPdfDocument(
+                doc,
+                {
+                    ...SAMPLE,
+                    insights: [],
+                    tip: null,
+                    allTime: [],
+                    threads: [
+                        {
+                            name,
+                            messageCount: 1,
+                            lastTimestamp: new Date(2026, 5, 2).getTime(),
+                            messages: [],
+                        },
+                    ],
+                },
+                theme,
+            );
+
+            const drawnName = doc.calls.text
+                .map((entry) => String(entry.value))
+                .filter((value) => name.includes(value));
+            expect(drawnName.length).toBeGreaterThan(1);
+            expect(drawnName.join("")).toBe(name);
+            for (const line of doc.calls.text) {
+                expect(String(line.value).length).toBeLessThanOrEqual(maxChars);
+            }
+        }
+    });
+
     it("draws a neutral chip when the direction is unknown", () => {
         const doc = createDocStub();
         renderPdfDocument(

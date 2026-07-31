@@ -456,6 +456,93 @@ describe("selectRecentThreads", () => {
         expect(solo.messages.map((entry) => entry.body)).toEqual(["solo"]);
     });
 
+    it("drops a conversation whose every row is self-only", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "hi" }),
+            row({
+                DATE: "2026-01-02 10:00:00",
+                CONTENT: "note to self",
+                "CONVERSATION ID": "c2",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+            }),
+            message({ name: "bob", conversationId: "c3", date: "2026-01-01 09:00:00", body: "yo" }),
+        ]);
+
+        expect(threads.map((thread) => thread.name).sort()).toEqual(["ada", "bob"]);
+    });
+
+    it("attributes a row whose sender is nameless and URL-less", () => {
+        const threads = selectRecentThreads([
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "one" }),
+            row({
+                FROM: "",
+                "SENDER PROFILE URL": "",
+                TO: "ada",
+                "RECIPIENT PROFILE URLS": "https://www.linkedin.com/in/ada",
+                DATE: "2026-01-03 10:00:00",
+                CONTENT: "two",
+                "CONVERSATION ID": "c1",
+            }),
+            message({ name: "bob", conversationId: "c2", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.find((thread) => thread.name === "ada");
+        expect(ada.messageCount).toBe(2);
+    });
+
+    it("fills in a correspondent's profile URL from a later conversation", () => {
+        const contactUrl = "https://www.linkedin.com/in/ada";
+        const threads = selectRecentThreads([
+            // The URL-less conversation comes first, so the identity is completed
+            // by a conversation seen later.
+            message({
+                name: "ada",
+                url: "",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "one",
+            }),
+            message({
+                name: "ada",
+                url: contactUrl,
+                conversationId: "c2",
+                date: "2026-01-02 10:00:00",
+                body: "two",
+            }),
+            message({ name: "bob", conversationId: "c3", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.filter((thread) => thread.name === "ada");
+        expect(ada).toHaveLength(1);
+        expect(ada[0].url).toBe(contactUrl);
+    });
+
+    it("replaces a placeholder name once a real one shows up", () => {
+        const contactUrl = "https://www.linkedin.com/in/ada";
+        const threads = selectRecentThreads([
+            row({
+                DATE: "2026-01-01 10:00:00",
+                CONTENT: "one",
+                "CONVERSATION ID": "c1",
+                TO: "",
+                "RECIPIENT PROFILE URLS": contactUrl,
+            }),
+            message({
+                name: "Ada Lovelace",
+                url: contactUrl,
+                conversationId: "c2",
+                date: "2026-01-02 10:00:00",
+                body: "two",
+            }),
+            message({ name: "bob", conversationId: "c3", date: "2026-01-01 09:00:00", body: "hi" }),
+        ]);
+
+        const ada = threads.find((thread) => thread.name !== "bob");
+        expect(ada.name).toBe("Ada Lovelace");
+        expect(ada.messageCount).toBe(2);
+    });
+
     it("falls back to a profile URL when a correspondent has no name", () => {
         const contactUrl = "https://www.linkedin.com/in/anonymous-person";
         const threads = selectRecentThreads([

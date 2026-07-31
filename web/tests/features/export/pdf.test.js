@@ -35,8 +35,19 @@ vi.mock("../../../src/features/export/pdf-document.js", () => ({
     renderPdfDocument: vi.fn(),
 }));
 
+vi.mock("../../../src/features/export/threads-transport.js", () => ({
+    terminateThreadsWorker: vi.fn(),
+}));
+
+// Mirrors web/index.html, which renders the trigger in its unavailable resting
+// state until the asynchronous availability check says otherwise.
 const MARKUP = `
-    <button id="pdfExportBtn" aria-label="Save your insights as a PDF"></button>
+    <button
+        id="pdfExportBtn"
+        disabled
+        aria-label="Save as PDF, unavailable until you upload a LinkedIn export"
+        title="Save as PDF, unavailable until you upload a LinkedIn export"
+    ></button>
     <div class="export-dialog-backdrop" id="pdfExportDialogBackdrop" hidden>
         <div id="pdfExportDialog" role="dialog" aria-modal="true">
             <input type="checkbox" id="pdfExportIncludeMessages" />
@@ -54,6 +65,7 @@ let hasExportableData;
 let registerPdfFonts;
 let readPdfPalette;
 let renderPdfDocument;
+let terminateThreadsWorker;
 let captureError;
 let DataCache;
 let LoadingOverlay;
@@ -73,6 +85,9 @@ async function loadModules() {
     ({ registerPdfFonts } = await import("../../../src/features/export/fonts.js"));
     ({ readPdfPalette } = await import("../../../src/features/export/palette.js"));
     ({ renderPdfDocument } = await import("../../../src/features/export/pdf-document.js"));
+    ({ terminateThreadsWorker } = await import(
+        "../../../src/features/export/threads-transport.js"
+    ));
     ({ captureError } = await import("../../../src/platform/observability/sentry.js"));
     ({ DataCache } = await import("../../../src/platform/persistence/data-cache.js"));
     ({ LoadingOverlay } = await import("../../../src/shared/ui/loading-overlay.js"));
@@ -218,6 +233,12 @@ describe("PdfExport", () => {
         expect(ui().backdrop.hidden).toBe(true);
     });
 
+    it("ignores a close while the dialog is already shut", () => {
+        ui().cancel.click();
+
+        expect(ui().backdrop.hidden).toBe(true);
+    });
+
     it("ignores keys while the dialog is closed", () => {
         expect(press("Escape").defaultPrevented).toBe(false);
     });
@@ -271,6 +292,29 @@ describe("PdfExport", () => {
         expect(ui().trigger.title).toBe(
             "Save as PDF, unavailable until you upload a LinkedIn export",
         );
+    });
+
+    it("keeps the trigger disabled while the availability check is pending", async () => {
+        let settle = null;
+        await setup(() =>
+            hasExportableData.mockReturnValue(
+                new Promise((resolve) => {
+                    settle = resolve;
+                }),
+            ),
+        );
+
+        expect(ui().trigger.disabled).toBe(true);
+        expect(ui().trigger.getAttribute("aria-label")).toBe(
+            "Save as PDF, unavailable until you upload a LinkedIn export",
+        );
+        expect(ui().trigger.title).toBe(
+            "Save as PDF, unavailable until you upload a LinkedIn export",
+        );
+
+        settle(true);
+        await vi.waitFor(() => expect(ui().trigger.disabled).toBe(false));
+        expect(ui().trigger.getAttribute("aria-label")).toBe("Save your insights as a PDF");
     });
 
     it("enables the trigger when data exists", () => {
@@ -417,7 +461,7 @@ describe("PdfExport", () => {
         vi.restoreAllMocks();
     });
 
-    it("refuses a second generate and a close while one is running", async () => {
+    it("refuses a second generate while one is running", async () => {
         let release = null;
         collectExportData.mockReturnValue(
             new Promise((resolve) => {
@@ -435,20 +479,157 @@ describe("PdfExport", () => {
         expect(ui().cancel.disabled).toBe(true);
         expect(ui().checkbox.disabled).toBe(true);
 
-        ui().confirm.click();
-        press("Escape");
-        expect(ui().backdrop.hidden).toBe(false);
+        // The button is disabled, so this stands in for any programmatic
+        // re-entry: generate() has to refuse it on its own.
+        ui().confirm.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         expect(jsPDF).toHaveBeenCalledTimes(1);
+        expect(collectExportData).toHaveBeenCalledTimes(1);
 
-        release({
-            generatedAt: new Date(2026, 6, 31),
-            rangeLabel: "Last 12 months",
-            insights: [],
-            tip: null,
-            allTime: [],
-            threads: [],
-        });
+        release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
         vi.restoreAllMocks();
+    });
+
+    it("closes on Escape during generation and cancels the export", async () => {
+        let release = null;
+        collectExportData.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        const anchorClick = vi
+            .spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => {});
+        const rejections = [];
+        const onRejection = (event) => rejections.push(event);
+        window.addEventListener("unhandledrejection", onRejection);
+
+        ui().trigger.focus();
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+
+        // The dialog's every control is disabled while generating, so refusing
+        // to close would trap a keyboard user inside it.
+        expect(press("Escape").defaultPrevented).toBe(true);
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(document.activeElement).toBe(ui().trigger);
+        expect(LoadingOverlay.hide).toHaveBeenCalledWith("pdf-export");
+        expect(terminateThreadsWorker).toHaveBeenCalled();
+        expect(ui().confirm.disabled).toBe(false);
+        expect(ui().confirm.textContent).toBe("Generate PDF");
+
+        // The export that was already running must not download anything or
+        // reopen what the user closed.
+        release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(renderPdfDocument).not.toHaveBeenCalled();
+        expect(anchorClick).not.toHaveBeenCalled();
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(rejections).toEqual([]);
+        window.removeEventListener("unhandledrejection", onRejection);
+        vi.restoreAllMocks();
+    });
+
+    it("stops an export cancelled before jsPDF has even loaded", async () => {
+        ui().trigger.click();
+        // generate() runs synchronously up to its first await, so this Escape
+        // lands before the dynamic import resolves.
+        ui().confirm.click();
+        press("Escape");
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(collectExportData).not.toHaveBeenCalled();
+        expect(renderPdfDocument).not.toHaveBeenCalled();
+    });
+
+    it("stops an export cancelled while the fonts are still loading", async () => {
+        let settleFonts = null;
+        registerPdfFonts.mockReturnValue(
+            new Promise((resolve) => {
+                settleFonts = resolve;
+            }),
+        );
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(registerPdfFonts).toHaveBeenCalled());
+
+        press("Escape");
+        settleFonts({ body: "helvetica", accent: "helvetica", embedded: false });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(collectExportData).not.toHaveBeenCalled();
+        expect(renderPdfDocument).not.toHaveBeenCalled();
+    });
+
+    it("keeps a cancelled failure out of the dialog and out of telemetry", async () => {
+        let fail = null;
+        collectExportData.mockReturnValue(
+            new Promise((resolve, reject) => {
+                fail = reject;
+            }),
+        );
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+
+        press("Escape");
+        fail(new Error("worker gone"));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(ui().error.hidden).toBe(true);
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(captureError).not.toHaveBeenCalled();
+    });
+
+    it("lets a new export run after a cancelled one", async () => {
+        let release = null;
+        collectExportData.mockReturnValueOnce(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        press("Escape");
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+
+        expect(renderPdfDocument).toHaveBeenCalledTimes(1);
+
+        // The abandoned run resolving afterwards changes nothing.
+        release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
+        await Promise.resolve();
+        expect(renderPdfDocument).toHaveBeenCalledTimes(1);
+        vi.restoreAllMocks();
+    });
+
+    it("revokes the object URL even when the download click throws", async () => {
+        const anchorClick = vi
+            .spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => {
+                throw new Error("download blocked");
+            });
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(ui().error.hidden).toBe(false));
+
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
+        expect(document.querySelector("a[download]")).toBeNull();
+        anchorClick.mockRestore();
     });
 });

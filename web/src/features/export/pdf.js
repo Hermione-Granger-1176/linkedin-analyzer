@@ -21,6 +21,7 @@ import { collectExportData, hasExportableData } from "./collect.js";
 import { registerPdfFonts } from "./fonts.js";
 import { readPdfPalette } from "./palette.js";
 import { renderPdfDocument } from "./pdf-document.js";
+import { terminateThreadsWorker } from "./threads-transport.js";
 
 const OVERLAY_SOURCE = "pdf-export";
 const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
@@ -38,6 +39,10 @@ export const PdfExport = (() => {
     let isOpen = false;
     let isGenerating = false;
     let lastFocused = null;
+    // Bumped whenever an export starts or is abandoned. A run whose token is no
+    // longer the current one has been cancelled: it must not download, touch the
+    // dialog, move focus or hide an overlay that now belongs to another run.
+    let generationToken = 0;
 
     /**
      * Resolve the DOM the export surface owns.
@@ -136,16 +141,32 @@ export const PdfExport = (() => {
         return Array.from(elements.dialog.querySelectorAll(FOCUSABLE_SELECTOR));
     }
 
-    /** Close the dialog and hand focus back to the trigger. */
+    /**
+     * Close the dialog and hand focus back to the trigger.
+     *
+     * Closing during a generation cancels it. Refusing to close would leave a
+     * keyboard user inside a dialog whose every control is disabled.
+     */
     function close() {
-        if (!isOpen || isGenerating) {
+        if (!isOpen) {
             return;
         }
         isOpen = false;
+        if (isGenerating) {
+            cancelGeneration();
+        }
         elements.backdrop.hidden = true;
         const target = lastFocused && lastFocused.focus ? lastFocused : elements.trigger;
         lastFocused = null;
         target.focus();
+    }
+
+    /** Abandon the running export and put the dialog back in its resting state. */
+    function cancelGeneration() {
+        generationToken += 1;
+        terminateThreadsWorker();
+        setBusy(false);
+        LoadingOverlay.hide(OVERLAY_SOURCE);
     }
 
     /**
@@ -231,10 +252,17 @@ export const PdfExport = (() => {
         const link = document.createElement("a");
         link.href = url;
         link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        try {
+            document.body.appendChild(link);
+            link.click();
+        } finally {
+            // A browser that refuses the synthetic click still leaves the anchor
+            // in the document and the object URL holding the whole PDF in memory.
+            if (link.parentNode) {
+                link.remove();
+            }
+            URL.revokeObjectURL(url);
+        }
     }
 
     /**
@@ -248,6 +276,8 @@ export const PdfExport = (() => {
         const includeMessages = elements.includeMessages.checked;
         hideError();
         setBusy(true);
+        const token = ++generationToken;
+        const cancelled = () => token !== generationToken;
         LoadingOverlay.show(OVERLAY_SOURCE, {
             title: "Building your PDF",
             message: "Laying out your insights. Everything stays in this browser.",
@@ -255,11 +285,20 @@ export const PdfExport = (() => {
 
         try {
             const { jsPDF } = await import("jspdf");
+            if (cancelled()) {
+                return;
+            }
             const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
             const palette = readPdfPalette();
             const fonts = await registerPdfFonts(doc);
+            if (cancelled()) {
+                return;
+            }
             const generatedAt = new Date();
             const data = await collectExportData({ includeMessages, generatedAt });
+            if (cancelled()) {
+                return;
+            }
 
             renderPdfDocument(doc, data, { palette, fonts });
             download(doc.output("blob"), buildFilename(generatedAt));
@@ -267,6 +306,11 @@ export const PdfExport = (() => {
             setBusy(false);
             close();
         } catch {
+            // A failure the user already walked away from is not worth reporting
+            // or showing, and the dialog it would write into may be reopened.
+            if (cancelled()) {
+                return;
+            }
             // The caught value is discarded on purpose: this catch surrounds CSV
             // parsing, contact identities, message bodies and jsPDF rendering, so
             // anything it holds could carry the user's own text. Only a fixed
@@ -278,7 +322,11 @@ export const PdfExport = (() => {
             setBusy(false);
             showError(GENERIC_ERROR);
         } finally {
-            LoadingOverlay.hide(OVERLAY_SOURCE);
+            // A cancelled run's overlay is already down, and by now the source
+            // may belong to a newer run.
+            if (!cancelled()) {
+                LoadingOverlay.hide(OVERLAY_SOURCE);
+            }
         }
     }
 

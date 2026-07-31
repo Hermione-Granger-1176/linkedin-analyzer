@@ -507,40 +507,39 @@ function buildThreadHeaderBlock(painter, thread) {
     const nameSize = 12.5;
     const metaSize = 8.5;
     const plural = thread.messageCount === 1 ? "message" : "messages";
+    // A long name, a group thread listing several people, or the profile-URL
+    // fallback all overrun the right margin if they are drawn unmeasured.
+    const nameLines = painter.wrap(thread.name, CONTENT_WIDTH, fonts.body, nameSize);
 
-    return {
-        kind: "thread-header",
-        keepTogether: true,
-        spacingAfter: 1.5,
-        rows: [
-            {
-                height: lineHeightMm(nameSize) + 2,
-                draw: (x, y) => {
-                    painter.text(
-                        thread.name,
-                        x,
-                        y + 2 + lineHeightMm(nameSize) * 0.72,
-                        fonts.body,
-                        nameSize,
-                        palette["--text-primary"],
-                    );
-                },
-            },
-            {
-                height: lineHeightMm(metaSize) + 1.5,
-                draw: (x, y) => {
-                    painter.text(
-                        `${thread.messageCount} ${plural}  ·  last on ${formatLongDate(thread.lastTimestamp)}`,
-                        x,
-                        y + lineHeightMm(metaSize) * 0.78,
-                        fonts.body,
-                        metaSize,
-                        palette["--text-muted"],
-                    );
-                },
-            },
-        ],
-    };
+    const rows = nameLines.map((line, index) => ({
+        height: lineHeightMm(nameSize) + (index === 0 ? 2 : 0),
+        draw: (x, y) => {
+            painter.text(
+                line,
+                x,
+                y + (index === 0 ? 2 : 0) + lineHeightMm(nameSize) * 0.72,
+                fonts.body,
+                nameSize,
+                palette["--text-primary"],
+            );
+        },
+    }));
+
+    rows.push({
+        height: lineHeightMm(metaSize) + 1.5,
+        draw: (x, y) => {
+            painter.text(
+                `${thread.messageCount} ${plural}  ·  last on ${formatLongDate(thread.lastTimestamp)}`,
+                x,
+                y + lineHeightMm(metaSize) * 0.78,
+                fonts.body,
+                metaSize,
+                palette["--text-muted"],
+            );
+        },
+    });
+
+    return { kind: "thread-header", keepTogether: true, spacingAfter: 1.5, rows };
 }
 
 /**

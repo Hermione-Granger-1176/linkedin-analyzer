@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { PDF_PALETTE_TOKENS, readPdfPalette } from "../../../src/features/export/palette.js";
 import {
     CONTENT_WIDTH,
     PAGE,
@@ -15,35 +16,10 @@ import {
     totalRowHeight,
 } from "../../../src/features/export/pdf-document.js";
 
-const PALETTE_TOKENS = [
-    "--bg-primary",
-    "--bg-secondary",
-    "--bg-tertiary",
-    "--text-primary",
-    "--text-secondary",
-    "--text-muted",
-    "--border-color",
-    "--border-light",
-    "--accent-blue",
-    "--accent-blue-light",
-    "--accent-blue-bg",
-    "--accent-yellow",
-    "--accent-yellow-light",
-    "--accent-yellow-bg",
-    "--accent-red",
-    "--accent-red-light",
-    "--accent-red-bg",
-    "--accent-green",
-    "--accent-green-light",
-    "--accent-green-bg",
-    "--accent-purple",
-    "--accent-purple-light",
-    "--accent-purple-bg",
-    "--text-on-accent",
-];
-
+// Taken from the palette itself rather than copied: a token added there has to
+// reach the stub, or the painter is handed undefined and nothing notices.
 const palette = Object.fromEntries(
-    PALETTE_TOKENS.map((token, index) => [token, { r: index, g: index, b: index }]),
+    PDF_PALETTE_TOKENS.map((token, index) => [token, { r: index, g: index, b: index }]),
 );
 const fonts = { body: "PatrickHand", accent: "Caveat", embedded: true };
 const theme = { palette, fonts };
@@ -125,13 +101,15 @@ describe("page geometry", () => {
     it("describes an A4 page", () => {
         expect(PAGE.width).toBe(210);
         expect(PAGE.height).toBe(297);
-        expect(CONTENT_WIDTH).toBe(210 - PAGE.marginX * 2);
-        expect(USABLE_HEIGHT).toBe(297 - PAGE.marginTop - PAGE.marginBottom);
+        // Concrete values, not the defining expressions: restating those cannot
+        // fail while the module compiles.
+        expect(CONTENT_WIDTH).toBe(178);
+        expect(USABLE_HEIGHT).toBe(257);
     });
 
     it("converts point sizes to line heights", () => {
-        expect(lineHeightMm(12)).toBeCloseTo(12 * (25.4 / 72) * 1.32, 6);
-        expect(lineHeightMm(24)).toBeCloseTo(lineHeightMm(12) * 2, 6);
+        expect(lineHeightMm(12)).toBeCloseTo(5.588, 3);
+        expect(lineHeightMm(24)).toBeCloseTo(11.176, 3);
     });
 
     it("sums row heights", () => {
@@ -153,23 +131,11 @@ describe("formatLongDate", () => {
 });
 
 describe("text contrast", () => {
-    // The real light-theme values, so the ratios below are the ones that end up
-    // on paper rather than ones the synthetic test palette happens to produce.
-    const LIGHT = {
-        "--text-primary": { r: 28, g: 25, b: 23 },
-        "--text-on-accent": { r: 255, g: 255, b: 255 },
-        "--bg-tertiary": { r: 255, g: 248, b: 230 },
-        "--accent-blue": { r: 66, g: 133, b: 244 },
-        "--accent-blue-bg": { r: 240, g: 243, b: 247 },
-        "--accent-yellow": { r: 251, g: 188, b: 5 },
-        "--accent-yellow-bg": { r: 254, g: 243, b: 211 },
-        "--accent-red": { r: 249, g: 74, b: 54 },
-        "--accent-red-bg": { r: 254, g: 235, b: 228 },
-        "--accent-green": { r: 41, g: 181, b: 113 },
-        "--accent-green-bg": { r: 223, g: 242, b: 227 },
-        "--accent-purple": { r: 155, g: 81, b: 224 },
-        "--accent-purple-bg": { r: 245, g: 236, b: 245 },
-    };
+    // Read live rather than copied, so a token whose value changes changes the
+    // ratios this certifies instead of silently certifying the old ones. In
+    // jsdom readPdfPalette() resolves to the built-in light fallbacks, which are
+    // the values that end up on paper.
+    const LIGHT = readPdfPalette();
     const ACCENTS = ["blue", "yellow", "red", "green", "purple"];
 
     it("computes WCAG contrast ratios", () => {
@@ -398,6 +364,8 @@ describe("buildBlocks", () => {
         expect(shortCard.keepTogether).toBe(true);
         expect(longCard.rows.length).toBeGreaterThan(shortCard.rows.length);
         expect(totalRowHeight(longCard.rows)).toBeGreaterThan(totalRowHeight(shortCard.rows));
+        // CARD_PADDING in pdf-document.js: a card's final row is its bottom
+        // padding, so a change there fails here intelligibly.
         expect(totalRowHeight(shortCard.rows)).toBeCloseTo(
             totalRowHeight(shortCard.rows.slice(0, -1)) + 3.6,
             6,
@@ -460,8 +428,34 @@ describe("buildBlocks", () => {
             { generatedAt: new Date(2026, 6, 31), rangeLabel: "All time" },
             theme,
         );
+        const drawn = doc.calls.text.map((entry) => entry.value);
 
+        // A document that drew nothing at all also returns 1, so the header and
+        // the placeholder are what say the guards held.
         expect(pageCount).toBe(1);
+        expect(drawn).toContain("LinkedIn Insights");
+        expect(drawn).toContain("No insights yet. Upload your LinkedIn export to fill this in.");
+        expect(drawn).toContain("Page 1 of 1");
+    });
+
+    it("still draws the chip for a message with an empty body", () => {
+        // LinkedIn exports an attachment-only message with no CONTENT. Without
+        // wrap()'s [""] floor the message would contribute no rows at all.
+        const { doc } = build({
+            ...SAMPLE,
+            threads: [
+                {
+                    name: "Ada Lovelace",
+                    messageCount: 1,
+                    lastTimestamp: new Date(2026, 5, 2).getTime(),
+                    messages: [
+                        { direction: "sent", timestamp: new Date(2026, 5, 2).getTime(), body: "" },
+                    ],
+                },
+            ],
+        });
+
+        expect(doc.calls.text.map((entry) => entry.value)).toContain("Sent");
     });
 
     it("draws every section that has data", () => {
@@ -480,6 +474,10 @@ describe("buildBlocks", () => {
         expect(drawn).toContain("Received");
         expect(drawn).toContain("Network growth");
         expect(drawn).toContain("3.4x");
+        // The message bodies themselves, not just the chrome around them: this
+        // is the behaviour the whole opt-in exists for.
+        expect(drawn).toContain("Hello");
+        expect(drawn).toContain("Hi");
     });
 
     it("numbers each insight in its roundel", () => {

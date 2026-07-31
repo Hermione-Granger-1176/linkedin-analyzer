@@ -63,7 +63,10 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-test("save as PDF downloads a real PDF including message contents", async ({ page }, testInfo) => {
+// Contents are the next test's job: it blocks the fonts so the text is readable
+// as literals. This one covers the round trip, the file name, and the dialog and
+// focus behaviour around it.
+test("save as PDF downloads a valid PDF and restores focus", async ({ page }, testInfo) => {
     await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV, MESSAGES_CSV]);
     await waitForLoadedStatus(page, "sharesStatus");
     await waitForLoadedStatus(page, "commentsStatus");
@@ -99,6 +102,8 @@ test("save as PDF downloads a real PDF including message contents", async ({ pag
 
     const bytes = fs.readFileSync(outputPath);
     expect(bytes.subarray(0, 4).toString("latin1")).toBe("%PDF");
+    // A floor the embedded font subsets alone would clear, so it says the file
+    // is real rather than that it has content: that is the next test's claim.
     expect(bytes.byteLength).toBeGreaterThan(5000);
 
     await expect(dialog).toBeHidden();

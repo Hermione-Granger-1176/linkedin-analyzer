@@ -218,6 +218,7 @@ describe("collectExportData", () => {
 
         expect(data.generatedAt).toBeInstanceOf(Date);
         expect(data.generatedAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(data.generatedAt.getTime()).toBeLessThanOrEqual(Date.now());
     });
 
     it("shows N/A for outreach values that were never measurable", async () => {
@@ -377,11 +378,23 @@ describe("collectExportData", () => {
         const pending = collectExportData();
         await vi.waitFor(() => expect(workerInstance).not.toBeNull());
         workerInstance.reply({ type: "nonsense" });
-        workerInstance.reply({ type: "view", requestId: 99, payload: {} });
+        // The stale envelope carries content, so processing it instead of
+        // dropping it is visible in the result rather than indistinguishable
+        // from dropping it.
+        workerInstance.reply({
+            type: "view",
+            requestId: 99,
+            payload: {
+                view: { networkGrowth: { multiplier: 9.9 } },
+                insights: { insights: [{ title: "Wrong request" }], tip: "Wrong tip." },
+            },
+        });
         workerInstance.reply({ type: "init", payload: { hasData: true } });
         workerInstance.reply({ type: "view", requestId: 1, payload: {} });
 
-        expect(await pending).toMatchObject({ insights: [], tip: null });
+        const data = await pending;
+        expect(data).toMatchObject({ insights: [], tip: null });
+        expect(data.allTime).toEqual([]);
     });
 
     it("reports and recovers from a worker error payload", async () => {
@@ -530,6 +543,29 @@ describe("collectExportData", () => {
         expect(loadRecentThreads.mock.calls[0][1].contactKeys).toEqual([]);
     });
 
+    it("never reports the exception a rejected connections read carried", async () => {
+        // Distinct from the unreadable-text case above: this one rejects the
+        // read itself, which is reported under a different operation and was
+        // the one leak path on the connections file with no test behind it.
+        const thrown = piiError("connections-storage");
+        Storage.getFile.mockImplementation((type) =>
+            type === "connections"
+                ? Promise.reject(thrown)
+                : Promise.resolve({ text: "FROM,TO\na,b" }),
+        );
+        loadRecentThreads.mockResolvedValue([]);
+
+        await collectExportData({ includeMessages: true });
+
+        const call = captureError.mock.calls.find(
+            ([, context]) => context.operation === "load-connections-file",
+        );
+        expect(call).toBeDefined();
+        expectFixedError(call[0], thrown);
+        expect(call[1]).toEqual({ module: "pdf-export", operation: "load-connections-file" });
+        expect(loadRecentThreads.mock.calls[0][1].contactKeys).toEqual([]);
+    });
+
     it("omits threads when no messages file was uploaded", async () => {
         Storage.getFile.mockResolvedValue(null);
 
@@ -541,6 +577,25 @@ describe("collectExportData", () => {
         Storage.getFile.mockResolvedValue({ text: "" });
 
         expect((await collectExportData({ includeMessages: true })).threads).toEqual([]);
+    });
+
+    it("stops before the threads worker when the run is cancelled mid-collection", async () => {
+        // The entry check passes; the second one, after the messages and
+        // connections reads, is where an abandoned run must stop rather than
+        // hand the whole CSV to a worker nobody is waiting on.
+        Storage.getFile.mockResolvedValue({ text: "FROM,TO\na,b" });
+        let checks = 0;
+
+        const data = await collectExportData({
+            includeMessages: true,
+            isCancelled: () => {
+                checks += 1;
+                return checks > 1;
+            },
+        });
+
+        expect(data.threads).toEqual([]);
+        expect(loadRecentThreads).not.toHaveBeenCalled();
     });
 
     it("drops the thread section when selection fails", async () => {

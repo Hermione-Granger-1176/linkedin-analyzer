@@ -792,7 +792,6 @@ describe("selectRecentThreads", () => {
         ]);
 
         const anonymous = threads.find((thread) => thread.name === "LinkedIn Member");
-        expect(anonymous).toBeDefined();
         expect(anonymous.messages.map((entry) => entry.body)).toEqual(["anonymous hello"]);
         expect(anonymous.messages[0].direction).toBe("received");
         // Most recent, so it leads the document.

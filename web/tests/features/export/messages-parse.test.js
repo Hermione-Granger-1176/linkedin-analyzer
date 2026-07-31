@@ -27,12 +27,14 @@ function csvCell(body) {
 }
 
 describe("parseMessagesForExport", () => {
-    it("leaves formula-prefixed bodies exactly as they were written", () => {
-        for (const body of ["=SUM(A1)", "+1 from me", "-5 minutes late", "@Ada ping"]) {
+    it.each(["=SUM(A1)", "+1 from me", "-5 minutes late", "@Ada ping"])(
+        "leaves the formula-prefixed body %s exactly as it was written",
+        (body) => {
             const { rows } = parseMessagesForExport(csvWithContent(`"${body}"`));
+
             expect(rows[0].CONTENT).toBe(body);
-        }
-    });
+        },
+    );
 
     it("keeps leading and trailing whitespace inside a body", () => {
         const { rows } = parseMessagesForExport(csvWithContent('"\tone\ntwo  "'));
@@ -105,6 +107,9 @@ describe("parseMessagesForExport", () => {
         const result = parseMessagesForExport("");
 
         expect(result.success).toBe(false);
-        expect(result.error).toBeTruthy();
+        expect(result.rows).toEqual([]);
+        // The specific message, not merely a truthy one: the sibling test above
+        // pins its own, and a leaked echo of the input would still be truthy.
+        expect(result.error).toBe("CSV file is empty or has no data rows");
     });
 });

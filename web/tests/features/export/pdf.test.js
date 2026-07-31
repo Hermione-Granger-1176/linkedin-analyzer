@@ -187,9 +187,17 @@ describe("PdfExport", () => {
         document.body.innerHTML = "";
     });
 
-    it("does nothing when the export markup is absent", () => {
+    it("does nothing when the export markup is absent", async () => {
+        // A fresh surface: beforeEach already init()ed this one, and a second
+        // call returns at the `initialized` latch without ever resolving the
+        // markup, so the path this test names would go unexercised.
+        await loadModules();
+        vi.clearAllMocks();
         document.body.innerHTML = "";
+
         expect(() => PdfExport.init()).not.toThrow();
+        expect(DataCache.subscribe).not.toHaveBeenCalled();
+        expect(hasExportableData).not.toHaveBeenCalled();
     });
 
     it("stands down on partial markup rather than throwing during boot", async () => {
@@ -347,6 +355,19 @@ describe("PdfExport", () => {
         expect(press("Tab", true).defaultPrevented).toBe(false);
     });
 
+    it("stops handling keys once its dialog has been replaced under it", () => {
+        ui().trigger.click();
+        expect(ui().backdrop.hidden).toBe(false);
+
+        // The keydown listener is on the document, so it outlives its own
+        // markup. A re-render swaps the dialog out from under this surface; it
+        // is no longer the modal the user is in and must not fight the live one.
+        document.body.innerHTML = MARKUP;
+
+        expect(press("Escape").defaultPrevented).toBe(false);
+        expect(press("Tab").defaultPrevented).toBe(false);
+    });
+
     it("disables the trigger with an accessible reason when there is no data", async () => {
         await setup(() => hasExportableData.mockResolvedValue(false));
 
@@ -469,34 +490,43 @@ describe("PdfExport", () => {
             generatedAt: expect.any(Date),
             isCancelled: expect.any(Function),
         });
-        expect(renderPdfDocument).toHaveBeenCalledWith(docStub, expect.any(Object), {
-            palette: { "--bg-primary": { r: 255, g: 253, b: 247 } },
-            fonts: { body: "PatrickHand", accent: "Caveat", embedded: true },
-        });
+        // The collected data itself, not merely something object-shaped: the
+        // contract is that what was gathered is what gets laid out.
+        expect(renderPdfDocument).toHaveBeenCalledWith(
+            docStub,
+            expect.objectContaining({ rangeLabel: "Last 12 months", insights: [], threads: [] }),
+            {
+                palette: { "--bg-primary": { r: 255, g: 253, b: 247 } },
+                fonts: { body: "PatrickHand", accent: "Caveat", embedded: true },
+            },
+        );
+        // "In order" is the test's name, so the order is asserted rather than
+        // left to the reading order of the expectations above.
+        const order = (mock) => mock.mock.invocationCallOrder[0];
+        expect(order(jsPDF)).toBeLessThan(order(readPdfPalette));
+        expect(order(readPdfPalette)).toBeLessThan(order(registerPdfFonts));
+        expect(order(registerPdfFonts)).toBeLessThan(order(collectExportData));
+        expect(order(collectExportData)).toBeLessThan(order(renderPdfDocument));
         expect(docStub.output).toHaveBeenCalledWith("blob");
         expect(anchorClick).toHaveBeenCalled();
         expect(URL.createObjectURL).toHaveBeenCalled();
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
         expect(LoadingOverlay.hide).toHaveBeenCalledWith("pdf-export");
         expect(document.activeElement).toBe(ui().trigger);
-        anchorClick.mockRestore();
     });
 
     it("names the file after the generation date", async () => {
         vi.setSystemTime(new Date(2026, 6, 31, 12));
         let downloadName = null;
-        const anchorClick = vi
-            .spyOn(HTMLAnchorElement.prototype, "click")
-            .mockImplementation(function capture() {
-                downloadName = this.download;
-            });
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function capture() {
+            downloadName = this.download;
+        });
 
         ui().trigger.click();
         ui().confirm.click();
         await vi.waitFor(() => expect(downloadName).not.toBeNull());
 
         expect(downloadName).toBe("linkedin-insights-2026-07-31.pdf");
-        anchorClick.mockRestore();
         vi.useRealTimers();
     });
 
@@ -513,7 +543,6 @@ describe("PdfExport", () => {
                 isCancelled: expect.any(Function),
             }),
         );
-        vi.restoreAllMocks();
     });
 
     it("surfaces a failure in the dialog and hides the overlay", async () => {
@@ -537,8 +566,27 @@ describe("PdfExport", () => {
     });
 
     it("never reports the exception the export path caught", async () => {
-        const thrown = piiError("render");
+        const thrown = piiError("collect");
         collectExportData.mockRejectedValue(thrown);
+        ui().trigger.click();
+        ui().confirm.click();
+
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "generate" });
+    });
+
+    it("never reports the exception the layout engine threw", async () => {
+        // The same catch also surrounds rendering, which is the step that holds
+        // the laid-out message bodies rather than merely the data behind them.
+        const thrown = piiError("render");
+        // Once, not for the rest of the file: clearAllMocks() resets call
+        // history but leaves implementations in place.
+        renderPdfDocument.mockImplementationOnce(() => {
+            throw thrown;
+        });
         ui().trigger.click();
         ui().confirm.click();
 
@@ -569,7 +617,6 @@ describe("PdfExport", () => {
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
 
         expect(ui().error.textContent).toBe("");
-        vi.restoreAllMocks();
     });
 
     it("refuses a second generate while one is running", async () => {
@@ -597,7 +644,6 @@ describe("PdfExport", () => {
 
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
-        vi.restoreAllMocks();
     });
 
     it("keeps Tab inside the dialog while an export is running", async () => {
@@ -630,7 +676,6 @@ describe("PdfExport", () => {
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
         expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
         expect(ui().status.textContent).toBe("");
-        vi.restoreAllMocks();
     });
 
     it("cancels a running export from the Cancel button", async () => {
@@ -667,8 +712,8 @@ describe("PdfExport", () => {
         ui().confirm.click();
         await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
 
-        // The dialog's every control is disabled while generating, so refusing
-        // to close would trap a keyboard user inside it.
+        // Cancel is the one control still enabled while generating, so a dialog
+        // that refused to close would be one a keyboard user could not leave.
         expect(press("Escape").defaultPrevented).toBe(true);
         expect(ui().backdrop.hidden).toBe(true);
         expect(document.activeElement).toBe(ui().trigger);
@@ -688,7 +733,6 @@ describe("PdfExport", () => {
         expect(ui().backdrop.hidden).toBe(true);
         expect(rejections).toEqual([]);
         window.removeEventListener("unhandledrejection", onRejection);
-        vi.restoreAllMocks();
     });
 
     it("stops an export cancelled before jsPDF has even loaded", async () => {
@@ -772,15 +816,12 @@ describe("PdfExport", () => {
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
         await Promise.resolve();
         expect(renderPdfDocument).toHaveBeenCalledTimes(1);
-        vi.restoreAllMocks();
     });
 
     it("revokes the object URL even when the download click throws", async () => {
-        const anchorClick = vi
-            .spyOn(HTMLAnchorElement.prototype, "click")
-            .mockImplementation(() => {
-                throw new Error("download blocked");
-            });
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+            throw new Error("download blocked");
+        });
 
         ui().trigger.click();
         ui().confirm.click();
@@ -788,6 +829,5 @@ describe("PdfExport", () => {
 
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
         expect(document.querySelector("a[download]")).toBeNull();
-        anchorClick.mockRestore();
     });
 });

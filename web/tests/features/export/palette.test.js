@@ -27,8 +27,13 @@ describe("parseCssColor", () => {
         expect(parseCssColor("rgba(0, 0, 0, 0)")).toEqual({ r: 255, g: 253, b: 247 });
     });
 
-    it("falls back to opaque when alpha is not a number", () => {
+    it("rejects a color whose alpha is not numeric syntax at all", () => {
+        // "none" does not match the alpha group, so the whole color fails to
+        // parse: that is a different outcome from falling back to opaque.
         expect(parseCssColor("rgba(10, 20, 30, none)")).toBeNull();
+    });
+
+    it("falls back to opaque when the alpha component parses to NaN", () => {
         expect(parseCssColor("rgba(10, 20, 30, .)")).toEqual({ r: 10, g: 20, b: 30 });
     });
 
@@ -106,15 +111,20 @@ describe("readPdfPalette", () => {
     });
 
     it("mounts a detached light-theme probe and removes it again", () => {
-        let seenClassName = null;
+        let probe = null;
         vi.spyOn(window, "getComputedStyle").mockImplementation((element) => {
-            seenClassName = element.className;
+            probe = element;
             return { getPropertyValue: () => "" };
         });
 
         readPdfPalette();
 
-        expect(seenClassName).toBe("theme-light");
+        // The probe is briefly mounted into the live document, so it has to be
+        // out of the accessibility tree and out of layout while it is there.
+        expect(probe.className).toBe("theme-light");
+        expect(probe.getAttribute("aria-hidden")).toBe("true");
+        expect(probe.style.position).toBe("absolute");
+        expect(probe.style.left).toBe("-9999px");
         expect(document.querySelectorAll(".theme-light")).toHaveLength(0);
     });
 

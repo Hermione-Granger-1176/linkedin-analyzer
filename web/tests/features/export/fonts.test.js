@@ -56,6 +56,10 @@ describe("registerPdfFonts", () => {
     });
 
     afterEach(() => {
+        // Teardown, not the last line of a test body: an assertion failing above
+        // that line used to leave fake timers installed, so one failure turned
+        // into a hang in the next test that awaits anything.
+        vi.useRealTimers();
         delete globalThis.fetch;
     });
 
@@ -139,7 +143,6 @@ describe("registerPdfFonts", () => {
             module: "pdf-export",
             operation: "register-fonts",
         });
-        vi.useRealTimers();
     });
 
     it("falls back to Helvetica when registration itself throws", async () => {
@@ -155,5 +158,12 @@ describe("registerPdfFonts", () => {
         });
 
         expect(await registerPdfFonts(doc)).toBe(FALLBACK_FONTS);
+        // All-or-nothing, which is the whole point of the surrounding catch: a
+        // document carrying one embedded face and one core face looks broken.
+        expect(doc.fonts).toEqual([]);
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "register-fonts",
+        });
     });
 });

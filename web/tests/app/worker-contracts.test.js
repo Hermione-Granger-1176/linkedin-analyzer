@@ -616,4 +616,17 @@ describe("worker contracts", () => {
         expect(parseThreadsWorkerMessage({ type: "processed" }).valid).toBe(false);
         expect(parseThreadsWorkerMessage(null).valid).toBe(false);
     });
+
+    it("bounds the failure text a threads worker can send back", () => {
+        // `threads` is passed through untouched, but `error` carries the CSV
+        // parser's message, which for a duplicate-header failure echoes header
+        // text taken from the user's own file. This ceiling is all that bounds it.
+        const parsed = parseThreadsWorkerMessage({
+            type: "threads",
+            payload: { success: false, error: "x".repeat(2000) },
+        });
+
+        expect(parsed.value.payload.error).toHaveLength(500);
+        expect(parsed.value.payload.threads).toEqual([]);
+    });
 });

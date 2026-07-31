@@ -74,8 +74,8 @@ function formatSentRatio(ratio) {
 
 /**
  * Build the all-time stat list, dropping stats with no data behind them.
- * @param {object|null} networkGrowth - Lifetime network growth from the view
- * @param {object|null} outreach - Persisted outreach summary
+ * @param {{multiplier?: number}|null} networkGrowth - Lifetime network growth from the view
+ * @param {{selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null} outreach - Persisted outreach summary
  * @returns {Array<{label: string, value: string}>} Stats in display order
  */
 function buildAllTimeStats(networkGrowth, outreach) {
@@ -121,7 +121,9 @@ async function readSafely(read, operation) {
  * @returns {Promise<{insights: object[], tip: string|null, networkGrowth: object|null}>} Worker view
  */
 function runAnalyticsWorker(analyticsBase) {
-    const empty = { insights: [], tip: null, networkGrowth: null };
+    // One identity is handed to every caller, so it is frozen: callers only read
+    // these fields, and nothing should be able to edit the shared empty result.
+    const empty = Object.freeze({ insights: [], tip: null, networkGrowth: null });
 
     if (typeof Worker === "undefined") {
         return Promise.resolve(empty);
@@ -151,30 +153,34 @@ function runAnalyticsWorker(analyticsBase) {
                 return;
             }
             const message = parsed.value;
-            if (message.type === "init") {
-                if (!message.payload.hasData) {
-                    finish(empty);
+            switch (message.type) {
+                case "init":
+                    if (!message.payload.hasData) {
+                        finish(empty);
+                        return;
+                    }
+                    post({ type: "view", requestId, filters: { ...DEFAULT_FILTERS } });
+                    return;
+                case "view": {
+                    if (message.requestId !== requestId) {
+                        return;
+                    }
+                    /* v8 ignore next */
+                    const payload = message.payload || {};
+                    const insights = payload.insights || {};
+                    finish({
+                        insights: insights.insights || [],
+                        tip: insights.tip || null,
+                        networkGrowth: (payload.view && payload.view.networkGrowth) || null,
+                    });
                     return;
                 }
-                post({ type: "view", requestId, filters: { ...DEFAULT_FILTERS } });
-                return;
-            }
-            if (message.type === "view" && message.requestId === requestId) {
-                const payload = message.payload || {};
-                const insights = payload.insights || {};
-                finish({
-                    insights: insights.insights || [],
-                    tip: insights.tip || null,
-                    networkGrowth: (payload.view && payload.view.networkGrowth) || null,
-                });
-                return;
-            }
-            if (message.type === "error") {
-                captureError(new Error("Analytics worker error during export."), {
-                    module: "pdf-export",
-                    operation: "analytics-worker-error-payload",
-                });
-                finish(empty);
+                case "error":
+                    captureError(new Error("Analytics worker error during export."), {
+                        module: "pdf-export",
+                        operation: "analytics-worker-error-payload",
+                    });
+                    finish(empty);
             }
         };
 
@@ -263,6 +269,33 @@ export function terminateAnalyticsWorker() {
 }
 
 /**
+ * @typedef {object} InsightSource
+ * @property {string} timeRange - Range key the insights were computed at
+ * @property {object[]} insights - Insight cards in display order
+ * @property {string|null} tip - Closing tip, when there is one
+ * @property {object|null} networkGrowth - Lifetime network growth
+ * @property {object|null} outreach - Persisted outreach summary
+ */
+
+/**
+ * Read the analytics base an export computes from, cache first.
+ *
+ * Shared so the availability check and the collection itself answer the same
+ * question the same way: a cached base with no months used to make the button
+ * read the stored one and say yes, while collection gave up without looking and
+ * exported nothing.
+ * @returns {Promise<any>} Analytics base carrying months, or null
+ */
+async function readAnalyticsBase() {
+    const cached = DataCache.get(ANALYTICS_BASE_CACHE_KEY);
+    if (cached && cached.months) {
+        return cached;
+    }
+    const stored = await readSafely(() => Storage.getAnalytics(), "load-analytics");
+    return stored && stored.months ? stored : null;
+}
+
+/**
  * Report whether a published snapshot holds anything the document would show.
  *
  * Insight cards are not the only thing on the Insights screen: a range can
@@ -284,7 +317,7 @@ function hasSnapshotContent(snapshot) {
 
 /**
  * Build the insight source an export falls back to when there is nothing to show.
- * @returns {{timeRange: string, insights: object[], tip: string|null, networkGrowth: object|null, outreach: object|null}} Empty source
+ * @returns {InsightSource} Empty source
  */
 function emptyInsightSource() {
     return {
@@ -299,7 +332,7 @@ function emptyInsightSource() {
 /**
  * Resolve the insight cards, tip and range, preferring the on-screen snapshot.
  * @param {() => boolean} isCancelled - True once the run has been abandoned
- * @returns {Promise<{timeRange: string, insights: object[], tip: string|null, networkGrowth: object|null, outreach: object|null}>} Insight source data
+ * @returns {Promise<InsightSource>} Insight source data
  */
 async function resolveInsightSource(isCancelled) {
     const snapshot = DataCache.get(INSIGHTS_EXPORT_CACHE_KEY);
@@ -313,11 +346,8 @@ async function resolveInsightSource(isCancelled) {
         };
     }
 
-    let analyticsBase = DataCache.get(ANALYTICS_BASE_CACHE_KEY) || null;
+    const analyticsBase = await readAnalyticsBase();
     if (!analyticsBase) {
-        analyticsBase = await readSafely(() => Storage.getAnalytics(), "load-analytics");
-    }
-    if (!analyticsBase || !analyticsBase.months) {
         return emptyInsightSource();
     }
     // The storage read above is a macrotask boundary, so the user may have
@@ -350,12 +380,7 @@ export async function hasExportableData() {
     if (hasSnapshotContent(snapshot)) {
         return true;
     }
-    const cachedBase = DataCache.get(ANALYTICS_BASE_CACHE_KEY);
-    if (cachedBase && cachedBase.months) {
-        return true;
-    }
-    const analyticsBase = await readSafely(() => Storage.getAnalytics(), "load-analytics");
-    if (analyticsBase && analyticsBase.months) {
+    if (await readAnalyticsBase()) {
         return true;
     }
     const outreach = await readSafely(() => Storage.getOutreach(), "load-outreach");
@@ -383,7 +408,7 @@ async function collectContactKeys() {
             return [];
         }
         const keys = new Set();
-        for (const row of parsed.data || []) {
+        for (const row of parsed.data) {
             const name = MessagesAnalytics.normalizeName(
                 `${row["First Name"] || ""} ${row["Last Name"] || ""}`,
             );
@@ -417,11 +442,14 @@ async function collectThreads(isCancelled) {
         return [];
     }
     const stored = await readSafely(() => Storage.getFile("messages"), "load-messages-file");
-    const text = stored && stored.text ? stored.text : "";
-    if (!text) {
-        return [];
-    }
     try {
+        // Read inside the try, as collectContactKeys does: a record whose text
+        // getter throws would otherwise escape this function entirely and take
+        // the whole export down, which is what the catch below exists to stop.
+        const text = stored && stored.text ? stored.text : "";
+        if (!text) {
+            return [];
+        }
         const contactKeys = await collectContactKeys();
         // Two storage reads have completed since the last check, and the next
         // step hands the whole messages CSV to a worker. A run the user has
@@ -445,12 +473,15 @@ async function collectThreads(isCancelled) {
 /**
  * Assemble everything the PDF layout needs.
  *
- * Cancellation has to be consulted here, not only by the caller: this walks
+ * Cancellation is threaded down rather than left to the caller: collection walks
  * several storage reads before it reaches either worker, and terminating a
  * worker that has not been created yet does nothing. Without `isCancelled` an
- * abandoned run went on to build a worker and hand it the user's whole CSV,
- * and a second run started meanwhile could deadlock against it over the shared
- * worker handle.
+ * abandoned run went on to build a worker and hand it the user's whole CSV, and
+ * a second run started meanwhile could deadlock against it over the shared
+ * worker handle. Each step that is about to start real work checks it; unlike
+ * the threads transport, which distinguishes cancellation from failure by
+ * symbol, a cancelled run here simply yields the same empty sections as a run
+ * with no data, and the caller discards the result either way.
  * @param {{includeMessages?: boolean, generatedAt?: Date, isCancelled?: () => boolean}} [options] - Export options
  * @returns {Promise<{generatedAt: Date, rangeLabel: string, insights: object[], tip: string|null, allTime: Array<{label: string, value: string}>, threads: object[]}>} Document model
  */
@@ -460,6 +491,7 @@ export async function collectExportData(options = {}) {
     const source = await resolveInsightSource(isCancelled);
     const outreach =
         source.outreach || (await readSafely(() => Storage.getOutreach(), "load-outreach"));
+    const threads = options.includeMessages ? await collectThreads(isCancelled) : [];
 
     return {
         generatedAt: options.generatedAt instanceof Date ? options.generatedAt : new Date(),
@@ -467,6 +499,6 @@ export async function collectExportData(options = {}) {
         insights: source.insights,
         tip: source.tip,
         allTime: buildAllTimeStats(source.networkGrowth, outreach),
-        threads: options.includeMessages ? await collectThreads(isCancelled) : [],
+        threads,
     };
 }

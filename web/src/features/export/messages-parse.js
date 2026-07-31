@@ -22,7 +22,14 @@ const CONFIG = LinkedInCleaner.configs[FILE_TYPE];
 
 const COLUMNS = Object.freeze(
     CONFIG.columns.map((column) =>
-        Object.freeze({ name: column.name, clean: CLEANERS[column.cleaner] || cleanValue }),
+        Object.freeze({
+            name: column.name,
+            // CONTENT is taken verbatim; every other column gets its usual cleaner.
+            read:
+                column.name === BODY_COLUMN
+                    ? messageBodyText
+                    : CLEANERS[column.cleaner] || cleanValue,
+        }),
     ),
 );
 
@@ -38,7 +45,7 @@ const COLUMNS = Object.freeze(
  * @param {unknown} value - Parsed CONTENT cell
  * @returns {string} Message body, verbatim
  */
-function decodeMessageBody(value) {
+function messageBodyText(value) {
     // CONTENT is a required column and the parser fills every cell, so a missing
     // body cannot reach here; the guard is defensive.
     /* v8 ignore next 3 */
@@ -72,10 +79,7 @@ export function parseMessagesForExport(csvText) {
     for (const raw of parsed.data) {
         const row = {};
         for (const column of COLUMNS) {
-            row[column.name] =
-                column.name === BODY_COLUMN
-                    ? decodeMessageBody(raw[column.name])
-                    : column.clean(raw[column.name]);
+            row[column.name] = column.read(raw[column.name]);
         }
         // Same row-level drop rule the spreadsheet cleaner applies, so the export
         // sees the same messages the workbook would have.

@@ -84,15 +84,12 @@ export async function registerPdfFonts(doc) {
     try {
         const buffers = await Promise.all(FONT_ASSETS.map((asset) => fetchFont(asset.file)));
 
+        const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY, embedded: true };
         FONT_ASSETS.forEach((asset, index) => {
             doc.addFileToVFS(asset.file, encodeFontBytes(buffers[index]));
             doc.addFont(asset.file, asset.family, "normal");
-        });
-
-        const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY, embedded: true };
-        for (const asset of FONT_ASSETS) {
             families[asset.role] = asset.family;
-        }
+        });
         return Object.freeze(families);
     } catch {
         // The export still produces a valid document, so this is a degradation

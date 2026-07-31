@@ -1,12 +1,17 @@
 export default {
+    // Stylelint resolves ignoreFiles against the directory holding this config,
+    // not the working directory, so every pattern climbs out of config/ first.
+    // Written without the prefix they matched nothing at all, and a local
+    // `make test-js` before `make lint-css` linted the coverage report.
     ignoreFiles: [
-        "node_modules/**",
-        ".venv/**",
-        ".playwright/**",
-        "coverage/**",
-        "web/dist/**",
-        "playwright-report/**",
-        "test-results/**",
+        "../node_modules/**",
+        "../.venv/**",
+        "../.playwright/**",
+        "../coverage/**",
+        "../web/coverage/**",
+        "../web/dist/**",
+        "../playwright-report/**",
+        "../test-results/**",
     ],
     rules: {
         "block-no-empty": true,

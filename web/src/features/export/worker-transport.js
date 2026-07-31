@@ -1,0 +1,294 @@
+/**
+ * The mechanism behind the export's dedicated worker transports.
+ *
+ * `messages-transport.js`, `connections-transport.js` and `threads-transport.js`
+ * each own a short-lived Web Worker: created on demand, watchdogged, and
+ * terminated as soon as the export has its answer. Owned outright rather than
+ * borrowed from the screen that runs the same worker, because a screen keeps its
+ * worker, its watchdog and its request counter in one module-level set: loading
+ * one while an export runs would clear the other's watchdog and leave its
+ * promise pending for the life of the page, and the export could not terminate
+ * it on cancellation without killing a worker the screen might be mid-request
+ * on.
+ *
+ * How all of that is done lives here. What is asked of the worker, and how its
+ * reply is read, stays with each transport, because that is the only part that
+ * genuinely differs between them.
+ *
+ * The three were written to one shape and then drifted, and every divergence
+ * review found was inside the part that was meant to be identical: a watchdog id
+ * nulled in two of them and not the third, listeners attached inside the `try`
+ * in one, error strings saying the same thing three ways. Sharing the mechanism
+ * makes that class of drift unrepresentable rather than something review has to
+ * keep catching.
+ *
+ * Termination is a settling event, not just a teardown. Killing the worker
+ * removes every event that could have answered the in-flight request, so
+ * `terminate()` settles it explicitly; a request left pending would keep its
+ * frame, and the raw export inside it, alive.
+ *
+ * Nothing a worker was handed is ever reported. Every error raised here is a
+ * fixed string naming the transport and nothing else, because a failure while
+ * parsing one of these files can carry the user's message text, or the name and
+ * employer of everyone they know.
+ */
+
+import { captureError } from "../../platform/observability/sentry.js";
+
+// Above this size, re-parsing on the UI thread would freeze the page, so the
+// export drops the section rather than blocking on it. One number for all three
+// because they fall back onto the same thread: a transport holding its own
+// opinion about how much that thread can take would be a bug, not a setting.
+export const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
+
+/**
+ * Outcome of a request the caller explicitly cancelled.
+ *
+ * Distinct from the null "the worker could not answer" outcome, because the
+ * main-thread fallback must not re-run the very work that was cancelled.
+ */
+export const CANCELLED = Symbol("export-request-cancelled");
+
+/**
+ * Outcome of a request the worker answered with a definite failure.
+ *
+ * Also distinct from null: the worker has already run this exact CSV through
+ * this exact code and reported that it cannot parse it, so the main thread would
+ * only freeze the page to reach the same answer. The null outcome means the
+ * worker mechanism never gave one, through no worker, a failed post or a
+ * timeout, and only that is worth falling back for.
+ */
+export const FAILED = Symbol("export-request-failed");
+
+/**
+ * Verdict from an `interpret` that read a reply and decided to keep waiting.
+ *
+ * Distinct from every real outcome, null included: null is the answer "the
+ * worker could not tell us", and this is the absence of an answer.
+ */
+export const PENDING = Symbol("export-request-pending");
+
+/**
+ * @typedef {object} ReplyContext
+ * @property {number} requestId - Id the in-flight request was posted under, to recognize its own replies
+ * @property {(message: string, operation: string) => void} report - Report a fixed error against this request
+ */
+
+/**
+ * @typedef {object} RequestOptions
+ * @property {{type: string, payload: object}} envelope - Message to post, which the transport stamps with the request id
+ * @property {(data: object) => {valid: boolean, value?: object, error?: string}} parse - Contract parser for replies
+ * @property {(message: object, context: ReplyContext) => *} interpret - Read one valid reply into an outcome, or PENDING to keep waiting
+ * @property {number} timeoutMs - Watchdog budget for this request
+ */
+
+/**
+ * @typedef {object} WorkerTransport
+ * @property {() => void} terminate - Terminate the worker and settle whatever it was answering
+ * @property {(options: RequestOptions) => Promise<*>} request - Post one request and wait for its outcome
+ */
+
+/**
+ * Create the worker-owning half of an export transport.
+ * @param {{name: string, createWorker: () => Worker}} config - Lowercase transport name, and how to construct its worker
+ * @returns {WorkerTransport} A transport owning one worker at a time
+ */
+export function createWorkerTransport(config) {
+    const { name, createWorker } = config;
+    // One name gives both the operation tags and the error messages, so a tag
+    // and the message beside it can never end up naming different workers.
+    const label = `${name[0].toUpperCase()}${name.slice(1)}`;
+
+    let worker = null;
+    let requestCount = 0;
+    // Set and cleared with pendingRequest: a watchdog exists exactly while a
+    // request is in flight.
+    let timeoutId = null;
+    /**
+     * Settle hook for the one request that can be in flight, so termination can
+     * end it and drop every reference the request was holding.
+     * @type {{cancel: () => void}|null}
+     */
+    let pendingRequest = null;
+
+    /**
+     * Report a fixed error, never the value that prompted it.
+     * @param {string} message - Fixed error text
+     * @param {string} operation - Sentry operation tag
+     * @param {object} [context] - Extra tags, such as the request id
+     */
+    const report = (message, operation, context) => {
+        captureError(new Error(message), { module: "pdf-export", operation, ...context });
+    };
+
+    /** Clear any in-flight worker watchdog timeout. */
+    const clearWorkerTimeout = () => {
+        if (!timeoutId) {
+            return;
+        }
+        window.clearTimeout(timeoutId);
+        timeoutId = null;
+    };
+
+    /**
+     * Terminate the worker and end whatever it was answering.
+     *
+     * Safe to call when nothing is running, and safe to call twice.
+     */
+    const terminate = () => {
+        if (worker) {
+            worker.terminate();
+        }
+        // Settled before the handle is dropped, so the request still detaches
+        // its listeners from the worker it was listening to.
+        if (pendingRequest) {
+            pendingRequest.cancel();
+        }
+        worker = null;
+        clearWorkerTimeout();
+    };
+
+    /** Create the worker, leaving it null when workers are unavailable. */
+    const initWorker = () => {
+        if (worker || typeof Worker === "undefined") {
+            return;
+        }
+
+        try {
+            worker = createWorker();
+        } catch {
+            worker = null;
+            report(`${label} worker could not start during export.`, `init-${name}-worker`);
+        }
+    };
+
+    /**
+     * Post one request to the worker and wait for whatever settles it.
+     * @param {RequestOptions} options - What to ask, how to read the reply, and how long to wait
+     * @returns {Promise<*>} The interpreted outcome, CANCELLED, or null when the mechanism never got an answer
+     */
+    const request = (options) => {
+        const { envelope, parse, interpret, timeoutMs } = options;
+
+        initWorker();
+        if (!worker) {
+            return Promise.resolve(null);
+        }
+        // Only one request can own the watchdog and the settle hook. A second
+        // arriving while the first is in flight would adopt both, and the first
+        // to be answered would then clear the second's watchdog and null its
+        // settle hook, leaving that promise pending for the life of the page.
+        if (pendingRequest) {
+            pendingRequest.cancel();
+        }
+
+        const requestId = ++requestCount;
+
+        /**
+         * Report a fixed error tagged with the request it belongs to.
+         * @param {string} message - Fixed error text
+         * @param {string} operation - Sentry operation tag
+         */
+        const reportRequest = (message, operation) => {
+            report(message, operation, { requestId });
+        };
+
+        return new Promise((resolve) => {
+            clearWorkerTimeout();
+
+            const finishRequest = () => {
+                clearWorkerTimeout();
+                // handleError can fire after terminate() has already nulled the
+                // handle, so the guard is load-bearing.
+                /* v8 ignore next 3 */
+                if (!worker) {
+                    return;
+                }
+                worker.removeEventListener("message", handleMessage);
+                worker.removeEventListener("error", handleError);
+                worker.removeEventListener("messageerror", handleError);
+            };
+
+            /**
+             * End the request, dropping everything it was holding.
+             * @param {*} result - Outcome for the caller
+             */
+            const settle = (result) => {
+                // Identity-guarded. Every settle path detaches the listeners and
+                // clears the watchdog before it returns, so nothing can settle a
+                // request twice today and the guard is defensive: it exists so
+                // that stops being something the next reader has to re-derive
+                // before adding a path.
+                /* v8 ignore next 3 */
+                if (pendingRequest === entry) {
+                    pendingRequest = null;
+                }
+                finishRequest();
+                resolve(result);
+            };
+
+            const handleMessage = (event) => {
+                const parsed = parse(event.data || {});
+                if (!parsed.valid) {
+                    reportRequest(`Invalid ${name} worker response.`, `${name}-message-parse`);
+                    return;
+                }
+
+                // A valid parse always carries a value; the contract's return
+                // type marks it optional because an invalid one carries an error
+                // in its place.
+                const outcome = interpret(/** @type {object} */ (parsed.value), {
+                    requestId,
+                    report: reportRequest,
+                });
+                if (outcome !== PENDING) {
+                    settle(outcome);
+                }
+            };
+
+            const handleError = (event) => {
+                // Cancelling the event suppresses the browser's own reporting of
+                // it, which would otherwise print the worker's error, and
+                // anything of the user's caught up in it, to the console.
+                if (event && typeof event.preventDefault === "function") {
+                    event.preventDefault();
+                }
+                // event.error is never forwarded: these workers parse the raw
+                // exports, so a runtime failure inside one can carry message
+                // text, or the name and employer of one of the user's contacts.
+                reportRequest(
+                    `${label} worker failed during export.`,
+                    `${name}-worker-error-event`,
+                );
+                settle(null);
+            };
+
+            const entry = { cancel: () => settle(CANCELLED) };
+            pendingRequest = entry;
+
+            worker.addEventListener("message", handleMessage);
+            worker.addEventListener("error", handleError);
+            worker.addEventListener("messageerror", handleError);
+
+            timeoutId = window.setTimeout(() => {
+                timeoutId = null;
+                reportRequest(`${label} worker timed out during export.`, `${name}-worker-timeout`);
+                settle(null);
+            }, timeoutMs);
+
+            try {
+                worker.postMessage({ ...envelope, requestId });
+            } catch {
+                // A structured-clone failure names the value it could not clone,
+                // and that value is one of the raw exports.
+                reportRequest(
+                    `${label} worker request could not be sent.`,
+                    `${name}-worker-post-message`,
+                );
+                settle(null);
+            }
+        });
+    };
+
+    return { terminate, request };
+}

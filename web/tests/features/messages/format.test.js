@@ -98,6 +98,19 @@ describe("messages-format", () => {
             const oneAndAHalfMb = "a".repeat(Math.floor(1.5 * 1024 * 1024));
             expect(computeWorkerTimeout(oneAndAHalfMb, "")).toBe(35000);
         });
+
+        it("sums however many files the caller was given", () => {
+            // Variadic so a caller with one file passes one, rather than padding
+            // the call with an empty second file it does not have. Summing means
+            // three half-megabyte files clear a whole megabyte together, the way
+            // two would.
+            const halfMb = "a".repeat(Math.floor(0.5 * 1024 * 1024));
+            expect(computeWorkerTimeout()).toBe(30000);
+            expect(computeWorkerTimeout(halfMb)).toBe(30000);
+            expect(computeWorkerTimeout(halfMb, halfMb)).toBe(35000);
+            expect(computeWorkerTimeout(halfMb, halfMb, halfMb)).toBe(35000);
+            expect(computeWorkerTimeout(halfMb, halfMb, halfMb, halfMb)).toBe(40000);
+        });
     });
 
     describe("buildDataSignature", () => {

@@ -8,6 +8,8 @@ import {
     parseMessagesWorkerMessage,
     parseMessagesWorkerRequest,
     parseStoredUploadFile,
+    parseThreadsWorkerMessage,
+    parseThreadsWorkerRequest,
 } from "../../src/app/worker-contracts.js";
 import { MAX_CSV_CHARS } from "../../src/shared/constants.js";
 
@@ -478,5 +480,72 @@ describe("worker contracts", () => {
     it("rejects invalid stored upload payload envelope", () => {
         const parsed = parseStoredUploadFile(null);
         expect(parsed.valid).toBe(false);
+    });
+
+    it("accepts a threads worker request and clamps the selection limits", () => {
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            requestId: 4,
+            payload: { messagesCsv: "FROM,TO\na,b", people: 99, messagesPerPerson: 0 },
+        });
+
+        expect(parsed.valid).toBe(true);
+        expect(parsed.value.requestId).toBe(4);
+        expect(parsed.value.payload.people).toBe(10);
+        expect(parsed.value.payload.messagesPerPerson).toBe(1);
+    });
+
+    it("defaults threads worker selection limits when they are absent", () => {
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: { messagesCsv: "FROM,TO\na,b" },
+        });
+
+        expect(parsed.value.payload).toMatchObject({ people: 10, messagesPerPerson: 5 });
+        expect(parsed.value.requestId).toBe(0);
+    });
+
+    it("rejects threads worker requests with a bad envelope or missing CSV", () => {
+        expect(parseThreadsWorkerRequest({ type: "process" }).valid).toBe(false);
+        expect(parseThreadsWorkerRequest(null).valid).toBe(false);
+        expect(parseThreadsWorkerRequest({ type: "threads" }).valid).toBe(false);
+        expect(
+            parseThreadsWorkerRequest({ type: "threads", payload: { messagesCsv: "" } }).valid,
+        ).toBe(false);
+    });
+
+    it("rejects oversized threads worker CSV payloads", () => {
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: { messagesCsv: "a".repeat(MAX_CSV_CHARS + 1) },
+        });
+
+        expect(parsed.valid).toBe(false);
+        expect(parsed.error).toContain("exceeds allowed size");
+    });
+
+    it("passes threads worker responses through without touching message bodies", () => {
+        const threads = [
+            { name: "Ada", messages: [{ direction: "sent", timestamp: 1, body: "x".repeat(2000) }] },
+        ];
+
+        const parsed = parseThreadsWorkerMessage({
+            type: "threads",
+            requestId: 2,
+            payload: { success: true, threads },
+        });
+
+        expect(parsed.valid).toBe(true);
+        expect(parsed.value.payload.threads).toBe(threads);
+        expect(parsed.value.payload.threads[0].messages[0].body).toHaveLength(2000);
+        expect(parsed.value.payload.error).toBeNull();
+    });
+
+    it("normalizes malformed threads worker responses", () => {
+        const parsed = parseThreadsWorkerMessage({ type: "threads", payload: "nope" });
+
+        expect(parsed.value.payload).toEqual({ success: false, threads: [], error: null });
+        expect(parseThreadsWorkerMessage({ type: "processed" }).valid).toBe(false);
+        expect(parseThreadsWorkerMessage(null).valid).toBe(false);
     });
 });

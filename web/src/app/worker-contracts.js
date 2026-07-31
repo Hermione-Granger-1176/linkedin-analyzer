@@ -9,6 +9,10 @@ const LIMITS = Object.freeze({
     maxFileNameChars: 255,
     maxJobIdChars: 128,
     maxMessageChars: 500,
+    // Ceilings for the PDF export's thread selection. They bound the work the
+    // worker will do, and double as the defaults.
+    threadPeople: 10,
+    threadMessagesPerPerson: 5,
 });
 
 /**
@@ -405,6 +409,63 @@ export function parseMessagesWorkerMessage(message) {
         type: "processed",
         requestId: normalizeRequestId(message.requestId),
         payload: isPlainObject(message.payload) ? message.payload : null,
+    });
+}
+
+/**
+ * Parse threads worker request envelope.
+ * @param {unknown} message - Raw request
+ * @returns {{valid: boolean, value?: object, error?: string}}
+ */
+export function parseThreadsWorkerRequest(message) {
+    if (!isPlainObject(message) || message.type !== "threads") {
+        return invalid("Invalid threads worker request envelope");
+    }
+    const payload = isPlainObject(message.payload) ? message.payload : {};
+    const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
+    if (!messagesCsv) {
+        return invalid("Missing messagesCsv payload");
+    }
+    if (messagesCsv.length > LIMITS.maxCsvChars) {
+        return invalid("messagesCsv payload exceeds allowed size");
+    }
+    return valid({
+        type: "threads",
+        requestId: normalizeRequestId(message.requestId),
+        payload: {
+            messagesCsv,
+            people: normalizeNumber(payload.people, LIMITS.threadPeople, 1, LIMITS.threadPeople),
+            messagesPerPerson: normalizeNumber(
+                payload.messagesPerPerson,
+                LIMITS.threadMessagesPerPerson,
+                1,
+                LIMITS.threadMessagesPerPerson,
+            ),
+        },
+    });
+}
+
+/**
+ * Parse threads worker outbound message.
+ *
+ * The thread payload carries the user's own message bodies verbatim, so it is
+ * checked for shape only and never truncated or rewritten.
+ * @param {unknown} message - Raw worker message
+ * @returns {{valid: boolean, value?: object, error?: string}}
+ */
+export function parseThreadsWorkerMessage(message) {
+    if (!isPlainObject(message) || message.type !== "threads") {
+        return invalid("Invalid threads worker message envelope");
+    }
+    const payload = isPlainObject(message.payload) ? message.payload : {};
+    return valid({
+        type: "threads",
+        requestId: normalizeRequestId(message.requestId),
+        payload: {
+            success: Boolean(payload.success),
+            threads: Array.isArray(payload.threads) ? payload.threads : [],
+            error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
+        },
     });
 }
 

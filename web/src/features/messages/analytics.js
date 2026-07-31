@@ -847,6 +847,13 @@ export const MessagesAnalytics = (() => {
         cleanText,
         parseDateTime,
         parseDateOnly,
-        parseRecipientNames
+        parseRecipientNames,
+        // Exposed for the PDF export's thread selection, which needs the same
+        // self-detection and participant filtering so a person does not split
+        // across keys and message direction matches the rest of the app.
+        detectSelfContext,
+        isSelfContact,
+        extractParticipantsFromRow,
+        buildContactKey
     };
 })();

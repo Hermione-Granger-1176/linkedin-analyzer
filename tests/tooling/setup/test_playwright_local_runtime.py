@@ -193,7 +193,9 @@ def test_validate_extracted_root_rejects_host_libc_and_escaping_symlinks(tmp_pat
     escaped_link.parent.mkdir(parents=True)
     escaped_link.symlink_to(tmp_path / "outside")
 
-    with pytest.raises(runtime.RuntimeSetupError, match="escaped"):
+    # The symlink check refuses this, not the path-containment check above it:
+    # the link is absolute, which is refused whether or not it resolves.
+    with pytest.raises(runtime.RuntimeSetupError, match="symlink that escapes"):
         runtime.validate_extracted_root(symlink_root)
 
 
@@ -937,6 +939,104 @@ def test_validate_extracted_root_requires_an_extracted_tree(tmp_path: Path) -> N
     """A missing runtime root means extraction silently produced nothing."""
     with pytest.raises(runtime.RuntimeSetupError, match="did not create a runtime root"):
         runtime.validate_extracted_root(tmp_path / "missing")
+
+
+def test_validate_extracted_root_accepts_a_dangling_link_that_stays_inside(
+    tmp_path: Path,
+) -> None:
+    """A link to a sibling APT never downloaded dangles inside the root, and is fine.
+
+    APT does not download a package the host already has installed, so the
+    documentation link naming that sibling has nothing to point at. The link is
+    still contained: refusing it failed the whole extraction over a file the
+    runtime never reads.
+    """
+    root = tmp_path / "root"
+    docs = root / "usr" / "share" / "doc"
+    (docs / "libncurses6").mkdir(parents=True)
+    (docs / "libncurses6" / "changelog.gz").symlink_to("../libtinfo6/changelog.gz")
+    (docs / "libgomp1").symlink_to("gcc-16-base")
+
+    runtime.validate_extracted_root(root)
+
+    # Read-only guard: the links are accepted where they are, not repaired.
+    assert (docs / "libgomp1").readlink() == Path("gcc-16-base")
+    assert not (docs / "libgomp1").exists()
+
+
+def test_validate_extracted_root_rejects_a_dangling_link_that_escapes(tmp_path: Path) -> None:
+    """Not existing is no excuse: a relative link out of the root is still refused."""
+    root = tmp_path / "root"
+    library_dir = root / "usr" / "lib"
+    library_dir.mkdir(parents=True)
+    (library_dir / "escape.so").symlink_to("../../../outside/missing.so")
+
+    with pytest.raises(runtime.RuntimeSetupError, match="escapes the private runtime root"):
+        runtime.validate_extracted_root(root)
+
+
+def test_validate_extracted_root_rejects_a_symlink_loop(tmp_path: Path) -> None:
+    """A link chain that cannot resolve fails closed rather than being walked."""
+    root = tmp_path / "root"
+    library_dir = root / "usr" / "lib"
+    library_dir.mkdir(parents=True)
+    (library_dir / "first.so").symlink_to("second.so")
+    (library_dir / "second.so").symlink_to("first.so")
+
+    with pytest.raises(runtime.RuntimeSetupError, match="escapes the private runtime root"):
+        runtime.validate_extracted_root(root)
+
+
+def test_validate_extracted_root_still_rejects_a_dangling_libc_overlay(tmp_path: Path) -> None:
+    """Accepting dangling links must not let a loader overlay in behind one."""
+    root = tmp_path / "root"
+    library_dir = root / "usr" / "lib"
+    library_dir.mkdir(parents=True)
+    (library_dir / "libc.so.6").symlink_to("libc-2.41.so")
+
+    with pytest.raises(runtime.RuntimeSetupError, match="loader or libc overlay"):
+        runtime.validate_extracted_root(root)
+
+
+def test_validate_extracted_root_refuses_an_entry_whose_location_cannot_be_resolved(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Containment of the entry itself still fails closed on a resolution error.
+
+    Traversal alone cannot produce an escaped location, because rglob does not
+    descend through directory symlinks. The guard exists for the case where the
+    operating system refuses to answer, which must be refused rather than
+    treated as contained.
+    """
+    root = tmp_path / "root"
+    library_dir = root / "usr" / "lib"
+    library_dir.mkdir(parents=True)
+    unreadable = library_dir / "real.so"
+    unreadable.write_text("", encoding="utf-8")
+
+    original_resolve = Path.resolve
+
+    def fail_for_unreadable(path: Path, *, strict: bool = False) -> Path:
+        if path == unreadable:
+            raise OSError("permission denied")
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", fail_for_unreadable)
+
+    with pytest.raises(runtime.RuntimeSetupError, match=r"escaped .*: usr/lib/real\.so"):
+        runtime.validate_extracted_root(root)
+
+
+def test_validate_extracted_root_names_the_entry_it_refuses(tmp_path: Path) -> None:
+    """The message carries the offending path, so a failure is diagnosable."""
+    root = tmp_path / "root"
+    library_dir = root / "usr" / "lib"
+    library_dir.mkdir(parents=True)
+    (library_dir / "escape.so").symlink_to("/etc/passwd")
+
+    with pytest.raises(runtime.RuntimeSetupError, match=r"usr/lib/escape\.so -> /etc/passwd"):
+        runtime.validate_extracted_root(root)
 
 
 # ─── Cache identity and reuse ────────────────────────────────────────────────

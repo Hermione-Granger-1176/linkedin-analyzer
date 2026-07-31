@@ -578,13 +578,28 @@ def validate_extracted_root(extracted_root: Path) -> None:
     if not extracted_root.exists():
         raise fail("package extraction did not create a runtime root")
     for entry in extracted_root.rglob("*"):
-        if not is_within(entry, extracted_root):
-            raise fail("extracted package path escaped the private runtime root")
+        # Containment applies to where a symlink sits, never to what it points
+        # at: that is the dedicated check below, which compares the target
+        # lexically instead of demanding that it exist. Resolving through the
+        # link here would conflate "dangling" with "escaping" and refuse a whole
+        # extraction over a documentation file. APT produces those links by
+        # design - it does not download a package the host already has, so the
+        # usr/share/doc link naming that sibling dangles while still pointing
+        # inside the root - which failed every well-provisioned developer
+        # machine while a bare CI container, holding none of those packages,
+        # downloaded the lot and stayed green.
+        location = entry.parent if entry.is_symlink() else entry
+        if not is_within(location, extracted_root):
+            raise fail(
+                "extracted package path escaped the private runtime root: "
+                f"{entry.relative_to(extracted_root)}"
+            )
         if entry.is_symlink():
             target = entry.readlink()
             if target.is_absolute() or not is_within(entry.parent / target, extracted_root):
                 raise fail(
-                    "extracted package contains a symlink that escapes the private runtime root"
+                    "extracted package contains a symlink that escapes the private runtime "
+                    f"root: {entry.relative_to(extracted_root)} -> {target}"
                 )
         name = entry.name
         relative = entry.relative_to(extracted_root)

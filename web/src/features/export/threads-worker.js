@@ -1,19 +1,19 @@
 /* LinkedIn Analyzer - PDF export thread selection worker */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
 
+import { parseMessagesForExport } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
 
 /**
- * Clean the messages CSV and pick the recent threads for the export.
+ * Parse the messages CSV and pick the recent threads for the export.
  * @param {{messagesCsv?: string, people?: number, messagesPerPerson?: number}} payload - Raw payload
  * @returns {{success: boolean, threads: object[], error: string|null}}
  */
 function processPayload(payload) {
     /* v8 ignore next */
     const messagesCsv = typeof payload.messagesCsv === "string" ? payload.messagesCsv : "";
-    const result = LinkedInCleaner.process(messagesCsv, "messages");
+    const result = parseMessagesForExport(messagesCsv);
     if (!result.success) {
         return {
             success: false,
@@ -25,7 +25,7 @@ function processPayload(payload) {
 
     return {
         success: true,
-        threads: selectRecentThreads(result.cleanedData, {
+        threads: selectRecentThreads(result.rows, {
             people: payload.people,
             messagesPerPerson: payload.messagesPerPerson,
         }),

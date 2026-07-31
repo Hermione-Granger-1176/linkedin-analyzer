@@ -10,8 +10,8 @@
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
 
+import { parseMessagesForExport } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
 
 const WORKER_TIMEOUT_BASE_MS = 15000;
@@ -206,9 +206,9 @@ function requestThreadsFromWorker(messagesCsv, options) {
  * @returns {object[]} Selected threads
  */
 function selectThreadsOnMainThread(messagesCsv, options) {
-    const result = LinkedInCleaner.process(messagesCsv, "messages");
+    const result = parseMessagesForExport(messagesCsv);
     if (!result.success) {
         return [];
     }
-    return selectRecentThreads(result.cleanedData, options);
+    return selectRecentThreads(result.rows, options);
 }

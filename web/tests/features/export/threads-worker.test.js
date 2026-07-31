@@ -37,6 +37,60 @@ describe("threads worker", () => {
         expect(result.threads[0].messages).toHaveLength(1);
     });
 
+    it("keeps formula-prefixed and whitespace-led bodies verbatim", () => {
+        // The spreadsheet cleaner quote-prefixes every one of these and trims the
+        // rest, which is right for a workbook and wrong for a PDF.
+        const bodies = [
+            "+1, that works for me",
+            "=hello, is this thing on?",
+            "-10% is the best I can do",
+            "@Ada could you take a look",
+            "\tindented after a tab",
+            "trailing spaces matter   ",
+        ];
+        const rows = bodies.map((body, index) =>
+            [
+                `c${index}`,
+                "Sam Self",
+                `Person${index}`,
+                `2025-02-${String(index + 1).padStart(2, "0")} 10:00:00 UTC`,
+                `"${body}"`,
+                "INBOX",
+                "https://linkedin.com/in/sam",
+                `https://linkedin.com/in/person${index}`,
+            ].join(","),
+        );
+        const csv = [
+            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+            ...rows,
+        ].join("\n");
+
+        const result = processPayload({ messagesCsv: csv, people: 10 });
+
+        expect(result.success).toBe(true);
+        const exported = result.threads
+            .map((thread) => thread.messages[0].body)
+            .sort((left, right) => left.localeCompare(right));
+        expect(exported).toEqual([...bodies].sort((left, right) => left.localeCompare(right)));
+        expect(exported.some((body) => body.startsWith("'"))).toBe(false);
+    });
+
+    it("keeps a body's own line breaks and control characters", () => {
+        const csv = [
+            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+            'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"line one\nline two",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
+            'c2,Sam Self,Bob,2025-01-02 10:00:00 UTC,"she said ""yes"" twice",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
+        ].join("\n");
+
+        const result = processPayload({ messagesCsv: csv });
+        const bodies = Object.fromEntries(
+            result.threads.map((thread) => [thread.name, thread.messages[0].body]),
+        );
+
+        expect(bodies.Ada).toBe("line one\nline two");
+        expect(bodies.Bob).toBe('she said "yes" twice');
+    });
+
     it("reports an error for an unparseable CSV", () => {
         const result = processPayload({ messagesCsv: "not,a,valid,csv" });
 

@@ -29,6 +29,19 @@ function normalizeLimit(value, fallback) {
 }
 
 /**
+ * Take a message body exactly as it was parsed.
+ *
+ * Deliberately not `cleanText`: trimming a body would eat the leading tab or
+ * the trailing blank line the person actually typed, and the export promises the
+ * full message.
+ * @param {unknown} value - Parsed CONTENT cell
+ * @returns {string} Message body
+ */
+function messageBody(value) {
+    return typeof value === "string" ? value : "";
+}
+
+/**
  * Map every contact name that is ever seen with a profile URL to that URL.
  *
  * LinkedIn exports include the profile URL on some rows and not others. Without
@@ -199,7 +212,7 @@ export function selectRecentThreads(rows, options = {}) {
                 : "received",
             timestamp,
             sequence: index,
-            body: MessagesAnalytics.cleanText(row.CONTENT),
+            body: messageBody(row.CONTENT),
         });
     });
 

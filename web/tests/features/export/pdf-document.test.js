@@ -222,11 +222,36 @@ describe("paginateBlocks", () => {
         expect(pages[1][0].rows).toHaveLength(5);
     });
 
-    it("keeps a single row taller than the page on one page", () => {
+    it("drops a row taller than the page rather than drawing past it", () => {
         const pages = paginateBlocks([{ rows: rows(1, 500), keepTogether: false }], 100);
 
-        expect(pages).toHaveLength(1);
-        expect(pages[0][0].rows).toHaveLength(1);
+        expect(pages).toEqual([]);
+    });
+
+    it("never places a row that ends outside the usable area", () => {
+        const usableHeight = 100;
+        const pages = paginateBlocks(
+            [
+                { rows: rows(3, 30), keepTogether: false },
+                { rows: rows(1, 500), keepTogether: false },
+                { rows: rows(4, 45), keepTogether: false },
+            ],
+            usableHeight,
+        );
+
+        for (const page of pages) {
+            for (const segment of page) {
+                let end = segment.y;
+                for (const row of segment.rows) {
+                    end += row.height;
+                }
+                expect(end).toBeLessThanOrEqual(usableHeight);
+            }
+        }
+        // The 500mm row is gone; every other row survives.
+        expect(totalRowHeight(pages.flatMap((page) => page.flatMap((segment) => segment.rows)))).toBe(
+            3 * 30 + 4 * 45,
+        );
     });
 });
 

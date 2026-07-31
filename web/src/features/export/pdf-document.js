@@ -96,7 +96,8 @@ export function totalRowHeight(rows) {
  *
  * Pure: it only reads row heights, so it can be exercised without a document.
  * A `keepTogether` block that fits within a page moves to the next page rather
- * than splitting; anything taller flows row by row.
+ * than splitting; anything taller flows row by row. Every placed row ends inside
+ * the usable area: a row that could not is dropped rather than drawn past it.
  * @param {Array<{rows: Array<{height: number}>, keepTogether?: boolean, spacingAfter?: number}>} blocks - Blocks in document order
  * @param {number} usableHeight - Height available on one page
  * @returns {Array<Array<{block: any, rows: any[], y: number}>>} Placed segments per page
@@ -132,6 +133,14 @@ export function paginateBlocks(blocks, usableHeight) {
         let pending = [];
         let start = cursor;
         for (const row of block.rows) {
+            // A row is one indivisible drawing unit, so a row taller than the
+            // whole content area cannot be placed without painting through the
+            // footer and off the sheet. No row builder produces one - every row
+            // is line-height based - but dropping it keeps "nothing outside the
+            // margins" true rather than merely likely.
+            if (row.height > usableHeight) {
+                continue;
+            }
             if (cursor > 0 && cursor + row.height > usableHeight) {
                 if (pending.length) {
                     page.push({ block, rows: pending, y: start });

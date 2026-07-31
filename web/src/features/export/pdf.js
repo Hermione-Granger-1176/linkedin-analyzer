@@ -57,6 +57,7 @@ export const PdfExport = (() => {
                 document.getElementById("pdfExportIncludeMessages")
             ),
             error: document.getElementById("pdfExportDialogError"),
+            status: document.getElementById("pdfExportDialogStatus"),
             cancel: document.getElementById("pdfExportCancelBtn"),
             confirm: document.getElementById("pdfExportConfirmBtn"),
         };
@@ -220,14 +221,34 @@ export const PdfExport = (() => {
 
     /**
      * Toggle the dialog's busy state.
+     *
+     * Cancel stays enabled throughout. Disabling every control would leave the
+     * dialog with nothing matching `FOCUSABLE_SELECTOR`, and `handleKeydown`
+     * gives up on trapping Tab when there is nothing to trap - so focus would
+     * walk out of an `aria-modal` dialog into the page behind it, during the
+     * dialog's longest-lived state. Generation progress is announced through a
+     * polite live region rather than through the disabled button's label, which
+     * assistive technology is not obliged to re-read.
      * @param {boolean} busy - Whether an export is running
      */
     function setBusy(busy) {
         isGenerating = busy;
         elements.confirm.disabled = busy;
-        elements.cancel.disabled = busy;
         elements.includeMessages.disabled = busy;
         elements.confirm.textContent = busy ? "Generating…" : "Generate PDF";
+        elements.dialog.setAttribute("aria-busy", busy ? "true" : "false");
+
+        if (!busy) {
+            elements.status.textContent = "";
+            elements.status.hidden = true;
+            return;
+        }
+
+        elements.status.textContent = "Generating your PDF. Cancel to stop.";
+        elements.status.hidden = false;
+        // Confirm is the control that started this and has just been disabled,
+        // which drops focus onto the body. Cancel is the only thing left to do.
+        elements.cancel.focus();
     }
 
     /**

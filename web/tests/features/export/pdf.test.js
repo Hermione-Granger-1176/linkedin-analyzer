@@ -52,6 +52,7 @@ const MARKUP = `
         <div id="pdfExportDialog" role="dialog" aria-modal="true">
             <input type="checkbox" id="pdfExportIncludeMessages" />
             <p id="pdfExportDialogError" hidden></p>
+            <p id="pdfExportDialogStatus" role="status" aria-live="polite" hidden></p>
             <button id="pdfExportCancelBtn">Cancel</button>
             <button id="pdfExportConfirmBtn">Generate PDF</button>
         </div>
@@ -104,6 +105,8 @@ function ui() {
         backdrop: document.getElementById("pdfExportDialogBackdrop"),
         checkbox: document.getElementById("pdfExportIncludeMessages"),
         error: document.getElementById("pdfExportDialogError"),
+        status: document.getElementById("pdfExportDialogStatus"),
+        dialog: document.getElementById("pdfExportDialog"),
         cancel: document.getElementById("pdfExportCancelBtn"),
         confirm: document.getElementById("pdfExportConfirmBtn"),
     };
@@ -476,7 +479,6 @@ describe("PdfExport", () => {
 
         expect(ui().confirm.textContent).toBe("Generating…");
         expect(ui().confirm.disabled).toBe(true);
-        expect(ui().cancel.disabled).toBe(true);
         expect(ui().checkbox.disabled).toBe(true);
 
         // The button is disabled, so this stands in for any programmatic
@@ -488,6 +490,53 @@ describe("PdfExport", () => {
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
         vi.restoreAllMocks();
+    });
+
+    it("keeps Tab inside the dialog while an export is running", async () => {
+        let release = null;
+        collectExportData.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+
+        // Cancel is the only control left enabled, so it is both the first and
+        // the last stop in the trap, and it holds focus.
+        expect(ui().cancel.disabled).toBe(false);
+        expect(document.activeElement).toBe(ui().cancel);
+        expect(ui().dialog.getAttribute("aria-busy")).toBe("true");
+        expect(ui().status.hidden).toBe(false);
+        expect(ui().status.textContent).toContain("Generating");
+
+        expect(press("Tab").defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(ui().cancel);
+        expect(press("Tab", true).defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(ui().cancel);
+
+        release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
+        expect(ui().status.hidden).toBe(true);
+        vi.restoreAllMocks();
+    });
+
+    it("cancels a running export from the Cancel button", async () => {
+        collectExportData.mockReturnValue(new Promise(() => {}));
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+
+        ui().cancel.click();
+
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(terminateThreadsWorker).toHaveBeenCalled();
+        expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
     });
 
     it("closes on Escape during generation and cancels the export", async () => {

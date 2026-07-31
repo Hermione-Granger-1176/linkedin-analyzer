@@ -1623,13 +1623,17 @@
                         </span>
                     </span>
                 </label>
-                <p class="export-dialog-error" id="pdfExportDialogError" role="alert" hidden></p>
+                <!--
+                    Both regions stay rendered and empty rather than hidden: a
+                    live region that is inserted, or unhidden, with its text
+                    already in it is not reliably announced.
+                -->
+                <p class="export-dialog-error" id="pdfExportDialogError" role="alert"></p>
                 <p
                     class="export-dialog-status"
                     id="pdfExportDialogStatus"
                     role="status"
                     aria-live="polite"
-                    hidden
                 ></p>
                 <div class="export-dialog-actions">
                     <button type="button" class="export-dialog-btn" id="pdfExportCancelBtn">

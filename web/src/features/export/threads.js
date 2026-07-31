@@ -221,6 +221,27 @@ function conversationKeyForRow(row, index) {
 }
 
 /**
+ * Report whether one row proves its conversation has more than two people.
+ *
+ * Counted off the raw fields rather than the parsed participants, because the
+ * participant list is exactly what loses this information when a group export
+ * carries at most one recipient URL. Splitting on commas can over-count a name
+ * that contains one, and that is the safe direction: the only thing this
+ * decides is whether a conversation may lend a profile URL to a bare name, and
+ * declining to keeps two people apart rather than merging them.
+ * @param {object} row - Parsed message row
+ * @returns {boolean} True when the row names more than one recipient
+ */
+function namesSeveralRecipients(row) {
+    const countParts = (value) =>
+        MessagesAnalytics.cleanText(value)
+            .split(",")
+            .filter((part) => part.trim()).length;
+
+    return countParts(row["RECIPIENT PROFILE URLS"]) > 1 || countParts(row.TO) > 1;
+}
+
+/**
  * Link a one-to-one conversation's URL-less aliases to that conversation's URL.
  *
  * `buildNameToUrl` can only join a name to a URL when it has seen that exact
@@ -251,6 +272,18 @@ function buildConversationAliases(dated, context) {
         if (!entry) {
             entry = { urls: new Set(), names: new Set(), oneToOne: true };
             conversations.set(conversationId, entry);
+        }
+
+        // Checked before the participant list, which cannot see the difference.
+        // `parseRecipientNames` collapses the whole TO field into a single name
+        // whenever a row carries at most one recipient URL - which is exactly
+        // what a group conversation looks like when the export holds only your
+        // own profile URL. That one "name" is then dropped as self, leaving one
+        // participant per row: the shape of a one-to-one. The raw fields still
+        // say otherwise, so they are counted directly.
+        if (namesSeveralRecipients(row)) {
+            entry.oneToOne = false;
+            continue;
         }
 
         const participants = MessagesAnalytics.extractParticipantsFromRow(row, context);
@@ -394,6 +427,15 @@ function withoutKnownContacts(entries, contactKeys) {
                 return false;
             }
         }
+        // A display name is only evidence when there is no URL to check
+        // instead. "You are never in your own connections" is true of
+        // identities, not of names, and sharing a name with one of your own
+        // connections is common enough that trusting a name hit over a profile
+        // URL hands the account owner's side of the conversation to the other
+        // person - inverting every direction chip in the export.
+        if (entry.urls.size) {
+            return true;
+        }
         for (const name of entry.names) {
             if (contactKeys.has(name)) {
                 return false;
@@ -404,30 +446,62 @@ function withoutKnownContacts(entries, contactKeys) {
 }
 
 /**
+ * Narrow candidates to the ones the connections file does not name.
+ * @param {Array<{urls: Set<string>, names: Set<string>}>} entries - Candidates
+ * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
+ * @returns {Array<object>} Strangers, or every candidate when that says nothing
+ */
+function narrowToStrangers(entries, contactKeys) {
+    const strangers = withoutKnownContacts(entries, contactKeys);
+    // Only useful when it actually narrowed the field: if every candidate is a
+    // connection, or none is, there is nothing new to go on.
+    return strangers.length && strangers.length < entries.length ? strangers : entries;
+}
+
+/**
+ * Report whether an identity's conversation coverage is matched by nobody else.
+ * @param {{conversations: Set<string>}} entry - Candidate identity
+ * @param {Array<{conversations: Set<string>}>} pool - Every candidate considered
+ * @returns {boolean} True when no other candidate covers as many conversations
+ */
+function leadsOnCoverage(entry, pool) {
+    return !pool.some(
+        (other) => other !== entry && other.conversations.size >= entry.conversations.size,
+    );
+}
+
+/**
  * Resolve the account owner from the identity index.
  *
- * Someone who both sends and receives is the strongest evidence there is, so
- * those candidates are considered first; a one-directional export falls back to
- * whoever appears in the most conversations. Either way the winner has to be
- * unique - a tie that the connections file cannot settle means self genuinely
- * cannot be identified, and the export says so rather than guessing.
+ * The connections file is consulted first, because it is a fact about the
+ * export rather than a heuristic over it: you are never in your own
+ * connections, so anybody it names is not the account owner. Consulting it only
+ * after the counting had tied meant it was never reached in the cases where the
+ * counting confidently reached the wrong answer.
+ *
+ * Both sending and receiving is then the strongest evidence available, but it
+ * is a preference and not a filter. An owner whose export happens to be all
+ * inbound - an inbox nobody has replied to - sends nothing at all, and dropping
+ * them from the pool handed self to whichever contact wrote the most, with no
+ * tie left for anything to notice. A balanced winner is accepted only when
+ * nobody outside that set matches their conversation coverage.
+ *
+ * A winner that is still not unique means self genuinely cannot be identified,
+ * and the export says so rather than guessing.
  * @param {Map<string, object>} identities - Identity index
  * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
  * @returns {{selfUrls: Set<string>, selfNames: Set<string>}|null} Self context, or null when unidentifiable
  */
 function resolveSelfContext(identities, contactKeys) {
-    const candidates = Array.from(identities.values());
-    const balanced = candidates.filter((entry) => entry.sent > 0 && entry.received > 0);
-    const pool = balanced.length ? balanced : candidates;
+    const pool = narrowToStrangers(Array.from(identities.values()), contactKeys);
 
-    let self = pickWidestCoverage(pool);
+    const balanced = pool.filter((entry) => entry.sent > 0 && entry.received > 0);
+    let self = pickWidestCoverage(balanced);
+    if (self && !leadsOnCoverage(self, pool)) {
+        self = null;
+    }
     if (!self) {
-        const strangers = withoutKnownContacts(pool, contactKeys);
-        // Only useful when it actually narrowed the field: if every candidate is
-        // a connection, or none is, there is nothing new to go on.
-        if (strangers.length && strangers.length < pool.length) {
-            self = pickWidestCoverage(strangers);
-        }
+        self = pickWidestCoverage(pool);
     }
     if (!self) {
         return null;

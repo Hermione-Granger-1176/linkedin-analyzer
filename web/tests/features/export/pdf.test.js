@@ -54,8 +54,8 @@ const MARKUP = `
     <div class="export-dialog-backdrop" id="pdfExportDialogBackdrop" hidden>
         <div id="pdfExportDialog" role="dialog" aria-modal="true">
             <input type="checkbox" id="pdfExportIncludeMessages" />
-            <p id="pdfExportDialogError" hidden></p>
-            <p id="pdfExportDialogStatus" role="status" aria-live="polite" hidden></p>
+            <p id="pdfExportDialogError" role="alert"></p>
+            <p id="pdfExportDialogStatus" role="status" aria-live="polite"></p>
             <button id="pdfExportCancelBtn">Cancel</button>
             <button id="pdfExportConfirmBtn">Generate PDF</button>
         </div>
@@ -308,6 +308,37 @@ describe("PdfExport", () => {
         expect(document.activeElement).toBe(ui().confirm);
     });
 
+    it("pulls Tab back in when focus has fallen out of the dialog", () => {
+        // Clicking the dialog's heading, its text or its padding focuses none
+        // of them and leaves activeElement on <body>. That is neither the first
+        // nor the last control, so native tabbing used to walk focus into the
+        // page behind an aria-modal dialog.
+        ui().trigger.click();
+        document.body.focus();
+        ui().checkbox.blur();
+
+        expect(press("Tab").defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(ui().checkbox);
+
+        ui().checkbox.blur();
+        expect(press("Tab", true).defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(ui().confirm);
+    });
+
+    it("returns focus to the trigger when nothing focusable opened the dialog", () => {
+        // Browsers that do not focus a clicked button leave <body> as the
+        // activeElement open() records. Every element has a .focus, but body's
+        // is a no-op, so testing for one dropped the user at the top of the
+        // page instead of back on the button they came from.
+        ui().trigger.blur();
+        ui().trigger.click();
+        expect(ui().backdrop.hidden).toBe(false);
+
+        ui().cancel.click();
+
+        expect(document.activeElement).toBe(ui().trigger);
+    });
+
     it("leaves Tab alone in the middle of the dialog", () => {
         ui().trigger.click();
         ui().cancel.focus();
@@ -436,6 +467,7 @@ describe("PdfExport", () => {
         expect(collectExportData).toHaveBeenCalledWith({
             includeMessages: false,
             generatedAt: expect.any(Date),
+            isCancelled: expect.any(Function),
         });
         expect(renderPdfDocument).toHaveBeenCalledWith(docStub, expect.any(Object), {
             palette: { "--bg-primary": { r: 255, g: 253, b: 247 } },
@@ -478,6 +510,7 @@ describe("PdfExport", () => {
             expect(collectExportData).toHaveBeenCalledWith({
                 includeMessages: true,
                 generatedAt: expect.any(Date),
+                isCancelled: expect.any(Function),
             }),
         );
         vi.restoreAllMocks();
@@ -488,7 +521,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().error.hidden).toBe(false));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
 
         expect(ui().error.textContent).toBe(
             "Something went wrong while building the PDF. Please try again.",
@@ -509,7 +542,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().error.hidden).toBe(false));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
 
         const [reported, context] = captureError.mock.calls[0];
         expectFixedError(reported, thrown);
@@ -529,13 +562,13 @@ describe("PdfExport", () => {
         collectExportData.mockRejectedValueOnce(new Error("worker gone"));
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().error.hidden).toBe(false));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
 
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         ui().confirm.click();
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
 
-        expect(ui().error.hidden).toBe(true);
+        expect(ui().error.textContent).toBe("");
         vi.restoreAllMocks();
     });
 
@@ -585,7 +618,7 @@ describe("PdfExport", () => {
         expect(ui().cancel.disabled).toBe(false);
         expect(document.activeElement).toBe(ui().cancel);
         expect(ui().dialog.getAttribute("aria-busy")).toBe("true");
-        expect(ui().status.hidden).toBe(false);
+        expect(ui().status.textContent).not.toBe("");
         expect(ui().status.textContent).toContain("Generating");
 
         expect(press("Tab").defaultPrevented).toBe(true);
@@ -596,7 +629,7 @@ describe("PdfExport", () => {
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
         await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
         expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
-        expect(ui().status.hidden).toBe(true);
+        expect(ui().status.textContent).toBe("");
         vi.restoreAllMocks();
     });
 
@@ -710,7 +743,7 @@ describe("PdfExport", () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(ui().error.hidden).toBe(true);
+        expect(ui().error.textContent).toBe("");
         expect(ui().backdrop.hidden).toBe(true);
         expect(captureError).not.toHaveBeenCalled();
     });
@@ -751,7 +784,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().error.hidden).toBe(false));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
 
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
         expect(document.querySelector("a[download]")).toBeNull();

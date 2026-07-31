@@ -199,7 +199,16 @@ export const PdfExport = (() => {
             cancelGeneration();
         }
         elements.backdrop.hidden = true;
-        const target = lastFocused && lastFocused.focus ? lastFocused : elements.trigger;
+        // Every element has a .focus, including <body> - which browsers that do
+        // not focus a clicked button leave as the activeElement open() recorded,
+        // and which focus() silently refuses. Testing for it dropped the user at
+        // the top of the page instead of back on the button they came from.
+        const restorable =
+            lastFocused &&
+            lastFocused !== document.body &&
+            lastFocused.isConnected &&
+            typeof lastFocused.focus === "function";
+        const target = restorable ? lastFocused : elements.trigger;
         lastFocused = null;
         target.focus();
     }
@@ -225,7 +234,10 @@ export const PdfExport = (() => {
      * @param {KeyboardEvent} event - Key event
      */
     function handleKeydown(event) {
-        if (!isOpen) {
+        // The listener is on the document, so it outlives its own markup. A
+        // surface whose dialog has been replaced under it is not the modal the
+        // user is in and must not fight the live one for focus.
+        if (!isOpen || !elements.dialog.isConnected) {
             return;
         }
         if (event.key === "Escape") {
@@ -243,6 +255,15 @@ export const PdfExport = (() => {
         }
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
+        // Clicking the dialog's heading, its text or its padding focuses none of
+        // them and leaves activeElement on <body>. That is neither first nor
+        // last, so without this the native Tab ran and walked focus into the
+        // page behind an aria-modal dialog.
+        if (!elements.dialog.contains(document.activeElement)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+            return;
+        }
         if (event.shiftKey && document.activeElement === first) {
             event.preventDefault();
             last.focus();
@@ -260,13 +281,11 @@ export const PdfExport = (() => {
      */
     function showError(message) {
         elements.error.textContent = message;
-        elements.error.hidden = false;
     }
 
     /** Clear any previous failure message. */
     function hideError() {
         elements.error.textContent = "";
-        elements.error.hidden = true;
     }
 
     /**
@@ -290,12 +309,10 @@ export const PdfExport = (() => {
 
         if (!busy) {
             elements.status.textContent = "";
-            elements.status.hidden = true;
             return;
         }
 
         elements.status.textContent = "Generating your PDF. Cancel to stop.";
-        elements.status.hidden = false;
         // Confirm is the control that started this and has just been disabled,
         // which drops focus onto the body. Cancel is the only thing left to do.
         elements.cancel.focus();
@@ -366,7 +383,14 @@ export const PdfExport = (() => {
                 return;
             }
             const generatedAt = new Date();
-            const data = await collectExportData({ includeMessages, generatedAt });
+            const data = await collectExportData({
+                includeMessages,
+                generatedAt,
+                // Checking only on the way back is not enough: collection walks
+                // several storage reads before it reaches either worker, and
+                // terminating a worker that does not exist yet does nothing.
+                isCancelled: cancelled,
+            });
             if (cancelled()) {
                 return;
             }

@@ -92,13 +92,37 @@ export function totalRowHeight(rows) {
 }
 
 /**
+ * Height of the first row of the next block that has any.
+ *
+ * One row, not the whole block: a heading needs to be followed by something to
+ * stop reading as stranded, and demanding the entire next block fit too would
+ * push short sections onto pages of their own.
+ * @param {Array<{rows: Array<{height: number}>}>} blocks - Blocks in document order
+ * @param {number} from - Index to start looking from
+ * @returns {number} First row height, or zero when nothing follows
+ */
+function leadingRowHeight(blocks, from) {
+    for (let index = from; index < blocks.length; index += 1) {
+        if (blocks[index].rows.length) {
+            return blocks[index].rows[0].height;
+        }
+    }
+    return 0;
+}
+
+/**
  * Place measured blocks onto pages.
  *
  * Pure: it only reads row heights, so it can be exercised without a document.
  * A `keepTogether` block that fits within a page moves to the next page rather
  * than splitting; anything taller flows row by row. Every placed row ends inside
  * the usable area: a row that could not is dropped rather than drawn past it.
- * @param {Array<{rows: Array<{height: number}>, keepTogether?: boolean, spacingAfter?: number}>} blocks - Blocks in document order
+ *
+ * A `keepWithNext` block additionally reserves room for the first row of
+ * whatever follows it. A heading is only a heading if something comes after it
+ * on the same page; without this, "All time" and a person's name were routinely
+ * left alone at the foot of a page with their content overleaf.
+ * @param {Array<{rows: Array<{height: number}>, keepTogether?: boolean, keepWithNext?: boolean, spacingAfter?: number}>} blocks - Blocks in document order
  * @param {number} usableHeight - Height available on one page
  * @returns {Array<Array<{block: any, rows: any[], y: number}>>} Placed segments per page
  */
@@ -113,7 +137,8 @@ export function paginateBlocks(blocks, usableHeight) {
         cursor = 0;
     };
 
-    for (const block of blocks) {
+    for (let index = 0; index < blocks.length; index += 1) {
+        const block = blocks[index];
         if (!block.rows.length) {
             continue;
         }
@@ -122,7 +147,13 @@ export function paginateBlocks(blocks, usableHeight) {
         const height = totalRowHeight(block.rows);
 
         if (block.keepTogether && height <= usableHeight) {
-            if (cursor > 0 && cursor + height > usableHeight) {
+            // Falls back to the block's own height when the pair cannot share a
+            // page at all, so an unsatisfiable request cannot loop pages.
+            const withNext = block.keepWithNext
+                ? height + spacingAfter + leadingRowHeight(blocks, index + 1)
+                : height;
+            const required = withNext <= usableHeight ? withNext : height;
+            if (cursor > 0 && cursor + required > usableHeight) {
                 nextPage();
             }
             page.push({ block, rows: block.rows, y: cursor });
@@ -234,6 +265,49 @@ export function createPainter(doc, palette, fonts) {
 }
 
 /**
+ * Relative luminance of a palette color, per WCAG 2.
+ * @param {{r: number, g: number, b: number}} color - Palette color
+ * @returns {number} Luminance between 0 and 1
+ */
+function relativeLuminance(color) {
+    const channel = (value) => {
+        const scaled = value / 255;
+        return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+}
+
+/**
+ * Contrast ratio between two palette colors, per WCAG 2.
+ * @param {{r: number, g: number, b: number}} left - First color
+ * @param {{r: number, g: number, b: number}} right - Second color
+ * @returns {number} Ratio between 1 and 21
+ */
+export function contrastRatio(left, right) {
+    const first = relativeLuminance(left);
+    const second = relativeLuminance(right);
+    return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
+/**
+ * Pick whichever of the palette's two text colors reads on this fill.
+ *
+ * Text used to be colored by the name of the accent it sat on rather than by
+ * what that produced: a card title in `--accent-yellow` on a tint of
+ * `--accent-yellow` is 1.54:1, and the white roundel digit on the raw accent is
+ * 1.71:1 - neither is visible on paper. Measuring instead keeps every one of
+ * them legible whatever the tokens are later set to.
+ * @param {object} palette - Palette from readPdfPalette()
+ * @param {{r: number, g: number, b: number}} background - Fill the text sits on
+ * @returns {{r: number, g: number, b: number}} The more readable text color
+ */
+export function readableOn(palette, background) {
+    const ink = palette["--text-primary"];
+    const reversed = palette["--text-on-accent"];
+    return contrastRatio(ink, background) >= contrastRatio(reversed, background) ? ink : reversed;
+}
+
+/**
  * Resolve an insight's accent to a palette color.
  * @param {object} palette - Palette from readPdfPalette()
  * @param {string} accent - Accent class from the insight
@@ -301,6 +375,7 @@ function buildSectionBlock(painter, label) {
     return {
         kind: "section",
         keepTogether: true,
+        keepWithNext: true,
         spacingAfter: 3,
         rows: [
             {
@@ -360,11 +435,21 @@ function buildInsightBlock(painter, insight, index) {
                         y + CARD_PADDING + ROUNDEL_RADIUS + 1.6,
                         fonts.body,
                         7,
-                        palette["--text-on-accent"],
+                        readableOn(palette, accent),
                         { align: "center" },
                     );
                 }
-                painter.text(line, x + CARD_GUTTER, baseline, fonts.body, titleSize, accent);
+                // The accent stays the card's rule and roundel, exactly as the
+                // Insights screen uses it for the border and icon. Its heading
+                // is `--text-primary` there too, and for the same reason.
+                painter.text(
+                    line,
+                    x + CARD_GUTTER,
+                    baseline,
+                    fonts.body,
+                    titleSize,
+                    readableOn(palette, tint),
+                );
             },
         });
     });
@@ -548,7 +633,13 @@ function buildThreadHeaderBlock(painter, thread) {
         },
     });
 
-    return { kind: "thread-header", keepTogether: true, spacingAfter: 1.5, rows };
+    return {
+        kind: "thread-header",
+        keepTogether: true,
+        keepWithNext: true,
+        spacingAfter: 1.5,
+        rows,
+    };
 }
 
 /**
@@ -609,7 +700,7 @@ function buildMessageBlock(painter, message) {
                     y + 4.3,
                     fonts.body,
                     metaSize - 0.5,
-                    accent,
+                    readableOn(palette, chipFill),
                     { align: "center" },
                 );
                 painter.text(

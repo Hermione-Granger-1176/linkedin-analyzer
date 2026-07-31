@@ -433,6 +433,131 @@ describe("selectRecentThreads", () => {
         expect(aided[0].messages.map((entry) => entry.direction)).toEqual(["sent", "received"]);
     });
 
+    it("does not merge two people in a group that exports only the owner's URL", () => {
+        // The failure this guards is not cosmetic: Carol's private one-to-one
+        // message was printed under Bob Brown's name and Bob's profile URL.
+        //
+        // `parseRecipientNames` collapses the whole TO field into one name when
+        // a row carries at most one recipient URL, which is what a group looks
+        // like when only the owner's URL is exported. That one name resolved to
+        // self and was dropped, leaving one participant per row - the shape of a
+        // one-to-one - so the aliaser lent Bob's URL to every bare name in it.
+        const groupRow = (from, url, body, date) =>
+            row({
+                FROM: from,
+                "SENDER PROFILE URL": url,
+                TO: `${SELF_NAME}, ${from === "Bob Brown" ? "Carol Jones" : "Bob Brown"}`,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+                DATE: date,
+                CONTENT: body,
+                "CONVERSATION ID": "grp",
+            });
+
+        const rows = [
+            groupRow("Bob Brown", "https://www.linkedin.com/in/bob", "bob to the group", "2026-01-01 09:00:00"),
+            groupRow("Carol Jones", "", "carol to the group", "2026-01-02 09:00:00"),
+            row({
+                FROM: "Carol Jones",
+                "SENDER PROFILE URL": "",
+                TO: SELF_NAME,
+                "RECIPIENT PROFILE URLS": SELF_URL,
+                DATE: "2026-01-03 09:00:00",
+                CONTENT: "carol private note",
+                "CONVERSATION ID": "carol-dm",
+            }),
+        ];
+
+        const threads = selectRecentThreads(rows);
+        const bodies = (name) =>
+            threads
+                .filter((thread) => thread.name.toLowerCase().includes(name))
+                .flatMap((thread) => thread.messages.map((entry) => entry.body));
+
+        expect(bodies("carol")).toContain("carol private note");
+        expect(bodies("bob")).not.toContain("carol private note");
+        // And Carol is still in the document under her own name.
+        expect(threads.some((thread) => thread.name.toLowerCase().includes("carol"))).toBe(true);
+    });
+
+    it("does not hand self to a contact when the owner never replies", () => {
+        // An inbox nobody has been answered in: Sam sends nothing at all. Making
+        // "sends and receives" a filter dropped Sam from the running entirely,
+        // and Ada then won outright - no tie, so nothing was left to notice it.
+        const rows = [
+            row({
+                FROM: "Ada",
+                "SENDER PROFILE URL": "https://www.linkedin.com/in/ada",
+                TO: `${SELF_NAME}, Bob`,
+                "RECIPIENT PROFILE URLS": `${SELF_URL},https://www.linkedin.com/in/bob`,
+                DATE: "2026-01-01 09:00:00",
+                CONTENT: "ada to the group",
+                "CONVERSATION ID": "grp",
+            }),
+            row({
+                FROM: "Bob",
+                "SENDER PROFILE URL": "https://www.linkedin.com/in/bob",
+                TO: `${SELF_NAME}, Ada`,
+                "RECIPIENT PROFILE URLS": `${SELF_URL},https://www.linkedin.com/in/ada`,
+                DATE: "2026-01-02 09:00:00",
+                CONTENT: "bob to the group",
+                "CONVERSATION ID": "grp",
+            }),
+            message({
+                name: "ada",
+                url: "https://www.linkedin.com/in/ada",
+                conversationId: "dm",
+                date: "2026-01-03 09:00:00",
+                body: "ada direct",
+                fromContact: true,
+            }),
+        ];
+
+        // With no connections file the export cannot know, and says so: every
+        // chip is neutral and both people are listed, rather than Ada's
+        // messages being confidently labelled "sent" by Sam.
+        for (const thread of selectRecentThreads(rows)) {
+            expect(thread.messages.every((entry) => entry.direction === "unknown")).toBe(true);
+        }
+
+        // With one, Ada and Bob are both in it and Sam is not, which settles it.
+        const aided = selectRecentThreads(rows, {
+            contactKeys: ["https://www.linkedin.com/in/ada", "https://www.linkedin.com/in/bob"],
+        });
+        expect(aided.flatMap((thread) => thread.messages).every((m) => m.direction === "received")).toBe(
+            true,
+        );
+        for (const thread of aided) {
+            expect(thread.name).not.toContain(SELF_NAME);
+            expect(thread.url).not.toBe(SELF_URL);
+        }
+    });
+
+    it("does not eliminate the owner over a connection who shares their name", () => {
+        // contactKeys mixes normalized URLs and names. "You are never in your
+        // own connections" is true of identities, not of display names, and a
+        // name hit used to be enough to hand self to the other person.
+        const rows = [
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "hi ada",
+            }),
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 11:00:00",
+                body: "hi sam",
+                fromContact: true,
+            }),
+        ];
+
+        const threads = selectRecentThreads(rows, { contactKeys: ["sam self"] });
+
+        expect(threads[0].messages.every((entry) => entry.direction === "unknown")).toBe(true);
+        expect(threads[0].name).not.toBe(SELF_NAME);
+    });
+
     it("leaves the tie unresolved when connections cannot separate the two", () => {
         const rows = [
             message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "mine" }),

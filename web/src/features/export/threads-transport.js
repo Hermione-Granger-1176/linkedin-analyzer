@@ -36,6 +36,17 @@ const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
  */
 const CANCELLED = Symbol("threads-request-cancelled");
 
+/**
+ * Outcome of a request the worker answered with a definite failure.
+ *
+ * Also distinct from null: the worker has already parsed this exact CSV with
+ * this exact code and reported that it cannot yield threads. Re-running it on
+ * the UI thread would freeze the page to arrive at the same answer. The null
+ * outcome means the worker mechanism never gave one - no worker, a failed post,
+ * a timeout - and only that is worth falling back for.
+ */
+const FAILED = Symbol("threads-request-failed");
+
 let threadsWorker = null;
 let threadsRequestId = 0;
 let threadsTimeoutId = null;
@@ -106,12 +117,20 @@ function initWorker() {
  * small exports; a large export with no worker yields an empty list so the PDF
  * simply omits the section.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} [options] - Selection limits and known connections
+ * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[], isCancelled?: () => boolean}} [options] - Selection limits, known connections and the run's cancellation check
  * @returns {Promise<object[]>} Selected threads, newest conversation first
  */
 export async function loadRecentThreads(messagesCsv, options = {}) {
     const text = typeof messagesCsv === "string" ? messagesCsv : "";
     if (!text) {
+        return [];
+    }
+    const isCancelled =
+        typeof options.isCancelled === "function" ? options.isCancelled : () => false;
+    // The caller reached here through several storage reads, any of which the
+    // user may have cancelled across. Creating the worker now would post the
+    // whole CSV to it on behalf of a run whose answer nobody will read.
+    if (isCancelled()) {
         return [];
     }
 
@@ -123,11 +142,14 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
         return [];
     }
     terminateThreadsWorker();
+    if (workerThreads === FAILED) {
+        return [];
+    }
     if (workerThreads) {
         return workerThreads;
     }
 
-    if (text.length > MAIN_THREAD_FALLBACK_MAX_CHARS) {
+    if (text.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
         return [];
     }
     return selectThreadsOnMainThread(text, options);
@@ -137,11 +159,18 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
  * Ask the worker for the thread selection.
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} options - Selection limits and known connections
- * @returns {Promise<object[]|null|typeof CANCELLED>} Threads, null when the worker could not answer, or CANCELLED
+ * @returns {Promise<object[]|null|typeof CANCELLED|typeof FAILED>} Threads, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */
 function requestThreadsFromWorker(messagesCsv, options) {
     if (!threadsWorker) {
         return Promise.resolve(null);
+    }
+    // Only one request can own the module-level watchdog and settle hook. A
+    // second arriving while the first is in flight would adopt both, and the
+    // first to be answered would then clear the second's watchdog and null its
+    // settle hook, leaving that promise pending for the life of the page.
+    if (pendingRequest) {
+        pendingRequest.cancel();
     }
 
     const requestId = ++threadsRequestId;
@@ -155,7 +184,7 @@ function requestThreadsFromWorker(messagesCsv, options) {
          * Resolving twice is harmless, and detaching twice is guarded, so this
          * needs no latch of its own: the watchdog, a worker event and an
          * explicit cancellation may all reach it.
-         * @param {object[]|null|typeof CANCELLED} result - Outcome for the caller
+         * @param {object[]|null|typeof CANCELLED|typeof FAILED} result - Outcome for the caller
          */
         const settle = (result) => {
             pendingRequest = null;
@@ -175,21 +204,26 @@ function requestThreadsFromWorker(messagesCsv, options) {
             }
 
             const message = parsed.value;
-            if (message.requestId !== requestId) {
-                // A stale success belongs to a request nobody is waiting on. A
-                // failure is different: only one request is ever in flight, so a
-                // failure envelope under any id is this request failing, and
-                // waiting out the watchdog would look like a hang.
-                if (message.payload.success) {
-                    return;
-                }
+            // A stale success belongs to a request nobody is waiting on. A
+            // failure is different: only one request is ever in flight, so a
+            // failure envelope under any id is this request failing, and
+            // waiting out the watchdog would look like a hang.
+            if (message.requestId !== requestId && message.payload.success) {
+                return;
+            }
+            if (!message.payload.success) {
+                // Reported whatever id it arrived under: the worker declining to
+                // parse a file the user has uploaded is the same event either
+                // way, and only the mismatched case used to be reported at all.
                 captureError(new Error("Threads worker reported a failure."), {
                     module: "pdf-export",
                     operation: "threads-worker-failure",
                     requestId,
                 });
+                settle(FAILED);
+                return;
             }
-            settle(message.payload.success ? message.payload.threads : null);
+            settle(message.payload.threads);
         };
 
         const handleError = (event) => {

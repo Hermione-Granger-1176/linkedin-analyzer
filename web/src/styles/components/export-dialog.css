@@ -90,7 +90,13 @@
     color: var(--text-primary);
 }
 
-.export-dialog-error[hidden] {
+/*
+ * Emptiness, not `hidden`, is what takes these off the page. `hidden` drops an
+ * element out of the accessibility tree, and a live region that is unhidden
+ * with its text already in it is not reliably announced - which would defeat
+ * the point of announcing generation progress through one.
+ */
+.export-dialog-error:empty {
     display: none;
 }
 
@@ -103,7 +109,7 @@
     color: var(--text-secondary-strong);
 }
 
-.export-dialog-status[hidden] {
+.export-dialog-status:empty {
     display: none;
 }
 

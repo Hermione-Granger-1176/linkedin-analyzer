@@ -128,7 +128,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 
 A **Save as PDF** button sits beside the theme toggle on every screen, and downloads an A4 document named `linkedin-insights-YYYY-MM-DD.pdf`.
 
-The PDF is a document in its own right, not a screenshot. It is laid out and drawn by `features/export/pdf-document.js`: measured blocks placed onto A4 pages, with page breaks that never split an insight card and a `Page x of y` footer.
+The PDF is a document in its own right, not a screenshot. It is laid out and drawn by `features/export/pdf-document.js`: measured blocks placed onto A4 pages, with page breaks that never split an insight card, never leave a heading stranded at the foot of a page, and a `Page x of y` footer. Text colour is chosen by measured contrast against whatever it is drawn on rather than by the name of the accent, so a card title or a direction chip stays legible whatever the palette tokens are set to.
 
 - It contains the header with the active time range and generation date, every insight card (the screen shows only the first six), the closing pro tip, and the all-time stats.
 - It is **always light and warm-palette**, whichever theme the app is in. The colors are read back out of the stylesheet at export time (`features/export/palette.js` mounts a detached `.theme-light` probe), so the document cannot drift from the site palette.
@@ -145,7 +145,9 @@ The hydrated message state the app keeps in memory deliberately discards message
 
 Threads are grouped by `CONVERSATION ID` first. Every row of a conversation is collected before its correspondents are worked out, so a contact who is renamed halfway through, or whose profile URL appears on only some rows, never splits the conversation in two, and a row that names nobody joins its conversation whichever order it arrives in. Rows with a blank id group by their correspondents instead. A conversation with more than one correspondent stays its own thread, titled with all of them, rather than merging into anyone's one-to-one thread.
 
-Message direction comes from the account owner, who is identified as the person who both sends and receives across the widest set of conversations. In an export where that is a tie (a single message, or one conversation on its own, where the two people are indistinguishable) the export says so: the messages carry a neutral **Message** chip instead of **Sent** or **Received**, and both people are listed as correspondents.
+Message direction comes from the account owner, who is identified in three steps. The connections file goes first, because it is a fact about the export rather than a heuristic over it: you are never in your own connections, so anybody it names by profile URL is not the owner. A bare name match is not enough — sharing a display name with one of your own connections is common, and trusting that would hand the owner's side of the conversation to the other person. Whoever is left is then judged on how many conversations they appear in, and sending as well as receiving is a preference rather than a filter: an inbox nobody has replied to has an owner who never sends, and dropping them would hand self to whichever contact wrote the most.
+
+Where that still does not produce a unique winner (a single message, or one conversation on its own, where the two people are indistinguishable) the export says so: the messages carry a neutral **Message** chip instead of **Sent** or **Received**, and both people are listed as correspondents.
 
 Message bodies leave the app only inside the file you download, to the location you choose. Nothing is uploaded, and nothing about the threads (bodies, contact names or the file name) is ever attached to diagnostics. Leaving the box unchecked means no message text appears in the output at all.
 

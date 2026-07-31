@@ -124,6 +124,34 @@ describe("loadRecentThreads", () => {
         await pending;
     });
 
+    it("starts no worker for a run that has already been cancelled", async () => {
+        expect(await loadRecentThreads(MESSAGES_CSV, { isCancelled: () => true })).toEqual([]);
+        expect(workerInstance).toBeNull();
+    });
+
+    it("ends an earlier request rather than letting two share the worker", async () => {
+        // Both requests would otherwise own the same module-level watchdog and
+        // settle hook, and whichever the worker answered first would clear the
+        // other's - leaving that promise pending for the life of the page.
+        const first = loadRecentThreads(MESSAGES_CSV);
+        const worker = workerInstance;
+        const second = loadRecentThreads(MESSAGES_CSV);
+        const [, secondRequest] = worker.postMessage.mock.calls;
+
+        worker.emit("message", {
+            data: {
+                type: "threads",
+                requestId: secondRequest[0].requestId,
+                payload: { success: true, threads: [{ name: "Ada", messages: [] }] },
+            },
+        });
+
+        // The cancelled one resolves rather than hanging, and does not re-run
+        // the abandoned work on the UI thread.
+        expect(await first).toEqual([]);
+        expect(await second).toEqual([{ name: "Ada", messages: [] }]);
+    });
+
     it("ignores stale successes for other requests and invalid envelopes", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV);
         const worker = workerInstance;
@@ -153,7 +181,10 @@ describe("loadRecentThreads", () => {
         });
     });
 
-    it("falls back to the main thread when the worker reports failure", async () => {
+    it("does not re-parse on the main thread when the worker reports failure", async () => {
+        // The worker has already run this exact code over this exact CSV and
+        // said it cannot yield threads. Re-running it on the UI thread freezes
+        // the page to reach the same answer, so the section is simply dropped.
         const pending = loadRecentThreads(MESSAGES_CSV);
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
@@ -166,7 +197,12 @@ describe("loadRecentThreads", () => {
             },
         });
 
-        expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
+        expect(await pending).toEqual([]);
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "threads-worker-failure",
+            requestId: request.requestId,
+        });
     });
 
     it("treats a failure envelope as terminal even under another request id", async () => {
@@ -187,7 +223,7 @@ describe("loadRecentThreads", () => {
         });
         vi.useRealTimers();
 
-        expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
+        expect(await pending).toEqual([]);
         expect(worker.terminate).toHaveBeenCalled();
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "pdf-export",

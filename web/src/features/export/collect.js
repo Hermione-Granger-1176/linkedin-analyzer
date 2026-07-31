@@ -283,10 +283,25 @@ function hasSnapshotContent(snapshot) {
 }
 
 /**
+ * Build the insight source an export falls back to when there is nothing to show.
+ * @returns {{timeRange: string, insights: object[], tip: string|null, networkGrowth: object|null, outreach: object|null}} Empty source
+ */
+function emptyInsightSource() {
+    return {
+        timeRange: DEFAULT_FILTERS.timeRange,
+        insights: [],
+        tip: null,
+        networkGrowth: null,
+        outreach: null,
+    };
+}
+
+/**
  * Resolve the insight cards, tip and range, preferring the on-screen snapshot.
+ * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<{timeRange: string, insights: object[], tip: string|null, networkGrowth: object|null, outreach: object|null}>} Insight source data
  */
-async function resolveInsightSource() {
+async function resolveInsightSource(isCancelled) {
     const snapshot = DataCache.get(INSIGHTS_EXPORT_CACHE_KEY);
     if (hasSnapshotContent(snapshot)) {
         return {
@@ -303,13 +318,14 @@ async function resolveInsightSource() {
         analyticsBase = await readSafely(() => Storage.getAnalytics(), "load-analytics");
     }
     if (!analyticsBase || !analyticsBase.months) {
-        return {
-            timeRange: DEFAULT_FILTERS.timeRange,
-            insights: [],
-            tip: null,
-            networkGrowth: null,
-            outreach: null,
-        };
+        return emptyInsightSource();
+    }
+    // The storage read above is a macrotask boundary, so the user may have
+    // cancelled while it was in flight. Starting the worker now would hand a
+    // whole analytics base to a run whose answer nobody will ever read, and
+    // leave it churning under its own 30-second watchdog.
+    if (isCancelled()) {
+        return emptyInsightSource();
     }
 
     const view = await runAnalyticsWorker(analyticsBase);
@@ -393,16 +409,27 @@ async function collectContactKeys() {
 
 /**
  * Select the recent threads, with message bodies, from the stored messages file.
+ * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<object[]>} Threads for the document
  */
-async function collectThreads() {
+async function collectThreads(isCancelled) {
+    if (isCancelled()) {
+        return [];
+    }
     const stored = await readSafely(() => Storage.getFile("messages"), "load-messages-file");
     const text = stored && stored.text ? stored.text : "";
     if (!text) {
         return [];
     }
     try {
-        return await loadRecentThreads(text, { contactKeys: await collectContactKeys() });
+        const contactKeys = await collectContactKeys();
+        // Two storage reads have completed since the last check, and the next
+        // step hands the whole messages CSV to a worker. A run the user has
+        // already abandoned stops here rather than starting that work.
+        if (isCancelled()) {
+            return [];
+        }
+        return await loadRecentThreads(text, { contactKeys, isCancelled });
     } catch {
         // A thread-selection failure drops the section rather than the export.
         // The caught value is discarded: it came from parsing the user's own
@@ -417,11 +444,20 @@ async function collectThreads() {
 
 /**
  * Assemble everything the PDF layout needs.
- * @param {{includeMessages?: boolean, generatedAt?: Date}} [options] - Export options
+ *
+ * Cancellation has to be consulted here, not only by the caller: this walks
+ * several storage reads before it reaches either worker, and terminating a
+ * worker that has not been created yet does nothing. Without `isCancelled` an
+ * abandoned run went on to build a worker and hand it the user's whole CSV,
+ * and a second run started meanwhile could deadlock against it over the shared
+ * worker handle.
+ * @param {{includeMessages?: boolean, generatedAt?: Date, isCancelled?: () => boolean}} [options] - Export options
  * @returns {Promise<{generatedAt: Date, rangeLabel: string, insights: object[], tip: string|null, allTime: Array<{label: string, value: string}>, threads: object[]}>} Document model
  */
 export async function collectExportData(options = {}) {
-    const source = await resolveInsightSource();
+    const isCancelled =
+        typeof options.isCancelled === "function" ? options.isCancelled : () => false;
+    const source = await resolveInsightSource(isCancelled);
     const outreach =
         source.outreach || (await readSafely(() => Storage.getOutreach(), "load-outreach"));
 
@@ -431,6 +467,6 @@ export async function collectExportData(options = {}) {
         insights: source.insights,
         tip: source.tip,
         allTime: buildAllTimeStats(source.networkGrowth, outreach),
-        threads: options.includeMessages ? await collectThreads() : [],
+        threads: options.includeMessages ? await collectThreads(isCancelled) : [],
     };
 }

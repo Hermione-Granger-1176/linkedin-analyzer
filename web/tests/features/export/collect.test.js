@@ -194,6 +194,24 @@ describe("collectExportData", () => {
         expect(Storage.getAnalytics).toHaveBeenCalled();
     });
 
+    it("never starts a worker for a run that has already been cancelled", async () => {
+        // Cancellation cannot only be checked on the way back: collection walks
+        // several storage reads before it reaches either worker, and
+        // terminating a worker that does not exist yet does nothing at all.
+        Storage.getAnalytics.mockResolvedValue({ months: {} });
+        Storage.getFile.mockResolvedValue({ text: "FROM,TO\na,b" });
+
+        const data = await collectExportData({
+            includeMessages: true,
+            isCancelled: () => true,
+        });
+
+        expect(workerInstance).toBeNull();
+        expect(loadRecentThreads).not.toHaveBeenCalled();
+        expect(data.insights).toEqual([]);
+        expect(data.threads).toEqual([]);
+    });
+
     it("defaults generatedAt to now", async () => {
         const before = Date.now();
         const data = await collectExportData();
@@ -449,6 +467,7 @@ describe("collectExportData", () => {
         expect(data.threads).toEqual([{ name: "Ada", messages: [] }]);
         expect(loadRecentThreads).toHaveBeenCalledWith("FROM,TO\na,b", {
             contactKeys: expect.any(Array),
+            isCancelled: expect.any(Function),
         });
     });
 

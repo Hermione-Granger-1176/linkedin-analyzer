@@ -8,7 +8,9 @@ import {
     createPainter,
     formatLongDate,
     lineHeightMm,
+    contrastRatio,
     paginateBlocks,
+    readableOn,
     renderPdfDocument,
     totalRowHeight,
 } from "../../../src/features/export/pdf-document.js";
@@ -150,6 +152,73 @@ describe("formatLongDate", () => {
     });
 });
 
+describe("text contrast", () => {
+    // The real light-theme values, so the ratios below are the ones that end up
+    // on paper rather than ones the synthetic test palette happens to produce.
+    const LIGHT = {
+        "--text-primary": { r: 28, g: 25, b: 23 },
+        "--text-on-accent": { r: 255, g: 255, b: 255 },
+        "--bg-tertiary": { r: 255, g: 248, b: 230 },
+        "--accent-blue": { r: 66, g: 133, b: 244 },
+        "--accent-blue-bg": { r: 240, g: 243, b: 247 },
+        "--accent-yellow": { r: 251, g: 188, b: 5 },
+        "--accent-yellow-bg": { r: 254, g: 243, b: 211 },
+        "--accent-red": { r: 249, g: 74, b: 54 },
+        "--accent-red-bg": { r: 254, g: 235, b: 228 },
+        "--accent-green": { r: 41, g: 181, b: 113 },
+        "--accent-green-bg": { r: 223, g: 242, b: 227 },
+        "--accent-purple": { r: 155, g: 81, b: 224 },
+        "--accent-purple-bg": { r: 245, g: 236, b: 245 },
+    };
+    const ACCENTS = ["blue", "yellow", "red", "green", "purple"];
+
+    it("computes WCAG contrast ratios", () => {
+        const white = { r: 255, g: 255, b: 255 };
+        const black = { r: 0, g: 0, b: 0 };
+
+        expect(contrastRatio(white, black)).toBeCloseTo(21, 5);
+        expect(contrastRatio(white, white)).toBeCloseTo(1, 5);
+        // Symmetric, whichever way round the arguments arrive.
+        expect(contrastRatio(black, white)).toBeCloseTo(contrastRatio(white, black), 5);
+    });
+
+    it("keeps every card title and roundel digit readable on its own accent", () => {
+        // Drawing the title in the accent it sits on a tint of gave 1.54:1 on
+        // yellow, and the white roundel digit on the raw accent gave 1.71:1.
+        for (const name of ACCENTS) {
+            const tint = LIGHT[`--accent-${name}-bg`];
+            const accent = LIGHT[`--accent-${name}`];
+
+            expect(contrastRatio(readableOn(LIGHT, tint), tint), `${name} title`).toBeGreaterThan(
+                4.5,
+            );
+            expect(
+                contrastRatio(readableOn(LIGHT, accent), accent),
+                `${name} roundel`,
+            ).toBeGreaterThan(4.5);
+        }
+    });
+
+    it("keeps every direction chip label readable on its own fill", () => {
+        for (const fill of [
+            LIGHT["--accent-blue-bg"],
+            LIGHT["--accent-green-bg"],
+            LIGHT["--bg-tertiary"],
+        ]) {
+            expect(contrastRatio(readableOn(LIGHT, fill), fill)).toBeGreaterThan(4.5);
+        }
+    });
+
+    it("reverses to the on-accent color when the ink is the worse of the two", () => {
+        const ink = { r: 0, g: 0, b: 0 };
+        const reversed = { r: 255, g: 255, b: 255 };
+        const stub = { "--text-primary": ink, "--text-on-accent": reversed };
+
+        expect(readableOn(stub, { r: 255, g: 255, b: 255 })).toBe(ink);
+        expect(readableOn(stub, { r: 0, g: 0, b: 0 })).toBe(reversed);
+    });
+});
+
 describe("paginateBlocks", () => {
     it("returns no pages for no blocks", () => {
         expect(paginateBlocks([], 100)).toEqual([]);
@@ -157,6 +226,52 @@ describe("paginateBlocks", () => {
 
     it("skips blocks with no rows", () => {
         expect(paginateBlocks([{ rows: [], keepTogether: true }], 100)).toEqual([]);
+    });
+
+    it("moves a keepWithNext heading rather than stranding it at the foot", () => {
+        // 88 of 100 used, a 10mm heading, then content. The heading alone fits;
+        // the heading followed by anything does not.
+        const heading = { rows: rows(1, 10), keepTogether: true, keepWithNext: true };
+        const pages = paginateBlocks(
+            [{ rows: rows(1, 88), keepTogether: true }, heading, { rows: rows(4, 20) }],
+            100,
+        );
+
+        expect(pages[0]).toHaveLength(1);
+        expect(pages[1][0].block).toBe(heading);
+        expect(pages[1][0].y).toBe(0);
+    });
+
+    it("keeps a keepWithNext heading in place when its content still fits", () => {
+        const heading = { rows: rows(1, 10), keepTogether: true, keepWithNext: true };
+        const pages = paginateBlocks(
+            [{ rows: rows(1, 50), keepTogether: true }, heading, { rows: rows(1, 20) }],
+            100,
+        );
+
+        expect(pages).toHaveLength(1);
+        expect(pages[0][1].block).toBe(heading);
+    });
+
+    it("places a keepWithNext heading with nothing after it like any other block", () => {
+        const heading = { rows: rows(1, 10), keepTogether: true, keepWithNext: true };
+        const pages = paginateBlocks([{ rows: rows(1, 85), keepTogether: true }, heading], 100);
+
+        expect(pages).toHaveLength(1);
+        expect(pages[0][1].block).toBe(heading);
+    });
+
+    it("does not loop pages when a heading and its content cannot share one", () => {
+        // The pair cannot fit on any page, so the request is dropped rather
+        // than retried forever on ever-emptier pages.
+        const heading = { rows: rows(1, 60), keepTogether: true, keepWithNext: true };
+        const pages = paginateBlocks(
+            [{ rows: rows(1, 50), keepTogether: true }, heading, { rows: rows(1, 60) }],
+            100,
+        );
+
+        expect(pages.length).toBeLessThanOrEqual(3);
+        expect(pages.flat().some((segment) => segment.block === heading)).toBe(true);
     });
 
     it("stacks blocks down one page, honouring spacing", () => {

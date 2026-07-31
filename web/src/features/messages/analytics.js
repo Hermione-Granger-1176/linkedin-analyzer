@@ -848,10 +848,10 @@ export const MessagesAnalytics = (() => {
         parseDateTime,
         parseDateOnly,
         parseRecipientNames,
-        // Exposed for the PDF export's thread selection, which needs the same
-        // self-detection and participant filtering so a person does not split
-        // across keys and message direction matches the rest of the app.
-        detectSelfContext,
+        // Exposed for the PDF export's thread selection, which reuses this
+        // module's participant filtering and key building so a person does not
+        // split across keys. Self-detection there is the export's own: this one
+        // breaks coverage ties by insertion order, which the export must not.
         isSelfContact,
         extractParticipantsFromRow,
         buildContactKey

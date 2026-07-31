@@ -33,8 +33,21 @@ const UNKNOWN_NAME_KEY = "unknown";
 const ANONYMOUS_NAME = "LinkedIn Member";
 const ANONYMOUS_NAME_KEY = "linkedin member";
 
-/** A self context that matches nobody, used before self has been resolved. */
+/**
+ * A self context that matches nobody, used before self has been resolved.
+ *
+ * Shared, so its sets are read-only by convention: the freeze covers the record
+ * and not the sets inside it.
+ */
 const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
+
+/**
+ * @typedef {{urls: Set<string>, names: Set<string>, conversations: Set<string>, sent: number, received: number}} Identity
+ * @typedef {{name: string, url: string}} Correspondent
+ * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, sequence: number, body: string}} MessageEntry
+ * @typedef {{row: object, date: Date}} DatedRow
+ * @typedef {{selfUrls: Set<string>, selfNames: Set<string>}} SelfContext
+ */
 
 /**
  * Extract a row's non-self participants for the export.
@@ -52,19 +65,22 @@ const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
  * person. Without an id there is no such scope and nothing to attribute the row
  * to, so it is dropped as before.
  * @param {object} row - Parsed message row
- * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+ * @param {SelfContext} context - Self context
  * @param {boolean} keepAnonymous - Whether the row has a conversation to scope anonymity to
  * @returns {Array<{name: string, url: string, anonymous: boolean}>} Participants
  */
 function exportParticipants(row, context, keepAnonymous) {
-    const named = MessagesAnalytics.extractParticipantsFromRow(row, context).map(
-        (participant) => ({ ...participant, anonymous: false }),
-    );
+    const named = MessagesAnalytics.extractParticipantsFromRow(row, context).map((participant) => ({
+        ...participant,
+        anonymous: false,
+    }));
     if (!keepAnonymous) {
         return named;
     }
 
-    const seen = new Set(named.map((participant) => MessagesAnalytics.buildContactKey(participant)));
+    const seen = new Set(
+        named.map((participant) => MessagesAnalytics.buildContactKey(participant)),
+    );
     const anonymous = [];
     const add = (rawName, rawUrl) => {
         const name = MessagesAnalytics.cleanText(rawName);
@@ -127,7 +143,7 @@ function messageBody(value) {
  * conversation coverage than the owner and invert the direction chip on the
  * dated messages that do get drawn.
  * @param {object[]} rows - Parsed message rows
- * @returns {Array<{row: object, date: Date}>} Dated rows, in file order
+ * @returns {DatedRow[]} Dated rows, in file order
  */
 function withParsedDates(rows) {
     const dated = [];
@@ -148,13 +164,13 @@ function withParsedDates(rows) {
  * LinkedIn exports include the profile URL on some rows and not others. Without
  * this pass the same person lands under both a `url:` and a `name:` key and
  * shows up as two threads.
- * @param {object[]} rows - Parsed message rows
+ * @param {DatedRow[]} dated - Dated message rows
  * @returns {Map<string, string>} Normalized name to canonical profile URL
  */
-function buildNameToUrl(rows) {
+function buildNameToUrl(dated) {
     const nameToUrl = new Map();
 
-    for (const row of rows) {
+    for (const { row } of dated) {
         for (const participant of MessagesAnalytics.extractParticipantsFromRow(row, NO_SELF)) {
             if (!participant.url) {
                 continue;
@@ -188,7 +204,9 @@ function canonicalContactKey(participant, nameToUrl, scope) {
     const nameKey = MessagesAnalytics.normalizeName(participant.name);
     const knownUrl = nameToUrl.get(nameKey);
     if (knownUrl) {
-        return `url:${knownUrl}`;
+        // Built through buildContactKey rather than spelled out, so this module's
+        // keys cannot drift from the ones analytics mints.
+        return MessagesAnalytics.buildContactKey({ name: participant.name, url: knownUrl });
     }
     return MessagesAnalytics.buildContactKey(participant);
 }
@@ -211,13 +229,43 @@ function senderContactKey(row, nameToUrl, scope) {
 }
 
 /**
+ * Read a row's conversation id.
+ * @param {object} row - Parsed message row
+ * @returns {string} Conversation id, or "" when the column is blank
+ */
+function conversationId(row) {
+    return MessagesAnalytics.cleanText(row["CONVERSATION ID"]);
+}
+
+/**
  * Build a stable conversation key for one row.
  * @param {object} row - Parsed message row
  * @param {number} index - Row index, used when the id column is blank
  * @returns {string} Conversation key
  */
 function conversationKeyForRow(row, index) {
-    return MessagesAnalytics.cleanText(row["CONVERSATION ID"]) || `row-${index}`;
+    return conversationId(row) || `row-${index}`;
+}
+
+/**
+ * Count the non-blank comma-separated parts of a raw field.
+ * @param {unknown} value - Raw cell
+ * @returns {number} Part count
+ */
+function countCommaParts(value) {
+    return MessagesAnalytics.cleanText(value)
+        .split(",")
+        .filter((part) => part.trim()).length;
+}
+
+/**
+ * The normalized name of a participant, or "" when it is only a placeholder.
+ * @param {{name: string}} participant - Sanitized participant
+ * @returns {string} Normalized name key, or "" when there is no real name
+ */
+function realNameKey(participant) {
+    const nameKey = MessagesAnalytics.normalizeName(participant.name);
+    return nameKey === UNKNOWN_NAME_KEY ? "" : nameKey;
 }
 
 /**
@@ -233,12 +281,7 @@ function conversationKeyForRow(row, index) {
  * @returns {boolean} True when the row names more than one recipient
  */
 function namesSeveralRecipients(row) {
-    const countParts = (value) =>
-        MessagesAnalytics.cleanText(value)
-            .split(",")
-            .filter((part) => part.trim()).length;
-
-    return countParts(row["RECIPIENT PROFILE URLS"]) > 1 || countParts(row.TO) > 1;
+    return countCommaParts(row["RECIPIENT PROFILE URLS"]) > 1 || countCommaParts(row.TO) > 1;
 }
 
 /**
@@ -255,23 +298,23 @@ function namesSeveralRecipients(row) {
  * alias in it is the same person, so any URL seen there is theirs. Only
  * conversations with a real `CONVERSATION ID` qualify, because a synthesized key
  * is built from the very identities this is trying to reconcile.
- * @param {Array<{row: object, date: Date}>} dated - Dated message rows
- * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Resolved self context
+ * @param {DatedRow[]} dated - Dated message rows
+ * @param {SelfContext} context - Resolved self context
  * @returns {Map<string, string>} Normalized name to profile URL
  */
 function buildConversationAliases(dated, context) {
     const conversations = new Map();
 
     for (const { row } of dated) {
-        const conversationId = MessagesAnalytics.cleanText(row["CONVERSATION ID"]);
-        if (!conversationId) {
+        const id = conversationId(row);
+        if (!id) {
             continue;
         }
 
-        let entry = conversations.get(conversationId);
-        if (!entry) {
-            entry = { urls: new Set(), names: new Set(), oneToOne: true };
-            conversations.set(conversationId, entry);
+        let conversation = conversations.get(id);
+        if (!conversation) {
+            conversation = { urls: new Set(), names: new Set(), oneToOne: true };
+            conversations.set(id, conversation);
         }
 
         // Checked before the participant list, which cannot see the difference.
@@ -282,38 +325,42 @@ function buildConversationAliases(dated, context) {
         // participant per row: the shape of a one-to-one. The raw fields still
         // say otherwise, so they are counted directly.
         if (namesSeveralRecipients(row)) {
-            entry.oneToOne = false;
+            conversation.oneToOne = false;
             continue;
         }
 
         const participants = MessagesAnalytics.extractParticipantsFromRow(row, context);
-        // A row naming nobody is silent about the shape of the conversation; a
-        // row naming several people proves it is a group.
-        if (participants.length !== 1) {
-            entry.oneToOne = entry.oneToOne && participants.length === 0;
+        // A row naming several people proves the conversation is a group.
+        if (participants.length > 1) {
+            conversation.oneToOne = false;
+            continue;
+        }
+        // A row naming nobody is silent about the shape of the conversation.
+        if (!participants.length) {
             continue;
         }
 
         const [participant] = participants;
         if (participant.url) {
-            entry.urls.add(participant.url);
+            conversation.urls.add(participant.url);
             continue;
         }
-        const nameKey = MessagesAnalytics.normalizeName(participant.name);
-        if (nameKey && nameKey !== UNKNOWN_NAME_KEY) {
-            entry.names.add(nameKey);
+        const nameKey = realNameKey(participant);
+        if (nameKey) {
+            conversation.names.add(nameKey);
         }
     }
 
     const aliases = new Map();
-    for (const entry of conversations.values()) {
-        // Two URLs in a one-to-one conversation means the correspondent is
-        // already resolvable both ways; there is nothing to disambiguate to.
-        if (!entry.oneToOne || entry.urls.size !== 1) {
+    for (const conversation of conversations.values()) {
+        // A one-to-one conversation lends its URL only when it has exactly one:
+        // none is nothing to lend, and two mean the correspondent is already
+        // resolvable both ways.
+        if (!conversation.oneToOne || conversation.urls.size !== 1) {
             continue;
         }
-        const [url] = entry.urls;
-        for (const nameKey of entry.names) {
+        const [url] = conversation.urls;
+        for (const nameKey of conversation.names) {
             if (!aliases.has(nameKey)) {
                 aliases.set(nameKey, url);
             }
@@ -330,14 +377,14 @@ function buildConversationAliases(dated, context) {
  * under, how many conversations it takes part in, and whether it ever sends and
  * ever receives. That is all the evidence there is for deciding which identity
  * is the account owner.
- * @param {object[]} rows - Parsed message rows
+ * @param {DatedRow[]} dated - Dated message rows
  * @param {Map<string, string>} nameToUrl - Name to canonical URL lookup
- * @returns {Map<string, {urls: Set<string>, names: Set<string>, conversations: Set<string>, sent: number, received: number}>} Identity index
+ * @returns {Map<string, Identity>} Identity index
  */
-function buildIdentityIndex(rows, nameToUrl) {
+function buildIdentityIndex(dated, nameToUrl) {
     const identities = new Map();
 
-    rows.forEach((row, index) => {
+    dated.forEach(({ row }, index) => {
         const conversationKey = conversationKeyForRow(row, index);
         const senderKey = senderContactKey(row, nameToUrl, conversationKey);
 
@@ -346,30 +393,30 @@ function buildIdentityIndex(rows, nameToUrl) {
         // conversation, so they would only add noise to the coverage count.
         for (const participant of MessagesAnalytics.extractParticipantsFromRow(row, NO_SELF)) {
             const key = canonicalContactKey(participant, nameToUrl, conversationKey);
-            let entry = identities.get(key);
-            if (!entry) {
-                entry = {
+            let identity = identities.get(key);
+            if (!identity) {
+                identity = {
                     urls: new Set(),
                     names: new Set(),
                     conversations: new Set(),
                     sent: 0,
                     received: 0,
                 };
-                identities.set(key, entry);
+                identities.set(key, identity);
             }
 
             if (participant.url) {
-                entry.urls.add(participant.url);
+                identity.urls.add(participant.url);
             }
-            const nameKey = MessagesAnalytics.normalizeName(participant.name);
-            if (nameKey && nameKey !== UNKNOWN_NAME_KEY) {
-                entry.names.add(nameKey);
+            const nameKey = realNameKey(participant);
+            if (nameKey) {
+                identity.names.add(nameKey);
             }
-            entry.conversations.add(conversationKey);
+            identity.conversations.add(conversationKey);
             if (key === senderKey) {
-                entry.sent += 1;
+                identity.sent += 1;
             } else {
-                entry.received += 1;
+                identity.received += 1;
             }
         }
     });
@@ -383,20 +430,20 @@ function buildIdentityIndex(rows, nameToUrl) {
  * A tie is the case this module refuses to guess at: picking the first one
  * inserted is exactly how a single received message ends up attributed to the
  * wrong person.
- * @param {Array<{conversations: Set<string>}>} entries - Candidate identities
- * @returns {object|null} Winning identity, or null when the top two tie
+ * @param {Identity[]} candidates - Candidate identities
+ * @returns {Identity|null} Winning identity, or null when the top two tie
  */
-function pickWidestCoverage(entries) {
+function pickWidestCoverage(candidates) {
     let best = null;
     let tied = false;
 
-    for (const entry of entries) {
-        if (!best || entry.conversations.size > best.conversations.size) {
-            best = entry;
+    for (const identity of candidates) {
+        if (!best || identity.conversations.size > best.conversations.size) {
+            best = identity;
             tied = false;
             continue;
         }
-        if (entry.conversations.size === best.conversations.size) {
+        if (identity.conversations.size === best.conversations.size) {
             tied = true;
         }
     }
@@ -413,61 +460,53 @@ function pickWidestCoverage(entries) {
  * owner. The connections file can. Someone you are connected to is in it; you
  * are never in your own connections, so an identity that appears there is not
  * you.
- * @param {Array<{urls: Set<string>, names: Set<string>}>} entries - Tied candidates
+ * @param {Identity[]} candidates - Tied candidates
  * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
- * @returns {Array<object>} Candidates that no connection matches
+ * @returns {Identity[]} Candidates that no connection matches
  */
-function withoutKnownContacts(entries, contactKeys) {
+function withoutKnownContacts(candidates, contactKeys) {
     if (!contactKeys.size) {
-        return entries;
+        return candidates;
     }
-    return entries.filter((entry) => {
-        for (const url of entry.urls) {
-            if (contactKeys.has(url)) {
-                return false;
-            }
-        }
+    return candidates.filter((identity) => {
         // A display name is only evidence when there is no URL to check
         // instead. "You are never in your own connections" is true of
         // identities, not of names, and sharing a name with one of your own
         // connections is common enough that trusting a name hit over a profile
         // URL hands the account owner's side of the conversation to the other
-        // person - inverting every direction chip in the export.
-        if (entry.urls.size) {
-            return true;
-        }
-        for (const name of entry.names) {
-            if (contactKeys.has(name)) {
-                return false;
-            }
-        }
-        return true;
+        // person, inverting every direction chip in the export.
+        const evidence = identity.urls.size ? identity.urls : identity.names;
+        return !matchesAny(evidence, contactKeys);
     });
 }
 
 /**
- * Narrow candidates to the ones the connections file does not name.
- * @param {Array<{urls: Set<string>, names: Set<string>}>} entries - Candidates
- * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
- * @returns {Array<object>} Strangers, or every candidate when that says nothing
+ * Report whether any of a set's values is a known key.
+ * @param {Set<string>} values - Candidate values
+ * @param {Set<string>} keys - Known keys
+ * @returns {boolean} True on the first match
  */
-function narrowToStrangers(entries, contactKeys) {
-    const strangers = withoutKnownContacts(entries, contactKeys);
-    // Only useful when it actually narrowed the field: if every candidate is a
-    // connection, or none is, there is nothing new to go on.
-    return strangers.length && strangers.length < entries.length ? strangers : entries;
+function matchesAny(values, keys) {
+    for (const value of values) {
+        if (keys.has(value)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
- * Report whether an identity's conversation coverage is matched by nobody else.
- * @param {{conversations: Set<string>}} entry - Candidate identity
- * @param {Array<{conversations: Set<string>}>} pool - Every candidate considered
- * @returns {boolean} True when no other candidate covers as many conversations
+ * Prefer the candidates the connections file does not name, when it separates
+ * them.
+ * @param {Identity[]} candidates - Candidates
+ * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
+ * @returns {Identity[]} Strangers, or every candidate when that says nothing
  */
-function leadsOnCoverage(entry, pool) {
-    return !pool.some(
-        (other) => other !== entry && other.conversations.size >= entry.conversations.size,
-    );
+function preferStrangers(candidates, contactKeys) {
+    const strangers = withoutKnownContacts(candidates, contactKeys);
+    // Only useful when it actually narrowed the field: if every candidate is a
+    // connection, or none is, there is nothing new to go on.
+    return strangers.length && strangers.length < candidates.length ? strangers : candidates;
 }
 
 /**
@@ -479,30 +518,22 @@ function leadsOnCoverage(entry, pool) {
  * after the counting had tied meant it was never reached in the cases where the
  * counting confidently reached the wrong answer.
  *
- * Both sending and receiving is then the strongest evidence available, but it
- * is a preference and not a filter. An owner whose export happens to be all
- * inbound - an inbox nobody has replied to - sends nothing at all, and dropping
- * them from the pool handed self to whichever contact wrote the most, with no
- * tie left for anything to notice. A balanced winner is accepted only when
- * nobody outside that set matches their conversation coverage.
+ * What remains is conversation coverage. The account owner is in every
+ * conversation and everyone else is in their own, so the widest coverage is the
+ * owner, and it decides alone. Requiring the owner to have both sent and
+ * received cannot be a filter (an inbox nobody has replied to has an owner who
+ * sends nothing), and as a preference it can only ever agree with coverage or
+ * overrule a tie the export has no business overruling.
  *
- * A winner that is still not unique means self genuinely cannot be identified,
- * and the export says so rather than guessing.
- * @param {Map<string, object>} identities - Identity index
+ * A winner that is not unique means self genuinely cannot be identified, and
+ * the export says so rather than guessing.
+ * @param {Map<string, Identity>} identities - Identity index
  * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
- * @returns {{selfUrls: Set<string>, selfNames: Set<string>}|null} Self context, or null when unidentifiable
+ * @returns {SelfContext|null} Self context, or null when unidentifiable
  */
 function resolveSelfContext(identities, contactKeys) {
-    const pool = narrowToStrangers(Array.from(identities.values()), contactKeys);
-
-    const balanced = pool.filter((entry) => entry.sent > 0 && entry.received > 0);
-    let self = pickWidestCoverage(balanced);
-    if (self && !leadsOnCoverage(self, pool)) {
-        self = null;
-    }
-    if (!self) {
-        self = pickWidestCoverage(pool);
-    }
+    const pool = preferStrangers(Array.from(identities.values()), contactKeys);
+    const self = pickWidestCoverage(pool);
     if (!self) {
         return null;
     }
@@ -514,7 +545,7 @@ function resolveSelfContext(identities, contactKeys) {
  * @param {{name: string, url: string}} correspondent - Accumulated identity
  * @param {{name: string, url: string}} participant - Sanitized participant
  */
-function applyIdentity(correspondent, participant) {
+function fillMissingIdentity(correspondent, participant) {
     if (!correspondent.url && participant.url) {
         correspondent.url = participant.url;
     }
@@ -526,19 +557,38 @@ function applyIdentity(correspondent, participant) {
 }
 
 /**
+ * Merge a participant into a keyed correspondent map, creating it if new.
+ * @param {Map<string, Correspondent>} target - Correspondent map
+ * @param {string} key - Canonical contact key
+ * @param {{name: string, url: string}} participant - Sanitized participant
+ */
+function upsertCorrespondent(target, key, participant) {
+    const existing = target.get(key);
+    if (existing) {
+        fillMissingIdentity(existing, participant);
+        return;
+    }
+    target.set(key, { name: participant.name, url: participant.url });
+}
+
+/**
  * Record one conversation's correspondents onto a thread.
- * @param {Map<string, {name: string, url: string}>} target - Thread correspondents
- * @param {Map<string, {name: string, url: string}>} source - Conversation correspondents
+ * @param {Map<string, Correspondent>} target - Thread correspondents
+ * @param {Map<string, Correspondent>} source - Conversation correspondents
  */
 function mergeCorrespondents(target, source) {
     for (const [key, correspondent] of source) {
-        const existing = target.get(key);
-        if (existing) {
-            applyIdentity(existing, correspondent);
-            continue;
-        }
-        target.set(key, { name: correspondent.name, url: correspondent.url });
+        upsertCorrespondent(target, key, correspondent);
     }
+}
+
+/**
+ * Build the key that identifies a set of people.
+ * @param {Iterable<string>} keys - Canonical contact keys
+ * @returns {string} Stable key for the whole set
+ */
+function correspondentSetKey(keys) {
+    return Array.from(keys).sort().join("|");
 }
 
 /**
@@ -555,7 +605,7 @@ function correspondentLabel(correspondent) {
 
 /**
  * Order the tail of a thread chronologically and keep the last N messages.
- * @param {object[]} entries - Recorded messages with a sequence number
+ * @param {MessageEntry[]} entries - Recorded messages with a sequence number
  * @param {number} messagesPerPerson - How many messages to keep
  * @returns {Array<{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}>} Trimmed messages
  */
@@ -569,7 +619,7 @@ function tailMessages(entries, messagesPerPerson) {
         );
 
     return ordered.slice(-messagesPerPerson).map((entry) => ({
-        direction: /** @type {'sent'|'received'|'unknown'} */ (entry.direction),
+        direction: entry.direction,
         timestamp: entry.timestamp,
         body: entry.body,
     }));
@@ -577,34 +627,32 @@ function tailMessages(entries, messagesPerPerson) {
 
 /**
  * Group rows into conversations, resolving each one's correspondents.
- * @param {Array<{row: object, date: Date}>} dated - Dated message rows
- * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+ * @param {DatedRow[]} dated - Dated message rows
+ * @param {SelfContext} context - Self context
  * @param {boolean} selfKnown - Whether the account owner was identified
  * @param {Map<string, string>} nameToUrl - Name to canonical URL lookup
- * @returns {Map<string, {correspondents: Map<string, {name: string, url: string}>, entries: object[]}>} Conversations
+ * @returns {Map<string, {correspondents: Map<string, Correspondent>, entries: MessageEntry[]}>} Conversations
  */
 function groupConversations(dated, context, selfKnown, nameToUrl) {
     const conversations = new Map();
 
     dated.forEach(({ row, date }, index) => {
-        const conversationId = MessagesAnalytics.cleanText(row["CONVERSATION ID"]);
+        const id = conversationId(row);
         const scope = conversationKeyForRow(row, index);
-        const participants = exportParticipants(row, context, Boolean(conversationId));
+        const participants = exportParticipants(row, context, Boolean(id));
         const participantKeys = participants.map((participant) =>
             canonicalContactKey(participant, nameToUrl, scope),
         );
-        const key = conversationId
-            ? `id:${conversationId}`
-            : participantKeys.length
-              ? `people:${participantKeys.slice().sort().join("|")}`
-              : "";
 
         // A blank conversation id on a row with no identifiable correspondent
         // (self-only, or an anonymous "LinkedIn Member" with no conversation to
         // be anonymous within) cannot be attributed to anyone at all.
-        if (!key) {
+        if (!id && !participantKeys.length) {
             return;
         }
+        // correspondentSetKey copies before sorting, so participantKeys stays
+        // index-aligned with participants below.
+        const key = id ? `id:${id}` : `people:${correspondentSetKey(participantKeys)}`;
 
         let conversation = conversations.get(key);
         if (!conversation) {
@@ -613,16 +661,11 @@ function groupConversations(dated, context, selfKnown, nameToUrl) {
         }
 
         participants.forEach((participant, participantIndex) => {
-            const participantKey = participantKeys[participantIndex];
-            const existing = conversation.correspondents.get(participantKey);
-            if (existing) {
-                applyIdentity(existing, participant);
-                return;
-            }
-            conversation.correspondents.set(participantKey, {
-                name: participant.name,
-                url: participant.url,
-            });
+            upsertCorrespondent(
+                conversation.correspondents,
+                participantKeys[participantIndex],
+                participant,
+            );
         });
 
         conversation.entries.push({
@@ -654,8 +697,8 @@ function resolveDirection(row, context, selfKnown) {
 
 /**
  * Fold conversations into one thread per set of correspondents.
- * @param {Map<string, {correspondents: Map<string, object>, entries: object[]}>} conversations - Conversations
- * @returns {Map<string, {correspondents: Map<string, object>, messageCount: number, lastTimestamp: number, entries: object[]}>} Threads
+ * @param {Map<string, {correspondents: Map<string, Correspondent>, entries: MessageEntry[]}>} conversations - Conversations
+ * @returns {Map<string, {correspondents: Map<string, Correspondent>, lastTimestamp: number, entries: MessageEntry[]}>} Threads
  */
 function foldIntoThreads(conversations) {
     const threads = new Map();
@@ -667,12 +710,11 @@ function foldIntoThreads(conversations) {
             continue;
         }
 
-        const key = Array.from(conversation.correspondents.keys()).sort().join("|");
+        const key = correspondentSetKey(conversation.correspondents.keys());
         let thread = threads.get(key);
         if (!thread) {
             thread = {
                 correspondents: new Map(),
-                messageCount: 0,
                 lastTimestamp: 0,
                 entries: [],
             };
@@ -680,7 +722,6 @@ function foldIntoThreads(conversations) {
         }
 
         mergeCorrespondents(thread.correspondents, conversation.correspondents);
-        thread.messageCount += conversation.entries.length;
         for (const entry of conversation.entries) {
             thread.entries.push(entry);
             thread.lastTimestamp = Math.max(thread.lastTimestamp, entry.timestamp);
@@ -712,13 +753,13 @@ function takeWithinPeopleBudget(threads, people) {
     const included = new Set();
 
     for (const thread of threads) {
-        const added = Array.from(thread.correspondents.keys()).filter(
-            (key) => !included.has(key),
-        );
+        const added = Array.from(thread.correspondents.keys()).filter((key) => !included.has(key));
         if (included.size + added.length > people) {
             continue;
         }
-        added.forEach((key) => included.add(key));
+        for (const key of added) {
+            included.add(key);
+        }
         taken.push(thread);
         if (included.size === people) {
             break;
@@ -748,9 +789,10 @@ export function selectRecentThreads(rows, options = {}) {
     const contactKeys = new Set(Array.isArray(options.contactKeys) ? options.contactKeys : []);
 
     const dated = withParsedDates(safeRows);
-    const datedRows = dated.map((entry) => entry.row);
-    const nameToUrl = buildNameToUrl(datedRows);
-    const self = resolveSelfContext(buildIdentityIndex(datedRows, nameToUrl), contactKeys);
+    const nameToUrl = buildNameToUrl(dated);
+    // Indexed over the same dated rows as groupConversations, so a row with a
+    // blank CONVERSATION ID gets the same synthesized key in both passes.
+    const self = resolveSelfContext(buildIdentityIndex(dated, nameToUrl), contactKeys);
     const context = self || NO_SELF;
     // Aliasing needs to know who self is, so it runs once self is settled and
     // only fills gaps: a name already seen carrying its own URL keeps that URL.
@@ -761,18 +803,17 @@ export function selectRecentThreads(rows, options = {}) {
     }
     const conversations = groupConversations(dated, context, Boolean(self), nameToUrl);
 
-    return takeWithinPeopleBudget(
-        Array.from(foldIntoThreads(conversations).values()).sort(
-            (left, right) => right.lastTimestamp - left.lastTimestamp,
-        ),
-        people,
-    ).map((thread) => {
+    const byRecency = Array.from(foldIntoThreads(conversations).values()).sort(
+        (left, right) => right.lastTimestamp - left.lastTimestamp,
+    );
+
+    return takeWithinPeopleBudget(byRecency, people).map((thread) => {
         const correspondents = Array.from(thread.correspondents.values());
         return {
             name: correspondents.map(correspondentLabel).join(", "),
             // Only a one-to-one thread has a single profile to point at.
             url: correspondents.length === 1 ? correspondents[0].url : "",
-            messageCount: thread.messageCount,
+            messageCount: thread.entries.length,
             lastTimestamp: thread.lastTimestamp,
             messages: tailMessages(thread.entries, messagesPerPerson),
         };

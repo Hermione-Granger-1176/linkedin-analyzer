@@ -243,6 +243,11 @@ function requestThreadsFromWorker(messagesCsv, options) {
                     messagesCsv,
                     people: options.people,
                     messagesPerPerson: options.messagesPerPerson,
+                    // Without this the worker path cannot break a self-detection
+                    // tie the connections file could have settled, and every
+                    // direction chip in a one-conversation export reads
+                    // "unknown". Only the main-thread fallback used to get it.
+                    contactKeys: options.contactKeys,
                 },
             });
         } catch {

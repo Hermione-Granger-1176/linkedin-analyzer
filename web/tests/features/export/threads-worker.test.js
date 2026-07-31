@@ -38,6 +38,33 @@ describe("threads worker", () => {
         expect(result.threads[0].messages).toHaveLength(1);
     });
 
+    it("breaks a self-detection tie with the contact keys from the request", () => {
+        // One conversation, both directions: the messages file alone cannot say
+        // which of the two is the account owner, so this is the case where the
+        // connections list is the only evidence there is.
+        const tiedCsv = [
+            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+            'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
+            'c1,Ada,Sam Self,2025-01-02 10:00:00 UTC,"Hi Sam",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/sam',
+        ].join("\n");
+
+        const unaided = processPayload({ messagesCsv: tiedCsv });
+        expect(unaided.threads[0].messages.map((entry) => entry.direction)).toEqual([
+            "unknown",
+            "unknown",
+        ]);
+
+        // Ada is a connection, and you are never in your own connections.
+        const aided = processPayload({
+            messagesCsv: tiedCsv,
+            contactKeys: ["https://linkedin.com/in/ada"],
+        });
+        expect(aided.threads[0].messages.map((entry) => entry.direction)).toEqual([
+            "sent",
+            "received",
+        ]);
+    });
+
     it("keeps formula-prefixed and whitespace-led bodies verbatim", () => {
         // The spreadsheet cleaner quote-prefixes every one of these and trims the
         // rest, which is right for a workbook and wrong for a PDF.

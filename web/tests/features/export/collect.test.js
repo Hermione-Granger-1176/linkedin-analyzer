@@ -158,6 +158,42 @@ describe("collectExportData", () => {
         expect(workerInstance).toBeNull();
     });
 
+    it("keeps the on-screen range when the snapshot has stats but no insight cards", async () => {
+        // A range can produce no cards while the all-time stats below them are
+        // still populated. Testing the cards alone sent that screen down the
+        // cold path, which exports the default range instead of this one.
+        DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
+            timeRange: "3m",
+            insights: [],
+            tip: null,
+            networkGrowth: { multiplier: 3.4 },
+            outreach: OUTREACH,
+        });
+
+        const data = await collectExportData();
+
+        expect(data.rangeLabel).toBe("Last 3 months");
+        expect(data.insights).toEqual([]);
+        expect(data.allTime[0]).toEqual({ label: "Network growth", value: "3.4x" });
+        expect(Storage.getAnalytics).not.toHaveBeenCalled();
+        expect(workerInstance).toBeNull();
+    });
+
+    it("falls back to the cold path when the snapshot holds nothing at all", async () => {
+        DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
+            timeRange: "3m",
+            insights: [],
+            tip: null,
+            networkGrowth: null,
+            outreach: null,
+        });
+
+        const data = await collectExportData();
+
+        expect(data.rangeLabel).toBe("Last 12 months");
+        expect(Storage.getAnalytics).toHaveBeenCalled();
+    });
+
     it("defaults generatedAt to now", async () => {
         const before = Date.now();
         const data = await collectExportData();
@@ -533,6 +569,13 @@ describe("hasExportableData", () => {
 
     it("is true when the Insights screen has published a snapshot", async () => {
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, { insights: [{ title: "One" }] });
+
+        expect(await hasExportableData()).toBe(true);
+        expect(Storage.getAnalytics).not.toHaveBeenCalled();
+    });
+
+    it("is true when the snapshot holds only all-time stats", async () => {
+        DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, { insights: [], outreach: OUTREACH });
 
         expect(await hasExportableData()).toBe(true);
         expect(Storage.getAnalytics).not.toHaveBeenCalled();

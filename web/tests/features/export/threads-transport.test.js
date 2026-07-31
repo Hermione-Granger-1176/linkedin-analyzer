@@ -103,6 +103,27 @@ describe("loadRecentThreads", () => {
         expect(worker.terminate).toHaveBeenCalled();
     });
 
+    it("sends the connections tiebreak keys to the worker", async () => {
+        // Without these on the request the worker cannot tell which side of a
+        // single conversation is the account owner, and every direction chip in
+        // the exported document reads "unknown".
+        const contactKeys = ["ada", "https://linkedin.com/in/ada"];
+        const pending = loadRecentThreads(MESSAGES_CSV, { contactKeys });
+        const worker = workerInstance;
+        const [request] = worker.postMessage.mock.calls[0];
+
+        expect(request.payload.contactKeys).toEqual(contactKeys);
+
+        worker.emit("message", {
+            data: {
+                type: "threads",
+                requestId: request.requestId,
+                payload: { success: true, threads: [] },
+            },
+        });
+        await pending;
+    });
+
     it("ignores stale successes for other requests and invalid envelopes", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV);
         const worker = workerInstance;

@@ -263,15 +263,35 @@ export function terminateAnalyticsWorker() {
 }
 
 /**
+ * Report whether a published snapshot holds anything the document would show.
+ *
+ * Insight cards are not the only thing on the Insights screen: a range can
+ * produce no cards while the all-time stats below them are still populated.
+ * Testing the cards alone would send that screen down the cold path and export
+ * the default range instead of the one the user has selected.
+ * @param {object|null|undefined} snapshot - Published Insights snapshot
+ * @returns {boolean} True when the snapshot carries content
+ */
+function hasSnapshotContent(snapshot) {
+    if (!snapshot) {
+        return false;
+    }
+    if (Array.isArray(snapshot.insights) && snapshot.insights.length) {
+        return true;
+    }
+    return Boolean(snapshot.networkGrowth || snapshot.outreach);
+}
+
+/**
  * Resolve the insight cards, tip and range, preferring the on-screen snapshot.
  * @returns {Promise<{timeRange: string, insights: object[], tip: string|null, networkGrowth: object|null, outreach: object|null}>} Insight source data
  */
 async function resolveInsightSource() {
     const snapshot = DataCache.get(INSIGHTS_EXPORT_CACHE_KEY);
-    if (snapshot && Array.isArray(snapshot.insights) && snapshot.insights.length) {
+    if (hasSnapshotContent(snapshot)) {
         return {
             timeRange: snapshot.timeRange,
-            insights: snapshot.insights,
+            insights: Array.isArray(snapshot.insights) ? snapshot.insights : [],
             tip: snapshot.tip || null,
             networkGrowth: snapshot.networkGrowth || null,
             outreach: snapshot.outreach || null,
@@ -311,7 +331,7 @@ async function resolveInsightSource() {
  */
 export async function hasExportableData() {
     const snapshot = DataCache.get(INSIGHTS_EXPORT_CACHE_KEY);
-    if (snapshot && Array.isArray(snapshot.insights) && snapshot.insights.length) {
+    if (hasSnapshotContent(snapshot)) {
         return true;
     }
     const cachedBase = DataCache.get(ANALYTICS_BASE_CACHE_KEY);

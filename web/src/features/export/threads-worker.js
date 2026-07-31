@@ -18,7 +18,7 @@ const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
 /**
  * Parse the messages CSV and pick the recent threads for the export.
- * @param {{messagesCsv?: string, people?: number, messagesPerPerson?: number}} payload - Raw payload
+ * @param {{messagesCsv?: string, people?: number, messagesPerPerson?: number, contactKeys?: string[]}} payload - Raw payload
  * @returns {{success: boolean, threads: object[], error: string|null}}
  */
 function processPayload(payload) {
@@ -39,6 +39,7 @@ function processPayload(payload) {
         threads: selectRecentThreads(result.rows, {
             people: payload.people,
             messagesPerPerson: payload.messagesPerPerson,
+            contactKeys: payload.contactKeys,
         }),
         error: null,
     };

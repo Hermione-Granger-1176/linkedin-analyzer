@@ -27,6 +27,19 @@ const OVERLAY_SOURCE = "pdf-export";
 const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
 const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), [href]";
 
+// The nodes the surface dereferences without checking first. `hint` is absent
+// on purpose: it is the one element every use of it already guards.
+const REQUIRED_ELEMENTS = Object.freeze([
+    "trigger",
+    "backdrop",
+    "dialog",
+    "includeMessages",
+    "error",
+    "status",
+    "cancel",
+    "confirm",
+]);
+
 const ENABLED_LABEL = "Save your insights as a PDF";
 const DISABLED_LABEL = "Save as PDF, unavailable until you upload a LinkedIn export";
 const DISABLED_HINT = "Upload a LinkedIn export to enable saving as PDF.";
@@ -78,7 +91,10 @@ export const PdfExport = (() => {
         }
 
         elements = resolveElements();
-        if (!elements.trigger || !elements.backdrop || !elements.confirm) {
+        // Every node this surface goes on to dereference unguarded, which is all
+        // of them but the hint. Checking only some of them left the rest to
+        // throw during boot and take the whole app down with them.
+        if (REQUIRED_ELEMENTS.some((name) => !elements[name])) {
             return;
         }
 

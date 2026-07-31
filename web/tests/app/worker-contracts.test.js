@@ -505,6 +505,62 @@ describe("worker contracts", () => {
         expect(parsed.value.requestId).toBe(0);
     });
 
+    it("carries the self-detection contact keys through to the worker", () => {
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: {
+                messagesCsv: "FROM,TO\na,b",
+                contactKeys: ["ada lovelace", "https://example.com/in/ada"],
+            },
+        });
+
+        expect(parsed.value.payload.contactKeys).toEqual([
+            "ada lovelace",
+            "https://example.com/in/ada",
+        ]);
+    });
+
+    it("bounds the contact keys and drops entries that cannot match", () => {
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: {
+                messagesCsv: "FROM,TO\na,b",
+                contactKeys: ["ada", 7, null, "", "b".repeat(600), "bob"],
+            },
+        });
+
+        // A coerced non-string could only ever be a key that matches nobody.
+        expect(parsed.value.payload.contactKeys).toEqual(["ada", "b".repeat(512), "bob"]);
+    });
+
+    it("truncates a contact key list past the ceiling instead of rejecting it", () => {
+        // A partial tiebreak still resolves more directions than none at all.
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: {
+                messagesCsv: "FROM,TO\na,b",
+                contactKeys: Array.from({ length: 60005 }, (_unused, index) => `key-${index}`),
+            },
+        });
+
+        expect(parsed.value.payload.contactKeys).toHaveLength(60000);
+        expect(parsed.value.payload.contactKeys[0]).toBe("key-0");
+    });
+
+    it("defaults the contact keys to an empty list when they are absent or invalid", () => {
+        const absent = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: { messagesCsv: "FROM,TO\na,b" },
+        });
+        const invalidShape = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: { messagesCsv: "FROM,TO\na,b", contactKeys: "ada" },
+        });
+
+        expect(absent.value.payload.contactKeys).toEqual([]);
+        expect(invalidShape.value.payload.contactKeys).toEqual([]);
+    });
+
     it("rejects threads worker requests with a bad envelope or missing CSV", () => {
         expect(parseThreadsWorkerRequest({ type: "process" }).valid).toBe(false);
         expect(parseThreadsWorkerRequest(null).valid).toBe(false);

@@ -41,6 +41,22 @@ async function waitForLoadedStatus(page, id) {
     await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 20000 });
 }
 
+/**
+ * Wait for the export trigger to actually be available, then return it.
+ *
+ * The button is never natively disabled - it stays in the tab order and carries
+ * its own reason for being unavailable - so `toBeEnabled()` passes on it
+ * immediately and would race the asynchronous availability check, leaving the
+ * click to land on a button that refuses it. `aria-disabled` is the real state.
+ * @param {import('@playwright/test').Page} page - Playwright page instance
+ * @returns {Promise<import('@playwright/test').Locator>} The ready trigger
+ */
+async function waitForExportTrigger(page) {
+    const trigger = page.locator("#pdfExportBtn");
+    await expect(trigger).toHaveAttribute("aria-disabled", "false", { timeout: 20000 });
+    return trigger;
+}
+
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
         window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
@@ -53,8 +69,7 @@ test("save as PDF downloads a real PDF including message contents", async ({ pag
     await waitForLoadedStatus(page, "commentsStatus");
     await waitForLoadedStatus(page, "messagesStatus");
 
-    const trigger = page.locator("#pdfExportBtn");
-    await expect(trigger).toBeEnabled({ timeout: 20000 });
+    const trigger = await waitForExportTrigger(page);
     await trigger.click();
 
     const dialog = page.locator("#pdfExportDialog");
@@ -101,8 +116,7 @@ test("the opted-in PDF really contains the message text", async ({ page }, testI
     await waitForLoadedStatus(page, "sharesStatus");
     await waitForLoadedStatus(page, "messagesStatus");
 
-    const trigger = page.locator("#pdfExportBtn");
-    await expect(trigger).toBeEnabled({ timeout: 20000 });
+    const trigger = await waitForExportTrigger(page);
     await trigger.click();
     await page.locator("#pdfExportIncludeMessages").check();
 
@@ -141,8 +155,7 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
     await page.locator("#themeToggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-    const trigger = page.locator("#pdfExportBtn");
-    await expect(trigger).toBeEnabled({ timeout: 20000 });
+    const trigger = await waitForExportTrigger(page);
     await trigger.click();
     await expect(page.locator("#pdfExportDialog")).toBeVisible();
 

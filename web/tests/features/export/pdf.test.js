@@ -192,6 +192,32 @@ describe("PdfExport", () => {
         expect(() => PdfExport.init()).not.toThrow();
     });
 
+    it("stands down on partial markup rather than throwing during boot", async () => {
+        // Every node but the hint is dereferenced unguarded once init() commits,
+        // so any one of them missing has to stop it before that point: this runs
+        // at app boot, and a throw here takes the whole page down with it.
+        const required = [
+            "pdfExportBtn",
+            "pdfExportDialogBackdrop",
+            "pdfExportDialog",
+            "pdfExportIncludeMessages",
+            "pdfExportDialogError",
+            "pdfExportDialogStatus",
+            "pdfExportCancelBtn",
+            "pdfExportConfirmBtn",
+        ];
+
+        for (const id of required) {
+            await loadModules();
+            vi.clearAllMocks();
+            document.body.innerHTML = MARKUP;
+            document.getElementById(id).remove();
+
+            expect(() => PdfExport.init(), `missing #${id}`).not.toThrow();
+            expect(DataCache.subscribe, `missing #${id}`).not.toHaveBeenCalled();
+        }
+    });
+
     it("subscribes once and ignores a repeat init", async () => {
         const subscriptions = DataCache.subscribe.mock.calls.length;
         PdfExport.init();

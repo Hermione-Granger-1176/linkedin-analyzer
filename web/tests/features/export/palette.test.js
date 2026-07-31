@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-    PDF_PALETTE_TOKEN_NAMES,
+    PDF_PALETTE_TOKENS,
     parseCssColor,
     readPdfPalette,
 } from "../../../src/features/export/palette.js";
@@ -75,7 +75,7 @@ describe("readPdfPalette", () => {
         const palette = readPdfPalette();
 
         expect(Object.isFrozen(palette)).toBe(true);
-        for (const token of PDF_PALETTE_TOKEN_NAMES) {
+        for (const token of PDF_PALETTE_TOKENS) {
             expect(palette[token]).toMatchObject({
                 r: expect.any(Number),
                 g: expect.any(Number),

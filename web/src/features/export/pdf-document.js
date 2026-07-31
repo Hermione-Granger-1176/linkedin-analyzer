@@ -26,10 +26,29 @@ export const USABLE_HEIGHT = PAGE.height - PAGE.marginTop - PAGE.marginBottom;
 const PT_TO_MM = 25.4 / 72;
 const LINE_FACTOR = 1.32;
 
+// Fraction of the line box the text baseline sits at.
+const BASELINE_RATIO = 0.78;
+
 const CARD_PADDING = 3.6;
 const CARD_GUTTER = 8.5;
 const RULE_WIDTH = 1.6;
 const ROUNDEL_RADIUS = 2.3;
+const CARD_RADIUS = 1.6;
+const RULE_RADIUS = 0.6;
+
+/** Width available to text inside a gutter-indented card, in millimetres. */
+const CARD_TEXT_WIDTH = CONTENT_WIDTH - CARD_GUTTER - CARD_PADDING;
+
+// Insight titles wrap short of the card edge so a long one does not crowd the
+// rounded corner.
+const TITLE_RIGHT_SLACK = 10;
+
+const CHIP_WIDTH = 15;
+const CHIP_HEIGHT = 4.6;
+const CHIP_DATE_GAP = 2.5;
+const MESSAGE_RULE_WIDTH = 0.9;
+const MESSAGE_RULE_INSET = 1.5;
+const MESSAGE_TAIL_PADDING = 2.6;
 
 const STAT_COLUMNS = 2;
 const STAT_GAP = 5;
@@ -59,6 +78,16 @@ const ACCENT_TOKENS = Object.freeze({
     "accent-red": "--accent-red",
 });
 const DEFAULT_ACCENT = "--accent-blue";
+
+/**
+ * @typedef {{r: number, g: number, b: number}} Rgb
+ * @typedef {Readonly<Record<string, Rgb>>} Palette
+ * @typedef {{height: number, draw: (x: number, y: number) => void}} Row
+ * @typedef {{kind: string, rows: Row[], keepTogether?: boolean, keepWithNext?: boolean, spacingAfter?: number, drawChrome?: (x: number, y: number, height: number) => void}} Block
+ * @typedef {{block: Block, rows: Row[], y: number}} Segment
+ * @typedef {{palette: Palette, fonts: {body: string, accent: string}, wrap: (text: string, width: number, family: string, size: number) => string[], text: (value: string, x: number, baseline: number, family: string, size: number, color: Rgb, options?: object) => void, fillRect: (x: number, y: number, width: number, height: number, color: Rgb, radius?: number) => void, fillCircle: (x: number, y: number, radius: number, color: Rgb) => void}} Painter
+ * @typedef {{generatedAt: Date, rangeLabel: string, insights: object[], tip: string|null, allTime: Array<{label: string, value: string}>, threads: object[]}} DocumentModel
+ */
 
 /**
  * Convert a point size to the millimetre height of one line.
@@ -92,12 +121,22 @@ export function totalRowHeight(rows) {
 }
 
 /**
+ * A row that reserves height without drawing, so a card's chrome extends past
+ * its last line of text.
+ * @param {number} height - Height in millimetres
+ * @returns {Row} Spacer row
+ */
+function spacerRow(height) {
+    return { height, draw: () => {} };
+}
+
+/**
  * Height of the first row of the next block that has any.
  *
  * One row, not the whole block: a heading needs to be followed by something to
  * stop reading as stranded, and demanding the entire next block fit too would
  * push short sections onto pages of their own.
- * @param {Array<{rows: Array<{height: number}>}>} blocks - Blocks in document order
+ * @param {Block[]} blocks - Blocks in document order
  * @param {number} from - Index to start looking from
  * @returns {number} First row height, or zero when nothing follows
  */
@@ -118,13 +157,14 @@ function leadingRowHeight(blocks, from) {
  * than splitting; anything taller flows row by row. Every placed row ends inside
  * the usable area: a row that could not is dropped rather than drawn past it.
  *
- * A `keepWithNext` block additionally reserves room for the first row of
- * whatever follows it. A heading is only a heading if something comes after it
- * on the same page; without this, "All time" and a person's name were routinely
- * left alone at the foot of a page with their content overleaf.
- * @param {Array<{rows: Array<{height: number}>, keepTogether?: boolean, keepWithNext?: boolean, spacingAfter?: number}>} blocks - Blocks in document order
+ * A block that is both `keepTogether` and `keepWithNext` additionally reserves
+ * room for the first row of whatever follows it; on the row-by-row path the flag
+ * does not apply. A heading is only a heading if something comes after it on the
+ * same page; without this, "All time" and a person's name were routinely left
+ * alone at the foot of a page with their content overleaf.
+ * @param {Block[]} blocks - Blocks in document order
  * @param {number} usableHeight - Height available on one page
- * @returns {Array<Array<{block: any, rows: any[], y: number}>>} Placed segments per page
+ * @returns {Segment[][]} Placed segments per page
  */
 export function paginateBlocks(blocks, usableHeight) {
     const pages = [];
@@ -137,8 +177,7 @@ export function paginateBlocks(blocks, usableHeight) {
         cursor = 0;
     };
 
-    for (let index = 0; index < blocks.length; index += 1) {
-        const block = blocks[index];
+    for (const [index, block] of blocks.entries()) {
         if (!block.rows.length) {
             continue;
         }
@@ -147,12 +186,16 @@ export function paginateBlocks(blocks, usableHeight) {
         const height = totalRowHeight(block.rows);
 
         if (block.keepTogether && height <= usableHeight) {
-            // Falls back to the block's own height when the pair cannot share a
-            // page at all, so an unsatisfiable request cannot loop pages.
-            const withNext = block.keepWithNext
-                ? height + spacingAfter + leadingRowHeight(blocks, index + 1)
-                : height;
-            const required = withNext <= usableHeight ? withNext : height;
+            let required = height;
+            if (block.keepWithNext) {
+                // Falls back to the block's own height when the pair cannot
+                // share a page at all, so an unsatisfiable request cannot loop
+                // pages.
+                const withNext = height + spacingAfter + leadingRowHeight(blocks, index + 1);
+                if (withNext <= usableHeight) {
+                    required = withNext;
+                }
+            }
             if (cursor > 0 && cursor + required > usableHeight) {
                 nextPage();
             }
@@ -198,9 +241,9 @@ export function paginateBlocks(blocks, usableHeight) {
 /**
  * Build the drawing context the row painters close over.
  * @param {object} doc - jsPDF document
- * @param {object} palette - Palette from readPdfPalette()
+ * @param {Palette} palette - Palette from readPdfPalette()
  * @param {{body: string, accent: string}} fonts - Registered font families
- * @returns {object} Drawing helpers
+ * @returns {Painter} Drawing helpers
  */
 export function createPainter(doc, palette, fonts) {
     /**
@@ -234,7 +277,7 @@ export function createPainter(doc, palette, fonts) {
      * @param {number} baseline - Baseline in millimetres
      * @param {string} family - Registered family name
      * @param {number} size - Font size in points
-     * @param {{r: number, g: number, b: number}} color - Text color
+     * @param {Rgb} color - Text color
      * @param {object} [options] - jsPDF text options
      */
     const drawText = (value, x, baseline, family, size, color, options) => {
@@ -249,7 +292,7 @@ export function createPainter(doc, palette, fonts) {
      * @param {number} y - Top edge
      * @param {number} width - Width
      * @param {number} height - Height
-     * @param {{r: number, g: number, b: number}} color - Fill color
+     * @param {Rgb} color - Fill color
      * @param {number} [radius] - Corner radius
      */
     const fillRect = (x, y, width, height, color, radius = 0) => {
@@ -261,12 +304,24 @@ export function createPainter(doc, palette, fonts) {
         doc.rect(x, y, width, height, "F");
     };
 
-    return { doc, palette, fonts, useFont, wrap, text: drawText, fillRect };
+    /**
+     * Fill a circle.
+     * @param {number} x - Centre x
+     * @param {number} y - Centre y
+     * @param {number} radius - Radius
+     * @param {Rgb} color - Fill color
+     */
+    const fillCircle = (x, y, radius, color) => {
+        doc.setFillColor(color.r, color.g, color.b);
+        doc.circle(x, y, radius, "F");
+    };
+
+    return { palette, fonts, wrap, text: drawText, fillRect, fillCircle };
 }
 
 /**
  * Relative luminance of a palette color, per WCAG 2.
- * @param {{r: number, g: number, b: number}} color - Palette color
+ * @param {Rgb} color - Palette color
  * @returns {number} Luminance between 0 and 1
  */
 function relativeLuminance(color) {
@@ -279,8 +334,8 @@ function relativeLuminance(color) {
 
 /**
  * Contrast ratio between two palette colors, per WCAG 2.
- * @param {{r: number, g: number, b: number}} left - First color
- * @param {{r: number, g: number, b: number}} right - Second color
+ * @param {Rgb} left - First color
+ * @param {Rgb} right - Second color
  * @returns {number} Ratio between 1 and 21
  */
 export function contrastRatio(left, right) {
@@ -297,9 +352,9 @@ export function contrastRatio(left, right) {
  * `--accent-yellow` is 1.54:1, and the white roundel digit on the raw accent is
  * 1.71:1 - neither is visible on paper. Measuring instead keeps every one of
  * them legible whatever the tokens are later set to.
- * @param {object} palette - Palette from readPdfPalette()
- * @param {{r: number, g: number, b: number}} background - Fill the text sits on
- * @returns {{r: number, g: number, b: number}} The more readable text color
+ * @param {Palette} palette - Palette from readPdfPalette()
+ * @param {Rgb} background - Fill the text sits on
+ * @returns {Rgb} The more readable text color
  */
 export function readableOn(palette, background) {
     const ink = palette["--text-primary"];
@@ -309,10 +364,10 @@ export function readableOn(palette, background) {
 
 /**
  * Resolve an insight's accent to a palette color.
- * @param {object} palette - Palette from readPdfPalette()
+ * @param {Palette} palette - Palette from readPdfPalette()
  * @param {string} accent - Accent class from the insight
  * @param {string} [suffix] - Token suffix, such as "-bg"
- * @returns {{r: number, g: number, b: number}} Accent color
+ * @returns {Rgb} Accent color
  */
 function accentColor(palette, accent, suffix = "") {
     const token = ACCENT_TOKENS[accent] || DEFAULT_ACCENT;
@@ -320,10 +375,52 @@ function accentColor(palette, accent, suffix = "") {
 }
 
 /**
+ * Build one row per wrapped line of secondary body text.
+ * @param {Painter} painter - Drawing helpers
+ * @param {string[]} lines - Wrapped lines
+ * @param {number} size - Font size in points
+ * @param {number} [leadIn] - Extra height reserved above the first line
+ * @returns {Row[]} Measured rows
+ */
+function bodyRows(painter, lines, size, leadIn = 0) {
+    const { palette, fonts } = painter;
+    return lines.map((line, index) => {
+        const top = index === 0 ? leadIn : 0;
+        return {
+            height: lineHeightMm(size) + top,
+            draw: (x, y) => {
+                painter.text(
+                    line,
+                    x + CARD_GUTTER,
+                    y + top + lineHeightMm(size) * BASELINE_RATIO,
+                    fonts.body,
+                    size,
+                    palette["--text-secondary"],
+                );
+            },
+        };
+    });
+}
+
+/**
+ * Build the chrome painter a tinted card with an accent rule uses.
+ * @param {Painter} painter - Drawing helpers
+ * @param {Rgb} tint - Card fill
+ * @param {Rgb} rule - Left rule color
+ * @returns {(x: number, y: number, height: number) => void} Chrome painter
+ */
+function cardChrome(painter, tint, rule) {
+    return (x, y, height) => {
+        painter.fillRect(x, y, CONTENT_WIDTH, height, tint, CARD_RADIUS);
+        painter.fillRect(x, y, RULE_WIDTH, height, rule, RULE_RADIUS);
+    };
+}
+
+/**
  * Build the title block.
- * @param {object} painter - Drawing helpers
- * @param {object} data - Document model
- * @returns {object} Block
+ * @param {Painter} painter - Drawing helpers
+ * @param {DocumentModel} data - Document model
+ * @returns {Block} Block
  */
 function buildHeaderBlock(painter, data) {
     const { palette, fonts } = painter;
@@ -336,7 +433,7 @@ function buildHeaderBlock(painter, data) {
                 painter.text(
                     "LinkedIn Insights",
                     x,
-                    y + lineHeightMm(titleSize) * 0.78,
+                    y + lineHeightMm(titleSize) * BASELINE_RATIO,
                     fonts.accent,
                     titleSize,
                     palette["--text-primary"],
@@ -349,24 +446,30 @@ function buildHeaderBlock(painter, data) {
                 painter.text(
                     `${data.rangeLabel}  ·  Generated ${formatLongDate(data.generatedAt)}`,
                     x,
-                    y + lineHeightMm(metaSize) * 0.78,
+                    y + lineHeightMm(metaSize) * BASELINE_RATIO,
                     fonts.body,
                     metaSize,
                     palette["--text-secondary"],
                 );
-                painter.fillRect(x, y + lineHeightMm(metaSize) + 1.6, CONTENT_WIDTH, 0.5, palette["--border-light"]);
+                painter.fillRect(
+                    x,
+                    y + lineHeightMm(metaSize) + 1.6,
+                    CONTENT_WIDTH,
+                    0.5,
+                    palette["--border-light"],
+                );
             },
         },
     ];
 
-    return { kind: "header", rows, keepTogether: true, spacingAfter: 6 };
+    return { kind: "header", keepTogether: true, spacingAfter: 6, rows };
 }
 
 /**
  * Build a section heading block.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {string} label - Heading text
- * @returns {object} Block
+ * @returns {Block} Block
  */
 function buildSectionBlock(painter, label) {
     const { palette, fonts } = painter;
@@ -384,12 +487,18 @@ function buildSectionBlock(painter, label) {
                     painter.text(
                         label,
                         x,
-                        y + lineHeightMm(size) * 0.78,
+                        y + lineHeightMm(size) * BASELINE_RATIO,
                         fonts.accent,
                         size,
                         palette["--text-primary"],
                     );
-                    painter.fillRect(x, y + lineHeightMm(size) + 1, 22, 0.9, palette["--accent-yellow"]);
+                    painter.fillRect(
+                        x,
+                        y + lineHeightMm(size) + 1,
+                        22,
+                        0.9,
+                        palette["--accent-yellow"],
+                    );
                 },
             },
         ],
@@ -398,41 +507,39 @@ function buildSectionBlock(painter, label) {
 
 /**
  * Build one insight card block.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {object} insight - Insight from the analytics worker
  * @param {number} index - One-based card number shown in the roundel
- * @returns {object} Block
+ * @returns {Block} Block
  */
 function buildInsightBlock(painter, insight, index) {
     const { palette, fonts } = painter;
     const titleSize = 12.5;
     const bodySize = 10;
-    const textWidth = CONTENT_WIDTH - CARD_GUTTER - CARD_PADDING;
     const accent = accentColor(palette, insight.accent);
     const tint = accentColor(palette, insight.accent, "-bg");
 
-    const titleLines = painter.wrap(insight.title, textWidth - 10, fonts.body, titleSize);
-    const bodyLines = painter.wrap(insight.body, textWidth, fonts.body, bodySize);
+    const titleLines = painter.wrap(
+        insight.title,
+        CARD_TEXT_WIDTH - TITLE_RIGHT_SLACK,
+        fonts.body,
+        titleSize,
+    );
+    const bodyLines = painter.wrap(insight.body, CARD_TEXT_WIDTH, fonts.body, bodySize);
 
-    const rows = [];
-    titleLines.forEach((line, lineIndex) => {
-        rows.push({
-            height: lineHeightMm(titleSize) + (lineIndex === 0 ? CARD_PADDING : 0),
+    const rows = titleLines.map((line, lineIndex) => {
+        const top = lineIndex === 0 ? CARD_PADDING : 0;
+        return {
+            height: lineHeightMm(titleSize) + top,
             draw: (x, y) => {
-                const baseline =
-                    y + (lineIndex === 0 ? CARD_PADDING : 0) + lineHeightMm(titleSize) * 0.78;
                 if (lineIndex === 0) {
-                    painter.doc.setFillColor(accent.r, accent.g, accent.b);
-                    painter.doc.circle(
-                        x + CARD_GUTTER - ROUNDEL_RADIUS - 1.4,
-                        y + CARD_PADDING + ROUNDEL_RADIUS + 0.4,
-                        ROUNDEL_RADIUS,
-                        "F",
-                    );
+                    const roundelX = x + CARD_GUTTER - ROUNDEL_RADIUS - 1.4;
+                    const roundelY = y + CARD_PADDING + ROUNDEL_RADIUS + 0.4;
+                    painter.fillCircle(roundelX, roundelY, ROUNDEL_RADIUS, accent);
                     painter.text(
                         String(index),
-                        x + CARD_GUTTER - ROUNDEL_RADIUS - 1.4,
-                        y + CARD_PADDING + ROUNDEL_RADIUS + 1.6,
+                        roundelX,
+                        roundelY + 1.2,
                         fonts.body,
                         7,
                         readableOn(palette, accent),
@@ -440,60 +547,44 @@ function buildInsightBlock(painter, insight, index) {
                     );
                 }
                 // The accent stays the card's rule and roundel, exactly as the
-                // Insights screen uses it for the border and icon. Its heading
-                // is `--text-primary` there too, and for the same reason.
+                // Insights screen uses it for the border and icon; the heading is
+                // measured against the tint rather than taking the accent, which
+                // on this palette lands on `--text-primary` just as it does on
+                // screen.
                 painter.text(
                     line,
                     x + CARD_GUTTER,
-                    baseline,
+                    y + top + lineHeightMm(titleSize) * BASELINE_RATIO,
                     fonts.body,
                     titleSize,
                     readableOn(palette, tint),
                 );
             },
-        });
+        };
     });
-    bodyLines.forEach((line, lineIndex) => {
-        rows.push({
-            height: lineHeightMm(bodySize) + (lineIndex === 0 ? 1 : 0),
-            draw: (x, y) => {
-                painter.text(
-                    line,
-                    x + CARD_GUTTER,
-                    y + (lineIndex === 0 ? 1 : 0) + lineHeightMm(bodySize) * 0.78,
-                    fonts.body,
-                    bodySize,
-                    palette["--text-secondary"],
-                );
-            },
-        });
-    });
-    rows.push({ height: CARD_PADDING, draw: () => {} });
+    rows.push(...bodyRows(painter, bodyLines, bodySize, 1));
+    rows.push(spacerRow(CARD_PADDING));
 
     return {
         kind: "insight",
         keepTogether: true,
         spacingAfter: 3.5,
         rows,
-        drawChrome: (x, y, height) => {
-            painter.fillRect(x, y, CONTENT_WIDTH, height, tint, 1.6);
-            painter.fillRect(x, y, RULE_WIDTH, height, accent, 0.6);
-        },
+        drawChrome: cardChrome(painter, tint, accent),
     };
 }
 
 /**
  * Build the closing pro-tip panel.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {string} tip - Tip text
- * @returns {object} Block
+ * @returns {Block} Block
  */
 function buildTipBlock(painter, tip) {
     const { palette, fonts } = painter;
     const labelSize = 11;
     const bodySize = 10.5;
-    const textWidth = CONTENT_WIDTH - CARD_GUTTER - CARD_PADDING;
-    const lines = painter.wrap(tip, textWidth, fonts.body, bodySize);
+    const lines = painter.wrap(tip, CARD_TEXT_WIDTH, fonts.body, bodySize);
 
     const rows = [
         {
@@ -502,7 +593,7 @@ function buildTipBlock(painter, tip) {
                 painter.text(
                     "Pro tip",
                     x + CARD_GUTTER,
-                    y + CARD_PADDING + lineHeightMm(labelSize) * 0.78,
+                    y + CARD_PADDING + lineHeightMm(labelSize) * BASELINE_RATIO,
                     fonts.accent,
                     labelSize,
                     palette["--text-primary"],
@@ -510,40 +601,23 @@ function buildTipBlock(painter, tip) {
             },
         },
     ];
-    lines.forEach((line) => {
-        rows.push({
-            height: lineHeightMm(bodySize),
-            draw: (x, y) => {
-                painter.text(
-                    line,
-                    x + CARD_GUTTER,
-                    y + lineHeightMm(bodySize) * 0.78,
-                    fonts.body,
-                    bodySize,
-                    palette["--text-secondary"],
-                );
-            },
-        });
-    });
-    rows.push({ height: CARD_PADDING, draw: () => {} });
+    rows.push(...bodyRows(painter, lines, bodySize));
+    rows.push(spacerRow(CARD_PADDING));
 
     return {
         kind: "tip",
         keepTogether: true,
         spacingAfter: 7,
         rows,
-        drawChrome: (x, y, height) => {
-            painter.fillRect(x, y, CONTENT_WIDTH, height, palette["--accent-yellow-bg"], 1.6);
-            painter.fillRect(x, y, RULE_WIDTH, height, palette["--accent-yellow"], 0.6);
-        },
+        drawChrome: cardChrome(painter, palette["--accent-yellow-bg"], palette["--accent-yellow"]),
     };
 }
 
 /**
  * Build the all-time stat grid.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {Array<{label: string, value: string}>} stats - All-time stats
- * @returns {object} Block
+ * @returns {Block} Block
  */
 function buildStatsBlock(painter, stats) {
     const { palette, fonts } = painter;
@@ -565,7 +639,14 @@ function buildStatsBlock(painter, stats) {
                         palette["--bg-tertiary"],
                         2,
                     );
-                    painter.fillRect(tileX, y, RULE_WIDTH, STAT_TILE_HEIGHT, palette["--accent-blue"], 0.6);
+                    painter.fillRect(
+                        tileX,
+                        y,
+                        RULE_WIDTH,
+                        STAT_TILE_HEIGHT,
+                        palette["--accent-blue"],
+                        RULE_RADIUS,
+                    );
                     painter.text(
                         stat.label,
                         tileX + CARD_GUTTER,
@@ -592,9 +673,9 @@ function buildStatsBlock(painter, stats) {
 
 /**
  * Build the header for one person's thread.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {object} thread - Selected thread
- * @returns {object} Block
+ * @returns {Block} Block
  */
 function buildThreadHeaderBlock(painter, thread) {
     const { palette, fonts } = painter;
@@ -625,7 +706,7 @@ function buildThreadHeaderBlock(painter, thread) {
             painter.text(
                 `${thread.messageCount} ${plural}  ·  last on ${formatLongDate(thread.lastTimestamp)}`,
                 x,
-                y + lineHeightMm(metaSize) * 0.78,
+                y + lineHeightMm(metaSize) * BASELINE_RATIO,
                 fonts.body,
                 metaSize,
                 palette["--text-muted"],
@@ -648,64 +729,69 @@ function buildThreadHeaderBlock(painter, thread) {
  * A one-conversation export gives the selector no way to tell the account owner
  * from the other person, and it says so rather than guessing; a neutral chip is
  * how that reads on the page.
- * @param {object} palette - Palette from readPdfPalette()
- * @param {string} direction - Message direction
- * @returns {{accent: object, chipFill: object, chipLabel: string}} Chip styling
+ * @param {Palette} palette - Palette from readPdfPalette()
+ * @param {'sent'|'received'|'unknown'} direction - Message direction
+ * @returns {{rule: Rgb, fill: Rgb, label: string}} Chip styling
  */
 function messageChip(palette, direction) {
     if (direction === "sent") {
         return {
-            accent: palette["--accent-blue"],
-            chipFill: palette["--accent-blue-bg"],
-            chipLabel: "Sent",
+            rule: palette["--accent-blue"],
+            fill: palette["--accent-blue-bg"],
+            label: "Sent",
         };
     }
     if (direction === "received") {
         return {
-            accent: palette["--accent-green"],
-            chipFill: palette["--accent-green-bg"],
-            chipLabel: "Received",
+            rule: palette["--accent-green"],
+            fill: palette["--accent-green-bg"],
+            label: "Received",
         };
     }
     return {
-        accent: palette["--text-muted"],
-        chipFill: palette["--bg-tertiary"],
-        chipLabel: "Message",
+        rule: palette["--text-muted"],
+        fill: palette["--bg-tertiary"],
+        label: "Message",
     };
 }
 
 /**
  * Build one message block, chip and all.
- * @param {object} painter - Drawing helpers
- * @param {{direction: string, timestamp: number, body: string}} message - Message
- * @returns {object} Block
+ * @param {Painter} painter - Drawing helpers
+ * @param {{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}} message - Message
+ * @returns {Block} Block
  */
 function buildMessageBlock(painter, message) {
     const { palette, fonts } = painter;
     const metaSize = 8;
     const bodySize = 9.5;
-    const indent = CARD_GUTTER;
-    const textWidth = CONTENT_WIDTH - indent - CARD_PADDING;
-    const { accent, chipFill, chipLabel } = messageChip(palette, message.direction);
+    const { rule, fill, label } = messageChip(palette, message.direction);
 
-    const lines = painter.wrap(message.body, textWidth, fonts.body, bodySize);
+    const lines = painter.wrap(message.body, CARD_TEXT_WIDTH, fonts.body, bodySize);
     const rows = [
         {
             height: lineHeightMm(metaSize) + 3.2,
             draw: (x, y) => {
-                painter.fillRect(x + indent, y + 1, 15, 4.6, chipFill, 2.3);
+                painter.fillRect(
+                    x + CARD_GUTTER,
+                    y + 1,
+                    CHIP_WIDTH,
+                    CHIP_HEIGHT,
+                    fill,
+                    CHIP_HEIGHT / 2,
+                );
                 painter.text(
-                    chipLabel,
-                    x + indent + 7.5,
+                    label,
+                    x + CARD_GUTTER + CHIP_WIDTH / 2,
                     y + 4.3,
                     fonts.body,
                     metaSize - 0.5,
-                    readableOn(palette, chipFill),
+                    readableOn(palette, fill),
                     { align: "center" },
                 );
                 painter.text(
                     formatLongDate(message.timestamp),
-                    x + indent + 17.5,
+                    x + CARD_GUTTER + CHIP_WIDTH + CHIP_DATE_GAP,
                     y + 4.3,
                     fonts.body,
                     metaSize,
@@ -714,22 +800,8 @@ function buildMessageBlock(painter, message) {
             },
         },
     ];
-    lines.forEach((line) => {
-        rows.push({
-            height: lineHeightMm(bodySize),
-            draw: (x, y) => {
-                painter.text(
-                    line,
-                    x + indent,
-                    y + lineHeightMm(bodySize) * 0.78,
-                    fonts.body,
-                    bodySize,
-                    palette["--text-secondary"],
-                );
-            },
-        });
-    });
-    rows.push({ height: 2.6, draw: () => {} });
+    rows.push(...bodyRows(painter, lines, bodySize));
+    rows.push(spacerRow(MESSAGE_TAIL_PADDING));
 
     return {
         kind: "message",
@@ -737,15 +809,15 @@ function buildMessageBlock(painter, message) {
         spacingAfter: 1.2,
         rows,
         drawChrome: (x, y, height) => {
-            painter.fillRect(x + 1.5, y, 0.9, height, accent, 0.45);
+            painter.fillRect(x + MESSAGE_RULE_INSET, y, MESSAGE_RULE_WIDTH, height, rule, 0.45);
         },
     };
 }
 
 /**
  * Build the placeholder shown when there is nothing to report.
- * @param {object} painter - Drawing helpers
- * @returns {object} Block
+ * @param {Painter} painter - Drawing helpers
+ * @returns {Block} Block
  */
 function buildEmptyBlock(painter) {
     const { palette, fonts } = painter;
@@ -762,7 +834,7 @@ function buildEmptyBlock(painter) {
                     painter.text(
                         "No insights yet. Upload your LinkedIn export to fill this in.",
                         x,
-                        y + 4 + lineHeightMm(size) * 0.78,
+                        y + 4 + lineHeightMm(size) * BASELINE_RATIO,
                         fonts.body,
                         size,
                         palette["--text-secondary"],
@@ -775,9 +847,9 @@ function buildEmptyBlock(painter) {
 
 /**
  * Turn the document model into measured blocks.
- * @param {object} painter - Drawing helpers
- * @param {object} data - Document model from collectExportData()
- * @returns {object[]} Blocks in document order
+ * @param {Painter} painter - Drawing helpers
+ * @param {DocumentModel} data - Document model from collectExportData()
+ * @returns {Block[]} Blocks in document order
  */
 export function buildBlocks(painter, data) {
     const insights = Array.isArray(data.insights) ? data.insights : [];
@@ -788,9 +860,9 @@ export function buildBlocks(painter, data) {
 
     if (insights.length) {
         blocks.push(buildSectionBlock(painter, "Your insights"));
-        insights.forEach((insight, index) => {
-            blocks.push(buildInsightBlock(painter, insight, index + 1));
-        });
+        blocks.push(
+            ...insights.map((insight, index) => buildInsightBlock(painter, insight, index + 1)),
+        );
     }
     if (data.tip) {
         blocks.push(buildTipBlock(painter, data.tip));
@@ -800,14 +872,15 @@ export function buildBlocks(painter, data) {
     }
     if (threads.length) {
         blocks.push(buildSectionBlock(painter, "Recent conversations"));
-        threads.forEach((thread) => {
+        for (const thread of threads) {
             blocks.push(buildThreadHeaderBlock(painter, thread));
-            (thread.messages || []).forEach((message) => {
-                blocks.push(buildMessageBlock(painter, message));
-            });
-        });
+            blocks.push(
+                ...(thread.messages || []).map((message) => buildMessageBlock(painter, message)),
+            );
+        }
     }
-    if (!insights.length && !allTime.length && !threads.length && !data.tip) {
+    // Only the header: none of the sections above found anything to say.
+    if (blocks.length === 1) {
         blocks.push(buildEmptyBlock(painter));
     }
 
@@ -815,10 +888,42 @@ export function buildBlocks(painter, data) {
 }
 
 /**
+ * Draw the page footer.
+ * @param {Painter} painter - Drawing helpers
+ * @param {number} pageNumber - One-based page number
+ * @param {number} pageCount - Total pages
+ */
+function drawFooter(painter, pageNumber, pageCount) {
+    const { palette, fonts } = painter;
+    const footerTop = PAGE.height - PAGE.marginBottom;
+    const baseline = footerTop + 12;
+    const size = 8.5;
+
+    painter.fillRect(PAGE.marginX, footerTop + 6, CONTENT_WIDTH, 0.4, palette["--border-light"]);
+    painter.text(
+        "LinkedIn Analyzer",
+        PAGE.marginX,
+        baseline,
+        fonts.body,
+        size,
+        palette["--text-muted"],
+    );
+    painter.text(
+        `Page ${pageNumber} of ${pageCount}`,
+        PAGE.width - PAGE.marginX,
+        baseline,
+        fonts.body,
+        size,
+        palette["--text-muted"],
+        { align: "right" },
+    );
+}
+
+/**
  * Draw the whole document onto a jsPDF instance.
  * @param {object} doc - jsPDF document, A4 in millimetres
- * @param {object} data - Document model from collectExportData()
- * @param {{palette: object, fonts: {body: string, accent: string}}} theme - Palette and registered fonts
+ * @param {DocumentModel} data - Document model from collectExportData()
+ * @param {{palette: Palette, fonts: {body: string, accent: string}}} theme - Palette and registered fonts
  * @returns {number} Page count
  */
 export function renderPdfDocument(doc, data, theme) {
@@ -850,40 +955,4 @@ export function renderPdfDocument(doc, data, theme) {
     });
 
     return placed.length;
-}
-
-/**
- * Draw the page footer.
- * @param {object} painter - Drawing helpers
- * @param {number} pageNumber - One-based page number
- * @param {number} pageCount - Total pages
- */
-function drawFooter(painter, pageNumber, pageCount) {
-    const { palette, fonts } = painter;
-    const baseline = PAGE.height - PAGE.marginBottom + 12;
-
-    painter.fillRect(
-        PAGE.marginX,
-        PAGE.height - PAGE.marginBottom + 6,
-        CONTENT_WIDTH,
-        0.4,
-        palette["--border-light"],
-    );
-    painter.text(
-        "LinkedIn Analyzer",
-        PAGE.marginX,
-        baseline,
-        fonts.body,
-        8.5,
-        palette["--text-muted"],
-    );
-    painter.text(
-        `Page ${pageNumber} of ${pageCount}`,
-        PAGE.width - PAGE.marginX,
-        baseline,
-        fonts.body,
-        8.5,
-        palette["--text-muted"],
-        { align: "right" },
-    );
 }

@@ -2,15 +2,19 @@
  * Palette reader for the PDF export.
  *
  * The exported document is always light, warm-palette, regardless of the theme
- * the user is looking at. Rather than duplicating hex values in JavaScript --
- * which would silently drift from the stylesheet -- the colors are read back
- * out of the light palette at export time by mounting a detached element that
- * carries the `.theme-light` class.
+ * the user is looking at. Duplicating hex values in JavaScript would silently
+ * drift from the stylesheet, so the colors are read back out of the light
+ * palette at export time by mounting a detached element that carries the
+ * `.theme-light` class.
  */
 
-// Tokens the layout engine draws with. Each is a custom property defined by the
-// light palette in styles/foundations/variables.css.
-const PDF_PALETTE_TOKENS = Object.freeze([
+/**
+ * The light-palette custom properties the export reads, in stylesheet order.
+ *
+ * A superset of what the layout engine currently draws with, so a token can be
+ * used without also having to be plumbed through here.
+ */
+export const PDF_PALETTE_TOKENS = Object.freeze([
     "--bg-primary",
     "--bg-secondary",
     "--bg-tertiary",
@@ -71,7 +75,8 @@ const FALLBACK_PALETTE = Object.freeze({
 // relative to the page background, and jsPDF has no alpha for plain fills.
 const COMPOSITE_BASE = Object.freeze({ r: 255, g: 253, b: 247 });
 
-const RGB_PATTERN = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.%]+)\s*)?\)$/i;
+const RGB_PATTERN =
+    /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.%]+)\s*)?\)$/i;
 // Three, four, six or eight digits: the build minifies `rgba(r, g, b, a)` down
 // to hex, and the tinted tokens keep their alpha as a trailing pair.
 const HEX_PATTERN = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i;
@@ -120,8 +125,8 @@ function flatten(color, alpha) {
 
 /**
  * Parse a CSS color string into opaque RGB channels.
- * Accepts `rgb()`, `rgba()` and three- or six-digit hex, and flattens any
- * transparency against the PDF paper color.
+ * Accepts `rgb()`, `rgba()` and three-, four-, six- or eight-digit hex, and
+ * flattens any transparency against the PDF paper color.
  * @param {string} value - CSS color text
  * @returns {{r: number, g: number, b: number}|null} Parsed color, or null when unrecognized
  */
@@ -156,8 +161,7 @@ export function parseCssColor(value) {
             g: Number.parseInt(expanded.slice(2, 4), 16),
             b: Number.parseInt(expanded.slice(4, 6), 16),
         };
-        const alpha =
-            expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) / 255 : 1;
+        const alpha = expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) / 255 : 1;
         return Object.freeze(flatten(color, alpha));
     }
 
@@ -178,6 +182,38 @@ function readToken(computed, token) {
 }
 
 /**
+ * Mount a detached, invisible light-theme probe on the document body.
+ * @returns {HTMLElement|null} Mounted probe, or null when there is no document
+ */
+function mountProbe() {
+    if (typeof document === "undefined" || !document.body) {
+        return null;
+    }
+    const probe = document.createElement("div");
+    probe.className = "theme-light";
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.position = "absolute";
+    probe.style.left = "-9999px";
+    probe.style.width = "0";
+    probe.style.height = "0";
+    probe.style.pointerEvents = "none";
+    document.body.appendChild(probe);
+    return probe;
+}
+
+/**
+ * Computed style of a mounted probe, when the environment provides one.
+ * @param {HTMLElement|null} probe - Mounted probe, or null
+ * @returns {CSSStyleDeclaration|null} Computed style, or null when unavailable
+ */
+function probeStyle(probe) {
+    if (!probe || typeof window === "undefined" || typeof window.getComputedStyle !== "function") {
+        return null;
+    }
+    return window.getComputedStyle(probe);
+}
+
+/**
  * Read the light palette as RGB triples for jsPDF.
  *
  * Mounts a detached, invisible `.theme-light` element so the values come from
@@ -186,26 +222,10 @@ function readToken(computed, token) {
  * @returns {Readonly<Record<string, Readonly<{r: number, g: number, b: number}>>>} Frozen palette keyed by custom property name
  */
 export function readPdfPalette() {
-    let probe = null;
-    let computed = null;
-
-    if (typeof document !== "undefined" && document.body) {
-        probe = document.createElement("div");
-        probe.className = "theme-light";
-        probe.setAttribute("aria-hidden", "true");
-        probe.style.position = "absolute";
-        probe.style.left = "-9999px";
-        probe.style.width = "0";
-        probe.style.height = "0";
-        probe.style.pointerEvents = "none";
-        document.body.appendChild(probe);
-        if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
-            computed = window.getComputedStyle(probe);
-        }
-    }
-
+    const probe = mountProbe();
     const palette = {};
     try {
+        const computed = probeStyle(probe);
         for (const token of PDF_PALETTE_TOKENS) {
             palette[token] = readToken(computed, token) || FALLBACK_PALETTE[token];
         }
@@ -217,6 +237,3 @@ export function readPdfPalette() {
 
     return Object.freeze(palette);
 }
-
-/** Token names the PDF palette exposes, in stylesheet order. */
-export const PDF_PALETTE_TOKEN_NAMES = PDF_PALETTE_TOKENS;

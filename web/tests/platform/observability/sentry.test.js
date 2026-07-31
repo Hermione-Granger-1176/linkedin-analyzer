@@ -472,6 +472,43 @@ describe("sentry", () => {
         expect(sentry.captureException).toHaveBeenLastCalledWith(unknownError);
     });
 
+    it("keeps the PDF export's module and every operation it reports", async () => {
+        const { options } = await enableSentry();
+        // Every operation the Save as PDF path passes to captureError. Without
+        // all of them on the allowlist the reduced event collapses to
+        // "captured-error" and the feature's diagnostics are indistinguishable.
+        const operations = [
+            "analytics-worker-error-event",
+            "analytics-worker-error-payload",
+            "analytics-worker-timeout",
+            "check-availability",
+            "generate",
+            "init-analytics-worker",
+            "init-threads-worker",
+            "load-analytics",
+            "load-messages-file",
+            "load-outreach",
+            "register-fonts",
+            "select-threads",
+            "threads-message-parse",
+            "threads-worker-error-event",
+            "threads-worker-failure",
+            "threads-worker-post-message",
+            "threads-worker-timeout",
+        ];
+
+        const values = operations.map((operation) => {
+            const reduced = options.beforeSend({
+                exception: { values: [{ type: "Error" }] },
+                tags: { module: "pdf-export", operation },
+            });
+            expect(reduced.tags).toEqual({ module: "pdf-export", operation });
+            return reduced.exception.values[0].value;
+        });
+
+        expect(values).toEqual(operations.map((operation) => `pdf-export.${operation}`));
+    });
+
     it("uses captured-error when validated module and operation tags are incomplete", async () => {
         const { options } = await enableSentry();
         const reduced = options.beforeSend({

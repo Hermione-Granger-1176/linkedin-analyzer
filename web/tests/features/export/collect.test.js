@@ -10,6 +10,7 @@ import { captureError } from "../../../src/platform/observability/sentry.js";
 import { DataCache } from "../../../src/platform/persistence/data-cache.js";
 import { Storage } from "../../../src/platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../../src/shared/constants.js";
+import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
     captureError: vi.fn(),
@@ -364,6 +365,29 @@ describe("collectExportData", () => {
             module: "pdf-export",
             operation: "select-threads",
         });
+    });
+
+    it("never reports the exception a thread-selection failure carried", async () => {
+        const thrown = piiError("selection");
+        Storage.getFile.mockResolvedValue({ text: "FROM,TO\na,b" });
+        loadRecentThreads.mockRejectedValue(thrown);
+
+        await collectExportData({ includeMessages: true });
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "select-threads" });
+    });
+
+    it("never reports the exception a stored-file read carried", async () => {
+        const thrown = piiError("storage");
+        Storage.getFile.mockRejectedValue(thrown);
+
+        expect((await collectExportData({ includeMessages: true })).threads).toEqual([]);
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "load-messages-file" });
     });
 });
 

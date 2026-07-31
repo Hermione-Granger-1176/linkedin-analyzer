@@ -5,6 +5,7 @@ import {
     terminateThreadsWorker,
 } from "../../../src/features/export/threads-transport.js";
 import { captureError } from "../../../src/platform/observability/sentry.js";
+import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
     captureError: vi.fn(),
@@ -155,12 +156,29 @@ describe("loadRecentThreads", () => {
         });
     });
 
-    it("reports a synthetic error when the event carries none", async () => {
+    it("reports a fixed error when the event carries none", async () => {
         const pending = loadRecentThreads(MESSAGES_CSV);
         workerInstance.emit("messageerror", { type: "messageerror" });
         await pending;
 
-        expect(captureError.mock.calls[0][0].message).toContain("messageerror");
+        expect(captureError.mock.calls[0][0].message).toBe("Threads worker failed.");
+    });
+
+    it("never reports the error a worker failure event carried", async () => {
+        const thrown = piiError("worker");
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        workerInstance.emit("error", { type: "error", error: thrown });
+        await pending;
+
+        expectFixedError(captureError.mock.calls[0][0], thrown);
+    });
+
+    it("never reports the error a failed postMessage carried", async () => {
+        postMessageError = piiError("clone");
+
+        await loadRecentThreads(MESSAGES_CSV);
+
+        expectFixedError(captureError.mock.calls[0][0], postMessageError);
     });
 
     it("falls back to the main thread when the worker times out", async () => {

@@ -107,11 +107,13 @@ describe("registerPdfFonts", () => {
     });
 
     it("falls back to Helvetica when the network rejects", async () => {
-        globalThis.fetch = vi.fn(() => Promise.reject(new Error("offline")));
+        const thrown = new Error("offline");
+        globalThis.fetch = vi.fn(() => Promise.reject(thrown));
         const doc = createDocStub();
 
         expect(await registerPdfFonts(doc)).toBe(FALLBACK_FONTS);
         expect(captureError).toHaveBeenCalledTimes(1);
+        expect(captureError.mock.calls[0][0]).not.toBe(thrown);
     });
 
     it("falls back to Helvetica when registration itself throws", async () => {

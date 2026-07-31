@@ -8,8 +8,9 @@
  * export uses.
  *
  * Message bodies can end up inside the downloaded file, by explicit opt-in.
- * Nothing about them is ever logged, reported or sent anywhere: diagnostics
- * from here carry fixed identifiers only.
+ * Nothing about them is ever logged, reported or sent anywhere: every catch on
+ * this path discards the value it caught and reports a freshly built error, so
+ * no user text can reach the telemetry SDK even before it scrubs an event.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
@@ -95,8 +96,11 @@ export const PdfExport = (() => {
         let available = false;
         try {
             available = await hasExportableData();
-        } catch (error) {
-            captureError(error, { module: "pdf-export", operation: "check-availability" });
+        } catch {
+            captureError(new Error("Export availability check failed."), {
+                module: "pdf-export",
+                operation: "check-availability",
+            });
         }
         elements.trigger.disabled = !available;
         elements.trigger.setAttribute("aria-label", available ? ENABLED_LABEL : DISABLED_LABEL);
@@ -262,8 +266,15 @@ export const PdfExport = (() => {
 
             setBusy(false);
             close();
-        } catch (error) {
-            captureError(error, { module: "pdf-export", operation: "generate" });
+        } catch {
+            // The caught value is discarded on purpose: this catch surrounds CSV
+            // parsing, contact identities, message bodies and jsPDF rendering, so
+            // anything it holds could carry the user's own text. Only a fixed
+            // error crosses into telemetry.
+            captureError(new Error("PDF generation failed."), {
+                module: "pdf-export",
+                operation: "generate",
+            });
             setBusy(false);
             showError(GENERIC_ERROR);
         } finally {

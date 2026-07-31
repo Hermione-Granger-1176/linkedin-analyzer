@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
+
 const jsPDF = vi.hoisted(() => vi.fn());
 
 vi.mock("jspdf", () => ({ jsPDF }));
@@ -377,6 +379,28 @@ describe("PdfExport", () => {
             module: "pdf-export",
             operation: "generate",
         });
+    });
+
+    it("never reports the exception the export path caught", async () => {
+        const thrown = piiError("render");
+        collectExportData.mockRejectedValue(thrown);
+        ui().trigger.click();
+        ui().confirm.click();
+
+        await vi.waitFor(() => expect(ui().error.hidden).toBe(false));
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "generate" });
+    });
+
+    it("never reports the exception an availability check caught", async () => {
+        const thrown = piiError("availability");
+        await setup(() => hasExportableData.mockRejectedValue(thrown));
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({ module: "pdf-export", operation: "check-availability" });
     });
 
     it("clears a previous failure on the next attempt", async () => {

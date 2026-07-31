@@ -3,7 +3,9 @@
  *
  * Owns a short-lived dedicated Web Worker: created on demand, watchdogged, and
  * terminated as soon as the export has its threads. Message bodies never leave
- * this path, and nothing about them is ever reported.
+ * this path, and nothing about them is ever reported: every catch and every
+ * worker error event here discards what it was handed and reports a fixed
+ * error instead.
  */
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
@@ -63,9 +65,9 @@ function initWorker() {
         threadsWorker = new Worker(new URL("./threads-worker.js", import.meta.url), {
             type: "module",
         });
-    } catch (error) {
+    } catch {
         threadsWorker = null;
-        captureError(error, {
+        captureError(new Error("Threads worker could not start."), {
             module: "pdf-export",
             operation: "init-threads-worker",
         });
@@ -136,19 +138,14 @@ function requestThreadsFromWorker(messagesCsv, options) {
             resolve(message.payload.success ? message.payload.threads : null);
         };
 
-        const handleError = (event) => {
-            captureError(
-                event && event.error
-                    ? event.error
-                    : new Error(
-                          `Threads worker ${event && event.type ? event.type : "error"} event`,
-                      ),
-                {
-                    module: "pdf-export",
-                    operation: "threads-worker-error-event",
-                    requestId,
-                },
-            );
+        const handleError = () => {
+            // event.error is never forwarded: this worker parses the raw messages
+            // CSV, so a runtime failure inside it can carry message text.
+            captureError(new Error("Threads worker failed."), {
+                module: "pdf-export",
+                operation: "threads-worker-error-event",
+                requestId,
+            });
             finishRequest();
             resolve(null);
         };
@@ -188,8 +185,10 @@ function requestThreadsFromWorker(messagesCsv, options) {
                     messagesPerPerson: options.messagesPerPerson,
                 },
             });
-        } catch (error) {
-            captureError(error, {
+        } catch {
+            // A structured-clone failure names the value it could not clone, and
+            // that value is the messages CSV.
+            captureError(new Error("Threads worker request could not be posted."), {
                 module: "pdf-export",
                 operation: "threads-worker-post-message",
                 requestId,

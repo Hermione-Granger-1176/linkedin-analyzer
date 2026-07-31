@@ -82,10 +82,11 @@ export async function registerPdfFonts(doc) {
             families[asset.role] = asset.family;
         }
         return Object.freeze(families);
-    } catch (error) {
+    } catch {
         // The export still produces a valid document, so this is a degradation
-        // rather than a failure. No file contents or user text are attached.
-        captureError(error, {
+        // rather than a failure. The caught value is discarded so this path
+        // matches the rest of the export: fixed errors only.
+        captureError(new Error("PDF font registration failed."), {
             module: "pdf-export",
             operation: "register-fonts",
         });

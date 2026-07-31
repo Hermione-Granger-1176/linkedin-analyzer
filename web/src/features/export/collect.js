@@ -88,6 +88,9 @@ function buildAllTimeStats(networkGrowth, outreach) {
 
 /**
  * Read a stored value without letting a storage failure abort the export.
+ *
+ * The caught value is discarded rather than reported: one of these reads is the
+ * stored messages CSV, so a storage error could carry a fragment of it.
  * @param {() => Promise<any>} read - Storage reader
  * @param {string} operation - Fixed identifier for diagnostics
  * @returns {Promise<any>} Stored value, or null when unavailable
@@ -95,8 +98,11 @@ function buildAllTimeStats(networkGrowth, outreach) {
 async function readSafely(read, operation) {
     try {
         return await read();
-    } catch (error) {
-        captureError(error, { module: "pdf-export", operation });
+    } catch {
+        captureError(new Error("Export storage read failed."), {
+            module: "pdf-export",
+            operation,
+        });
         return null;
     }
 }
@@ -118,8 +124,11 @@ function runAnalyticsWorker(analyticsBase) {
         worker = new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
             type: "module",
         });
-    } catch (error) {
-        captureError(error, { module: "pdf-export", operation: "init-analytics-worker" });
+    } catch {
+        captureError(new Error("Analytics worker could not start during export."), {
+            module: "pdf-export",
+            operation: "init-analytics-worker",
+        });
         return Promise.resolve(empty);
     }
 
@@ -268,9 +277,14 @@ async function collectThreads() {
     }
     try {
         return await loadRecentThreads(text);
-    } catch (error) {
+    } catch {
         // A thread-selection failure drops the section rather than the export.
-        captureError(error, { module: "pdf-export", operation: "select-threads" });
+        // The caught value is discarded: it came from parsing the user's own
+        // messages, so only a fixed error is reported.
+        captureError(new Error("Thread selection failed."), {
+            module: "pdf-export",
+            operation: "select-threads",
+        });
         return [];
     }
 }

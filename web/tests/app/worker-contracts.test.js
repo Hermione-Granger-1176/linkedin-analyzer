@@ -505,60 +505,52 @@ describe("worker contracts", () => {
         expect(parsed.value.requestId).toBe(0);
     });
 
-    it("carries the self-detection contact keys through to the worker", () => {
+    it("carries the self-detection connections file through to the worker", () => {
+        const connectionsCsv = "First Name,Last Name,URL\nAda,Lovelace,https://example.com/in/ada";
         const parsed = parseThreadsWorkerRequest({
             type: "threads",
-            payload: {
-                messagesCsv: "FROM,TO\na,b",
-                contactKeys: ["ada lovelace", "https://example.com/in/ada"],
-            },
+            payload: { messagesCsv: "FROM,TO\na,b", connectionsCsv },
         });
 
-        expect(parsed.value.payload.contactKeys).toEqual([
-            "ada lovelace",
-            "https://example.com/in/ada",
-        ]);
+        // Verbatim: the worker derives the tiebreak keys from it, and a rewritten
+        // cell is a key that matches nobody.
+        expect(parsed.value.payload.connectionsCsv).toBe(connectionsCsv);
     });
 
-    it("bounds the contact keys and drops entries that cannot match", () => {
-        const parsed = parseThreadsWorkerRequest({
-            type: "threads",
-            payload: {
-                messagesCsv: "FROM,TO\na,b",
-                contactKeys: ["ada", 7, null, "", "b".repeat(600), "bob"],
-            },
-        });
-
-        // A coerced non-string could only ever be a key that matches nobody.
-        expect(parsed.value.payload.contactKeys).toEqual(["ada", "b".repeat(512), "bob"]);
-    });
-
-    it("truncates a contact key list past the ceiling instead of rejecting it", () => {
-        // A partial tiebreak still resolves more directions than none at all.
-        const parsed = parseThreadsWorkerRequest({
-            type: "threads",
-            payload: {
-                messagesCsv: "FROM,TO\na,b",
-                contactKeys: Array.from({ length: 60005 }, (_unused, index) => `key-${index}`),
-            },
-        });
-
-        expect(parsed.value.payload.contactKeys).toHaveLength(60000);
-        expect(parsed.value.payload.contactKeys[0]).toBe("key-0");
-    });
-
-    it("defaults the contact keys to an empty list when they are absent or invalid", () => {
+    it("defaults the connections file to an empty string when it is absent or invalid", () => {
         const absent = parseThreadsWorkerRequest({
             type: "threads",
             payload: { messagesCsv: "FROM,TO\na,b" },
         });
         const invalidShape = parseThreadsWorkerRequest({
             type: "threads",
-            payload: { messagesCsv: "FROM,TO\na,b", contactKeys: "ada" },
+            payload: { messagesCsv: "FROM,TO\na,b", connectionsCsv: ["Ada"] },
         });
 
-        expect(absent.value.payload.contactKeys).toEqual([]);
-        expect(invalidShape.value.payload.contactKeys).toEqual([]);
+        // A missing connections file leaves the tie unresolved rather than
+        // failing the request: the messages file is what the section is made of.
+        expect(absent.valid).toBe(true);
+        expect(absent.value.payload.connectionsCsv).toBe("");
+        expect(invalidShape.valid).toBe(true);
+        expect(invalidShape.value.payload.connectionsCsv).toBe("");
+    });
+
+    it("rejects an oversized connections file rather than truncating it", () => {
+        // Truncation would leave the worker naming half the user's connections
+        // and calling the other half strangers, which makes the tiebreak wrong
+        // rather than absent.
+        const parsed = parseThreadsWorkerRequest({
+            type: "threads",
+            requestId: 5,
+            payload: {
+                messagesCsv: "FROM,TO\na,b",
+                connectionsCsv: "a".repeat(MAX_CSV_CHARS + 1),
+            },
+        });
+
+        expect(parsed.valid).toBe(false);
+        expect(parsed.error).toContain("connectionsCsv payload exceeds allowed size");
+        expect(parsed.requestId).toBe(5);
     });
 
     it("rejects threads worker requests with a bad envelope or missing CSV", () => {

@@ -2,27 +2,26 @@
  * Transport for the PDF export's thread selection.
  *
  * Owns a short-lived dedicated Web Worker: created on demand, watchdogged, and
- * terminated as soon as the export has its threads. Message bodies never leave
- * this path, and nothing about them is ever reported: every catch and every
- * worker error event here discards what it was handed and reports a fixed
- * error instead.
+ * terminated as soon as the export has its threads. The worker is handed both
+ * raw files, the messages export and the connections export it breaks a
+ * self-detection tie with. Neither leaves this path, and nothing about either
+ * is ever reported: every catch and every worker error event here discards what
+ * it was handed and reports a fixed error instead.
  *
  * Termination is a settling event, not just a teardown. Killing the worker
  * removes every event that could have answered the in-flight request, so
  * `terminateThreadsWorker()` settles it explicitly. A request left pending
  * would keep `loadRecentThreads()` suspended for the life of the page, and its
- * frame holds the raw messages CSV.
+ * frame holds both raw files.
  */
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { computeWorkerTimeout } from "../messages/format.js";
 
+import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
-
-const WORKER_TIMEOUT_BASE_MS = 15000;
-const WORKER_TIMEOUT_PER_MB_MS = 5000;
-const BYTES_PER_MB = 1024 * 1024;
 
 // Above this size, re-parsing on the UI thread would freeze the page, so the
 // export drops the threads section rather than blocking on it.
@@ -58,16 +57,6 @@ let threadsTimeoutId = null;
  * @type {{cancel: () => void}|null}
  */
 let pendingRequest = null;
-
-/**
- * Scale the watchdog with the size of the export being parsed.
- * @param {string} messagesCsv - Raw messages CSV text
- * @returns {number} Timeout in milliseconds
- */
-function computeTimeout(messagesCsv) {
-    const megabytes = messagesCsv.length / BYTES_PER_MB;
-    return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
-}
 
 /**
  * Terminate the threads worker and end whatever it was answering.
@@ -122,11 +111,13 @@ function initWorker() {
  * small exports; a large export with no worker yields an empty list so the PDF
  * simply omits the section.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[], isCancelled?: () => boolean}} [options] - Selection limits, known connections and the run's cancellation check
+ * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
+ * @param {{people?: number, messagesPerPerson?: number, isCancelled?: () => boolean}} [options] - Selection limits and the run's cancellation check
  * @returns {Promise<object[]>} Selected threads, newest conversation first
  */
-export async function loadRecentThreads(messagesCsv, options = {}) {
+export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {}) {
     const text = typeof messagesCsv === "string" ? messagesCsv : "";
+    const contacts = typeof connectionsCsv === "string" ? connectionsCsv : "";
     if (!text) {
         return [];
     }
@@ -140,7 +131,7 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
     }
 
     initWorker();
-    const outcome = await requestThreadsFromWorker(text, options);
+    const outcome = await requestThreadsFromWorker(text, contacts, options);
     if (outcome === CANCELLED) {
         // Falling back here would redo on the UI thread precisely the work the
         // user asked to stop, holding the CSV for as long as it took. Whoever
@@ -157,19 +148,23 @@ export async function loadRecentThreads(messagesCsv, options = {}) {
         return outcome;
     }
 
+    // The ceiling covers the messages file alone, as it always has: the
+    // connections parse below is the one the UI thread used to do on every
+    // path, worker or not, so a fallback that also does it is nothing new.
     if (text.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
         return [];
     }
-    return selectThreadsOnMainThread(text, options);
+    return selectThreadsOnMainThread(text, contacts, options);
 }
 
 /**
  * Ask the worker for the thread selection.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} options - Selection limits and known connections
+ * @param {string} connectionsCsv - Raw connections CSV text
+ * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
  * @returns {Promise<object[]|null|typeof CANCELLED|typeof FAILED>} Threads, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */
-function requestThreadsFromWorker(messagesCsv, options) {
+function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
     if (!threadsWorker) {
         return Promise.resolve(null);
     }
@@ -261,8 +256,9 @@ function requestThreadsFromWorker(messagesCsv, options) {
             if (event && typeof event.preventDefault === "function") {
                 event.preventDefault();
             }
-            // event.error is never forwarded: this worker parses the raw messages
-            // CSV, so a runtime failure inside it can carry message text.
+            // event.error is never forwarded: this worker parses both raw
+            // exports, so a runtime failure inside it can carry message text, or
+            // the name and employer of one of the user's connections.
             captureError(new Error("Threads worker failed."), {
                 module: "pdf-export",
                 operation: "threads-worker-error-event",
@@ -274,6 +270,10 @@ function requestThreadsFromWorker(messagesCsv, options) {
         const request = { cancel: () => settle(CANCELLED) };
         pendingRequest = request;
 
+        // The budget is the shared one rather than a formula of this module's
+        // own: the messages transport watchdogs the very same pair of files, and
+        // two different allowances over one export was an accident of this
+        // module having been written first.
         threadsTimeoutId = window.setTimeout(() => {
             captureError(new Error("Threads worker request timed out."), {
                 module: "pdf-export",
@@ -281,7 +281,7 @@ function requestThreadsFromWorker(messagesCsv, options) {
                 requestId,
             });
             settle(null);
-        }, computeTimeout(messagesCsv));
+        }, computeWorkerTimeout(messagesCsv, connectionsCsv));
 
         try {
             threadsWorker.addEventListener("message", handleMessage);
@@ -292,18 +292,22 @@ function requestThreadsFromWorker(messagesCsv, options) {
                 requestId,
                 payload: {
                     messagesCsv,
+                    // The file itself rather than the tiebreak keys read out of
+                    // it. Deriving them here means parsing tens of thousands of
+                    // connections on the UI thread, which is the very thing the
+                    // worker exists to keep off it; deriving them in the worker
+                    // costs the post one more string. Without either, the worker
+                    // cannot break a self-detection tie the connections file
+                    // could have settled, and every direction chip in a
+                    // one-conversation export reads "unknown".
+                    connectionsCsv,
                     people: options.people,
                     messagesPerPerson: options.messagesPerPerson,
-                    // Without this the worker path cannot break a self-detection
-                    // tie the connections file could have settled, and every
-                    // direction chip in a one-conversation export reads
-                    // "unknown". Only the main-thread fallback used to get it.
-                    contactKeys: options.contactKeys,
                 },
             });
         } catch {
             // A structured-clone failure names the value it could not clone, and
-            // that value is the messages CSV.
+            // that value is one of the two raw exports.
             captureError(new Error("Threads worker request could not be posted."), {
                 module: "pdf-export",
                 operation: "threads-worker-post-message",
@@ -317,13 +321,43 @@ function requestThreadsFromWorker(messagesCsv, options) {
 /**
  * Select threads directly on the main thread as a fallback.
  * @param {string} messagesCsv - Raw messages CSV text
- * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} options - Selection limits and known connections
+ * @param {string} connectionsCsv - Raw connections CSV text
+ * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
  * @returns {object[]} Selected threads
  */
-function selectThreadsOnMainThread(messagesCsv, options) {
+function selectThreadsOnMainThread(messagesCsv, connectionsCsv, options) {
     const result = parseMessagesForExport(messagesCsv);
     if (!result.success) {
         return [];
     }
-    return selectRecentThreads(result.rows, options);
+    return selectRecentThreads(result.rows, {
+        people: options.people,
+        messagesPerPerson: options.messagesPerPerson,
+        contactKeys: mainThreadContactKeys(connectionsCsv),
+    });
+}
+
+/**
+ * Derive the tiebreak keys on the UI thread, for a small export with no worker.
+ *
+ * Parsing on this thread is what the transport exists to avoid, but this path
+ * is already parsing the messages export here by definition, and the browser
+ * that took it has no worker to move anything to. The alternative is a document
+ * whose every direction chip reads "unknown" on exactly those browsers.
+ * @param {string} connectionsCsv - Raw connections CSV text
+ * @returns {string[]} Normalized keys, empty when there are none to be had
+ */
+function mainThreadContactKeys(connectionsCsv) {
+    try {
+        return collectContactKeys(connectionsCsv);
+    } catch {
+        // A tiebreak is a nicety, so this costs a direction chip rather than the
+        // section. The caught value came from parsing the user's own
+        // connections, so only a fixed error crosses into telemetry.
+        captureError(new Error("Connections could not be read for the export's tiebreak."), {
+            module: "pdf-export",
+            operation: "contact-keys-main-thread-parse",
+        });
+        return [];
+    }
 }

@@ -14,12 +14,6 @@ const LIMITS = Object.freeze({
     // DEFAULT_PEOPLE and DEFAULT_MESSAGES_PER_PERSON in features/export/threads.js.
     maxThreadPeople: 10,
     maxThreadMessagesPerPerson: 5,
-    // The self-detection tiebreak keys, one or two per connection. The ceiling
-    // is well past the largest connections list LinkedIn will export; anything
-    // beyond it is truncated rather than rejected, because a partial tiebreak
-    // still resolves more directions than none.
-    maxContactKeys: 60000,
-    maxContactKeyChars: 512,
 });
 
 /**
@@ -85,33 +79,6 @@ function normalizeOptionalString(value, maxLength) {
         return value.slice(0, maxLength);
     }
     return value;
-}
-
-/**
- * Normalize a list of strings to a bounded list of bounded strings.
- *
- * Non-strings and empties are dropped rather than coerced: these lists are
- * looked up by exact value, so a coerced entry could only ever be a key that
- * matches nothing.
- * @param {unknown} value - Raw value
- * @param {number} maxItems - Maximum number of entries kept
- * @param {number} maxItemLength - Maximum length of each entry
- * @returns {string[]}
- */
-function normalizeStringArray(value, maxItems, maxItemLength) {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-    const normalized = [];
-    for (const entry of value) {
-        if (normalized.length >= maxItems) {
-            break;
-        }
-        if (typeof entry === "string" && entry) {
-            normalized.push(normalizeString(entry, maxItemLength));
-        }
-    }
-    return normalized;
 }
 
 /**
@@ -469,11 +436,21 @@ export function parseThreadsWorkerRequest(message) {
     if (messagesCsv.length > LIMITS.maxCsvChars) {
         return rejected("messagesCsv payload exceeds allowed size");
     }
+    // The connections file the worker derives its self-detection tiebreak keys
+    // from. Optional, as it is on the messages worker's own request, but when
+    // present it must respect the same size ceiling as every other CSV payload
+    // rather than being silently truncated: half a connections file names half
+    // the people in it, and the tiebreak would then be wrong rather than absent.
+    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
+    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+        return rejected("connectionsCsv payload exceeds allowed size");
+    }
     return valid({
         type: "threads",
         requestId,
         payload: {
             messagesCsv,
+            connectionsCsv,
             people: normalizeNumber(
                 payload.people,
                 LIMITS.maxThreadPeople,
@@ -485,11 +462,6 @@ export function parseThreadsWorkerRequest(message) {
                 LIMITS.maxThreadMessagesPerPerson,
                 1,
                 LIMITS.maxThreadMessagesPerPerson,
-            ),
-            contactKeys: normalizeStringArray(
-                payload.contactKeys,
-                LIMITS.maxContactKeys,
-                LIMITS.maxContactKeyChars,
             ),
         },
     });

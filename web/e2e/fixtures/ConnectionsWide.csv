@@ -1,0 +1,57 @@
+Notes:
+Export metadata
+
+First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Bob,Smith,https://linkedin.com/in/person0,,北京科技,Engineer,01 Jan 2019
+Cara,Nakamura,https://linkedin.com/in/person1,,北京科技,Manager,02 Jun 2020
+Dan,陈,https://linkedin.com/in/person2,,北京科技,Designer,03 Nov 2021
+Erin,Tanaka,https://linkedin.com/in/person3,,北京科技,Analyst,04 Apr 2022
+Frank,Smith,https://linkedin.com/in/person4,,北京科技,Consultant,05 Sep 2023
+Gita,Nakamura,https://linkedin.com/in/person5,,北京科技,Founder,06 Feb 2024
+Hana,陈,https://linkedin.com/in/person6,,北京科技,Ingénieur,07 Jul 2025
+Ivan,Tanaka,https://linkedin.com/in/person7,,北京科技,Recruiter,08 Dec 2019
+李,Smith,https://linkedin.com/in/person8,,北京科技,Data Scientist,09 May 2020
+Ňuňo,Nakamura,https://linkedin.com/in/person9,,Café Zürich,Product Manager,10 Oct 2021
+Kim,陈,https://linkedin.com/in/person10,,Café Zürich,Head of People Operations and Talent Acquisition Worldwide,11 Mar 2022
+Lena,Tanaka,https://linkedin.com/in/person11,,Café Zürich,Intern,12 Aug 2023
+Mo,Smith,https://linkedin.com/in/person12,,Café Zürich,Engineer,13 Jan 2024
+Nia,Nakamura,https://linkedin.com/in/person13,,Acme,Manager,14 Jun 2025
+Omar,陈,https://linkedin.com/in/person14,,Acme,Designer,15 Nov 2019
+Pia,Tanaka,https://linkedin.com/in/person15,,Acme,Analyst,16 Apr 2020
+Quinn,Smith,https://linkedin.com/in/person16,,Acme,Consultant,17 Sep 2021
+Rosa,Nakamura,https://linkedin.com/in/person17,,Innotech,Founder,18 Feb 2022
+Sam,陈,https://linkedin.com/in/person18,,Innotech,Ingénieur,19 Jul 2023
+Tara,Tanaka,https://linkedin.com/in/person19,,Innotech,Recruiter,20 Dec 2024
+Bob,Smith,https://linkedin.com/in/person20,,Innotech,Data Scientist,21 May 2025
+Cara,Nakamura,https://linkedin.com/in/person21,,Globex,Product Manager,22 Oct 2019
+Dan,陈,https://linkedin.com/in/person22,,Globex,Head of People Operations and Talent Acquisition Worldwide,23 Mar 2020
+Erin,Tanaka,https://linkedin.com/in/person23,,Globex,Intern,24 Aug 2021
+Frank,Smith,https://linkedin.com/in/person24,,Globex,Engineer,25 Jan 2022
+Gita,Nakamura,https://linkedin.com/in/person25,,Initech,Manager,26 Jun 2023
+Hana,陈,https://linkedin.com/in/person26,,Initech,Designer,27 Nov 2024
+Ivan,Tanaka,https://linkedin.com/in/person27,,Initech,Analyst,28 Apr 2025
+李,Smith,https://linkedin.com/in/person28,,Initech,Consultant,01 Sep 2019
+Ňuňo,Nakamura,https://linkedin.com/in/person29,,Umbrella,Founder,02 Feb 2020
+Kim,陈,https://linkedin.com/in/person30,,Umbrella,Ingénieur,03 Jul 2021
+Lena,Tanaka,https://linkedin.com/in/person31,,Umbrella,Recruiter,04 Dec 2022
+Mo,Smith,https://linkedin.com/in/person32,,Umbrella,Data Scientist,05 May 2023
+Nia,Nakamura,https://linkedin.com/in/person33,,Soylent,Product Manager,06 Oct 2024
+Omar,陈,https://linkedin.com/in/person34,,Soylent,Head of People Operations and Talent Acquisition Worldwide,07 Mar 2025
+Pia,Tanaka,https://linkedin.com/in/person35,,Soylent,Intern,08 Aug 2019
+Quinn,Smith,https://linkedin.com/in/person36,,Soylent,Engineer,09 Jan 2020
+Rosa,Nakamura,https://linkedin.com/in/person37,,Vandelay,Manager,10 Jun 2021
+Sam,陈,https://linkedin.com/in/person38,,Vandelay,Designer,11 Nov 2022
+Tara,Tanaka,https://linkedin.com/in/person39,,Vandelay,Analyst,12 Apr 2023
+Bob,Smith,https://linkedin.com/in/person40,,Vandelay,Consultant,13 Sep 2024
+Cara,Nakamura,https://linkedin.com/in/person41,,Hooli,Founder,14 Feb 2025
+Dan,陈,https://linkedin.com/in/person42,,Hooli,Ingénieur,15 Jul 2019
+Erin,Tanaka,https://linkedin.com/in/person43,,Hooli,Recruiter,16 Dec 2020
+Frank,Smith,https://linkedin.com/in/person44,,Hooli,Data Scientist,17 May 2021
+Gita,Nakamura,https://linkedin.com/in/person45,,Stark Industries,Product Manager,18 Oct 2022
+Hana,陈,https://linkedin.com/in/person46,,Stark Industries,Head of People Operations and Talent Acquisition Worldwide,19 Mar 2023
+Ivan,Tanaka,https://linkedin.com/in/person47,,Stark Industries,Intern,20 Aug 2024
+李,Smith,https://linkedin.com/in/person48,,Stark Industries,Engineer,21 Jan 2025
+Ňuňo,Nakamura,https://linkedin.com/in/person49,,Wonka,Manager,22 Jun 2019
+Kim,陈,https://linkedin.com/in/person50,,Wonka,Designer,23 Nov 2020
+Lena,Tanaka,https://linkedin.com/in/person51,,Wonka,Analyst,24 Apr 2021
+Mo,Smith,https://linkedin.com/in/person52,,Wonka,Consultant,25 Sep 2022

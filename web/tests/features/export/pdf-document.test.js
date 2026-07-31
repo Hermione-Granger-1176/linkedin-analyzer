@@ -779,6 +779,19 @@ describe("buildBlocks", () => {
         expect(sections[0].pageBreakBefore).toBe(false);
     });
 
+    it("gives the title company when the first section is not a dashboard", () => {
+        // The rule the dashboards answer to governs the sections after them too.
+        // Asked unconditionally, "Your insights" broke to page two and left an
+        // export with no dashboard printing a page holding nothing but a title.
+        const doc = createDocStub();
+        const pages = paginateBlocks(
+            buildBlocks(createPainter(doc, palette, fonts), { ...SAMPLE, dashboards: [] }),
+            USABLE_HEIGHT,
+        );
+
+        expect(pages[0].map((segment) => segment.block.kind)).toContain("section");
+    });
+
     it("keeps a dashboard where a single stat measured something", () => {
         const doc = createDocStub();
         const blocks = buildBlocks(createPainter(doc, palette, fonts), {
@@ -1160,17 +1173,18 @@ describe("buildBlocks", () => {
 describe("renderPdfDocument", () => {
     it("paints one page background and footer per page", () => {
         const doc = createDocStub();
-        // Insights and conversations each open a page of their own, so this
-        // sample runs to three even though its content would fit on one.
+        // This sample has no dashboards, so insights are the first thing placed
+        // and share page one with the title; conversations then open a page of
+        // their own.
         const pageCount = renderPdfDocument(doc, SAMPLE, theme);
 
-        expect(pageCount).toBe(3);
-        expect(doc.addPage).toHaveBeenCalledTimes(2);
-        expect(doc.calls.text.filter((entry) => entry.value === "Page 1 of 3")).toHaveLength(1);
-        expect(doc.calls.text.filter((entry) => entry.value === "Page 3 of 3")).toHaveLength(1);
+        expect(pageCount).toBe(2);
+        expect(doc.addPage).toHaveBeenCalledTimes(1);
+        expect(doc.calls.text.filter((entry) => entry.value === "Page 1 of 2")).toHaveLength(1);
+        expect(doc.calls.text.filter((entry) => entry.value === "Page 2 of 2")).toHaveLength(1);
         expect(
             doc.calls.rect.filter((args) => args[2] === PAGE.width && args[3] === PAGE.height),
-        ).toHaveLength(3);
+        ).toHaveLength(2);
     });
 
     it("heads a page that opens part way through a dashboard", () => {

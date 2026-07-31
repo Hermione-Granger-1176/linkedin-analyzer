@@ -44,7 +44,7 @@ const HEATMAP_PADDING = Object.freeze({ top: 3, right: 2, bottom: 6, left: 11 })
 
 // Ink per chart type, matching the screens: the timeline and the heatmap are
 // blue, topic bars purple. Fixed here rather than taken from a chart's config,
-// so a dashboard cannot ask for a colour the site never draws that chart in.
+// so a dashboard cannot ask for a color the site never draws that chart in.
 const LINE_ACCENT = "--accent-blue";
 const BAR_ACCENT = "--accent-purple";
 const HEATMAP_ACCENT = "--accent-blue";
@@ -76,6 +76,10 @@ const BAR_MIN_WIDTH = 0.6;
 const BAR_RADIUS = 0.5;
 const LIST_VALUE_WIDTH = 24;
 const LIST_TEXT_INSET = 2;
+// Where a list row's text sits inside its row. The same drop as a bar's height,
+// which is how the two kinds of row line up, but a list row draws no bar and
+// naming it after one sent a reader looking for the chart it belonged to.
+const LIST_TEXT_BASELINE = BAR_HEIGHT;
 // A list row is two columns rather than two strings sharing one width: the
 // primary takes the larger share, the secondary what is left over.
 const LIST_PRIMARY_FRACTION = 0.55;
@@ -160,7 +164,7 @@ export function pickLabelIndices(count, width) {
     for (let index = 0; index < count; index += every) {
         kept.add(index);
     }
-    // The final point anchors where the series ends, so it is always labelled,
+    // The final point anchors where the series ends, so it is always labeled,
     // evicting the one before it when the step left the two too close to sit
     // side by side. Measured in millimetres, like the spacing every other pair
     // gets: over ten years of months the last two indices were six steps apart
@@ -248,6 +252,25 @@ function buildChartTitleBlock(painter, title) {
 }
 
 /**
+ * The drawable rectangle a padded plot of the given height leaves.
+ *
+ * The padding is what the axis labels are drawn into, so the plot itself is
+ * always the row inset by it. Stated once so a third plot type inherits the
+ * convention rather than restating the arithmetic.
+ * @param {{top: number, right: number, bottom: number, left: number}} padding - Room the axes need
+ * @param {number} height - Full row height
+ * @returns {{left: number, top: number, width: number, height: number}} Plot area
+ */
+function plotArea(padding, height) {
+    return {
+        left: padding.left,
+        top: padding.top,
+        width: CONTENT_WIDTH - padding.left - padding.right,
+        height: height - padding.top - padding.bottom,
+    };
+}
+
+/**
  * Draw the horizontal gridlines and the values they stand for.
  * @param {object} painter - Drawing helpers
  * @param {{left: number, top: number, width: number, height: number}} plot - Plot area
@@ -290,16 +313,11 @@ export function buildLineChartBlocks(painter, config) {
     const accent = palette[LINE_ACCENT];
     const areaFill = mixColors(palette["--bg-primary"], accent, 0.18);
 
-    const plot = {
-        left: LINE_PADDING.left,
-        top: LINE_PADDING.top,
-        width: CONTENT_WIDTH - LINE_PADDING.left - LINE_PADDING.right,
-        height: PLOT_HEIGHT - LINE_PADDING.top - LINE_PADDING.bottom,
-    };
+    const plot = plotArea(LINE_PADDING, PLOT_HEIGHT);
     const gridlines = axisScale(Math.max(1, ...points.map((point) => point.value)));
     const maxValue = gridlines[gridlines.length - 1];
     const slice = plot.width / points.length;
-    const labelled = pickLabelIndices(points.length, plot.width);
+    const labeled = pickLabelIndices(points.length, plot.width);
     const showValues = points.length <= MAX_VALUE_LABELS;
     const valueLabelHeight = lineHeightMm(AXIS_SIZE);
 
@@ -312,8 +330,8 @@ export function buildLineChartBlocks(painter, config) {
             const placed = points.map((point, index) => ({
                 x: area.left + slice * index + slice / 2,
                 y: baseline - (point.value / maxValue) * area.height,
-                axisLabel: labelled.has(index) ? String(point.label) : "",
-                valueLabel: showValues && point.value ? String(point.value) : "",
+                axisLabel: labeled.has(index) ? String(point.label) : "",
+                valueLabel: showValues && point.value !== 0 ? String(point.value) : "",
             }));
 
             drawValueAxis(painter, area, gridlines);
@@ -373,18 +391,18 @@ export function buildLineChartBlocks(painter, config) {
                     // Whole label: a weekly point reads "Jan 05" and a growth
                     // point "Jan 2024", so a first word alone would repeat the
                     // month across the axis or drop the year entirely. Held
-                    // inside the plot rather than centred come what may: the
+                    // inside the plot rather than centered come what may: the
                     // last point sits half a slice from the right edge, which
                     // over a decade of months is a third of a millimetre, and
                     // the label ran out over the margin.
                     const half = painter.measure(axisLabel, fonts.body, AXIS_SIZE) / 2;
-                    const centre = Math.min(
+                    const center = Math.min(
                         Math.max(pointX, area.left + half),
                         area.left + area.width - half,
                     );
                     painter.text(
                         axisLabel,
-                        centre,
+                        center,
                         baseline + 4,
                         fonts.body,
                         AXIS_SIZE,
@@ -479,12 +497,7 @@ export function buildHeatmapBlocks(painter, config) {
     const accent = palette[HEATMAP_ACCENT];
     const paper = palette["--bg-primary"];
 
-    const plot = {
-        left: HEATMAP_PADDING.left,
-        top: HEATMAP_PADDING.top,
-        width: CONTENT_WIDTH - HEATMAP_PADDING.left - HEATMAP_PADDING.right,
-        height: HEATMAP_HEIGHT - HEATMAP_PADDING.top - HEATMAP_PADDING.bottom,
-    };
+    const plot = plotArea(HEATMAP_PADDING, HEATMAP_HEIGHT);
     const cellWidth = plot.width / HOURS_PER_DAY;
     const cellHeight = plot.height / DAY_LABELS.length;
     const maxValue = Math.max(1, ...grid.flat());
@@ -585,6 +598,12 @@ export function buildListBlocks(painter, config) {
         const secondary = item.secondary
             ? fitLabel(painter, item.secondary, secondaryWidth, LABEL_SIZE - 1)
             : "";
+        // Fitted for the same reason the two above are: drawn from the right
+        // edge, a value wider than its column reaches back across the secondary
+        // one.
+        const value = item.value
+            ? fitLabel(painter, item.value, LIST_VALUE_WIDTH - LIST_TEXT_INSET, LABEL_SIZE)
+            : "";
         return {
             height: ROW_HEIGHT,
             draw: (x, y) => {
@@ -592,7 +611,7 @@ export function buildListBlocks(painter, config) {
                 painter.text(
                     primary,
                     x + LIST_TEXT_INSET,
-                    y + BAR_HEIGHT,
+                    y + LIST_TEXT_BASELINE,
                     fonts.body,
                     LABEL_SIZE,
                     palette["--text-primary"],
@@ -601,18 +620,18 @@ export function buildListBlocks(painter, config) {
                     painter.text(
                         secondary,
                         x + valueLeft - LIST_TEXT_INSET,
-                        y + BAR_HEIGHT,
+                        y + LIST_TEXT_BASELINE,
                         fonts.body,
                         LABEL_SIZE - 1,
                         palette["--text-muted"],
                         { align: "right" },
                     );
                 }
-                if (item.value) {
+                if (value) {
                     painter.text(
-                        item.value,
+                        value,
                         x + CONTENT_WIDTH - LIST_TEXT_INSET,
-                        y + BAR_HEIGHT,
+                        y + LIST_TEXT_BASELINE,
                         fonts.body,
                         LABEL_SIZE,
                         palette["--text-secondary"],

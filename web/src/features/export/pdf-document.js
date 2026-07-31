@@ -330,8 +330,8 @@ export function createPainter(doc, palette, fonts) {
 
     /**
      * Fill a circle.
-     * @param {number} x - Centre x
-     * @param {number} y - Centre y
+     * @param {number} x - Center x
+     * @param {number} y - Center y
      * @param {number} radius - Radius
      * @param {Rgb} color - Fill color
      */
@@ -517,7 +517,7 @@ function buildSectionBlock(painter, label, options = {}) {
         },
     ];
 
-    const subtitle = options.subtitle || "";
+    const { subtitle } = options;
     if (subtitle) {
         rows.push({
             height: lineHeightMm(captionSize) + 1.5,
@@ -667,15 +667,17 @@ function fitStatValue(painter, value, width) {
     // A tile whose value never arrived is left blank rather than cut down to an
     // ellipsis standing for nothing.
     const text = value ?? "";
+    let longest = "";
     for (const size of STAT_VALUE_SIZES) {
         const [first, ...rest] = painter.wrap(text, width, painter.fonts.accent, size);
         if (!rest.length) {
             return { text: first, size };
         }
+        longest = first;
     }
-    const smallest = STAT_VALUE_SIZES[STAT_VALUE_SIZES.length - 1];
-    const [first] = painter.wrap(text, width, painter.fonts.accent, smallest);
-    return { text: `${String(first).trimEnd()}…`, size: smallest };
+    // The last iteration already wrapped at the smallest size, so its first line
+    // is the most that size can hold; measuring it again would say the same.
+    return { text: `${longest.trimEnd()}…`, size: STAT_VALUE_SIZES[STAT_VALUE_SIZES.length - 1] };
 }
 
 /**
@@ -1003,9 +1005,10 @@ function buildDashboardBlocks(painter, dashboard, pageBreakBefore) {
         const build = CHART_BUILDERS[chart.type];
         // A type no builder answers to is skipped: the rest of the export is
         // worth more to the reader than the one chart nobody knows how to draw.
-        if (build) {
-            body.push(...build(painter, chart));
+        if (!build) {
+            continue;
         }
+        body.push(...build(painter, chart));
     }
 
     // Everything below the heading says what a page opening on it should be
@@ -1031,22 +1034,19 @@ export function buildBlocks(painter, data) {
 
     const blocks = [buildHeaderBlock(painter, data)];
 
-    // The first dashboard follows the title on page one; every later one opens
-    // on its own page, the way each of these is its own screen on the site.
-    // Counted by the dashboards that had something to show rather than by
-    // position, so one that turned out to be empty does not leave the title
-    // alone on a page of its own.
-    let placed = 0;
+    // Whatever comes first follows the title on page one; every section after
+    // it opens on its own page, the way each of these is its own screen on the
+    // site. Asked of the blocks already placed rather than of position, so a
+    // dashboard or a section that turned out to be empty does not leave the
+    // title alone on a page of its own.
     for (const dashboard of dashboards) {
-        const dashboardBlocks = buildDashboardBlocks(painter, dashboard, placed > 0);
-        if (dashboardBlocks.length) {
-            blocks.push(...dashboardBlocks);
-            placed += 1;
-        }
+        blocks.push(...buildDashboardBlocks(painter, dashboard, blocks.length > 1));
     }
 
     if (insights.length) {
-        blocks.push(buildSectionBlock(painter, "Your insights", { pageBreakBefore: true }));
+        blocks.push(
+            buildSectionBlock(painter, "Your insights", { pageBreakBefore: blocks.length > 1 }),
+        );
         blocks.push(
             ...insights.map((insight, index) => buildInsightBlock(painter, insight, index + 1)),
         );
@@ -1058,7 +1058,11 @@ export function buildBlocks(painter, data) {
         blocks.push(buildSectionBlock(painter, "All time"), buildStatsBlock(painter, allTime));
     }
     if (threads.length) {
-        blocks.push(buildSectionBlock(painter, "Recent conversations", { pageBreakBefore: true }));
+        blocks.push(
+            buildSectionBlock(painter, "Recent conversations", {
+                pageBreakBefore: blocks.length > 1,
+            }),
+        );
         for (const thread of threads) {
             blocks.push(buildThreadHeaderBlock(painter, thread));
             blocks.push(

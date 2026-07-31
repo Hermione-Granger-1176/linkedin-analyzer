@@ -1,5 +1,5 @@
 /**
- * Page geometry and colour arithmetic shared by the PDF layout engine.
+ * Page geometry and color arithmetic shared by the PDF layout engine.
  *
  * The document module owns blocks and pagination, and the chart module owns
  * plotting; both need the same millimetre grid and the same rules about which

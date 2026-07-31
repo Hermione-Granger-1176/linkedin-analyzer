@@ -14,7 +14,8 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-tooltip.js";
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
-import { parseLocalDate } from "../analytics/dates.js";
+
+import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
 
 export const ConnectionsPage = (() => {
     "use strict";
@@ -24,18 +25,9 @@ export const ConnectionsPage = (() => {
         timeRange: "12m",
     });
 
-    const RANGE_DAYS = Object.freeze({
-        "1m": 30,
-        "3m": 91,
-        "6m": 182,
-        "12m": 365,
-    });
-
-    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const RANGE_VALUES = new Set(RANGE_KEYS);
     const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
-    const MS_PER_DAY = 24 * 60 * 60 * 1000;
     const WORKER_TIMEOUT_MS = 30000;
-    const TOP_N = 10;
 
     /** @type {{filters: {timeRange: string}, dataReady: boolean, hasData: boolean, allRows: Array<{connectedOn: number, company: string, position: string}>|null, allTimeline: Array<object>|null, workerStats: {total?: number, networkAgeMonths?: number}|null, currentView: object|null}} */
     const state = {
@@ -452,13 +444,8 @@ export const ConnectionsPage = (() => {
         /* v8 ignore next */
         const rawRows = payload.rows || [];
 
-        /* Normalize field names for client-side filtering (worker returns title-case keys) */
         markPerformance("connections:normalize:start");
-        const rows = rawRows.map((row) => ({
-            connectedOn: parseConnectedOn(row["Connected On"]),
-            company: (row.Company || "").trim(),
-            position: (row.Position || "").trim(),
-        }));
+        const rows = normalizeConnectionRows(rawRows);
         markPerformance("connections:normalize:end");
         measurePerformance(
             "connections:normalize",
@@ -544,126 +531,15 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        const filtered = filterRowsByRange(state.allRows, state.filters.timeRange);
-        const companies = aggregateField(filtered, "company");
-        const positions = aggregateField(filtered, "position");
-        const ws = state.workerStats;
-        const stats = {
-            total: (ws && ws.total) || state.allRows.length,
-            recent: filtered.length,
-            topCompany: findTopValue(filtered, "company"),
-            networkAge: formatNetworkAge((ws && ws.networkAgeMonths) || 0),
-        };
-
-        const view = {
-            timeline: state.allTimeline,
-            companies,
-            positions,
-            stats,
-        };
+        const view = buildConnectionsView(
+            state.allRows,
+            state.allTimeline,
+            state.workerStats,
+            state.filters.timeRange,
+        );
 
         state.currentView = view;
         renderView(view);
-    }
-
-    /**
-     * Parse a cleaned "Connected On" date string into a timestamp.
-     * @param {string} dateStr - ISO-style date string (YYYY-MM-DD)
-     * @returns {number} Epoch milliseconds, or 0 if unparseable
-     */
-    function parseConnectedOn(dateStr) {
-        const parsed = parseLocalDate(dateStr);
-        return parsed ? parsed.getTime() : 0;
-    }
-
-    /**
-     * Filter connection rows by the selected time range.
-     * @param {Array<object>} rows - All parsed connection rows
-     * @param {string} range - Time range key ('1m', '3m', '6m', '12m', 'all')
-     * @returns {Array<object>} Filtered rows within the range
-     */
-    function filterRowsByRange(rows, range) {
-        if (range === "all") {
-            return rows;
-        }
-
-        const days = RANGE_DAYS[range];
-        /* v8 ignore next 3 */
-        if (!days) {
-            return rows;
-        }
-
-        const cutoff = Date.now() - days * MS_PER_DAY;
-        return rows.filter((row) => row.connectedOn >= cutoff);
-    }
-
-    /**
-     * Aggregate a string field into {topic, count} pairs, sorted descending.
-     * @param {Array<object>} rows - Connection rows to aggregate
-     * @param {string} field - Field name to aggregate ('company' or 'position')
-     * @returns {Array<{topic: string, count: number}>} Top N aggregated entries
-     */
-    function aggregateField(rows, field) {
-        const counts = Object.create(null);
-        for (const row of rows) {
-            const value = row[field];
-            /* v8 ignore next 3 */
-            if (!value) {
-                continue;
-            }
-            counts[value] = (counts[value] || 0) + 1;
-        }
-
-        return Object.entries(counts)
-            .map(([topic, count]) => ({ topic, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, TOP_N);
-    }
-
-    /**
-     * Find the most frequent value for a given field.
-     * @param {Array<object>} rows - Connection rows
-     * @param {string} field - Field name
-     * @returns {string} Most frequent value or '-'
-     */
-    function findTopValue(rows, field) {
-        if (!rows.length) {
-            return "-";
-        }
-
-        const counts = Object.create(null);
-        let maxKey = "";
-        let maxCount = 0;
-        for (const row of rows) {
-            const value = row[field];
-            /* v8 ignore next 3 */
-            if (!value) {
-                continue;
-            }
-            const next = (counts[value] || 0) + 1;
-            counts[value] = next;
-            if (next > maxCount) {
-                maxCount = next;
-                maxKey = value;
-            }
-        }
-
-        return maxKey || "-";
-    }
-
-    /**
-     * Format a network age in months as a human-readable string.
-     * @param {number} months - Network age from worker stats
-     * @returns {string} Human-readable network age (e.g. '3.2 yr')
-     */
-    function formatNetworkAge(months) {
-        if (!months) {
-            return "-";
-        }
-        if (months < 12) {
-            return `${months} mo`;
-        }
-        return `${(months / 12).toFixed(1)} yr`;
     }
 
     /**

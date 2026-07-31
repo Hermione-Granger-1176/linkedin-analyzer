@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import {
     loadRecentThreads,
     terminateThreadsWorker,
@@ -15,6 +16,24 @@ const MESSAGES_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
     'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
     'c2,Sam Self,Bob,2025-01-03 10:00:00 UTC,"Hello Bob",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
+].join("\n");
+
+// One conversation, both directions, so the messages file alone cannot say who
+// the account owner is: the case the connections file exists to settle.
+const TIED_CSV = [
+    "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+    'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
+    'c1,Ada,Sam Self,2025-01-02 10:00:00 UTC,"Hi Sam",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/sam',
+].join("\n");
+
+// Ada carries no connection date, which the cleaner drops the whole row for.
+// Both paths derive their keys from the parsed rows, so both still find her.
+const CONNECTIONS_CSV = [
+    "Notes:",
+    "Export metadata",
+    "",
+    "First Name,Last Name,URL,Email Address,Company,Position,Connected On",
+    "Ada,,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,",
 ].join("\n");
 
 let workerInstance = null;
@@ -70,17 +89,18 @@ describe("loadRecentThreads", () => {
     afterEach(() => {
         terminateThreadsWorker();
         vi.useRealTimers();
+        vi.restoreAllMocks();
         delete globalThis.Worker;
     });
 
     it("returns nothing for blank input without starting a worker", async () => {
-        expect(await loadRecentThreads("")).toEqual([]);
-        expect(await loadRecentThreads(null)).toEqual([]);
+        expect(await loadRecentThreads("", "")).toEqual([]);
+        expect(await loadRecentThreads(null, "")).toEqual([]);
         expect(workerInstance).toBeNull();
     });
 
     it("resolves with the worker's threads and terminates it", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV, { people: 3, messagesPerPerson: 2 });
+        const pending = loadRecentThreads(MESSAGES_CSV, "", { people: 3, messagesPerPerson: 2 });
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
@@ -103,16 +123,19 @@ describe("loadRecentThreads", () => {
         expect(worker.terminate).toHaveBeenCalled();
     });
 
-    it("sends the connections tiebreak keys to the worker", async () => {
-        // Without these on the request the worker cannot tell which side of a
-        // single conversation is the account owner, and every direction chip in
-        // the exported document reads "unknown".
-        const contactKeys = ["ada", "https://linkedin.com/in/ada"];
-        const pending = loadRecentThreads(MESSAGES_CSV, { contactKeys });
+    it("sends the raw connections file to the worker and parses nothing here", async () => {
+        // Without it the worker cannot tell which side of a single conversation
+        // is the account owner, and every direction chip in the exported
+        // document reads "unknown". Deriving the keys on this side instead is
+        // the whole-file parse that kept the Escape key from reaching its own
+        // handler, so the file travels raw and the worker does the reading.
+        const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
+        const pending = loadRecentThreads(MESSAGES_CSV, CONNECTIONS_CSV);
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
-        expect(request.payload.contactKeys).toEqual(contactKeys);
+        expect(request.payload.connectionsCsv).toBe(CONNECTIONS_CSV);
+        expect(request.payload.contactKeys).toBeUndefined();
 
         worker.emit("message", {
             data: {
@@ -122,10 +145,39 @@ describe("loadRecentThreads", () => {
             },
         });
         await pending;
+
+        expect(parseCSV).not.toHaveBeenCalled();
+    });
+
+    it("scales the watchdog with the connections file as well", async () => {
+        // The worker reads both files now, so a budget scaled to the messages
+        // export alone would fire early on a large connections export and send
+        // a parse the worker was still doing to the UI thread instead.
+        vi.useFakeTimers();
+        const threeMbConnections = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(320000)}`;
+        expect(threeMbConnections.length).toBeGreaterThan(3 * 1024 * 1024);
+        expect(threeMbConnections.length).toBeLessThan(4 * 1024 * 1024);
+
+        const pending = loadRecentThreads(MESSAGES_CSV, threeMbConnections);
+
+        // 30s base plus 5s per whole megabyte: 45s, where the messages file
+        // alone would have bought 30s.
+        vi.advanceTimersByTime(30001);
+        expect(captureError).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(15000);
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "threads-worker-timeout",
+            requestId: expect.any(Number),
+        });
+
+        vi.useRealTimers();
+        await pending;
     });
 
     it("starts no worker for a run that has already been cancelled", async () => {
-        expect(await loadRecentThreads(MESSAGES_CSV, { isCancelled: () => true })).toEqual([]);
+        expect(await loadRecentThreads(MESSAGES_CSV, "", { isCancelled: () => true })).toEqual([]);
         expect(workerInstance).toBeNull();
     });
 
@@ -133,9 +185,9 @@ describe("loadRecentThreads", () => {
         // Both requests would otherwise own the same module-level watchdog and
         // settle hook, and whichever the worker answered first would clear the
         // other's - leaving that promise pending for the life of the page.
-        const first = loadRecentThreads(MESSAGES_CSV);
+        const first = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
-        const second = loadRecentThreads(MESSAGES_CSV);
+        const second = loadRecentThreads(MESSAGES_CSV, "");
         const [, secondRequest] = worker.postMessage.mock.calls;
 
         worker.emit("message", {
@@ -153,7 +205,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("ignores stale successes for other requests and invalid envelopes", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
@@ -185,7 +237,7 @@ describe("loadRecentThreads", () => {
         // The worker has already run this exact code over this exact CSV and
         // said it cannot yield threads. Re-running it on the UI thread freezes
         // the page to reach the same answer, so the section is simply dropped.
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
@@ -207,7 +259,7 @@ describe("loadRecentThreads", () => {
 
     it("treats a failure envelope as terminal even under another request id", async () => {
         vi.useFakeTimers();
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
@@ -233,7 +285,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("falls back to the main thread when the worker errors", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         workerInstance.emit("error", { type: "error", error: new Error("worker blew up") });
 
         expect((await pending).map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
@@ -245,16 +297,16 @@ describe("loadRecentThreads", () => {
     });
 
     it("reports a fixed error when the event carries none", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         workerInstance.emit("messageerror", { type: "messageerror" });
         await pending;
 
-        expect(captureError.mock.calls[0][0].message).toBe("Threads worker failed.");
+        expect(captureError.mock.calls[0][0].message).toBe("Threads worker failed during export.");
     });
 
     it("never reports the error a worker failure event carried", async () => {
         const thrown = piiError("worker");
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         workerInstance.emit("error", { type: "error", error: thrown });
         await pending;
 
@@ -263,7 +315,7 @@ describe("loadRecentThreads", () => {
 
     it("cancels a worker error event so the browser cannot report it", async () => {
         const preventDefault = vi.fn();
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         // An uncancelled error event on a Worker is reported by the browser
         // itself, and that report reaches the console with the worker's own
         // message - here, text parsed straight out of the messages CSV.
@@ -276,14 +328,14 @@ describe("loadRecentThreads", () => {
     it("never reports the error a failed postMessage carried", async () => {
         postMessageError = piiError("clone");
 
-        await loadRecentThreads(MESSAGES_CSV);
+        await loadRecentThreads(MESSAGES_CSV, "");
 
         expectFixedError(captureError.mock.calls[0][0], postMessageError);
     });
 
     it("settles a terminated request instead of leaving it pending", async () => {
         vi.useFakeTimers();
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         expect(worker.postMessage).toHaveBeenCalled();
 
@@ -300,7 +352,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("does not re-parse on the main thread after a cancellation", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         terminateThreadsWorker();
 
         // The main-thread fallback would answer with these threads; redoing the
@@ -310,7 +362,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("detaches a cancelled request from the worker it was listening to", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
 
@@ -333,7 +385,7 @@ describe("loadRecentThreads", () => {
     });
 
     it("tolerates a second termination with nothing in flight", async () => {
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         terminateThreadsWorker();
         await pending;
 
@@ -342,11 +394,11 @@ describe("loadRecentThreads", () => {
     });
 
     it("runs a fresh request after a cancelled one", async () => {
-        const cancelled = loadRecentThreads(MESSAGES_CSV);
+        const cancelled = loadRecentThreads(MESSAGES_CSV, "");
         terminateThreadsWorker();
         expect(await cancelled).toEqual([]);
 
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = workerInstance;
         const [request] = worker.postMessage.mock.calls[0];
         worker.emit("message", {
@@ -362,7 +414,7 @@ describe("loadRecentThreads", () => {
 
     it("falls back to the main thread when the worker times out", async () => {
         vi.useFakeTimers();
-        const pending = loadRecentThreads(MESSAGES_CSV);
+        const pending = loadRecentThreads(MESSAGES_CSV, "");
         vi.advanceTimersByTime(60000);
         vi.useRealTimers();
 
@@ -377,7 +429,7 @@ describe("loadRecentThreads", () => {
     it("falls back to the main thread when posting to the worker throws", async () => {
         postMessageError = new Error("clone failed");
 
-        expect((await loadRecentThreads(MESSAGES_CSV)).map((thread) => thread.name)).toEqual([
+        expect((await loadRecentThreads(MESSAGES_CSV, "")).map((thread) => thread.name)).toEqual([
             "Bob",
             "Ada",
         ]);
@@ -391,7 +443,7 @@ describe("loadRecentThreads", () => {
     it("falls back to the main thread when the worker cannot be constructed", async () => {
         constructorError = new Error("no workers here");
 
-        expect((await loadRecentThreads(MESSAGES_CSV)).map((thread) => thread.name)).toEqual([
+        expect((await loadRecentThreads(MESSAGES_CSV, "")).map((thread) => thread.name)).toEqual([
             "Bob",
             "Ada",
         ]);
@@ -404,16 +456,60 @@ describe("loadRecentThreads", () => {
     it("selects on the main thread when workers are unavailable", async () => {
         delete globalThis.Worker;
 
-        expect((await loadRecentThreads(MESSAGES_CSV)).map((thread) => thread.name)).toEqual([
+        expect((await loadRecentThreads(MESSAGES_CSV, "")).map((thread) => thread.name)).toEqual([
             "Bob",
             "Ada",
         ]);
     });
 
+    it("breaks the tie on the main thread with the same keys the worker derives", async () => {
+        // The fallback has to answer with the document the worker would have
+        // produced, tiebreak included: a browser with no worker is not a browser
+        // that deserves every direction chip reading "unknown". Ada's row
+        // carries no connection date, so a fallback that cleaned rather than
+        // parsed would drop her and lose the tie.
+        delete globalThis.Worker;
+
+        const unaided = await loadRecentThreads(TIED_CSV, "");
+        expect(unaided[0].messages.map((entry) => entry.direction)).toEqual([
+            "unknown",
+            "unknown",
+        ]);
+
+        const aided = await loadRecentThreads(TIED_CSV, CONNECTIONS_CSV);
+        expect(aided[0].messages.map((entry) => entry.direction)).toEqual(["sent", "received"]);
+    });
+
+    it("never reports what an unparseable connections file carried on the main thread", async () => {
+        delete globalThis.Worker;
+        const thrown = piiError("connections");
+        const parseCSV = LinkedInCleaner.parseCSV;
+        vi.spyOn(LinkedInCleaner, "parseCSV").mockImplementation((text, fileType) => {
+            if (fileType === "connections") {
+                throw thrown;
+            }
+            return parseCSV.call(LinkedInCleaner, text, fileType);
+        });
+
+        // The tiebreak goes; the section it would have labelled stays.
+        const threads = await loadRecentThreads(TIED_CSV, CONNECTIONS_CSV);
+        expect(threads[0].messages.map((entry) => entry.direction)).toEqual([
+            "unknown",
+            "unknown",
+        ]);
+
+        const [reported, context] = captureError.mock.calls[0];
+        expectFixedError(reported, thrown);
+        expect(context).toEqual({
+            module: "pdf-export",
+            operation: "contact-keys-main-thread-parse",
+        });
+    });
+
     it("returns nothing on the main thread when the CSV cannot be parsed", async () => {
         delete globalThis.Worker;
 
-        expect(await loadRecentThreads("not,a,valid,csv")).toEqual([]);
+        expect(await loadRecentThreads("not,a,valid,csv", "")).toEqual([]);
     });
 
     it("skips the main-thread fallback for very large exports", async () => {
@@ -421,7 +517,20 @@ describe("loadRecentThreads", () => {
         const huge = `${MESSAGES_CSV}\n${"# padding\n".repeat(600000)}`;
 
         expect(huge.length).toBeGreaterThan(5 * 1024 * 1024);
-        expect(await loadRecentThreads(huge)).toEqual([]);
+        expect(await loadRecentThreads(huge, "")).toEqual([]);
+    });
+
+    it("counts the connections file against the fallback ceiling too", async () => {
+        // The fallback parses both files: the messages export for the threads,
+        // the connections export for the tiebreak keys. A ceiling that measured
+        // only the first would wave through a small messages file beside a huge
+        // connections one and then parse all of it on the UI thread.
+        delete globalThis.Worker;
+        const hugeContacts = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
+
+        expect(MESSAGES_CSV.length).toBeLessThan(5 * 1024 * 1024);
+        expect(hugeContacts.length).toBeGreaterThan(5 * 1024 * 1024);
+        expect(await loadRecentThreads(MESSAGES_CSV, hugeContacts)).toEqual([]);
     });
 
     it("still selects on the main thread just under the fallback ceiling", async () => {
@@ -432,23 +541,25 @@ describe("loadRecentThreads", () => {
         const padded = `${MESSAGES_CSV}\n${"# padding\n".repeat(10)}`;
 
         expect(padded.length).toBeLessThan(5 * 1024 * 1024);
-        expect((await loadRecentThreads(padded)).map((thread) => thread.name)).toEqual([
+        expect((await loadRecentThreads(padded, "")).map((thread) => thread.name)).toEqual([
             "Bob",
             "Ada",
         ]);
     });
 
     it("scales the watchdog with the size of the export", async () => {
-        // 15s base plus 5s per whole megabyte. The only other timeout test
-        // advances 60s against a three-line CSV, so it would pass for a constant.
+        // The shared budget from messages/format.js: a 30s base plus 5s per
+        // whole megabyte, which is 45s here. The only other timeout test
+        // advances 60s against a three-line CSV, so it would pass for a
+        // constant, and the base is asserted through a size that crosses it.
         vi.useFakeTimers();
         const threeMb = `${MESSAGES_CSV}\n${"# padding\n".repeat(320000)}`;
         expect(threeMb.length).toBeGreaterThan(3 * 1024 * 1024);
         expect(threeMb.length).toBeLessThan(4 * 1024 * 1024);
 
-        const pending = loadRecentThreads(threeMb);
+        const pending = loadRecentThreads(threeMb, "");
 
-        vi.advanceTimersByTime(29999);
+        vi.advanceTimersByTime(44999);
         expect(captureError).not.toHaveBeenCalled();
 
         vi.advanceTimersByTime(2);

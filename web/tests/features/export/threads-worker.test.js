@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { processPayload } from "../../../src/features/export/threads-worker.js";
 import { PII_MARKER, piiError } from "../../helpers/pii-sentinel.js";
 
@@ -10,7 +11,47 @@ const MESSAGES_CSV = [
     'c2,Sam Self,Bob,2025-01-03 10:00:00 UTC,"Hello Bob",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
 ].join("\n");
 
+// One conversation, both directions: the messages file alone cannot say which
+// of the two is the account owner, so this is the case where the connections
+// list is the only evidence there is.
+const TIED_CSV = [
+    "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+    'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
+    'c1,Ada,Sam Self,2025-01-02 10:00:00 UTC,"Hi Sam",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/sam',
+].join("\n");
+
+const CONNECTIONS_HEADER =
+    "First Name,Last Name,URL,Email Address,Company,Position,Connected On";
+
+/**
+ * Build a connections export naming Ada, with the date column as given.
+ * @param {string} connectedOn - Value of the "Connected On" cell
+ * @returns {string} Connections CSV, preamble and all
+ */
+function adaConnectionsCsv(connectedOn) {
+    return [
+        "Notes:",
+        "Export metadata",
+        "",
+        CONNECTIONS_HEADER,
+        `Ada,,https://linkedin.com/in/ada,,Analytical Engines,Mathematician,${connectedOn}`,
+    ].join("\n");
+}
+
+/**
+ * Read the direction chip of every message in the first thread.
+ * @param {{threads: object[]}} result - Worker result
+ * @returns {string[]} Directions, oldest message first
+ */
+function directions(result) {
+    return result.threads[0].messages.map((entry) => entry.direction);
+}
+
 describe("threads worker", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("cleans the CSV and selects threads", () => {
         const result = processPayload({ messagesCsv: MESSAGES_CSV });
 
@@ -38,31 +79,71 @@ describe("threads worker", () => {
         expect(result.threads[0].messages).toHaveLength(1);
     });
 
-    it("breaks a self-detection tie with the contact keys from the request", () => {
-        // One conversation, both directions: the messages file alone cannot say
-        // which of the two is the account owner, so this is the case where the
-        // connections list is the only evidence there is.
-        const tiedCsv = [
-            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
-            'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
-            'c1,Ada,Sam Self,2025-01-02 10:00:00 UTC,"Hi Sam",INBOX,https://linkedin.com/in/ada,https://linkedin.com/in/sam',
-        ].join("\n");
+    it("breaks a self-detection tie with the connections file from the request", () => {
+        const unaided = processPayload({ messagesCsv: TIED_CSV });
+        expect(directions(unaided)).toEqual(["unknown", "unknown"]);
 
-        const unaided = processPayload({ messagesCsv: tiedCsv });
-        expect(unaided.threads[0].messages.map((entry) => entry.direction)).toEqual([
-            "unknown",
-            "unknown",
-        ]);
-
-        // Ada is a connection, and you are never in your own connections.
+        // Ada is a connection, and you are never in your own connections. The
+        // keys are derived here rather than posted in: parsing this file is the
+        // last piece of export work that used to run on the UI thread.
         const aided = processPayload({
-            messagesCsv: tiedCsv,
-            contactKeys: ["https://linkedin.com/in/ada"],
+            messagesCsv: TIED_CSV,
+            connectionsCsv: adaConnectionsCsv("01 Jan 2024"),
         });
-        expect(aided.threads[0].messages.map((entry) => entry.direction)).toEqual([
-            "sent",
-            "received",
-        ]);
+        expect(directions(aided)).toEqual(["sent", "received"]);
+    });
+
+    it("keeps a connection whose export recorded no connection date", () => {
+        // The spreadsheet cleaner drops a row with no "Connected On", which is
+        // right for the connections dashboard and wrong here: somebody you are
+        // connected to is still not you whether or not the export recorded when
+        // it happened. Deriving these keys from cleaned rows loses Ada, and the
+        // tie goes back to "unknown".
+        const undated = adaConnectionsCsv("");
+        expect(LinkedInCleaner.process(undated, "connections").cleanedData).toHaveLength(0);
+
+        const result = processPayload({ messagesCsv: TIED_CSV, connectionsCsv: undated });
+
+        expect(directions(result)).toEqual(["sent", "received"]);
+    });
+
+    it("leaves the tie unresolved when the connections file will not parse", () => {
+        const result = processPayload({
+            messagesCsv: TIED_CSV,
+            connectionsCsv: "not,a,connections,export",
+        });
+
+        expect(result.success).toBe(true);
+        expect(directions(result)).toEqual(["unknown", "unknown"]);
+    });
+
+    it("treats a non-string connections file as absent", () => {
+        const result = processPayload({ messagesCsv: TIED_CSV, connectionsCsv: 7 });
+
+        expect(result.success).toBe(true);
+        expect(directions(result)).toEqual(["unknown", "unknown"]);
+    });
+
+    it("keeps the thread selection when the connections parse throws", () => {
+        // A tiebreak is a nicety: losing it costs a direction chip, not the
+        // section. Nothing the parse threw may reach the reply either, since it
+        // was reading the user's own connections when it failed.
+        const parseCSV = LinkedInCleaner.parseCSV;
+        vi.spyOn(LinkedInCleaner, "parseCSV").mockImplementation((text, fileType) => {
+            if (fileType === "connections") {
+                throw piiError("connections");
+            }
+            return parseCSV.call(LinkedInCleaner, text, fileType);
+        });
+
+        const result = processPayload({
+            messagesCsv: TIED_CSV,
+            connectionsCsv: adaConnectionsCsv("01 Jan 2024"),
+        });
+
+        expect(result.success).toBe(true);
+        expect(directions(result)).toEqual(["unknown", "unknown"]);
+        expect(JSON.stringify(result)).not.toContain(PII_MARKER);
     });
 
     it("keeps formula-prefixed and whitespace-led bodies verbatim", () => {

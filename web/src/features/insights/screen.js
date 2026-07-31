@@ -45,12 +45,14 @@ export const InsightsPage = (() => {
     // Guard against a worker that constructs but never responds (chunk load
     // failure, silent hang): without this the loading overlay would stay up forever.
     const WORKER_TIMEOUT_MS = 30000;
-    /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
+    /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, currentView: object|null, currentViewRange: string|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
         hasData: false,
         currentInsights: null,
+        currentView: null,
+        currentViewRange: null,
         // Lifetime values for the All-time section: networkGrowth rides on each
         // view (same value regardless of filters); outreach is loaded once from
         // storage since it is produced by the separate messages worker.
@@ -191,6 +193,8 @@ export const InsightsPage = (() => {
         state.analyticsReady = false;
         state.hasData = false;
         state.currentInsights = null;
+        state.currentView = null;
+        state.currentViewRange = null;
     }
 
     /** Create the analytics Web Worker. */
@@ -359,6 +363,16 @@ export const InsightsPage = (() => {
      */
     function applyWorkerInsightsPayload(payload) {
         state.currentInsights = payload.insights || null;
+        // The whole view is kept, not just the growth figure off it: the PDF
+        // export plots its activity dashboard from the timeline, topics and
+        // heatmap on it, and without this the snapshot below would send it back
+        // to the worker for numbers this screen has already been given.
+        state.currentView = payload.view || null;
+        // Recorded with the view, not read off the filters later: the filter is
+        // updated the moment the user picks a range, while the view only arrives
+        // when the worker answers. Publishing one against the other let a chart
+        // of the last twelve months go out captioned "All time".
+        state.currentViewRange = state.filters.timeRange;
         // networkGrowth is a lifetime value carried identically on every view.
         state.networkGrowth = (payload.view && payload.view.networkGrowth) || null;
         if (state.currentInsights) {
@@ -424,6 +438,10 @@ export const InsightsPage = (() => {
             timeRange: state.filters.timeRange,
             insights: state.currentInsights ? state.currentInsights.insights || [] : [],
             tip: state.currentInsights ? state.currentInsights.tip || null : null,
+            // Withheld when it was built at a range the snapshot is no longer
+            // describing, so the export falls back to its own worker run rather
+            // than plotting one range under the caption of another.
+            view: state.currentViewRange === state.filters.timeRange ? state.currentView : null,
             networkGrowth: state.networkGrowth,
             outreach: state.outreach,
         });

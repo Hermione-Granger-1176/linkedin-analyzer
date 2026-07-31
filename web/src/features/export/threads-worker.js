@@ -1,16 +1,18 @@
 /**
  * PDF export thread selection worker.
  *
- * This worker is handed the raw messages CSV, so every failure inside it is
- * assumed to carry the user's own text. Two rules follow, and both are
- * load-bearing: the only failure strings that leave here are fixed literals
- * from this file, and every global failure event is cancelled so the browser's
- * own reporting - which writes the original message to the console - never
- * runs.
+ * This worker is handed the raw messages CSV and the raw connections CSV, so
+ * every failure inside it is assumed to carry the user's own text: a message
+ * body, or the name, employer and profile URL of somebody they know. Two rules
+ * follow, and both are load-bearing: the only failure strings that leave here
+ * are fixed literals from this file, and every global failure event is
+ * cancelled so the browser's own reporting, which writes the original message
+ * to the console, never runs.
  */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
 
+import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
 
@@ -21,8 +23,31 @@ const RUNTIME_FAILURE = "Threads worker runtime failure.";
 let activeRequestId = 0;
 
 /**
+ * Derive the self-detection tiebreak keys, or none when they cannot be had.
+ *
+ * The connections file is parsed here rather than by the caller because the
+ * caller is the UI thread, and a real connections export runs to tens of
+ * thousands of rows: parsing it there held that thread long enough that the
+ * Escape key which cancels an export could not reach its own handler.
+ *
+ * A tiebreak is a nicety, so a file that will not parse costs a direction chip
+ * on a one-conversation export rather than the thread selection. Nothing about
+ * the failure is described, here or anywhere else in this worker, because the
+ * value that caused it came from the user's own connections.
+ * @param {unknown} connectionsCsv - Raw connections CSV text, when there is one
+ * @returns {string[]} Normalized keys, empty when there are none to be had
+ */
+function contactKeysFrom(connectionsCsv) {
+    try {
+        return collectContactKeys(typeof connectionsCsv === "string" ? connectionsCsv : "");
+    } catch {
+        return [];
+    }
+}
+
+/**
  * Parse the messages CSV and pick the recent threads for the export.
- * @param {{messagesCsv?: string, people?: number, messagesPerPerson?: number, contactKeys?: string[]}} payload - Raw payload
+ * @param {{messagesCsv?: string, connectionsCsv?: string, people?: number, messagesPerPerson?: number}} payload - Raw payload
  * @returns {{success: boolean, threads: object[], error: string|null}}
  */
 function processPayload(payload) {
@@ -43,7 +68,7 @@ function processPayload(payload) {
         threads: selectRecentThreads(result.rows, {
             people: payload.people,
             messagesPerPerson: payload.messagesPerPerson,
-            contactKeys: payload.contactKeys,
+            contactKeys: contactKeysFrom(payload.connectionsCsv),
         }),
         error: null,
     };
@@ -53,8 +78,9 @@ function processPayload(payload) {
  * Post a normalized failure payload.
  *
  * The message is always a fixed string chosen by this module. Nothing thrown
- * inside the worker is ever forwarded: this worker holds the raw messages CSV,
- * so a thrown value can carry a row, a name, a profile URL or a message body.
+ * inside the worker is ever forwarded: this worker holds the raw messages CSV
+ * and the raw connections CSV, so a thrown value can carry a row, a name, an
+ * employer, a profile URL or a message body.
  * @param {number|string} requestId - Request id being answered
  * @param {string} message - Fixed failure text
  */

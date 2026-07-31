@@ -60,6 +60,13 @@
     cursor: pointer;
 }
 
+/* Opt-ins in a run sit closer to each other than the group sits to what
+   follows it. Sibling margins collapse, so the tighter gap has to be set on the
+   opt-in above rather than added to the one below. */
+.export-dialog-option:has(+ .export-dialog-option) {
+    margin-bottom: var(--space-md);
+}
+
 .export-dialog-option input {
     margin-top: 3px;
     width: 18px;

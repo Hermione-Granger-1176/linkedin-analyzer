@@ -1610,6 +1610,10 @@
                     theme you are using.
                 </p>
                 <ul class="export-dialog-contents">
+                    <li>
+                        A dashboard per screen: activity, connections and messages, with the stat
+                        tiles and charts each of them shows
+                    </li>
                     <li>Your insight cards and the closing pro tip</li>
                     <li>The active time range and today's date</li>
                     <li>
@@ -1617,13 +1621,26 @@
                         received
                     </li>
                 </ul>
+                <label class="export-dialog-option" for="pdfExportIncludeNames">
+                    <input type="checkbox" id="pdfExportIncludeNames" />
+                    <span>
+                        <span class="export-dialog-option-label">
+                            Name people in the dashboards
+                        </span>
+                        <span class="export-dialog-option-hint">
+                            Adds your top contacts, silent connections and fading conversations by
+                            name. Counts, charts and company names are included either way.
+                        </span>
+                    </span>
+                </label>
                 <label class="export-dialog-option" for="pdfExportIncludeMessages">
                     <input type="checkbox" id="pdfExportIncludeMessages" />
                     <span>
                         <span class="export-dialog-option-label">Include message contents</span>
                         <span class="export-dialog-option-hint">
                             Adds the last 5 messages of your 10 most recently messaged contacts, in
-                            full. The file is saved to your device and nothing is sent anywhere.
+                            full, each under the contact's name. The file is saved to your device
+                            and nothing is sent anywhere.
                         </span>
                     </span>
                 </label>

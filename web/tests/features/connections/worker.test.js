@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
+import { processConnections } from "../../../src/features/connections/connections-worker.js";
 import {
     buildGrowthTimeline,
     computeStats,
     monthKeyToLabel,
     parseConnectionDate,
-    processConnections,
     toMonthKey
-} from "../../../src/features/connections/connections-worker.js";
+} from "../../../src/features/connections/view.js";
 
 describe("connections worker helpers", () => {
     it("parseConnectionDate returns Date for valid ISO string", () => {

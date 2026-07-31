@@ -4,6 +4,8 @@ import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
 const jsPDF = vi.hoisted(() => vi.fn());
 
+const RUNTIME_PATH = "../../../src/features/export/pdf-runtime.js";
+
 vi.mock("jspdf", () => ({ jsPDF }));
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
@@ -18,9 +20,12 @@ vi.mock("../../../src/shared/ui/loading-overlay.js", () => ({
     LoadingOverlay: { show: vi.fn(), hide: vi.fn() },
 }));
 
+vi.mock("../../../src/features/export/availability.js", () => ({
+    hasExportableData: vi.fn(),
+}));
+
 vi.mock("../../../src/features/export/collect.js", () => ({
     collectExportData: vi.fn(),
-    hasExportableData: vi.fn(),
     terminateAnalyticsWorker: vi.fn(),
 }));
 
@@ -36,8 +41,18 @@ vi.mock("../../../src/features/export/pdf-document.js", () => ({
     renderPdfDocument: vi.fn(),
 }));
 
+// All three transports, so a cancellation can be checked against every worker
+// an export can have started rather than against one of the four.
 vi.mock("../../../src/features/export/threads-transport.js", () => ({
     terminateThreadsWorker: vi.fn(),
+}));
+
+vi.mock("../../../src/features/export/messages-transport.js", () => ({
+    terminateMessagesWorker: vi.fn(),
+}));
+
+vi.mock("../../../src/features/export/connections-transport.js", () => ({
+    terminateConnectionsWorker: vi.fn(),
 }));
 
 // Mirrors web/index.html, which renders the trigger in its unavailable resting
@@ -53,6 +68,7 @@ const MARKUP = `
     <span class="sr-only" id="pdfExportBtnHint">Upload a LinkedIn export to enable saving as PDF.</span>
     <div class="export-dialog-backdrop" id="pdfExportDialogBackdrop" hidden>
         <div id="pdfExportDialog" role="dialog" aria-modal="true">
+            <input type="checkbox" id="pdfExportIncludeNames" />
             <input type="checkbox" id="pdfExportIncludeMessages" />
             <p id="pdfExportDialogError" role="alert"></p>
             <p id="pdfExportDialogStatus" role="status" aria-live="polite"></p>
@@ -71,9 +87,13 @@ let registerPdfFonts;
 let readPdfPalette;
 let renderPdfDocument;
 let terminateThreadsWorker;
+let terminateMessagesWorker;
+let terminateConnectionsWorker;
 let captureError;
 let DataCache;
 let LoadingOverlay;
+/** @type {{loads: number}|null} */
+let runtimeChunk = null;
 
 /**
  * Re-import the export surface and every module it is mocked against.
@@ -84,7 +104,8 @@ let LoadingOverlay;
  */
 async function loadModules() {
     vi.resetModules();
-    ({ collectExportData, hasExportableData, terminateAnalyticsWorker } = await import(
+    ({ hasExportableData } = await import("../../../src/features/export/availability.js"));
+    ({ collectExportData, terminateAnalyticsWorker } = await import(
         "../../../src/features/export/collect.js"
     ));
     ({ registerPdfFonts } = await import("../../../src/features/export/fonts.js"));
@@ -92,6 +113,12 @@ async function loadModules() {
     ({ renderPdfDocument } = await import("../../../src/features/export/pdf-document.js"));
     ({ terminateThreadsWorker } = await import(
         "../../../src/features/export/threads-transport.js"
+    ));
+    ({ terminateMessagesWorker } = await import(
+        "../../../src/features/export/messages-transport.js"
+    ));
+    ({ terminateConnectionsWorker } = await import(
+        "../../../src/features/export/connections-transport.js"
     ));
     ({ captureError } = await import("../../../src/platform/observability/sentry.js"));
     ({ DataCache } = await import("../../../src/platform/persistence/data-cache.js"));
@@ -108,6 +135,7 @@ function ui() {
         trigger: document.getElementById("pdfExportBtn"),
         hint: document.getElementById("pdfExportBtnHint"),
         backdrop: document.getElementById("pdfExportDialogBackdrop"),
+        namesCheckbox: document.getElementById("pdfExportIncludeNames"),
         checkbox: document.getElementById("pdfExportIncludeMessages"),
         error: document.getElementById("pdfExportDialogError"),
         status: document.getElementById("pdfExportDialogStatus"),
@@ -115,6 +143,46 @@ function ui() {
         cancel: document.getElementById("pdfExportCancelBtn"),
         confirm: document.getElementById("pdfExportConfirmBtn"),
     };
+}
+
+/**
+ * Stand in for the network the chunk the export's own modules live in arrives
+ * over.
+ *
+ * The factory hands back the real barrel, so the surface still drives the real
+ * modules; the wrapper only counts the fetches and, when a test passes a gate,
+ * holds one open the way a slow or failing connection would. Registered per
+ * test rather than for the file because a mock is cached once it has been
+ * built, and re-registering is what makes the next fetch a fetch again.
+ * @param {Promise<unknown>} [gate] - Settled before the chunk is delivered
+ * @returns {{loads: number}} Live count of the fetches since this call
+ */
+function interceptRuntimeChunk(gate) {
+    const chunk = { loads: 0 };
+    vi.doMock(RUNTIME_PATH, async (importOriginal) => {
+        chunk.loads += 1;
+        if (gate) {
+            await gate;
+        }
+        return importOriginal();
+    });
+    return chunk;
+}
+
+/**
+ * Let every pending continuation run before a negative is asserted.
+ *
+ * Awaiting a microtask or two proves nothing here: it can leave an abandoned
+ * run still queued behind its own await, so "it did not carry on" would read
+ * the same as "it has not got there yet".
+ * @returns {Promise<void>}
+ */
+async function runPendingTasks() {
+    for (let index = 0; index < 3; index += 1) {
+        await new Promise((resolve) => {
+            setTimeout(resolve, 0);
+        });
+    }
 }
 
 /**
@@ -143,6 +211,9 @@ const DOCUMENT_MODEL = Object.freeze({
  * @returns {Promise<void>}
  */
 async function setup(configure) {
+    // Registered before the surface is imported, so a chunk that stopped being
+    // fetched on demand would be counted here rather than quietly missed.
+    runtimeChunk = interceptRuntimeChunk();
     await loadModules();
     // The mocked modules are shared across resetModules(), so their call
     // history has to be cleared explicitly for each fresh surface.
@@ -184,6 +255,9 @@ describe("PdfExport", () => {
     afterEach(() => {
         vi.restoreAllMocks();
         vi.useRealTimers();
+        // Whatever a test put in front of the chunk goes with it, so the next
+        // one drives the real barrel again.
+        vi.doUnmock(RUNTIME_PATH);
         document.body.innerHTML = "";
     });
 
@@ -208,6 +282,7 @@ describe("PdfExport", () => {
             "pdfExportBtn",
             "pdfExportDialogBackdrop",
             "pdfExportDialog",
+            "pdfExportIncludeNames",
             "pdfExportIncludeMessages",
             "pdfExportDialogError",
             "pdfExportDialogStatus",
@@ -233,20 +308,23 @@ describe("PdfExport", () => {
         expect(DataCache.subscribe.mock.calls).toHaveLength(subscriptions);
     });
 
-    it("opens the dialog with the message checkbox unchecked", () => {
+    it("opens the dialog with both opt-ins unchecked", () => {
         ui().trigger.click();
 
         expect(ui().backdrop.hidden).toBe(false);
+        expect(ui().namesCheckbox.checked).toBe(false);
         expect(ui().checkbox.checked).toBe(false);
-        expect(document.activeElement).toBe(ui().checkbox);
+        expect(document.activeElement).toBe(ui().namesCheckbox);
     });
 
     it("forgets a previous opt-in when reopened", () => {
         ui().trigger.click();
+        ui().namesCheckbox.checked = true;
         ui().checkbox.checked = true;
         ui().cancel.click();
         ui().trigger.click();
 
+        expect(ui().namesCheckbox.checked).toBe(false);
         expect(ui().checkbox.checked).toBe(false);
     });
 
@@ -310,7 +388,7 @@ describe("PdfExport", () => {
 
         ui().confirm.focus();
         expect(press("Tab").defaultPrevented).toBe(true);
-        expect(document.activeElement).toBe(ui().checkbox);
+        expect(document.activeElement).toBe(ui().namesCheckbox);
 
         expect(press("Tab", true).defaultPrevented).toBe(true);
         expect(document.activeElement).toBe(ui().confirm);
@@ -323,10 +401,10 @@ describe("PdfExport", () => {
         // page behind an aria-modal dialog.
         ui().trigger.click();
         document.body.focus();
-        ui().checkbox.blur();
+        ui().namesCheckbox.blur();
 
         expect(press("Tab").defaultPrevented).toBe(true);
-        expect(document.activeElement).toBe(ui().checkbox);
+        expect(document.activeElement).toBe(ui().namesCheckbox);
 
         ui().checkbox.blur();
         expect(press("Tab", true).defaultPrevented).toBe(true);
@@ -486,6 +564,7 @@ describe("PdfExport", () => {
         expect(readPdfPalette).toHaveBeenCalled();
         expect(registerPdfFonts).toHaveBeenCalledWith(docStub);
         expect(collectExportData).toHaveBeenCalledWith({
+            includeNames: false,
             includeMessages: false,
             generatedAt: expect.any(Date),
             isCancelled: expect.any(Function),
@@ -530,19 +609,43 @@ describe("PdfExport", () => {
         vi.useRealTimers();
     });
 
-    it("passes the opt-in through when the checkbox is ticked", async () => {
+    it("passes both opt-ins through when the checkboxes are ticked", async () => {
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         ui().trigger.click();
+        ui().namesCheckbox.checked = true;
         ui().checkbox.checked = true;
         ui().confirm.click();
 
         await vi.waitFor(() =>
             expect(collectExportData).toHaveBeenCalledWith({
+                includeNames: true,
                 includeMessages: true,
                 generatedAt: expect.any(Date),
                 isCancelled: expect.any(Function),
             }),
         );
+    });
+
+    it("keeps the two opt-ins independent of each other", async () => {
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+        ui().trigger.click();
+        ui().namesCheckbox.checked = true;
+        ui().confirm.click();
+
+        await vi.waitFor(() =>
+            expect(collectExportData).toHaveBeenCalledWith(
+                expect.objectContaining({ includeNames: true, includeMessages: false }),
+            ),
+        );
+    });
+
+    it("disables both opt-ins while an export is running", async () => {
+        ui().trigger.click();
+        ui().confirm.click();
+
+        await vi.waitFor(() => expect(ui().confirm.disabled).toBe(true));
+        expect(ui().namesCheckbox.disabled).toBe(true);
+        expect(ui().checkbox.disabled).toBe(true);
     });
 
     it("surfaces a failure in the dialog and hides the overlay", async () => {
@@ -688,7 +791,12 @@ describe("PdfExport", () => {
         ui().cancel.click();
 
         expect(ui().backdrop.hidden).toBe(true);
+        // Every worker a run can be in, not merely the one this run reached:
+        // collection walks all four, and which of them is live depends on how
+        // far it had got.
         expect(terminateThreadsWorker).toHaveBeenCalled();
+        expect(terminateMessagesWorker).toHaveBeenCalled();
+        expect(terminateConnectionsWorker).toHaveBeenCalled();
         expect(terminateAnalyticsWorker).toHaveBeenCalled();
         expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
     });
@@ -747,6 +855,126 @@ describe("PdfExport", () => {
 
         expect(collectExportData).not.toHaveBeenCalled();
         expect(renderPdfDocument).not.toHaveBeenCalled();
+    });
+
+    it("keeps the export's own modules off the page until a run needs them", async () => {
+        // The point of the boundary: the button, its dialog and the
+        // availability check are on every page, and collection, the three
+        // transports and the layout engine are not.
+        expect(hasExportableData).toHaveBeenCalled();
+
+        // Opening the dialog and leaving it again is not a run either.
+        ui().trigger.click();
+        press("Escape");
+
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(runtimeChunk.loads).toBe(0);
+    });
+
+    it("stops an export cancelled while its own modules are still loading", async () => {
+        let deliverChunk = null;
+        const chunk = interceptRuntimeChunk(
+            new Promise((resolve) => {
+                deliverChunk = resolve;
+            }),
+        );
+        const anchorClick = vi
+            .spyOn(HTMLAnchorElement.prototype, "click")
+            .mockImplementation(() => {});
+        const rejections = [];
+        const onRejection = (event) => rejections.push(event);
+        window.addEventListener("unhandledrejection", onRejection);
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(chunk.loads).toBe(1));
+
+        // The chunk is still on the wire, so there is no worker to end: pulling
+        // it down to call four terminators that have nothing to terminate would
+        // spend exactly the download the boundary is there to save.
+        expect(() => press("Escape")).not.toThrow();
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(terminateThreadsWorker).not.toHaveBeenCalled();
+        expect(terminateAnalyticsWorker).not.toHaveBeenCalled();
+        expect(LoadingOverlay.hide).toHaveBeenCalledWith("pdf-export");
+        expect(ui().confirm.disabled).toBe(false);
+
+        // Arriving afterwards must not restart the run the user walked away
+        // from.
+        deliverChunk();
+        await import("../../../src/features/export/pdf-runtime.js");
+        await runPendingTasks();
+
+        // Not one step of it, from the empty document onwards: the fonts alone
+        // are a quarter of a megabyte fetched for a file nobody will read.
+        expect(jsPDF).not.toHaveBeenCalled();
+        expect(readPdfPalette).not.toHaveBeenCalled();
+        expect(registerPdfFonts).not.toHaveBeenCalled();
+        expect(collectExportData).not.toHaveBeenCalled();
+        expect(renderPdfDocument).not.toHaveBeenCalled();
+        expect(anchorClick).not.toHaveBeenCalled();
+        expect(ui().backdrop.hidden).toBe(true);
+        expect(rejections).toEqual([]);
+        window.removeEventListener("unhandledrejection", onRejection);
+    });
+
+    it("fetches the export's own modules once, not once per export", async () => {
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        expect(runtimeChunk.loads).toBe(1);
+
+        // Put a chunk that never arrives in front of the next fetch: the second
+        // export has to run off what the first one already holds, so it must
+        // neither count a load nor be left waiting on one.
+        const stalled = interceptRuntimeChunk(new Promise(() => {}));
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(renderPdfDocument).toHaveBeenCalledTimes(2));
+
+        expect(stalled.loads).toBe(0);
+    });
+
+    it("reports a chunk that fails to arrive like any other failure", async () => {
+        let failChunk = null;
+        const chunk = interceptRuntimeChunk(
+            new Promise((resolve, reject) => {
+                failChunk = reject;
+            }),
+        );
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(chunk.loads).toBe(1));
+        failChunk(new Error("chunk never arrived"));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+
+        // The same failure the rest of the path reports: a fixed message in the
+        // dialog, a fixed error in telemetry, and a dialog left usable rather
+        // than stuck busy.
+        expect(ui().error.textContent).toBe(
+            "Something went wrong while building the PDF. Please try again.",
+        );
+        expect(ui().backdrop.hidden).toBe(false);
+        expect(ui().confirm.disabled).toBe(false);
+        expect(ui().confirm.textContent).toBe("Generate PDF");
+        expect(LoadingOverlay.hide).toHaveBeenCalledWith("pdf-export");
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "generate",
+        });
+
+        // A load that failed is not remembered as a verdict: the next attempt
+        // goes back for the chunk rather than failing out of memory for the
+        // rest of the session.
+        const retry = interceptRuntimeChunk();
+        vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+        ui().confirm.click();
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+
+        expect(retry.loads).toBe(1);
+        expect(renderPdfDocument).toHaveBeenCalledTimes(1);
     });
 
     it("stops an export cancelled while the fonts are still loading", async () => {

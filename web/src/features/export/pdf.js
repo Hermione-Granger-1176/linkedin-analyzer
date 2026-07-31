@@ -2,26 +2,28 @@
  * Save as PDF orchestrator.
  *
  * Owns the global export button and its confirmation dialog, and runs the
- * export: jsPDF is imported lazily so it stays out of the initial bundle, the
- * palette and fonts are gathered, the layout engine draws the document, and the
- * result is downloaded through the same anchor/object-URL dance the Excel
- * export uses.
+ * export: jsPDF and the export's own modules are imported lazily so they stay
+ * out of the initial bundle, the palette and fonts are gathered, the layout
+ * engine draws the document, and the result is downloaded through the same
+ * anchor/object-URL dance the Excel export uses.
  *
- * Message bodies can end up inside the downloaded file, by explicit opt-in.
- * Nothing about them is ever logged, reported or sent anywhere: every catch on
- * this path discards the value it caught and reports a freshly built error, so
- * no user text can reach the telemetry SDK even before it scrubs an event.
+ * The button is on every screen, so this module is on every page load and holds
+ * only what that costs: the dialog, and an availability check that reads no
+ * further than availability.js. Everything a run needs is behind the dynamic
+ * import in `loadExportRuntime`.
+ *
+ * Contact names, and message bodies, can end up inside the downloaded file, each
+ * by its own explicit opt-in. Nothing about either is ever logged, reported or
+ * sent anywhere: every catch on this path discards the value it caught and
+ * reports a freshly built error, so no user text can reach the telemetry SDK
+ * even before it scrubs an event.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
-import { collectExportData, hasExportableData, terminateAnalyticsWorker } from "./collect.js";
-import { registerPdfFonts } from "./fonts.js";
-import { readPdfPalette } from "./palette.js";
-import { renderPdfDocument } from "./pdf-document.js";
-import { terminateThreadsWorker } from "./threads-transport.js";
+import { hasExportableData } from "./availability.js";
 
 const OVERLAY_SOURCE = "pdf-export";
 const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
@@ -33,6 +35,7 @@ const REQUIRED_ELEMENTS = Object.freeze([
     "trigger",
     "backdrop",
     "dialog",
+    "includeNames",
     "includeMessages",
     "error",
     "status",
@@ -64,6 +67,16 @@ export const PdfExport = (() => {
     // longer the current one has been cancelled: it must not download, touch the
     // dialog, move focus or hide an overlay that now belongs to another run.
     let generationToken = 0;
+    /**
+     * The export's own modules, once a run has fetched them.
+     * @type {typeof import("./pdf-runtime.js")|null}
+     */
+    let exportRuntime = null;
+    /**
+     * The fetch itself, kept so a second export reuses the first one's.
+     * @type {Promise<typeof import("./pdf-runtime.js")>|null}
+     */
+    let exportRuntimeLoad = null;
 
     /**
      * Resolve the DOM the export surface owns.
@@ -75,6 +88,9 @@ export const PdfExport = (() => {
             hint: document.getElementById("pdfExportBtnHint"),
             backdrop: document.getElementById("pdfExportDialogBackdrop"),
             dialog: document.getElementById("pdfExportDialog"),
+            includeNames: /** @type {HTMLInputElement|null} */ (
+                document.getElementById("pdfExportIncludeNames")
+            ),
             includeMessages: /** @type {HTMLInputElement|null} */ (
                 document.getElementById("pdfExportIncludeMessages")
             ),
@@ -165,6 +181,9 @@ export const PdfExport = (() => {
         isOpen = true;
         lastFocused = /** @type {HTMLElement|null} */ (document.activeElement);
         hideError();
+        // Both opt-ins reset on every open: an export is a fresh decision about
+        // what leaves the browser, never a setting the dialog remembers for you.
+        elements.includeNames.checked = false;
         elements.includeMessages.checked = false;
         elements.backdrop.hidden = false;
         focusFirst();
@@ -226,15 +245,18 @@ export const PdfExport = (() => {
     /**
      * Abandon the running export and put the dialog back in its resting state.
      *
-     * Both workers are ended: an export cancelled early is usually still in the
-     * analytics worker, and one cancelled with messages included is usually in
-     * the threads worker. Bumping the token alone would stop the result being
-     * used but leave the worker running, and holding its data, until it answered.
+     * Every worker the export can be in is ended, since bumping the token alone
+     * would stop the result being used but leave a worker running, and holding
+     * the user's whole export, until it answered. Only when the run had got as
+     * far as fetching the modules they live in: a cancellation before or during
+     * that fetch has no worker to end, and pulling the chunk down to call four
+     * no-ops would spend exactly the download the boundary exists to avoid.
      */
     function cancelGeneration() {
         generationToken += 1;
-        terminateThreadsWorker();
-        terminateAnalyticsWorker();
+        if (exportRuntime) {
+            exportRuntime.terminateExportWorkers();
+        }
         setBusy(false);
         LoadingOverlay.hide(OVERLAY_SOURCE);
     }
@@ -324,6 +346,7 @@ export const PdfExport = (() => {
     function setBusy(busy) {
         isGenerating = busy;
         elements.confirm.disabled = busy;
+        elements.includeNames.disabled = busy;
         elements.includeMessages.disabled = busy;
         elements.confirm.textContent = busy ? "Generating…" : "Generate PDF";
         elements.dialog.setAttribute("aria-busy", busy ? "true" : "false");
@@ -375,6 +398,31 @@ export const PdfExport = (() => {
     }
 
     /**
+     * Fetch the export's own modules, at most once a session.
+     *
+     * The promise is kept rather than only the modules, so a second export
+     * started before the first has finished still shares the one fetch. A
+     * failure is forgotten instead: the chunk may simply not have arrived, and
+     * the next attempt should go back to the network rather than fail out of
+     * memory for the rest of the session.
+     * @returns {Promise<typeof import("./pdf-runtime.js")>} Loaded modules
+     */
+    function loadExportRuntime() {
+        if (!exportRuntimeLoad) {
+            exportRuntimeLoad = import("./pdf-runtime.js")
+                .then((runtime) => {
+                    exportRuntime = runtime;
+                    return runtime;
+                })
+                .catch((error) => {
+                    exportRuntimeLoad = null;
+                    throw error;
+                });
+        }
+        return exportRuntimeLoad;
+    }
+
+    /**
      * Build and download the document.
      * @returns {Promise<void>}
      */
@@ -382,6 +430,7 @@ export const PdfExport = (() => {
         if (isGenerating) {
             return;
         }
+        const includeNames = elements.includeNames.checked;
         const includeMessages = elements.includeMessages.checked;
         hideError();
         setBusy(true);
@@ -393,18 +442,27 @@ export const PdfExport = (() => {
         });
 
         try {
-            const { jsPDF } = await import("jspdf");
+            // Two chunks, fetched together rather than one after the other: a
+            // run needs both before it can draw anything, and a failure in
+            // either is the same failure to the user. The cancellation check
+            // below covers the wait: a run abandoned while its own code is
+            // still on the wire must not carry on once it lands.
+            const [{ jsPDF }, runtime] = await Promise.all([
+                import("jspdf"),
+                loadExportRuntime(),
+            ]);
             if (isCancelled()) {
                 return;
             }
             const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
-            const palette = readPdfPalette();
-            const fonts = await registerPdfFonts(doc);
+            const palette = runtime.readPdfPalette();
+            const fonts = await runtime.registerPdfFonts(doc);
             if (isCancelled()) {
                 return;
             }
             const generatedAt = new Date();
-            const data = await collectExportData({
+            const data = await runtime.collectExportData({
+                includeNames,
                 includeMessages,
                 generatedAt,
                 // Checking only on the way back is not enough: collection walks
@@ -416,7 +474,7 @@ export const PdfExport = (() => {
                 return;
             }
 
-            renderPdfDocument(doc, data, { palette, fonts });
+            runtime.renderPdfDocument(doc, data, { palette, fonts });
             download(doc.output("blob"), buildFilename(generatedAt));
 
             // Clearing busy first is load-bearing: close() cancels a generation

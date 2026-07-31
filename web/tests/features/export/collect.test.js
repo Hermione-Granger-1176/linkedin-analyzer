@@ -495,7 +495,7 @@ describe("collectExportData", () => {
 
         expect(workerInstance).toBeNull();
         expect(Storage.getAnalytics).not.toHaveBeenCalled();
-        const activity = dashboardNamed(data, "Activity");
+        const activity = dashboardNamed(data, "Analytics");
         // The months the view actually covers, not the name of the control it
         // was selected with: the range is anchored on the newest event in the
         // file, so "Last 3 months" stops being true the day after the export.
@@ -564,7 +564,7 @@ describe("collectExportData", () => {
         expect(data.insights).toEqual([{ title: "Mornings win", body: "…" }]);
         expect(data.tip).toBe("Reply faster.");
         expect(data.allTime[0]).toEqual({ label: "Network growth", value: "3.4×" });
-        expect(dashboardNamed(data, "Activity").subtitle).toBe("Jan 2026 to Feb 2026");
+        expect(dashboardNamed(data, "Analytics").subtitle).toBe("Jan 2026 to Feb 2026");
     });
 
     it("falls back to the cold path when the snapshot holds nothing at all", async () => {
@@ -897,7 +897,7 @@ describe("collectExportData", () => {
     }
 
     it("builds the activity dashboard from the worker's view", async () => {
-        const activity = dashboardNamed(await collectWithView(ACTIVITY_VIEW), "Activity");
+        const activity = dashboardNamed(await collectWithView(ACTIVITY_VIEW), "Analytics");
 
         expect(activity.subtitle).toBe("Jan 2026 to Feb 2026");
         // The Analytics screen's own wording: a reader who knows the screen
@@ -926,7 +926,7 @@ describe("collectExportData", () => {
         });
 
         expect(data.rangeLabel).toBe("Feb 2026");
-        expect(dashboardNamed(data, "Activity").subtitle).toBe("Feb 2026");
+        expect(dashboardNamed(data, "Analytics").subtitle).toBe("Feb 2026");
     });
 
     it("falls back to the range's own name when the timeline carries no dates", async () => {
@@ -939,7 +939,7 @@ describe("collectExportData", () => {
         });
 
         expect(data.rangeLabel).toBe("Last 12 months");
-        expect(dashboardNamed(data, "Activity").subtitle).toBe("Last 12 months");
+        expect(dashboardNamed(data, "Analytics").subtitle).toBe("Last 12 months");
     });
 
     it("builds the activity dashboard from a view with no peak hour", async () => {
@@ -948,7 +948,7 @@ describe("collectExportData", () => {
         // down the whole export rather than one stat on one page.
         const data = await collectWithView({ ...ACTIVITY_VIEW, peakHour: null });
 
-        expect(dashboardNamed(data, "Activity").stats).toEqual([
+        expect(dashboardNamed(data, "Analytics").stats).toEqual([
             { label: "Posts", value: "12" },
             { label: "Comments", value: "30" },
             { label: "Total activity", value: "42" },
@@ -959,7 +959,7 @@ describe("collectExportData", () => {
     it("builds the activity dashboard from a view with no streaks", async () => {
         const data = await collectWithView({ ...ACTIVITY_VIEW, streaks: undefined });
 
-        expect(dashboardNamed(data, "Activity").stats).toEqual([
+        expect(dashboardNamed(data, "Analytics").stats).toEqual([
             { label: "Posts", value: "12" },
             { label: "Comments", value: "30" },
             { label: "Total activity", value: "42" },
@@ -991,7 +991,7 @@ describe("collectExportData", () => {
         const data = await collectExportData();
 
         expect(data.dashboards.map((dashboard) => dashboard.title)).toEqual([
-            "Activity",
+            "Analytics",
             "Connections",
             "Messages",
         ]);

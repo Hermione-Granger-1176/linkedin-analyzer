@@ -64,13 +64,21 @@ const CMAP_SEGMENTED_FORMAT = 4;
  */
 function buildWinAnsiCoverage() {
     const coverage = new Set(WINANSI_EXTRAS);
-    for (let code = 0x20; code <= 0x7e; code += 1) {
-        coverage.add(code);
-    }
-    for (let code = 0xa0; code <= 0xff; code += 1) {
-        coverage.add(code);
-    }
+    addRange(coverage, 0x20, 0x7e);
+    addRange(coverage, 0xa0, 0xff);
     return coverage;
+}
+
+/**
+ * Add an inclusive range of code points to a coverage set.
+ * @param {Set<number>} coverage - Set to add to
+ * @param {number} from - First code point
+ * @param {number} to - Last code point
+ */
+function addRange(coverage, from, to) {
+    for (let code = from; code <= to; code += 1) {
+        coverage.add(code);
+    }
 }
 
 const WINANSI_COVERAGE = buildWinAnsiCoverage();
@@ -150,9 +158,7 @@ function addSegmentedCoverage(view, offset, coverage) {
         if (start === 0xffff || start <= previousEnd || end < start) {
             return;
         }
-        for (let code = start; code <= end; code += 1) {
-            coverage.add(code);
-        }
+        addRange(coverage, start, end);
         previousEnd = end;
     }
 }
@@ -190,21 +196,21 @@ function readFontCoverage(buffer) {
  * The document model is built without knowing which face will draw which
  * string, so a character counts as drawable only when every embedded face has
  * it. A face whose cmap could not be read takes the whole document back to
- * WinAnsi rather than lending it coverage nobody has checked.
+ * WinAnsi rather than lending it coverage nobody has checked. So does being
+ * asked to narrow nothing at all, which is the same question with no face able
+ * to answer it.
  * @param {Array<Set<number>|null>} coverages - One entry per embedded face
  * @returns {Set<number>} Code points the document can draw
  */
 function intersectCoverage(coverages) {
-    if (coverages.some((coverage) => coverage === null)) {
+    if (!coverages.length || coverages.includes(null)) {
         return WINANSI_COVERAGE;
     }
     const [first, ...rest] = /** @type {Array<Set<number>>} */ (coverages);
-    const shared = new Set(first);
-    for (const coverage of rest) {
-        for (const code of shared) {
-            if (!coverage.has(code)) {
-                shared.delete(code);
-            }
+    const shared = new Set();
+    for (const code of first) {
+        if (rest.every((coverage) => coverage.has(code))) {
+            shared.add(code);
         }
     }
     return shared;
@@ -253,18 +259,22 @@ async function fetchFont(file) {
  */
 export async function registerPdfFonts(doc) {
     try {
-        const buffers = await Promise.all(FONT_ASSETS.map((asset) => fetchFont(asset.file)));
+        // Each face is carried with its own bytes rather than the two being kept
+        // in step by an index, which is the pairing every line below depends on.
+        const faces = await Promise.all(
+            FONT_ASSETS.map(async (asset) => ({ asset, buffer: await fetchFont(asset.file) })),
+        );
         // Read before anything is registered: a file this cannot get through is
         // not one the document should be drawn with either, and the catch below
         // then leaves both the families and the coverage on the fallback.
-        const coverage = intersectCoverage(buffers.map(readFontCoverage));
+        const coverage = intersectCoverage(faces.map((face) => readFontCoverage(face.buffer)));
 
         const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY };
-        FONT_ASSETS.forEach((asset, index) => {
-            doc.addFileToVFS(asset.file, encodeFontBytes(buffers[index]));
+        for (const { asset, buffer } of faces) {
+            doc.addFileToVFS(asset.file, encodeFontBytes(buffer));
             doc.addFont(asset.file, asset.family, "normal");
             families[asset.role] = asset.family;
-        });
+        }
         drawableCoverage = coverage;
         return Object.freeze(families);
     } catch {

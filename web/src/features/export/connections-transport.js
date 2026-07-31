@@ -264,10 +264,9 @@ function requestDataFromWorker(connectionsCsv) {
                 return;
             }
             // A stale success belongs to a request nobody is waiting on. It is
-            // dropped before the payload is read rather than after, as the
-            // messages and threads transports do: an emptied payload settles
-            // this request below, and the reply that settles it has to be its
-            // own.
+            // dropped before the emptied-payload check below rather than after
+            // it, as the messages transport does: an emptied payload settles
+            // this request, and the reply that settles it has to be its own.
             if (message.requestId !== requestId) {
                 return;
             }

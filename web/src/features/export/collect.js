@@ -29,7 +29,7 @@ import {
     getTopContactsInRange,
 } from "../messages/relationships.js";
 
-import { hasSnapshotContent, readAnalyticsBase, readSafely } from "./availability.js";
+import { hasSnapshotContent, readAnalyticsBase, readOutreach, readSafely } from "./availability.js";
 import { loadConnectionsData } from "./connections-transport.js";
 import { sanitizeModel } from "./drawable-text.js";
 import { readDrawableCoverage } from "./fonts.js";
@@ -47,8 +47,10 @@ const LIST_LIMIT = 10;
 const CONNECTIONS_RANGE = "all";
 
 // The messages dashboard follows the Messages screen's own default, not the
-// Insights one above: they agree today, and a page that silently tracked the
+// Insights one below: they agree today, and a page that silently tracked the
 // wrong screen if either moved would still be captioned with this one's name.
+// Were this ever to become "all", there would be no range to anchor a window
+// on, and the page would quietly lose its timeline rather than say so.
 const MESSAGES_RANGE = DEFAULT_TIME_RANGE;
 
 /**
@@ -127,10 +129,10 @@ function formatWindow(monthWindow) {
  * @returns {MonthWindow|null} Window, or null when nothing was plotted
  */
 function viewWindow(view) {
-    const timeline = view && Array.isArray(view.timeline) ? view.timeline : [];
-    if (!timeline.length) {
+    if (!view || !Array.isArray(view.timeline) || !view.timeline.length) {
         return null;
     }
+    const { timeline } = view;
     const startKey = String(timeline[0].key || "").slice(0, 7);
     const endKey = String(timeline[timeline.length - 1].key || "").slice(0, 7);
     return startKey && endKey ? { startKey, endKey } : null;
@@ -148,7 +150,9 @@ function viewWindow(view) {
  * @returns {MonthWindow|null} Window, or null when there is nothing in range
  */
 function messageWindow(rangeStart, latestTimestamp) {
-    if (!rangeStart) {
+    // Against null rather than falsiness: a local-midnight epoch is a legitimate
+    // range start, and the one that falls on it is 0.
+    if (rangeStart === null) {
         return null;
     }
     return {
@@ -462,7 +466,7 @@ async function resolveInsightSource(isCancelled) {
  * Build the activity dashboard from an analytics view.
  *
  * The stat wording and the three charts are the Analytics screen's, in its
- * order: a reader who knows the screen should recognise the page.
+ * order: a reader who knows the screen should recognize the page.
  * @param {object|null} view - Filtered analytics view
  * @param {string} rangeLabel - Window the view was built over
  * @returns {object|null} Dashboard, or null when there is no activity
@@ -492,7 +496,7 @@ function buildActivityDashboard(view, rangeLabel) {
     }
 
     return {
-        title: "Activity",
+        title: "Analytics",
         subtitle: rangeLabel,
         stats,
         charts: [
@@ -628,18 +632,14 @@ function buildMessagePeopleCharts(messageState, connectionState, topContacts, fa
     // Panel order, wording and per-row detail are the Messages screen's. A list
     // that dropped the dates and the units would be the same names carrying less
     // than the page they were copied from.
+    //
+    // Computed here rather than beside `fading` in the caller: this panel is the
+    // only thing that wants it, and this function only runs when names are opted
+    // in, so a names-off export never walks the whole network for it.
     const silent = connectionState ? getSilentConnections(messageState, connectionState) : [];
 
     return [
-        {
-            type: "list",
-            title: listTitle("Top contacts", topContacts.length),
-            items: topContacts.slice(0, LIST_LIMIT).map((contact) => ({
-                primary: contact.name,
-                secondary: `Last message: ${formatShortDate(contact.lastTimestamp)}`,
-                value: `${contact.count} msgs`,
-            })),
-        },
+        buildLastMessageList("Top contacts", topContacts, (contact) => `${contact.count} msgs`),
         {
             type: "list",
             title: listTitle("Silent connections", silent.length),
@@ -653,16 +653,31 @@ function buildMessagePeopleCharts(messageState, connectionState, topContacts, fa
                     : "No date",
             })),
         },
-        {
-            type: "list",
-            title: listTitle("Fading conversations", fading.length),
-            items: fading.slice(0, LIST_LIMIT).map((contact) => ({
-                primary: contact.name,
-                secondary: `Last message: ${formatShortDate(contact.lastTimestamp)}`,
-                value: `${contact.daysSince} days`,
-            })),
-        },
+        buildLastMessageList("Fading conversations", fading, (contact) => `${contact.daysSince} days`),
     ];
+}
+
+/**
+ * Build a list panel of contacts, each titled by when they last wrote.
+ *
+ * The two panels that take this shape differ only in what they put on the right,
+ * so the row limit and the title's count are stated once: a third cannot forget
+ * either.
+ * @param {string} label - Panel name
+ * @param {object[]} contacts - Contacts in display order
+ * @param {(contact: object) => string} toValue - Right-hand value for one row
+ * @returns {object} Chart configuration
+ */
+function buildLastMessageList(label, contacts, toValue) {
+    return {
+        type: "list",
+        title: listTitle(label, contacts.length),
+        items: contacts.slice(0, LIST_LIMIT).map((contact) => ({
+            primary: contact.name,
+            secondary: `Last message: ${formatShortDate(contact.lastTimestamp)}`,
+            value: toValue(contact),
+        })),
+    };
 }
 
 /**
@@ -694,54 +709,9 @@ async function collectMessagesDashboard(files, includeNames, isCancelled) {
         if (!state || isCancelled()) {
             return empty;
         }
-
-        const { messageState, connectionState } = state;
-        const rangeStart = getRangeStart(MESSAGES_RANGE, messageState.latestTimestamp);
-        const monthWindow = messageWindow(rangeStart, messageState.latestTimestamp);
-        const summary = getTopContactsInRange(messageState, rangeStart);
-        const fading = connectionState
-            ? getFadingConversations(messageState, connectionState)
-            : [];
-        const rangeLabel =
-            formatWindow(monthWindow) || formatRangeLabel(MESSAGES_RANGE).toLowerCase();
-
-        const charts = [];
-        if (monthWindow) {
-            charts.push({
-                type: "line",
-                title: "Messages per month",
-                points: buildMessageTimeline(messageState.rowTimestamps, monthWindow),
-            });
-        }
-        if (includeNames) {
-            charts.push(
-                ...buildMessagePeopleCharts(messageState, connectionState, summary.items, fading),
-            );
-        }
-
-        return {
-            window: monthWindow,
-            dashboard: {
-                title: "Messages",
-                // Two ranges live on this page, so the caption names both rather
-                // than printing one over the top of the other. On screen each
-                // panel carries its own line of copy saying what it counts; the
-                // page keeps only the caption, so the caption has to carry it.
-                subtitle:
-                    `Messages and people: ${rangeLabel}. ` +
-                    "Connections, silent and fading: all time.",
-                stats: [
-                    { label: "Messages in range", value: String(summary.totalRows) },
-                    { label: "People in range", value: String(summary.totalPeople) },
-                    {
-                        label: "Total connections",
-                        value: String(connectionState ? connectionState.list.length : 0),
-                    },
-                    { label: "Fading conversations", value: String(fading.length) },
-                ],
-                charts,
-            },
-        };
+        // Built inside the catch's reach, not after it: a throw from any of the
+        // aggregates below still costs the section rather than the export.
+        return buildMessagesDashboard(state, includeNames);
     } catch {
         // As with the connections dashboard: the section goes, the export stays,
         // and the caught value, parsed from the user's own messages, is not
@@ -752,6 +722,63 @@ async function collectMessagesDashboard(files, includeNames, isCancelled) {
         });
         return empty;
     }
+}
+
+/**
+ * Assemble the messages dashboard from hydrated state.
+ *
+ * Pure, as the other builders in this module are: the loading, the cancellation
+ * checks and the reporting stay with the caller, so what the page contains can
+ * be read, and exercised, without a worker.
+ * @param {{messageState: object, connectionState: object|null}} state - Hydrated message state
+ * @param {boolean} includeNames - Whether the people lists were opted into
+ * @returns {{dashboard: object, window: MonthWindow|null}} Dashboard and the months it covers
+ */
+function buildMessagesDashboard(state, includeNames) {
+    const { messageState, connectionState } = state;
+    const rangeStart = getRangeStart(MESSAGES_RANGE, messageState.latestTimestamp);
+    const monthWindow = messageWindow(rangeStart, messageState.latestTimestamp);
+    const summary = getTopContactsInRange(messageState, rangeStart);
+    const fading = connectionState ? getFadingConversations(messageState, connectionState) : [];
+    const rangeLabel = formatWindow(monthWindow) || formatRangeLabel(MESSAGES_RANGE).toLowerCase();
+
+    const charts = [];
+    if (monthWindow) {
+        charts.push({
+            type: "line",
+            title: "Messages per month",
+            points: buildMessageTimeline(messageState.rowTimestamps, monthWindow),
+        });
+    }
+    if (includeNames) {
+        charts.push(
+            ...buildMessagePeopleCharts(messageState, connectionState, summary.items, fading),
+        );
+    }
+
+    return {
+        window: monthWindow,
+        dashboard: {
+            title: "Messages",
+            // Two ranges live on this page, so the caption names both rather
+            // than printing one over the top of the other. On screen each
+            // panel carries its own line of copy saying what it counts; the
+            // page keeps only the caption, so the caption has to carry it.
+            subtitle:
+                `Messages and people: ${rangeLabel}. ` +
+                "Connections, silent and fading: all time.",
+            stats: [
+                { label: "Messages in range", value: String(summary.totalRows) },
+                { label: "People in range", value: String(summary.totalPeople) },
+                {
+                    label: "Total connections",
+                    value: String(connectionState ? connectionState.list.length : 0),
+                },
+                { label: "Fading conversations", value: String(fading.length) },
+            ],
+            charts,
+        },
+    };
 }
 
 /**
@@ -850,8 +877,7 @@ export async function collectExportData(options = {}) {
     const source = await resolveInsightSource(isCancelled);
     const activityWindow = viewWindow(source.view);
     const activityLabel = formatWindow(activityWindow) || formatRangeLabel(source.timeRange);
-    const outreach =
-        source.outreach || (await readSafely(() => Storage.getOutreach(), "load-outreach"));
+    const outreach = source.outreach || (await readOutreach());
     // Read once and pass the text down. The connections export used to be read
     // and re-read up to three times in one run, once per consumer, which is both
     // the slow way and an odd thing to do alongside a promise to keep only one

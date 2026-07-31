@@ -58,6 +58,15 @@ let threadsTimeoutId = null;
  */
 let pendingRequest = null;
 
+/** Clear any in-flight worker watchdog timeout. */
+function clearWorkerTimeout() {
+    if (!threadsTimeoutId) {
+        return;
+    }
+    window.clearTimeout(threadsTimeoutId);
+    threadsTimeoutId = null;
+}
+
 /**
  * Terminate the threads worker and end whatever it was answering.
  *
@@ -76,15 +85,6 @@ export function terminateThreadsWorker() {
     clearWorkerTimeout();
 }
 
-/** Clear any in-flight worker watchdog timeout. */
-function clearWorkerTimeout() {
-    if (!threadsTimeoutId) {
-        return;
-    }
-    window.clearTimeout(threadsTimeoutId);
-    threadsTimeoutId = null;
-}
-
 /** Create the threads worker, leaving it null when workers are unavailable. */
 function initWorker() {
     if (threadsWorker || typeof Worker === "undefined") {
@@ -97,7 +97,7 @@ function initWorker() {
         });
     } catch {
         threadsWorker = null;
-        captureError(new Error("Threads worker could not start."), {
+        captureError(new Error("Threads worker could not start during export."), {
             module: "pdf-export",
             operation: "init-threads-worker",
         });
@@ -148,10 +148,14 @@ export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {
         return outcome;
     }
 
-    // The ceiling covers the messages file alone, as it always has: the
-    // connections parse below is the one the UI thread used to do on every
-    // path, worker or not, so a fallback that also does it is nothing new.
-    if (text.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
+    // Both files, because the fallback below parses both: the messages export
+    // for the threads and the connections export for the tiebreak keys. The
+    // ceiling used to count the messages file alone, from when the UI thread
+    // derived those keys on every path and the fallback added nothing to what
+    // was already happening. It is the only path that parses them now, so a
+    // small messages file beside a large connections one would clear a ceiling
+    // that no longer measured the work.
+    if (text.length + contacts.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
         return [];
     }
     return selectThreadsOnMainThread(text, contacts, options);
@@ -203,11 +207,11 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
          * @param {object[]|null|typeof CANCELLED|typeof FAILED} result - Outcome for the caller
          */
         const settle = (result) => {
-            // Identity-guarded, as the analytics run's own hook is. Every settle
-            // path detaches the listeners and clears the watchdog before it
-            // returns, so nothing can settle a request twice today and the guard
-            // is defensive: it exists so that stops being something the next
-            // reader has to re-derive before adding a path.
+            // Identity-guarded, as both sibling transports' own hooks are. Every
+            // settle path detaches the listeners and clears the watchdog before
+            // it returns, so nothing can settle a request twice today and the
+            // guard is defensive: it exists so that stops being something the
+            // next reader has to re-derive before adding a path.
             /* v8 ignore next 3 */
             if (pendingRequest === request) {
                 pendingRequest = null;
@@ -251,15 +255,15 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
 
         const handleError = (event) => {
             // Cancelling the event suppresses the browser's own reporting of it,
-            // which would otherwise print the worker's error - and anything of
-            // the user's caught up in it - to the console.
+            // which would otherwise print the worker's error, and anything of the
+            // user's caught up in it, to the console.
             if (event && typeof event.preventDefault === "function") {
                 event.preventDefault();
             }
             // event.error is never forwarded: this worker parses both raw
             // exports, so a runtime failure inside it can carry message text, or
             // the name and employer of one of the user's connections.
-            captureError(new Error("Threads worker failed."), {
+            captureError(new Error("Threads worker failed during export."), {
                 module: "pdf-export",
                 operation: "threads-worker-error-event",
                 requestId,
@@ -270,12 +274,17 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
         const request = { cancel: () => settle(CANCELLED) };
         pendingRequest = request;
 
+        threadsWorker.addEventListener("message", handleMessage);
+        threadsWorker.addEventListener("error", handleError);
+        threadsWorker.addEventListener("messageerror", handleError);
+
         // The budget is the shared one rather than a formula of this module's
         // own: the messages transport watchdogs the very same pair of files, and
         // two different allowances over one export was an accident of this
         // module having been written first.
         threadsTimeoutId = window.setTimeout(() => {
-            captureError(new Error("Threads worker request timed out."), {
+            threadsTimeoutId = null;
+            captureError(new Error("Threads worker timed out during export."), {
                 module: "pdf-export",
                 operation: "threads-worker-timeout",
                 requestId,
@@ -284,9 +293,6 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
         }, computeWorkerTimeout(messagesCsv, connectionsCsv));
 
         try {
-            threadsWorker.addEventListener("message", handleMessage);
-            threadsWorker.addEventListener("error", handleError);
-            threadsWorker.addEventListener("messageerror", handleError);
             threadsWorker.postMessage({
                 type: "threads",
                 requestId,
@@ -308,7 +314,7 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
         } catch {
             // A structured-clone failure names the value it could not clone, and
             // that value is one of the two raw exports.
-            captureError(new Error("Threads worker request could not be posted."), {
+            captureError(new Error("Threads worker request could not be sent."), {
                 module: "pdf-export",
                 operation: "threads-worker-post-message",
                 requestId,

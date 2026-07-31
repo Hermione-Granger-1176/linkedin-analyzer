@@ -6,7 +6,7 @@
  * character they have no glyph for. "Ňuňo Smith" reached the page as "uo Smith"
  * and "田中 Fernández-Hall" as " Fernández-Hall": names damaged with nothing on
  * the page to say they had been. A face with wider coverage would add megabytes
- * to an app that fetches 225KB of fonts only when an export runs, so the loss is
+ * to an app that fetches 225 KB of fonts only when an export runs, so the loss is
  * made visible instead. A reader who can see that a name is broken can go and
  * find it; a reader shown a quietly wrong name cannot.
  *
@@ -36,10 +36,12 @@ const LAYOUT_CHARACTERS = new Set(["\n", "\r", "\t"]);
  * @returns {boolean} True when it can be drawn as it is
  */
 function isDrawable(character, coverage) {
+    if (LAYOUT_CHARACTERS.has(character)) {
+        return true;
+    }
     // Iterating a string yields whole characters, so there is always a code
     // point here, surrogate pairs included.
-    const code = /** @type {number} */ (character.codePointAt(0));
-    return LAYOUT_CHARACTERS.has(character) || coverage.has(code);
+    return coverage.has(/** @type {number} */ (character.codePointAt(0)));
 }
 
 /**
@@ -64,10 +66,10 @@ export function sanitizeText(value, coverage) {
             inRun = false;
             continue;
         }
-        replaced = true;
         if (!inRun) {
             drawn += PLACEHOLDER;
             inRun = true;
+            replaced = true;
         }
     }
 
@@ -98,7 +100,7 @@ function isPlainObject(value) {
  * companies, positions, topics, stat values and message bodies enter the
  * document from five different collectors, and the defect this exists to stop is
  * exactly the one where the sixth is added and nobody remembers. Numbers, dates
- * and anything else carrying behaviour of its own are handed straight back, so
+ * and anything else carrying behavior of its own are handed straight back, so
  * only literals and arrays are rebuilt.
  * @param {any} value - Document model, or any part of one
  * @param {Set<number>} coverage - Code points the document's fonts can draw

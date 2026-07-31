@@ -301,7 +301,7 @@ describe("loadRecentThreads", () => {
         workerInstance.emit("messageerror", { type: "messageerror" });
         await pending;
 
-        expect(captureError.mock.calls[0][0].message).toBe("Threads worker failed.");
+        expect(captureError.mock.calls[0][0].message).toBe("Threads worker failed during export.");
     });
 
     it("never reports the error a worker failure event carried", async () => {
@@ -518,6 +518,19 @@ describe("loadRecentThreads", () => {
 
         expect(huge.length).toBeGreaterThan(5 * 1024 * 1024);
         expect(await loadRecentThreads(huge, "")).toEqual([]);
+    });
+
+    it("counts the connections file against the fallback ceiling too", async () => {
+        // The fallback parses both files: the messages export for the threads,
+        // the connections export for the tiebreak keys. A ceiling that measured
+        // only the first would wave through a small messages file beside a huge
+        // connections one and then parse all of it on the UI thread.
+        delete globalThis.Worker;
+        const hugeContacts = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
+
+        expect(MESSAGES_CSV.length).toBeLessThan(5 * 1024 * 1024);
+        expect(hugeContacts.length).toBeGreaterThan(5 * 1024 * 1024);
+        expect(await loadRecentThreads(MESSAGES_CSV, hugeContacts)).toEqual([]);
     });
 
     it("still selects on the main thread just under the fallback ceiling", async () => {

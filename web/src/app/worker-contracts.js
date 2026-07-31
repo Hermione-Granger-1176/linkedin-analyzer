@@ -419,9 +419,10 @@ export function parseMessagesWorkerMessage(message) {
  * @returns {{valid: boolean, value?: object, error?: string, requestId?: number|string}}
  */
 export function parseThreadsWorkerRequest(message) {
-    // A rejected request still has to be answered under the id it arrived with:
-    // the main thread ignores any other id and would otherwise sit out the whole
-    // size-scaled watchdog before giving up.
+    // A rejected request is still answered under the id it arrived with. The
+    // transport settles a failure envelope whatever id it carries, so this is
+    // not what keeps it off the watchdog; it keeps the reply attributable in
+    // diagnostics, and correct if that policy ever tightens.
     const requestId = normalizeRequestId(isPlainObject(message) ? message.requestId : 0);
     const rejected = (error) => ({ ...invalid(error), requestId });
 

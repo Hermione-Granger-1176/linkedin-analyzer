@@ -236,7 +236,7 @@ test("the PDF carries a dashboard page per screen", async ({ page }, testInfo) =
     const text = extractPdfText(fs.readFileSync(outputPath));
 
     // Each screen's own headings, so the page divides the way the site does.
-    expect(text).toContain("Activity");
+    expect(text).toContain("Analytics");
     expect(text).toContain("Activity timeline");
     expect(text).toContain("Top topics");
     expect(text).toContain("When you are active");

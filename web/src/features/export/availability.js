@@ -62,6 +62,18 @@ export async function readAnalyticsBase() {
 }
 
 /**
+ * Read the persisted outreach summary, treating a storage failure as absent.
+ *
+ * Shared with the collection itself for the same reason the analytics base is:
+ * one statement of where the summary comes from, and of what it is reported as
+ * when the read fails.
+ * @returns {Promise<any>} Outreach summary, or null
+ */
+export function readOutreach() {
+    return readSafely(() => Storage.getOutreach(), "load-outreach");
+}
+
+/**
  * Report whether a published snapshot holds anything the document would show.
  *
  * Insight cards are not the only thing on the Insights screen: a range can
@@ -97,8 +109,7 @@ export async function hasExportableData() {
     if (await readAnalyticsBase()) {
         return true;
     }
-    const outreach = await readSafely(() => Storage.getOutreach(), "load-outreach");
-    if (outreach) {
+    if (await readOutreach()) {
         return true;
     }
     // A connections or messages export produces a dashboard of its own without

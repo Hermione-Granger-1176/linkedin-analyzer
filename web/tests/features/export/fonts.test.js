@@ -151,6 +151,36 @@ describe("registerPdfFonts", () => {
         delete globalThis.fetch;
     });
 
+    it("registers each face with its own bytes", async () => {
+        // The stub records the file and its data together, but only the names
+        // were ever read back. Registering Caveat with Patrick Hand's outlines,
+        // or with no bytes at all, ships a visibly broken document and would
+        // otherwise pass every assertion in this file.
+        const faces = {
+            "/fonts/PatrickHand-Regular.ttf": buildFontFile([
+                { format: 4, segments: [[0x41, 0x42]] },
+            ]),
+            "/fonts/Caveat-Regular.ttf": buildFontFile([{ format: 4, segments: [[0x41, 0x43]] }]),
+        };
+        globalThis.fetch = vi.fn((url) =>
+            Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(faces[url]) }),
+        );
+        const doc = createDocStub();
+
+        await registerPdfFonts(doc);
+
+        expect(doc.vfs).toEqual([
+            {
+                file: "PatrickHand-Regular.ttf",
+                data: encodeFontBytes(faces["/fonts/PatrickHand-Regular.ttf"]),
+            },
+            {
+                file: "Caveat-Regular.ttf",
+                data: encodeFontBytes(faces["/fonts/Caveat-Regular.ttf"]),
+            },
+        ]);
+    });
+
     it("registers both handwritten faces and reports the family names", async () => {
         const requested = [];
         const font = buildFontFile([{ format: 4, segments: [[0x41, 0x5a]] }]);

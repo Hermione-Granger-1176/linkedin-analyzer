@@ -6,6 +6,7 @@ import { ScreenManager } from "./app/screen-manager.js";
 import { AnalyticsPage } from "./features/analytics/screen.js";
 import { CleanPage } from "./features/cleaning/screen.js";
 import { ConnectionsPage } from "./features/connections/screen.js";
+import { PdfExport } from "./features/export/pdf.js";
 import { InsightsPage } from "./features/insights/screen.js";
 import { MessagesPage } from "./features/messages/screen.js";
 import { Tutorial } from "./features/tutorial/tutorial.js";
@@ -86,6 +87,7 @@ function init() {
     initRuntime();
     initDecorations();
     Theme.init();
+    PdfExport.init();
     NavMenu.init();
     Tutorial.init();
     registerRoutes();

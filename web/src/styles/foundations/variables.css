@@ -18,7 +18,9 @@
     src: url("/fonts/Caveat-Regular.woff2") format("woff2");
 }
 
-:root {
+:root,
+[data-theme="light"],
+.theme-light {
     /* Light Theme (Default): warm, doodly, marker-on-paper */
     --bg-primary: rgba(255, 253, 247, 1);
     --bg-secondary: rgba(253, 250, 245, 1);

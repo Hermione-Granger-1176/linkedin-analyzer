@@ -43,6 +43,7 @@
   "browserslist": "> 0.5%, last 2 versions, not dead",
   "dependencies": {
     "@sentry/browser": "^10.68.0",
+    "jspdf": "^4.2.1",
     "roughjs": "^4.6.6",
     "web-vitals": "^6.0.1",
     "write-excel-file": "^4.1.1"
@@ -70,6 +71,14 @@
     {
       "path": "web/dist/assets/messages-worker-*.js",
       "limit": "8 kB"
+    },
+    {
+      "path": "web/dist/assets/threads-worker-*.js",
+      "limit": "10 kB"
+    },
+    {
+      "path": "web/dist/assets/jspdf*.js",
+      "limit": "140 kB"
     }
   ],
   "devDependencies": {

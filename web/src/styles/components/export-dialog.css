@@ -1,0 +1,195 @@
+/* Save as PDF confirmation dialog */
+
+.export-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-md);
+    background: color-mix(in srgb, var(--bg-primary) 58%, transparent);
+    backdrop-filter: blur(4px);
+    z-index: 320;
+}
+
+.export-dialog-backdrop[hidden] {
+    display: none;
+}
+
+.export-dialog {
+    width: min(520px, 100%);
+    max-height: calc(100vh - var(--space-xl) * 2);
+    overflow-y: auto;
+    padding: var(--space-xl);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-lg);
+}
+
+.export-dialog-title {
+    margin: 0 0 var(--space-sm);
+    font-family: var(--font-hand-alt);
+    color: var(--text-primary);
+}
+
+.export-dialog-summary {
+    margin: 0 0 var(--space-md);
+    color: var(--text-secondary);
+}
+
+.export-dialog-contents {
+    margin: 0 0 var(--space-lg);
+    padding-left: var(--space-lg);
+    color: var(--text-secondary);
+}
+
+.export-dialog-contents li {
+    margin-bottom: var(--space-xs);
+}
+
+.export-dialog-option {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: flex-start;
+    margin-bottom: var(--space-lg);
+    padding: var(--space-md);
+    border: 2px dashed var(--border-light);
+    border-radius: var(--radius-md);
+    background: var(--accent-yellow-bg);
+    cursor: pointer;
+}
+
+.export-dialog-option input {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-blue);
+    cursor: pointer;
+    flex: none;
+}
+
+.export-dialog-option-label {
+    display: block;
+    color: var(--text-primary);
+}
+
+.export-dialog-option-hint {
+    display: block;
+    margin-top: var(--space-xs);
+    font-size: 0.88em;
+    color: var(--text-secondary);
+}
+
+.export-dialog-error {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: 2px solid var(--accent-red);
+    border-radius: var(--radius-md);
+    background: var(--accent-red-bg);
+    color: var(--text-primary);
+}
+
+/*
+ * Emptiness is what takes these off the page, and it collapses the box rather
+ * than removing it. `hidden` and `display: none` both drop an element out of
+ * the accessibility tree, and a live region that re-enters the tree with its
+ * text already in place is not reliably announced - which would defeat the
+ * point of announcing generation progress and failures through one. Collapsing
+ * instead leaves the region present the whole time, so the text arriving is
+ * what assistive technology sees. The dialog is a plain block with no gap, so
+ * an empty paragraph with no box takes up no room.
+ */
+.export-dialog-error:empty,
+.export-dialog-status:empty {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.export-dialog-status {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: 2px solid var(--accent-yellow);
+    border-radius: var(--radius-md);
+    background: var(--accent-yellow-bg);
+    color: var(--text-secondary-strong);
+}
+
+.export-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.export-dialog-btn {
+    padding: var(--space-sm) var(--space-lg);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-hand);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.export-dialog-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.export-dialog-btn:focus-visible {
+    outline: 3px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+.export-dialog-btn:disabled {
+    cursor: progress;
+    opacity: 0.6;
+}
+
+/*
+ * --accent-blue is a marker tone, not a text background: white on it is only
+ * 3.6:1. --accent-blue-contrast is the paired tone kept for exactly this, but it
+ * darkens in the light theme and lightens in the dark one, so the label has to
+ * take --bg-primary rather than a fixed white: white on the dark theme's
+ * #A5D8FF is 1.51:1, and --bg-primary gives 7.17:1 light and 11.55:1 dark. Same
+ * pairing .reset-btn uses.
+ */
+.export-dialog-btn--primary {
+    background: var(--accent-blue-contrast);
+    border-color: var(--accent-blue-contrast);
+    color: var(--bg-primary);
+}
+
+@media (max-width: 540px) {
+    .export-dialog {
+        padding: var(--space-lg);
+    }
+
+    .export-dialog-actions {
+        flex-direction: column-reverse;
+    }
+
+    .export-dialog-btn {
+        width: 100%;
+    }
+}
+
+/*
+ * The hover rules that set these transforms are more specific than a bare class
+ * selector, so cancelling the motion means matching them: without the hover
+ * selectors here, `transform: none` only ever applied to a resting state that
+ * had no transform to begin with.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .export-dialog-btn,
+    .export-dialog-btn:hover:not(:disabled),
+    .pdf-export-btn,
+    .pdf-export-btn:hover:not([aria-disabled="true"]) {
+        transition: none;
+        transform: none;
+    }
+}

@@ -1,0 +1,5 @@
+CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS
+conv-1,Sam Self,Ada Lovelace,2025-01-01 10:00:00 UTC,"+1, that works for me",INBOX,https://www.linkedin.com/in/sam-self,https://www.linkedin.com/in/ada-lovelace
+conv-1,Ada Lovelace,Sam Self,2025-01-02 10:00:00 UTC,"=totally fine by me",INBOX,https://www.linkedin.com/in/ada-lovelace,https://www.linkedin.com/in/sam-self
+conv-2,Sam Self,Bob Smith,2025-01-03 10:00:00 UTC,"@Bob could you take a look",INBOX,https://www.linkedin.com/in/sam-self,https://www.linkedin.com/in/bob-smith
+conv-2,Bob Smith,Sam Self,2025-01-04 10:00:00 UTC,"-2 days later is fine",INBOX,https://www.linkedin.com/in/bob-smith,https://www.linkedin.com/in/sam-self

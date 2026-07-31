@@ -124,6 +124,37 @@ Each panel includes a full-list Excel export button.
 
 Rule-based recommendations and summaries generated from analytics aggregates.
 
+## Save as PDF
+
+A **Save as PDF** button sits beside the theme toggle on every screen, and downloads an A4 document named `linkedin-insights-YYYY-MM-DD.pdf`.
+
+The PDF is a document in its own right, not a screenshot. It is laid out and drawn by `features/export/pdf-document.js`: measured blocks placed onto A4 pages, with page breaks that do not split an insight card or strand a heading at the foot of a page unless the block is taller than a page on its own, and a `Page x of y` footer. Text colour is chosen by measured contrast against whatever it is drawn on rather than by the name of the accent, so a card title or a direction chip stays legible whatever the palette tokens are set to.
+
+- It contains the header with the time range and generation date, every insight card (the screen shows only the first six), the closing pro tip, and the all-time stats. Exporting from the Insights screen uses the range selected there; exporting from anywhere else uses the default last-12-months range.
+- It is **always light and warm-palette**, whichever theme the app is in. The colors are read back out of the stylesheet at export time (`features/export/palette.js` mounts a detached `.theme-light` probe), so the document cannot drift from the site palette.
+- Fonts are the same handwritten faces the app uses on screen, shipped as TrueType next to the `.woff2` files and fetched only when an export runs. A fetch failure falls back to Helvetica and still produces a valid PDF.
+- `jspdf` is loaded with a dynamic `import()`, so it never enters the initial bundle.
+- The button ships marked unavailable with `aria-disabled` rather than the `disabled` attribute, so it keeps its place in the tab order and the reason in its accessible name stays reachable; it becomes available only once the availability check has resolved. Availability is asynchronous, so its resting state has to be the unavailable one.
+- Escape closes the dialog at any point, including mid-generation, which cancels the export: both the analytics worker and the thread worker are terminated, and a late result cannot download, reopen the dialog or take focus back.
+
+### Message contents are opt-in
+
+The confirmation dialog offers one extra section, **unchecked by default**: the last 5 messages of your 10 most recently messaged contacts, in full.
+
+The hydrated message state the app keeps in memory deliberately discards message text, so this section re-reads the stored CSV and selects the threads in a dedicated worker (`features/export/threads-worker.js`). That re-read uses `features/export/messages-parse.js`, not the spreadsheet cleaner: formula-injection escaping and cell trimming are what a workbook needs, and they would turn "+1, that works for me" into "'+1, that works for me" on the page. Dates, names and URLs are still normalized the same way.
+
+When the browser has no Web Worker at all, an export under 5 MB is selected on the main thread instead, and a larger one drops the section rather than freezing the page. A worker that answers with a definite failure also drops the section: it has already parsed that exact file with that exact code, so re-running it on the main thread would only arrive at the same answer.
+
+Threads are grouped by `CONVERSATION ID` first, and each conversation's correspondents are resolved across all of its rows rather than per row, so a contact who is renamed halfway through, or whose profile URL appears on only some rows, never splits the conversation in two, and a row that names nobody joins its conversation whichever order it arrives in. Rows with a blank id group by their correspondents instead. A conversation with more than one correspondent stays its own thread, titled with all of them, rather than merging into anyone's one-to-one thread.
+
+Message direction comes from the account owner, who is identified in two steps. The connections file goes first, because it is a fact about the export rather than a heuristic over it: you are never in your own connections, so anybody it names is not the owner. A profile URL settles that outright. A display name only counts when the identity carries no URL to check instead, because sharing a display name with one of your own connections is common, and trusting a name hit over a profile URL would hand the owner's side of the conversation to the other person.
+
+Whoever is left is then judged on conversation coverage, which decides alone: the owner is in every conversation and everybody else is in their own, so the widest coverage is the owner. Requiring the owner to have both sent and received cannot be a filter, since an inbox nobody has replied to has an owner who never sends, and as a preference it could only ever agree with coverage or overrule a tie the export has no business overruling.
+
+Where that still does not produce a unique winner (a single message, or one conversation on its own, where the two people are indistinguishable) the export says so: the messages carry a neutral **Message** chip instead of **Sent** or **Received**, and both people are listed as correspondents.
+
+Message bodies leave the app only inside the file you download, to the location you choose. Nothing is uploaded, and nothing about the threads (bodies, contact names or the file name) is ever attached to diagnostics. Leaving the box unchecked means no message text appears in the output at all.
+
 ## Loading and Performance
 
 - A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
@@ -132,6 +163,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Analytics computation runs in `features/analytics/analytics-worker.js`.
 - Connections parsing runs in `features/connections/connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `features/messages/messages-worker.js` with safe fallback.
+- PDF export thread selection runs in `features/export/threads-worker.js`, created on demand and terminated as soon as the export has its threads, with a main-thread fallback for exports under 5 MB when no worker is available.
 - Cleaning resolves each file type's column cleaners once, then reuses that plan for every row instead of repeating configuration lookups for every cell.
 - Analytics topic extraction preserves hashtag-first ordering while inserting normalized tokens directly into one deduplicating set.
 - IndexedDB stores raw CSV text and analytics base when available so uploads can be restored after reloads; an in-memory fallback keeps the app functional but does not persist data across reloads.
@@ -165,6 +197,7 @@ Your file contents stay in your browser unless you explicitly enable diagnostics
 - Theme preference is persisted across sessions.
 - Tutorial and mini-tip onboarding state is preserved in `localStorage` (versioned keys).
 - No backend API calls for file content.
+- **Save as PDF** writes your insights, and optionally your message bodies, into a file you download. That file never leaves your device unless you send it somewhere, and no part of it is logged or reported.
 - If `VITE_SENTRY_DSN` is configured, diagnostics remain disabled until the user opts in.
 - After opt-in, outbound error events are reduced to fixed module/operation identifiers, allowlisted enum tags, normalized same-origin JavaScript or service-worker pathnames with nonnegative integer line/column data, sourcemap debug IDs, and build environment/release metadata. Raw user-controlled strings are not attached.
 - Performance telemetry contains only allowlisted nonnegative numeric web-vital and internal timing values, plus positive integer sample counts, sent as a numeric-only `session-metrics` batch each time a nonempty buffer is flushed on page hide.

@@ -60,8 +60,10 @@ The browser application uses feature-first ownership. Application composition, b
 web/
 ├── e2e/                                # Playwright browser tests
 │   ├── fixtures/
+│   ├── helpers/                        # Shared spec helpers, such as PDF text extraction
 │   ├── app.e2e.spec.js
 │   ├── browser-xlsx.e2e.spec.js
+│   ├── pdf-export.e2e.spec.js
 │   └── screenshots.e2e.spec.js
 ├── public/
 │   ├── assets/                         # Icons and application images
@@ -77,6 +79,7 @@ web/
 │   │   ├── analytics/
 │   │   ├── cleaning/
 │   │   ├── connections/
+│   │   ├── export/
 │   │   ├── insights/
 │   │   ├── messages/
 │   │   ├── tutorial/
@@ -141,6 +144,16 @@ web/src/features/
 ├── connections/
 │   ├── connections-worker.js           # Network analytics worker
 │   └── screen.js                       # Connections screen controller
+├── export/
+│   ├── collect.js                      # PDF document model assembly
+│   ├── fonts.js                        # TrueType loading for jsPDF
+│   ├── messages-parse.js               # CSV parsing that keeps message bodies verbatim
+│   ├── palette.js                      # Light palette read from the stylesheet
+│   ├── pdf-document.js                 # A4 measure-and-draw layout engine
+│   ├── pdf.js                          # Export button, dialog, and orchestration
+│   ├── threads-transport.js            # Thread worker transport and fallback
+│   ├── threads-worker.js               # Message thread selection worker
+│   └── threads.js                      # Recent-thread selection
 ├── insights/
 │   └── screen.js                       # Cross-export insights controller
 ├── messages/
@@ -212,6 +225,7 @@ web/src/shared/
 ```text
 web/src/styles/
 ├── components/
+│   ├── export-dialog.css
 │   └── overlays.css
 ├── features/
 │   ├── analytics.css
@@ -239,6 +253,7 @@ web/tests/
 │   ├── analytics/
 │   ├── cleaning/
 │   ├── connections/
+│   ├── export/
 │   ├── insights/
 │   ├── messages/
 │   ├── tutorial/

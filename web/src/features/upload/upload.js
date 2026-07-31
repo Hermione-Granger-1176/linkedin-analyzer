@@ -685,6 +685,10 @@ export const UploadPage = (() => {
         DataCache.invalidate("storage:");
         DataCache.invalidate("clean:");
         DataCache.invalidate("messages:");
+        // The Insights screen publishes what is on screen for the PDF export to
+        // reuse. That snapshot describes the previous upload, and the export
+        // prefers it over recomputing, so it has to go with the rest.
+        DataCache.invalidate("insights:");
 
         const files = await Storage.getAllFiles();
         DataCache.set("storage:files", files.map(toStoredFileMetadata));

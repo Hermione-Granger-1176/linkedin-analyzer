@@ -9,6 +9,17 @@ const LIMITS = Object.freeze({
     maxFileNameChars: 255,
     maxJobIdChars: 128,
     maxMessageChars: 500,
+    // Ceilings for the PDF export's thread selection. They bound the work the
+    // worker will do, and double as the defaults, so they must match
+    // DEFAULT_PEOPLE and DEFAULT_MESSAGES_PER_PERSON in features/export/threads.js.
+    maxThreadPeople: 10,
+    maxThreadMessagesPerPerson: 5,
+    // The self-detection tiebreak keys, one or two per connection. The ceiling
+    // is well past the largest connections list LinkedIn will export; anything
+    // beyond it is truncated rather than rejected, because a partial tiebreak
+    // still resolves more directions than none.
+    maxContactKeys: 60000,
+    maxContactKeyChars: 512,
 });
 
 /**
@@ -74,6 +85,33 @@ function normalizeOptionalString(value, maxLength) {
         return value.slice(0, maxLength);
     }
     return value;
+}
+
+/**
+ * Normalize a list of strings to a bounded list of bounded strings.
+ *
+ * Non-strings and empties are dropped rather than coerced: these lists are
+ * looked up by exact value, so a coerced entry could only ever be a key that
+ * matches nothing.
+ * @param {unknown} value - Raw value
+ * @param {number} maxItems - Maximum number of entries kept
+ * @param {number} maxItemLength - Maximum length of each entry
+ * @returns {string[]}
+ */
+function normalizeStringArray(value, maxItems, maxItemLength) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const normalized = [];
+    for (const entry of value) {
+        if (normalized.length >= maxItems) {
+            break;
+        }
+        if (typeof entry === "string" && entry) {
+            normalized.push(normalizeString(entry, maxItemLength));
+        }
+    }
+    return normalized;
 }
 
 /**
@@ -405,6 +443,79 @@ export function parseMessagesWorkerMessage(message) {
         type: "processed",
         requestId: normalizeRequestId(message.requestId),
         payload: isPlainObject(message.payload) ? message.payload : null,
+    });
+}
+
+/**
+ * Parse threads worker request envelope.
+ * @param {unknown} message - Raw request
+ * @returns {{valid: boolean, value?: object, error?: string, requestId?: number|string}}
+ */
+export function parseThreadsWorkerRequest(message) {
+    // A rejected request still has to be answered under the id it arrived with:
+    // the main thread ignores any other id and would otherwise sit out the whole
+    // size-scaled watchdog before giving up.
+    const requestId = normalizeRequestId(isPlainObject(message) ? message.requestId : 0);
+    const rejected = (error) => ({ ...invalid(error), requestId });
+
+    if (!isPlainObject(message) || message.type !== "threads") {
+        return rejected("Invalid threads worker request envelope");
+    }
+    const payload = isPlainObject(message.payload) ? message.payload : {};
+    const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
+    if (!messagesCsv) {
+        return rejected("Missing messagesCsv payload");
+    }
+    if (messagesCsv.length > LIMITS.maxCsvChars) {
+        return rejected("messagesCsv payload exceeds allowed size");
+    }
+    return valid({
+        type: "threads",
+        requestId,
+        payload: {
+            messagesCsv,
+            people: normalizeNumber(
+                payload.people,
+                LIMITS.maxThreadPeople,
+                1,
+                LIMITS.maxThreadPeople,
+            ),
+            messagesPerPerson: normalizeNumber(
+                payload.messagesPerPerson,
+                LIMITS.maxThreadMessagesPerPerson,
+                1,
+                LIMITS.maxThreadMessagesPerPerson,
+            ),
+            contactKeys: normalizeStringArray(
+                payload.contactKeys,
+                LIMITS.maxContactKeys,
+                LIMITS.maxContactKeyChars,
+            ),
+        },
+    });
+}
+
+/**
+ * Parse threads worker outbound message.
+ *
+ * The thread payload carries the user's own message bodies verbatim, so it is
+ * checked for shape only and never truncated or rewritten.
+ * @param {unknown} message - Raw worker message
+ * @returns {{valid: boolean, value?: object, error?: string}}
+ */
+export function parseThreadsWorkerMessage(message) {
+    if (!isPlainObject(message) || message.type !== "threads") {
+        return invalid("Invalid threads worker message envelope");
+    }
+    const payload = isPlainObject(message.payload) ? message.payload : {};
+    return valid({
+        type: "threads",
+        requestId: normalizeRequestId(message.requestId),
+        payload: {
+            success: Boolean(payload.success),
+            threads: Array.isArray(payload.threads) ? payload.threads : [],
+            error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
+        },
     });
 }
 

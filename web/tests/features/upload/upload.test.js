@@ -287,6 +287,56 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("drops the Insights export snapshot when a new file lands", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: null,
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    this.result = encodeBuf("col\nvalue");
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+        vi.spyOn(Date, "now").mockReturnValue(1234);
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "shares",
+                    fileName: "Shares.csv",
+                    rowCount: 2,
+                    jobId: "Shares.csv:1234:6b851eb851eb85",
+                    analyticsBase: { months: { "2024-01": {} } },
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Without this the PDF export keeps reusing the snapshot the Insights
+        // screen published for the previous dataset.
+        expect(DataCache.invalidate).toHaveBeenCalledWith("insights:");
+
+        Date.now.mockRestore();
+        Math.random.mockRestore();
+        globalThis.FileReader = originalFileReader;
+    });
+
     it("does not complete the wrong job when an error lacks a jobId during concurrent uploads", async () => {
         const fileReaderInstance = {
             result: null,

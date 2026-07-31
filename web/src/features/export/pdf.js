@@ -1,0 +1,454 @@
+/**
+ * Save as PDF orchestrator.
+ *
+ * Owns the global export button and its confirmation dialog, and runs the
+ * export: jsPDF is imported lazily so it stays out of the initial bundle, the
+ * palette and fonts are gathered, the layout engine draws the document, and the
+ * result is downloaded through the same anchor/object-URL dance the Excel
+ * export uses.
+ *
+ * Message bodies can end up inside the downloaded file, by explicit opt-in.
+ * Nothing about them is ever logged, reported or sent anywhere: every catch on
+ * this path discards the value it caught and reports a freshly built error, so
+ * no user text can reach the telemetry SDK even before it scrubs an event.
+ */
+
+import { captureError } from "../../platform/observability/sentry.js";
+import { DataCache } from "../../platform/persistence/data-cache.js";
+import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+
+import { collectExportData, hasExportableData, terminateAnalyticsWorker } from "./collect.js";
+import { registerPdfFonts } from "./fonts.js";
+import { readPdfPalette } from "./palette.js";
+import { renderPdfDocument } from "./pdf-document.js";
+import { terminateThreadsWorker } from "./threads-transport.js";
+
+const OVERLAY_SOURCE = "pdf-export";
+const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
+const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), [href]";
+
+// The nodes the surface dereferences without checking first. `hint` is absent
+// on purpose: it is the one element every use of it already guards.
+const REQUIRED_ELEMENTS = Object.freeze([
+    "trigger",
+    "backdrop",
+    "dialog",
+    "includeMessages",
+    "error",
+    "status",
+    "cancel",
+    "confirm",
+]);
+
+const ENABLED_LABEL = "Save your insights as a PDF";
+const DISABLED_LABEL = "Save as PDF, unavailable until you upload a LinkedIn export";
+const DISABLED_HINT = "Upload a LinkedIn export to enable saving as PDF.";
+const GENERIC_ERROR = "Something went wrong while building the PDF. Please try again.";
+
+export const PdfExport = (() => {
+    "use strict";
+
+    let elements = null;
+    let initialized = false;
+    let isOpen = false;
+    let isGenerating = false;
+    // The trigger is aria-disabled rather than natively disabled, so it can
+    // still be clicked and activated by keyboard; open() consults this instead.
+    let isAvailable = false;
+    // Bumped on every availability check so an older storage read that finishes
+    // late cannot overwrite a newer answer.
+    let availabilityToken = 0;
+    /** @type {HTMLElement|null} */
+    let lastFocused = null;
+    // Bumped whenever an export starts or is abandoned. A run whose token is no
+    // longer the current one has been cancelled: it must not download, touch the
+    // dialog, move focus or hide an overlay that now belongs to another run.
+    let generationToken = 0;
+
+    /**
+     * Resolve the DOM the export surface owns.
+     * @returns {object} Element references
+     */
+    function resolveElements() {
+        return {
+            trigger: document.getElementById("pdfExportBtn"),
+            hint: document.getElementById("pdfExportBtnHint"),
+            backdrop: document.getElementById("pdfExportDialogBackdrop"),
+            dialog: document.getElementById("pdfExportDialog"),
+            includeMessages: /** @type {HTMLInputElement|null} */ (
+                document.getElementById("pdfExportIncludeMessages")
+            ),
+            error: document.getElementById("pdfExportDialogError"),
+            status: document.getElementById("pdfExportDialogStatus"),
+            cancel: document.getElementById("pdfExportCancelBtn"),
+            confirm: document.getElementById("pdfExportConfirmBtn"),
+        };
+    }
+
+    /** Wire the export button and its dialog. */
+    function init() {
+        if (initialized) {
+            return;
+        }
+
+        const resolved = resolveElements();
+        // Checking only some of them left the rest to throw during boot and take
+        // the whole app down with them.
+        if (REQUIRED_ELEMENTS.some((name) => !resolved[name])) {
+            return;
+        }
+
+        elements = resolved;
+        initialized = true;
+        elements.trigger.addEventListener("click", open);
+        elements.cancel.addEventListener("click", close);
+        elements.confirm.addEventListener("click", generate);
+        elements.backdrop.addEventListener("mousedown", (event) => {
+            if (event.target === elements.backdrop) {
+                close();
+            }
+        });
+        document.addEventListener("keydown", handleKeydown);
+
+        DataCache.subscribe((event) => {
+            if (event && CACHE_EVENTS.has(event.type)) {
+                refreshAvailability();
+            }
+        });
+
+        refreshAvailability();
+    }
+
+    /**
+     * Enable or disable the trigger, with a reason a screen reader can read.
+     *
+     * `aria-disabled` rather than the `disabled` property: a natively disabled
+     * button leaves the tab order entirely, so the reason for it being
+     * unavailable - which lives on the button - can never be reached by the
+     * people who most need it. The button stays focusable and `open()` refuses
+     * to act on it instead.
+     * @returns {Promise<void>}
+     */
+    async function refreshAvailability() {
+        const token = ++availabilityToken;
+        let available = false;
+        try {
+            available = await hasExportableData();
+        } catch {
+            captureError(new Error("Export availability check failed."), {
+                module: "pdf-export",
+                operation: "check-availability",
+            });
+        }
+        // A check started before this one may still be in flight; whichever
+        // storage read finishes last would otherwise win, and an upload's
+        // "available" could be overwritten by a stale "unavailable" for the
+        // rest of the session.
+        if (token !== availabilityToken) {
+            return;
+        }
+        isAvailable = available;
+        const label = available ? ENABLED_LABEL : DISABLED_LABEL;
+        elements.trigger.setAttribute("aria-disabled", available ? "false" : "true");
+        elements.trigger.setAttribute("aria-label", label);
+        elements.trigger.title = label;
+        if (elements.hint) {
+            elements.hint.textContent = available ? "" : DISABLED_HINT;
+        }
+    }
+
+    /** Open the confirmation dialog. */
+    function open() {
+        if (isOpen || !isAvailable) {
+            return;
+        }
+        isOpen = true;
+        lastFocused = /** @type {HTMLElement|null} */ (document.activeElement);
+        hideError();
+        elements.includeMessages.checked = false;
+        elements.backdrop.hidden = false;
+        focusFirst();
+    }
+
+    /** Move focus to the first focusable control in the dialog. */
+    function focusFirst() {
+        const [first] = focusableElements();
+        if (first) {
+            first.focus();
+        }
+    }
+
+    /**
+     * List the dialog's focusable controls in tab order.
+     * @returns {HTMLElement[]} Focusable elements
+     */
+    function focusableElements() {
+        return Array.from(elements.dialog.querySelectorAll(FOCUSABLE_SELECTOR));
+    }
+
+    /**
+     * Close the dialog and hand focus back to the trigger.
+     *
+     * Closing during a generation cancels it. Cancel is the one control still
+     * enabled while an export runs, so a dialog that refused to close would be
+     * one a keyboard user could not leave.
+     */
+    function close() {
+        if (!isOpen) {
+            return;
+        }
+        isOpen = false;
+        if (isGenerating) {
+            cancelGeneration();
+        }
+        elements.backdrop.hidden = true;
+        const target = canRestoreFocus(lastFocused) ? lastFocused : elements.trigger;
+        lastFocused = null;
+        target.focus();
+    }
+
+    /**
+     * Report whether a recorded node is still worth handing focus back to.
+     *
+     * Every element has a .focus, including <body> - which browsers that do not
+     * focus a clicked button leave as the activeElement open() recorded, and
+     * which focus() silently refuses. Testing for it dropped the user at the top
+     * of the page instead of back on the button they came from.
+     * @param {HTMLElement|null} node - Node recorded when the dialog opened
+     * @returns {boolean} True when focusing it would land somewhere useful
+     */
+    function canRestoreFocus(node) {
+        return Boolean(
+            node && node !== document.body && node.isConnected && typeof node.focus === "function",
+        );
+    }
+
+    /**
+     * Abandon the running export and put the dialog back in its resting state.
+     *
+     * Both workers are ended: an export cancelled early is usually still in the
+     * analytics worker, and one cancelled with messages included is usually in
+     * the threads worker. Bumping the token alone would stop the result being
+     * used but leave the worker running, and holding its data, until it answered.
+     */
+    function cancelGeneration() {
+        generationToken += 1;
+        terminateThreadsWorker();
+        terminateAnalyticsWorker();
+        setBusy(false);
+        LoadingOverlay.hide(OVERLAY_SOURCE);
+    }
+
+    /**
+     * Handle Escape and trap Tab inside the open dialog.
+     * @param {KeyboardEvent} event - Key event
+     */
+    function handleKeydown(event) {
+        // The listener is on the document, so it outlives its own markup. A
+        // surface whose dialog has been replaced under it is not the modal the
+        // user is in and must not fight the live one for focus.
+        if (!isOpen || !elements.dialog.isConnected) {
+            return;
+        }
+        if (event.key === "Escape") {
+            event.preventDefault();
+            close();
+            return;
+        }
+        if (event.key !== "Tab") {
+            return;
+        }
+
+        const target = tabTarget(event.shiftKey);
+        if (!target) {
+            return;
+        }
+        event.preventDefault();
+        target.focus();
+    }
+
+    /**
+     * Pick where a Tab press should send focus to keep it inside the dialog.
+     * @param {boolean} backwards - Whether Shift is held
+     * @returns {HTMLElement|null} Wrap target, or null to let Tab run natively
+     */
+    function tabTarget(backwards) {
+        const focusable = focusableElements();
+        if (!focusable.length) {
+            return null;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        // Clicking the dialog's heading, its text or its padding focuses none of
+        // them and leaves activeElement on <body>. That is neither first nor
+        // last, so without this the native Tab ran and walked focus into the
+        // page behind an aria-modal dialog.
+        if (!elements.dialog.contains(active)) {
+            return backwards ? last : first;
+        }
+        if (backwards && active === first) {
+            return last;
+        }
+        if (!backwards && active === last) {
+            return first;
+        }
+        return null;
+    }
+
+    /**
+     * Show a failure message inside the dialog.
+     * @param {string} message - Fixed, user-facing text
+     */
+    function showError(message) {
+        elements.error.textContent = message;
+    }
+
+    /** Clear any previous failure message. */
+    function hideError() {
+        showError("");
+    }
+
+    /**
+     * Toggle the dialog's busy state.
+     *
+     * Cancel stays enabled throughout. Disabling every control would leave the
+     * dialog with nothing matching `FOCUSABLE_SELECTOR`, and `handleKeydown`
+     * gives up on trapping Tab when there is nothing to trap - so focus would
+     * walk out of an `aria-modal` dialog into the page behind it, during the
+     * dialog's longest-lived state. Generation progress is announced through a
+     * polite live region rather than through the disabled button's label, which
+     * assistive technology is not obliged to re-read.
+     * @param {boolean} busy - Whether an export is running
+     */
+    function setBusy(busy) {
+        isGenerating = busy;
+        elements.confirm.disabled = busy;
+        elements.includeMessages.disabled = busy;
+        elements.confirm.textContent = busy ? "Generating…" : "Generate PDF";
+        elements.dialog.setAttribute("aria-busy", busy ? "true" : "false");
+
+        if (!busy) {
+            elements.status.textContent = "";
+            return;
+        }
+
+        elements.status.textContent = "Generating your PDF. Cancel to stop.";
+        // Confirm is the control that started this and has just been disabled,
+        // which drops focus onto the body. Cancel is the only thing left to do.
+        elements.cancel.focus();
+    }
+
+    /**
+     * Build the dated file name.
+     * @param {Date} generatedAt - Generation timestamp
+     * @returns {string} File name
+     */
+    function buildFilename(generatedAt) {
+        const year = generatedAt.getFullYear();
+        const month = String(generatedAt.getMonth() + 1).padStart(2, "0");
+        const day = String(generatedAt.getDate()).padStart(2, "0");
+        return `linkedin-insights-${year}-${month}-${day}.pdf`;
+    }
+
+    /**
+     * Download a blob under the given name.
+     * @param {Blob} blob - PDF bytes
+     * @param {string} filename - File name
+     */
+    function download(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        try {
+            document.body.appendChild(link);
+            link.click();
+        } finally {
+            // A browser that refuses the synthetic click still leaves the anchor
+            // in the document and the object URL holding the whole PDF in memory.
+            if (link.parentNode) {
+                link.remove();
+            }
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    /**
+     * Build and download the document.
+     * @returns {Promise<void>}
+     */
+    async function generate() {
+        if (isGenerating) {
+            return;
+        }
+        const includeMessages = elements.includeMessages.checked;
+        hideError();
+        setBusy(true);
+        const token = ++generationToken;
+        const isCancelled = () => token !== generationToken;
+        LoadingOverlay.show(OVERLAY_SOURCE, {
+            title: "Building your PDF",
+            message: "Laying out your insights. Everything stays in this browser.",
+        });
+
+        try {
+            const { jsPDF } = await import("jspdf");
+            if (isCancelled()) {
+                return;
+            }
+            const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+            const palette = readPdfPalette();
+            const fonts = await registerPdfFonts(doc);
+            if (isCancelled()) {
+                return;
+            }
+            const generatedAt = new Date();
+            const data = await collectExportData({
+                includeMessages,
+                generatedAt,
+                // Checking only on the way back is not enough: collection walks
+                // several storage reads before it reaches either worker, and
+                // terminating a worker that does not exist yet does nothing.
+                isCancelled,
+            });
+            if (isCancelled()) {
+                return;
+            }
+
+            renderPdfDocument(doc, data, { palette, fonts });
+            download(doc.output("blob"), buildFilename(generatedAt));
+
+            // Clearing busy first is load-bearing: close() cancels a generation
+            // it still believes is running, so the other order would terminate
+            // both workers and bump the token for a run that just downloaded,
+            // making the finally below skip hiding its own overlay.
+            setBusy(false);
+            close();
+        } catch {
+            // A failure the user already walked away from is not worth reporting
+            // or showing, and the dialog it would write into may be reopened.
+            if (isCancelled()) {
+                return;
+            }
+            // The caught value is discarded on purpose: this catch surrounds CSV
+            // parsing, contact identities, message bodies and jsPDF rendering, so
+            // anything it holds could carry the user's own text. Only a fixed
+            // error crosses into telemetry.
+            captureError(new Error("PDF generation failed."), {
+                module: "pdf-export",
+                operation: "generate",
+            });
+            setBusy(false);
+            showError(GENERIC_ERROR);
+        } finally {
+            // A cancelled run's overlay is already down, and by now the source
+            // may belong to a newer run.
+            if (!isCancelled()) {
+                LoadingOverlay.hide(OVERLAY_SOURCE);
+            }
+        }
+    }
+
+    return { init };
+})();

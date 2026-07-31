@@ -6,6 +6,7 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
+import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
 const ACCENT_CLASSES = new Set([
@@ -407,6 +408,25 @@ export const InsightsPage = (() => {
         );
 
         elements.allTime.hidden = !growth && !outreach;
+        publishExportSnapshot();
+    }
+
+    /**
+     * Publish what is currently on screen for the PDF export.
+     *
+     * The export button is global and cannot assume this screen has run, so it
+     * has its own cold data path. Publishing here is the fast path: exporting
+     * from the Insights screen then matches exactly what the user is looking at,
+     * including the active time range.
+     */
+    function publishExportSnapshot() {
+        DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
+            timeRange: state.filters.timeRange,
+            insights: state.currentInsights ? state.currentInsights.insights || [] : [],
+            tip: state.currentInsights ? state.currentInsights.tip || null : null,
+            networkGrowth: state.networkGrowth,
+            outreach: state.outreach,
+        });
     }
 
     /**

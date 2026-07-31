@@ -72,7 +72,9 @@ const FALLBACK_PALETTE = Object.freeze({
 const COMPOSITE_BASE = Object.freeze({ r: 255, g: 253, b: 247 });
 
 const RGB_PATTERN = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.%]+)\s*)?\)$/i;
-const HEX_PATTERN = /^#([\da-f]{3}|[\da-f]{6})$/i;
+// Three, four, six or eight digits: the build minifies `rgba(r, g, b, a)` down
+// to hex, and the tinted tokens keep their alpha as a trailing pair.
+const HEX_PATTERN = /^#([\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i;
 
 /**
  * Clamp a channel to the 0-255 byte range jsPDF expects.
@@ -143,17 +145,20 @@ export function parseCssColor(value) {
     if (hexMatch) {
         const digits = hexMatch[1];
         const expanded =
-            digits.length === 3
+            digits.length <= 4
                 ? digits
                       .split("")
                       .map((digit) => digit + digit)
                       .join("")
                 : digits;
-        return Object.freeze({
+        const color = {
             r: Number.parseInt(expanded.slice(0, 2), 16),
             g: Number.parseInt(expanded.slice(2, 4), 16),
             b: Number.parseInt(expanded.slice(4, 6), 16),
-        });
+        };
+        const alpha =
+            expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) / 255 : 1;
+        return Object.freeze(flatten(color, alpha));
     }
 
     return null;

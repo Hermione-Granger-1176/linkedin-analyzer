@@ -41,13 +41,22 @@ describe("parseCssColor", () => {
         expect(parseCssColor("#4285F4")).toEqual({ r: 66, g: 133, b: 244 });
     });
 
+    it("flattens four and eight digit hex, which the build minifier emits", () => {
+        // #fbbc0526 is the minified form of rgba(251, 188, 5, 0.15).
+        expect(parseCssColor("#fbbc0526")).toEqual({ r: 254, g: 243, b: 211 });
+        // #0008 doubles to alpha 0x88, which is 0.533, not 0.5.
+        expect(parseCssColor("#0008")).toEqual({ r: 119, g: 118, b: 115 });
+        expect(parseCssColor("#000f")).toEqual({ r: 0, g: 0, b: 0 });
+    });
+
     it("returns null for blank and unrecognized values", () => {
         expect(parseCssColor("")).toBeNull();
         expect(parseCssColor("   ")).toBeNull();
         expect(parseCssColor(null)).toBeNull();
         expect(parseCssColor(undefined)).toBeNull();
         expect(parseCssColor("papayawhip")).toBeNull();
-        expect(parseCssColor("#ff00")).toBeNull();
+        expect(parseCssColor("#ff004")).toBeNull();
+        expect(parseCssColor("#ff004455aa")).toBeNull();
     });
 
     it("returns frozen colors", () => {

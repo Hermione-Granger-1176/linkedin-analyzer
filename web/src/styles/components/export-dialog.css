@@ -128,9 +128,11 @@
     opacity: 0.6;
 }
 
+/* --accent-blue is a marker tone, not a text background: white on it is only
+   3.6:1. --accent-blue-contrast is the darkened pair kept for exactly this. */
 .export-dialog-btn--primary {
-    background: var(--accent-blue);
-    border-color: var(--accent-blue);
+    background: var(--accent-blue-contrast);
+    border-color: var(--accent-blue-contrast);
     color: var(--text-on-accent);
 }
 

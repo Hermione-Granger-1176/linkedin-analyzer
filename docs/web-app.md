@@ -124,6 +124,26 @@ Each panel includes a full-list Excel export button.
 
 Rule-based recommendations and summaries generated from analytics aggregates.
 
+## Save as PDF
+
+A **Save as PDF** button sits beside the theme toggle on every screen, and downloads an A4 document named `linkedin-insights-YYYY-MM-DD.pdf`.
+
+The PDF is a document in its own right, not a screenshot. It is laid out and drawn by `features/export/pdf-document.js`: measured blocks placed onto A4 pages, with page breaks that never split an insight card and a `Page x of y` footer.
+
+- It contains the header with the active time range and generation date, every insight card (the screen shows only the first six), the closing pro tip, and the all-time stats.
+- It is **always light and warm-palette**, whichever theme the app is in. The colors are read back out of the stylesheet at export time (`features/export/palette.js` mounts a detached `.theme-light` probe), so the document cannot drift from the site palette.
+- Fonts are the same handwritten faces the app uses on screen, shipped as TrueType next to the `.woff2` files and fetched only when an export runs. A fetch failure falls back to Helvetica and still produces a valid PDF.
+- `jspdf` is loaded with a dynamic `import()`, so it never enters the initial bundle.
+- The button is disabled, with the reason in its accessible name, until there is something to export.
+
+### Message contents are opt-in
+
+The confirmation dialog offers one extra section, **unchecked by default**: the last 5 messages of your 10 most recently messaged contacts, in full.
+
+The hydrated message state the app keeps in memory deliberately discards message text, so this section re-reads the stored CSV and selects the threads in a dedicated worker (`features/export/threads-worker.js`).
+
+Message bodies leave the app only inside the file you download, to the location you choose. Nothing is uploaded, and nothing about the threads (bodies, contact names or the file name) is ever attached to diagnostics. Leaving the box unchecked means no message text appears in the output at all.
+
 ## Loading and Performance
 
 - A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
@@ -132,6 +152,7 @@ Rule-based recommendations and summaries generated from analytics aggregates.
 - Analytics computation runs in `features/analytics/analytics-worker.js`.
 - Connections parsing runs in `features/connections/connections-worker.js` with client-side filtering.
 - Messages/connections parsing runs in `features/messages/messages-worker.js` with safe fallback.
+- PDF export thread selection runs in `features/export/threads-worker.js`, created on demand and terminated as soon as the export has its threads.
 - Cleaning resolves each file type's column cleaners once, then reuses that plan for every row instead of repeating configuration lookups for every cell.
 - Analytics topic extraction preserves hashtag-first ordering while inserting normalized tokens directly into one deduplicating set.
 - IndexedDB stores raw CSV text and analytics base when available so uploads can be restored after reloads; an in-memory fallback keeps the app functional but does not persist data across reloads.
@@ -165,6 +186,7 @@ Your file contents stay in your browser unless you explicitly enable diagnostics
 - Theme preference is persisted across sessions.
 - Tutorial and mini-tip onboarding state is preserved in `localStorage` (versioned keys).
 - No backend API calls for file content.
+- **Save as PDF** writes your insights, and optionally your message bodies, into a file you download. That file never leaves your device unless you send it somewhere, and no part of it is logged or reported.
 - If `VITE_SENTRY_DSN` is configured, diagnostics remain disabled until the user opts in.
 - After opt-in, outbound error events are reduced to fixed module/operation identifiers, allowlisted enum tags, normalized same-origin JavaScript or service-worker pathnames with nonnegative integer line/column data, sourcemap debug IDs, and build environment/release metadata. Raw user-controlled strings are not attached.
 - Performance telemetry contains only allowlisted nonnegative numeric web-vital and internal timing values, plus positive integer sample counts, sent as a numeric-only `session-metrics` batch each time a nonempty buffer is flushed on page hide.

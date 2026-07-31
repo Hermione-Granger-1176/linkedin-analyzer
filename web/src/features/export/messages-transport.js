@@ -22,6 +22,7 @@ import {
     CANCELLED,
     createWorkerTransport,
     FAILED,
+    failureOutcome,
     MAIN_THREAD_FALLBACK_MAX_CHARS,
     PENDING,
 } from "./worker-transport.js";
@@ -136,11 +137,11 @@ function interpretReply(message, context) {
         return null;
     }
     if (!message.payload.success) {
-        // Settled whatever id it arrived under: only one request is ever in
-        // flight, so a failure envelope is this request failing, and waiting out
-        // the watchdog would look like a hang.
+        // Settled whatever id it arrived under, because only one request is ever
+        // in flight and waiting out the watchdog would look like a hang. What it
+        // settles as does turn on the id: see `failureOutcome`.
         context.report("Messages worker reported a failure.", "messages-worker-failure");
-        return FAILED;
+        return failureOutcome(message, context);
     }
     // A stale success belongs to a request nobody is waiting on.
     if (message.requestId !== context.requestId) {

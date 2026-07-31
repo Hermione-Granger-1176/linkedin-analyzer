@@ -250,26 +250,38 @@ describe("loadConnectionsData", () => {
         });
     });
 
-    it("treats a failure envelope as terminal even under another request id", async () => {
+    it("falls back when a failure envelope names no request it was given", async () => {
+        // The worker answers under the request's own id when it read the request
+        // and the parse is what failed, and under id zero when it fell over
+        // before or outside of that. Only the first is evidence about the file.
+        // This one never touched the CSV, so the small export is still parsed
+        // here rather than dropped, which is what the test above pins for a
+        // failure the worker did attribute to its request.
+        //
+        // It settles at once either way: no timer is advanced, so a request left
+        // to sit out its watchdog fails this test.
         vi.useFakeTimers();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
-        // A worker that could not read the request cannot echo its id in every
-        // browser; the single in-flight request must still end here rather than
-        // sitting out the watchdog.
         replyToRequest({ success: false, error: "invalid request" }, 99);
         vi.useRealTimers();
 
-        expect(await pending).toBeNull();
+        expect((await pending).rows).toHaveLength(2);
         expect(workerInstance.terminate).toHaveBeenCalled();
     });
 
-    it("does not re-parse on the main thread when the worker posts an error", async () => {
-        // This worker answers a request it threw on, or could not read at all,
-        // with an error envelope under request id zero.
+    it("does not re-parse on the main thread for an error envelope under its own id", async () => {
+        // This worker answers a request it threw on with an error envelope under
+        // that request's id. It ran this exact CSV through this exact code, so
+        // the UI thread would only freeze to reach the same answer.
         vi.useFakeTimers();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
+        const [request] = workerInstance.postMessage.mock.calls[0];
         workerInstance.emit("message", {
-            data: { type: "error", requestId: 0, payload: { message: "runtime failure" } },
+            data: {
+                type: "error",
+                requestId: request.requestId,
+                payload: { message: "runtime failure" },
+            },
         });
         vi.useRealTimers();
 
@@ -277,8 +289,59 @@ describe("loadConnectionsData", () => {
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "pdf-export",
             operation: "connections-worker-error-payload",
+            requestId: request.requestId,
+        });
+    });
+
+    it("falls back for an error envelope under id zero", async () => {
+        // Id zero is how this worker answers a global failure, or a request the
+        // contract parser would not let it read. Neither says the file cannot be
+        // parsed, so a small export is still parsed here.
+        vi.useFakeTimers();
+        const pending = loadConnectionsData(CONNECTIONS_CSV);
+        workerInstance.emit("message", {
+            data: { type: "error", requestId: 0, payload: { message: "runtime failure" } },
+        });
+        vi.useRealTimers();
+
+        expect((await pending).rows).toHaveLength(2);
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "pdf-export",
+            operation: "connections-worker-error-payload",
             requestId: expect.any(Number),
         });
+    });
+
+    it("answers a crash the same way whichever of its two routes lands first", async () => {
+        // A crash inside this worker reaches the main thread twice over: as the
+        // posted error envelope under id zero, and as a propagated error event
+        // on the Worker object, which this worker does not cancel. Nothing in
+        // the spec orders the two, so what the export does must not depend on
+        // which one wins.
+        const postCrashEnvelope = (worker) => {
+            worker.emit("message", {
+                data: { type: "error", requestId: 0, payload: { message: "runtime failure" } },
+            });
+        };
+        const propagateErrorEvent = (worker) => {
+            worker.emit("error", { type: "error", error: new Error("worker blew up") });
+        };
+
+        const outcomes = [];
+        for (const routes of [
+            [postCrashEnvelope, propagateErrorEvent],
+            [propagateErrorEvent, postCrashEnvelope],
+        ]) {
+            const pending = loadConnectionsData(CONNECTIONS_CSV);
+            const worker = workerInstance;
+            for (const route of routes) {
+                route(worker);
+            }
+            outcomes.push(await pending);
+        }
+
+        // Both fall back, because neither route said anything about the file.
+        expect(outcomes.map((data) => data.rows.length)).toEqual([2, 2]);
     });
 
     it("settles a success the contract parser emptied", async () => {

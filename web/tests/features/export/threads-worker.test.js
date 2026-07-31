@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { processPayload } from "../../../src/features/export/threads-worker.js";
 
@@ -43,5 +43,117 @@ describe("threads worker", () => {
         expect(result.success).toBe(false);
         expect(result.threads).toEqual([]);
         expect(result.error).toBeTruthy();
+    });
+
+    it("treats a non-string CSV as empty", () => {
+        expect(processPayload({ messagesCsv: null }).success).toBe(false);
+    });
+});
+
+describe("threads worker listeners", () => {
+    let postMessageSpy;
+
+    /**
+     * Spy on the worker's postMessage, aliased to globalThis under jsdom.
+     * @returns {import("vitest").MockInstance} The spy
+     */
+    function spyOnPostMessage() {
+        postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
+        return postMessageSpy;
+    }
+
+    /**
+     * Dispatch an event onto the worker global.
+     * @param {string} type - Event type
+     * @param {object} [properties] - Extra event properties
+     */
+    function dispatch(type, properties) {
+        const event = new Event(type);
+        for (const [key, value] of Object.entries(properties || {})) {
+            Object.defineProperty(event, key, { value });
+        }
+        globalThis.dispatchEvent(event);
+    }
+
+    afterEach(() => {
+        postMessageSpy.mockRestore();
+    });
+
+    it("ignores messages that are not thread requests", () => {
+        spyOnPostMessage();
+        dispatch("message", { data: { type: "process" } });
+
+        expect(postMessageSpy).not.toHaveBeenCalled();
+    });
+
+    it("answers a thread request with the selection", () => {
+        spyOnPostMessage();
+        dispatch("message", {
+            data: { type: "threads", requestId: 7, payload: { messagesCsv: MESSAGES_CSV } },
+        });
+
+        expect(postMessageSpy).toHaveBeenCalledOnce();
+        const [message] = postMessageSpy.mock.calls[0];
+        expect(message).toMatchObject({ type: "threads", requestId: 7 });
+        expect(message.payload.success).toBe(true);
+        expect(message.payload.threads).toHaveLength(2);
+    });
+
+    it("reports an invalid request payload", () => {
+        spyOnPostMessage();
+        dispatch("message", { data: { type: "threads", payload: {} } });
+
+        const [message] = postMessageSpy.mock.calls[0];
+        expect(message.payload.success).toBe(false);
+        expect(message.payload.error).toContain("Missing messagesCsv payload");
+    });
+
+    it("forwards runtime error events", () => {
+        spyOnPostMessage();
+        dispatch("error", { error: new Error("threads-runtime") });
+
+        const [message] = postMessageSpy.mock.calls[0];
+        expect(message.payload.error).toContain("threads-runtime");
+    });
+
+    it("forwards string-only error events", () => {
+        spyOnPostMessage();
+        dispatch("error", { message: "threads-string-error" });
+
+        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe("threads-string-error");
+    });
+
+    it("falls back when an error event carries nothing", () => {
+        spyOnPostMessage();
+        dispatch("error");
+
+        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe(
+            "Threads worker runtime failure.",
+        );
+    });
+
+    it("forwards unhandled rejections", () => {
+        spyOnPostMessage();
+        dispatch("unhandledrejection", { reason: new Error("threads-rejection") });
+
+        expect(postMessageSpy.mock.calls[0][0].payload.error).toContain("threads-rejection");
+    });
+
+    it("falls back for an opaque rejection reason", () => {
+        spyOnPostMessage();
+        dispatch("unhandledrejection", { reason: { kind: "opaque" } });
+
+        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe(
+            "Threads worker runtime failure.",
+        );
+    });
+
+    it("falls back when a rejection event carries no reason", () => {
+        spyOnPostMessage();
+        dispatch("unhandledrejection");
+
+        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe(
+            "Threads worker runtime failure.",
+        );
     });
 });

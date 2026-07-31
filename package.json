@@ -71,6 +71,14 @@
     {
       "path": "web/dist/assets/messages-worker-*.js",
       "limit": "8 kB"
+    },
+    {
+      "path": "web/dist/assets/threads-worker-*.js",
+      "limit": "8 kB"
+    },
+    {
+      "path": "web/dist/assets/jspdf*.js",
+      "limit": "140 kB"
     }
   ],
   "devDependencies": {

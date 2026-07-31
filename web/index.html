@@ -77,6 +77,7 @@
         <link rel="stylesheet" href="./src/styles/screens.css" />
         <link rel="stylesheet" href="./src/styles/sketch.css" />
         <link rel="stylesheet" href="./src/styles/features/tutorial.css" />
+        <link rel="stylesheet" href="./src/styles/components/export-dialog.css" />
     </head>
     <body>
         <noscript>
@@ -87,6 +88,32 @@
         </noscript>
 
         <a class="skip-link" href="#appMain">Skip to main content</a>
+
+        <button
+            class="pdf-export-btn"
+            id="pdfExportBtn"
+            type="button"
+            aria-label="Save your insights as a PDF"
+        >
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                    d="M12 3v11m0 0-4-4m4 4 4-4"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+                <path
+                    d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
+            </svg>
+        </button>
 
         <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
             <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true">
@@ -1552,6 +1579,51 @@
                     </svg>
                 </div>
                 <p class="progress-percent" id="progressPercent">0%</p>
+            </div>
+        </div>
+
+        <div class="export-dialog-backdrop" id="pdfExportDialogBackdrop" hidden>
+            <div
+                class="export-dialog"
+                id="pdfExportDialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="pdfExportDialogTitle"
+                aria-describedby="pdfExportDialogSummary"
+            >
+                <h2 class="export-dialog-title" id="pdfExportDialogTitle">Save as PDF</h2>
+                <p class="export-dialog-summary" id="pdfExportDialogSummary">
+                    A one-page-or-more A4 document, drawn in this app's light palette whichever
+                    theme you are using.
+                </p>
+                <ul class="export-dialog-contents">
+                    <li>Your insight cards and the closing pro tip</li>
+                    <li>The active time range and today's date</li>
+                    <li>All-time stats: network growth, outreach, replies, unanswered</li>
+                </ul>
+                <label class="export-dialog-option" for="pdfExportIncludeMessages">
+                    <input type="checkbox" id="pdfExportIncludeMessages" />
+                    <span>
+                        <span class="export-dialog-option-label">Include message contents</span>
+                        <span class="export-dialog-option-hint">
+                            Adds the last 5 messages of your 10 most recently messaged contacts, in
+                            full. The file is saved to your device and nothing is sent anywhere.
+                        </span>
+                    </span>
+                </label>
+                <p class="export-dialog-error" id="pdfExportDialogError" role="alert" hidden></p>
+                <div class="export-dialog-actions">
+                    <button type="button" class="export-dialog-btn" id="pdfExportCancelBtn">
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        class="export-dialog-btn export-dialog-btn--primary"
+                        id="pdfExportConfirmBtn"
+                    >
+                        Generate PDF
+                    </button>
+                </div>
             </div>
         </div>
 

@@ -133,3 +133,45 @@ button {
 [data-theme="dark"] .theme-toggle .icon-moon {
     display: block;
 }
+
+/* Save as PDF: sits immediately left of the theme toggle on every screen, so
+   its offset is one toggle width plus one gutter. */
+.pdf-export-btn {
+    position: fixed;
+    top: var(--space-lg);
+    right: calc(var(--space-lg) + 48px + var(--space-sm));
+    width: 48px;
+    height: 48px;
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    z-index: 200;
+    box-shadow: var(--shadow-sm);
+}
+
+.pdf-export-btn .icon {
+    width: 24px;
+    height: 24px;
+    color: var(--text-primary);
+}
+
+.pdf-export-btn:hover:not(:disabled) {
+    transform: scale(1.06) rotate(-8deg);
+    box-shadow: var(--shadow-md);
+}
+
+.pdf-export-btn:focus-visible {
+    outline: 3px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+.pdf-export-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    box-shadow: none;
+}

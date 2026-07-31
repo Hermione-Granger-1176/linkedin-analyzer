@@ -40,6 +40,11 @@
         right: var(--space-md);
     }
 
+    .pdf-export-btn {
+        top: var(--space-md);
+        right: calc(var(--space-md) + 48px + var(--space-sm));
+    }
+
     .filters-bar {
         flex-direction: column;
         align-items: flex-start;

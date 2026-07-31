@@ -302,7 +302,7 @@ function buildMiniTipTarget() {
  * Mark tutorial completion in localStorage for a route.
  */
 function markRouteComplete(routeName) {
-    window.localStorage.setItem(`linkedin-analyzer:tutorial:v1:route:${routeName}:complete`, "1");
+    window.localStorage.setItem(`linkedin-analyzer:tutorial:v2:route:${routeName}:complete`, "1");
 }
 
 /**
@@ -310,7 +310,7 @@ function markRouteComplete(routeName) {
  */
 function dismissMiniTip(routeName, tipId) {
     window.localStorage.setItem(
-        `linkedin-analyzer:tutorial:v1:route:${routeName}:tip:${tipId}:dismissed`,
+        `linkedin-analyzer:tutorial:v2:route:${routeName}:tip:${tipId}:dismissed`,
         "1",
     );
 }
@@ -740,7 +740,7 @@ describe("Tutorial.onRouteChange()", () => {
     it("does not count same-screen parameter updates as new route visits", () => {
         vi.useFakeTimers();
         buildHomeTargets();
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
 
         Tutorial.onRouteChange("home");
         Tutorial.onRouteChange("home");
@@ -1348,7 +1348,7 @@ describe("renderMiniTips", () => {
     function primeVisitCount(routeName) {
         // Pre-set visit count to 1 so onRouteChange increments it to 2
         // 2 % 2 === 0 → shouldScheduleMiniTips passes
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
     }
 
@@ -1410,7 +1410,7 @@ describe("renderMiniTips", () => {
 
         expect(document.querySelector(".tutorial-mini-tip")).toBeNull();
 
-        const key = "linkedin-analyzer:tutorial:v1:route:home:tip:home-upload-tip:dismissed";
+        const key = "linkedin-analyzer:tutorial:v2:route:home:tip:home-upload-tip:dismissed";
         expect(window.localStorage.getItem(key)).toBe("1");
     });
 
@@ -1733,7 +1733,7 @@ describe("miscellaneous edge cases", () => {
         buildHomeTargets();
 
         // Set up conditions so mini-tips would be scheduled for home
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("home");
 
@@ -1781,7 +1781,7 @@ describe("miscellaneous edge cases", () => {
 
     it("getStorageNumberValue fallback when stored value is not a number", () => {
         // Set a non-numeric visit count to trigger the !isFinite path → returns fallback
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "not-a-number");
 
         // incrementMiniTipVisitCount reads via getStorageNumberValue(key, 0)
@@ -1811,7 +1811,7 @@ describe("positionMiniTip rendering", () => {
      * styles are applied and the tip is visible.
      */
     function triggerMiniTips() {
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("home");
         buildMiniTipTarget();
@@ -1928,7 +1928,7 @@ describe("scheduleMiniTipRetry", () => {
 
         // Use analytics route where the mini-tip target is '#analytics-mini-target'
         // Don't build the target yet, renderMiniTips will find nothing and schedule retry
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("analytics");
 
@@ -1955,7 +1955,7 @@ describe("scheduleMiniTipRetry", () => {
         vi.useFakeTimers();
 
         // No target at all, all retries will fail
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("analytics");
 
@@ -1969,7 +1969,7 @@ describe("scheduleMiniTipRetry", () => {
     it("cancels mini-tip retry when tutorial becomes active during retry window", () => {
         vi.useFakeTimers();
 
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("analytics");
 
@@ -1989,7 +1989,7 @@ describe("scheduleMiniTipRetry", () => {
     it("cancels mini-tip retry when route changes during retry window", () => {
         vi.useFakeTimers();
 
-        const key = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(key, "1");
         markRouteComplete("analytics");
 
@@ -2013,10 +2013,10 @@ describe("shouldScheduleMiniTips cooldown", () => {
         vi.useFakeTimers();
 
         // Set up: visit count = 2 (passes interval check), but lastShownAt is very recent
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1"); // onRouteChange will increment to 2
 
-        const lastShownKey = "linkedin-analyzer:tutorial:v1:mini-tip:last-shown-at";
+        const lastShownKey = "linkedin-analyzer:tutorial:v2:mini-tip:last-shown-at";
         window.localStorage.setItem(lastShownKey, String(Date.now())); // just shown
 
         buildHomeTargets();
@@ -2034,10 +2034,10 @@ describe("shouldScheduleMiniTips cooldown", () => {
     it("shows mini-tips when cooldown has passed", () => {
         vi.useFakeTimers();
 
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1");
 
-        const lastShownKey = "linkedin-analyzer:tutorial:v1:mini-tip:last-shown-at";
+        const lastShownKey = "linkedin-analyzer:tutorial:v2:mini-tip:last-shown-at";
         // Set lastShownAt to way in the past (> cooldown period)
         window.localStorage.setItem(lastShownKey, String(Date.now() - 999999));
 
@@ -2403,9 +2403,9 @@ describe("isViewportPinned and ensureTargetInView with fixed element", () => {
 
 describe("positionMiniTip with left, right, and bottom placements", () => {
     function setupMiniTipPlacementsRoute() {
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1");
-        const lastShownKey = "linkedin-analyzer:tutorial:v1:mini-tip:last-shown-at";
+        const lastShownKey = "linkedin-analyzer:tutorial:v2:mini-tip:last-shown-at";
         window.localStorage.setItem(lastShownKey, String(Date.now() - 999999));
         markRouteComplete("minitipplacements");
         addTarget("mtp-target", {
@@ -2438,7 +2438,7 @@ describe("getRouteConfigItems edge cases", () => {
     it("does not throw when TutorialMiniTips has no entry for route", () => {
         // 'notargets' route exists in TutorialSteps but not in TutorialMiniTips
         markRouteComplete("notargets");
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1");
 
         // onRouteChange calls scheduleMiniTips which calls getRouteMiniTips('notargets')
@@ -2462,7 +2462,7 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
 
         // Even if route is complete and visit count is right, active guard fires
         markRouteComplete("home");
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1");
 
         Tutorial.onRouteChange("home");
@@ -2475,9 +2475,9 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
     it("canStartMiniTips returns false when token is stale (line 1591)", () => {
         vi.useFakeTimers();
 
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1");
-        const lastShownKey = "linkedin-analyzer:tutorial:v1:mini-tip:last-shown-at";
+        const lastShownKey = "linkedin-analyzer:tutorial:v2:mini-tip:last-shown-at";
         window.localStorage.setItem(lastShownKey, String(Date.now() - 999999));
 
         buildMiniTipTarget();
@@ -2498,9 +2498,9 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
 
         const { LoadingOverlay } = await import("../../../src/shared/ui/loading-overlay.js");
 
-        const visitKey = "linkedin-analyzer:tutorial:v1:mini-tip:route-visits";
+        const visitKey = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
         window.localStorage.setItem(visitKey, "1");
-        const lastShownKey = "linkedin-analyzer:tutorial:v1:mini-tip:last-shown-at";
+        const lastShownKey = "linkedin-analyzer:tutorial:v2:mini-tip:last-shown-at";
         window.localStorage.setItem(lastShownKey, String(Date.now() - 999999));
 
         buildMiniTipTarget();

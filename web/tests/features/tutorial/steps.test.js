@@ -114,16 +114,16 @@ describe("TutorialSteps", () => {
 // ---------------------------------------------------------------------------
 
 describe("TutorialSteps entry counts", () => {
-    it("home has 5 steps", () => {
-        expect(TutorialSteps.home.length).toBe(5);
+    it("home has 6 steps", () => {
+        expect(TutorialSteps.home.length).toBe(6);
     });
 
     it("clean has 4 steps", () => {
         expect(TutorialSteps.clean.length).toBe(4);
     });
 
-    it("analytics has 4 steps", () => {
-        expect(TutorialSteps.analytics.length).toBe(4);
+    it("analytics has 5 steps", () => {
+        expect(TutorialSteps.analytics.length).toBe(5);
     });
 
     it("connections has 4 steps", () => {
@@ -209,6 +209,60 @@ describe("TutorialSteps known content", () => {
         const step = TutorialSteps.clean.find((s) => s.id === "clean-download");
         expect(step).toBeDefined();
         expect(step.title).toContain("Download");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// TutorialSteps, the shared Save as PDF step
+// ---------------------------------------------------------------------------
+
+describe("TutorialSteps Save as PDF step", () => {
+    const PDF_STEP_ROUTES = ["home", "analytics"];
+
+    /**
+     * Read the Save as PDF step for a route.
+     */
+    function pdfStep(route) {
+        return TutorialSteps[route].find((s) => s.id === `${route}-pdf-export`);
+    }
+
+    it("exists on every route that introduces the export button", () => {
+        for (const route of PDF_STEP_ROUTES) {
+            expect(pdfStep(route)).toBeDefined();
+        }
+    });
+
+    it("points every route at the same global export button", () => {
+        for (const route of PDF_STEP_ROUTES) {
+            expect(pdfStep(route).target).toBe("#pdfExportBtn");
+            expect(pdfStep(route).placement).toBe("bottom");
+        }
+    });
+
+    it("falls back to a container that belongs to its own route", () => {
+        expect(pdfStep("home").fallbackTarget).toBe("#screen-home .hero-header");
+        expect(pdfStep("analytics").fallbackTarget).toBe("#screen-analytics .screen-header");
+    });
+
+    it("gives each route its own wording", () => {
+        const bodies = PDF_STEP_ROUTES.map((route) => pdfStep(route).body);
+        expect(new Set(bodies).size).toBe(bodies.length);
+        for (const body of bodies) {
+            expect(body.toUpperCase()).toContain("PDF");
+        }
+    });
+
+    it("tells home users the button waits on an upload", () => {
+        expect(pdfStep("home").body.toLowerCase()).toContain("upload");
+    });
+
+    it("tells analytics users message contents are opt-in", () => {
+        expect(pdfStep("analytics").body.toLowerCase()).toContain("message contents");
+    });
+
+    it("comes last in the analytics flow", () => {
+        const analytics = TutorialSteps.analytics;
+        expect(analytics[analytics.length - 1].id).toBe("analytics-pdf-export");
     });
 });
 

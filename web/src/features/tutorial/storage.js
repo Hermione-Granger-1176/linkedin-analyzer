@@ -1,6 +1,8 @@
 /* Storage keys and safe localStorage access for the guided tutorial */
 
-const TUTORIAL_STORAGE_VERSION = "v1";
+// Bumped to v2 for the Save as PDF steps: a returning user who already
+// completed Home and Analytics would otherwise never be shown the export.
+const TUTORIAL_STORAGE_VERSION = "v2";
 const STORAGE_PREFIX = `linkedin-analyzer:tutorial:${TUTORIAL_STORAGE_VERSION}`;
 
 /**

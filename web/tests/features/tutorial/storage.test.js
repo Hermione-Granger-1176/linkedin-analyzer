@@ -19,7 +19,7 @@ import {
     setStorageValue,
 } from "../../../src/features/tutorial/storage.js";
 
-const PREFIX = "linkedin-analyzer:tutorial:v1";
+const PREFIX = "linkedin-analyzer:tutorial:v2";
 
 describe("storage key builders", () => {
     it("builds a per-route completion key", () => {

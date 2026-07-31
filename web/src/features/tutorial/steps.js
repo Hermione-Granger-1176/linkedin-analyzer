@@ -1,5 +1,31 @@
 /* Tutorial steps by route */
 
+/**
+ * Build the Save as PDF step for a route.
+ *
+ * The export button is one fixed control beside the theme toggle, reachable
+ * from every screen, so every route that introduces it points at the same
+ * target with the same placement and navigation flags. Only the wording
+ * changes, and the fallback each route falls back to when the button is not
+ * rendered yet.
+ * @param {{route: string, title: string, body: string, fallbackTarget: string}} config - Route-specific wording and fallback
+ * @returns {object} Tutorial step
+ */
+function createPdfExportStep(config) {
+    return {
+        id: `${config.route}-pdf-export`,
+        route: config.route,
+        title: config.title,
+        body: config.body,
+        target: "#pdfExportBtn",
+        fallbackTarget: config.fallbackTarget,
+        placement: "bottom",
+        allowSkip: true,
+        allowBack: true,
+        allowNext: true
+    };
+}
+
 export const TutorialSteps = Object.freeze({
     home: [
         {
@@ -50,6 +76,12 @@ export const TutorialSteps = Object.freeze({
             allowBack: true,
             allowNext: true
         },
+        createPdfExportStep({
+            route: "home",
+            title: "Save your data as a PDF",
+            body: "This button builds a PDF of your charts and insights. It stays greyed out until you upload at least one file, then it is ready whenever you are.",
+            fallbackTarget: "#screen-home .hero-header"
+        }),
         {
             id: "home-theme-toggle",
             route: "home",
@@ -161,7 +193,13 @@ export const TutorialSteps = Object.freeze({
             allowSkip: true,
             allowBack: true,
             allowNext: true
-        }
+        },
+        createPdfExportStep({
+            route: "analytics",
+            title: "Save this as a PDF",
+            body: "Download your charts, key metrics, and insights as a PDF. Message contents are left out unless you tick the box in the dialog.",
+            fallbackTarget: "#screen-analytics .screen-header"
+        })
     ],
     connections: [
         {

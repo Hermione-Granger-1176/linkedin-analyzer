@@ -61,6 +61,30 @@ function messageBody(value) {
 }
 
 /**
+ * Keep only the rows whose date parses, paired with the parsed date.
+ *
+ * Every pass has to agree on which rows exist. A row with an unreadable date
+ * never reaches the PDF, so it must not vote on who the account owner is
+ * either: a pile of undated rows could otherwise give a contact wider
+ * conversation coverage than the owner and invert the direction chip on the
+ * dated messages that do get drawn.
+ * @param {object[]} rows - Parsed message rows
+ * @returns {Array<{row: object, date: Date}>} Dated rows, in file order
+ */
+function withParsedDates(rows) {
+    const dated = [];
+
+    for (const row of rows) {
+        const date = MessagesAnalytics.parseDateTime(row.DATE);
+        if (date) {
+            dated.push({ row, date });
+        }
+    }
+
+    return dated;
+}
+
+/**
  * Map every contact name that is ever seen with a profile URL to that URL.
  *
  * LinkedIn exports include the profile URL on some rows and not others. Without
@@ -296,21 +320,16 @@ function tailMessages(entries, messagesPerPerson) {
 
 /**
  * Group rows into conversations, resolving each one's correspondents.
- * @param {object[]} rows - Parsed message rows
+ * @param {Array<{row: object, date: Date}>} dated - Dated message rows
  * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
  * @param {boolean} selfKnown - Whether the account owner was identified
  * @param {Map<string, string>} nameToUrl - Name to canonical URL lookup
  * @returns {Map<string, {correspondents: Map<string, {name: string, url: string}>, entries: object[]}>} Conversations
  */
-function groupConversations(rows, context, selfKnown, nameToUrl) {
+function groupConversations(dated, context, selfKnown, nameToUrl) {
     const conversations = new Map();
 
-    rows.forEach((row, index) => {
-        const date = MessagesAnalytics.parseDateTime(row.DATE);
-        if (!date) {
-            return;
-        }
-
+    dated.forEach(({ row, date }, index) => {
         const participants = MessagesAnalytics.extractParticipantsFromRow(row, context);
         const participantKeys = participants.map((participant) =>
             canonicalContactKey(participant, nameToUrl),
@@ -416,8 +435,9 @@ function foldIntoThreads(conversations) {
 /**
  * Pick the most recently messaged people and the tail of each conversation.
  *
- * Rows whose date cannot be parsed are skipped, exactly as
- * `MessagesAnalytics.buildMessageState` does.
+ * Rows whose date cannot be parsed are skipped before anything else, exactly as
+ * `MessagesAnalytics.buildMessageState` does, so they cannot influence which
+ * identity is taken to be the account owner.
  * @param {object[]} rows - Parsed message rows, including CONTENT
  * @param {{people?: number, messagesPerPerson?: number}} [options] - Selection limits
  * @returns {Array<{name: string, url: string, messageCount: number, lastTimestamp: number, messages: Array<{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}>}>} Threads, most recent first
@@ -430,10 +450,12 @@ export function selectRecentThreads(rows, options = {}) {
         DEFAULT_MESSAGES_PER_PERSON,
     );
 
-    const nameToUrl = buildNameToUrl(safeRows);
-    const self = resolveSelfContext(buildIdentityIndex(safeRows, nameToUrl));
+    const dated = withParsedDates(safeRows);
+    const datedRows = dated.map((entry) => entry.row);
+    const nameToUrl = buildNameToUrl(datedRows);
+    const self = resolveSelfContext(buildIdentityIndex(datedRows, nameToUrl));
     const context = self || NO_SELF;
-    const conversations = groupConversations(safeRows, context, Boolean(self), nameToUrl);
+    const conversations = groupConversations(dated, context, Boolean(self), nameToUrl);
 
     return Array.from(foldIntoThreads(conversations).values())
         .sort((left, right) => right.lastTimestamp - left.lastTimestamp)

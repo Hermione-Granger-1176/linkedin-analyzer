@@ -8,9 +8,9 @@
  * as "'+1, that works for me".
  *
  * So the export reuses the same CSV parser and the same date, name and URL
- * normalizers, and leaves `CONTENT` exactly as the file had it apart from the
- * quote unescaping the CSV format itself requires. The Excel path keeps the full
- * spreadsheet-oriented cleaner, which genuinely needs the escaping.
+ * normalizers, and leaves `CONTENT` exactly as the parser produced it. The Excel
+ * path keeps the full spreadsheet-oriented cleaner, which genuinely needs the
+ * escaping.
  */
 
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
@@ -27,11 +27,15 @@ const COLUMNS = Object.freeze(
 );
 
 /**
- * Undo the CSV-level quote escaping without touching anything else.
+ * Take the message body exactly as the CSV tokenizer produced it.
  *
- * The same two passes `cleanMessagesContent` runs, minus the trim: leading tabs
- * and trailing blank lines are part of what the person typed.
- * @param {unknown} value - Raw CONTENT cell
+ * `parseCsvRows` is the single decoding layer: it already collapses the doubled
+ * quotes the CSV format uses to escape a literal quote, and it treats backslash
+ * as an ordinary character for messages (`CSV_OPTIONS_DEFAULT` sets
+ * `escape: null`). A second unescaping pass here would re-decode already-decoded
+ * text and corrupt bodies that legitimately contain adjacent quotes, so there
+ * isn't one.
+ * @param {unknown} value - Parsed CONTENT cell
  * @returns {string} Message body, verbatim
  */
 function decodeMessageBody(value) {
@@ -41,11 +45,7 @@ function decodeMessageBody(value) {
     if (value === null || value === undefined) {
         return "";
     }
-    const text = String(value);
-    if (!text.includes('"') && !text.includes("\\")) {
-        return text;
-    }
-    return text.replace(/\\"/g, '"').replace(/""/g, '"');
+    return String(value);
 }
 
 /**

@@ -52,6 +52,23 @@ function message(spec) {
     });
 }
 
+/**
+ * Build a row between two contacts whose date cannot be parsed.
+ * @param {{from: string, to: string, conversationId: string}} spec - Row spec
+ * @returns {object} Message row
+ */
+function undatedBetween(spec) {
+    return row({
+        FROM: spec.from,
+        "SENDER PROFILE URL": `https://www.linkedin.com/in/${spec.from}`,
+        TO: spec.to,
+        "RECIPIENT PROFILE URLS": `https://www.linkedin.com/in/${spec.to}`,
+        DATE: "not a date",
+        CONTENT: "undated",
+        "CONVERSATION ID": spec.conversationId,
+    });
+}
+
 describe("selectRecentThreads", () => {
     it("returns an empty list for empty and non-array input", () => {
         expect(selectRecentThreads([])).toEqual([]);
@@ -181,8 +198,39 @@ describe("selectRecentThreads", () => {
         expect(ada.messages.map((entry) => entry.body)).toEqual(["kept"]);
     });
 
-    it("ranks people by their most recent message and caps the count", () => {
-        const rows = [];
+    it("does not let undated rows decide who the account owner is", () => {
+        const threads = selectRecentThreads([
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 10:00:00",
+                body: "mine",
+            }),
+            message({
+                name: "ada",
+                conversationId: "c1",
+                date: "2026-01-01 11:00:00",
+                body: "hers",
+                fromContact: true,
+            }),
+            message({
+                name: "bob",
+                conversationId: "c2",
+                date: "2026-01-01 09:00:00",
+                body: "mine too",
+            }),
+            // Ada talks to Carol in two more conversations than the owner
+            // appears in, but none of those rows has a readable date.
+            undatedBetween({ from: "ada", to: "carol", conversationId: "c3" }),
+            undatedBetween({ from: "carol", to: "ada", conversationId: "c4" }),
+        ]);
+
+        const ada = threads.find((thread) => thread.name === "ada");
+        expect(ada.messages.map((entry) => entry.direction)).toEqual(["sent", "received"]);
+        expect(threads.some((thread) => thread.name === "carol")).toBe(false);
+    });
+
+    it("ranks people by their most recent message and caps the count", () => {        const rows = [];
         for (let index = 0; index < 14; index += 1) {
             rows.push(
                 message({

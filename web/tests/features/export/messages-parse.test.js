@@ -17,6 +17,15 @@ function csvWithContent(content) {
     ].join("\n");
 }
 
+/**
+ * CSV-encode a logical body: wrap it in quotes and double every quote inside.
+ * @param {string} body - Logical message text
+ * @returns {string} CSV cell
+ */
+function csvCell(body) {
+    return `"${body.replaceAll('"', '""')}"`;
+}
+
 describe("parseMessagesForExport", () => {
     it("leaves formula-prefixed bodies exactly as they were written", () => {
         for (const body of ["=SUM(A1)", "+1 from me", "-5 minutes late", "@Ada ping"]) {
@@ -42,6 +51,24 @@ describe("parseMessagesForExport", () => {
         const { rows } = parseMessagesForExport(csvWithContent('"she said ""yes"""'));
 
         expect(rows[0].CONTENT).toBe('she said "yes"');
+    });
+
+    it("round-trips bodies the CSV tokenizer has already decoded once", () => {
+        const bodies = [
+            'she typed ""yes"" twice',
+            '"""',
+            'a regex like \\" stays a backslash and a quote',
+            "windows\\path\\to\\file",
+            "\ttab-led and space-tailed  ",
+            "first line\nsecond line\n\n",
+            '=SUM(A1) and ""quoted"" together',
+        ];
+
+        for (const body of bodies) {
+            const { rows } = parseMessagesForExport(csvWithContent(csvCell(body)));
+
+            expect(rows[0].CONTENT).toBe(body);
+        }
     });
 
     it("still normalizes dates, names and URLs", () => {

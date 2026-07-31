@@ -149,7 +149,13 @@ function requestThreadsFromWorker(messagesCsv, options) {
             resolve(message.payload.success ? message.payload.threads : null);
         };
 
-        const handleError = () => {
+        const handleError = (event) => {
+            // Cancelling the event suppresses the browser's own reporting of it,
+            // which would otherwise print the worker's error - and anything of
+            // the user's caught up in it - to the console.
+            if (event && typeof event.preventDefault === "function") {
+                event.preventDefault();
+            }
             // event.error is never forwarded: this worker parses the raw messages
             // CSV, so a runtime failure inside it can carry message text.
             captureError(new Error("Threads worker failed."), {

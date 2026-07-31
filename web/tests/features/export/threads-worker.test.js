@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { processPayload } from "../../../src/features/export/threads-worker.js";
+import { PII_MARKER, piiError } from "../../helpers/pii-sentinel.js";
 
 const MESSAGES_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
@@ -118,15 +119,31 @@ describe("threads worker listeners", () => {
 
     /**
      * Dispatch an event onto the worker global.
+     *
+     * Cancelable, like the real `error` and `unhandledrejection` events, so a
+     * handler that fails to cancel one is visible as `defaultPrevented`.
      * @param {string} type - Event type
      * @param {object} [properties] - Extra event properties
+     * @returns {Event} The dispatched event
      */
     function dispatch(type, properties) {
-        const event = new Event(type);
+        const event = new Event(type, { cancelable: true });
         for (const [key, value] of Object.entries(properties || {})) {
             Object.defineProperty(event, key, { value });
         }
         globalThis.dispatchEvent(event);
+        return event;
+    }
+
+    /**
+     * Assert a posted failure payload carries nothing of the user's.
+     * @param {object} message - Posted worker message
+     */
+    function expectFixedFailure(message) {
+        expect(message.payload.success).toBe(false);
+        expect(message.payload.threads).toEqual([]);
+        expect(message.payload.error).toBe("Threads worker runtime failure.");
+        expect(JSON.stringify(message)).not.toContain(PII_MARKER);
     }
 
     afterEach(() => {
@@ -165,56 +182,74 @@ describe("threads worker listeners", () => {
         expect(message.payload.error).toContain("Missing messagesCsv payload");
     });
 
-    it("forwards runtime error events under the active request id", () => {
+    it("answers a runtime error under the active request id without its text", () => {
         spyOnPostMessage();
         dispatch("message", {
             data: { type: "threads", requestId: 21, payload: { messagesCsv: MESSAGES_CSV } },
         });
-        dispatch("error", { error: new Error("threads-runtime") });
+        const event = dispatch("error", { error: piiError("worker-runtime") });
 
+        // Uncancelled, the browser reports this event itself, and that report
+        // goes to the console carrying whatever the error holds.
+        expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
         expect(message.requestId).toBe(21);
-        expect(message.payload.error).toContain("threads-runtime");
+        expectFixedFailure(message);
     });
 
-    it("forwards string-only error events", () => {
+    it("never forwards the text of a string-only error event", () => {
         spyOnPostMessage();
-        dispatch("error", { message: "threads-string-error" });
+        const event = dispatch("error", { message: `boom ${PII_MARKER}` });
 
-        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe("threads-string-error");
+        expect(event.defaultPrevented).toBe(true);
+        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
     });
 
-    it("falls back when an error event carries nothing", () => {
+    it("answers an error event that carries nothing", () => {
         spyOnPostMessage();
-        dispatch("error");
+        const event = dispatch("error");
 
-        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe(
-            "Threads worker runtime failure.",
-        );
+        expect(event.defaultPrevented).toBe(true);
+        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
     });
 
-    it("forwards unhandled rejections", () => {
+    it("never forwards the reason of an unhandled rejection", () => {
         spyOnPostMessage();
-        dispatch("unhandledrejection", { reason: new Error("threads-rejection") });
+        const event = dispatch("unhandledrejection", { reason: piiError("worker-rejection") });
 
-        expect(postMessageSpy.mock.calls[0][0].payload.error).toContain("threads-rejection");
+        expect(event.defaultPrevented).toBe(true);
+        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
     });
 
-    it("falls back for an opaque rejection reason", () => {
+    it("never forwards an opaque rejection reason", () => {
         spyOnPostMessage();
-        dispatch("unhandledrejection", { reason: { kind: "opaque" } });
+        const event = dispatch("unhandledrejection", {
+            reason: { kind: "opaque", body: PII_MARKER },
+        });
 
-        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe(
-            "Threads worker runtime failure.",
-        );
+        expect(event.defaultPrevented).toBe(true);
+        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
     });
 
-    it("falls back when a rejection event carries no reason", () => {
+    it("answers a rejection event that carries no reason", () => {
         spyOnPostMessage();
-        dispatch("unhandledrejection");
+        const event = dispatch("unhandledrejection");
 
-        expect(postMessageSpy.mock.calls[0][0].payload.error).toBe(
-            "Threads worker runtime failure.",
-        );
+        expect(event.defaultPrevented).toBe(true);
+        expectFixedFailure(postMessageSpy.mock.calls[0][0]);
+    });
+
+    it("never forwards the text of a failure thrown while answering", () => {
+        spyOnPostMessage();
+        postMessageSpy.mockImplementationOnce(() => {
+            throw piiError("post");
+        });
+        dispatch("message", {
+            data: { type: "threads", requestId: 31, payload: { messagesCsv: MESSAGES_CSV } },
+        });
+
+        const [message] = postMessageSpy.mock.calls[1];
+        expect(message.requestId).toBe(31);
+        expectFixedFailure(message);
     });
 });

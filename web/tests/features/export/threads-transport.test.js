@@ -204,6 +204,18 @@ describe("loadRecentThreads", () => {
         expectFixedError(captureError.mock.calls[0][0], thrown);
     });
 
+    it("cancels a worker error event so the browser cannot report it", async () => {
+        const preventDefault = vi.fn();
+        const pending = loadRecentThreads(MESSAGES_CSV);
+        // An uncancelled error event on a Worker is reported by the browser
+        // itself, and that report reaches the console with the worker's own
+        // message - here, text parsed straight out of the messages CSV.
+        workerInstance.emit("error", { type: "error", error: piiError("worker"), preventDefault });
+        await pending;
+
+        expect(preventDefault).toHaveBeenCalled();
+    });
+
     it("never reports the error a failed postMessage carried", async () => {
         postMessageError = piiError("clone");
 

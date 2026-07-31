@@ -1,9 +1,20 @@
-/* LinkedIn Analyzer - PDF export thread selection worker */
+/**
+ * PDF export thread selection worker.
+ *
+ * This worker is handed the raw messages CSV, so every failure inside it is
+ * assumed to carry the user's own text. Two rules follow, and both are
+ * load-bearing: the only failure strings that leave here are fixed literals
+ * from this file, and every global failure event is cancelled so the browser's
+ * own reporting - which writes the original message to the console - never
+ * runs.
+ */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
 
 import { parseMessagesForExport } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
+
+const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
 /**
  * Parse the messages CSV and pick the recent threads for the export.
@@ -34,66 +45,36 @@ function processPayload(payload) {
 }
 
 /**
- * Convert unknown error values into a message string.
- * @param {unknown} error - Thrown value
- * @returns {string}
- */
-function toErrorMessage(error) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    if (typeof error === "string" && error) {
-        return error;
-    }
-    return "Threads worker runtime failure.";
-}
-
-/**
  * Post a normalized failure payload.
+ *
+ * The message is always a fixed string chosen by this module. Nothing thrown
+ * inside the worker is ever forwarded: this worker holds the raw messages CSV,
+ * so a thrown value can carry a row, a name, a profile URL or a message body.
  * @param {number|string} requestId - Request id being answered
- * @param {unknown} error - Thrown value
+ * @param {string} message - Fixed failure text
  */
-function postThreadsError(requestId, error) {
+function postThreadsError(requestId, message) {
     self.postMessage({
         type: "threads",
         requestId,
         payload: {
             success: false,
             threads: [],
-            error: toErrorMessage(error),
+            error: message,
         },
     });
 }
 
 /**
- * Extract an error-like value from a worker error event.
- * @param {unknown} event - Error event
- * @returns {unknown}
+ * Cancel a failure event so the browser's own error reporting stays silent.
+ *
+ * An uncancelled `error` or `unhandledrejection` event is reported by the
+ * browser independently of any listener, and that report goes to the console
+ * with the original message in it.
+ * @param {Event} event - Failure event
  */
-function extractWorkerError(event) {
-    /* v8 ignore next 3 */
-    if (!event || typeof event !== "object") {
-        return undefined;
-    }
-    if ("error" in event && event.error) {
-        return event.error;
-    }
-    if ("message" in event && event.message) {
-        return event.message;
-    }
-    return undefined;
-}
-
-/**
- * Extract rejection reason from a worker unhandledrejection event.
- * @param {unknown} event - Rejection event
- * @returns {unknown}
- */
-function extractWorkerRejection(event) {
-    if (!event || typeof event !== "object" || !("reason" in event)) {
-        return undefined;
-    }
-    return event.reason;
+function silenceDefaultReporting(event) {
+    event.preventDefault();
 }
 
 // The id of the request being served, so a runtime failure is answered under an
@@ -122,17 +103,19 @@ if (typeof self !== "undefined") {
                 requestId: message.requestId,
                 payload: processPayload(message.payload),
             });
-        } catch (error) {
-            postThreadsError(message.requestId, error);
+        } catch {
+            postThreadsError(message.requestId, RUNTIME_FAILURE);
         }
     });
 
     self.addEventListener("error", (event) => {
-        postThreadsError(activeRequestId, extractWorkerError(event));
+        silenceDefaultReporting(event);
+        postThreadsError(activeRequestId, RUNTIME_FAILURE);
     });
 
     self.addEventListener("unhandledrejection", (event) => {
-        postThreadsError(activeRequestId, extractWorkerRejection(event));
+        silenceDefaultReporting(event);
+        postThreadsError(activeRequestId, RUNTIME_FAILURE);
     });
 }
 

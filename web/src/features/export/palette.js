@@ -34,6 +34,7 @@ const PDF_PALETTE_TOKENS = Object.freeze([
     "--accent-purple",
     "--accent-purple-light",
     "--accent-purple-bg",
+    "--text-on-accent",
 ]);
 
 // jsdom does not implement custom-property resolution, and a browser that fails
@@ -63,6 +64,7 @@ const FALLBACK_PALETTE = Object.freeze({
     "--accent-purple": Object.freeze({ r: 155, g: 81, b: 224 }),
     "--accent-purple-light": Object.freeze({ r: 232, g: 218, b: 246 }),
     "--accent-purple-bg": Object.freeze({ r: 245, g: 236, b: 245 }),
+    "--text-on-accent": Object.freeze({ r: 255, g: 255, b: 255 }),
 });
 
 // The paper the tinted tokens are composited onto. Alpha in the stylesheet is

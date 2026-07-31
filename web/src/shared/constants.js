@@ -6,6 +6,9 @@ export const MAX_CSV_CHARS = 60 * 1024 * 1024;
 /** Window property key coordinating async session cleanup across modules. */
 export const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
 
+/** DataCache key the Insights screen publishes its on-screen snapshot under, for the PDF export to reuse. */
+export const INSIGHTS_EXPORT_CACHE_KEY = "insights:exportSnapshot";
+
 /** Supported file types, in auto-detection priority order. */
 export const FILE_TYPES = Object.freeze(["shares", "comments", "messages", "connections"]);
 

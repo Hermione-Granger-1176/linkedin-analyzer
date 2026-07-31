@@ -110,7 +110,7 @@ function applyIdentity(thread, participant) {
  * Order the tail of a thread chronologically and keep the last N messages.
  * @param {object[]} entries - Recorded messages with a sequence number
  * @param {number} messagesPerPerson - How many messages to keep
- * @returns {Array<{direction: string, timestamp: number, body: string}>} Trimmed messages
+ * @returns {Array<{direction: 'sent'|'received', timestamp: number, body: string}>} Trimmed messages
  */
 function tailMessages(entries, messagesPerPerson) {
     const ordered = entries
@@ -122,7 +122,7 @@ function tailMessages(entries, messagesPerPerson) {
         );
 
     return ordered.slice(-messagesPerPerson).map((entry) => ({
-        direction: entry.direction,
+        direction: /** @type {'sent'|'received'} */ (entry.direction),
         timestamp: entry.timestamp,
         body: entry.body,
     }));

@@ -77,7 +77,7 @@ export async function registerPdfFonts(doc) {
             doc.addFont(asset.file, asset.family, "normal");
         });
 
-        const families = { embedded: true };
+        const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY, embedded: true };
         for (const asset of FONT_ASSETS) {
             families[asset.role] = asset.family;
         }

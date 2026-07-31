@@ -442,14 +442,20 @@ export const InsightsPage = (() => {
             // describing, so the export falls back to its own worker run rather
             // than plotting one range under the caption of another.
             //
-            // Not the range control, which cannot produce that mismatch: within
-            // a visit the outreach latch is already closed, so nothing publishes
-            // between the filter changing and the view arriving, and the two are
-            // equal every time this runs. Returning to the screen is what does
-            // it. Leaving opens the latch, so a re-entry at a different range
-            // has the outreach read publishing the moment it resolves while the
-            // worker is still answering, and the only view on hand until it does
-            // is the one built for the range that was on screen last time.
+            // Reachable only when something publishes between the filter
+            // changing and the view for it arriving. The worker's own handler
+            // never can, since it assigns currentViewRange three lines before it
+            // renders. The one other publisher is loadOutreach, which fires once
+            // per open latch, so the window is exactly as long as that latch is
+            // open: on a first entry, after onRouteLeave clears it, and after a
+            // failed read reopens it for a retry. A successful read closes it
+            // for the rest of the visit, which is why a range change usually
+            // finds nothing here to race.
+            //
+            // Both open-latch cases put a stale view in reach. Returning at a
+            // different range leaves the last visit's view on hand while the
+            // worker answers, and a range change while the read is still in
+            // flight lands in front of the publish it has yet to make.
             view: state.currentViewRange === state.filters.timeRange ? state.currentView : null,
             networkGrowth: state.networkGrowth,
             outreach: state.outreach,

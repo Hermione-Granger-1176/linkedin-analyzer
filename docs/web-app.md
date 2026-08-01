@@ -77,6 +77,28 @@ Special behavior:
 - Sketch-style arrow callouts point to the highlighted target; the arrow style varies per step unless a step specifies `arrowStyle`.
 - Pip guides the tour from a top corner of the callout card. He takes the corner away from the target, so he never sits on the pointer arrow or the highlighted element, and mirrors to gesture across the card toward it. He presents through the tour and waves on the final step. He is decoration: aria-hidden, no pointer events, and positioned out of flow so the card measures the same size with or without him.
 
+## Mascot
+
+Pip is the hand-drawn character who turns up across the app: waving beside the hero title, scribbling in the loading overlays, peeking over the top of an empty box, panicking next to a clean error, cheering a finished export, leaning on the Insights and Messages tips, peeking out of the floating help button, guiding the tutorial, and reacting in the corner of every insight card. He is decoration everywhere: `aria-hidden`, `focusable="false"`, and no pointer events.
+
+Four places hold the drawings, and each owns one thing:
+
+| Where                                   | Owns                                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `<defs>` in `web/index.html`            | The shared `#pipWobble` ink filter, and one `<g id="pip-...">` per pose used more than once |
+| `web/src/styles/components/mascot.css`  | The character: ink and fill classes, idle loops, one-shot moves, the reduced-motion guard   |
+| Feature stylesheets                     | Where a pose sits on a surface: size, offset, mirroring                                     |
+| `reactions.js` and `tutorial/mascot.js` | The two poses built in JavaScript, drawn with the same `pip-*` classes                      |
+
+A pose drawn in more than one place is defined once in the `<defs>` block at the top of `index.html`, and each placement is a wrapper `<svg>` carrying its own class and `viewBox` around a `<use href="#pip-...">`. That covers the peeker (five empty states), the tipster (two tips), and the scribbler (two loading overlays). Poses drawn only once stay inline where they appear.
+
+Two rules follow from how `<use>` works, and both are load-bearing:
+
+- A `<use>` builds a shadow tree, and a selector written outside the placement cannot reach into it. Anything a pose needs must therefore be a class on the definition itself. The cheer and the help-button head are styled from an ancestor (`.is-cheering .pip-jump`, `.tutorial-help-pip .tutorial-help-mark`), so they have to stay inline.
+- The definitions are groups rather than `<symbol>`s. A symbol renders through a nested viewport, which rounds an instance sitting on a fractional pixel differently from the inline drawing it replaced. A referenced group is placed by a plain translate and rasterises identically.
+
+Every idle loop is infinite on purpose: the screenshot harness waits for finite animations to finish, so a loop that never settles must never claim to. One-shot moves (the splat, the cheer, the hub wiggle) are finite. Everything switches off under `prefers-reduced-motion: reduce`.
+
 ## Screens
 
 ### Home

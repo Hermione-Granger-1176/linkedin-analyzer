@@ -1,10 +1,31 @@
 /* Pip: the doodled character who lives in the app, and the small moves around him.
-   Poses are inline SVG in index.html; everything about how they are inked,
-   coloured, and moved lives here. Colours stay on the app tokens so the
-   character flips with the theme instead of staying a light-mode drawing. */
 
-/* Hidden host for the shared feTurbulence wobble filter. Kept out of flow so
-   the defs block never takes part in layout. */
+   Ownership, so a redesign knows where to go:
+
+   - The drawings are SVG. A pose used more than once is a group in the hidden
+     defs block at the top of index.html and every placement is a use element;
+     a pose used once stays inline where it appears. The two poses built in
+     JavaScript, features/insights/reactions.js and features/tutorial/mascot.js,
+     draw with the same pip-* classes as the rest.
+   - This file is the character himself: the ink and fill classes every pose is
+     drawn with, the loops they share, the one-shot moves, and the reduced-motion
+     guard that switches all of it off. Nothing here knows which screen a pose
+     lands on.
+   - Where a pose sits on a surface belongs to that surface's stylesheet:
+     .pip-loader inside the progress card in components/overlays.css,
+     .insight-reaction on the card in features/insights.css, .tutorial-mascot and
+     .tutorial-help-pip in features/tutorial.css. The placement section below
+     holds only the poses whose surface has no stylesheet of its own.
+   - The two exceptions are deliberate and commented where they live: the help
+     button's "?" is a button affordance drawn into a pose rather than part of
+     Pip, and the insight reactions carry their own loops beside the component
+     that builds them.
+
+   Colours stay on the app tokens so the character flips with the theme instead
+   of staying a light-mode drawing. */
+
+/* Hidden host for the shared feTurbulence wobble filter and the reusable pose
+   groups. Kept out of flow so the defs block never takes part in layout. */
 .pip-defs {
     position: absolute;
     width: 0;

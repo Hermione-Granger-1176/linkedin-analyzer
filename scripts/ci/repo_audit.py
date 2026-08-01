@@ -35,15 +35,19 @@ EXIT_HEALTHY = 0
 EXIT_DRIFT_FOUND = 1
 EXIT_CHECK_FAILED = 2
 
-# Every check that must pass before a pull request can merge into main. The two
-# CodeQL analysis jobs are listed alongside the aggregate `CI result` because
-# the aggregate belongs to the CI workflow and says nothing about CodeQL.
+# Every check that must pass before a pull request can merge into main. The
+# `CI result` aggregate already covers every job inside the CI workflow, so
+# naming those individually would only break protection the day one is renamed.
+# What it cannot speak for is named here instead: the two CodeQL analysis jobs,
+# the code-scanning service's own `CodeQL` alert gate, and the dependency
+# review, each of which lives in a workflow of its own.
 EXPECTED_REQUIRED_CHECKS = frozenset(
     {
         "analyze-javascript",
         "analyze-python",
         "CodeQL",
         "CI result",
+        "dependency-review",
     }
 )
 

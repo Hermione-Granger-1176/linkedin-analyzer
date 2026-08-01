@@ -228,12 +228,20 @@ Expectations live in `scripts/ci/repo_audit.py` as named constants, so changing 
 
 | Group             | Expectation                                                                                                                                                                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository        | Default branch is `main`; squash is the only merge method; merged branches are deleted                                                                                                                                                              |
+| Repository        | Default branch is `main`                                                                                                                                                                                                                            |
 | Security          | Secret scanning, push protection, and Dependabot security updates are all enabled                                                                                                                                                                   |
 | Branch protection | Required checks are `analyze-javascript`, `analyze-python`, `CodeQL`, `CI result`, and `dependency-review`; at least one approving review; signed commits, linear history, and conversation resolution required; force pushes and deletions refused |
-| Actions           | Variables `APP_ID` and `ESCALATION_APP_ID`, and secrets `APP_PRIVATE_KEY` and `ESCALATION_APP_PRIVATE_KEY`, all exist                                                                                                                               |
+| Actions           | Variables `APP_ID`, `ESCALATION_APP_ID`, and `AUDIT_APP_ID`, and secrets `APP_PRIVATE_KEY`, `ESCALATION_APP_PRIVATE_KEY`, and `AUDIT_APP_PRIVATE_KEY`, all exist                                                                                    |
 
 The script's exit codes match the schedule watchdog: `0` clean, `1` drift found and listed, `2` the audit could not complete. They are distinct because a failure to look must never read as a clean result, which is also why a setting the API declines to report is treated as missing rather than assumed correct. The one exception is a branch with no protection at all, which answers `404`: that is the single worst drift the audit can find, so it becomes a finding rather than a failure to check.
+
+#### Settings this audit deliberately does not check
+
+The merge methods (`allow_squash_merge`, `allow_merge_commit`, `allow_rebase_merge`) and `delete_branch_on_merge` are not audited, and re-adding them will produce a weekly false alarm.
+
+GitHub returns those four only to a token carrying **push** access. That is an access level derived from the permission set, not a permission that can be granted on its own, so the read-only audit App receives `null` for every one of them and no permission change alters that. Its token reports `admin`, `maintain`, `push`, `pull`, and `triage` all `false`, which is correct for an App that must never write. Auditing those four would mean granting the audit App write access in order to read four booleans.
+
+Little is lost. Required linear history on the default branch already refuses merge and rebase commits, and the audit does check that. What genuinely goes unwatched is `delete_branch_on_merge`, which is housekeeping rather than a safety property. The `artifacts` repository has never audited these four either.
 
 Note that `make` collapses any non-zero recipe exit to `2` of its own, so `1` and `2` are only distinguishable to something running the module directly. At a terminal the printed output is the signal: drift is listed on stdout, and a failure to look prints to stderr with the two permissions it needed.
 

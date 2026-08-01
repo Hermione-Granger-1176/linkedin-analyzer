@@ -60,12 +60,15 @@ EXPECTED_REQUIRED_CHECKS = frozenset(
     }
 )
 
-# The two GitHub Apps behind the maintenance writeback workflows: the primary
-# app that commits, and the escalation app that opens the CI pin refresh pull
-# request. All four values are audited because any one missing degrades a
-# workflow into a skip, and a skip is quiet.
-EXPECTED_VARIABLES = frozenset({"APP_ID", "ESCALATION_APP_ID"})
-EXPECTED_SECRETS = frozenset({"APP_PRIVATE_KEY", "ESCALATION_APP_PRIVATE_KEY"})
+# The three GitHub Apps: the primary app that commits, the escalation app that
+# opens the CI pin refresh pull request, and the audit app that runs this check
+# on a schedule. All six values are audited because any one missing degrades a
+# workflow into a skip, and a skip is quiet. The audit app's own pair is here
+# too, so this check cannot go silently unrun.
+EXPECTED_VARIABLES = frozenset({"APP_ID", "ESCALATION_APP_ID", "AUDIT_APP_ID"})
+EXPECTED_SECRETS = frozenset(
+    {"APP_PRIVATE_KEY", "ESCALATION_APP_PRIVATE_KEY", "AUDIT_APP_PRIVATE_KEY"}
+)
 
 # Secret scanning is the layer no job in this repository can provide: push
 # protection refuses the push carrying a secret, rather than reporting it once
@@ -96,14 +99,18 @@ FORBIDDEN_PROTECTION_BLOCKS = {
     "allow_deletions": "allows branch deletion",
 }
 
-# Squash is the only merge method, which is what makes one pull request equal
-# one commit on main. Leaving either of the others enabled offers a merge that
-# required linear history would refuse anyway.
-EXPECTED_MERGE_METHODS = {
-    "allow_squash_merge": True,
-    "allow_merge_commit": False,
-    "allow_rebase_merge": False,
-}
+# Every repository field this audit judges by value. Presence is checked before
+# any of them is compared, because an omitted field and a `false` one are the
+# same thing to `dict.get` and only one of them is drift.
+#
+# The merge methods and `delete_branch_on_merge` are deliberately absent. GitHub
+# returns those only to a token carrying push access, which is an access level
+# rather than a grantable permission, so the read-only audit App sees `null` for
+# every one of them and no permission change can alter that. Auditing them would
+# mean giving the App write access to read four booleans. Required linear
+# history on the default branch already refuses merge and rebase commits, and
+# the audit does check that.
+JUDGED_REPOSITORY_FIELDS = frozenset({"default_branch"})
 
 # What `gh api` says when a branch exists but carries no protection, as opposed
 # to "Branch not found" for one that does not exist. Both are HTTP 404, so the
@@ -233,20 +240,27 @@ def _missing(actual: set[str], expected: frozenset[str], label: str) -> list[str
 
 
 def audit_repository(repository: dict[str, object], *, default_branch: str) -> list[str]:
-    """Audit the repository-level settings, ignoring branch protection."""
+    """Audit the repository-level settings, ignoring branch protection.
+
+    A field the response omitted is a failure to look, not a setting at its
+    wrong value. GitHub returns a reduced repository object to tokens without
+    the access a field needs, and ``dict.get`` cannot tell that apart from a
+    real ``false``, so an absent key would otherwise be reported as drift about
+    a setting that is in fact correct.
+    """
+    unreadable = sorted(JUDGED_REPOSITORY_FIELDS - repository.keys())
+    if unreadable:
+        raise GhError(
+            "The repository metadata response omitted "
+            + ", ".join(unreadable)
+            + ". The token cannot read them, so their values are unknown rather than wrong."
+        )
+
     findings = []
 
     actual_branch = repository.get("default_branch")
     if actual_branch != default_branch:
         findings.append(f"default branch is {actual_branch!r} instead of {default_branch!r}")
-
-    for key, expected in sorted(EXPECTED_MERGE_METHODS.items()):
-        if repository.get(key) is not expected:
-            state = "enabled" if expected else "disabled"
-            findings.append(f"{key} should be {state}")
-
-    if repository.get("delete_branch_on_merge") is not True:
-        findings.append("merged branches are not deleted automatically")
 
     findings.extend(
         _missing(

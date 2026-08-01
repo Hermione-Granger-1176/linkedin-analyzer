@@ -34,15 +34,29 @@ class CopilotReview:
     submitted_at: datetime
     body: str
     generated_comment_count: int | None
+    state: str = ""
+
+    @property
+    def is_approved(self) -> bool:
+        """Return whether Copilot submitted this review as an approval.
+
+        Copilot approves with a "Ready to approve" overview that carries no
+        comment-count sentence at all, so the wording patterns below cannot
+        recognize it and the state is the only reliable signal.
+        """
+        return self.state == "APPROVED"
 
     @property
     def is_explicitly_clean(self) -> bool:
-        """Return whether the overview explicitly reports zero comments in words.
+        """Return whether the review reports nothing to address.
 
-        Both Copilot phrasings count: "generated no comments" on a first review
-        and "generated no new comments" on a re-review. A numeric "generated 0
-        comments" deliberately does not, so an unexpected wording fails closed.
+        An approval counts on its own. Otherwise both Copilot phrasings do:
+        "generated no comments" on a first review and "generated no new
+        comments" on a re-review. A numeric "generated 0 comments" deliberately
+        does not, so an unexpected wording fails closed.
         """
+        if self.is_approved:
+            return True
         match = _COMMENT_COUNT_PATTERN.search(self.body)
         return match is not None and match.group(1) is not None
 
@@ -115,6 +129,9 @@ def _copilot_reviews(reviews: object) -> tuple[CopilotReview, ...]:
         body = review.get("body")
         if not isinstance(body, str):
             raise GhError("A Copilot review is missing a string body.")
+        state = review.get("state", "")
+        if not isinstance(state, str):
+            raise GhError("A Copilot review is missing a string state.")
         parsed.append(
             CopilotReview(
                 review_id=review_id,
@@ -124,6 +141,7 @@ def _copilot_reviews(reviews: object) -> tuple[CopilotReview, ...]:
                 ),
                 body=body,
                 generated_comment_count=_generated_comment_count(body),
+                state=state,
             )
         )
     return tuple(parsed)
@@ -240,7 +258,9 @@ def _review_summary(review: CopilotReview | None, *, requested: bool) -> str:
     if review is None:
         return "no new review yet" if requested else "not requested"
     if review.generated_comment_count is None:
-        return "unrecognized Copilot overview"
+        return (
+            "approved with no comments" if review.is_approved else "unrecognized Copilot overview"
+        )
     if review.is_explicitly_clean:
         return "generated no comments"
     return f"generated {review.generated_comment_count} comment(s)"
@@ -333,6 +353,7 @@ def watch_pr(
                 if (
                     status.fresh_review is not None
                     and status.fresh_review.generated_comment_count is None
+                    and not status.fresh_review.is_approved
                 ):
                     raise GhError(
                         "The fresh Copilot review overview could not be classified; "

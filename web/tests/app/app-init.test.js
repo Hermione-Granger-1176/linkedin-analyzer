@@ -20,6 +20,7 @@ vi.mock("../../src/features/cleaning/screen.js", () => ({ CleanPage: { init: vi.
 vi.mock("../../src/features/connections/screen.js", () => ({
     ConnectionsPage: { init: vi.fn(), onRouteChange: vi.fn() },
 }));
+vi.mock("../../src/shared/ui/alive.js", () => ({ initAlive: vi.fn() }));
 vi.mock("../../src/shared/ui/decorations.js", () => ({ initDecorations: vi.fn() }));
 vi.mock("../../src/shared/dom-events.js", () => ({ DomEvents: { closest: vi.fn() } }));
 vi.mock("../../src/features/insights/screen.js", () => ({

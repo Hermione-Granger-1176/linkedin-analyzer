@@ -22,6 +22,7 @@ import { initTelemetry } from "./platform/observability/telemetry.js";
 import { Session } from "./platform/persistence/session.js";
 import { SESSION_CLEANUP_PROMISE_KEY } from "./shared/constants.js";
 import { DomEvents } from "./shared/dom-events.js";
+import { initAlive } from "./shared/ui/alive.js";
 import { initDecorations } from "./shared/ui/decorations.js";
 import { initMascot } from "./shared/ui/mascot.js";
 import { NavMenu } from "./shared/ui/nav-menu.js";
@@ -88,6 +89,9 @@ function init() {
     initRuntime();
     initDecorations();
     initMascot();
+    // Ahead of Theme.init() on purpose: that call announces the theme it settled
+    // on at boot, and Pip should only flinch at a switch someone actually threw.
+    initAlive();
     Theme.init();
     PdfExport.init();
     NavMenu.init();

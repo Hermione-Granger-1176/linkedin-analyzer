@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { celebrateDownload, initMascot } from "../../../src/shared/ui/mascot.js";
+import { DataCache } from "../../../src/platform/persistence/data-cache.js";
+import { celebrateDownload, celebrateStaple, initMascot } from "../../../src/shared/ui/mascot.js";
 import { mockMatchMedia, resetDom, setupDom } from "../../helpers/dom.js";
 
 /**
@@ -24,6 +25,8 @@ describe("mascot", () => {
             <button class="download-btn" id="download">Download</button>
             <button id="plain">Plain</button>
             <svg class="pip-cheer" id="cleanCheer" hidden></svg>
+            <svg class="pip-staple" id="pdfStaple" hidden></svg>
+            <svg class="pip-eraser" id="clearEraser" hidden></svg>
         `);
     });
 
@@ -148,6 +151,78 @@ describe("mascot", () => {
             celebrateDownload();
 
             expect(document.getElementById("cleanCheer").hasAttribute("hidden")).toBe(true);
+        });
+    });
+
+    describe("celebrateStaple", () => {
+        it("shows the staple, then hides it again", () => {
+            vi.useFakeTimers();
+
+            celebrateStaple();
+
+            const staple = document.getElementById("pdfStaple");
+            expect(staple.hasAttribute("hidden")).toBe(false);
+            expect(staple.classList.contains("is-stapling")).toBe(true);
+
+            vi.advanceTimersByTime(1700);
+
+            expect(staple.hasAttribute("hidden")).toBe(true);
+            expect(staple.classList.contains("is-stapling")).toBe(false);
+        });
+
+        it("keeps each moment on its own timer", () => {
+            vi.useFakeTimers();
+
+            celebrateDownload();
+            celebrateStaple();
+            vi.advanceTimersByTime(1700);
+
+            // The staple's own timer has fired; the longer cheer is still up.
+            expect(document.getElementById("pdfStaple").hasAttribute("hidden")).toBe(true);
+            expect(document.getElementById("cleanCheer").hasAttribute("hidden")).toBe(false);
+        });
+
+        it("does nothing when reduced motion is requested", () => {
+            mockMatchMedia(true);
+
+            celebrateStaple();
+
+            expect(document.getElementById("pdfStaple").hasAttribute("hidden")).toBe(true);
+        });
+    });
+
+    describe("the eraser sweep", () => {
+        it("runs when a wipe has actually gone through", () => {
+            vi.useFakeTimers();
+            initMascot();
+
+            DataCache.notify({ type: "storageCleared" });
+
+            const eraser = document.getElementById("clearEraser");
+            expect(eraser.hasAttribute("hidden")).toBe(false);
+            expect(eraser.classList.contains("is-erasing")).toBe(true);
+
+            vi.advanceTimersByTime(1700);
+
+            expect(eraser.hasAttribute("hidden")).toBe(true);
+            expect(eraser.classList.contains("is-erasing")).toBe(false);
+        });
+
+        it("ignores every other cache notification", () => {
+            initMascot();
+
+            DataCache.notify({ type: "filesChanged" });
+
+            expect(document.getElementById("clearEraser").hasAttribute("hidden")).toBe(true);
+        });
+
+        it("stays out of the way when reduced motion is requested", () => {
+            mockMatchMedia(true);
+            initMascot();
+
+            DataCache.notify({ type: "storageCleared" });
+
+            expect(document.getElementById("clearEraser").hasAttribute("hidden")).toBe(true);
         });
     });
 });

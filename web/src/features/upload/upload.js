@@ -14,6 +14,7 @@ import { FILE_TYPES, MAX_CSV_CHARS } from "../../shared/constants.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
+import { hideCatcher, playCatch, showCatcher } from "./mascot.js";
 import { UploadProgress } from "./progress.js";
 import { MAX_FILE_BYTES, readFileAsText } from "./read.js";
 import {
@@ -363,6 +364,7 @@ export const UploadPage = (() => {
     function handleDragOver(event) {
         event.preventDefault();
         elements.dropZone?.classList.add("drag-over");
+        showCatcher();
     }
 
     /**
@@ -372,6 +374,7 @@ export const UploadPage = (() => {
     function handleDragLeave(event) {
         event.preventDefault();
         elements.dropZone?.classList.remove("drag-over");
+        hideCatcher();
     }
 
     /**
@@ -382,9 +385,12 @@ export const UploadPage = (() => {
         event.preventDefault();
         elements.dropZone?.classList.remove("drag-over");
         const files = Array.from(event.dataTransfer?.files || []);
-        if (files.length) {
-            processFiles(files);
+        if (!files.length) {
+            hideCatcher();
+            return;
         }
+        playCatch();
+        processFiles(files);
     }
 
     /**

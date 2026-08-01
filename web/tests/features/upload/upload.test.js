@@ -97,7 +97,9 @@ describe("UploadPage", () => {
      */
     function setupUploadDom() {
         setupDom(`
-            <div id="multiDropZone"></div>
+            <div id="multiDropZone">
+                <svg class="pip-catcher" id="uploadCatcher" data-pose="ready" hidden></svg>
+            </div>
             <input id="multiFileInput" type="file" />
             <span id="sharesStatus"></span>
             <span id="commentsStatus"></span>
@@ -472,6 +474,59 @@ describe("UploadPage", () => {
         Object.defineProperty(dragLeave, "preventDefault", { value: vi.fn() });
         dropZone.dispatchEvent(dragLeave);
         expect(dropZone.classList.contains("drag-over")).toBe(false);
+    });
+
+    it("brings Pip up on drag and puts him away when the drag leaves", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const dropZone = document.getElementById("multiDropZone");
+        const pip = document.getElementById("uploadCatcher");
+        const dragOver = new Event("dragover");
+        Object.defineProperty(dragOver, "preventDefault", { value: vi.fn() });
+        dropZone.dispatchEvent(dragOver);
+        expect(pip.hasAttribute("hidden")).toBe(false);
+        expect(pip.getAttribute("data-pose")).toBe("ready");
+
+        const dragLeave = new Event("dragleave");
+        Object.defineProperty(dragLeave, "preventDefault", { value: vi.fn() });
+        dropZone.dispatchEvent(dragLeave);
+        expect(pip.hasAttribute("hidden")).toBe(true);
+    });
+
+    it("plays Pip's catch when a dropped file lands", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const dropZone = document.getElementById("multiDropZone");
+        const pip = document.getElementById("uploadCatcher");
+        const file = new File(["a,b\n1,2"], "Shares.csv", { type: "text/csv" });
+        const dropEvent = new Event("drop");
+        Object.defineProperty(dropEvent, "preventDefault", { value: vi.fn() });
+        Object.defineProperty(dropEvent, "dataTransfer", { value: { files: [file] } });
+
+        dropZone.dispatchEvent(dropEvent);
+
+        expect(pip.hasAttribute("hidden")).toBe(false);
+        expect(pip.getAttribute("data-pose")).toBe("catch");
+    });
+
+    it("puts Pip away when a drop carries no files", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const dropZone = document.getElementById("multiDropZone");
+        const pip = document.getElementById("uploadCatcher");
+        const dragOver = new Event("dragover");
+        Object.defineProperty(dragOver, "preventDefault", { value: vi.fn() });
+        dropZone.dispatchEvent(dragOver);
+
+        const dropEvent = new Event("drop");
+        Object.defineProperty(dropEvent, "preventDefault", { value: vi.fn() });
+        Object.defineProperty(dropEvent, "dataTransfer", { value: { files: [] } });
+        dropZone.dispatchEvent(dropEvent);
+
+        expect(pip.hasAttribute("hidden")).toBe(true);
     });
 
     it("warns when storage is low during upload", async () => {

@@ -353,6 +353,101 @@
             >Upload a LinkedIn export to enable saving as PDF.</span
         >
 
+        <!-- Pip staples the finished PDF together, in the corner under the button
+        that made it. Shown only once a file has actually downloaded, and hidden
+        again as soon as the moment has played. Inline rather than a defs group:
+        every move below is driven from .is-stapling on this element, and an
+        ancestor class cannot reach into the shadow tree a use element builds. -->
+        <svg
+            class="pip-staple"
+            id="pdfStaple"
+            viewBox="0 0 190 160"
+            aria-hidden="true"
+            focusable="false"
+            hidden
+        >
+            <g filter="url(#pipWobble)">
+                <!-- The stack he is squaring up. Each sheet is wrapped so the
+                nudge into line is a transform on the group, leaving the sheet
+                itself at its drawn position. -->
+                <g class="pip-sheet pip-sheet-left">
+                    <rect class="pip-ink pip-paper" x="108" y="116" width="56" height="9" rx="2" />
+                </g>
+                <g class="pip-sheet pip-sheet-right">
+                    <rect class="pip-ink pip-paper" x="110" y="108" width="54" height="9" rx="2" />
+                </g>
+                <g class="pip-sheet pip-sheet-left">
+                    <rect class="pip-ink pip-paper" x="109" y="100" width="55" height="9" rx="2" />
+                </g>
+                <rect class="pip-ink pip-paper" x="116" y="94" width="44" height="8" rx="3" />
+                <g class="pip-jaw">
+                    <rect class="pip-ink pip-jacket" x="116" y="84" width="44" height="8" rx="3" />
+                    <path class="pip-ink" d="M119 92 L119 97" />
+                </g>
+                <!-- The "chk", three marks thrown off the nose of the stapler. -->
+                <g class="pip-chk">
+                    <path class="pip-ink" d="M164 82 L170 77" />
+                    <path class="pip-ink" d="M166 90 L173 90" />
+                    <path class="pip-ink" d="M164 97 L170 101" />
+                </g>
+                <path
+                    class="pip-ink pip-paper pip-flutter"
+                    d="M152 98 q7 -4 9 2 q-6 4 -9 -2 Z"
+                />
+                <path
+                    class="pip-ink pip-hood"
+                    d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
+                />
+                <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
+                <path class="pip-ink" d="M38 46 Q33 49 38 54" />
+                <path class="pip-ink pip-brow" d="M47.5 44 Q52 40.5 56.5 43.5" />
+                <path class="pip-ink pip-brow" d="M72.5 43 Q68 39.5 63.5 42.5" />
+                <g class="pip-blink">
+                    <circle class="pip-eye" cx="52" cy="49" r="3.2" />
+                    <circle class="pip-eye" cx="68" cy="49" r="3.2" />
+                </g>
+                <path class="pip-ink" d="M60 52 Q63 56 59 57" />
+                <path class="pip-ink" d="M52 60 Q60 65 68 59" />
+                <path
+                    class="pip-hair"
+                    d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
+                />
+                <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
+                <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
+                <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
+                <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
+                <path class="pip-ink" d="M60 68 L60 77" />
+                <path class="pip-ink pip-jacket" d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z" />
+                <path class="pip-ink" d="M53 78 Q60 85 67 78" />
+                <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
+                <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
+                <path class="pip-cord" d="M65 83 q2 5 1 8" />
+                <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
+                <path class="pip-ink" d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z" />
+                <path class="pip-ink" d="M45 84 Q34 96 33 108" />
+                <circle class="pip-ink pip-paper" cx="32" cy="111" r="4" />
+                <path class="pip-ink" d="M52 115 Q48 129 49 145" />
+                <path class="pip-ink" d="M69 115 Q73 129 72 145" />
+                <path class="pip-ink pip-solid" d="M49 145 Q40 146 40 150 L51 150 Z" />
+                <path class="pip-ink pip-solid" d="M72 145 Q81 146 81 150 L70 150 Z" />
+                <!-- The pressing arm, drawn last so the hand lands on top of the
+                stapler. A fat palm with a thumb wrapped round the near edge:
+                the whole hand is one closed shape rather than a row of
+                fingers. -->
+                <g class="pip-press">
+                    <path class="pip-ink" d="M76 84 Q102 76 128 78" />
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M130 70 Q125 77 130 85 Q139 89 147 84 Q151 77 147 70 Q138 66 130 70 Z"
+                    />
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M131 83 Q126 87 127 91 Q130 93.5 133 90.5 Q135 88 136 85 Z"
+                    />
+                </g>
+            </g>
+        </svg>
+
         <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
             <svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2" />
@@ -490,12 +585,27 @@
                                             d="M82.5 38 Q78 34.5 73.5 37.5"
                                         />
                                         <g class="pip-blink">
-                                            <circle class="pip-eye" cx="62" cy="44" r="3.6" />
-                                            <circle class="pip-eye" cx="78" cy="44" r="3.6" />
+                                            <!-- Wrapped so the gaze offset written by
+                                            shared/ui/alive.js and the blink loop never
+                                            fight over one transform. -->
+                                            <g class="pip-gaze">
+                                                <circle
+                                                    class="pip-eye"
+                                                    cx="62"
+                                                    cy="44"
+                                                    r="3.6"
+                                                />
+                                                <circle
+                                                    class="pip-eye"
+                                                    cx="78"
+                                                    cy="44"
+                                                    r="3.6"
+                                                />
+                                            </g>
                                         </g>
                                         <path class="pip-ink" d="M70 47 Q73 51 69 52" />
                                         <path
-                                            class="pip-ink pip-solid"
+                                            class="pip-ink pip-solid pip-mouth"
                                             d="M60 55 Q70 69 80 55 Q70 61 60 55 Z"
                                         />
                                         <g class="pip-flick">
@@ -663,6 +773,203 @@
                             <div class="drop-zone-hover">
                                 <p>Release to upload</p>
                             </div>
+                            <!-- Pip comes up behind the bottom edge with his arms
+                            out while a file is over the zone, and hugs the page he
+                            caught once it lands. Decorative: the copy above him
+                            already says what the zone does. The viewBox crops him
+                            at the waist, so the edge he rises from is the drop
+                            zone's own border rather than a line drawn for him.
+                            Inline rather than a defs group: the two arm poses are
+                            switched by a selector on the svg, which cannot reach
+                            into the shadow tree a use element builds. -->
+                            <svg
+                                class="pip-catcher"
+                                id="uploadCatcher"
+                                data-pose="ready"
+                                viewBox="20 4 100 120"
+                                aria-hidden="true"
+                                focusable="false"
+                                hidden
+                            >
+                                <g filter="url(#pipWobble)">
+                                    <g class="pip-catch-body">
+                                        <path
+                                            class="pip-ink pip-hood"
+                                            d="M53 86 C48 76 51 62 62 63 C65 68 75 68 78 63 C89 62 92 76 87 86 Q70 90 53 86 Z"
+                                        />
+                                        <circle class="pip-ink pip-paper" cx="70" cy="46" r="22" />
+                                        <path class="pip-ink" d="M48 46 Q43 49 48 54" />
+                                        <path class="pip-ink" d="M92 46 Q97 49 92 54" />
+                                        <!-- Brows up under the fringe and the eyes
+                                        opened out to whites with the pupils high in
+                                        them: he is watching the file, not the
+                                        visitor. -->
+                                        <path
+                                            class="pip-ink pip-brow"
+                                            d="M57.5 37.5 Q62 33.8 66.5 37"
+                                        />
+                                        <path
+                                            class="pip-ink pip-brow"
+                                            d="M82.5 36.5 Q78 32.8 73.5 36"
+                                        />
+                                        <g class="pip-blink">
+                                            <circle
+                                                class="pip-ink pip-paper"
+                                                cx="62"
+                                                cy="44"
+                                                r="5"
+                                            />
+                                            <circle
+                                                class="pip-ink pip-paper"
+                                                cx="78"
+                                                cy="44"
+                                                r="5"
+                                            />
+                                            <circle class="pip-eye" cx="62.6" cy="42.8" r="2.4" />
+                                            <circle class="pip-eye" cx="78.6" cy="42.8" r="2.4" />
+                                        </g>
+                                        <path class="pip-ink" d="M70 49 Q73 53 69 54" />
+                                        <path
+                                            class="pip-hair"
+                                            d="M52 34 C48 26 50 18 60 15 C70 11 82 14 87 22 C91 28 91 33 90 39 L87 44 Q86 34 83.5 37 Q80 24 77 30 Q74 22 70 32 Q67 22 63 30 Q59.5 21 56 31 Z"
+                                        />
+                                        <path class="pip-wisp" d="M74 12 q5 -3 9 0" />
+                                        <path class="pip-wisp" d="M64 13.4 q3 -3 6 -1" />
+                                        <path class="pip-wisp" d="M53 33 q-2 4 -1 7" />
+                                        <path class="pip-ink" d="M58 66 C62 72 78 72 82 66" />
+                                        <path class="pip-ink" d="M70 68 L70 77" />
+                                        <path
+                                            class="pip-ink pip-jacket"
+                                            d="M54 81 Q70 74 86 81 L89 112 Q70 118 51 112 Z"
+                                        />
+                                        <path class="pip-ink" d="M63 78 Q70 85 77 78" />
+                                        <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
+                                        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
+                                        <path class="pip-cord" d="M75 83 q2 5 1 8" />
+                                        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+                                        <path
+                                            class="pip-ink"
+                                            d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
+                                        />
+                                        <!-- Arms out, mouth open, hands up and tipped
+                                        outwards. Each hand is the same drawing:
+                                        fingers and thumb inked first as fat
+                                        capsules, then the palm laid over where they
+                                        join it, and the near one is that drawing
+                                        mirrored so the thumbs both point away from
+                                        him. The mouth belongs to the pose rather
+                                        than the body, so the catch can grin without
+                                        redrawing the face it grins on. -->
+                                        <g class="pip-catch-pose" data-pose="ready">
+                                            <ellipse
+                                                class="pip-ink pip-solid"
+                                                cx="70"
+                                                cy="59"
+                                                rx="4.4"
+                                                ry="4.6"
+                                            />
+                                            <path class="pip-ink" d="M56 83 Q44 74 38 59" />
+                                            <path class="pip-ink" d="M84 83 Q96 74 102 59" />
+                                            <g
+                                                transform="translate(35 52) scale(-1 1) rotate(20) translate(-110 -57)"
+                                            >
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M101.3 55.7 L97.8 42.7 Q96.8 39.1 99.5 38.3 Q102.2 37.6 103.2 41.3 L106.7 54.3 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M106.7 54.1 L106.2 38.6 Q106.1 34.8 108.9 34.7 Q111.7 34.6 111.8 38.4 L112.3 53.9 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M112.3 54.3 L115.8 41.3 Q116.8 37.6 119.5 38.3 Q122.2 39.1 121.2 42.7 L117.7 55.7 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M108.8 59.4 L120.8 62.9 Q124.3 63.9 123.6 66.5 Q122.8 69.1 119.2 68.1 L107.2 64.6 Z"
+                                                />
+                                                <circle
+                                                    class="pip-ink pip-paper"
+                                                    cx="110"
+                                                    cy="57"
+                                                    r="8.4"
+                                                />
+                                            </g>
+                                            <g
+                                                transform="translate(105 52) rotate(20) translate(-110 -57)"
+                                            >
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M101.3 55.7 L97.8 42.7 Q96.8 39.1 99.5 38.3 Q102.2 37.6 103.2 41.3 L106.7 54.3 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M106.7 54.1 L106.2 38.6 Q106.1 34.8 108.9 34.7 Q111.7 34.6 111.8 38.4 L112.3 53.9 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M112.3 54.3 L115.8 41.3 Q116.8 37.6 119.5 38.3 Q122.2 39.1 121.2 42.7 L117.7 55.7 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M108.8 59.4 L120.8 62.9 Q124.3 63.9 123.6 66.5 Q122.8 69.1 119.2 68.1 L107.2 64.6 Z"
+                                                />
+                                                <circle
+                                                    class="pip-ink pip-paper"
+                                                    cx="110"
+                                                    cy="57"
+                                                    r="8.4"
+                                                />
+                                            </g>
+                                        </g>
+                                        <!-- Caught it: a grin, and the page held flat
+                                        against his chest. The arms are inked before
+                                        the page and the hands after it, so the hug
+                                        reads as two hands on the near edge rather
+                                        than a loop of ink around a rectangle. Each
+                                        hand is a mitt: the thumb up over the page,
+                                        then the palm over where it joins. -->
+                                        <g class="pip-catch-pose" data-pose="catch">
+                                            <path
+                                                class="pip-ink pip-solid"
+                                                d="M60 55 Q70 69 80 55 Q70 61 60 55 Z"
+                                            />
+                                            <path class="pip-ink" d="M55 84 Q47 96 55 102" />
+                                            <path class="pip-ink" d="M85 84 Q93 96 85 102" />
+                                            <g transform="rotate(-8 70 92)">
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M54 72 L86 72 L86 112 L54 112 Z"
+                                                />
+                                                <path class="pip-ink" d="M78 72 L86 80" />
+                                            </g>
+                                            <path
+                                                class="pip-ink pip-paper"
+                                                d="M57.98 103.98 L64.98 96.98 Q67.2 94.8 65.2 92.8 Q63.2 90.8 61.02 93.02 L54.02 100.02 Z"
+                                            />
+                                            <circle
+                                                class="pip-ink pip-paper"
+                                                cx="55"
+                                                cy="104"
+                                                r="6.2"
+                                            />
+                                            <path
+                                                class="pip-ink pip-paper"
+                                                d="M82.02 103.98 L75.02 96.98 Q72.8 94.8 74.8 92.8 Q76.8 90.8 78.98 93.02 L85.98 100.02 Z"
+                                            />
+                                            <circle
+                                                class="pip-ink pip-paper"
+                                                cx="85"
+                                                cy="104"
+                                                r="6.2"
+                                            />
+                                        </g>
+                                        <path class="pip-ink" d="M62 115 Q58 129 59 145" />
+                                        <path class="pip-ink" d="M79 115 Q83 129 82 145" />
+                                    </g>
+                                </g>
+                            </svg>
                         </div>
 
                         <div class="upload-status-card">
@@ -724,6 +1031,206 @@
                                 >
                                     Clear data
                                 </button>
+                                <!-- Pip rubs the card clean once a wipe has gone
+                                through, then dusts his hands off. Shown only for
+                                the moment itself, and out of the flow, so the two
+                                buttons never shift to make room for him. Inline
+                                rather than a defs group: every move below hangs
+                                off .is-erasing on this element, and an ancestor
+                                class cannot reach into a use element's shadow
+                                tree. -->
+                                <svg
+                                    class="pip-eraser"
+                                    id="clearEraser"
+                                    viewBox="0 0 210 160"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                    hidden
+                                >
+                                    <g filter="url(#pipWobble)">
+                                        <rect
+                                            class="pip-ink pip-paper"
+                                            x="96"
+                                            y="94"
+                                            width="100"
+                                            height="46"
+                                            rx="3"
+                                        />
+                                        <path
+                                            class="pip-ink pip-erase-mark"
+                                            d="M106 108 Q128 102 150 110 T186 106"
+                                        />
+                                        <path
+                                            class="pip-ink pip-erase-mark pip-erase-mark-2"
+                                            d="M106 124 Q130 118 152 125"
+                                        />
+                                        <!-- Rubber crumbs, left along the sweep
+                                        and gone again a moment later. -->
+                                        <ellipse
+                                            class="pip-shaving pip-crumb"
+                                            cx="126"
+                                            cy="122"
+                                            rx="2.4"
+                                            ry="1.7"
+                                        />
+                                        <ellipse
+                                            class="pip-shaving pip-crumb pip-crumb-2"
+                                            cx="142"
+                                            cy="128"
+                                            rx="2.2"
+                                            ry="1.6"
+                                        />
+                                        <ellipse
+                                            class="pip-shaving pip-crumb pip-crumb-3"
+                                            cx="157"
+                                            cy="121"
+                                            rx="2.6"
+                                            ry="1.8"
+                                        />
+                                        <ellipse
+                                            class="pip-shaving pip-crumb pip-crumb-4"
+                                            cx="171"
+                                            cy="128"
+                                            rx="2.2"
+                                            ry="1.6"
+                                        />
+                                        <path
+                                            class="pip-ink pip-hood"
+                                            d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
+                                        />
+                                        <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
+                                        <path class="pip-ink" d="M38 46 Q33 49 38 54" />
+                                        <path
+                                            class="pip-ink pip-brow"
+                                            d="M47.5 44 Q52 40.5 56.5 43.5"
+                                        />
+                                        <path
+                                            class="pip-ink pip-brow"
+                                            d="M72.5 43 Q68 39.5 63.5 42.5"
+                                        />
+                                        <g class="pip-blink">
+                                            <circle class="pip-eye" cx="52" cy="49" r="3.2" />
+                                            <circle class="pip-eye" cx="68" cy="49" r="3.2" />
+                                        </g>
+                                        <path class="pip-ink" d="M60 52 Q63 56 59 57" />
+                                        <path class="pip-ink" d="M52 60 Q60 65 68 59" />
+                                        <path
+                                            class="pip-hair"
+                                            d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
+                                        />
+                                        <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
+                                        <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
+                                        <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
+                                        <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
+                                        <path class="pip-ink" d="M60 68 L60 77" />
+                                        <path
+                                            class="pip-ink pip-jacket"
+                                            d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z"
+                                        />
+                                        <path class="pip-ink" d="M53 78 Q60 85 67 78" />
+                                        <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
+                                        <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
+                                        <path class="pip-cord" d="M65 83 q2 5 1 8" />
+                                        <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
+                                        <path
+                                            class="pip-ink"
+                                            d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z"
+                                        />
+                                        <path class="pip-ink" d="M52 115 Q48 129 49 145" />
+                                        <path class="pip-ink" d="M69 115 Q73 129 72 145" />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M49 145 Q40 146 40 150 L51 150 Z"
+                                        />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M72 145 Q81 146 81 150 L70 150 Z"
+                                        />
+                                        <!-- Both arms, in the pose the sweep needs:
+                                        one hanging, the other scrubbing. The hand
+                                        on the rubber is one fat closed shape with
+                                        the thumb wrapped round the near edge. -->
+                                        <g class="pip-erase">
+                                            <path class="pip-ink" d="M45 84 Q34 96 33 108" />
+                                            <circle
+                                                class="pip-ink pip-paper"
+                                                cx="32"
+                                                cy="111"
+                                                r="4"
+                                            />
+                                            <g class="pip-scrub">
+                                                <path class="pip-ink" d="M76 84 Q98 88 114 98" />
+                                                <rect
+                                                    class="pip-ink pip-pencil"
+                                                    x="118"
+                                                    y="104"
+                                                    width="28"
+                                                    height="13"
+                                                    rx="2.5"
+                                                    transform="rotate(-5 132 110)"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M112 92 Q107 99 112 107 Q121 111 129 106 Q133 99 129 92 Q120 88 112 92 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M113 105 Q109 109 110 113 Q113 115.5 116 112.5 Q118 110 119 107 Z"
+                                                />
+                                            </g>
+                                        </g>
+                                        <!-- And the same two arms out front for the
+                                        all-clean dust-off, swapped in as the sweep
+                                        fades. -->
+                                        <g class="pip-dust">
+                                            <!-- The far forearm comes out from
+                                            behind him rather than across the
+                                            jacket, where a line over the blue
+                                            reads as a strike through it. -->
+                                            <path class="pip-ink" d="M78 106 Q84 111 89 113" />
+                                            <path
+                                                class="pip-ink pip-paper"
+                                                d="M92 109 Q87 116 92 124 Q101 128 109 123 Q113 116 109 109 Q100 105 92 109 Z"
+                                            />
+                                            <path
+                                                class="pip-ink pip-paper"
+                                                d="M94 122 Q90 126 91 130 Q94 132.5 97 129.5 Q99 127 100 124 Z"
+                                            />
+                                            <path class="pip-ink" d="M76 84 Q90 86 100 90" />
+                                            <g class="pip-pat">
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M107 85 Q102 92 107 100 Q116 104 124 99 Q128 92 124 85 Q115 81 107 85 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-paper"
+                                                    d="M109 98 Q105 102 106 106 Q109 108.5 112 105.5 Q114 103 115 100 Z"
+                                                />
+                                            </g>
+                                            <ellipse
+                                                class="pip-shaving pip-puff"
+                                                cx="134"
+                                                cy="84"
+                                                rx="2.4"
+                                                ry="1.7"
+                                            />
+                                            <ellipse
+                                                class="pip-shaving pip-puff pip-puff-2"
+                                                cx="140"
+                                                cy="95"
+                                                rx="2.1"
+                                                ry="1.5"
+                                            />
+                                            <ellipse
+                                                class="pip-shaving pip-puff pip-puff-3"
+                                                cx="128"
+                                                cy="75"
+                                                rx="2.6"
+                                                ry="1.8"
+                                            />
+                                        </g>
+                                    </g>
+                                </svg>
                             </div>
                         </div>
                     </section>

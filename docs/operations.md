@@ -245,7 +245,9 @@ Little is lost. Required linear history on the default branch already refuses me
 
 Note that `make` collapses any non-zero recipe exit to `2` of its own, so `1` and `2` are only distinguishable to something running the module directly. At a terminal the printed output is the signal: drift is listed on stdout, and a failure to look prints to stderr with the two permissions it needed.
 
-**This target is run by hand, not from a workflow.** Reading branch protection needs `administration: read` and listing secrets needs `secrets: read`, and `GITHUB_TOKEN` can grant neither. The repository's App credentials exist for writeback and carry neither permission either, so a workflow copy would only ever report that it could not look. Run it after changing repository settings, and when a merge behaves in a way the protection rules should have prevented.
+**This target needs a GitHub App token, never `GITHUB_TOKEN`.** Reading branch protection needs `administration: read` and listing secrets needs `secrets: read`, and `GITHUB_TOKEN` can grant neither. Neither writeback App carries them either, deliberately, so [`audit-repo-settings.yml`](#scheduled-audit-run) runs it weekly on the read-only audit App instead.
+
+Run it by hand as well after changing repository settings, and when a merge behaves in a way the protection rules should have prevented. Against a maintainer's own credentials it answers immediately, rather than waiting for Monday.
 
 Rulesets are deliberately not audited; this repository uses classic branch protection and has none. Migrating protection to a ruleset would empty the classic endpoint, which the audit already reports as unprotected.
 
@@ -347,13 +349,11 @@ Scope all three installations to selected repositories rather than all of them.
 
 If the escalation credentials are missing, the CI pin refresh workflow records a skipped summary instead of attempting a write, and the settings audit does the same when the audit credentials are absent. If the primary credentials are missing, the Python lock refresh workflow uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
 
-### Repository settings audit
+### Scheduled audit run
 
 `audit-repo-settings.yml` runs `make ci-audit-repo-settings` every Monday, and on `workflow_dispatch`. `scripts/ci/repo_audit.py` writes a `checked` output itself, exactly as the schedule watchdog does and for the same reason: `make` rewrites every failing recipe's status to `2`, so "found drift" and "could not read the settings" reach the workflow as the same exit code. Reading `make`'s status instead would raise a drift alert every time the audit merely failed to look, which is the opposite of the fail-closed behavior the audit is built around.
 
 The three reporting jobs read that output and call the shared `alert-issue.yml` described in [Alert issues](#alert-issues). A failed run that reached a verdict is drift, a failed run that did not is a setup failure, and a successful one closes the issue.
-
-The same target remains runnable by hand against a maintainer's own credentials, which is the faster way to check a setting immediately after changing it.
 
 ## CLI Environment Variables
 

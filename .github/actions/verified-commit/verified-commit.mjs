@@ -200,6 +200,23 @@ export function createBranchName(prefix, date = new Date()) {
 }
 
 /**
+ * Pick the pull request to reuse for a fallback branch, newest first.
+ *
+ * Resetting the dated branch to the base empties any open pull request on it,
+ * which GitHub closes automatically. That close lands before this runs, so an
+ * open-only lookup finds nothing and opens a duplicate. A closed but unmerged
+ * pull request is therefore still reusable; a merged one never is, because its
+ * branch has moved on to unrelated work.
+ * @param {Array<{number: number, state: string, merged_at: string | null, html_url: string}>} pulls - Pull requests for the branch.
+ * @returns {{number: number, state: string, merged_at: string | null, html_url: string} | undefined} Reusable pull request, if any.
+ */
+export function selectReusablePull(pulls) {
+    return pulls
+        .filter((pull) => pull.state === "open" || !pull.merged_at)
+        .sort((left, right) => right.number - left.number)[0];
+}
+
+/**
  * Check whether a module URL matches the current Node.js entrypoint.
  * @param {string} moduleUrl - Module URL, typically `import.meta.url`.
  * @param {string | undefined} argvPath - Entrypoint path from `process.argv[1]`.
@@ -418,15 +435,23 @@ export async function runVerifiedCommit({
 
     const pullsUrl = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
     pullsUrl.search = new URLSearchParams({
-        state: "open",
+        state: "all",
         head: `${owner}:${fallbackBranch}`,
     }).toString();
-    const existingPulls = await clients.fetchJson(pullsUrl.toString());
+    const reusablePull = selectReusablePull(await clients.fetchJson(pullsUrl.toString()));
 
-    if (existingPulls.length > 0) {
-        consoleObj.log(`Updated existing PR: ${existingPulls[0].html_url}`);
-        setOutput("result-url", existingPulls[0].html_url);
-        return { changed: true, resultUrl: existingPulls[0].html_url };
+    if (reusablePull) {
+        if (reusablePull.state !== "open") {
+            await clients.fetchJson(
+                `https://api.github.com/repos/${owner}/${repo}/pulls/${reusablePull.number}`,
+                { method: "PATCH", body: JSON.stringify({ state: "open" }) },
+            );
+            consoleObj.log(`Reopened PR closed by the branch reset: ${reusablePull.html_url}`);
+        } else {
+            consoleObj.log(`Updated existing PR: ${reusablePull.html_url}`);
+        }
+        setOutput("result-url", reusablePull.html_url);
+        return { changed: true, resultUrl: reusablePull.html_url };
     }
 
     const pullRequest = await clients.fetchJson(

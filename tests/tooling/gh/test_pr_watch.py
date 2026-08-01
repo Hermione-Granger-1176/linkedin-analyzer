@@ -20,6 +20,7 @@ def _review(
     body: object = _CLEAN_BODY,
     submitted_at: object = _SUBMITTED_AT,
     login: object = "copilot-pull-request-reviewer",
+    state: object = "COMMENTED",
 ) -> dict[str, object]:
     """Build one review payload."""
     return {
@@ -27,6 +28,7 @@ def _review(
         "author": {"login": login},
         "body": body,
         "submittedAt": submitted_at,
+        "state": state,
     }
 
 
@@ -117,6 +119,7 @@ def test_copilot_reviews_ignores_other_authors_and_parses_copilot() -> None:
             submitted_at=datetime(2026, 7, 26, 12, tzinfo=UTC),
             body=_COMMENT_BODY,
             generated_comment_count=2,
+            state="COMMENTED",
         ),
     )
 
@@ -161,6 +164,8 @@ def test_copilot_review_requires_exact_clean_wording() -> None:
         [_review("", body=_CLEAN_BODY)],
         [_review("review", submitted_at=None)],
         [_review("review", body=None)],
+        [_review("review", state=None)],
+        [{key: value for key, value in _review("review").items() if key != "state"}],
     ],
 )
 def test_copilot_reviews_rejects_malformed_payloads(reviews: object) -> None:
@@ -253,6 +258,39 @@ def test_review_summary_flags_an_unrecognized_overview() -> None:
     )
 
     assert pr_watch._review_summary(review, requested=True) == "unrecognized Copilot overview"
+
+
+def test_an_approval_without_a_comment_count_is_clean() -> None:
+    """Copilot approves with wording that carries no count, so state is the signal."""
+    review = _parsed_review(count=None, state="APPROVED")
+
+    assert review.is_approved
+    assert review.is_explicitly_clean
+    assert pr_watch._review_summary(review, requested=True) == "approved with no comments"
+
+
+def test_a_non_approving_review_still_needs_recognizable_wording() -> None:
+    """A commented or dismissed review must not inherit the approval shortcut."""
+    review = _parsed_review(count=None, state="COMMENTED")
+
+    assert not review.is_approved
+    assert not review.is_explicitly_clean
+    assert pr_watch._review_summary(review, requested=True) == "unrecognized Copilot overview"
+
+
+def test_watch_pr_accepts_an_approving_fresh_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An approval with no comments settles the watch instead of failing it."""
+    _watch_stubs(
+        monkeypatch,
+        [_status(settled=True, review=_parsed_review(count=None, state="APPROVED"))],
+    )
+
+    report = pr_watch.watch_pr(12, interval=0, max_polls=1)
+
+    assert "approved with no comments" in report
+    assert "merge ready: yes" in report
 
 
 @pytest.mark.parametrize("conclusion", ["SUCCESS", "NEUTRAL", "SKIPPED"])
@@ -407,6 +445,7 @@ def _parsed_review(
     review_id: str = "new",
     *,
     count: int | None = 0,
+    state: str = "",
 ) -> pr_watch.CopilotReview:
     """Build one parsed fresh review."""
     body = _CLEAN_BODY if count == 0 else _COMMENT_BODY if count == 2 else "unrecognized"
@@ -415,6 +454,7 @@ def _parsed_review(
         submitted_at=datetime(2026, 7, 26, 12, tzinfo=UTC),
         body=body,
         generated_comment_count=count,
+        state=state,
     )
 
 

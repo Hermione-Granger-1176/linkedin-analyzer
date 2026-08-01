@@ -702,7 +702,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog ci-audit-repo-settings ci-coverage-summary
+.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-workflows ci-workflow-disable ci-workflow-enable ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog ci-audit-repo-settings ci-coverage-summary
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -735,6 +735,18 @@ ci-rerun: ## Re-run a workflow run (make ci-rerun run=ID [failed=1])
 ci-dispatch: ## Start a workflow run (make ci-dispatch workflow=dependency-audit.yml [ref=branch] [inputs="key=value ..."])
 	@test -n "$(workflow)" || (printf 'Usage: make ci-dispatch workflow=dependency-audit.yml [ref=branch] [inputs="key=value ..."]\n' >&2; exit 1)
 	gh workflow run "$(workflow)" $(if $(ref),--ref "$(ref)") $(foreach kv,$(inputs),-f "$(kv)")
+
+ci-workflows: ## List every workflow with its enabled state (make ci-workflows [repo=owner/name])
+	gh api "repos/$(if $(repo),$(repo),{owner}/{repo})/actions/workflows" \
+		--jq '.workflows[] | "\(.state)\t\(.name)\t\(.path)"'
+
+ci-workflow-disable: ## Stop a workflow from triggering (make ci-workflow-disable workflow=refresh-python-locks.yml)
+	@test -n "$(workflow)" || (printf 'Usage: make ci-workflow-disable workflow=refresh-python-locks.yml\n' >&2; exit 1)
+	gh workflow disable "$(workflow)"
+
+ci-workflow-enable: ## Let a disabled workflow trigger again (make ci-workflow-enable workflow=refresh-python-locks.yml)
+	@test -n "$(workflow)" || (printf 'Usage: make ci-workflow-enable workflow=refresh-python-locks.yml\n' >&2; exit 1)
+	gh workflow enable "$(workflow)"
 
 ci-caches: ## List Actions caches, largest first (make ci-caches [limit=N] [key=prefix])
 	gh cache list --limit "$(if $(limit),$(limit),30)" --sort size_in_bytes --order desc $(if $(key),--key "$(key)")

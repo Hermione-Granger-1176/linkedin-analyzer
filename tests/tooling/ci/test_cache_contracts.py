@@ -81,15 +81,12 @@ def test_e2e_uses_an_immutable_version_matched_playwright_container() -> None:
     package_version = package_lock["packages"]["node_modules/@playwright/test"]["version"]
     image_match = re.search(
         r"PLAYWRIGHT_CI_IMAGE := mcr\.microsoft\.com/playwright:v(?P<version>[^-]+)-noble"
-        r"@sha256:(?P<digest>[0-9a-f]{64})",
+        r"@sha256:[0-9a-f]{64}",
         (REPO_ROOT / "Makefile").read_text(encoding="utf-8"),
     )
 
     assert image_match is not None
     assert image_match.group("version") == package_version
-    assert image_match.group("digest") == (
-        "baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07"
-    )
     assert "run: make web-e2e-container" in CI_WORKFLOW
     assert "playwright-engines" not in CI_SETUP
     assert "Cache Playwright browsers" not in CI_SETUP

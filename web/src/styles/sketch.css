@@ -188,28 +188,82 @@
     animation: underline-draw 0.6s ease-out;
 }
 
-/* Tape effect for preview section - only show when visible */
+/* Masking tape. One strip, one look, shared by every surface that claims one:
+   the rules below only say where a strip sits and which way it leans, and the
+   two size properties carry defaults so a claim can be a single line. The tape
+   is torn from the same roll in both themes, so its color is a token rather
+   than a tint of the marker yellow it started as. */
 .preview-section:not([hidden])::before,
-.preview-section:not([hidden])::after {
+.preview-section:not([hidden])::after,
+.upload-status-card::before,
+.upload-status-card::after,
+.chart-card--wide::before,
+.message-panel::before {
     content: "";
     position: absolute;
-    width: 60px;
-    height: 24px;
-    background: var(--accent-yellow);
-    opacity: 0.6;
-    transform: rotate(-3deg);
+    width: var(--tape-width, 54px);
+    height: var(--tape-height, 20px);
+    background: var(--tape-fill);
+    transform: rotate(-4deg);
     z-index: 10;
+    pointer-events: none;
 }
 
-.preview-section:not([hidden])::before {
+/* The preview section is taped down by both top corners, and its strips are
+   the wider ones the panel shipped with. */
+.preview-section:not([hidden])::before,
+.preview-section:not([hidden])::after {
+    --tape-width: 60px;
+    --tape-height: 24px;
+
     top: -12px;
     left: 20px;
+    transform: rotate(-3deg);
 }
 
 .preview-section:not([hidden])::after {
-    top: -12px;
+    left: auto;
     right: 20px;
     transform: rotate(3deg);
+}
+
+/* The Files card is the one panel on Home that holds the page together, so it
+   gets a strip on each corner. The cards that head a data screen get one, on
+   the left, which is enough to say the page was assembled by hand without
+   turning every card into a scrapbook page. */
+.upload-status-card::before,
+.upload-status-card::after,
+.chart-card--wide::before,
+.message-panel::before {
+    top: -10px;
+    left: 22px;
+}
+
+.upload-status-card::after {
+    left: auto;
+    right: 22px;
+    transform: rotate(4deg);
+}
+
+/* Nobody tears three strips off a roll at the same angle, so the panels in a
+   row lean differently, the way the cards around them are each rotated by a
+   fraction of a degree. */
+.message-panel:nth-child(2)::before {
+    left: 30px;
+    transform: rotate(3deg);
+}
+
+.message-panel:nth-child(3)::before {
+    left: 18px;
+    transform: rotate(-2deg);
+}
+
+/* The strips overhang the top edge, so the cards that wear them have to be
+   their containing block. .chart-card is already positioned by its own rule in
+   analytics.css. */
+.upload-status-card,
+.message-panel {
+    position: relative;
 }
 
 /* Animated doodle entrance */
@@ -256,15 +310,6 @@
    dark they take an opaque color rather than a tint of the ground. */
 [data-theme="dark"] .error-message {
     background: rgba(82, 46, 40, 1);
-}
-
-/* Masking tape under a lamp is tan, not the yellow of the marker it shares a
-   token with, so the dark strips step off the accent and gain back the opacity
-   the light strips give away. */
-[data-theme="dark"] .preview-section:not([hidden])::before,
-[data-theme="dark"] .preview-section:not([hidden])::after {
-    background: rgba(176, 140, 88, 1);
-    opacity: 0.85;
 }
 
 /* Selection styling: dark text keeps contrast on the yellow highlight */

@@ -81,6 +81,16 @@
     /* Grid background */
     --grid-color: rgba(28, 25, 23, 0.03);
 
+    /* Notebook furniture: the margin rule down the left edge, the ring inside a
+       punched hole, the masking tape, and the ruling on an index card. The
+       margin rule is a pencil-weight red, well under the marker red it is
+       mixed from, because a full-strength line would read as an error state. */
+    --paper-margin-color: rgba(249, 74, 54, 0.26);
+    --paper-punch-ring: rgba(87, 65, 47, 0.24);
+    --tape-fill: rgba(251, 188, 5, 0.6);
+    --index-rule-color: rgba(249, 74, 54, 0.42);
+    --index-line-color: rgba(66, 133, 244, 0.14);
+
     /* Selection */
     --selection-text: rgba(28, 25, 23, 1);
 
@@ -169,6 +179,19 @@
        addition to near-black, which needs roughly twice the step to read. */
     --grid-color: rgba(240, 228, 210, 0.055);
 
+    /* Notebook furniture after dark. The margin rule keeps its hue but drops to
+       a whisper: a lit red line down a near-black page is the one thing on it
+       that would shout. The punch ring becomes real shadow rather than a wash
+       of brown, the tape turns tan the way masking tape does under a lamp
+       (matching the strips the preview section already wore), and the index
+       ruling switches from marker blue to chalk, because a blue line only
+       reads as ruling on white paper. */
+    --paper-margin-color: rgba(255, 133, 118, 0.17);
+    --paper-punch-ring: rgba(0, 0, 0, 0.5);
+    --tape-fill: rgba(176, 140, 88, 0.85);
+    --index-rule-color: rgba(255, 133, 118, 0.3);
+    --index-line-color: rgba(240, 228, 210, 0.07);
+
     /* Selection */
     --selection-text: rgba(32, 26, 21, 1);
 }
@@ -199,6 +222,23 @@
     --radius-md: 8px;
     --radius-lg: 12px;
     --radius-xl: 20px;
+
+    /* Notebook furniture geometry. The margin rule and the punched holes both
+       live in the strip left of the content, so their offsets track the
+       viewport: on a wide screen there is a real gutter to sit in, and on a
+       phone they tuck against the edge instead of crowding the cards, whose
+       own inset bottoms out at var(--space-md). The punches repeat down the
+       whole sheet on one step rather than sitting at three fixed points,
+       because the page is as long as its content: a ring binder holds a stack,
+       and a reader who scrolls should keep seeing the edge they started with.
+       The ruling on a stat tile is geometry of that one card, so it is scoped
+       to .stat-card in features/analytics.css rather than kept here. */
+    --paper-margin-x: clamp(11px, 1.8vw, 28px);
+    --paper-margin-width: 1.5px;
+    --paper-punch-x: clamp(11px, 0.9vw, 14px);
+    --paper-punch-radius: clamp(5px, 0.45vw, 7px);
+    --paper-punch-step: 320px;
+    --paper-punch-fill: var(--bg-primary);
 
     /* Container */
     --container-max-width: 1400px;

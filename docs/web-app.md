@@ -79,7 +79,19 @@ Special behavior:
 
 ## Mascot
 
-Pip is the hand-drawn character who turns up across the app: waving beside the hero title, scribbling in the loading overlays, peeking over the top of an empty box, panicking next to a clean error, cheering a finished export, leaning on the Insights and Messages tips, peeking out of the floating help button, guiding the tutorial, and reacting in the corner of every insight card. He is decoration everywhere: `aria-hidden`, `focusable="false"`, and no pointer events.
+Pip is the hand-drawn character who turns up across the app: waving beside the hero title, scribbling in the loading overlays, waiting over the top of an empty box, panicking next to a clean error, cheering a finished export, leaning on the Insights and Messages tips, peeking out of the floating help button, guiding the tutorial, and reacting in the corner of every insight card. He is decoration everywhere: `aria-hidden`, `focusable="false"`, and no pointer events.
+
+The five empty states get five different Pips, each about the screen it sits on:
+
+| Box                 | Pose                        | Idle                                         |
+| ------------------- | --------------------------- | -------------------------------------------- |
+| `#cleanEmpty`       | Peeks over the edge         | Bobs up and down, and blinks                 |
+| `#analyticsEmpty`   | Hunts through a magnifier   | The glass sweeps, one eye huge behind it     |
+| `#connectionsEmpty` | Holds an empty mailbox open | The lowered flag twitches                    |
+| `#messagesEmpty`    | Launches a paper plane      | The plane rides a marching dotted line       |
+| `#insightsEmpty`    | Chin on his fist            | An unlit pencil-sketch bulb flickers faintly |
+
+They are drawn inline in `index.html` and placed by the empty-state section at the foot of `mascot.css`, which also inks the props each pose carries. Sizes stay close to one another, so a box is the same height whichever Pip is waiting in it.
 
 Four places hold the drawings, and each owns one thing:
 
@@ -90,7 +102,7 @@ Four places hold the drawings, and each owns one thing:
 | Feature stylesheets                     | Where a pose sits on a surface: size, offset, mirroring                                     |
 | `reactions.js` and `tutorial/mascot.js` | The two poses built in JavaScript, drawn with the same `pip-*` classes                      |
 
-A pose drawn in more than one place is defined once in the `<defs>` block at the top of `index.html`, and each placement is a wrapper `<svg>` carrying its own class and `viewBox` around a `<use href="#pip-...">`. That covers the peeker (five empty states), the tipster (two tips), and the scribbler (two loading overlays). Poses drawn only once stay inline where they appear.
+A pose drawn in more than one place is defined once in the `<defs>` block at the top of `index.html`, and each placement is a wrapper `<svg>` carrying its own class and `viewBox` around a `<use href="#pip-...">`. That covers the tipster (two tips) and the scribbler (two loading overlays). Poses drawn only once stay inline where they appear, which is where all five empty-state poses live.
 
 Two rules follow from how `<use>` works, and both are load-bearing:
 

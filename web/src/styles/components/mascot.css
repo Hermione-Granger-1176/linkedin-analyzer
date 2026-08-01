@@ -15,7 +15,10 @@
      .pip-loader inside the progress card in components/overlays.css,
      .insight-reaction on the card in features/insights.css, .tutorial-mascot and
      .tutorial-help-pip in features/tutorial.css. The placement section below
-     holds only the poses whose surface has no stylesheet of its own.
+     holds only the poses whose surface has no stylesheet of its own, and the
+     five empty-state poses have a section of their own at the foot of the file:
+     one screen each, so what they are made of and where they hang read better
+     together than split across two files.
    - The two exceptions are deliberate and commented where they live: the help
      button's "?" is a button affordance drawn into a pose rather than part of
      Pip, and the insight reactions carry their own loops beside the component
@@ -347,7 +350,6 @@
 
 .pip-hero,
 .pip-loader,
-.pip-peeker,
 .pip-alarm,
 .pip-cheer,
 .pip-tipster {
@@ -367,16 +369,6 @@
 .pip-hero {
     flex: 0 0 auto;
     width: clamp(68px, 8vw, 104px);
-    height: auto;
-}
-
-/* Peeks over the top edge of an empty box. The box is the containing block and
-   paints its border underneath, so the hands land on the edge itself. */
-.pip-peeker {
-    position: absolute;
-    top: -62px;
-    right: clamp(12px, 8%, 72px);
-    width: 104px;
     height: auto;
 }
 
@@ -1276,11 +1268,6 @@
 }
 
 @media (max-width: 540px) {
-    .pip-peeker {
-        width: 84px;
-        top: -50px;
-    }
-
     /* A phone-width note has no room for both Pip and a readable message: his
        own width plus the lane that clears the help button would leave the text
        barely a third of the note. He sits this one out, the way the filter
@@ -1313,6 +1300,232 @@
         left: -8px;
         width: 11px;
         height: 14px;
+    }
+}
+
+/* ---------- Empty states ----------
+   Five boxes say "nothing here yet", and each one gets the Pip its own screen
+   earned: he waits for files on Clean, hunts for numbers through a magnifying
+   glass on Analytics, holds an empty mailbox open on Connections, launches a
+   paper plane on Messages, and waits for an idea under an unlit bulb on
+   Insights. Each pose is drawn once, in the box it belongs to, so all five are
+   inline in index.html rather than definitions in the defs block.
+
+   Placement sits here rather than in features/analytics.css, which owns the
+   boxes: that file draws the dashed frame and gives it a containing block and a
+   little clear air above, which is all these five take from it. Every pose is
+   cropped by its own viewBox at the box's top edge, so hands and props land on
+   the border instead of floating over it.
+
+   The props are inked here too, beside the poses they belong to: each of them
+   turns up on exactly one screen, which is not true of anything in the ink
+   section above.
+
+   Every idle below is infinite, for the same reason the rest of Pip's loops
+   are: the screenshot harness waits for finite animations to finish. */
+
+.pip-peeker,
+.pip-inspector,
+.pip-mailer,
+.pip-pilot,
+.pip-dreamer {
+    position: absolute;
+    right: clamp(12px, 8%, 72px);
+    height: auto;
+    pointer-events: none;
+}
+
+.pip-peeker {
+    top: -62px;
+    width: 104px;
+}
+
+.pip-inspector {
+    top: -62px;
+    width: 116px;
+}
+
+.pip-mailer {
+    top: -62px;
+    width: 128px;
+}
+
+.pip-pilot {
+    top: -62px;
+    width: 139px;
+}
+
+/* The bulb sits above his head, so this one is the tallest of the five and
+   starts a little higher up the page. */
+.pip-dreamer {
+    top: -68px;
+    width: 104px;
+}
+
+/* A wash rather than a fill: the face keeps reading through the glass, which is
+   what makes the eye behind it look magnified rather than pasted on. */
+.pip-lens {
+    fill: var(--accent-blue);
+    fill-opacity: 0.14;
+}
+
+/* Heavier than the face line, so the glass reads as a rim and not as another
+   circle drawn on Pip. */
+.pip-rim {
+    stroke-width: 4.2;
+}
+
+.pip-glint {
+    fill: none;
+    stroke: var(--bg-secondary);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    opacity: 0.85;
+}
+
+.pip-flag {
+    fill: var(--accent-red);
+    fill-opacity: 0.8;
+}
+
+/* Where the plane has been. Dashes rather than a line, so it reads as a flight
+   path instead of a wire holding the plane up. */
+.pip-trail {
+    fill: none;
+    stroke: var(--text-secondary);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-dasharray: 2 8;
+    opacity: 0.6;
+    animation: pip-trail-march 3s linear infinite;
+}
+
+/* The bulb is a pencil sketch, not a light: secondary ink, no yellow anywhere,
+   and no rays coming off it. Switched off is the whole point of the pose. */
+.pip-bulb-line {
+    fill: none;
+    stroke: var(--text-secondary);
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.pip-bulb {
+    opacity: 0.5;
+    animation: pip-bulb-flicker 5.6s ease-in-out infinite;
+}
+
+/* Pivoted at the wrist end of the forearm, which is the one part of the arm the
+   box edge holds still, so the glass sweeps instead of sliding. */
+.pip-scan {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: pip-scan 4.6s ease-in-out infinite;
+}
+
+/* Hinged where the flag is bolted to the side of the mailbox. */
+.pip-flag-twitch {
+    transform-box: fill-box;
+    transform-origin: 100% 0%;
+    animation: pip-flag-twitch 4.2s ease-in-out infinite;
+}
+
+.pip-glide {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: pip-glide 3.8s ease-in-out infinite;
+}
+
+@keyframes pip-scan {
+    0%,
+    100% {
+        transform: rotate(-3.5deg);
+    }
+    50% {
+        transform: rotate(3.5deg);
+    }
+}
+
+@keyframes pip-flag-twitch {
+    0%,
+    80%,
+    100% {
+        transform: rotate(0deg);
+    }
+    87% {
+        transform: rotate(-7deg);
+    }
+    93% {
+        transform: rotate(3deg);
+    }
+}
+
+/* Along the line rather than across it, so the plane keeps riding the dashes. */
+@keyframes pip-glide {
+    0%,
+    100% {
+        transform: translate(-6px, 3px) rotate(-2deg);
+    }
+    50% {
+        transform: translate(6px, -3px) rotate(2deg);
+    }
+}
+
+/* One dash plus one gap, so the march loops without a seam. */
+@keyframes pip-trail-march {
+    0% {
+        stroke-dashoffset: 0;
+    }
+    100% {
+        stroke-dashoffset: -10;
+    }
+}
+
+/* A flicker inside the range a pencil line lives in. The top of it is still
+   fainter than the ink Pip is drawn with, so the bulb never reads as lit. */
+@keyframes pip-bulb-flicker {
+    0%,
+    100% {
+        opacity: 0.42;
+    }
+    38% {
+        opacity: 0.58;
+    }
+    46% {
+        opacity: 0.44;
+    }
+    62% {
+        opacity: 0.6;
+    }
+}
+
+/* Phone width: the boxes run the width of the screen and their messages need
+   the room, so all five come down a size and sit closer to the edge they hang
+   from. */
+@media (max-width: 540px) {
+    .pip-peeker {
+        top: -50px;
+        width: 84px;
+    }
+
+    .pip-inspector {
+        top: -50px;
+        width: 94px;
+    }
+
+    .pip-mailer {
+        top: -50px;
+        width: 104px;
+    }
+
+    .pip-pilot {
+        top: -50px;
+        width: 112px;
+    }
+
+    .pip-dreamer {
+        top: -55px;
+        width: 84px;
     }
 }
 
@@ -1355,6 +1568,11 @@
     .is-erasing .pip-erase-mark,
     .is-erasing .pip-crumb,
     .is-erasing .pip-puff,
+    .pip-scan,
+    .pip-flag-twitch,
+    .pip-glide,
+    .pip-trail,
+    .pip-bulb,
     .pip-splat {
         animation: none;
     }

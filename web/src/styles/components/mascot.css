@@ -21,8 +21,11 @@
      together than split across two files.
    - The two exceptions are deliberate and commented where they live: the help
      button's "?" is a button affordance drawn into a pose rather than part of
-     Pip, and the insight reactions carry their own loops beside the component
-     that builds them.
+     Pip, and the insight stamps run the shared loops at their own pace, which
+     is set beside the component that builds them.
+
+   Responsive breakpoints are repeated section by section rather than gathered
+   into one block per width, so everything about a pose reads in one place.
 
    Colours stay on the app tokens so the character flips with the theme instead
    of staying a light-mode drawing. */
@@ -346,7 +349,9 @@
 
 /* ---------- Placement ----------
    Every pose is decoration, so none of them takes a pointer event away from
-   the controls they sit next to. */
+   the controls they sit next to. The declaration is repeated in each section
+   below rather than gathered here, so a new pose is inert from the rule that
+   places it: five poses share the list here, and the rest say it themselves. */
 
 .pip-hero,
 .pip-loader,
@@ -375,7 +380,8 @@
 /* Off to the side of the sticky note, which holds still itself. Kept small so
    the note stays the compact strip it was before he turned up. The right
    margin keeps him out of the lane the fixed tutorial help button owns in the
-   bottom-right of the viewport (a 58px circle plus the offset it is pinned by).
+   bottom-right of the viewport (that circle plus the offset it is pinned by,
+   and the circle comes down a size on a narrow screen with him).
    The note is page content and scrolls under that button, so without the lane
    Pip ends up beneath it whenever the note reaches the foot of the screen. */
 .pip-alarm {
@@ -384,7 +390,7 @@
     width: 66px;
     height: auto;
     margin-left: auto;
-    margin-right: calc(58px + var(--space-md));
+    margin-right: calc(var(--help-btn-size) + var(--space-md));
 }
 
 /* The cheer pops up over the download button rather than sitting in the row:
@@ -558,15 +564,12 @@
 
 /* Stat tiles settle like they were dropped on the desk. card-in runs with
    animation-fill-mode: both, which pins `transform` for good, so the settle
-   uses the individual rotate/translate properties instead. The transition list
-   repeats the shared one from sketch.css because this rule replaces it. */
+   uses the individual rotate/translate properties instead. This rule replaces
+   the shared transition rather than adding to it, so it restates the shared
+   list and appends the two properties it settles. */
 .stat-card {
     transition:
-        background-color var(--transition-normal),
-        border-color var(--transition-normal),
-        color var(--transition-normal),
-        box-shadow var(--transition-normal),
-        transform var(--transition-normal),
+        var(--card-transition),
         rotate var(--transition-normal),
         translate var(--transition-normal);
 }
@@ -585,10 +588,13 @@
 }
 
 .pip-splat {
+    /* Half of it hangs back up and left, so the blot centres on the click. */
+    --pip-splat-size: 26px;
+
     position: absolute;
-    width: 26px;
-    height: 26px;
-    margin: -13px 0 0 -13px;
+    width: var(--pip-splat-size);
+    height: var(--pip-splat-size);
+    margin: calc(var(--pip-splat-size) / -2) 0 0 calc(var(--pip-splat-size) / -2);
     pointer-events: none;
     color: var(--accent-blue-contrast);
     animation: pip-splat-pop 0.55s ease-out forwards;
@@ -847,7 +853,7 @@
    toggle rather than reaching past it. */
 .pip-staple {
     position: fixed;
-    top: calc(var(--space-lg) + 48px + var(--space-sm));
+    top: calc(var(--space-lg) + var(--corner-btn-size) + var(--space-sm));
     right: var(--space-lg);
     width: 120px;
     height: auto;
@@ -936,12 +942,6 @@
 
 .is-stapling .pip-chk {
     animation: pip-staple-chk 1.4s ease-out forwards;
-}
-
-.pip-flutter {
-    transform-box: fill-box;
-    transform-origin: center;
-    opacity: 0;
 }
 
 .is-stapling .pip-flutter {
@@ -1080,8 +1080,12 @@
     animation-delay: 0.12s;
 }
 
+/* The three bits of debris in this file, resting: out of sight until the move
+   that throws them starts. The staple's flutter is in with them because there
+   is nothing to say about it that is not said here. */
 .pip-crumb,
-.pip-puff {
+.pip-puff,
+.pip-flutter {
     transform-box: fill-box;
     transform-origin: center;
     opacity: 0;
@@ -1228,7 +1232,7 @@
    the screen by then, and the message under it stays readable. */
 @media (max-width: 768px) {
     .pip-staple {
-        top: calc(var(--space-md) + 48px + var(--space-sm));
+        top: calc(var(--space-md) + var(--corner-btn-size) + var(--space-sm));
         right: var(--space-md);
         width: 104px;
     }
@@ -1330,28 +1334,25 @@
 .pip-pilot,
 .pip-dreamer {
     position: absolute;
+    top: -62px;
     right: clamp(12px, 8%, 72px);
     height: auto;
     pointer-events: none;
 }
 
 .pip-peeker {
-    top: -62px;
     width: 104px;
 }
 
 .pip-inspector {
-    top: -62px;
     width: 116px;
 }
 
 .pip-mailer {
-    top: -62px;
     width: 128px;
 }
 
 .pip-pilot {
-    top: -62px;
     width: 139px;
 }
 
@@ -1503,23 +1504,27 @@
    the room, so all five come down a size and sit closer to the edge they hang
    from. */
 @media (max-width: 540px) {
-    .pip-peeker {
+    .pip-peeker,
+    .pip-inspector,
+    .pip-mailer,
+    .pip-pilot,
+    .pip-dreamer {
         top: -50px;
+    }
+
+    .pip-peeker {
         width: 84px;
     }
 
     .pip-inspector {
-        top: -50px;
         width: 94px;
     }
 
     .pip-mailer {
-        top: -50px;
         width: 104px;
     }
 
     .pip-pilot {
-        top: -50px;
         width: 112px;
     }
 
@@ -1529,7 +1534,10 @@
     }
 }
 
-/* Reduced motion: Pip holds still, and the one-shot moves never start. */
+/* Reduced motion: Pip holds still, and the one-shot moves never start. The
+   hover transforms on the cards are deliberately kept: they answer the pointer
+   rather than starting on their own, which is what .hub-card:hover already
+   did before the stat cards joined it. */
 @media (prefers-reduced-motion: reduce) {
     .pip-bob,
     .pip-blink,

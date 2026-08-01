@@ -37,13 +37,16 @@ describe("upload catcher", () => {
         });
 
         it("leaves him alone once he is already up", () => {
-            showCatcher();
-            const revealed = vi.spyOn(catcher(), "removeAttribute");
-
+            vi.useFakeTimers();
             showCatcher();
 
-            expect(revealed).not.toHaveBeenCalled();
+            showCatcher();
+
+            // Same pose, still up, and nothing booked: the second call did not
+            // restart his entrance under the pointer.
             expect(catcher().hasAttribute("hidden")).toBe(false);
+            expect(catcher().getAttribute("data-pose")).toBe("ready");
+            expect(vi.getTimerCount()).toBe(0);
         });
 
         it("takes him back to the ready pose when a drag follows a catch", () => {

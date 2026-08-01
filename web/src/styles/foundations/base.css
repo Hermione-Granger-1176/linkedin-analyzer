@@ -48,16 +48,17 @@ body {
         );
     --paper-furniture-size: 100% var(--paper-punch-step), 100% 100%;
 
+    /* The ruling, held as its own pair for the same reason as the furniture. */
+    --paper-ruling:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    --paper-ruling-size: 25px 25px, 25px 25px;
+
     /* Grid paper background, under the furniture: the holes are listed first
        because they paint over the ruling, and a hole is a hole, so the grid has
        to stop at its edge. */
-    background-image:
-        var(--paper-furniture), linear-gradient(var(--grid-color) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-    background-size:
-        var(--paper-furniture-size),
-        25px 25px,
-        25px 25px;
+    background-image: var(--paper-furniture), var(--paper-ruling);
+    background-size: var(--paper-furniture-size), var(--paper-ruling-size);
 }
 
 /* Below the narrow breakpoint the left edge belongs to the fixed nav toggle and
@@ -79,13 +80,11 @@ body {
    against the content while scrolling. */
 [data-theme="dark"] body {
     background-image:
-        var(--paper-furniture), linear-gradient(var(--grid-color) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px),
-        radial-gradient(120% 80% at 50% 0%, rgba(96, 74, 52, 0.22), transparent 70%);
+        var(--paper-furniture), var(--paper-ruling),
+        radial-gradient(120% 80% at 50% 0%, var(--desk-lamp), transparent 70%);
     background-size:
         var(--paper-furniture-size),
-        25px 25px,
-        25px 25px,
+        var(--paper-ruling-size),
         100% 100%;
 }
 
@@ -149,8 +148,8 @@ button {
     position: fixed;
     top: var(--space-lg);
     right: var(--space-lg);
-    width: 48px;
-    height: 48px;
+    width: var(--corner-btn-size);
+    height: var(--corner-btn-size);
     border: 2px solid var(--border-color);
     border-radius: 50%;
     background: var(--bg-secondary);
@@ -196,9 +195,9 @@ button {
 .pdf-export-btn {
     position: fixed;
     top: var(--space-lg);
-    right: calc(var(--space-lg) + 48px + var(--space-sm));
-    width: 48px;
-    height: 48px;
+    right: calc(var(--space-lg) + var(--corner-btn-size) + var(--space-sm));
+    width: var(--corner-btn-size);
+    height: var(--corner-btn-size);
     border: 2px solid var(--border-color);
     border-radius: 50%;
     background: var(--bg-secondary);

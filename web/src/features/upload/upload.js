@@ -389,6 +389,8 @@ export const UploadPage = (() => {
             hideCatcher();
             return;
         }
+        // The catch plays for any drop that landed, valid or not: Pip is
+        // reacting to the file arriving, not to what processing makes of it.
         playCatch();
         processFiles(files);
     }

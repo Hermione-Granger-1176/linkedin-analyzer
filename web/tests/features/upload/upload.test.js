@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MAX_CSV_CHARS } from "../../../src/shared/constants.js";
 import { createCanvas, mockMatchMedia, setupDom } from "../../helpers/dom.js";
@@ -184,6 +184,13 @@ describe("UploadPage", () => {
         Storage.saveAnalytics.mockResolvedValue();
         Storage.clearAll.mockResolvedValue();
         DataCache.get.mockImplementation(() => null);
+    });
+
+    afterEach(async () => {
+        // A drop starts Pip's catch, which holds a 1.1s timer to put him away
+        // again. Cleared here so it cannot outlive the test that started it.
+        const { hideCatcher } = await import("../../../src/features/upload/mascot.js");
+        hideCatcher();
     });
 
     // -------------------------------------------------------------------------

@@ -8,10 +8,23 @@
  * and the stylesheet keeps him out of the pointer's way.
  *
  * Both hands are inked fingers first and palm last, so the palm covers where
- * they join it. The card renders him at 40px, which is why the hands are drawn
- * as large as they are: a hand in real proportions would be a few pixels of
- * mush, and the pose it is meant to be reading would go with it.
+ * they join it. The card renders him at 40px, 34px on a phone, which is why the
+ * hands are drawn as large as they are: a hand in real proportions would be a
+ * few pixels of mush, and the pose it is meant to be reading would go with it.
+ *
+ * Everything from the hood down to the drawstrings is the shared Pip in
+ * shared/ui/pip-parts.js; the extra wisp, the arms and the legs are his own.
  */
+
+import {
+    PIP_BROWS_HAPPY,
+    PIP_BUST,
+    PIP_EYES,
+    PIP_HAIR,
+    PIP_MOUTH_GRIN,
+    PIP_NOSE,
+    PIP_TORSO,
+} from "../../shared/ui/pip-parts.js";
 
 const MASCOT_MARKUP = `
 <svg
@@ -22,37 +35,10 @@ const MASCOT_MARKUP = `
     aria-hidden="true"
     focusable="false"
 >
-    <g filter="url(#pipWobble)">
-        <path
-            class="pip-ink pip-hood"
-            d="M53 86 C48 76 51 62 62 63 C65 68 75 68 78 63 C89 62 92 76 87 86 Q70 90 53 86 Z"
-        />
-        <circle class="pip-ink pip-paper" cx="70" cy="46" r="22" />
-        <path class="pip-ink" d="M48 46 Q43 49 48 54" />
-        <path class="pip-ink" d="M92 46 Q97 49 92 54" />
-        <path class="pip-ink pip-brow" d="M57.5 39 Q62 35.5 66.5 38.5" />
-        <path class="pip-ink pip-brow" d="M82.5 38 Q78 34.5 73.5 37.5" />
-        <g class="pip-blink">
-            <circle class="pip-eye" cx="62" cy="44" r="3.6" />
-            <circle class="pip-eye" cx="78" cy="44" r="3.6" />
-        </g>
-        <path class="pip-ink" d="M70 47 Q73 51 69 52" />
-        <path class="pip-ink pip-solid" d="M60 55 Q70 69 80 55 Q70 61 60 55 Z" />
-        <path
-            class="pip-hair"
-            d="M52 34 C48 26 50 18 60 15 C70 11 82 14 87 22 C91 28 91 33 90 39 L87 44 Q86 34 83.5 37 Q80 24 77 30 Q74 22 70 32 Q67 22 63 30 Q59.5 21 56 31 Z"
-        />
-        <path class="pip-wisp" d="M74 12 q5 -3 9 0" />
-        <path class="pip-wisp" d="M64 13.4 q3 -3 6 -1" />
-        <path class="pip-wisp" d="M53 33 q-2 4 -1 7" />
-        <path class="pip-ink" d="M58 66 C62 72 78 72 82 66" />
-        <path class="pip-ink" d="M70 68 L70 77" />
-        <path class="pip-ink pip-jacket" d="M54 81 Q70 74 86 81 L89 112 Q70 118 51 112 Z" />
-        <path class="pip-ink" d="M63 78 Q70 85 77 78" />
-        <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
-        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
-        <path class="pip-cord" d="M75 83 q2 5 1 8" />
-        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+    <g filter="url(#pipWobble)">${PIP_BUST}${PIP_BROWS_HAPPY}
+        <g class="pip-blink">${PIP_EYES}
+        </g>${PIP_NOSE}${PIP_MOUTH_GRIN}${PIP_HAIR}
+        <path class="pip-wisp" d="M53 33 q-2 4 -1 7" />${PIP_TORSO}
         <path class="pip-ink" d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z" />
         <path class="pip-ink" d="M55 84 Q44 96 43 108" />
         <circle class="pip-ink pip-paper" cx="42" cy="111" r="4" />

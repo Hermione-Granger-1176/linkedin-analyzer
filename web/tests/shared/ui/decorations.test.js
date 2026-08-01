@@ -14,9 +14,8 @@ vi.mock("roughjs/bundled/rough.esm.js", () => ({
  * @returns {HTMLCanvasElement} The mounted canvas
  */
 function mountCanvas() {
-    const { canvas, ctx } = createCanvas({ width: 300, height: 200 });
+    const { canvas } = createCanvas({ width: 300, height: 200 });
     canvas.id = "roughCanvas";
-    canvas.getContext = vi.fn(() => ctx);
     document.body.appendChild(canvas);
     return canvas;
 }
@@ -70,7 +69,10 @@ describe("initDecorations", () => {
         const rough = await import("roughjs/bundled/rough.esm.js");
         const rc = rough.default.canvas.mock.results[0].value;
         expect(rc.circle).toHaveBeenCalledTimes(3);
-        expect(rc.circle.mock.calls[0][3]).toMatchObject({ fillStyle: "solid" });
+        expect(rc.circle.mock.calls[0][3]).toMatchObject({
+            fillStyle: "solid",
+            stroke: "transparent",
+        });
     });
 
     it("redraws when the theme changes", async () => {

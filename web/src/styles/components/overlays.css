@@ -41,7 +41,8 @@
 
 /* Pip scribbling on a pad, in place of the gear that used to spin here. The
    drawing arm and the marks on the paper carry the motion, so the frame around
-   him only has to hold a sensible width. */
+   him only has to hold a sensible width. Both of those loops belong to
+   mascot.css, along with the preference that switches them off. */
 .progress-mascot-wrap {
     width: min(240px, 64vw);
     display: grid;
@@ -77,15 +78,6 @@
     color: var(--text-primary);
     font-weight: 600;
     min-height: 28px;
-}
-
-/* The character's own loops live in mascot.css, behind the same preference.
-   Anything the overlay adds on top of them stops here. */
-@media (prefers-reduced-motion: reduce) {
-    .progress-mascot-wrap,
-    .pip-loader {
-        animation: none;
-    }
 }
 
 /* Tooltip */

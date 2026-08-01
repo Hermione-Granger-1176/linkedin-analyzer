@@ -7,6 +7,8 @@
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { DomEvents } from "../dom-events.js";
 
+import { playOneShot, prefersReducedMotion } from "./motion.js";
+
 const SPLAT_TARGETS = ".primary-btn, .download-btn";
 const SPLAT_PATH =
     "M13 1 q5 5 6 10 q4 1 4 4 q-1 3 -5 2 q-2 5 -6 6 q-5 0 -7 -5 q-4 1 -4 -3 q0 -3 4 -4 q0 -6 8 -10 Z";
@@ -16,9 +18,9 @@ const SPLAT_LIFETIME_MS = 800;
 const STORAGE_CLEARED = "storageCleared";
 
 /* Each one-shot pose: the element it is drawn in, the class its animations hang
-   off, and how long it stays on screen. Every duration is comfortably past the
-   animation it covers, and short enough that nothing lingers once the moment it
-   marks is old news. */
+   off, and how long it stays on screen. The staple and the eraser sit just past
+   the moves they cover. The cheer runs longer on purpose: Pip's pump is over in
+   0.85s and he holds the finish pose for a beat before he goes. */
 const CHEER = Object.freeze({ id: "cleanCheer", activeClass: "is-cheering", durationMs: 2000 });
 const STAPLE = Object.freeze({ id: "pdfStaple", activeClass: "is-stapling", durationMs: 1700 });
 const ERASER = Object.freeze({ id: "clearEraser", activeClass: "is-erasing", durationMs: 1700 });
@@ -26,14 +28,6 @@ const ERASER = Object.freeze({ id: "clearEraser", activeClass: "is-erasing", dur
 /** @type {Map<string, number>} */
 const momentTimers = new Map();
 let initialized = false;
-
-/**
- * Check whether the visitor asked for reduced motion.
- * @returns {boolean} True when the reduce preference is set.
- */
-function prefersReducedMotion() {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 /**
  * Drop a short-lived ink splat inside a clicked button, where the pointer was.
@@ -47,13 +41,27 @@ function spawnSplat(event, button) {
     splat.className = "pip-splat";
     splat.setAttribute("aria-hidden", "true");
     splat.innerHTML = `<svg viewBox="0 0 26 26"><path d="${SPLAT_PATH}"></path></svg>`;
-    splat.style.left = `${event.clientX - rect.left}px`;
-    splat.style.top = `${event.clientY - rect.top}px`;
-    splat.addEventListener("animationend", () => splat.remove(), { once: true });
+    // A click the keyboard raised carries no pointer position and reports 0,0,
+    // which would drop the splat off in the button's top left corner. There is
+    // no place the visitor aimed at, so the middle of the button it is.
+    const fromKeyboard = event.detail === 0;
+    const x = fromKeyboard ? rect.width / 2 : event.clientX - rect.left;
+    const y = fromKeyboard ? rect.height / 2 : event.clientY - rect.top;
+    splat.style.left = `${x}px`;
+    splat.style.top = `${y}px`;
     // A route button hides its own screen on the way out, and an animation in a
     // display:none subtree never ends, so the splat would sit there for good.
-    // The backstop clears it either way; remove() twice is harmless.
-    window.setTimeout(() => splat.remove(), SPLAT_LIFETIME_MS);
+    // The backstop clears it either way, and a splat that did get to finish
+    // takes its own backstop off on the way out.
+    const backstop = window.setTimeout(() => splat.remove(), SPLAT_LIFETIME_MS);
+    splat.addEventListener(
+        "animationend",
+        () => {
+            window.clearTimeout(backstop);
+            splat.remove();
+        },
+        { once: true },
+    );
     button.appendChild(splat);
 }
 
@@ -74,39 +82,32 @@ function handleClick(event) {
 }
 
 /**
- * Show a one-shot pose, replay its animation from the start, then put it away.
- *
- * The timer is the backstop rather than animationend: a pose whose screen is
- * hidden underneath it sits in a display:none subtree, where no animation ever
- * ends and the moment would stay on screen for the rest of the session.
+ * Show one of the moments, from its class, for as long as it is worth showing.
  * @param {{id: string, activeClass: string, durationMs: number}} moment - The pose to play.
  * @returns {void}
  */
 function playMoment(moment) {
-    const { id, activeClass, durationMs } = moment;
     if (prefersReducedMotion()) {
         return;
     }
+    const { id, activeClass, durationMs } = moment;
     const pose = document.getElementById(id);
     if (!pose) {
         return;
     }
 
-    window.clearTimeout(momentTimers.get(id));
-    // The element is an <svg>, and `hidden` is an HTMLElement property: setting
-    // it there would never reach the attribute the stylesheet matches on.
-    pose.removeAttribute("hidden");
-    // Reapply from a clean slate so a second run replays the animation.
-    pose.classList.remove(activeClass);
-    void pose.getBoundingClientRect();
-    pose.classList.add(activeClass);
-
     momentTimers.set(
         id,
-        window.setTimeout(() => {
-            pose.classList.remove(activeClass);
-            pose.setAttribute("hidden", "");
-        }, durationMs),
+        playOneShot({
+            element: pose,
+            durationMs,
+            previousTimer: momentTimers.get(id),
+            apply: () => pose.classList.add(activeClass),
+            reset: () => pose.classList.remove(activeClass),
+            // The id it was filed under is spent, and clearing a spent timer id
+            // could land on whatever the environment handed out next.
+            done: () => momentTimers.delete(id),
+        }),
     );
 }
 

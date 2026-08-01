@@ -9,6 +9,7 @@ vi.mock("../../src/platform/observability/sentry.js", () => ({
 vi.mock("../../src/platform/observability/telemetry.js", () => ({ initTelemetry: vi.fn() }));
 vi.mock("../../src/shared/ui/alive.js", () => ({ initAlive: vi.fn() }));
 vi.mock("../../src/shared/ui/decorations.js", () => ({ initDecorations: vi.fn() }));
+vi.mock("../../src/shared/ui/mascot.js", () => ({ initMascot: vi.fn() }));
 vi.mock("../../src/shared/ui/theme.js", () => ({ Theme: { init: vi.fn() } }));
 vi.mock("../../src/features/tutorial/tutorial.js", () => ({ Tutorial: { init: vi.fn(), onRouteChange: vi.fn() } }));
 vi.mock("../../src/features/upload/upload.js", () => ({ UploadPage: { init: vi.fn(), onRouteChange: vi.fn() } }));

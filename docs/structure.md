@@ -165,6 +165,7 @@ web/src/features/
 │   ├── threads.js                      # Recent-thread selection
 │   └── worker-transport.js             # Worker ownership, watchdog, and settling for all three
 ├── insights/
+│   ├── reactions.js                    # Pip's stamp-sized pose for each insight card
 │   └── screen.js                       # Cross-export insights controller
 ├── messages/
 │   ├── analytics.js                    # Message analytics
@@ -178,6 +179,7 @@ web/src/features/
 ├── tutorial/
 │   ├── arrows.js                       # Pointer arrow variants
 │   ├── geometry.js                     # Overlay geometry
+│   ├── mascot.js                       # Pip drawn on the tutorial callout card
 │   ├── pacing.js                       # Mini-tip pacing
 │   ├── shell.js                        # Overlay DOM shell
 │   ├── steps.js                        # Route tutorial definitions
@@ -187,6 +189,7 @@ web/src/features/
 └── upload/
     ├── decode.js                       # Byte decoding
     ├── jobs.js                         # Upload job identity
+    ├── mascot.js                       # Drop-zone catcher poses
     ├── progress.js                     # Progress overlay controller
     ├── read.js                         # Streaming and FileReader input
     ├── state.js                        # File state and hints
@@ -219,12 +222,16 @@ web/src/shared/
 ├── constants.js                        # Dependency-free cross-feature constants
 ├── dom-events.js                       # Delegated event target helpers
 ├── ui/
+│   ├── alive.js                        # Hero Pip's gaze, boredom, and theme flinch
 │   ├── avatar.js                       # Deterministic contact avatars
 │   ├── chart-tooltip.js                # Shared chart tooltip
 │   ├── charts.js                       # Canvas chart rendering and export
 │   ├── decorations.js                  # Rough.js background decorations
 │   ├── loading-overlay.js              # Shared loading overlay
+│   ├── mascot.js                       # Click splats and the one-shot moments
+│   ├── motion.js                       # Reduced-motion check and the one-shot mechanism
 │   ├── nav-menu.js                     # Mobile navigation
+│   ├── pip-parts.js                    # The SVG parts every drawing of Pip shares
 │   └── theme.js                        # Theme selection
 └── worker-timeout.js                   # Size-scaled watchdog budget for parsing workers
 ```
@@ -237,6 +244,7 @@ web/src/shared/
 web/src/styles/
 ├── components/
 │   ├── export-dialog.css
+│   ├── mascot.css
 │   └── overlays.css
 ├── features/
 │   ├── analytics.css

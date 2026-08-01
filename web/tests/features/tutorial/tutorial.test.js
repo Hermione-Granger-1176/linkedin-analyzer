@@ -86,6 +86,31 @@ vi.mock("../../../src/features/tutorial/steps.js", () => ({
                 allowNext: true,
             },
         ],
+        // A route that points at something on the left and then at nothing, for
+        // the mascot's facing flip.
+        facing: [
+            {
+                id: "facing-step-1",
+                route: "facing",
+                title: "Pointing Left",
+                body: "First step body",
+                target: "#step-target-1",
+                placement: "bottom",
+                allowSkip: true,
+                allowBack: true,
+                allowNext: true,
+            },
+            {
+                id: "facing-step-2",
+                route: "facing",
+                title: "Pointing At Nothing",
+                body: "Second step body",
+                placement: "center",
+                allowSkip: true,
+                allowBack: true,
+                allowNext: true,
+            },
+        ],
         // A route with a step that has NO target, always considered renderable
         notargets: [
             {
@@ -2668,12 +2693,20 @@ describe("findRenderableStepIndex edge cases", () => {
 // ===========================================================================
 
 describe("tutorial mascot", () => {
-    it("mounts inside the popover without joining the focus trap", () => {
+    it("mounts inside the popover without joining the focus trap", async () => {
         Tutorial.init();
         const mascot = document.querySelector(".tutorial-mascot");
         expect(mascot).not.toBeNull();
         expect(mascot.closest(".tutorial-popover")).not.toBeNull();
         expect(mascot.getAttribute("aria-hidden")).toBe("true");
+
+        // The trap walks the popover with this same function, so nothing inside
+        // Pip may answer it.
+        const { getFocusableElements } = await import("../../../src/features/tutorial/targets.js");
+        const popover = document.querySelector(".tutorial-popover");
+        expect(getFocusableElements(popover).length).toBeGreaterThan(0);
+        expect(getFocusableElements(popover).some((node) => mascot.contains(node))).toBe(false);
+        expect(getFocusableElements(mascot)).toEqual([]);
     });
 
     it("presents on the way through and waves on the final step", () => {
@@ -2709,10 +2742,24 @@ describe("tutorial mascot", () => {
         expect(document.querySelector(".tutorial-mascot").dataset.facing).toBe("left");
     });
 
-    it("faces forward on a step with no target to point at", () => {
-        Tutorial.start("notargets");
+    it("faces forward again on a step with no target to point at", () => {
+        addTarget("step-target-1", {
+            left: 0,
+            top: 300,
+            right: 20,
+            bottom: 340,
+            width: 20,
+            height: 40,
+            x: 0,
+            y: 300,
+        });
+        Tutorial.start("facing");
+        const mascot = document.querySelector(".tutorial-mascot");
+        expect(mascot.dataset.facing).toBe("left");
 
-        expect(document.querySelector(".tutorial-mascot").dataset.facing).toBe("right");
+        ui_nextButton().click();
+
+        expect(mascot.dataset.facing).toBe("right");
     });
 });
 

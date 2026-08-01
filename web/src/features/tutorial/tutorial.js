@@ -75,7 +75,7 @@ export const Tutorial = (() => {
         miniTipEntries: [],
     };
 
-    /** @type {{root: HTMLDivElement | null, overlay: HTMLDivElement | null, spotlight: HTMLDivElement | null, pointer: SVGSVGElement | null, pointerMainPath: SVGPathElement | null, pointerEchoPath: SVGPathElement | null, pointerHeadPath: SVGPathElement | null, popover: HTMLElement | null, title: HTMLHeadingElement | null, body: HTMLParagraphElement | null, counter: HTMLSpanElement | null, dots: HTMLDivElement | null, backButton: HTMLButtonElement | null, nextButton: HTMLButtonElement | null, skipButton: HTMLButtonElement | null, mascot: SVGSVGElement | null, miniTipsLayer: HTMLDivElement | null}} */
+    /** @type {import("./shell.js").TutorialUi} */
     const ui = {
         root: null,
         overlay: null,

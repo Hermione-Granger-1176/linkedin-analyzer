@@ -238,5 +238,5 @@
    outline; an opaque ink blue gives it the same weight the pale fill carries in
    the light theme. The filled hover state outranks this on its own. */
 [data-theme="dark"] .primary-btn {
-    background-color: rgba(33, 54, 75, 1);
+    background-color: var(--surface-cta);
 }

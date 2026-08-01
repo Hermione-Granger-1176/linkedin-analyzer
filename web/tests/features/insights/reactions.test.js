@@ -31,7 +31,19 @@ describe("buildInsightReaction", () => {
         expect(markup).toContain('filter="url(#pipWobble)"');
     });
 
-    it.each(POSED_IDS)("gives %s its own pose", (id, marker) => {
+    it("bobs and blinks on the shared loops rather than loops of its own", () => {
+        const markup = buildInsightReaction("trending-up");
+
+        // The stamp's slower pace is a scoped duration override in
+        // features/insights.css, so the classes stay the shared ones.
+        expect(markup).toContain('class="pip-bob"');
+        expect(markup).toContain('class="pip-blink"');
+    });
+
+    /* steady-pace and weekday deliberately share ARMS_THUMBS_UP, so a green run
+       here says every id got the pose it was assigned, not that all twelve
+       poses differ from one another. */
+    it.each(POSED_IDS)("gives %s the pose it was assigned", (id, marker) => {
         expect(buildInsightReaction(id)).toContain(marker);
     });
 

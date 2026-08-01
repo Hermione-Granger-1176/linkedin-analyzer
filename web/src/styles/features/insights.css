@@ -85,20 +85,19 @@
     pointer-events: none;
 }
 
+/* The stamps bob and blink on Pip's own loops from components/mascot.css, just
+   slower: a drawing this small in the corner of a card should read as calm
+   rather than busy. */
+.insight-reaction .pip-bob {
+    animation-duration: 4.2s;
+}
+
+.insight-reaction .pip-blink {
+    animation-duration: 6.4s;
+}
+
 /* Idle only, and infinite: the cards already arrive on a card-in stagger, and
    the screenshot harness waits for finite animations to finish. */
-.insight-reaction-bob {
-    transform-box: fill-box;
-    transform-origin: 50% 100%;
-    animation: insight-reaction-bob 4.2s ease-in-out infinite;
-}
-
-.insight-reaction-blink {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: insight-reaction-blink 6.4s ease-in-out infinite;
-}
-
 .insight-reaction-zzz {
     transform-box: fill-box;
     transform-origin: center;
@@ -107,28 +106,6 @@
 
 /* Distances are in the pose's own user units, not screen pixels: the 98-unit
    viewBox draws at 56px, so a couple of units is the small breath it looks. */
-@keyframes insight-reaction-bob {
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-2.5px);
-    }
-}
-
-@keyframes insight-reaction-blink {
-    0%,
-    92%,
-    100% {
-        transform: scaleY(1);
-    }
-    95%,
-    97% {
-        transform: scaleY(0.12);
-    }
-}
-
 @keyframes insight-reaction-zzz {
     0% {
         opacity: 0;
@@ -161,6 +138,12 @@
     display: flex;
     align-items: center;
     margin-bottom: var(--space-xl);
+}
+
+/* The display:flex above outranks the [hidden] UA rule, so the tip stayed on
+   screen with nothing to say. Re-hide it explicitly when it is empty. */
+.insight-tip[hidden] {
+    display: none;
 }
 
 /* Messages Insights */
@@ -411,8 +394,11 @@
     flex: 1;
 }
 
+/* No Pip stands on a skeleton, so it gives back the strip the real cards
+   reserve for him and keeps the height it was tuned to before he arrived. */
 .skeleton-insight {
     min-height: 118px;
+    padding-bottom: var(--space-lg);
 }
 
 @keyframes skeleton-shimmer {
@@ -431,8 +417,6 @@
 
 /* Reduced motion: the reactions are still there, they just hold their pose. */
 @media (prefers-reduced-motion: reduce) {
-    .insight-reaction-bob,
-    .insight-reaction-blink,
     .insight-reaction-zzz {
         animation: none;
     }

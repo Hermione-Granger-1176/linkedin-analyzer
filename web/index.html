@@ -114,12 +114,15 @@
                     />
                 </filter>
 
-                <!-- Pip's reusable poses. A pose is defined here as soon as it is
-                drawn in more than one place, so redrawing the tipster or the
-                scribbler is one edit rather than two. Each placement is a wrapper
-                svg carrying the class its feature stylesheet positions it by,
-                around a use element pointing back here; the wrapper keeps the
-                viewBox, because that is what gives the placement its aspect ratio.
+                <!-- Pip's reusable poses, and the parts more than one pose is
+                built from. Anything drawn in more than one place is defined here,
+                so redrawing the tipster, the scribbler or a hand is one edit
+                rather than two. A pose is placed by a wrapper svg carrying the
+                class the stylesheet that owns its surface positions it by, around
+                a use element pointing back here; the wrapper keeps the viewBox,
+                because that is what gives the placement its aspect ratio. A part
+                is placed by a bare use element inside the drawing that wants it,
+                under whatever transform puts it where that drawing needs it.
 
                 Groups rather than symbols: a symbol renders through a nested
                 viewport, and that rounds an instance sitting on a fractional pixel
@@ -129,11 +132,12 @@
 
                 Everything a pose is inked and moved by is a class on the content
                 below, because a selector written outside the placement cannot reach
-                into the shadow tree a use element builds. The cheer and the
-                help-button head are styled from an ancestor, so neither could move
-                here even if it wanted to; they stay inline, as do the hero wave,
-                the panic and the five empty-state poses, which are each drawn in
-                only one place. -->
+                into the shadow tree a use element builds. The cheer, the staple,
+                the eraser, the upload catcher, the help-button head and the hero
+                (is-bored, is-waking) are styled from an ancestor, so none of them
+                could move here even if it wanted to; they stay inline, as do the
+                panic and the five empty-state poses, which are each drawn in only
+                one place. -->
 
                 <!-- Pip, leaning on the bubble he speaks through. Decorative: the
                 tip beside him carries the whole message. -->
@@ -277,6 +281,45 @@
                         />
                     </g>
                 </g>
+
+                <!-- One open hand: fingers and thumb inked first as fat capsules,
+                then the palm laid over where they join it. Drawn where the hero's
+                waving hand sits, so each placement is the transform that site was
+                already wrapping the drawing in and nothing more. -->
+                <g id="pip-hand-open">
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M101.3 55.7 L97.8 42.7 Q96.8 39.1 99.5 38.3 Q102.2 37.6 103.2 41.3 L106.7 54.3 Z"
+                    />
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M106.7 54.1 L106.2 38.6 Q106.1 34.8 108.9 34.7 Q111.7 34.6 111.8 38.4 L112.3 53.9 Z"
+                    />
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M112.3 54.3 L115.8 41.3 Q116.8 37.6 119.5 38.3 Q122.2 39.1 121.2 42.7 L117.7 55.7 Z"
+                    />
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M108.8 59.4 L120.8 62.9 Q124.3 63.9 123.6 66.5 Q122.8 69.1 119.2 68.1 L107.2 64.6 Z"
+                    />
+                    <circle class="pip-ink pip-paper" cx="110" cy="57" r="8.4" />
+                </g>
+
+                <!-- One closed hand: a fat palm with the thumb wrapped round the
+                near edge, so the hand reads as one shape rather than a row of
+                fingers. Drawn where the eraser's scrubbing hand sits, and placed
+                everywhere else by a whole-number translate. -->
+                <g id="pip-hand-closed">
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M112 92 Q107 99 112 107 Q121 111 129 106 Q133 99 129 92 Q120 88 112 92 Z"
+                    />
+                    <path
+                        class="pip-ink pip-paper"
+                        d="M113 105 Q109 109 110 113 Q113 115.5 116 112.5 Q118 110 119 107 Z"
+                    />
+                </g>
             </defs>
         </svg>
 
@@ -396,19 +439,10 @@
                 <path class="pip-ink pip-solid" d="M49 145 Q40 146 40 150 L51 150 Z" />
                 <path class="pip-ink pip-solid" d="M72 145 Q81 146 81 150 L70 150 Z" />
                 <!-- The pressing arm, drawn last so the hand lands on top of the
-                stapler. A fat palm with a thumb wrapped round the near edge:
-                the whole hand is one closed shape rather than a row of
-                fingers. -->
+                stapler. -->
                 <g class="pip-press">
                     <path class="pip-ink" d="M76 84 Q102 76 128 78" />
-                    <path
-                        class="pip-ink pip-paper"
-                        d="M130 70 Q125 77 130 85 Q139 89 147 84 Q151 77 147 70 Q138 66 130 70 Z"
-                    />
-                    <path
-                        class="pip-ink pip-paper"
-                        d="M131 83 Q126 87 127 91 Q130 93.5 133 90.5 Q135 88 136 85 Z"
-                    />
+                    <use href="#pip-hand-closed" transform="translate(18 -22)" />
                 </g>
             </g>
         </svg>
@@ -446,7 +480,7 @@
             data-tutorial-action="restart"
             aria-label="Open tutorial for this page"
         >
-            <!-- Pip peeks out of the button with the question held up beside his
+            <!-- Pip peeks out of the button with the question floating beside his
             head. Decorative: the button's own label says what it does. -->
             <svg
                 class="tutorial-help-pip"
@@ -590,9 +624,21 @@
                                         />
                                         <path class="pip-ink" d="M63 78 Q70 85 77 78" />
                                         <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
-                                        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="64"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path class="pip-cord" d="M75 83 q2 5 1 8" />
-                                        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="76"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path
                                             class="pip-ink"
                                             d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
@@ -606,33 +652,12 @@
                                         />
                                         <!-- An open palm, fanned wide enough to
                                         read as a wave at the size the hero
-                                        actually renders. Fingers and thumb are
-                                        drawn first, so the palm covers where
-                                        they join it. -->
+                                        actually renders. The wave is on the
+                                        wrapper, so the hand itself is the shared
+                                        drawing. -->
                                         <g class="pip-wave">
                                             <path class="pip-ink" d="M85 84 Q101 79 106 65" />
-                                            <path
-                                                class="pip-ink pip-paper"
-                                                d="M101.3 55.7 L97.8 42.7 Q96.8 39.1 99.5 38.3 Q102.2 37.6 103.2 41.3 L106.7 54.3 Z"
-                                            />
-                                            <path
-                                                class="pip-ink pip-paper"
-                                                d="M106.7 54.1 L106.2 38.6 Q106.1 34.8 108.9 34.7 Q111.7 34.6 111.8 38.4 L112.3 53.9 Z"
-                                            />
-                                            <path
-                                                class="pip-ink pip-paper"
-                                                d="M112.3 54.3 L115.8 41.3 Q116.8 37.6 119.5 38.3 Q122.2 39.1 121.2 42.7 L117.7 55.7 Z"
-                                            />
-                                            <path
-                                                class="pip-ink pip-paper"
-                                                d="M108.8 59.4 L120.8 62.9 Q124.3 63.9 123.6 66.5 Q122.8 69.1 119.2 68.1 L107.2 64.6 Z"
-                                            />
-                                            <circle
-                                                class="pip-ink pip-paper"
-                                                cx="110"
-                                                cy="57"
-                                                r="8.4"
-                                            />
+                                            <use href="#pip-hand-open" />
                                         </g>
                                         <path class="pip-ink" d="M62 115 Q58 129 59 145" />
                                         <path class="pip-ink" d="M79 115 Q83 129 82 145" />
@@ -809,22 +834,32 @@
                                         />
                                         <path class="pip-ink" d="M63 78 Q70 85 77 78" />
                                         <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
-                                        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="64"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path class="pip-cord" d="M75 83 q2 5 1 8" />
-                                        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="76"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path
                                             class="pip-ink"
                                             d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
                                         />
                                         <!-- Arms out, mouth open, hands up and tipped
-                                        outwards. Each hand is the same drawing:
-                                        fingers and thumb inked first as fat
-                                        capsules, then the palm laid over where they
-                                        join it, and the near one is that drawing
-                                        mirrored so the thumbs both point away from
-                                        him. The mouth belongs to the pose rather
-                                        than the body, so the catch can grin without
-                                        redrawing the face it grins on. -->
+                                        outwards. Both hands are the shared open
+                                        hand, and the far one, drawn first, is that
+                                        drawing mirrored so the thumbs both point
+                                        away from him. The mouth belongs to the pose
+                                        rather than the body, so the catch can grin
+                                        without redrawing the face it grins on. -->
                                         <g class="pip-catch-pose" data-pose="ready">
                                             <ellipse
                                                 class="pip-ink pip-solid"
@@ -835,58 +870,14 @@
                                             />
                                             <path class="pip-ink" d="M56 83 Q44 74 38 59" />
                                             <path class="pip-ink" d="M84 83 Q96 74 102 59" />
-                                            <g
+                                            <use
+                                                href="#pip-hand-open"
                                                 transform="translate(35 52) scale(-1 1) rotate(20) translate(-110 -57)"
-                                            >
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M101.3 55.7 L97.8 42.7 Q96.8 39.1 99.5 38.3 Q102.2 37.6 103.2 41.3 L106.7 54.3 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M106.7 54.1 L106.2 38.6 Q106.1 34.8 108.9 34.7 Q111.7 34.6 111.8 38.4 L112.3 53.9 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M112.3 54.3 L115.8 41.3 Q116.8 37.6 119.5 38.3 Q122.2 39.1 121.2 42.7 L117.7 55.7 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M108.8 59.4 L120.8 62.9 Q124.3 63.9 123.6 66.5 Q122.8 69.1 119.2 68.1 L107.2 64.6 Z"
-                                                />
-                                                <circle
-                                                    class="pip-ink pip-paper"
-                                                    cx="110"
-                                                    cy="57"
-                                                    r="8.4"
-                                                />
-                                            </g>
-                                            <g
+                                            />
+                                            <use
+                                                href="#pip-hand-open"
                                                 transform="translate(105 52) rotate(20) translate(-110 -57)"
-                                            >
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M101.3 55.7 L97.8 42.7 Q96.8 39.1 99.5 38.3 Q102.2 37.6 103.2 41.3 L106.7 54.3 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M106.7 54.1 L106.2 38.6 Q106.1 34.8 108.9 34.7 Q111.7 34.6 111.8 38.4 L112.3 53.9 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M112.3 54.3 L115.8 41.3 Q116.8 37.6 119.5 38.3 Q122.2 39.1 121.2 42.7 L117.7 55.7 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M108.8 59.4 L120.8 62.9 Q124.3 63.9 123.6 66.5 Q122.8 69.1 119.2 68.1 L107.2 64.6 Z"
-                                                />
-                                                <circle
-                                                    class="pip-ink pip-paper"
-                                                    cx="110"
-                                                    cy="57"
-                                                    r="8.4"
-                                                />
-                                            </g>
+                                            />
                                         </g>
                                         <!-- Caught it: a grin, and the page held flat
                                         against his chest. The arms are inked before
@@ -1094,9 +1085,21 @@
                                         />
                                         <path class="pip-ink" d="M53 78 Q60 85 67 78" />
                                         <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
-                                        <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="54"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path class="pip-cord" d="M65 83 q2 5 1 8" />
-                                        <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="66"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path
                                             class="pip-ink"
                                             d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z"
@@ -1112,9 +1115,7 @@
                                             d="M72 145 Q81 146 81 150 L70 150 Z"
                                         />
                                         <!-- Both arms, in the pose the sweep needs:
-                                        one hanging, the other scrubbing. The hand
-                                        on the rubber is one fat closed shape with
-                                        the thumb wrapped round the near edge. -->
+                                        one hanging, the other scrubbing. -->
                                         <g class="pip-erase">
                                             <path class="pip-ink" d="M45 84 Q34 96 33 108" />
                                             <circle
@@ -1134,14 +1135,7 @@
                                                     rx="2.5"
                                                     transform="rotate(-5 132 110)"
                                                 />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M112 92 Q107 99 112 107 Q121 111 129 106 Q133 99 129 92 Q120 88 112 92 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M113 105 Q109 109 110 113 Q113 115.5 116 112.5 Q118 110 119 107 Z"
-                                                />
+                                                <use href="#pip-hand-closed" />
                                             </g>
                                         </g>
                                         <!-- And the same two arms out front for the
@@ -1153,23 +1147,15 @@
                                             jacket, where a line over the blue
                                             reads as a strike through it. -->
                                             <path class="pip-ink" d="M78 106 Q84 111 89 113" />
-                                            <path
-                                                class="pip-ink pip-paper"
-                                                d="M92 109 Q87 116 92 124 Q101 128 109 123 Q113 116 109 109 Q100 105 92 109 Z"
-                                            />
-                                            <path
-                                                class="pip-ink pip-paper"
-                                                d="M94 122 Q90 126 91 130 Q94 132.5 97 129.5 Q99 127 100 124 Z"
+                                            <use
+                                                href="#pip-hand-closed"
+                                                transform="translate(-20 17)"
                                             />
                                             <path class="pip-ink" d="M76 84 Q90 86 100 90" />
                                             <g class="pip-pat">
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M107 85 Q102 92 107 100 Q116 104 124 99 Q128 92 124 85 Q115 81 107 85 Z"
-                                                />
-                                                <path
-                                                    class="pip-ink pip-paper"
-                                                    d="M109 98 Q105 102 106 106 Q109 108.5 112 105.5 Q114 103 115 100 Z"
+                                                <use
+                                                    href="#pip-hand-closed"
+                                                    transform="translate(-5 -7)"
                                                 />
                                             </g>
                                             <ellipse
@@ -1440,15 +1426,37 @@
                                         d="M42.5 72.4 C38 63.3 40.7 50.5 50.7 51.5 C53.5 56 62.5 56 65.3 51.5 C75.3 50.5 78 63.3 73.5 72.4 Q58 76 42.5 72.4 Z"
                                     />
                                     <path class="pip-cord" d="M53 62 q-1 3 0 5" />
-                                    <ellipse class="pip-aglet" cx="53" cy="68.6" rx="1.8" ry="2.4" />
+                                    <ellipse
+                                        class="pip-aglet"
+                                        cx="53"
+                                        cy="68.6"
+                                        rx="1.8"
+                                        ry="2.4"
+                                    />
                                     <path class="pip-cord" d="M63 62 q1 3 0 5" />
-                                    <ellipse class="pip-aglet" cx="63" cy="68.6" rx="1.8" ry="2.4" />
+                                    <ellipse
+                                        class="pip-aglet"
+                                        cx="63"
+                                        cy="68.6"
+                                        rx="1.8"
+                                        ry="2.4"
+                                    />
                                     <circle class="pip-ink pip-paper" cx="58" cy="36" r="20" />
                                     <path class="pip-ink pip-brow" d="M49 27 Q52 24.8 55 27" />
                                     <path class="pip-ink pip-brow" d="M67 27 Q64 24.8 61 27" />
                                     <g class="pip-blink">
-                                        <circle class="pip-ink pip-paper" cx="51.5" cy="35" r="4.2" />
-                                        <circle class="pip-ink pip-paper" cx="64.5" cy="35" r="4.2" />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="51.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="64.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
                                         <circle class="pip-eye" cx="52.3" cy="34.3" r="2.2" />
                                         <circle class="pip-eye" cx="65.3" cy="34.3" r="2.2" />
                                     </g>
@@ -1659,6 +1667,10 @@
                                                         class="pip-wisp"
                                                         d="M64 13.4 q3 -3 6 -1"
                                                     />
+                                                    <path
+                                                        class="pip-wisp"
+                                                        d="M53 33 q-2 4 -1 7"
+                                                    />
                                                 </g>
                                                 <path
                                                     class="pip-ink"
@@ -1823,9 +1835,21 @@
                                         />
                                         <path class="pip-ink" d="M63 78 Q70 85 77 78" />
                                         <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
-                                        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="64"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path class="pip-cord" d="M75 83 q2 5 1 8" />
-                                        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+                                        <ellipse
+                                            class="pip-aglet"
+                                            cx="76"
+                                            cy="93"
+                                            rx="2"
+                                            ry="2.8"
+                                        />
                                         <path
                                             class="pip-ink"
                                             d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
@@ -1979,7 +2003,13 @@
                                     <circle class="pip-ink pip-paper" cx="84.5" cy="35" r="4.2" />
                                     <circle class="pip-eye" cx="85.3" cy="34.3" r="2.2" />
                                 </g>
-                                <ellipse class="pip-ink pip-solid" cx="78" cy="46" rx="3.2" ry="4.2" />
+                                <ellipse
+                                    class="pip-ink pip-solid"
+                                    cx="78"
+                                    cy="46"
+                                    rx="3.2"
+                                    ry="4.2"
+                                />
                                 <path class="pip-ink" d="M72 55 q6 4 12 -1" />
                                 <path
                                     class="pip-hair"
@@ -1995,7 +2025,12 @@
                                 <g class="pip-scan">
                                     <path class="pip-ink" d="M54 76 Q51 66 50 59" />
                                     <g class="pip-blink">
-                                        <circle class="pip-ink pip-paper" cx="67" cy="36.5" r="8.6" />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="67"
+                                            cy="36.5"
+                                            r="8.6"
+                                        />
                                         <circle class="pip-eye" cx="69" cy="35.4" r="4.6" />
                                         <circle class="pip-paper" cx="70.8" cy="33.6" r="1.6" />
                                     </g>
@@ -2259,7 +2294,13 @@
                                 </g>
                                 <path class="pip-ink pip-paper" d="M18 62 L74 62 L74 68 L18 68 Z" />
                                 <ellipse class="pip-ink pip-paper" cx="70" cy="46" rx="9" ry="16" />
-                                <ellipse class="pip-ink pip-solid" cx="68.5" cy="46" rx="3.6" ry="9" />
+                                <ellipse
+                                    class="pip-ink pip-solid"
+                                    cx="68.5"
+                                    cy="46"
+                                    rx="3.6"
+                                    ry="9"
+                                />
                                 <path
                                     class="pip-ink pip-hood"
                                     d="M94.5 72.4 C90 63.3 92.7 50.5 102.7 51.5 C105.5 56 114.5 56 117.3 51.5 C127.3 50.5 130 63.3 125.5 72.4 Q110 76 94.5 72.4 Z"
@@ -2548,7 +2589,13 @@
                                     <circle class="pip-eye" cx="29.3" cy="33.8" r="2.2" />
                                     <circle class="pip-eye" cx="42.3" cy="33.8" r="2.2" />
                                 </g>
-                                <ellipse class="pip-ink pip-solid" cx="34" cy="46" rx="3.2" ry="4.2" />
+                                <ellipse
+                                    class="pip-ink pip-solid"
+                                    cx="34"
+                                    cy="46"
+                                    rx="3.2"
+                                    ry="4.2"
+                                />
                                 <path class="pip-ink" d="M27 54 q7 6 13 -1" />
                                 <path
                                     class="pip-hair"
@@ -2818,7 +2865,13 @@
                                     <circle class="pip-eye" cx="45.1" cy="41.4" r="2.2" />
                                     <circle class="pip-eye" cx="58.1" cy="41.4" r="2.2" />
                                 </g>
-                                <ellipse class="pip-ink pip-solid" cx="50" cy="53" rx="3.2" ry="4.2" />
+                                <ellipse
+                                    class="pip-ink pip-solid"
+                                    cx="50"
+                                    cy="53"
+                                    rx="3.2"
+                                    ry="4.2"
+                                />
                                 <path class="pip-ink" d="M45 60 q5 2 9 -1" />
                                 <path
                                     class="pip-hair"
@@ -2965,7 +3018,12 @@
         >
             <div class="progress-card content-loading-card">
                 <div class="progress-mascot-wrap" aria-hidden="true">
-                    <svg class="pip-loader" viewBox="0 0 210 160" focusable="false">
+                    <svg
+                        class="pip-loader"
+                        viewBox="0 0 210 160"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
                         <use href="#pip-loader" />
                     </svg>
                 </div>
@@ -2982,7 +3040,12 @@
                     <canvas id="progressCanvas"></canvas>
                 </div>
                 <div class="progress-mascot-wrap" aria-hidden="true">
-                    <svg class="pip-loader" viewBox="0 0 210 160" focusable="false">
+                    <svg
+                        class="pip-loader"
+                        viewBox="0 0 210 160"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
                         <use href="#pip-loader" />
                     </svg>
                 </div>
@@ -3010,7 +3073,7 @@
                         A dashboard per screen: activity, connections and messages, with the stat
                         tiles and charts each of them shows
                     </li>
-                    <li>Your insight cards and the closing pro tip</li>
+                    <li>Your insight cards and the closing "Pip says" tip</li>
                     <li>The active time range and today's date</li>
                     <li>
                         All-time stats: network growth, outreach, replies, unanswered, sent to

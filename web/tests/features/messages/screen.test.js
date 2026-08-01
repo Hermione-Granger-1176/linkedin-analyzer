@@ -1927,8 +1927,8 @@ describe("MessagesPage", () => {
         await tick();
 
         const tipText = document.getElementById("messagesTipText").textContent;
-        expect(tipText).toContain("silent");
-        expect(tipText).toContain("I count");
+        // One connection, so the noun is singular.
+        expect(tipText).toContain("I count 1 silent connection.");
     });
 
     // --- Connections state reuse when signature matches ----------------------

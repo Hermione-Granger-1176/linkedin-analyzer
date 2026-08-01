@@ -29,24 +29,40 @@ let frames = [];
 
 /* alive.js binds for the life of the page, and window and document outlive every
    test in this file. Recording what gets bound lets afterEach hand the next test
-   a clean pair of globals, instead of one carrying four tests' worth of eyes. */
+   a clean pair of globals, instead of one carrying four tests' worth of eyes.
+   The options go in the record too: a capture-phase listener only comes off
+   again when it is removed with the same options it was added with. */
 const boundListeners = [];
-
-[window, document].forEach((target) => {
-    const original = target.addEventListener.bind(target);
-    target.addEventListener = (type, handler, options) => {
-        boundListeners.push({ target, type, handler });
-        original(type, handler, options);
-    };
-});
+/** @type {Map<EventTarget, Function>} */
+const realAddEventListener = new Map();
 
 /**
- * Take every listener bound during a test back off again.
+ * Record every listener the module binds, and pass it on to the real thing.
+ * @returns {void}
+ */
+function recordListeners() {
+    [window, document].forEach((target) => {
+        realAddEventListener.set(target, target.addEventListener);
+        const original = target.addEventListener.bind(target);
+        target.addEventListener = (type, handler, options) => {
+            boundListeners.push({ target, type, handler, options });
+            original(type, handler, options);
+        };
+    });
+}
+
+/**
+ * Give the globals their own addEventListener back, then take every listener
+ * bound during the test off again.
  * @returns {void}
  */
 function releaseListeners() {
-    boundListeners.splice(0).forEach(({ target, type, handler }) => {
-        target.removeEventListener(type, handler);
+    realAddEventListener.forEach((original, target) => {
+        target.addEventListener = /** @type {typeof target.addEventListener} */ (original);
+    });
+    realAddEventListener.clear();
+    boundListeners.splice(0).forEach(({ target, type, handler, options }) => {
+        target.removeEventListener(type, handler, options);
     });
 }
 
@@ -132,6 +148,7 @@ describe("alive", () => {
         );
         mockPreferences();
         setupDom(HERO_HTML);
+        recordListeners();
     });
 
     afterEach(() => {
@@ -235,6 +252,21 @@ describe("alive", () => {
 
             expect(gazeTransform()).toBe("");
         });
+
+        it("writes nothing while the hero measures nothing on one axis", async () => {
+            const { initAlive } = await loadAlive();
+            initAlive();
+            measureHero({ left: 0, top: 0, width: 100, height: 100 });
+            movePointerTo(600, 600);
+            expect(gazeTransform()).toBe("translate(1.60px, 0.80px)");
+
+            // A box with height but no width has no centre worth aiming at
+            // either, and the glance it was holding comes off.
+            measureHero({ left: 0, top: 0, width: 0, height: 120 });
+            movePointerTo(600, 600);
+
+            expect(gazeTransform()).toBe("");
+        });
     });
 
     describe("idle doodle", () => {
@@ -328,6 +360,16 @@ describe("alive", () => {
                 window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" })),
             ).not.toThrow();
         });
+
+        it("survives the visitor coming back to a yawn whose hero has left", async () => {
+            const { initAlive } = await loadAlive();
+            initAlive();
+
+            vi.advanceTimersByTime(IDLE_DELAY_MS);
+            hero().remove();
+
+            expect(() => window.dispatchEvent(new MouseEvent("pointerdown"))).not.toThrow();
+        });
     });
 
     describe("theme reaction", () => {
@@ -335,7 +377,7 @@ describe("alive", () => {
             const { initAlive } = await loadAlive();
             initAlive();
 
-            document.dispatchEvent(new CustomEvent("themechange"));
+            document.dispatchEvent(new CustomEvent("themechange", { detail: { boot: true } }));
 
             expect(hero().classList.contains("is-waking")).toBe(false);
         });
@@ -343,7 +385,6 @@ describe("alive", () => {
         it("flinches at a switch the visitor actually threw, briefly", async () => {
             const { initAlive } = await loadAlive();
             initAlive();
-            document.dispatchEvent(new CustomEvent("themechange"));
 
             document.dispatchEvent(new CustomEvent("themechange"));
             expect(hero().classList.contains("is-waking")).toBe(true);
@@ -358,7 +399,6 @@ describe("alive", () => {
         it("replays the flinch when the theme is toggled straight back", async () => {
             const { initAlive } = await loadAlive();
             initAlive();
-            document.dispatchEvent(new CustomEvent("themechange"));
             document.dispatchEvent(new CustomEvent("themechange"));
 
             vi.advanceTimersByTime(WAKE_MS / 2);
@@ -376,7 +416,6 @@ describe("alive", () => {
         it("holds off while another screen is the one on show", async () => {
             const { initAlive } = await loadAlive();
             initAlive();
-            document.dispatchEvent(new CustomEvent("themechange"));
             document.getElementById("screen-home").classList.remove("active");
 
             document.dispatchEvent(new CustomEvent("themechange"));
@@ -387,7 +426,6 @@ describe("alive", () => {
         it("holds off when the hero has left the page", async () => {
             const { initAlive } = await loadAlive();
             initAlive();
-            document.dispatchEvent(new CustomEvent("themechange"));
             hero().remove();
 
             expect(() => document.dispatchEvent(new CustomEvent("themechange"))).not.toThrow();
@@ -413,15 +451,22 @@ describe("alive", () => {
 
         it("binds its listeners once however often it is initialized", async () => {
             const { initAlive } = await loadAlive();
-            const addListener = vi.spyOn(window, "addEventListener");
+            const onWindow = vi.spyOn(window, "addEventListener");
+            // The theme reaction goes on the document, so a second binding
+            // would only show up there.
+            const onDocument = vi.spyOn(document, "addEventListener");
 
             initAlive();
-            const afterFirst = addListener.mock.calls.length;
+            const afterFirstWindow = onWindow.mock.calls.length;
+            const afterFirstDocument = onDocument.mock.calls.length;
             initAlive();
 
-            expect(afterFirst).toBeGreaterThan(0);
-            expect(addListener.mock.calls).toHaveLength(afterFirst);
-            addListener.mockRestore();
+            expect(afterFirstWindow).toBeGreaterThan(0);
+            expect(afterFirstDocument).toBeGreaterThan(0);
+            expect(onWindow.mock.calls).toHaveLength(afterFirstWindow);
+            expect(onDocument.mock.calls).toHaveLength(afterFirstDocument);
+            onWindow.mockRestore();
+            onDocument.mockRestore();
         });
     });
 });

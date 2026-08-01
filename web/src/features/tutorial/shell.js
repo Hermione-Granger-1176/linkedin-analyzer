@@ -124,10 +124,12 @@ export function buildTutorialShell(ui) {
     footer.appendChild(progress);
     footer.appendChild(controls);
 
-    // Pip leads the popover children and is positioned out of flow, so the card
-    // measures the same size with or without him and the focus trap never sees
-    // him. Ahead of the title on purpose: the corner he stands in changes with
-    // the step, and the stylesheet moves the title's gutter to match him.
+    // Pip leads the popover children and is positioned out of flow, so he adds
+    // nothing to the card's own size and the focus trap never sees him. The
+    // title does give up a gutter beside him, and the stylesheet moves that
+    // gutter from one side to the other when he flips, so the card measures the
+    // same whichever way he faces. Ahead of the title on purpose: the corner he
+    // stands in changes with the step.
     ui.mascot = buildTutorialMascot();
 
     ui.popover.appendChild(ui.mascot);

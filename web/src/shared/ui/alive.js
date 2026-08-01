@@ -11,6 +11,8 @@
    never ends, and a class left on for good would leave the screenshot harness
    waiting for a move that is never going to finish. */
 
+import { prefersReducedMotion } from "./motion.js";
+
 const HERO_SELECTOR = ".pip-hero";
 const GAZE_SELECTOR = ".pip-gaze";
 const HOME_SCREEN_ID = "screen-home";
@@ -43,18 +45,10 @@ let wakeTimer = 0;
 let gazeFrame = 0;
 /* Where the pointer was last seen. Only ever read on a frame that a pointermove
    booked, so it is a plain pair rather than something nullable. */
-let pendingPointer = { x: 0, y: 0 };
-/* Theme.init() announces the theme it settled on at boot, which is not a visitor
-   reaching for the switch. The first announcement only arms the reaction. */
-let themeSettled = false;
-
-/**
- * Check whether the visitor asked for reduced motion.
- * @returns {boolean} True when the reduce preference is set.
- */
-function prefersReducedMotion() {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
+const pendingPointer = { x: 0, y: 0 };
+/* Whether the yawn is on right now. Activity arrives a few hundred times a
+   minute, and this is what keeps all but the interesting one out of the DOM. */
+let bored = false;
 
 /**
  * Check whether the device drives a real pointer that Pip could follow.
@@ -113,9 +107,11 @@ function applyGaze() {
     }
 
     const rect = hero.getBoundingClientRect();
-    // A hidden hero measures zero on every side, and aiming at the top left
-    // corner of the viewport is not a glance worth drawing.
-    if (rect.width === 0 && rect.height === 0) {
+    // A hidden hero measures zero on at least one side, and a box with no width
+    // or no height puts the centre somewhere Pip is not. Drop the last offset on
+    // the way out, so he is looking straight ahead when he comes back.
+    if (!rect.width || !rect.height) {
+        gaze.style.transform = "";
         return;
     }
 
@@ -132,7 +128,8 @@ function applyGaze() {
  * @returns {void}
  */
 function handlePointerMove(event) {
-    pendingPointer = { x: event.clientX, y: event.clientY };
+    pendingPointer.x = event.clientX;
+    pendingPointer.y = event.clientY;
     if (gazeFrame) {
         return;
     }
@@ -150,8 +147,12 @@ function playIdleDoodle() {
         return;
     }
     window.clearTimeout(doodleTimer);
+    bored = true;
     hero.classList.add("is-bored");
-    doodleTimer = window.setTimeout(() => hero.classList.remove("is-bored"), IDLE_DOODLE_MS);
+    doodleTimer = window.setTimeout(() => {
+        bored = false;
+        hero.classList.remove("is-bored");
+    }, IDLE_DOODLE_MS);
 }
 
 /**
@@ -169,10 +170,10 @@ function restartIdleTimer() {
  * @returns {void}
  */
 function handleActivity() {
-    const hero = heroElement();
-    if (hero && hero.classList.contains("is-bored")) {
+    if (bored) {
+        bored = false;
         window.clearTimeout(doodleTimer);
-        hero.classList.remove("is-bored");
+        heroElement()?.classList.remove("is-bored");
     }
     restartIdleTimer();
 }
@@ -180,11 +181,13 @@ function handleActivity() {
 /**
  * React to the lights going on or off: a hard double blink and a shake of the
  * hair, over inside a second.
+ * @param {CustomEvent} event - The themechange announcement.
  * @returns {void}
  */
-function handleThemeChange() {
-    if (!themeSettled) {
-        themeSettled = true;
+function handleThemeChange(event) {
+    // Theme.init() announces the theme it settled on at boot, which is nobody
+    // reaching for the switch, and it says so in the event it sends.
+    if (event.detail?.boot) {
         return;
     }
     const hero = heroElement();

@@ -58,13 +58,10 @@ function draw() {
  * Draw the background decorations and keep them in step with the theme.
  * The colors and the fill-versus-outline treatment both come from the active
  * theme, so a toggle has to repaint the canvas or the doodles keep the palette
- * they were born with. Re-registering the same listener replaces it, so calling
- * this more than once never stacks up redraws.
+ * they were born with. Registering the same listener twice is ignored, so
+ * calling this more than once never stacks up redraws.
  */
 export function initDecorations() {
-    "use strict";
-
-    document.removeEventListener("themechange", draw);
     document.addEventListener("themechange", draw);
     draw();
 }

@@ -87,12 +87,12 @@ function init() {
         initTelemetry();
     }
     initRuntime();
-    initDecorations();
     initMascot();
-    // Ahead of Theme.init() on purpose: that call announces the theme it settled
-    // on at boot, and Pip should only flinch at a switch someone actually threw.
     initAlive();
     Theme.init();
+    // After Theme.init() on purpose: the doodles read their palette off the
+    // theme, and painting before it has settled means painting twice.
+    initDecorations();
     PdfExport.init();
     NavMenu.init();
     Tutorial.init();

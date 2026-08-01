@@ -884,6 +884,8 @@ export const MessagesPage = (() => {
         const fading = fadingConversations[0] || null;
 
         if (top && fading) {
+            // A conversation is only fading after thirty quiet days, so the day
+            // count here is never one.
             return `${top.name} is your liveliest thread. I would say hello to ${fading.name} too, quiet for ${fading.daysSince} days now.`;
         }
 
@@ -892,7 +894,8 @@ export const MessagesPage = (() => {
         }
 
         if (silentConnections.length) {
-            return `I count ${silentConnections.length} silent connections. One short hello can wake the list up.`;
+            const people = silentConnections.length === 1 ? "connection" : "connections";
+            return `I count ${silentConnections.length} silent ${people}. One short hello can wake the list up.`;
         }
 
         return null;

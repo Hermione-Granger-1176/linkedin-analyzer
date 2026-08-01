@@ -37,6 +37,10 @@
 }
 
 .tutorial-popover {
+    /* Pip's width, read by his own rule and by the gutter the title gives him,
+       so the two can never drift apart. */
+    --tutorial-mascot-width: 40px;
+
     position: fixed;
     z-index: 1300;
     pointer-events: auto;
@@ -75,7 +79,7 @@
     position: absolute;
     left: 8px;
     bottom: calc(100% - 42px);
-    width: 40px;
+    width: var(--tutorial-mascot-width);
     height: auto;
     pointer-events: none;
 }
@@ -90,12 +94,12 @@
 }
 
 .tutorial-mascot ~ .tutorial-title {
-    padding-left: 50px;
+    padding-left: calc(var(--tutorial-mascot-width) + 10px);
 }
 
 .tutorial-mascot[data-facing="left"] ~ .tutorial-title {
     padding-left: 0;
-    padding-right: 50px;
+    padding-right: calc(var(--tutorial-mascot-width) + 10px);
 }
 
 /* Both arms ship in the same drawing; the pose attribute picks one. */
@@ -325,8 +329,8 @@
     position: fixed;
     right: var(--space-lg);
     bottom: var(--space-lg);
-    width: 58px;
-    height: 58px;
+    width: var(--help-btn-size);
+    height: var(--help-btn-size);
     border: 2px dashed var(--border-color);
     border-radius: 47% 53% 50% 50% / 53% 47% 52% 48%;
     background: color-mix(in srgb, var(--accent-yellow-bg) 70%, var(--bg-secondary));
@@ -390,7 +394,12 @@
 }
 
 @media (max-width: 700px) {
+    /* A narrow card is often pinned to the top of the viewport, and the
+       smaller Pip reaches above its top edge by less, so nothing crops his
+       hair. His gutter follows him down. */
     .tutorial-popover {
+        --tutorial-mascot-width: 34px;
+
         width: calc(100vw - 20px);
         padding: 14px;
     }
@@ -419,29 +428,15 @@
         height: 82px;
     }
 
+    /* The size comes down with --help-btn-size, which changes on this same
+       breakpoint; all this band owns is the tighter gutter. */
     .tutorial-help-btn {
         right: var(--space-md);
         bottom: var(--space-md);
-        width: 54px;
-        height: 54px;
     }
 
     .tutorial-help-pip {
         width: 43px;
-    }
-
-    /* A narrow card is often pinned to the top of the viewport, and the smaller
-       Pip reaches above its top edge by less, so nothing crops his hair. */
-    .tutorial-mascot {
-        width: 34px;
-    }
-
-    .tutorial-mascot ~ .tutorial-title {
-        padding-left: 44px;
-    }
-
-    .tutorial-mascot[data-facing="left"] ~ .tutorial-title {
-        padding-right: 44px;
     }
 }
 

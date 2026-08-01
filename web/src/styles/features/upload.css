@@ -611,24 +611,24 @@
    states carry a third selector to climb back over it. The download button's
    own hover already outranks a two-part selector and needs no such twin. */
 [data-theme="dark"] .drop-zone {
-    background-color: rgba(59, 46, 32, 1);
+    background-color: var(--surface-drop);
 }
 
 [data-theme="dark"] .drop-zone:hover,
 [data-theme="dark"] .drop-zone:focus {
-    background-color: rgba(35, 51, 68, 1);
+    background-color: var(--surface-drop-hover);
 }
 
 [data-theme="dark"] .drop-zone.drag-over {
-    background-color: rgba(28, 57, 44, 1);
+    background-color: var(--surface-green);
 }
 
 /* A loaded file reads as a note with a green tick on it, so it has to sit above
    the neutral card rather than below it. */
 [data-theme="dark"] .file-status-item.is-ready {
-    background-color: rgba(38, 66, 52, 1);
+    background-color: var(--surface-ready);
 }
 
 [data-theme="dark"] .download-btn {
-    background-color: rgba(28, 57, 44, 1);
+    background-color: var(--surface-green);
 }

@@ -6,10 +6,20 @@
    inlined in index.html because the cards themselves are built in JS, and
    because a dozen full poses in the page source would bury the content.
 
-   Poses share one bust drawn in the same coordinate space as the hero Pip in
-   index.html, so only the brows, the eyes, the mouth, and the arms change from
-   one to the next. The wobble filter is the shared #pipWobble already defined
-   in that document. */
+   Poses share the bust, hair and torso every drawing of Pip is built from
+   (shared/ui/pip-parts.js), so only the brows, the eyes, the mouth, and the
+   arms change from one pose to the next. The wobble filter is the shared
+   #pipWobble already defined in index.html. */
+
+import {
+    PIP_BROWS_HAPPY,
+    PIP_BUST,
+    PIP_EYES,
+    PIP_HAIR,
+    PIP_MOUTH_GRIN,
+    PIP_NOSE,
+    PIP_TORSO,
+} from "../../shared/ui/pip-parts.js";
 
 /* Square crop around the bust: head and hair at the top, the jacket running off
    the bottom edge, and enough room out to the right for a raised arm and
@@ -17,20 +27,6 @@
    this whole box renders at 56px, so anything hand-sized in real proportions
    would be four pixels of mush. */
 const REACTION_VIEWBOX = "26 4 98 98";
-
-/* Hood, head and ears, drawn before the face so the fringe can overlap it. */
-const BUST = `
-    <path
-        class="pip-ink pip-hood"
-        d="M53 86 C48 76 51 62 62 63 C65 68 75 68 78 63 C89 62 92 76 87 86 Q70 90 53 86 Z"
-    />
-    <circle class="pip-ink pip-paper" cx="70" cy="46" r="22" />
-    <path class="pip-ink" d="M48 46 Q43 49 48 54" />
-    <path class="pip-ink" d="M92 46 Q97 49 92 54" />`;
-
-const BROWS_HAPPY = `
-    <path class="pip-ink pip-brow" d="M57.5 39 Q62 35.5 66.5 38.5" />
-    <path class="pip-ink pip-brow" d="M82.5 38 Q78 34.5 73.5 37.5" />`;
 
 /* Lifted clear of the eyes: the difference between pleased and proud. */
 const BROWS_PROUD = `
@@ -43,9 +39,7 @@ const BROWS_SLEEPY = `
     <path class="pip-ink pip-brow" d="M83 40 Q78 38.6 73 40.6" />`;
 
 const EYES_OPEN = `
-    <g class="insight-reaction-blink">
-        <circle class="pip-eye" cx="62" cy="44" r="3.6" />
-        <circle class="pip-eye" cx="78" cy="44" r="3.6" />
+    <g class="pip-blink">${PIP_EYES}
     </g>`;
 
 /* Arcs curving up: eyes squeezed shut by a grin. */
@@ -60,38 +54,12 @@ const EYES_ASLEEP = `
     <path class="pip-ink" d="M56.8 45 Q62 50.6 67.2 45" />
     <path class="pip-ink" d="M72.8 45 Q78 50.6 83.2 45" />`;
 
-const NOSE = `
-    <path class="pip-ink" d="M70 47 Q73 51 69 52" />`;
-
-const MOUTH_GRIN = `
-    <path class="pip-ink pip-solid" d="M60 55 Q70 69 80 55 Q70 61 60 55 Z" />`;
-
 const MOUTH_SMILE = `
     <path class="pip-ink" d="M62 56 Q70 63 78 56" />`;
 
 /* Doubles as a snore and a yawn. */
 const MOUTH_ROUND = `
     <ellipse class="pip-ink pip-paper" cx="70" cy="58" rx="3.6" ry="2.8" />`;
-
-const HAIR = `
-    <path
-        class="pip-hair"
-        d="M52 34 C48 26 50 18 60 15 C70 11 82 14 87 22 C91 28 91 33 90 39 L87 44 Q86 34 83.5 37 Q80 24 77 30 Q74 22 70 32 Q67 22 63 30 Q59.5 21 56 31 Z"
-    />
-    <path class="pip-wisp" d="M74 12 q5 -3 9 0" />
-    <path class="pip-wisp" d="M64 13.4 q3 -3 6 -1" />`;
-
-/* Collar, zip, jacket and drawstrings. The jacket runs past the bottom of the
-   crop on purpose, so Pip reads as standing behind the card's lower edge. */
-const TORSO = `
-    <path class="pip-ink" d="M58 66 C62 72 78 72 82 66" />
-    <path class="pip-ink" d="M70 68 L70 77" />
-    <path class="pip-ink pip-jacket" d="M54 81 Q70 74 86 81 L89 112 Q70 118 51 112 Z" />
-    <path class="pip-ink" d="M63 78 Q70 85 77 78" />
-    <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
-    <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
-    <path class="pip-cord" d="M75 83 q2 5 1 8" />
-    <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />`;
 
 const ARM_LEFT_REST = `
     <path class="pip-ink" d="M55 84 Q44 92 43 102" />`;
@@ -212,13 +180,13 @@ const LEAN_RIGHT = "rotate(8 70 96)";
  */
 function pose(brows, eyes, mouth, arms, lean = UPRIGHT) {
     return {
-        body: `${BUST}${brows}${eyes}${NOSE}${mouth}${HAIR}${TORSO}${arms}`,
+        body: `${PIP_BUST}${brows}${eyes}${PIP_NOSE}${mouth}${PIP_HAIR}${PIP_TORSO}${arms}`,
         lean,
     };
 }
 
 /* Nothing else is known about the card, so Pip just stands there pleasantly. */
-const FALLBACK_POSE = pose(BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_REST);
+const FALLBACK_POSE = pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_REST);
 
 /**
  * Poses keyed by the insight ids generated in features/analytics/insights.js.
@@ -228,18 +196,18 @@ const FALLBACK_POSE = pose(BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_REST);
  * @type {Map<unknown, {body: string, lean: string}>}
  */
 const POSES = new Map([
-    ["early-bird", pose(BROWS_HAPPY, EYES_HAPPY, MOUTH_ROUND, ARMS_STRETCH)],
+    ["early-bird", pose(PIP_BROWS_HAPPY, EYES_HAPPY, MOUTH_ROUND, ARMS_STRETCH)],
     ["night-owl", pose(BROWS_SLEEPY, EYES_OPEN, MOUTH_SMILE, ARMS_MUG)],
-    ["steady-pace", pose(BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_THUMBS_UP)],
-    ["trending-up", pose(BROWS_PROUD, EYES_OPEN, MOUTH_GRIN, ARMS_FLEX)],
+    ["steady-pace", pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_THUMBS_UP)],
+    ["trending-up", pose(BROWS_PROUD, EYES_OPEN, PIP_MOUTH_GRIN, ARMS_FLEX)],
     ["slowing", pose(BROWS_SLEEPY, EYES_HAPPY, MOUTH_SMILE, ARMS_BREATHER)],
-    ["topic-shift", pose(BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_POINT)],
-    ["engagement-shift", pose(BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_SPEECH)],
+    ["topic-shift", pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_POINT)],
+    ["engagement-shift", pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_SPEECH)],
     ["quiet-stretch", pose(BROWS_SLEEPY, EYES_ASLEEP, MOUTH_ROUND, ARMS_DOZE, LEAN_RIGHT)],
-    ["super-engager", pose(BROWS_HAPPY, EYES_OPEN, MOUTH_GRIN, ARMS_HIGH_FIVE)],
-    ["topic-master", pose(BROWS_HAPPY, EYES_OPEN, MOUTH_GRIN, ARMS_TROPHY)],
-    ["streak", pose(BROWS_PROUD, EYES_OPEN, MOUTH_GRIN, ARMS_PUNCH)],
-    ["weekday", pose(BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_THUMBS_UP)],
+    ["super-engager", pose(PIP_BROWS_HAPPY, EYES_OPEN, PIP_MOUTH_GRIN, ARMS_HIGH_FIVE)],
+    ["topic-master", pose(PIP_BROWS_HAPPY, EYES_OPEN, PIP_MOUTH_GRIN, ARMS_TROPHY)],
+    ["streak", pose(BROWS_PROUD, EYES_OPEN, PIP_MOUTH_GRIN, ARMS_PUNCH)],
+    ["weekday", pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_THUMBS_UP)],
 ]);
 
 /**
@@ -259,6 +227,6 @@ export function buildInsightReaction(insightId) {
         viewBox="${REACTION_VIEWBOX}"
         aria-hidden="true"
         focusable="false"
-    ><g filter="url(#pipWobble)"><g transform="${chosen.lean}"><g class="insight-reaction-bob">${chosen.body}
+    ><g filter="url(#pipWobble)"><g transform="${chosen.lean}"><g class="pip-bob">${chosen.body}
     </g></g></g></svg>`;
 }

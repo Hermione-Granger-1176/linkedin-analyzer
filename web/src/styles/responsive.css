@@ -42,7 +42,7 @@
 
     .pdf-export-btn {
         top: var(--space-md);
-        right: calc(var(--space-md) + 48px + var(--space-sm));
+        right: calc(var(--space-md) + var(--corner-btn-size) + var(--space-sm));
     }
 
     .filters-bar {

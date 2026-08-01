@@ -26,7 +26,38 @@ describe("Theme", () => {
         Theme.init();
 
         expect(onChange).toHaveBeenCalledTimes(1);
+        // The flag is how a listener tells the boot announcement apart from a
+        // visitor reaching for the switch.
+        expect(onChange.mock.calls[0][0].detail).toEqual({ boot: true });
         expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+        document.removeEventListener("themechange", onChange);
+    });
+
+    it("announces the light theme it settled on at init too", () => {
+        setupDom('<button id="themeToggle"></button>');
+        mockMatchMedia(false);
+        const onChange = vi.fn();
+        document.addEventListener("themechange", onChange);
+
+        Theme.init();
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange.mock.calls[0][0].detail).toEqual({ boot: true });
+        expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+        document.removeEventListener("themechange", onChange);
+    });
+
+    it("leaves the boot flag off a switch the visitor threw", () => {
+        setupDom('<button id="themeToggle"></button>');
+        mockMatchMedia(false);
+        Theme.init();
+        const onChange = vi.fn();
+        document.addEventListener("themechange", onChange);
+
+        document.getElementById("themeToggle").click();
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange.mock.calls[0][0].detail).toEqual({ boot: false });
         document.removeEventListener("themechange", onChange);
     });
 

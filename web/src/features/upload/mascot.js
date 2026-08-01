@@ -12,6 +12,8 @@
  * of them is reached on its own.
  */
 
+import { playOneShot, prefersReducedMotion } from "../../shared/ui/motion.js";
+
 const CATCHER_ID = "uploadCatcher";
 const POSE_ATTRIBUTE = "data-pose";
 const READY_POSE = "ready";
@@ -23,16 +25,8 @@ const CATCH_LIFETIME_MS = 1100;
 let catchTimer = 0;
 
 /**
- * Check whether the visitor asked for reduced motion.
- * @returns {boolean} True when the reduce preference is set.
- */
-function prefersReducedMotion() {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-/**
  * Find the drop zone's Pip, on the screens that have one.
- * @returns {HTMLElement|null} The catcher element, or null where it is absent.
+ * @returns {Element|null} The catcher svg, or null where it is absent.
  */
 function getCatcher() {
     return document.getElementById(CATCHER_ID);
@@ -43,13 +37,14 @@ function getCatcher() {
  * @returns {void}
  */
 export function hideCatcher() {
+    // The timer is module state, so it goes whether or not the screen the catch
+    // was playing on is still the one in front of us.
+    window.clearTimeout(catchTimer);
     const catcher = getCatcher();
     if (!catcher) {
         return;
     }
-    window.clearTimeout(catchTimer);
-    // The element is an <svg>, and `hidden` is an HTMLElement property: setting
-    // it there would never reach the attribute the stylesheet matches on.
+    // The attribute rather than the property, for the reason playOneShot gives.
     catcher.setAttribute("hidden", "");
     catcher.setAttribute(POSE_ATTRIBUTE, READY_POSE);
 }
@@ -87,14 +82,16 @@ export function playCatch() {
         return;
     }
 
-    window.clearTimeout(catchTimer);
-    catcher.removeAttribute("hidden");
-    // Back to the ready pose first so a second drop replays the catch instead
-    // of holding the pose it is already in.
-    catcher.setAttribute(POSE_ATTRIBUTE, READY_POSE);
-    void catcher.getBoundingClientRect();
-    catcher.setAttribute(POSE_ATTRIBUTE, CATCH_POSE);
-    // A drop can take the screen out from under him, and an animation in a
-    // display:none subtree never ends, so the timer is what puts him away.
-    catchTimer = window.setTimeout(hideCatcher, CATCH_LIFETIME_MS);
+    // A drop can take the screen out from under him, so the timer playOneShot
+    // hangs the moment on is what puts him away again.
+    catchTimer = playOneShot({
+        element: catcher,
+        durationMs: CATCH_LIFETIME_MS,
+        previousTimer: catchTimer,
+        apply: () => catcher.setAttribute(POSE_ATTRIBUTE, CATCH_POSE),
+        reset: () => catcher.setAttribute(POSE_ATTRIBUTE, READY_POSE),
+        done: () => {
+            catchTimer = 0;
+        },
+    });
 }

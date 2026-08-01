@@ -7,6 +7,7 @@ import {
     CREATE_COMMIT_MUTATION,
     isCliEntrypoint,
     parseDiffOutput,
+    selectReusablePull,
 } from "../../../.github/actions/verified-commit/verified-commit.mjs";
 
 describe("verified commit action helpers", () => {
@@ -43,5 +44,27 @@ describe("verified commit action helpers", () => {
                 contents: Buffer.from("staged:new.txt").toString("base64"),
             },
         ]);
+    });
+
+    it("reuses the pull request the branch reset closed instead of opening another", () => {
+        const closedByReset = { number: 217, state: "closed", merged_at: null };
+
+        expect(selectReusablePull([closedByReset])).toBe(closedByReset);
+    });
+
+    it("prefers an open pull request and never revives a merged one", () => {
+        const merged = { number: 214, state: "closed", merged_at: "2026-08-01T07:00:00Z" };
+        const open = { number: 219, state: "open", merged_at: null };
+
+        expect(selectReusablePull([merged, open])).toBe(open);
+        expect(selectReusablePull([merged])).toBeUndefined();
+        expect(selectReusablePull([])).toBeUndefined();
+    });
+
+    it("picks the newest reusable pull request when several exist", () => {
+        const older = { number: 217, state: "closed", merged_at: null };
+        const newer = { number: 219, state: "closed", merged_at: null };
+
+        expect(selectReusablePull([older, newer])).toBe(newer);
     });
 });

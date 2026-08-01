@@ -1,0 +1,120 @@
+name: Audit Repository Settings
+
+on:
+  schedule:
+    - cron: "23 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      status: ${{ steps.audit.outputs.status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Check audit app credentials
+        id: credentials
+        env:
+          AUDIT_APP_ID: ${{ vars.AUDIT_APP_ID }}
+          AUDIT_APP_PRIVATE_KEY: ${{ secrets.AUDIT_APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$AUDIT_APP_ID" ] && [ -n "$AUDIT_APP_PRIVATE_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create audit token
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: audit-token
+        with:
+          app-id: ${{ vars.AUDIT_APP_ID }}
+          private-key: ${{ secrets.AUDIT_APP_PRIVATE_KEY }}
+
+      - name: CI setup
+        if: steps.credentials.outputs.available == 'true'
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ""
+          install-node-deps: "false"
+
+      - name: Audit repository settings
+        if: steps.credentials.outputs.available == 'true'
+        id: audit
+        env:
+          GH_TOKEN: ${{ steps.audit-token.outputs.token }}
+        run: |
+          if make ci-audit-repo-settings > audit-report.txt 2>&1; then
+            status=0
+          else
+            status=$?
+          fi
+          cat audit-report.txt
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Repository settings audit"
+            echo
+            echo '```text'
+            cat audit-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Note missing audit credentials
+        if: steps.credentials.outputs.available != 'true'
+        run: |
+          {
+            echo "## Repository settings audit"
+            echo
+            echo "Skipped because AUDIT_APP_ID and AUDIT_APP_PRIVATE_KEY are not configured."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report-drift:
+    needs: audit
+    if: failure() && needs.audit.outputs.status != ''
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Repository settings have drifted
+      label: repo-settings-audit
+      state: open
+      detail: Read the audit output in the run, then either restore the setting or update the expectation in scripts/ci/repo_audit.py.
+
+  report-setup-failure:
+    needs: audit
+    if: failure() && needs.audit.outputs.status == ''
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Repository settings have drifted
+      label: repo-settings-audit
+      state: setup-failure
+
+  report-recovery:
+    needs: audit
+    if: success() && needs.audit.outputs.status == '0'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/alert-issue.yml
+    with:
+      title: Repository settings have drifted
+      label: repo-settings-audit
+      state: close

@@ -7,12 +7,12 @@ or review can see. They drift silently: a required check renamed out of the
 protection list, or push protection switched off, changes nothing locally and
 shows up only the next time it was supposed to stop something.
 
-This audit reads those settings back and reports the drift as a list. It is run
-on demand rather than from a workflow because reading branch protection needs
-``administration: read`` and listing secrets needs ``secrets: read``, and
-``GITHUB_TOKEN`` can grant neither. The repository's App credentials exist for
-writeback and carry neither permission either, so a workflow copy of this check
-would report "could not check" on every run.
+This audit reads those settings back and reports the drift as a list. Reading
+branch protection needs ``administration: read`` and listing secrets needs
+``secrets: read``, and ``GITHUB_TOKEN`` can grant neither. Neither writeback App
+carries them either, deliberately, so ``audit-repo-settings.yml`` runs this on a
+third read-only App instead. It stays runnable by hand against a maintainer's
+own credentials, which is the faster way to check a setting you just changed.
 
 The audit is deliberately fail-closed. A setting it cannot read is never
 reported as correct: an unreadable response ends the run with EXIT_CHECK_FAILED

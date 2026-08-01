@@ -298,12 +298,13 @@ A failed workflow-run context validation, missing artifact, unchanged lock, or s
 
 ### Token model
 
-Two GitHub Apps provide elevated permissions beyond the default `GITHUB_TOKEN`, each scoped to a single role. The split mirrors the token model documented in the `artifacts` repository.
+Three GitHub Apps provide elevated permissions beyond the default `GITHUB_TOKEN`, each scoped to a single role. The split mirrors the token model documented in the `artifacts` repository.
 
-| App                    | ID variable         | Private-key secret           | Used for                                       |
-| ---------------------- | ------------------- | ---------------------------- | ---------------------------------------------- |
-| Hermione1176 (primary) | `APP_ID`            | `APP_PRIVATE_KEY`            | Python lock writeback onto Dependabot branches |
-| Harry1176 (escalation) | `ESCALATION_APP_ID` | `ESCALATION_APP_PRIVATE_KEY` | The monthly CI pin refresh pull request        |
+| App                    | ID variable         | Private-key secret           | Used for                                        |
+| ---------------------- | ------------------- | ---------------------------- | ----------------------------------------------- |
+| Hermione1176 (primary) | `APP_ID`            | `APP_PRIVATE_KEY`            | Python lock writeback onto Dependabot branches  |
+| Harry1176 (escalation) | `ESCALATION_APP_ID` | `ESCALATION_APP_PRIVATE_KEY` | The monthly CI pin refresh pull request         |
+| Percy1176 (audit)      | `AUDIT_APP_ID`      | `AUDIT_APP_PRIVATE_KEY`      | The weekly repository settings audit, read-only |
 
 Each installation carries only the permissions its role actually exercises.
 
@@ -326,9 +327,23 @@ Both missing-grant failures arrive as a bare 403, so it is worth knowing them ap
 - Without `pull_requests: write`, the branch and the verified commit both succeed and only the final `POST /repos/{owner}/{repo}/pulls` fails with `Resource not accessible by integration`.
 - Without `workflows: write`, the commit itself fails, but only on the runs where an action SHA actually moved, so it can stay hidden for months.
 
-Scope both installations to selected repositories rather than all of them.
+Percy1176 (audit) never writes to the tree. `audit-repo-settings.yml` runs `make ci-audit-repo-settings` on it every Monday, and its installation must carry exactly the permissions the audit reads, so that a 403 from `scripts/ci/repo_audit.py` unambiguously means a missing grant rather than an unrelated failure:
 
-If the escalation credentials are missing, the CI pin refresh workflow records a skipped summary instead of attempting a write. If the primary credentials are missing, the Python lock refresh workflow uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
+- `metadata: read` (implicit, required to call any repository endpoint)
+- `administration: read` (branch protection)
+- `secrets: read` (names only; the audit never reads a secret value)
+- `actions_variables: read`
+- `issues: write` (the drift-alert issue lifecycle: open, comment, close)
+
+Scope all three installations to selected repositories rather than all of them.
+
+If the escalation credentials are missing, the CI pin refresh workflow records a skipped summary instead of attempting a write, and the settings audit does the same when the audit credentials are absent. If the primary credentials are missing, the Python lock refresh workflow uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
+
+### Repository settings audit
+
+`audit-repo-settings.yml` runs `make ci-audit-repo-settings` every Monday, and on `workflow_dispatch`. The audit job captures the exit status into a job output before failing, because `make` rewrites every failing recipe's status to `2` and "found drift" would otherwise be indistinguishable from "could not look". The three reporting jobs read that output and call the shared `alert-issue.yml` described in [Alert issues](#alert-issues): an unset status is a setup failure, a non-zero one is drift, and `0` closes the issue.
+
+The same target remains runnable by hand against a maintainer's own credentials, which is the faster way to check a setting immediately after changing it.
 
 ## CLI Environment Variables
 

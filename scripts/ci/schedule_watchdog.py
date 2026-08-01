@@ -58,6 +58,7 @@ CHECKED_OUTPUT = "checked"
 # compares names and values, so neither an unwatched schedule nor a cadence too
 # loose to notice one stopping can reach main.
 SCHEDULED_WORKFLOW_CADENCES: dict[str, int] = {
+    "audit-repo-settings.yml": 7 * DAY_SECONDS,  # "23 8 * * 1" weekly
     "codeql.yml": 7 * DAY_SECONDS,  # "30 6 * * 1" weekly
     "dependency-audit.yml": 7 * DAY_SECONDS,  # "0 6 * * 1" weekly
     "refresh-action-shas.yml": 31 * DAY_SECONDS,  # "0 3 1 * *" monthly

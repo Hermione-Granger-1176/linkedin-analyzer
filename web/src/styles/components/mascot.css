@@ -328,7 +328,8 @@
 .pip-loader,
 .pip-peeker,
 .pip-alarm,
-.pip-cheer {
+.pip-cheer,
+.pip-tipster {
     pointer-events: none;
 }
 
@@ -390,6 +391,88 @@
 
 .pip-cheer[hidden] {
     display: none;
+}
+
+/* ---------- Pip says ----------
+   The Insights and Messages tips are Pip talking. He leans on the left edge of
+   a drawn speech bubble, and the tip text is what comes out of it. The row
+   itself belongs to .insight-tip in features/insights.css; everything the two
+   halves are made of lives here. */
+
+.pip-tipster {
+    flex: 0 0 auto;
+    width: 78px;
+    height: auto;
+    /* His hand is inked at the right edge of the frame, so the pull-in parks it
+       across the bubble's border rather than a few pixels short of it, and the
+       stacking context keeps the hand on top of the border it rests on. */
+    position: relative;
+    z-index: 1;
+    margin-right: -11px;
+}
+
+.pip-bubble {
+    position: relative;
+    flex: 1 1 auto;
+    padding: var(--space-md) var(--space-lg);
+    border: 2px solid var(--border-color);
+    /* The same imperfect corners the sketch cards are drawn with. */
+    border-radius: 16px 14px 17px 15px / 14px 17px 15px 16px;
+    background: var(--bg-secondary);
+    box-shadow: var(--shadow-sm);
+}
+
+/* The tail, pointing back at Pip's head. Two triangles: the outer one is the
+   ink, the inner one is the fill laid over it, and the inner one reaches a few
+   pixels into the bubble so the border it crosses disappears behind it. It sits
+   high on the edge, above the arm he is leaning with. */
+.pip-bubble::before,
+.pip-bubble::after {
+    content: "";
+    position: absolute;
+    top: 10px;
+    left: -15px;
+    width: 15px;
+    height: 22px;
+    background: var(--border-color);
+    clip-path: polygon(100% 0, 0 46%, 100% 100%);
+}
+
+.pip-bubble::after {
+    top: 13px;
+    left: -10px;
+    width: 13px;
+    height: 15px;
+    background: var(--bg-secondary);
+}
+
+.pip-bubble-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-xs);
+    font-size: var(--font-size-lg);
+    color: var(--text-primary);
+}
+
+/* The lightbulb that used to headline the tip, kept as a small mark next to his
+   name instead of the 48px icon it was. */
+.pip-bubble-bulb {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    color: var(--accent-yellow);
+}
+
+.pip-bubble-bulb svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.pip-bubble p {
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
 }
 
 /* ---------- One-shot moves ---------- */
@@ -553,6 +636,32 @@
        chips do, and the message keeps the whole strip to itself. */
     .pip-alarm {
         display: none;
+    }
+
+    /* Pip stays in the tip at phone width, small enough that the bubble keeps a
+       readable line. A smaller Pip sits lower against a bubble of the same
+       height, so the tail comes down the edge to meet his head again. */
+    .pip-tipster {
+        width: 56px;
+        margin-right: -8px;
+    }
+
+    .pip-bubble {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .pip-bubble::before {
+        top: 18px;
+        left: -12px;
+        width: 12px;
+        height: 20px;
+    }
+
+    .pip-bubble::after {
+        top: 21px;
+        left: -8px;
+        width: 11px;
+        height: 14px;
     }
 }
 

@@ -2663,6 +2663,59 @@ describe("findRenderableStepIndex edge cases", () => {
     });
 });
 
+// ===========================================================================
+// Pip, the guide standing on the callout card
+// ===========================================================================
+
+describe("tutorial mascot", () => {
+    it("mounts inside the popover without joining the focus trap", () => {
+        Tutorial.init();
+        const mascot = document.querySelector(".tutorial-mascot");
+        expect(mascot).not.toBeNull();
+        expect(mascot.closest(".tutorial-popover")).not.toBeNull();
+        expect(mascot.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("presents on the way through and waves on the final step", () => {
+        buildHomeTargets();
+        Tutorial.start("home");
+
+        const mascot = document.querySelector(".tutorial-mascot");
+        expect(mascot.dataset.pose).toBe("present");
+
+        ui_nextButton().click();
+        expect(mascot.dataset.pose).toBe("present");
+
+        ui_nextButton().click();
+        expect(ui_nextButton().textContent).toBe("Finish");
+        expect(mascot.dataset.pose).toBe("wave");
+    });
+
+    it("turns toward a target sitting left of the card", () => {
+        addTarget("step-target-1", {
+            left: 0,
+            top: 300,
+            right: 20,
+            bottom: 340,
+            width: 20,
+            height: 40,
+            x: 0,
+            y: 300,
+        });
+        addTarget("step-target-2");
+        addTarget("step-target-3");
+        Tutorial.start("home");
+
+        expect(document.querySelector(".tutorial-mascot").dataset.facing).toBe("left");
+    });
+
+    it("faces forward on a step with no target to point at", () => {
+        Tutorial.start("notargets");
+
+        expect(document.querySelector(".tutorial-mascot").dataset.facing).toBe("right");
+    });
+});
+
 // ---------------------------------------------------------------------------
 // Helpers used in new tests
 // ---------------------------------------------------------------------------

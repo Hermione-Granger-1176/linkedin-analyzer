@@ -1814,6 +1814,8 @@ describe("MessagesPage", () => {
         const tipText = document.getElementById("messagesTipText").textContent;
         expect(tipText).toContain("Top Guy");
         expect(tipText).toContain("Old Pal");
+        // Pip speaks the tip, so the copy stays first person.
+        expect(tipText).toContain("I would say hello");
     });
 
     // --- Tip text: only top contact (no fading) ------------------------------
@@ -1871,6 +1873,7 @@ describe("MessagesPage", () => {
         const tipText = document.getElementById("messagesTipText").textContent;
         expect(tipText).toContain("Active Conn");
         expect(tipText).toContain("top contact");
+        expect(tipText).toContain("I would keep that rhythm going");
     });
 
     // --- Tip text: only silent connections, no top contact -------------------
@@ -1925,6 +1928,7 @@ describe("MessagesPage", () => {
 
         const tipText = document.getElementById("messagesTipText").textContent;
         expect(tipText).toContain("silent");
+        expect(tipText).toContain("I count");
     });
 
     // --- Connections state reuse when signature matches ----------------------

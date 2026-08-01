@@ -7,6 +7,8 @@
  * reads tutorial flow state.
  */
 
+import { buildTutorialMascot } from "./mascot.js";
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /**
@@ -26,6 +28,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  * @property {HTMLButtonElement | null} backButton
  * @property {HTMLButtonElement | null} nextButton
  * @property {HTMLButtonElement | null} skipButton
+ * @property {SVGSVGElement | null} mascot
  * @property {HTMLDivElement | null} miniTipsLayer
  */
 
@@ -121,6 +124,13 @@ export function buildTutorialShell(ui) {
     footer.appendChild(progress);
     footer.appendChild(controls);
 
+    // Pip leads the popover children and is positioned out of flow, so the card
+    // measures the same size with or without him and the focus trap never sees
+    // him. Ahead of the title on purpose: the corner he stands in changes with
+    // the step, and the stylesheet moves the title's gutter to match him.
+    ui.mascot = buildTutorialMascot();
+
+    ui.popover.appendChild(ui.mascot);
     ui.popover.appendChild(ui.title);
     ui.popover.appendChild(ui.body);
     ui.popover.appendChild(footer);

@@ -69,12 +69,13 @@ Special behavior:
 
 - Only the **Home** tutorial includes the dark/light mode step (`#themeToggle`).
 - **Home** and **Analytics** both introduce Save as PDF (`#pdfExportBtn`). The button is global, so both steps come from one `createPdfExportStep()` factory in `steps.js`: pass a route, its wording, and a route-scoped fallback target to add the step to another screen. Home explains that the button waits on an upload; Analytics explains the message-contents opt-in.
-- Use the floating `?` help button in the bottom-right corner to replay the tutorial for the current page.
+- Use the floating help button in the bottom-right corner to replay the tutorial for the current page. It shows Pip peeking out of the dashed circle with a small `?` held up beside his head.
 - Completing or skipping marks that page tutorial as done; the floating help button resets and replays it.
 - Tutorial auto-start waits until active loading overlays finish, then adds a brief visible pause before opening.
 - Contextual mini-tip callouts appear only after the route tutorial is completed/skipped, then follow engagement-based pacing and cooldowns until dismissed.
 - Tutorial completion, mini-tip dismissal, and mini-tip pacing metadata are stored in versioned `localStorage` keys (bump version to re-onboard after new tutorial features).
 - Sketch-style arrow callouts point to the highlighted target; the arrow style varies per step unless a step specifies `arrowStyle`.
+- Pip guides the tour from a top corner of the callout card. He takes the corner away from the target, so he never sits on the pointer arrow or the highlighted element, and mirrors to gesture across the card toward it. He presents through the tour and waves on the final step. He is decoration: aria-hidden, no pointer events, and positioned out of flow so the card measures the same size with or without him.
 
 ## Screens
 
@@ -272,7 +273,7 @@ Browsers pick the best format automatically:
 
 ### Theme Color
 
-Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the browser chrome to match the light (`rgba(255, 253, 247, 1)`) or dark (`rgba(28, 25, 23, 1)`) theme.
+Two `<meta name="theme-color">` tags (one per `prefers-color-scheme`) tint the browser chrome to match the light (`rgba(255, 253, 247, 1)`) or dark (`rgba(32, 26, 21, 1)`) theme.
 
 ### robots.txt
 

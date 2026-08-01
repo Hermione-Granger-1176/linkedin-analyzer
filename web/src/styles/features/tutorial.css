@@ -66,6 +66,48 @@
     line-height: 1.1;
 }
 
+/* Pip presents the step from a top corner of the card. He is out of flow on
+   purpose: the popover is measured before it is placed, and he must not change
+   the size that measurement returns. He stands deep enough into the card that
+   the viewport never crops him when the card is pinned to the top edge, and the
+   title gives up a gutter beside him so no heading ever runs underneath. */
+.tutorial-mascot {
+    position: absolute;
+    left: 8px;
+    bottom: calc(100% - 42px);
+    width: 40px;
+    height: auto;
+    pointer-events: none;
+}
+
+/* He takes the corner away from the target and gestures across the card toward
+   it, which keeps him off both the pointer arrow and the highlighted element.
+   One flip covers every step whose target sits back the other way. */
+.tutorial-mascot[data-facing="left"] {
+    left: auto;
+    right: 8px;
+    transform: scaleX(-1);
+}
+
+.tutorial-mascot ~ .tutorial-title {
+    padding-left: 50px;
+}
+
+.tutorial-mascot[data-facing="left"] ~ .tutorial-title {
+    padding-left: 0;
+    padding-right: 50px;
+}
+
+/* Both arms ship in the same drawing; the pose attribute picks one. */
+.tutorial-mascot-arm {
+    display: none;
+}
+
+.tutorial-mascot[data-pose="present"] .tutorial-mascot-arm[data-pose="present"],
+.tutorial-mascot[data-pose="wave"] .tutorial-mascot-arm[data-pose="wave"] {
+    display: block;
+}
+
 .tutorial-text {
     margin: 0;
     font-family: var(--font-hand);
@@ -294,9 +336,9 @@
     cursor: pointer;
     display: grid;
     place-items: center;
-    font-family: var(--font-hand-alt);
-    font-size: 32px;
-    line-height: 1;
+    /* The circle is the crop: Pip is drawn a little larger than it and sits low
+       inside, so his hood is cut off by the rim and he reads as peeking out. */
+    overflow: hidden;
     transition:
         transform var(--transition-fast),
         box-shadow var(--transition-fast),
@@ -311,6 +353,25 @@
     border: 1px dashed color-mix(in srgb, var(--border-color) 45%, transparent);
     border-radius: inherit;
     pointer-events: none;
+}
+
+.tutorial-help-pip {
+    position: relative;
+    top: 4px;
+    width: 46px;
+    height: auto;
+}
+
+/* The question stays on the accent so it still reads as the hint the "?" was.
+   Scoped past .pip-ink rather than tied to which stylesheet lands last. */
+.tutorial-help-pip .tutorial-help-mark {
+    stroke: var(--accent-blue);
+    stroke-width: 3.4;
+}
+
+.tutorial-help-pip .tutorial-help-dot {
+    fill: var(--accent-blue);
+    stroke: none;
 }
 
 .tutorial-help-btn:hover,
@@ -363,7 +424,24 @@
         bottom: var(--space-md);
         width: 54px;
         height: 54px;
-        font-size: 29px;
+    }
+
+    .tutorial-help-pip {
+        width: 43px;
+    }
+
+    /* A narrow card is often pinned to the top of the viewport, and the smaller
+       Pip reaches above its top edge by less, so nothing crops his hair. */
+    .tutorial-mascot {
+        width: 34px;
+    }
+
+    .tutorial-mascot ~ .tutorial-title {
+        padding-left: 44px;
+    }
+
+    .tutorial-mascot[data-facing="left"] ~ .tutorial-title {
+        padding-right: 44px;
     }
 }
 

@@ -630,7 +630,7 @@ function buildTipBlock(painter, tip) {
             height: lineHeightMm(labelSize) + CARD_PADDING,
             draw: (x, y) => {
                 painter.text(
-                    "Pro tip",
+                    "Pip says",
                     x + CARD_GUTTER,
                     y + CARD_PADDING + lineHeightMm(labelSize) * BASELINE_RATIO,
                     fonts.accent,

@@ -176,5 +176,7 @@ describe("generateInsights", () => {
         expect(peakDay.body).toContain("Wed");
         expect(tip).toContain("Wed");
         expect(tip).toContain("14:00");
+        // The tip is spoken by Pip in the app, so it stays in his voice.
+        expect(tip).toContain("I would post then");
     });
 });

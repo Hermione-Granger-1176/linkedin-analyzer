@@ -10,12 +10,16 @@ worst drift there is) as a failure to look rather than a finding.
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 from scripts.ci import repo_audit
 from scripts.gh.gh_runner import GhError
 
 from tests.support.gh import FakeGh, completed_process, has
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 REPO = "owner/name"
 REPO_PATH = f"repos/{REPO}"
@@ -413,3 +417,74 @@ def test_the_repository_is_resolved_when_none_is_given(
     monkeypatch.setattr(repo_audit.gh_runner, "resolve_repo", lambda: REPO)
     assert repo_audit.main([]) == repo_audit.EXIT_HEALTHY
     assert REPO in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("reached_verdict", "expected"),
+    [(True, "checked=true"), (False, "checked=false")],
+    ids=["reached", "could-not-look"],
+)
+def test_the_verdict_reaches_the_workflow_as_an_output(
+    tmp_path: Path, reached_verdict: bool, expected: str
+) -> None:
+    """The alert jobs pick their state on this bit, which no exit code can carry."""
+    output = tmp_path / "github-output"
+
+    repo_audit.report_checked(reached_verdict, env={repo_audit.GITHUB_OUTPUT_ENV: str(output)})
+
+    assert output.read_text(encoding="utf-8") == f"{expected}\n"
+
+
+def test_the_verdict_is_appended_beside_any_other_step_output(tmp_path: Path) -> None:
+    """One file collects every output of the step; truncating it would drop the others."""
+    output = tmp_path / "github-output"
+    output.write_text("already=here\n", encoding="utf-8")
+
+    repo_audit.report_checked(True, env={repo_audit.GITHUB_OUTPUT_ENV: str(output)})
+
+    assert output.read_text(encoding="utf-8") == "already=here\nchecked=true\n"
+
+
+@pytest.mark.parametrize("env", [{}, {"GITHUB_OUTPUT": ""}], ids=["unset", "empty"])
+def test_nothing_is_written_outside_github_actions(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env: dict[str, str]
+) -> None:
+    """`make ci-audit-repo-settings` at a terminal has no output file to write to.
+
+    A real path is left in the process environment so the assertion has
+    something to catch: writing anywhere at all would create it.
+    """
+    unwanted = tmp_path / "should-not-be-written"
+    monkeypatch.setenv(repo_audit.GITHUB_OUTPUT_ENV, str(unwanted))
+
+    repo_audit.report_checked(True, env=env)
+
+    assert not unwanted.exists()
+
+
+def test_a_drift_verdict_is_reported_as_reached(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Drift is a verdict, so it must not be mistaken for the audit failing to look."""
+    output = tmp_path / "github-output"
+    monkeypatch.setenv(repo_audit.GITHUB_OUTPUT_ENV, str(output))
+    _patch_audit(monkeypatch, ["allow_merge_commit should be disabled"])
+
+    assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_DRIFT_FOUND
+    capsys.readouterr()
+
+    assert output.read_text(encoding="utf-8") == "checked=true\n"
+
+
+def test_a_failure_to_look_is_reported_as_unchecked(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Collapsing this into drift would alert on settings the audit never read."""
+    output = tmp_path / "github-output"
+    monkeypatch.setenv(repo_audit.GITHUB_OUTPUT_ENV, str(output))
+    _patch_audit(monkeypatch, GhError("token missing a permission"))
+
+    assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_CHECK_FAILED
+    capsys.readouterr()
+
+    assert output.read_text(encoding="utf-8") == "checked=false\n"

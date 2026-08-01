@@ -341,7 +341,9 @@ If the escalation credentials are missing, the CI pin refresh workflow records a
 
 ### Repository settings audit
 
-`audit-repo-settings.yml` runs `make ci-audit-repo-settings` every Monday, and on `workflow_dispatch`. The audit job captures the exit status into a job output before failing, because `make` rewrites every failing recipe's status to `2` and "found drift" would otherwise be indistinguishable from "could not look". The three reporting jobs read that output and call the shared `alert-issue.yml` described in [Alert issues](#alert-issues): an unset status is a setup failure, a non-zero one is drift, and `0` closes the issue.
+`audit-repo-settings.yml` runs `make ci-audit-repo-settings` every Monday, and on `workflow_dispatch`. `scripts/ci/repo_audit.py` writes a `checked` output itself, exactly as the schedule watchdog does and for the same reason: `make` rewrites every failing recipe's status to `2`, so "found drift" and "could not read the settings" reach the workflow as the same exit code. Reading `make`'s status instead would raise a drift alert every time the audit merely failed to look, which is the opposite of the fail-closed behavior the audit is built around.
+
+The three reporting jobs read that output and call the shared `alert-issue.yml` described in [Alert issues](#alert-issues). A failed run that reached a verdict is drift, a failed run that did not is a setup failure, and a successful one closes the issue.
 
 The same target remains runnable by hand against a maintainer's own credentials, which is the faster way to check a setting immediately after changing it.
 

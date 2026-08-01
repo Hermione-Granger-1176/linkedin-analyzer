@@ -26,6 +26,8 @@ const IDLE_DOODLE_MS = 2600;
 const WAKE_MS = 800;
 
 let frames = [];
+/** @type {typeof window.requestAnimationFrame} */
+let realRequestAnimationFrame;
 
 /* alive.js binds for the life of the page, and window and document outlive every
    test in this file. Recording what gets bound lets afterEach hand the next test
@@ -148,6 +150,7 @@ describe("alive", () => {
         frames = [];
         // Vitest's fake timers do not stand in for rAF here, and the gaze needs a
         // frame queue it can drain on demand.
+        realRequestAnimationFrame = window.requestAnimationFrame;
         window.requestAnimationFrame = /** @type {typeof window.requestAnimationFrame} */ (
             (callback) => {
                 frames.push(callback);
@@ -160,6 +163,7 @@ describe("alive", () => {
     });
 
     afterEach(() => {
+        window.requestAnimationFrame = realRequestAnimationFrame;
         releaseListeners();
         vi.useRealTimers();
         resetDom();

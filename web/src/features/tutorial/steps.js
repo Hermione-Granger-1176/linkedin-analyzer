@@ -341,8 +341,8 @@ export const TutorialSteps = Object.freeze({
         {
             id: "insights-tip",
             route: "insights",
-            title: "Use the pro tip",
-            body: "When available, this tip gives you one focused action to improve consistency and engagement.",
+            title: "Hear Pip out",
+            body: "When Pip has a tip, it is one focused action to improve consistency and engagement.",
             target: "#insightTip",
             fallbackTarget: "#insightsGrid, #insightsEmpty",
             placement: "top",

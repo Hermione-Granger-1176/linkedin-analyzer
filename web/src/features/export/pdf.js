@@ -22,6 +22,7 @@
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+import { celebrateStaple } from "../../shared/ui/mascot.js";
 
 import { hasExportableData } from "./availability.js";
 
@@ -436,6 +437,7 @@ export const PdfExport = (() => {
         setBusy(true);
         const token = ++generationToken;
         const isCancelled = () => token !== generationToken;
+        let downloaded = false;
         LoadingOverlay.show(OVERLAY_SOURCE, {
             title: "Building your PDF",
             message: "Laying out your insights. Everything stays in this browser.",
@@ -483,6 +485,7 @@ export const PdfExport = (() => {
             // making the finally below skip hiding its own overlay.
             setBusy(false);
             close();
+            downloaded = true;
         } catch {
             // A failure the user already walked away from is not worth reporting
             // or showing, and the dialog it would write into may be reopened.
@@ -505,6 +508,13 @@ export const PdfExport = (() => {
             if (!isCancelled()) {
                 LoadingOverlay.hide(OVERLAY_SOURCE);
             }
+        }
+
+        // Outside the try, and only for a run that got as far as downloading:
+        // the moment marks a file the user actually has, and decoration that
+        // threw inside the try would be reported to them as a failed export.
+        if (downloaded) {
+            celebrateStaple();
         }
     }
 

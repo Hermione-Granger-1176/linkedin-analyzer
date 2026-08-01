@@ -1016,7 +1016,7 @@ describe("buildBlocks", () => {
         expect(drawn).toContain("LinkedIn Insights");
         expect(drawn).toContain("Last 12 months  ·  Generated 31 July 2026");
         expect(drawn).toContain("Your insights");
-        expect(drawn).toContain("Pro tip");
+        expect(drawn).toContain("Pip says");
         expect(drawn).toContain("All time");
         expect(drawn).toContain("Recent conversations");
         expect(drawn).toContain("Ada Lovelace");

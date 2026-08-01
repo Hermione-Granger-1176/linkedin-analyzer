@@ -20,6 +20,10 @@ vi.mock("../../../src/shared/ui/loading-overlay.js", () => ({
     LoadingOverlay: { show: vi.fn(), hide: vi.fn() },
 }));
 
+vi.mock("../../../src/shared/ui/mascot.js", () => ({
+    celebrateStaple: vi.fn(),
+}));
+
 vi.mock("../../../src/features/export/availability.js", () => ({
     hasExportableData: vi.fn(),
 }));
@@ -90,6 +94,7 @@ let terminateThreadsWorker;
 let terminateMessagesWorker;
 let terminateConnectionsWorker;
 let captureError;
+let celebrateStaple;
 let DataCache;
 let LoadingOverlay;
 /** @type {{loads: number}|null} */
@@ -123,6 +128,7 @@ async function loadModules() {
     ({ captureError } = await import("../../../src/platform/observability/sentry.js"));
     ({ DataCache } = await import("../../../src/platform/persistence/data-cache.js"));
     ({ LoadingOverlay } = await import("../../../src/shared/ui/loading-overlay.js"));
+    ({ celebrateStaple } = await import("../../../src/shared/ui/mascot.js"));
     ({ PdfExport } = await import("../../../src/features/export/pdf.js"));
 }
 
@@ -592,6 +598,48 @@ describe("PdfExport", () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
         expect(LoadingOverlay.hide).toHaveBeenCalledWith("pdf-export");
         expect(document.activeElement).toBe(ui().trigger);
+    });
+
+    it("marks a finished export with the mascot's staple", async () => {
+        ui().trigger.click();
+        ui().confirm.click();
+
+        await vi.waitFor(() => expect(celebrateStaple).toHaveBeenCalledTimes(1));
+        // After the dialog is down, so the moment plays over the page rather
+        // than behind the modal that started it.
+        expect(ui().backdrop.hidden).toBe(true);
+    });
+
+    it("leaves the staple alone when the export failed", async () => {
+        // Once, not for the rest of the file: clearAllMocks() resets call
+        // history but leaves implementations in place.
+        renderPdfDocument.mockImplementationOnce(() => {
+            throw new Error("layout failed");
+        });
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+
+        expect(celebrateStaple).not.toHaveBeenCalled();
+    });
+
+    it("leaves the staple alone when the export was cancelled", async () => {
+        let release = null;
+        collectExportData.mockReturnValueOnce(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+
+        ui().trigger.click();
+        ui().confirm.click();
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        ui().cancel.click();
+        release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
+        await runPendingTasks();
+
+        expect(celebrateStaple).not.toHaveBeenCalled();
     });
 
     it("names the file after the generation date", async () => {

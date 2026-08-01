@@ -39,22 +39,19 @@
     display: none;
 }
 
-.progress-gear-wrap {
-    width: 88px;
-    height: 88px;
-    border: 2px dashed var(--border-light);
-    border-radius: 50%;
+/* Pip scribbling on a pad, in place of the gear that used to spin here. The
+   drawing arm and the marks on the paper carry the motion, so the frame around
+   him only has to hold a sensible width. Both of those loops belong to
+   mascot.css, along with the preference that switches them off. */
+.progress-mascot-wrap {
+    width: min(240px, 64vw);
     display: grid;
     place-items: center;
-    background: var(--bg-tertiary);
-    animation: gear-float 2.4s ease-in-out infinite;
 }
 
-.progress-gear {
-    width: 62px;
-    height: 62px;
-    color: var(--accent-blue);
-    animation: gear-spin 3.2s linear infinite;
+.pip-loader {
+    width: 100%;
+    height: auto;
 }
 
 .progress-card h2 {
@@ -81,32 +78,6 @@
     color: var(--text-primary);
     font-weight: 600;
     min-height: 28px;
-}
-
-@keyframes gear-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes gear-float {
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-3px);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .progress-gear-wrap,
-    .progress-gear {
-        animation: none;
-    }
 }
 
 /* Tooltip */

@@ -12,6 +12,7 @@ import { DomEvents } from "../../shared/dom-events.js";
 import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-tooltip.js";
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+import { prefersReducedMotion } from "../../shared/ui/motion.js";
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 
@@ -986,7 +987,7 @@ export const AnalyticsPage = (() => {
      * @returns {boolean} True if the timeline should animate.
      */
     function shouldAnimate(view) {
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        if (prefersReducedMotion()) {
             return false;
         }
         if (document.visibilityState && document.visibilityState !== "visible") {

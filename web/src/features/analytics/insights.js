@@ -175,7 +175,8 @@ export function generateInsights(view) {
         accent: "accent-blue",
     });
 
-    const tip = `Try posting close to ${peakDayLabel} around ${String(peakHour).padStart(2, "0")}:00 for maximum consistency.`;
+    // Pip speaks the tip in the app, so it is written in his voice.
+    const tip = `You are sharpest on ${peakDayLabel} around ${String(peakHour).padStart(2, "0")}:00. I would post then.`;
 
     return { insights, tip };
 }

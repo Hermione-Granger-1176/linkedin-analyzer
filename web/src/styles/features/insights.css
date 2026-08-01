@@ -9,10 +9,22 @@
 }
 
 .insight-card {
+    /* The strip along the foot of the card that Pip's reaction stands in. Kept
+       as a custom property so the reserved padding and his own size can never
+       drift apart. */
+    --insight-reaction-size: 56px;
+
+    position: relative;
     background: var(--bg-secondary);
     border: 2px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--space-lg);
+    /* Text stops above the reaction instead of running under it, at every width
+       the grid can produce. Reserved downwards rather than sideways: the grid
+       goes as narrow as 240px, where taking 56px off every line would cost more
+       than the cards can spare, and a row is only ever as tall as its longest
+       card anyway. */
+    padding-bottom: calc(var(--space-sm) + var(--insight-reaction-size));
     box-shadow: var(--shadow-sm);
     display: flex;
     gap: var(--space-md);
@@ -58,6 +70,56 @@
     border-color: var(--accent-red);
 }
 
+/* Pip's reaction stamp, one per card, injected by features/insights/screen.js.
+   It is inked by the shared .pip-* classes in components/mascot.css, so it
+   flips with the theme along with every other pose. Out of the card's flow and
+   out of the pointer's way: the card reserves his strip with padding instead.
+   Flush with the bottom edge, so the jacket running off the crop reads as Pip
+   standing behind the card rather than as a drawing that got cut off. */
+.insight-reaction {
+    position: absolute;
+    right: var(--space-xs);
+    bottom: 0;
+    width: var(--insight-reaction-size);
+    height: var(--insight-reaction-size);
+    pointer-events: none;
+}
+
+/* The stamps bob and blink on Pip's own loops from components/mascot.css, just
+   slower: a drawing this small in the corner of a card should read as calm
+   rather than busy. */
+.insight-reaction .pip-bob {
+    animation-duration: 4.2s;
+}
+
+.insight-reaction .pip-blink {
+    animation-duration: 6.4s;
+}
+
+/* Idle only, and infinite: the cards already arrive on a card-in stagger, and
+   the screenshot harness waits for finite animations to finish. */
+.insight-reaction-zzz {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: insight-reaction-zzz 3.4s ease-in-out infinite;
+}
+
+/* Distances are in the pose's own user units, not screen pixels: the 98-unit
+   viewBox draws at 56px, so a couple of units is the small breath it looks. */
+@keyframes insight-reaction-zzz {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) scale(0.7);
+    }
+    30% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(5px, -12px) scale(1.05);
+    }
+}
+
 .insight-body h3 {
     font-size: var(--font-size-lg);
     color: var(--text-primary);
@@ -69,21 +131,19 @@
     color: var(--text-secondary);
 }
 
+/* The tip is a row of two: Pip on the left and the bubble he speaks through on
+   the right. Both of those are drawn in mascot.css, so all this rule owns is
+   the row itself. */
 .insight-tip {
     display: flex;
     align-items: center;
-    gap: var(--space-md);
-    padding: var(--space-md);
-    border: 2px dashed var(--border-light);
-    border-radius: var(--radius-lg);
-    background: var(--bg-tertiary);
     margin-bottom: var(--space-xl);
 }
 
-.insight-tip-icon {
-    width: 48px;
-    height: 48px;
-    color: var(--accent-yellow);
+/* The display:flex above outranks the [hidden] UA rule, so the tip stayed on
+   screen with nothing to say. Re-hide it explicitly when it is empty. */
+.insight-tip[hidden] {
+    display: none;
 }
 
 /* Messages Insights */
@@ -334,12 +394,30 @@
     flex: 1;
 }
 
+/* No Pip stands on a skeleton, so it gives back the strip the real cards
+   reserve for him and keeps the height it was tuned to before he arrived. */
 .skeleton-insight {
     min-height: 118px;
+    padding-bottom: var(--space-lg);
 }
 
 @keyframes skeleton-shimmer {
     100% {
         transform: translateX(100%);
+    }
+}
+
+/* On a phone every card is a full row of its own, so the strip Pip reserves is
+   height the screen actually notices. He takes a little less of it. */
+@media (max-width: 540px) {
+    .insight-card {
+        --insight-reaction-size: 46px;
+    }
+}
+
+/* Reduced motion: the reactions are still there, they just hold their pose. */
+@media (prefers-reduced-motion: reduce) {
+    .insight-reaction-zzz {
+        animation: none;
     }
 }

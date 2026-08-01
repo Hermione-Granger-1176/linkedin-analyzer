@@ -22,7 +22,9 @@ import { initTelemetry } from "./platform/observability/telemetry.js";
 import { Session } from "./platform/persistence/session.js";
 import { SESSION_CLEANUP_PROMISE_KEY } from "./shared/constants.js";
 import { DomEvents } from "./shared/dom-events.js";
+import { initAlive } from "./shared/ui/alive.js";
 import { initDecorations } from "./shared/ui/decorations.js";
+import { initMascot } from "./shared/ui/mascot.js";
 import { NavMenu } from "./shared/ui/nav-menu.js";
 import { Theme } from "./shared/ui/theme.js";
 
@@ -85,8 +87,12 @@ function init() {
         initTelemetry();
     }
     initRuntime();
-    initDecorations();
+    initMascot();
+    initAlive();
     Theme.init();
+    // After Theme.init() on purpose: the doodles read their palette off the
+    // theme, and painting before it has settled means painting twice.
+    initDecorations();
     PdfExport.init();
     NavMenu.init();
     Tutorial.init();

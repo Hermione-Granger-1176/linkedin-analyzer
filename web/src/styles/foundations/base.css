@@ -25,11 +25,67 @@ body {
         background-color var(--transition-normal),
         color var(--transition-normal);
 
-    /* Grid paper background */
-    background-image:
+    /* The furniture punched into the sheet: a column of binder holes down the
+       outside edge, and the margin rule beside them. Both are background layers
+       rather than elements, so they scroll with the paper, sit under every
+       card, and take no part in layout. They are held as a pair of lists rather
+       than written into the background below because the dark theme restates
+       that background to add its lamp, and the furniture does not change. */
+    --paper-furniture:
+        radial-gradient(
+            circle at var(--paper-punch-x) 50%,
+            var(--paper-punch-fill) 0 calc(var(--paper-punch-radius) - 2.5px),
+            var(--paper-punch-ring) calc(var(--paper-punch-radius) - 0.5px)
+                var(--paper-punch-radius),
+            transparent var(--paper-punch-radius)
+        ),
+        linear-gradient(
+            90deg,
+            transparent 0 var(--paper-margin-x),
+            var(--paper-margin-color) var(--paper-margin-x)
+                calc(var(--paper-margin-x) + var(--paper-margin-width)),
+            transparent calc(var(--paper-margin-x) + var(--paper-margin-width))
+        );
+    --paper-furniture-size: 100% var(--paper-punch-step), 100% 100%;
+
+    /* The ruling, held as its own pair for the same reason as the furniture. */
+    --paper-ruling:
         linear-gradient(var(--grid-color) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-    background-size: 25px 25px;
+    --paper-ruling-size: 25px 25px, 25px 25px;
+
+    /* Grid paper background, under the furniture: the holes are listed first
+       because they paint over the ruling, and a hole is a hole, so the grid has
+       to stop at its edge. */
+    background-image: var(--paper-furniture), var(--paper-ruling);
+    background-size: var(--paper-furniture-size), var(--paper-ruling-size);
+}
+
+/* Below the narrow breakpoint the left edge belongs to the fixed nav toggle and
+   the cards run nearly to the paper's edge, so the punches drop out and the
+   margin rule carries the notebook on its own. Emptying the two punch colors
+   leaves the layer in place and paints nothing, which keeps the layer lists
+   above as the single description of this background. */
+@media (max-width: 540px) {
+    body {
+        --paper-punch-fill: transparent;
+        --paper-punch-ring: transparent;
+    }
+}
+
+/* Dark theme: the same ruled page and the same furniture, plus the pool of a
+   desk lamp above it. The ruling comes from the token; the last layer is a
+   single static gradient that keeps a flat near-black from reading as a void,
+   and it sizes to the document rather than the viewport so it never slides
+   against the content while scrolling. */
+[data-theme="dark"] body {
+    background-image:
+        var(--paper-furniture), var(--paper-ruling),
+        radial-gradient(120% 80% at 50% 0%, var(--desk-lamp), transparent 70%);
+    background-size:
+        var(--paper-furniture-size),
+        var(--paper-ruling-size),
+        100% 100%;
 }
 
 .skip-link {
@@ -92,8 +148,8 @@ button {
     position: fixed;
     top: var(--space-lg);
     right: var(--space-lg);
-    width: 48px;
-    height: 48px;
+    width: var(--corner-btn-size);
+    height: var(--corner-btn-size);
     border: 2px solid var(--border-color);
     border-radius: 50%;
     background: var(--bg-secondary);
@@ -139,9 +195,9 @@ button {
 .pdf-export-btn {
     position: fixed;
     top: var(--space-lg);
-    right: calc(var(--space-lg) + 48px + var(--space-sm));
-    width: 48px;
-    height: 48px;
+    right: calc(var(--space-lg) + var(--corner-btn-size) + var(--space-sm));
+    width: var(--corner-btn-size);
+    height: var(--corner-btn-size);
     border: 2px solid var(--border-color);
     border-radius: 50%;
     background: var(--bg-secondary);

@@ -86,6 +86,31 @@ vi.mock("../../../src/features/tutorial/steps.js", () => ({
                 allowNext: true,
             },
         ],
+        // A route that points at something on the left and then at nothing, for
+        // the mascot's facing flip.
+        facing: [
+            {
+                id: "facing-step-1",
+                route: "facing",
+                title: "Pointing Left",
+                body: "First step body",
+                target: "#step-target-1",
+                placement: "bottom",
+                allowSkip: true,
+                allowBack: true,
+                allowNext: true,
+            },
+            {
+                id: "facing-step-2",
+                route: "facing",
+                title: "Pointing At Nothing",
+                body: "Second step body",
+                placement: "center",
+                allowSkip: true,
+                allowBack: true,
+                allowNext: true,
+            },
+        ],
         // A route with a step that has NO target, always considered renderable
         notargets: [
             {
@@ -2660,6 +2685,81 @@ describe("findRenderableStepIndex edge cases", () => {
         Tutorial.start("noback");
         // Step 0 has no allowBack set (undefined → treated as allowed)
         expect(() => ui_backButton().click()).not.toThrow();
+    });
+});
+
+// ===========================================================================
+// Pip, the guide standing on the callout card
+// ===========================================================================
+
+describe("tutorial mascot", () => {
+    it("mounts inside the popover without joining the focus trap", async () => {
+        Tutorial.init();
+        const mascot = document.querySelector(".tutorial-mascot");
+        expect(mascot).not.toBeNull();
+        expect(mascot.closest(".tutorial-popover")).not.toBeNull();
+        expect(mascot.getAttribute("aria-hidden")).toBe("true");
+
+        // The trap walks the popover with this same function, so nothing inside
+        // Pip may answer it.
+        const { getFocusableElements } = await import("../../../src/features/tutorial/targets.js");
+        const popover = document.querySelector(".tutorial-popover");
+        expect(getFocusableElements(popover).length).toBeGreaterThan(0);
+        expect(getFocusableElements(popover).some((node) => mascot.contains(node))).toBe(false);
+        expect(getFocusableElements(mascot)).toEqual([]);
+    });
+
+    it("presents on the way through and waves on the final step", () => {
+        buildHomeTargets();
+        Tutorial.start("home");
+
+        const mascot = document.querySelector(".tutorial-mascot");
+        expect(mascot.dataset.pose).toBe("present");
+
+        ui_nextButton().click();
+        expect(mascot.dataset.pose).toBe("present");
+
+        ui_nextButton().click();
+        expect(ui_nextButton().textContent).toBe("Finish");
+        expect(mascot.dataset.pose).toBe("wave");
+    });
+
+    it("turns toward a target sitting left of the card", () => {
+        addTarget("step-target-1", {
+            left: 0,
+            top: 300,
+            right: 20,
+            bottom: 340,
+            width: 20,
+            height: 40,
+            x: 0,
+            y: 300,
+        });
+        addTarget("step-target-2");
+        addTarget("step-target-3");
+        Tutorial.start("home");
+
+        expect(document.querySelector(".tutorial-mascot").dataset.facing).toBe("left");
+    });
+
+    it("faces forward again on a step with no target to point at", () => {
+        addTarget("step-target-1", {
+            left: 0,
+            top: 300,
+            right: 20,
+            bottom: 340,
+            width: 20,
+            height: 40,
+            x: 0,
+            y: 300,
+        });
+        Tutorial.start("facing");
+        const mascot = document.querySelector(".tutorial-mascot");
+        expect(mascot.dataset.facing).toBe("left");
+
+        ui_nextButton().click();
+
+        expect(mascot.dataset.facing).toBe("right");
     });
 });
 

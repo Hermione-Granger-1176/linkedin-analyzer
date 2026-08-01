@@ -22,6 +22,7 @@
 - Avoid narrating the code; explain why, not what.
 - Keep comments short and aligned with nearby logic.
 - Match project tone: direct, neutral, and implementation-focused.
+- Mascot drawings and the stylesheets that pose them are the one exception: they describe the pose in plain language, because a run of path coordinates says nothing about what it draws.
 
 ## Maintainer Voice and Consistency
 

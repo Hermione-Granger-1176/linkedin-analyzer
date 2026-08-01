@@ -9,6 +9,8 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
+import { buildInsightReaction } from "./reactions.js";
+
 const ACCENT_CLASSES = new Set([
     "accent-yellow",
     "accent-purple",
@@ -659,12 +661,17 @@ export const InsightsPage = (() => {
             const card = document.createElement("div");
             card.className = "insight-card";
             card.dataset.accent = accent;
+            // Pip reacts to what the card says from its bottom-right corner. He
+            // is decoration on top of the card, not part of it: the PDF export
+            // is built from these same insight objects rather than from the DOM,
+            // so nothing about him reaches the document.
             card.innerHTML = `
                 <div class="insight-icon ${accent}">${getInsightIcon(insight.icon)}</div>
                 <div class="insight-body">
                     <h3>${escapeHtml(insight.title)}</h3>
                     <p>${escapeHtml(insight.body)}</p>
                 </div>
+                ${buildInsightReaction(insight.id)}
             `;
             elements.insightsGrid.appendChild(card);
         });

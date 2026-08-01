@@ -13,6 +13,7 @@ import {
     getRectEdgePoint,
     resolvePlacement,
 } from "./geometry.js";
+import { setTutorialMascotFacing, setTutorialMascotPose } from "./mascot.js";
 import {
     getMiniTipCooldownMs,
     getMiniTipDisplayDelayMs,
@@ -74,7 +75,7 @@ export const Tutorial = (() => {
         miniTipEntries: [],
     };
 
-    /** @type {{root: HTMLDivElement | null, overlay: HTMLDivElement | null, spotlight: HTMLDivElement | null, pointer: SVGSVGElement | null, pointerMainPath: SVGPathElement | null, pointerEchoPath: SVGPathElement | null, pointerHeadPath: SVGPathElement | null, popover: HTMLElement | null, title: HTMLHeadingElement | null, body: HTMLParagraphElement | null, counter: HTMLSpanElement | null, dots: HTMLDivElement | null, backButton: HTMLButtonElement | null, nextButton: HTMLButtonElement | null, skipButton: HTMLButtonElement | null, miniTipsLayer: HTMLDivElement | null}} */
+    /** @type {import("./shell.js").TutorialUi} */
     const ui = {
         root: null,
         overlay: null,
@@ -91,6 +92,7 @@ export const Tutorial = (() => {
         backButton: null,
         nextButton: null,
         skipButton: null,
+        mascot: null,
         miniTipsLayer: null,
     };
 
@@ -654,6 +656,7 @@ export const Tutorial = (() => {
         ui.skipButton.hidden = !showSkip;
         ui.nextButton.hidden = !allowNext;
         ui.nextButton.textContent = isLastStep ? "Finish" : "Next";
+        setTutorialMascotPose(ui.mascot, isLastStep);
 
         if (focusPopover) {
             ui.popover.focus();
@@ -789,6 +792,7 @@ export const Tutorial = (() => {
         }
         if (!targetRect || placement === "center") {
             ui.pointer.style.display = "none";
+            setTutorialMascotFacing(ui.mascot, false);
             return;
         }
 
@@ -797,6 +801,7 @@ export const Tutorial = (() => {
         const targetCenterX = targetRect.left + targetRect.width / 2;
         const targetCenterY = targetRect.top + targetRect.height / 2;
         const angle = Math.atan2(targetCenterY - popCenterY, targetCenterX - popCenterX);
+        setTutorialMascotFacing(ui.mascot, targetCenterX < popCenterX);
 
         const popRectBox = {
             left: popPosition.left,

@@ -6,6 +6,7 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPE_LABELS, FILE_TYPES } from "../../shared/constants.js";
+import { celebrateDownload } from "../../shared/ui/mascot.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
 import { ExcelGenerator } from "./excel.js";
@@ -397,7 +398,9 @@ export const CleanPage = (() => {
                 fileType: type,
             });
             showError(`Error generating Excel: ${downloadResult.error}`);
+            return;
         }
+        celebrateDownload();
     }
 
     /**

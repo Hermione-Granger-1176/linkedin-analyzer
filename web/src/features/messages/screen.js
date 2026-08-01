@@ -867,7 +867,8 @@ export const MessagesPage = (() => {
     }
 
     /**
-     * Build a contextual tip string.
+     * Build a contextual tip string. Pip speaks the tip on screen, so every
+     * branch stays in his first-person voice.
      * @param {object[]} topContacts - Top contacts list
      * @param {object[]} silentConnections - Silent connections list
      * @param {object[]} fadingConversations - Fading conversations list
@@ -883,15 +884,18 @@ export const MessagesPage = (() => {
         const fading = fadingConversations[0] || null;
 
         if (top && fading) {
-            return `${top.name} is your most active conversation. Reconnect with ${fading.name} who has been quiet for ${fading.daysSince} days.`;
+            // A conversation is only fading after thirty quiet days, so the day
+            // count here is never one.
+            return `${top.name} is your liveliest thread. I would say hello to ${fading.name} too, quiet for ${fading.daysSince} days now.`;
         }
 
         if (top) {
-            return `${top.name} is your top contact in this range. Keep this momentum going.`;
+            return `${top.name} is your top contact in this range. I would keep that rhythm going.`;
         }
 
         if (silentConnections.length) {
-            return `${silentConnections.length} connections are still silent. A short check-in can restart your network momentum.`;
+            const people = silentConnections.length === 1 ? "connection" : "connections";
+            return `I count ${silentConnections.length} silent ${people}. One short hello can wake the list up.`;
         }
 
         return null;
@@ -906,7 +910,8 @@ export const MessagesPage = (() => {
         const missingFileMessages = {
             silent: "Upload Connections.csv to view silent connections.",
             fading: "Upload Connections.csv to identify fading conversations.",
-            tip: "Upload Connections.csv to unlock silent and fading relationship insights.",
+            // Pip reads the tip out, so this one is in his voice.
+            tip: "Upload Connections.csv and I can point out who has gone quiet on you.",
         };
 
         if (!state.hasConnectionsFile) {

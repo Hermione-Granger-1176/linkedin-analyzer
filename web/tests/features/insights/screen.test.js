@@ -263,6 +263,65 @@ describe("InsightsPage", () => {
         expect(icon.className).not.toContain("onclick");
     });
 
+    it("stamps a mood-matched Pip on each card without disturbing its text or the export", async () => {
+        Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
+        DataCache.get.mockReturnValue(null);
+
+        InsightsPage.init();
+        await InsightsPage.onRouteChange({ range: "3m" });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        workerInstance.listeners.message[0]({
+            data: { type: "init", payload: { hasData: true } },
+        });
+        const viewRequestId = workerInstance.postMessage.mock.calls.find(
+            (call) => call[0].type === "view",
+        )[0].requestId;
+        const insights = [
+            {
+                id: "quiet-stretch",
+                title: "Quiet Stretch",
+                body: "This period is lighter on activity.",
+                accent: "accent-purple",
+                icon: "monkey",
+            },
+            {
+                id: "trending-up",
+                title: "Trending Up",
+                body: "Activity is up 42% compared to the previous period.",
+                accent: "accent-blue",
+                icon: "rocket",
+            },
+        ];
+        workerInstance.listeners.message[0]({
+            data: {
+                type: "view",
+                requestId: viewRequestId,
+                payload: { insights: { insights, tip: null } },
+            },
+        });
+
+        const cards = document.querySelectorAll(".insight-card");
+        const reactions = document.querySelectorAll(".insight-card .insight-reaction");
+        expect(reactions.length).toBe(2);
+        // Each card gets the pose for its own id: the doze leans, the flex does not.
+        expect(reactions[0].innerHTML).toContain("insight-reaction-zzz");
+        expect(reactions[1].innerHTML).not.toContain("insight-reaction-zzz");
+        // Decoration only: no assistive-technology surface, and the card's own
+        // text is untouched by it.
+        reactions.forEach((reaction) => expect(reaction.getAttribute("aria-hidden")).toBe("true"));
+        expect(cards[1].querySelector(".insight-body h3").textContent).toBe("Trending Up");
+        expect(cards[1].textContent).toContain("Activity is up 42%");
+
+        // The PDF export reads the insight objects, never the cards, so the
+        // published snapshot carries no trace of the stamps.
+        const snapshot = DataCache.set.mock.calls
+            .filter((call) => call[0] === INSIGHTS_EXPORT_CACHE_KEY)
+            .at(-1)[1];
+        expect(snapshot.insights).toEqual(insights);
+        expect(JSON.stringify(snapshot)).not.toContain("insight-reaction");
+    });
+
     it("renders the All-time section from networkGrowth and the stored outreach summary", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         Storage.getOutreach.mockResolvedValue({

@@ -129,7 +129,7 @@ def _copilot_reviews(reviews: object) -> tuple[CopilotReview, ...]:
         body = review.get("body")
         if not isinstance(body, str):
             raise GhError("A Copilot review is missing a string body.")
-        state = review.get("state", "")
+        state = review.get("state")
         if not isinstance(state, str):
             raise GhError("A Copilot review is missing a string state.")
         parsed.append(

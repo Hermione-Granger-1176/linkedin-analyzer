@@ -207,8 +207,8 @@ export function createBranchName(prefix, date = new Date()) {
  * open-only lookup finds nothing and opens a duplicate. A closed but unmerged
  * pull request is therefore still reusable; a merged one never is, because its
  * branch has moved on to unrelated work.
- * @param {Array<{number: number, state: string, merged_at: string | null}>} pulls - Pull requests for the branch.
- * @returns {{number: number, state: string, merged_at: string | null} | undefined} Reusable pull request, if any.
+ * @param {Array<{number: number, state: string, merged_at: string | null, html_url: string}>} pulls - Pull requests for the branch.
+ * @returns {{number: number, state: string, merged_at: string | null, html_url: string} | undefined} Reusable pull request, if any.
  */
 export function selectReusablePull(pulls) {
     return pulls

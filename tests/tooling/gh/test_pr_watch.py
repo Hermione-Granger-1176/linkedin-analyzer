@@ -165,6 +165,7 @@ def test_copilot_review_requires_exact_clean_wording() -> None:
         [_review("review", submitted_at=None)],
         [_review("review", body=None)],
         [_review("review", state=None)],
+        [{key: value for key, value in _review("review").items() if key != "state"}],
     ],
 )
 def test_copilot_reviews_rejects_malformed_payloads(reviews: object) -> None:

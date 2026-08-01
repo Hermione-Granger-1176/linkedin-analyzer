@@ -228,16 +228,26 @@ Expectations live in `scripts/ci/repo_audit.py` as named constants, so changing 
 
 | Group             | Expectation                                                                                                                                                                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository        | Default branch is `main`; squash is the only merge method; merged branches are deleted                                                                                                                                                              |
+| Repository        | Default branch is `main`                                                                                                                                                                                                                            |
 | Security          | Secret scanning, push protection, and Dependabot security updates are all enabled                                                                                                                                                                   |
 | Branch protection | Required checks are `analyze-javascript`, `analyze-python`, `CodeQL`, `CI result`, and `dependency-review`; at least one approving review; signed commits, linear history, and conversation resolution required; force pushes and deletions refused |
-| Actions           | Variables `APP_ID` and `ESCALATION_APP_ID`, and secrets `APP_PRIVATE_KEY` and `ESCALATION_APP_PRIVATE_KEY`, all exist                                                                                                                               |
+| Actions           | Variables `APP_ID`, `ESCALATION_APP_ID`, and `AUDIT_APP_ID`, and secrets `APP_PRIVATE_KEY`, `ESCALATION_APP_PRIVATE_KEY`, and `AUDIT_APP_PRIVATE_KEY`, all exist                                                                                    |
 
 The script's exit codes match the schedule watchdog: `0` clean, `1` drift found and listed, `2` the audit could not complete. They are distinct because a failure to look must never read as a clean result, which is also why a setting the API declines to report is treated as missing rather than assumed correct. The one exception is a branch with no protection at all, which answers `404`: that is the single worst drift the audit can find, so it becomes a finding rather than a failure to check.
 
+#### Settings this audit deliberately does not check
+
+The merge methods (`allow_squash_merge`, `allow_merge_commit`, `allow_rebase_merge`) and `delete_branch_on_merge` are not audited, and re-adding them will produce a weekly false alarm.
+
+GitHub returns those four only to a token carrying **push** access. That is an access level derived from the permission set, not a permission that can be granted on its own, so the read-only audit App receives `null` for every one of them and no permission change alters that. Its token reports `admin`, `maintain`, `push`, `pull`, and `triage` all `false`, which is correct for an App that must never write. Auditing those four would mean granting the audit App write access in order to read four booleans.
+
+Little is lost. Required linear history on the default branch already refuses merge and rebase commits, and the audit does check that. What genuinely goes unwatched is `delete_branch_on_merge`, which is housekeeping rather than a safety property. The `artifacts` repository has never audited these four either.
+
 Note that `make` collapses any non-zero recipe exit to `2` of its own, so `1` and `2` are only distinguishable to something running the module directly. At a terminal the printed output is the signal: drift is listed on stdout, and a failure to look prints to stderr with the two permissions it needed.
 
-**This target is run by hand, not from a workflow.** Reading branch protection needs `administration: read` and listing secrets needs `secrets: read`, and `GITHUB_TOKEN` can grant neither. The repository's App credentials exist for writeback and carry neither permission either, so a workflow copy would only ever report that it could not look. Run it after changing repository settings, and when a merge behaves in a way the protection rules should have prevented.
+**This target needs a GitHub App token, never `GITHUB_TOKEN`.** Reading branch protection needs `administration: read` and listing secrets needs `secrets: read`, and `GITHUB_TOKEN` can grant neither. Neither writeback App carries them either, deliberately, so [`audit-repo-settings.yml`](#scheduled-audit-run) runs it weekly on the read-only audit App instead.
+
+Run it by hand as well after changing repository settings, and when a merge behaves in a way the protection rules should have prevented. Against a maintainer's own credentials it answers immediately, rather than waiting for Monday.
 
 Rulesets are deliberately not audited; this repository uses classic branch protection and has none. Migrating protection to a ruleset would empty the classic endpoint, which the audit already reports as unprotected.
 
@@ -339,13 +349,11 @@ Scope all three installations to selected repositories rather than all of them.
 
 If the escalation credentials are missing, the CI pin refresh workflow records a skipped summary instead of attempting a write, and the settings audit does the same when the audit credentials are absent. If the primary credentials are missing, the Python lock refresh workflow uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
 
-### Repository settings audit
+### Scheduled audit run
 
 `audit-repo-settings.yml` runs `make ci-audit-repo-settings` every Monday, and on `workflow_dispatch`. `scripts/ci/repo_audit.py` writes a `checked` output itself, exactly as the schedule watchdog does and for the same reason: `make` rewrites every failing recipe's status to `2`, so "found drift" and "could not read the settings" reach the workflow as the same exit code. Reading `make`'s status instead would raise a drift alert every time the audit merely failed to look, which is the opposite of the fail-closed behavior the audit is built around.
 
 The three reporting jobs read that output and call the shared `alert-issue.yml` described in [Alert issues](#alert-issues). A failed run that reached a verdict is drift, a failed run that did not is a setup failure, and a successful one closes the issue.
-
-The same target remains runnable by hand against a maintainer's own credentials, which is the faster way to check a setting immediately after changing it.
 
 ## CLI Environment Variables
 

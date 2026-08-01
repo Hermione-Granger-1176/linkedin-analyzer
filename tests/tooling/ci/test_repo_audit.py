@@ -246,18 +246,18 @@ def test_a_changed_default_branch_is_reported() -> None:
     assert findings == ["default branch is 'master' instead of 'main'"]
 
 
-@pytest.mark.parametrize(("method", "expected"), sorted(repo_audit.EXPECTED_MERGE_METHODS.items()))
-def test_each_merge_method_is_reported_when_it_flips(method: str, expected: bool) -> None:
-    """Squash-only is what makes one pull request equal one commit on main."""
-    findings = _audit(repository=_repository(**{method: not expected}))
-    state = "enabled" if expected else "disabled"
-    assert findings == [f"{method} should be {state}"]
+@pytest.mark.parametrize(
+    "field",
+    ["allow_squash_merge", "allow_merge_commit", "allow_rebase_merge", "delete_branch_on_merge"],
+)
+def test_a_field_only_a_writing_token_can_read_is_not_judged(field: str) -> None:
+    """GitHub returns these only to a token with push access, which the audit App lacks.
 
-
-def test_branches_that_survive_a_merge_are_reported() -> None:
-    """Automatic deletion is what keeps merged work from accumulating as stale branches."""
-    findings = _audit(repository=_repository(delete_branch_on_merge=False))
-    assert findings == ["merged branches are not deleted automatically"]
+    They arrive as ``null`` rather than as their real value, so judging them
+    would alarm every week about settings that are in fact correct.
+    """
+    assert field not in repo_audit.JUDGED_REPOSITORY_FIELDS
+    assert _audit(repository=_repository(**{field: None})) == []
 
 
 def test_a_disabled_security_feature_is_reported_by_name() -> None:
@@ -288,21 +288,22 @@ def test_security_features_that_cannot_be_read_are_reported_as_missing(
 def test_a_missing_variable_is_reported() -> None:
     """Without it the writeback workflows degrade into a silent skip."""
     assert _audit(variables={"variables": []}) == [
-        "missing repository variables: APP_ID, ESCALATION_APP_ID"
+        "missing repository variables: APP_ID, AUDIT_APP_ID, ESCALATION_APP_ID"
     ]
 
 
 def test_a_missing_secret_is_reported() -> None:
     """Without it the writeback workflows degrade into a silent skip."""
     assert _audit(secrets={"secrets": []}) == [
-        "missing repository secrets: APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY"
+        "missing repository secrets: "
+        "APP_PRIVATE_KEY, AUDIT_APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY"
     ]
 
 
 def test_a_missing_escalation_credential_alone_is_reported() -> None:
     """The primary app being healthy must not hide an absent escalation app."""
     assert _audit(variables={"variables": [{"name": "APP_ID"}]}) == [
-        "missing repository variables: ESCALATION_APP_ID"
+        "missing repository variables: AUDIT_APP_ID, ESCALATION_APP_ID"
     ]
 
 
@@ -353,15 +354,15 @@ def test_a_response_that_is_not_an_object_fails_the_audit(kwargs: object, messag
 def test_every_drifted_setting_is_reported_in_one_pass() -> None:
     """One run has to name all of them; fixing them one round trip at a time is worse."""
     findings = _audit(
-        repository=_repository(delete_branch_on_merge=False, allow_merge_commit=True),
+        repository=_repository(default_branch="master"),
         protection=_protection(required_signatures={"enabled": False}),
         secrets={"secrets": []},
     )
     assert findings == [
-        "allow_merge_commit should be disabled",
-        "merged branches are not deleted automatically",
+        "default branch is 'master' instead of 'main'",
         "main branch protection does not require signed commits",
-        "missing repository secrets: APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY",
+        "missing repository secrets: "
+        "APP_PRIVATE_KEY, AUDIT_APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY",
     ]
 
 
@@ -488,3 +489,38 @@ def test_a_failure_to_look_is_reported_as_unchecked(
     capsys.readouterr()
 
     assert output.read_text(encoding="utf-8") == "checked=false\n"
+
+
+@pytest.mark.parametrize(
+    "omitted",
+    sorted(repo_audit.JUDGED_REPOSITORY_FIELDS),
+)
+def test_a_field_the_response_omitted_is_a_failure_to_look(omitted: str) -> None:
+    """GitHub returns a reduced repository object to a token without the access a field needs.
+
+    Treating the absence as `false` would raise a drift alert about a setting
+    that is in fact correct, which is the opposite of this audit's contract.
+    """
+    payload = {key: value for key, value in _repository().items() if key != omitted}
+
+    with pytest.raises(GhError, match=f"omitted {omitted}|omitted .*{omitted}"):
+        repo_audit.audit_repository(payload, default_branch="main")
+
+
+def test_the_unreadable_fields_are_all_named_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One run should name every field the token could not read, not just the first.
+
+    The judged set is one field today, so the set is widened here rather than
+    letting the message-building go untested until a second field is added.
+    """
+    monkeypatch.setattr(
+        repo_audit, "JUDGED_REPOSITORY_FIELDS", frozenset({"default_branch", "homepage", "topics"})
+    )
+    payload = {
+        key: value for key, value in _repository().items() if key not in {"homepage", "topics"}
+    }
+
+    with pytest.raises(GhError) as excinfo:
+        repo_audit.audit_repository(payload, default_branch="main")
+
+    assert "omitted homepage, topics" in str(excinfo.value)

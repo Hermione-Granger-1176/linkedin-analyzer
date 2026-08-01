@@ -16,6 +16,11 @@ export const Theme = (() => {
         const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         const theme = savedTheme || (systemPrefersDark ? "dark" : "light");
         applyTheme(theme);
+        // The document ships marked light, so the first apply is itself a change
+        // whenever the stored or system preference is dark. Announcing it lets
+        // theme-derived canvases (the background doodles) paint the right palette
+        // instead of keeping the one they read before this ran.
+        notifyThemeChange();
 
         toggle.addEventListener("click", () => {
             const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";

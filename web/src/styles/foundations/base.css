@@ -32,6 +32,22 @@ body {
     background-size: 25px 25px;
 }
 
+/* Dark theme: the same ruled page, plus the pool of a desk lamp above it. The
+   ruling comes from the token; the third layer is a single static gradient that
+   keeps a flat near-black from reading as a void, and it sizes to the document
+   rather than the viewport so it never slides against the content while
+   scrolling. */
+[data-theme="dark"] body {
+    background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px),
+        radial-gradient(120% 80% at 50% 0%, rgba(96, 74, 52, 0.22), transparent 70%);
+    background-size:
+        25px 25px,
+        25px 25px,
+        100% 100%;
+}
+
 .skip-link {
     position: absolute;
     top: -100px;

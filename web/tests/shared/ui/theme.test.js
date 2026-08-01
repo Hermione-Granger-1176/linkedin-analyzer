@@ -17,6 +17,19 @@ describe("Theme", () => {
         expect(document.documentElement.getAttribute("data-theme")).toBeTruthy();
     });
 
+    it("announces the theme it settled on at init", () => {
+        setupDom('<button id="themeToggle"></button>');
+        mockMatchMedia(true);
+        const onChange = vi.fn();
+        document.addEventListener("themechange", onChange);
+
+        Theme.init();
+
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+        document.removeEventListener("themechange", onChange);
+    });
+
     it("returns early when theme toggle is missing", () => {
         setupDom("");
         mockMatchMedia();

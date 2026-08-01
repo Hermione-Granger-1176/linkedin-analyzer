@@ -252,6 +252,21 @@
     border-radius: 0 0 4px 4px;
 }
 
+/* Dark theme: the two paper props in this file are physical objects, so after
+   dark they take an opaque color rather than a tint of the ground. */
+[data-theme="dark"] .error-message {
+    background: rgba(82, 46, 40, 1);
+}
+
+/* Masking tape under a lamp is tan, not the yellow of the marker it shares a
+   token with, so the dark strips step off the accent and gain back the opacity
+   the light strips give away. */
+[data-theme="dark"] .preview-section:not([hidden])::before,
+[data-theme="dark"] .preview-section:not([hidden])::after {
+    background: rgba(176, 140, 88, 1);
+    opacity: 0.85;
+}
+
 /* Selection styling: dark text keeps contrast on the yellow highlight */
 ::selection {
     background: var(--accent-yellow);

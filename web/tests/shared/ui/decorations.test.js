@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { initDecorations } from "../../../src/shared/ui/decorations.js";
-import { createCanvas } from "../../helpers/dom.js";
+import { createCanvas, resetDom } from "../../helpers/dom.js";
 
 vi.mock("roughjs/bundled/rough.esm.js", () => ({
     default: {
@@ -9,11 +9,27 @@ vi.mock("roughjs/bundled/rough.esm.js", () => ({
     },
 }));
 
+/**
+ * Mount a decoration canvas the module can find.
+ * @returns {HTMLCanvasElement} The mounted canvas
+ */
+function mountCanvas() {
+    const { canvas, ctx } = createCanvas({ width: 300, height: 200 });
+    canvas.id = "roughCanvas";
+    canvas.getContext = vi.fn(() => ctx);
+    document.body.appendChild(canvas);
+    return canvas;
+}
+
 describe("initDecorations", () => {
     beforeEach(async () => {
         document.body.innerHTML = "";
         const rough = await import("roughjs/bundled/rough.esm.js");
         rough.default.canvas.mockClear();
+    });
+
+    afterEach(() => {
+        resetDom();
     });
 
     it("returns early when canvas is missing", async () => {
@@ -23,10 +39,8 @@ describe("initDecorations", () => {
     });
 
     it("returns early when canvas context is null", async () => {
-        const { canvas } = createCanvas({ width: 300, height: 200 });
-        canvas.id = "roughCanvas";
+        const canvas = mountCanvas();
         canvas.getContext = vi.fn(() => null);
-        document.body.appendChild(canvas);
 
         initDecorations();
         const rough = await import("roughjs/bundled/rough.esm.js");
@@ -35,11 +49,8 @@ describe("initDecorations", () => {
         expect(rc.circle).not.toHaveBeenCalled();
     });
 
-    it("draws rough circles on the canvas", async () => {
-        const { canvas, ctx } = createCanvas({ width: 300, height: 200 });
-        canvas.id = "roughCanvas";
-        canvas.getContext = vi.fn(() => ctx);
-        document.body.appendChild(canvas);
+    it("draws chalk outlines on the canvas in the dark theme", async () => {
+        const canvas = mountCanvas();
         document.documentElement.setAttribute("data-theme", "dark");
 
         initDecorations();
@@ -47,5 +58,46 @@ describe("initDecorations", () => {
         const rc = rough.default.canvas.mock.results[0].value;
         expect(rough.default.canvas).toHaveBeenCalledWith(canvas);
         expect(rc.circle).toHaveBeenCalledTimes(3);
+        expect(rc.circle.mock.calls[0][3]).toMatchObject({ strokeWidth: 1.8 });
+        expect(rc.circle.mock.calls[0][3].fill).toBeUndefined();
+    });
+
+    it("draws solid blobs on the canvas in the light theme", async () => {
+        mountCanvas();
+        document.documentElement.setAttribute("data-theme", "light");
+
+        initDecorations();
+        const rough = await import("roughjs/bundled/rough.esm.js");
+        const rc = rough.default.canvas.mock.results[0].value;
+        expect(rc.circle).toHaveBeenCalledTimes(3);
+        expect(rc.circle.mock.calls[0][3]).toMatchObject({ fillStyle: "solid" });
+    });
+
+    it("redraws when the theme changes", async () => {
+        mountCanvas();
+        document.documentElement.setAttribute("data-theme", "light");
+        initDecorations();
+
+        const rough = await import("roughjs/bundled/rough.esm.js");
+        expect(rough.default.canvas).toHaveBeenCalledTimes(1);
+
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.dispatchEvent(new CustomEvent("themechange"));
+
+        expect(rough.default.canvas).toHaveBeenCalledTimes(2);
+        const rc = rough.default.canvas.mock.results[1].value;
+        expect(rc.circle.mock.calls[0][3]).toMatchObject({ strokeWidth: 1.8 });
+    });
+
+    it("registers only one redraw listener however often it is initialized", async () => {
+        mountCanvas();
+        initDecorations();
+        initDecorations();
+
+        const rough = await import("roughjs/bundled/rough.esm.js");
+        expect(rough.default.canvas).toHaveBeenCalledTimes(2);
+
+        document.dispatchEvent(new CustomEvent("themechange"));
+        expect(rough.default.canvas).toHaveBeenCalledTimes(3);
     });
 });

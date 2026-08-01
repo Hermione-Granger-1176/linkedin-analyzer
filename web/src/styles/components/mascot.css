@@ -399,11 +399,14 @@
     position: relative;
 }
 
+/* Centred with the individual translate property rather than with `transform`,
+   because the moment envelope animates `transform` and would otherwise drop the
+   centring for the length of the move. */
 .pip-cheer {
     position: absolute;
     left: 50%;
     bottom: 100%;
-    transform: translateX(-50%);
+    translate: -50%;
     width: 74px;
     height: auto;
 }
@@ -876,6 +879,10 @@
     height: auto;
 }
 
+/* The envelope all three moments arrive and leave in. The cheer is on the list
+   too, so a fist pump fades out the way the other two do instead of being cut
+   off mid-air. */
+.pip-cheer.is-cheering,
 .pip-staple.is-stapling,
 .pip-eraser.is-erasing {
     animation: pip-moment-in 1.4s ease-in-out forwards;
@@ -1550,6 +1557,7 @@
     .pip-drift,
     .pip-speed line,
     .pip-mark,
+    .pip-cheer.is-cheering,
     .is-cheering .pip-jump,
     .is-cheering .pip-arm,
     .hub-card:hover .hub-icon svg,

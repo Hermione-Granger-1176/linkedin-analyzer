@@ -17,6 +17,10 @@ function circleOptions(color, outline) {
     return { fill: color, fillStyle: "solid", stroke: "transparent", roughness: 2 };
 }
 
+/* The frame a resize has booked, so a drag repaints once per frame rather than
+   once per event. */
+let resizeFrame = 0;
+
 /** Size the decoration canvas to the viewport and redraw it for the current theme. */
 function draw() {
     const canvas = /** @type {HTMLCanvasElement|null} */ (document.getElementById("roughCanvas"));
@@ -55,13 +59,32 @@ function draw() {
 }
 
 /**
- * Draw the background decorations and keep them in step with the theme.
- * The colors and the fill-versus-outline treatment both come from the active
- * theme, so a toggle has to repaint the canvas or the doodles keep the palette
- * they were born with. Registering the same listener twice is ignored, so
- * calling this more than once never stacks up redraws.
+ * Repaint after a resize, at most once per animation frame. A resize drag fires
+ * a long stream of events, and only the size the last of them leaves behind is
+ * worth a repaint.
+ * @returns {void}
+ */
+function handleResize() {
+    if (resizeFrame) {
+        return;
+    }
+    resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0;
+        draw();
+    });
+}
+
+/**
+ * Draw the background decorations and keep them in step with the theme and the
+ * viewport. The colors and the fill-versus-outline treatment both come from the
+ * active theme, so a toggle has to repaint the canvas or the doodles keep the
+ * palette they were born with, and the canvas is sized to the window, so a
+ * resize has to repaint it or the doodles stay at the old size, stretched.
+ * Registering the same listener twice is ignored, so calling this more than once
+ * never stacks up redraws.
  */
 export function initDecorations() {
     document.addEventListener("themechange", draw);
+    window.addEventListener("resize", handleResize, { passive: true });
     draw();
 }

@@ -392,12 +392,15 @@
 }
 
 /* Preview Section */
+/* No overflow clip here: the card is taped down by both top corners, and a clip
+   crops those strips to half bars. Nothing inside needs the card to do the
+   clipping for it. The table has its own scroll box below, and the header and
+   the note sit inside the corner curve. */
 .preview-section {
     display: none;
     margin-bottom: var(--space-xl);
     border: 2px solid var(--border-light);
     border-radius: var(--radius-md);
-    overflow: hidden;
     position: relative;
     background: var(--bg-secondary);
 }

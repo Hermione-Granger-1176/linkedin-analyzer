@@ -3,8 +3,12 @@
    page has been still for a while, and he flinches when the lights change.
 
    All three are decoration on a drawing that is already aria-hidden, so all
-   three sit out entirely under reduced motion, and the gaze also sits out on
-   touch, where there is no pointer to follow.
+   three sit out under reduced motion. The preference is read when a move would
+   play rather than once at startup, so a visitor who turns it on or off part way
+   through the session is obeyed from the next move onwards; the timers behind a
+   move keep running either way, they just stop producing anything visible. The
+   gaze also sits out on touch, where there is no pointer to follow, and that one
+   is settled at startup because it is a property of the device, not a choice.
 
    The one-shots are finite CSS animations, and each one is taken off by a timer
    rather than by animationend: an animation that starts inside a hidden subtree
@@ -43,9 +47,11 @@ let idleTimer = 0;
 let doodleTimer = 0;
 let wakeTimer = 0;
 let gazeFrame = 0;
-/* Where the pointer was last seen. Only ever read on a frame that a pointermove
-   booked, so it is a plain pair rather than something nullable. */
+/* Where the pointer was last seen, and whether it has ever been seen at all. A
+   scroll aims at that same position, and before the first move there is no
+   position to aim at, only the origin. */
 const pendingPointer = { x: 0, y: 0 };
+let pointerSeen = false;
 /* Whether the yawn is on right now. Activity arrives a few hundred times a
    minute, and this is what keeps all but the interesting one out of the DOM. */
 let bored = false;
@@ -96,6 +102,9 @@ function clamp(value, min, max) {
  */
 function applyGaze() {
     gazeFrame = 0;
+    if (prefersReducedMotion()) {
+        return;
+    }
     const pointer = pendingPointer;
     const hero = heroElement();
     if (!hero) {
@@ -123,13 +132,10 @@ function applyGaze() {
 }
 
 /**
- * Note where the pointer is and book a frame to move the eyes there.
- * @param {PointerEvent} event - The pointer move that came in.
+ * Book the frame that aims the eyes, unless one is already booked.
  * @returns {void}
  */
-function handlePointerMove(event) {
-    pendingPointer.x = event.clientX;
-    pendingPointer.y = event.clientY;
+function bookGaze() {
     if (gazeFrame) {
         return;
     }
@@ -137,10 +143,38 @@ function handlePointerMove(event) {
 }
 
 /**
+ * Note where the pointer is and book a frame to move the eyes there.
+ * @param {PointerEvent} event - The pointer move that came in.
+ * @returns {void}
+ */
+function handlePointerMove(event) {
+    pendingPointer.x = event.clientX;
+    pendingPointer.y = event.clientY;
+    pointerSeen = true;
+    bookGaze();
+}
+
+/**
+ * Aim the eyes again after a scroll. The pointer has not moved, but the hero has
+ * moved under it, so the offset the pupils are holding is aimed at where the
+ * pointer used to be relative to the drawing.
+ * @returns {void}
+ */
+function handleScroll() {
+    if (!pointerSeen) {
+        return;
+    }
+    bookGaze();
+}
+
+/**
  * Play the bored yawn, once, and take it off again afterwards.
  * @returns {void}
  */
 function playIdleDoodle() {
+    if (prefersReducedMotion()) {
+        return;
+    }
     const hero = heroElement();
     if (!hero || !homeIsVisible()) {
         // Nothing to yawn at. Any activity re-arms the timer from scratch.
@@ -190,6 +224,9 @@ function handleThemeChange(event) {
     if (event.detail?.boot) {
         return;
     }
+    if (prefersReducedMotion()) {
+        return;
+    }
     const hero = heroElement();
     if (!hero || !homeIsVisible()) {
         return;
@@ -206,18 +243,20 @@ function handleThemeChange(event) {
 /**
  * Give hero Pip his own life: eyes that follow the pointer, a yawn when the page
  * has gone quiet, and a flinch at the theme switch. Binding is one-shot, because
- * a second call would double every listener. Reduced motion opts out of all of
- * it, and a device without a fine pointer keeps the last two.
+ * a second call would double every listener. The listeners go on whatever the
+ * motion preference says, since each move checks it for itself when the time
+ * comes; a device without a fine pointer keeps the last two.
  * @returns {void}
  */
 export function initAlive() {
-    if (started || prefersReducedMotion()) {
+    if (started) {
         return;
     }
     started = true;
 
     if (hasFinePointer()) {
         window.addEventListener("pointermove", handlePointerMove, { passive: true });
+        window.addEventListener("scroll", handleScroll, { passive: true });
     }
     ACTIVITY_EVENTS.forEach((name) => {
         window.addEventListener(name, handleActivity, { passive: true });

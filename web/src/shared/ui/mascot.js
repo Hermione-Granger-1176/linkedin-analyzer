@@ -18,10 +18,10 @@ const SPLAT_LIFETIME_MS = 800;
 const STORAGE_CLEARED = "storageCleared";
 
 /* Each one-shot pose: the element it is drawn in, the class its animations hang
-   off, and how long it stays on screen. The staple and the eraser sit just past
-   the moves they cover. The cheer runs longer on purpose: Pip's pump is over in
-   0.85s and he holds the finish pose for a beat before he goes. */
-const CHEER = Object.freeze({ id: "cleanCheer", activeClass: "is-cheering", durationMs: 2000 });
+   off, and how long it stays on screen. All three share the 1.4s pip-moment-in
+   envelope in components/mascot.css and sit just past it, so each pose is fully
+   faded out before the timer takes it away. */
+const CHEER = Object.freeze({ id: "cleanCheer", activeClass: "is-cheering", durationMs: 1700 });
 const STAPLE = Object.freeze({ id: "pdfStaple", activeClass: "is-stapling", durationMs: 1700 });
 const ERASER = Object.freeze({ id: "clearEraser", activeClass: "is-erasing", durationMs: 1700 });
 

@@ -113,6 +113,16 @@ function measureHero({ left = 100, top = 100, width = 100, height = 100 } = {}) 
 }
 
 /**
+ * Run every frame booked so far.
+ * @returns {void}
+ */
+function runFrames() {
+    const queued = frames;
+    frames = [];
+    queued.forEach((callback) => callback());
+}
+
+/**
  * Send a pointer move and run the frame it books.
  * @param {number} clientX - Pointer x in client space.
  * @param {number} clientY - Pointer y in client space.
@@ -120,9 +130,7 @@ function measureHero({ left = 100, top = 100, width = 100, height = 100 } = {}) 
  */
 function movePointerTo(clientX, clientY) {
     window.dispatchEvent(new MouseEvent("pointermove", { clientX, clientY }));
-    const queued = frames;
-    frames = [];
-    queued.forEach((callback) => callback());
+    runFrames();
 }
 
 /**
@@ -204,6 +212,33 @@ describe("alive", () => {
             frames[0]();
             // The frame lands on the newest position, not the first one queued.
             expect(gazeTransform()).toBe("translate(1.60px, 0.00px)");
+        });
+
+        it("aims again when a scroll moves the hero under a still pointer", async () => {
+            const { initAlive } = await loadAlive();
+            initAlive();
+            measureHero();
+            movePointerTo(290, 150);
+            expect(gazeTransform()).toBe("translate(0.80px, 0.00px)");
+
+            // The page scrolls, so the hero sits 90px higher than the pointer
+            // last saw it, without the pointer having moved at all.
+            measureHero({ left: 100, top: 10, width: 100, height: 100 });
+            window.dispatchEvent(new Event("scroll"));
+            runFrames();
+
+            expect(gazeTransform()).toBe("translate(0.80px, 0.26px)");
+        });
+
+        it("books nothing on a scroll before any pointer has been seen", async () => {
+            const { initAlive } = await loadAlive();
+            initAlive();
+            measureHero();
+
+            window.dispatchEvent(new Event("scroll"));
+
+            expect(frames).toHaveLength(0);
+            expect(gazeTransform()).toBe("");
         });
 
         it("stays out of it entirely on a device without a fine pointer", async () => {
@@ -433,7 +468,7 @@ describe("alive", () => {
     });
 
     describe("guards", () => {
-        it("does nothing at all when the visitor asked for reduced motion", async () => {
+        it("plays none of its moves while the visitor asks for reduced motion", async () => {
             mockPreferences({ reduceMotion: true });
             const { initAlive } = await loadAlive();
             initAlive();
@@ -447,6 +482,55 @@ describe("alive", () => {
             expect(gazeTransform()).toBe("");
             expect(hero().classList.contains("is-bored")).toBe(false);
             expect(hero().classList.contains("is-waking")).toBe(false);
+        });
+
+        it("still binds its listeners under reduced motion", async () => {
+            mockPreferences({ reduceMotion: true });
+            const { initAlive } = await loadAlive();
+            initAlive();
+            measureHero();
+
+            window.dispatchEvent(new MouseEvent("pointermove", { clientX: 600, clientY: 600 }));
+
+            // It is the move that sits out, not the listener, which is what lets
+            // the preference be turned back off later in the session.
+            expect(frames).toHaveLength(1);
+        });
+
+        it("suppresses the next move when the preference goes on mid-session", async () => {
+            const { initAlive } = await loadAlive();
+            initAlive();
+            measureHero();
+            movePointerTo(600, 600);
+            expect(gazeTransform()).toBe("translate(1.60px, 0.80px)");
+
+            mockPreferences({ reduceMotion: true });
+            movePointerTo(-200, -200);
+            vi.advanceTimersByTime(IDLE_DELAY_MS);
+
+            // The glance he was already holding stays where it was; nothing new
+            // is drawn on top of it.
+            expect(gazeTransform()).toBe("translate(1.60px, 0.80px)");
+            expect(hero().classList.contains("is-bored")).toBe(false);
+        });
+
+        it("plays the next move once the preference goes off mid-session", async () => {
+            mockPreferences({ reduceMotion: true });
+            const { initAlive } = await loadAlive();
+            initAlive();
+            measureHero();
+            movePointerTo(600, 600);
+            vi.advanceTimersByTime(IDLE_DELAY_MS);
+            expect(gazeTransform()).toBe("");
+            expect(hero().classList.contains("is-bored")).toBe(false);
+
+            mockPreferences();
+            movePointerTo(600, 600);
+            expect(gazeTransform()).toBe("translate(1.60px, 0.80px)");
+
+            // The pointer move counts as activity, so the wait starts over.
+            vi.advanceTimersByTime(IDLE_DELAY_MS);
+            expect(hero().classList.contains("is-bored")).toBe(true);
         });
 
         it("binds its listeners once however often it is initialized", async () => {

@@ -91,7 +91,8 @@
         <a class="skip-link" href="#appMain">Skip to main content</a>
 
         <!-- The parts of Pip that more than one place needs: the ink wobble
-        filter, and every pose that turns up on more than one surface. -->
+        filter, every pose that turns up on more than one surface, and the pieces
+        more than one pose is drawn from. -->
         <svg class="pip-defs" aria-hidden="true" focusable="false" width="0" height="0">
             <defs>
                 <!-- feTurbulence plus feDisplacementMap gives the clean paths a
@@ -137,7 +138,9 @@
                 (is-bored, is-waking) are styled from an ancestor, so none of them
                 could move here even if it wanted to; they stay inline, as do the
                 panic and the five empty-state poses, which are each drawn in only
-                one place. -->
+                one place. The staple and the eraser do take their standing body
+                from here, because what the ancestor class moves is the arms and
+                the props around him; the body itself holds still. -->
 
                 <!-- Pip, leaning on the bubble he speaks through. Decorative: the
                 tip beside him carries the whole message. -->
@@ -282,6 +285,53 @@
                     </g>
                 </g>
 
+                <!-- Pip standing, from the hood down to the shoes, with no arms
+                and nothing in his hands. The staple and the eraser are drawn
+                around this exact body, so it is inked once here and placed by
+                both of them. Arms stay with the moment that swings them.
+                The loader is not on that list: its hair sits inside the animated
+                .pip-flick group and its mouth is a different line, so its copy
+                stays where it is. -->
+                <g id="pip-body-standing">
+                    <path
+                        class="pip-ink pip-hood"
+                        d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
+                    />
+                    <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
+                    <path class="pip-ink" d="M38 46 Q33 49 38 54" />
+                    <path class="pip-ink pip-brow" d="M47.5 44 Q52 40.5 56.5 43.5" />
+                    <path class="pip-ink pip-brow" d="M72.5 43 Q68 39.5 63.5 42.5" />
+                    <g class="pip-blink">
+                        <circle class="pip-eye" cx="52" cy="49" r="3.2" />
+                        <circle class="pip-eye" cx="68" cy="49" r="3.2" />
+                    </g>
+                    <path class="pip-ink" d="M60 52 Q63 56 59 57" />
+                    <path class="pip-ink" d="M52 60 Q60 65 68 59" />
+                    <path
+                        class="pip-hair"
+                        d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
+                    />
+                    <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
+                    <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
+                    <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
+                    <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
+                    <path class="pip-ink" d="M60 68 L60 77" />
+                    <path
+                        class="pip-ink pip-jacket"
+                        d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z"
+                    />
+                    <path class="pip-ink" d="M53 78 Q60 85 67 78" />
+                    <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
+                    <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
+                    <path class="pip-cord" d="M65 83 q2 5 1 8" />
+                    <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
+                    <path class="pip-ink" d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z" />
+                    <path class="pip-ink" d="M52 115 Q48 129 49 145" />
+                    <path class="pip-ink" d="M69 115 Q73 129 72 145" />
+                    <path class="pip-ink pip-solid" d="M49 145 Q40 146 40 150 L51 150 Z" />
+                    <path class="pip-ink pip-solid" d="M72 145 Q81 146 81 150 L70 150 Z" />
+                </g>
+
                 <!-- One open hand: fingers and thumb inked first as fat capsules,
                 then the palm laid over where they join it. Drawn where the hero's
                 waving hand sits, so each placement is the transform that site was
@@ -363,9 +413,11 @@
 
         <!-- Pip staples the finished PDF together, in the corner under the button
         that made it. Shown only once a file has actually downloaded, and hidden
-        again as soon as the moment has played. Inline rather than a defs group:
-        every move below is driven from .is-stapling on this element, and an
-        ancestor class cannot reach into the shadow tree a use element builds. -->
+        again as soon as the moment has played. The moving parts are inline rather
+        than a defs group: every move below is driven from .is-stapling on this
+        element, and an ancestor class cannot reach into the shadow tree a use
+        element builds. The body he does it all with holds still, so that comes
+        from #pip-body-standing. -->
         <svg
             class="pip-staple"
             id="pdfStaple"
@@ -402,42 +454,10 @@
                     class="pip-ink pip-paper pip-flutter"
                     d="M152 98 q7 -4 9 2 q-6 4 -9 -2 Z"
                 />
-                <path
-                    class="pip-ink pip-hood"
-                    d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
-                />
-                <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
-                <path class="pip-ink" d="M38 46 Q33 49 38 54" />
-                <path class="pip-ink pip-brow" d="M47.5 44 Q52 40.5 56.5 43.5" />
-                <path class="pip-ink pip-brow" d="M72.5 43 Q68 39.5 63.5 42.5" />
-                <g class="pip-blink">
-                    <circle class="pip-eye" cx="52" cy="49" r="3.2" />
-                    <circle class="pip-eye" cx="68" cy="49" r="3.2" />
-                </g>
-                <path class="pip-ink" d="M60 52 Q63 56 59 57" />
-                <path class="pip-ink" d="M52 60 Q60 65 68 59" />
-                <path
-                    class="pip-hair"
-                    d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
-                />
-                <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
-                <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
-                <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
-                <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
-                <path class="pip-ink" d="M60 68 L60 77" />
-                <path class="pip-ink pip-jacket" d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z" />
-                <path class="pip-ink" d="M53 78 Q60 85 67 78" />
-                <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
-                <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
-                <path class="pip-cord" d="M65 83 q2 5 1 8" />
-                <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
-                <path class="pip-ink" d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z" />
+                <use href="#pip-body-standing" />
+                <!-- The arm that is not doing anything, hanging at his side. -->
                 <path class="pip-ink" d="M45 84 Q34 96 33 108" />
                 <circle class="pip-ink pip-paper" cx="32" cy="111" r="4" />
-                <path class="pip-ink" d="M52 115 Q48 129 49 145" />
-                <path class="pip-ink" d="M69 115 Q73 129 72 145" />
-                <path class="pip-ink pip-solid" d="M49 145 Q40 146 40 150 L51 150 Z" />
-                <path class="pip-ink pip-solid" d="M72 145 Q81 146 81 150 L70 150 Z" />
                 <!-- The pressing arm, drawn last so the hand lands on top of the
                 stapler. -->
                 <g class="pip-press">
@@ -990,11 +1010,13 @@
                                 <!-- Pip rubs the card clean once a wipe has gone
                                 through, then dusts his hands off. Shown only for
                                 the moment itself, and out of the flow, so the two
-                                buttons never shift to make room for him. Inline
-                                rather than a defs group: every move below hangs
-                                off .is-erasing on this element, and an ancestor
-                                class cannot reach into a use element's shadow
-                                tree. -->
+                                buttons never shift to make room for him. The
+                                moving parts are inline rather than a defs group:
+                                every move below hangs off .is-erasing on this
+                                element, and an ancestor class cannot reach into a
+                                use element's shadow tree. The body he does it all
+                                with holds still, so that comes from
+                                #pip-body-standing. -->
                                 <svg
                                     class="pip-eraser"
                                     id="clearEraser"
@@ -1050,70 +1072,7 @@
                                             rx="2.2"
                                             ry="1.6"
                                         />
-                                        <path
-                                            class="pip-ink pip-hood"
-                                            d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
-                                        />
-                                        <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
-                                        <path class="pip-ink" d="M38 46 Q33 49 38 54" />
-                                        <path
-                                            class="pip-ink pip-brow"
-                                            d="M47.5 44 Q52 40.5 56.5 43.5"
-                                        />
-                                        <path
-                                            class="pip-ink pip-brow"
-                                            d="M72.5 43 Q68 39.5 63.5 42.5"
-                                        />
-                                        <g class="pip-blink">
-                                            <circle class="pip-eye" cx="52" cy="49" r="3.2" />
-                                            <circle class="pip-eye" cx="68" cy="49" r="3.2" />
-                                        </g>
-                                        <path class="pip-ink" d="M60 52 Q63 56 59 57" />
-                                        <path class="pip-ink" d="M52 60 Q60 65 68 59" />
-                                        <path
-                                            class="pip-hair"
-                                            d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
-                                        />
-                                        <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
-                                        <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
-                                        <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
-                                        <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
-                                        <path class="pip-ink" d="M60 68 L60 77" />
-                                        <path
-                                            class="pip-ink pip-jacket"
-                                            d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z"
-                                        />
-                                        <path class="pip-ink" d="M53 78 Q60 85 67 78" />
-                                        <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
-                                        <ellipse
-                                            class="pip-aglet"
-                                            cx="54"
-                                            cy="93"
-                                            rx="2"
-                                            ry="2.8"
-                                        />
-                                        <path class="pip-cord" d="M65 83 q2 5 1 8" />
-                                        <ellipse
-                                            class="pip-aglet"
-                                            cx="66"
-                                            cy="93"
-                                            rx="2"
-                                            ry="2.8"
-                                        />
-                                        <path
-                                            class="pip-ink"
-                                            d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z"
-                                        />
-                                        <path class="pip-ink" d="M52 115 Q48 129 49 145" />
-                                        <path class="pip-ink" d="M69 115 Q73 129 72 145" />
-                                        <path
-                                            class="pip-ink pip-solid"
-                                            d="M49 145 Q40 146 40 150 L51 150 Z"
-                                        />
-                                        <path
-                                            class="pip-ink pip-solid"
-                                            d="M72 145 Q81 146 81 150 L70 150 Z"
-                                        />
+                                        <use href="#pip-body-standing" />
                                         <!-- Both arms, in the pose the sweep needs:
                                         one hanging, the other scrubbing. -->
                                         <g class="pip-erase">
@@ -2880,7 +2839,7 @@
                                 <path class="pip-wisp" d="M61 20 q4 -2 7 1" />
                                 <path class="pip-wisp" d="M49 18 q3 -2 5 -0.5" />
                                 <path class="pip-wisp" d="M39 33 q-1.5 3 -0.8 5" />
-                                <path class="pip-ink" d="M37 82 Q31 84 28 88" />
+                                <path class="pip-ink" d="M37 82 Q33 83 29 84" />
                                 <path class="pip-ink pip-paper" d="M36 82 q-3 -18 8 -18 q11 0 8 18 Z" />
                                 <ellipse
                                     class="pip-ink pip-paper"

@@ -4,7 +4,7 @@ import { mockMatchMedia, resetDom, setupDom } from "../../helpers/dom.js";
 
 /* Kept in step with mascot.js, which keeps its timings to itself. */
 const SPLAT_LIFETIME_MS = 800;
-const CHEER_MS = 2000;
+const CHEER_MS = 1700;
 const STAPLE_MS = 1700;
 const ERASER_MS = 1700;
 
@@ -283,12 +283,15 @@ describe("mascot", () => {
             const { celebrateDownload, celebrateStaple } = await loadMascot();
 
             celebrateDownload();
+            vi.advanceTimersByTime(400);
             celebrateStaple();
-            vi.advanceTimersByTime(STAPLE_MS);
+            vi.advanceTimersByTime(CHEER_MS - 400);
 
-            // The staple's own timer has fired; the longer cheer is still up.
-            expect(document.getElementById("pdfStaple").hasAttribute("hidden")).toBe(true);
-            expect(document.getElementById("cleanCheer").hasAttribute("hidden")).toBe(false);
+            // The three moments now run for the same length, so the one that
+            // started first is the one that is over: the staple has its own
+            // timer and the rest of its run still to go.
+            expect(document.getElementById("cleanCheer").hasAttribute("hidden")).toBe(true);
+            expect(document.getElementById("pdfStaple").hasAttribute("hidden")).toBe(false);
         });
 
         it("does nothing when reduced motion is requested", async () => {

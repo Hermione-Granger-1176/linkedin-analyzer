@@ -47,11 +47,12 @@ EXPECTED_REQUIRED_CHECKS = frozenset(
     }
 )
 
-# The GitHub App behind the maintenance writeback workflows. Both halves are
-# audited because either one missing degrades those workflows into a skip, and
-# a skip is quiet.
-EXPECTED_VARIABLES = frozenset({"APP_ID"})
-EXPECTED_SECRETS = frozenset({"APP_PRIVATE_KEY"})
+# The two GitHub Apps behind the maintenance writeback workflows: the primary
+# app that commits, and the escalation app that opens the CI pin refresh pull
+# request. All four values are audited because any one missing degrades a
+# workflow into a skip, and a skip is quiet.
+EXPECTED_VARIABLES = frozenset({"APP_ID", "ESCALATION_APP_ID"})
+EXPECTED_SECRETS = frozenset({"APP_PRIVATE_KEY", "ESCALATION_APP_PRIVATE_KEY"})
 
 # Secret scanning is the layer no job in this repository can provide: push
 # protection refuses the push carrying a secret, rather than reporting it once

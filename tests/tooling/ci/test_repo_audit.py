@@ -283,12 +283,23 @@ def test_security_features_that_cannot_be_read_are_reported_as_missing(
 
 def test_a_missing_variable_is_reported() -> None:
     """Without it the writeback workflows degrade into a silent skip."""
-    assert _audit(variables={"variables": []}) == ["missing repository variables: APP_ID"]
+    assert _audit(variables={"variables": []}) == [
+        "missing repository variables: APP_ID, ESCALATION_APP_ID"
+    ]
 
 
 def test_a_missing_secret_is_reported() -> None:
     """Without it the writeback workflows degrade into a silent skip."""
-    assert _audit(secrets={"secrets": []}) == ["missing repository secrets: APP_PRIVATE_KEY"]
+    assert _audit(secrets={"secrets": []}) == [
+        "missing repository secrets: APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY"
+    ]
+
+
+def test_a_missing_escalation_credential_alone_is_reported() -> None:
+    """The primary app being healthy must not hide an absent escalation app."""
+    assert _audit(variables={"variables": [{"name": "APP_ID"}]}) == [
+        "missing repository variables: ESCALATION_APP_ID"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -346,7 +357,7 @@ def test_every_drifted_setting_is_reported_in_one_pass() -> None:
         "allow_merge_commit should be disabled",
         "merged branches are not deleted automatically",
         "main branch protection does not require signed commits",
-        "missing repository secrets: APP_PRIVATE_KEY",
+        "missing repository secrets: APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY",
     ]
 
 

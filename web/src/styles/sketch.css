@@ -169,6 +169,25 @@
     opacity: 0.5;
 }
 
+/* On the home hero the underline rules itself in on first paint, left to right.
+   One pass, then it stays put: the screenshot harness waits for every finite
+   animation to finish, and a decoration that keeps redrawing would never settle.
+   The keyframes carry the hero's own translateX(-50%) centering so the scale
+   does not undo it; transform-origin pins the growth to the left end. */
+@keyframes underline-draw {
+    from {
+        transform: translateX(-50%) scaleX(0);
+    }
+    to {
+        transform: translateX(-50%) scaleX(1);
+    }
+}
+
+.hero-header .title::before {
+    transform-origin: left center;
+    animation: underline-draw 0.6s ease-out;
+}
+
 /* Tape effect for preview section - only show when visible */
 .preview-section:not([hidden])::before,
 .preview-section:not([hidden])::after {
@@ -237,6 +256,21 @@
 ::selection {
     background: var(--accent-yellow);
     color: var(--selection-text);
+}
+
+/* Reduced motion: the decorative movement in this file stops. Mirrors the
+   trailing guards in screens.css and overlays.css. */
+@media (prefers-reduced-motion: reduce) {
+    .download-btn:hover,
+    .primary-btn:hover,
+    .upload-layout,
+    .analytics-grid,
+    .insights-grid,
+    .messages-layout,
+    .message-panels,
+    .hero-header .title::before {
+        animation: none;
+    }
 }
 
 /* Cursor customization for interactive elements */

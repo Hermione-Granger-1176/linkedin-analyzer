@@ -28,6 +28,7 @@ vi.mock("../../src/features/insights/screen.js", () => ({
 vi.mock("../../src/features/messages/screen.js", () => ({
     MessagesPage: { init: vi.fn(), onRouteChange: vi.fn() },
 }));
+vi.mock("../../src/shared/ui/mascot.js", () => ({ initMascot: vi.fn() }));
 vi.mock("../../src/shared/ui/nav-menu.js", () => ({ NavMenu: { init: vi.fn() } }));
 vi.mock("../../src/app/router.js", () => ({
     AppRouter: {

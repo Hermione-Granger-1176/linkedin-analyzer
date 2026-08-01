@@ -171,13 +171,19 @@
     text-align: center;
 }
 
+/* position and the top margin between them give the peeking mascot in
+   mascot.css somewhere to hang from: it is absolutely positioned against this
+   box and leans over the top edge, so the box needs to be its containing block
+   and to keep a little clear air above itself. */
 .analytics-empty,
 .insights-empty {
+    position: relative;
     text-align: center;
     padding: var(--space-xl);
     border: 2px dashed var(--border-light);
     border-radius: var(--radius-lg);
     background: var(--bg-secondary);
+    margin-top: var(--space-2xl);
     margin-bottom: var(--space-xl);
 }
 

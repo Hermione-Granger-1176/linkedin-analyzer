@@ -38,12 +38,17 @@ vi.mock("../../../src/platform/observability/sentry.js", () => ({
     captureError: vi.fn(),
 }));
 
+vi.mock("../../../src/shared/ui/mascot.js", () => ({
+    celebrateDownload: vi.fn(),
+}));
+
 let CleanPage;
 let DataCache;
 let ExcelGenerator;
 let LinkedInCleaner;
 let Storage;
 let captureError;
+let celebrateDownload;
 
 describe("CleanPage", () => {
     beforeEach(async () => {
@@ -75,6 +80,7 @@ describe("CleanPage", () => {
         ({ LinkedInCleaner } = await import("../../../src/features/cleaning/cleaner.js"));
         ({ Storage } = await import("../../../src/platform/persistence/storage.js"));
         ({ captureError } = await import("../../../src/platform/observability/sentry.js"));
+        ({ celebrateDownload } = await import("../../../src/shared/ui/mascot.js"));
 
         DataCache.get.mockReturnValue(null);
         // renderPreview loads the selected file's text on demand; the parser is
@@ -84,6 +90,7 @@ describe("CleanPage", () => {
         ExcelGenerator.generateAndDownload.mockReset();
         ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
         captureError.mockReset();
+        celebrateDownload.mockReset();
     });
 
     it("shows empty state when no files are loaded", async () => {
@@ -152,6 +159,23 @@ describe("CleanPage", () => {
         expect(document.getElementById("cleanDownloadSection").hidden).toBe(true);
     });
 
+    it("celebrates once the Excel download has landed", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 2 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanDownloadBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+        expect(celebrateDownload).toHaveBeenCalledTimes(1);
+    });
+
     it("reports Excel generation errors", async () => {
         Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv", updatedAt: 2 }]);
         LinkedInCleaner.process.mockReturnValue({
@@ -171,6 +195,7 @@ describe("CleanPage", () => {
 
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
         expect(document.getElementById("cleanErrorText").textContent).toContain("Failed");
+        expect(celebrateDownload).not.toHaveBeenCalled();
     });
 
     it("shows an error when download is attempted with no cached data", async () => {

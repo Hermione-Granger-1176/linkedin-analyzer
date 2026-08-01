@@ -76,6 +76,7 @@
         <link rel="stylesheet" href="./src/styles/responsive.css" />
         <link rel="stylesheet" href="./src/styles/screens.css" />
         <link rel="stylesheet" href="./src/styles/sketch.css" />
+        <link rel="stylesheet" href="./src/styles/components/mascot.css" />
         <link rel="stylesheet" href="./src/styles/features/tutorial.css" />
         <link rel="stylesheet" href="./src/styles/components/export-dialog.css" />
     </head>
@@ -88,6 +89,28 @@
         </noscript>
 
         <a class="skip-link" href="#appMain">Skip to main content</a>
+
+        <!-- Shared ink wobble filter for Pip. feTurbulence plus feDisplacementMap
+        gives the clean paths a hand-drawn tremble, so every pose references this
+        one definition instead of carrying its own copy. -->
+        <svg class="pip-defs" aria-hidden="true" focusable="false" width="0" height="0">
+            <filter id="pipWobble" x="-25%" y="-25%" width="150%" height="150%">
+                <feTurbulence
+                    type="fractalNoise"
+                    baseFrequency="0.026"
+                    numOctaves="2"
+                    seed="7"
+                    result="pipNoise"
+                />
+                <feDisplacementMap
+                    in="SourceGraphic"
+                    in2="pipNoise"
+                    scale="2.2"
+                    xChannelSelector="R"
+                    yChannelSelector="G"
+                />
+            </filter>
+        </svg>
 
         <!-- Availability is resolved asynchronously after boot, so the resting
         state is unavailable: an enabled button here would open an export dialog
@@ -167,31 +190,126 @@
             <section class="screen" tabindex="-1" id="screen-home">
                 <div class="screen-inner screen-inner--hero">
                     <header class="hero-header">
-                        <h1 class="title">
-                            <span class="title-icon">
-                                <svg viewBox="0 0 40 40" class="pencil-icon" aria-hidden="true">
-                                    <path
-                                        d="M8 32 L28 12 L32 16 L12 36 Z"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                    />
-                                    <path
-                                        d="M28 12 L30 10 C31 9 33 9 34 10 L34 10 C35 11 35 13 34 14 L32 16"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                    />
-                                    <path
-                                        d="M8 32 L6 38 L12 36"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                    />
-                                </svg>
-                            </span>
-                            LinkedIn Analyzer
-                        </h1>
+                        <div class="hero-title-row">
+                            <h1 class="title">
+                                <span class="title-icon">
+                                    <svg
+                                        viewBox="0 0 40 40"
+                                        class="pencil-icon"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            d="M8 32 L28 12 L32 16 L12 36 Z"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                        />
+                                        <path
+                                            d="M28 12 L30 10 C31 9 33 9 34 10 L34 10 C35 11 35 13 34 14 L32 16"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                        />
+                                        <path
+                                            d="M8 32 L6 38 L12 36"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                        />
+                                    </svg>
+                                </span>
+                                LinkedIn Analyzer
+                            </h1>
+                            <!-- Pip, waving hello. Decorative: the heading beside him
+                            already carries the meaning. -->
+                            <svg
+                                class="pip-hero"
+                                viewBox="0 0 140 160"
+                                aria-hidden="true"
+                                focusable="false"
+                            >
+                                <g filter="url(#pipWobble)">
+                                    <g class="pip-bob">
+                                        <path
+                                            class="pip-ink pip-hood"
+                                            d="M53 86 C48 76 51 62 62 63 C65 68 75 68 78 63 C89 62 92 76 87 86 Q70 90 53 86 Z"
+                                        />
+                                        <circle class="pip-ink pip-paper" cx="70" cy="46" r="22" />
+                                        <path class="pip-ink" d="M48 46 Q43 49 48 54" />
+                                        <path class="pip-ink" d="M92 46 Q97 49 92 54" />
+                                        <path
+                                            class="pip-ink pip-brow"
+                                            d="M57.5 39 Q62 35.5 66.5 38.5"
+                                        />
+                                        <path
+                                            class="pip-ink pip-brow"
+                                            d="M82.5 38 Q78 34.5 73.5 37.5"
+                                        />
+                                        <g class="pip-blink">
+                                            <circle class="pip-eye" cx="62" cy="44" r="3.6" />
+                                            <circle class="pip-eye" cx="78" cy="44" r="3.6" />
+                                        </g>
+                                        <path class="pip-ink" d="M70 47 Q73 51 69 52" />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M60 55 Q70 69 80 55 Q70 61 60 55 Z"
+                                        />
+                                        <g class="pip-flick">
+                                            <path
+                                                class="pip-hair"
+                                                d="M52 34 C48 26 50 18 60 15 C70 11 82 14 87 22 C91 28 91 33 90 39 L87 44 Q86 34 83.5 37 Q80 24 77 30 Q74 22 70 32 Q67 22 63 30 Q59.5 21 56 31 Z"
+                                            />
+                                            <path class="pip-wisp" d="M74 12 q5 -3 9 0" />
+                                            <path class="pip-wisp" d="M64 13.4 q3 -3 6 -1" />
+                                            <path class="pip-wisp" d="M53 33 q-2 4 -1 7" />
+                                        </g>
+                                        <path class="pip-ink" d="M58 66 C62 72 78 72 82 66" />
+                                        <path class="pip-ink" d="M70 68 L70 77" />
+                                        <path
+                                            class="pip-ink pip-jacket"
+                                            d="M54 81 Q70 74 86 81 L89 112 Q70 118 51 112 Z"
+                                        />
+                                        <path class="pip-ink" d="M63 78 Q70 85 77 78" />
+                                        <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
+                                        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
+                                        <path class="pip-cord" d="M75 83 q2 5 1 8" />
+                                        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+                                        <path
+                                            class="pip-ink"
+                                            d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
+                                        />
+                                        <path class="pip-ink" d="M55 84 Q44 96 43 108" />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="42"
+                                            cy="111"
+                                            r="4"
+                                        />
+                                        <g class="pip-wave">
+                                            <path class="pip-ink" d="M85 84 Q99 78 104 64" />
+                                            <circle
+                                                class="pip-ink pip-paper"
+                                                cx="106"
+                                                cy="60"
+                                                r="4.6"
+                                            />
+                                            <path class="pip-ink" d="M112 52 q4 -3 4 -8" />
+                                            <path class="pip-ink" d="M116 60 q5 -1 7 -5" />
+                                        </g>
+                                        <path class="pip-ink" d="M62 115 Q58 129 59 145" />
+                                        <path class="pip-ink" d="M79 115 Q83 129 82 145" />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M59 145 Q50 146 50 150 L61 150 Z"
+                                        />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M82 145 Q91 146 91 150 L80 150 Z"
+                                        />
+                                    </g>
+                                </g>
+                            </svg>
+                        </div>
                         <p class="subtitle">Clean and analyze your LinkedIn data exports</p>
                     </header>
 
@@ -572,6 +690,71 @@
                     </nav>
 
                     <div class="analytics-empty" id="cleanEmpty" hidden>
+                        <!-- Pip leans in over the top edge while the box waits for data. -->
+                        <svg
+                            class="pip-peeker"
+                            viewBox="0 0 118 76"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <g filter="url(#pipWobble)">
+                                <g class="pip-peek">
+                                    <path
+                                        class="pip-ink pip-hood"
+                                        d="M42.5 72.4 C38 63.3 40.7 50.5 50.7 51.5 C53.5 56 62.5 56 65.3 51.5 C75.3 50.5 78 63.3 73.5 72.4 Q58 76 42.5 72.4 Z"
+                                    />
+                                    <path class="pip-cord" d="M53 62 q-1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="53" cy="68.6" rx="1.8" ry="2.4" />
+                                    <path class="pip-cord" d="M63 62 q1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="63" cy="68.6" rx="1.8" ry="2.4" />
+                                    <circle class="pip-ink pip-paper" cx="58" cy="36" r="20" />
+                                    <path class="pip-ink pip-brow" d="M49 27 Q52 24.8 55 27" />
+                                    <path class="pip-ink pip-brow" d="M67 27 Q64 24.8 61 27" />
+                                    <g class="pip-blink">
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="51.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="64.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle class="pip-eye" cx="52.3" cy="34.3" r="2.2" />
+                                        <circle class="pip-eye" cx="65.3" cy="34.3" r="2.2" />
+                                    </g>
+                                    <ellipse
+                                        class="pip-ink pip-solid"
+                                        cx="58"
+                                        cy="46"
+                                        rx="3.2"
+                                        ry="4.2"
+                                    />
+                                    <path
+                                        class="pip-ink"
+                                        d="M47.1 54.2 C50.7 59.6 65.3 59.6 68.9 54.2"
+                                    />
+                                    <path
+                                        class="pip-hair"
+                                        d="M46 26 C43 20 45 13 53 11 C61 9 70 11 74 17 C77 21 77 25 76.5 29 L74 33 Q73 24 71 27.5 Q68 16 65.5 20.5 Q63 15 60 22 Q57.5 16 54.5 22 Q52 16 49 22 Z"
+                                    />
+                                    <path class="pip-wisp" d="M69 12 q4 -2 7 1" />
+                                    <path class="pip-wisp" d="M57 10 q3 -2 5 -0.5" />
+                                    <path class="pip-wisp" d="M47 25 q-1.5 3 -0.8 5" />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M30 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M74 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                </g>
+                            </g>
+                        </svg>
                         <h2>No files loaded</h2>
                         <p>Upload LinkedIn CSV files on the Home page.</p>
                     </div>
@@ -688,6 +871,147 @@
                                     </svg>
                                     Download Clean Excel
                                 </button>
+                                <!-- One fist pump, shown only once an export has landed
+                                and hidden again straight after. -->
+                                <svg
+                                    class="pip-cheer"
+                                    id="cleanCheer"
+                                    viewBox="0 0 140 160"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                    hidden
+                                >
+                                    <g filter="url(#pipWobble)">
+                                        <g class="pip-jump">
+                                            <g class="pip-bob">
+                                                <path
+                                                    class="pip-ink pip-hood"
+                                                    d="M53 86 C48 76 51 62 62 63 C65 68 75 68 78 63 C89 62 92 76 87 86 Q70 90 53 86 Z"
+                                                />
+                                                <circle
+                                                    class="pip-ink pip-paper"
+                                                    cx="70"
+                                                    cy="46"
+                                                    r="22"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-brow"
+                                                    d="M57.5 39 Q62 35.5 66.5 38.5"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-brow"
+                                                    d="M82.5 38 Q78 34.5 73.5 37.5"
+                                                />
+                                                <g class="pip-blink">
+                                                    <circle
+                                                        class="pip-eye"
+                                                        cx="62"
+                                                        cy="44"
+                                                        r="3.5"
+                                                    />
+                                                    <circle
+                                                        class="pip-eye"
+                                                        cx="78"
+                                                        cy="44"
+                                                        r="3.5"
+                                                    />
+                                                </g>
+                                                <path
+                                                    class="pip-ink pip-solid"
+                                                    d="M61 56 Q70 68 79 56 Q70 61 61 56 Z"
+                                                />
+                                                <g class="pip-flick">
+                                                    <path
+                                                        class="pip-hair"
+                                                        d="M52 34 C48 26 50 18 60 15 C70 11 82 14 87 22 C91 28 91 33 90 39 L87 44 Q86 34 83.5 37 Q80 24 77 30 Q74 22 70 32 Q67 22 63 30 Q59.5 21 56 31 Z"
+                                                    />
+                                                    <path
+                                                        class="pip-wisp"
+                                                        d="M74 12 q5 -3 9 0"
+                                                    />
+                                                    <path
+                                                        class="pip-wisp"
+                                                        d="M64 13.4 q3 -3 6 -1"
+                                                    />
+                                                </g>
+                                                <path
+                                                    class="pip-ink"
+                                                    d="M58 66 C62 72 78 72 82 66"
+                                                />
+                                                <path class="pip-ink" d="M70 68 L70 77" />
+                                                <path
+                                                    class="pip-ink pip-jacket"
+                                                    d="M54 81 Q70 74 86 81 L89 112 Q70 118 51 112 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink"
+                                                    d="M63 78 Q70 85 77 78"
+                                                />
+                                                <path
+                                                    class="pip-cord"
+                                                    d="M65 83 q-2 5 -1 8"
+                                                />
+                                                <ellipse
+                                                    class="pip-aglet"
+                                                    cx="64"
+                                                    cy="93"
+                                                    rx="2"
+                                                    ry="2.8"
+                                                />
+                                                <path class="pip-cord" d="M75 83 q2 5 1 8" />
+                                                <ellipse
+                                                    class="pip-aglet"
+                                                    cx="76"
+                                                    cy="93"
+                                                    rx="2"
+                                                    ry="2.8"
+                                                />
+                                                <path
+                                                    class="pip-ink"
+                                                    d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink"
+                                                    d="M55 84 Q44 96 43 108"
+                                                />
+                                                <circle
+                                                    class="pip-ink pip-paper"
+                                                    cx="42"
+                                                    cy="111"
+                                                    r="4"
+                                                />
+                                                <g class="pip-arm">
+                                                    <path
+                                                        class="pip-ink"
+                                                        d="M85 84 Q97 94 98 106"
+                                                    />
+                                                    <circle
+                                                        class="pip-ink pip-paper"
+                                                        cx="99"
+                                                        cy="109"
+                                                        r="4.4"
+                                                    />
+                                                </g>
+                                                <path
+                                                    class="pip-ink"
+                                                    d="M62 115 Q58 129 59 145"
+                                                />
+                                                <path
+                                                    class="pip-ink"
+                                                    d="M79 115 Q83 129 82 145"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-solid"
+                                                    d="M59 145 Q50 146 50 150 L61 150 Z"
+                                                />
+                                                <path
+                                                    class="pip-ink pip-solid"
+                                                    d="M82 145 Q91 146 91 150 L80 150 Z"
+                                                />
+                                            </g>
+                                        </g>
+                                    </g>
+                                </svg>
                             </div>
                         </div>
 
@@ -719,6 +1043,97 @@
                                 />
                             </svg>
                             <p id="cleanErrorText"></p>
+                            <!-- Pip does the panicking, off to the side. The note itself
+                            holds still so it stays readable. -->
+                            <svg
+                                class="pip-alarm"
+                                viewBox="0 0 140 160"
+                                aria-hidden="true"
+                                focusable="false"
+                            >
+                                <g filter="url(#pipWobble)">
+                                    <g class="pip-tremble">
+                                        <path
+                                            class="pip-ink pip-hood"
+                                            d="M53 86 C48 76 51 62 62 63 C65 68 75 68 78 63 C89 62 92 76 87 86 Q70 90 53 86 Z"
+                                        />
+                                        <circle class="pip-ink pip-paper" cx="70" cy="46" r="22" />
+                                        <path class="pip-ink pip-brow" d="M56 39 Q61 34 67 33" />
+                                        <path class="pip-ink pip-brow" d="M84 39 Q79 34 73 33" />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="62"
+                                            cy="46.5"
+                                            r="5"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="78"
+                                            cy="46.5"
+                                            r="5"
+                                        />
+                                        <circle class="pip-eye" cx="63" cy="45.8" r="2.6" />
+                                        <circle class="pip-eye" cx="79" cy="45.8" r="2.6" />
+                                        <path class="pip-ink" d="M70 51 Q73 55 69 56" />
+                                        <path
+                                            class="pip-ink pip-paper"
+                                            d="M60 60 L81 60 L81 66 L60 66 Z"
+                                        />
+                                        <path class="pip-ink" d="M67 60 L67 66" />
+                                        <path class="pip-ink" d="M74 60 L74 66" />
+                                        <path
+                                            class="pip-hair"
+                                            d="M52 34 C48 26 50 18 60 15 C70 11 82 14 87 22 C91 28 91 33 90 39 L87 44 Q86 34 83.5 37 Q80 24 77 30 Q74 22 70 32 Q67 22 63 30 Q59.5 21 56 31 Z"
+                                        />
+                                        <path class="pip-wisp" d="M74 12 q5 -3 9 0" />
+                                        <path class="pip-wisp" d="M64 13.4 q3 -3 6 -1" />
+                                        <path class="pip-wisp" d="M53 33 q-2 4 -1 7" />
+                                        <path class="pip-ink" d="M58 66 C62 72 78 72 82 66" />
+                                        <path class="pip-ink" d="M70 68 L70 77" />
+                                        <path
+                                            class="pip-ink pip-jacket"
+                                            d="M54 81 Q70 74 86 81 L89 112 Q70 118 51 112 Z"
+                                        />
+                                        <path class="pip-ink" d="M63 78 Q70 85 77 78" />
+                                        <path class="pip-cord" d="M65 83 q-2 5 -1 8" />
+                                        <ellipse class="pip-aglet" cx="64" cy="93" rx="2" ry="2.8" />
+                                        <path class="pip-cord" d="M75 83 q2 5 1 8" />
+                                        <ellipse class="pip-aglet" cx="76" cy="93" rx="2" ry="2.8" />
+                                        <path
+                                            class="pip-ink"
+                                            d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
+                                        />
+                                        <path class="pip-ink" d="M55 84 Q42 76 47 62" />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="50"
+                                            cy="58"
+                                            r="4.6"
+                                        />
+                                        <path class="pip-ink" d="M85 84 Q98 76 93 62" />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="90"
+                                            cy="58"
+                                            r="4.6"
+                                        />
+                                        <path class="pip-ink" d="M60 115 L54 144" />
+                                        <path class="pip-ink" d="M81 115 L88 144" />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M54 144 Q45 145 45 149 L56 149 Z"
+                                        />
+                                        <path
+                                            class="pip-ink pip-solid"
+                                            d="M88 144 Q97 145 97 149 L86 149 Z"
+                                        />
+                                    </g>
+                                    <path
+                                        class="pip-drop pip-sweat"
+                                        d="M104 30 q4 -8 8 0 q0 6 -4 6 q-4 0 -4 -6 Z"
+                                    />
+                                </g>
+                            </svg>
                         </div>
                     </div>
 
@@ -812,6 +1227,71 @@
                         data-testid="analytics-empty"
                         hidden
                     >
+                        <!-- Pip leans in over the top edge while the box waits for data. -->
+                        <svg
+                            class="pip-peeker"
+                            viewBox="0 0 118 76"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <g filter="url(#pipWobble)">
+                                <g class="pip-peek">
+                                    <path
+                                        class="pip-ink pip-hood"
+                                        d="M42.5 72.4 C38 63.3 40.7 50.5 50.7 51.5 C53.5 56 62.5 56 65.3 51.5 C75.3 50.5 78 63.3 73.5 72.4 Q58 76 42.5 72.4 Z"
+                                    />
+                                    <path class="pip-cord" d="M53 62 q-1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="53" cy="68.6" rx="1.8" ry="2.4" />
+                                    <path class="pip-cord" d="M63 62 q1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="63" cy="68.6" rx="1.8" ry="2.4" />
+                                    <circle class="pip-ink pip-paper" cx="58" cy="36" r="20" />
+                                    <path class="pip-ink pip-brow" d="M49 27 Q52 24.8 55 27" />
+                                    <path class="pip-ink pip-brow" d="M67 27 Q64 24.8 61 27" />
+                                    <g class="pip-blink">
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="51.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="64.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle class="pip-eye" cx="52.3" cy="34.3" r="2.2" />
+                                        <circle class="pip-eye" cx="65.3" cy="34.3" r="2.2" />
+                                    </g>
+                                    <ellipse
+                                        class="pip-ink pip-solid"
+                                        cx="58"
+                                        cy="46"
+                                        rx="3.2"
+                                        ry="4.2"
+                                    />
+                                    <path
+                                        class="pip-ink"
+                                        d="M47.1 54.2 C50.7 59.6 65.3 59.6 68.9 54.2"
+                                    />
+                                    <path
+                                        class="pip-hair"
+                                        d="M46 26 C43 20 45 13 53 11 C61 9 70 11 74 17 C77 21 77 25 76.5 29 L74 33 Q73 24 71 27.5 Q68 16 65.5 20.5 Q63 15 60 22 Q57.5 16 54.5 22 Q52 16 49 22 Z"
+                                    />
+                                    <path class="pip-wisp" d="M69 12 q4 -2 7 1" />
+                                    <path class="pip-wisp" d="M57 10 q3 -2 5 -0.5" />
+                                    <path class="pip-wisp" d="M47 25 q-1.5 3 -0.8 5" />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M30 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M74 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                </g>
+                            </g>
+                        </svg>
                         <h2>No data available yet</h2>
                         <p>Upload Shares.csv or Comments.csv on the Home page.</p>
                         <div class="action-buttons">
@@ -1025,6 +1505,71 @@
                     </div>
 
                     <div class="analytics-empty" id="connectionsEmpty" hidden>
+                        <!-- Pip leans in over the top edge while the box waits for data. -->
+                        <svg
+                            class="pip-peeker"
+                            viewBox="0 0 118 76"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <g filter="url(#pipWobble)">
+                                <g class="pip-peek">
+                                    <path
+                                        class="pip-ink pip-hood"
+                                        d="M42.5 72.4 C38 63.3 40.7 50.5 50.7 51.5 C53.5 56 62.5 56 65.3 51.5 C75.3 50.5 78 63.3 73.5 72.4 Q58 76 42.5 72.4 Z"
+                                    />
+                                    <path class="pip-cord" d="M53 62 q-1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="53" cy="68.6" rx="1.8" ry="2.4" />
+                                    <path class="pip-cord" d="M63 62 q1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="63" cy="68.6" rx="1.8" ry="2.4" />
+                                    <circle class="pip-ink pip-paper" cx="58" cy="36" r="20" />
+                                    <path class="pip-ink pip-brow" d="M49 27 Q52 24.8 55 27" />
+                                    <path class="pip-ink pip-brow" d="M67 27 Q64 24.8 61 27" />
+                                    <g class="pip-blink">
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="51.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="64.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle class="pip-eye" cx="52.3" cy="34.3" r="2.2" />
+                                        <circle class="pip-eye" cx="65.3" cy="34.3" r="2.2" />
+                                    </g>
+                                    <ellipse
+                                        class="pip-ink pip-solid"
+                                        cx="58"
+                                        cy="46"
+                                        rx="3.2"
+                                        ry="4.2"
+                                    />
+                                    <path
+                                        class="pip-ink"
+                                        d="M47.1 54.2 C50.7 59.6 65.3 59.6 68.9 54.2"
+                                    />
+                                    <path
+                                        class="pip-hair"
+                                        d="M46 26 C43 20 45 13 53 11 C61 9 70 11 74 17 C77 21 77 25 76.5 29 L74 33 Q73 24 71 27.5 Q68 16 65.5 20.5 Q63 15 60 22 Q57.5 16 54.5 22 Q52 16 49 22 Z"
+                                    />
+                                    <path class="pip-wisp" d="M69 12 q4 -2 7 1" />
+                                    <path class="pip-wisp" d="M57 10 q3 -2 5 -0.5" />
+                                    <path class="pip-wisp" d="M47 25 q-1.5 3 -0.8 5" />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M30 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M74 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                </g>
+                            </g>
+                        </svg>
                         <h2>No connections data available yet</h2>
                         <p>Upload Connections.csv on the Home page.</p>
                         <div class="action-buttons">
@@ -1233,6 +1778,71 @@
                     </div>
 
                     <div class="analytics-empty" id="messagesEmpty" hidden>
+                        <!-- Pip leans in over the top edge while the box waits for data. -->
+                        <svg
+                            class="pip-peeker"
+                            viewBox="0 0 118 76"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <g filter="url(#pipWobble)">
+                                <g class="pip-peek">
+                                    <path
+                                        class="pip-ink pip-hood"
+                                        d="M42.5 72.4 C38 63.3 40.7 50.5 50.7 51.5 C53.5 56 62.5 56 65.3 51.5 C75.3 50.5 78 63.3 73.5 72.4 Q58 76 42.5 72.4 Z"
+                                    />
+                                    <path class="pip-cord" d="M53 62 q-1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="53" cy="68.6" rx="1.8" ry="2.4" />
+                                    <path class="pip-cord" d="M63 62 q1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="63" cy="68.6" rx="1.8" ry="2.4" />
+                                    <circle class="pip-ink pip-paper" cx="58" cy="36" r="20" />
+                                    <path class="pip-ink pip-brow" d="M49 27 Q52 24.8 55 27" />
+                                    <path class="pip-ink pip-brow" d="M67 27 Q64 24.8 61 27" />
+                                    <g class="pip-blink">
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="51.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="64.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle class="pip-eye" cx="52.3" cy="34.3" r="2.2" />
+                                        <circle class="pip-eye" cx="65.3" cy="34.3" r="2.2" />
+                                    </g>
+                                    <ellipse
+                                        class="pip-ink pip-solid"
+                                        cx="58"
+                                        cy="46"
+                                        rx="3.2"
+                                        ry="4.2"
+                                    />
+                                    <path
+                                        class="pip-ink"
+                                        d="M47.1 54.2 C50.7 59.6 65.3 59.6 68.9 54.2"
+                                    />
+                                    <path
+                                        class="pip-hair"
+                                        d="M46 26 C43 20 45 13 53 11 C61 9 70 11 74 17 C77 21 77 25 76.5 29 L74 33 Q73 24 71 27.5 Q68 16 65.5 20.5 Q63 15 60 22 Q57.5 16 54.5 22 Q52 16 49 22 Z"
+                                    />
+                                    <path class="pip-wisp" d="M69 12 q4 -2 7 1" />
+                                    <path class="pip-wisp" d="M57 10 q3 -2 5 -0.5" />
+                                    <path class="pip-wisp" d="M47 25 q-1.5 3 -0.8 5" />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M30 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M74 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                </g>
+                            </g>
+                        </svg>
                         <h2>No messages data available yet</h2>
                         <p>Upload messages.csv on the Home page to unlock messaging insights.</p>
                         <div class="action-buttons">
@@ -1424,6 +2034,71 @@
                     </div>
 
                     <div class="insights-empty" id="insightsEmpty" hidden>
+                        <!-- Pip leans in over the top edge while the box waits for data. -->
+                        <svg
+                            class="pip-peeker"
+                            viewBox="0 0 118 76"
+                            aria-hidden="true"
+                            focusable="false"
+                        >
+                            <g filter="url(#pipWobble)">
+                                <g class="pip-peek">
+                                    <path
+                                        class="pip-ink pip-hood"
+                                        d="M42.5 72.4 C38 63.3 40.7 50.5 50.7 51.5 C53.5 56 62.5 56 65.3 51.5 C75.3 50.5 78 63.3 73.5 72.4 Q58 76 42.5 72.4 Z"
+                                    />
+                                    <path class="pip-cord" d="M53 62 q-1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="53" cy="68.6" rx="1.8" ry="2.4" />
+                                    <path class="pip-cord" d="M63 62 q1 3 0 5" />
+                                    <ellipse class="pip-aglet" cx="63" cy="68.6" rx="1.8" ry="2.4" />
+                                    <circle class="pip-ink pip-paper" cx="58" cy="36" r="20" />
+                                    <path class="pip-ink pip-brow" d="M49 27 Q52 24.8 55 27" />
+                                    <path class="pip-ink pip-brow" d="M67 27 Q64 24.8 61 27" />
+                                    <g class="pip-blink">
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="51.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle
+                                            class="pip-ink pip-paper"
+                                            cx="64.5"
+                                            cy="35"
+                                            r="4.2"
+                                        />
+                                        <circle class="pip-eye" cx="52.3" cy="34.3" r="2.2" />
+                                        <circle class="pip-eye" cx="65.3" cy="34.3" r="2.2" />
+                                    </g>
+                                    <ellipse
+                                        class="pip-ink pip-solid"
+                                        cx="58"
+                                        cy="46"
+                                        rx="3.2"
+                                        ry="4.2"
+                                    />
+                                    <path
+                                        class="pip-ink"
+                                        d="M47.1 54.2 C50.7 59.6 65.3 59.6 68.9 54.2"
+                                    />
+                                    <path
+                                        class="pip-hair"
+                                        d="M46 26 C43 20 45 13 53 11 C61 9 70 11 74 17 C77 21 77 25 76.5 29 L74 33 Q73 24 71 27.5 Q68 16 65.5 20.5 Q63 15 60 22 Q57.5 16 54.5 22 Q52 16 49 22 Z"
+                                    />
+                                    <path class="pip-wisp" d="M69 12 q4 -2 7 1" />
+                                    <path class="pip-wisp" d="M57 10 q3 -2 5 -0.5" />
+                                    <path class="pip-wisp" d="M47 25 q-1.5 3 -0.8 5" />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M30 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                    <path
+                                        class="pip-ink pip-paper"
+                                        d="M74 66 q-1 -9 7 -9 q8 0 7 9 Z"
+                                    />
+                                </g>
+                            </g>
+                        </svg>
                         <h2>No data available yet</h2>
                         <p>Upload Shares.csv or Comments.csv on the Home page.</p>
                         <div class="action-buttons">
@@ -1544,20 +2219,100 @@
             hidden
         >
             <div class="progress-card content-loading-card">
-                <div class="progress-gear-wrap" aria-hidden="true">
-                    <svg class="progress-gear" viewBox="0 0 80 80">
-                        <g
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2.4"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
+                <!-- Pip does the waiting: hood up, pen already moving. -->
+                <div class="progress-mascot-wrap" aria-hidden="true">
+                    <svg class="pip-loader" viewBox="0 0 210 160" focusable="false">
+                        <g filter="url(#pipWobble)">
+                            <g transform="rotate(-4 152 106)">
+                                <rect
+                                    class="pip-ink pip-paper"
+                                    x="118"
+                                    y="72"
+                                    width="74"
+                                    height="62"
+                                    rx="3"
+                                />
+                                <path class="pip-ink pip-mark" d="M128 88 Q145 82 166 90 T182 86" />
+                                <path
+                                    class="pip-ink pip-mark pip-mark-2"
+                                    d="M128 104 Q148 98 168 105 T182 101"
+                                />
+                                <path
+                                    class="pip-ink pip-mark pip-mark-3"
+                                    d="M128 120 Q142 115 158 121"
+                                />
+                            </g>
+                            <g class="pip-bob">
+                                <path
+                                    class="pip-ink pip-hood"
+                                    d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
+                                />
+                                <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
+                                <path class="pip-ink" d="M38 46 Q33 49 38 54" />
+                                <path class="pip-ink pip-brow" d="M47.5 44 Q52 40.5 56.5 43.5" />
+                                <path class="pip-ink pip-brow" d="M72.5 43 Q68 39.5 63.5 42.5" />
+                                <g class="pip-blink">
+                                    <circle class="pip-eye" cx="52" cy="49" r="3.2" />
+                                    <circle class="pip-eye" cx="68" cy="49" r="3.2" />
+                                </g>
+                                <path class="pip-ink" d="M60 52 Q63 56 59 57" />
+                                <path class="pip-ink" d="M51 59 Q60 64 68 58" />
+                                <path class="pip-ink pip-tongue" d="M53 60 q5 0 4 5 q-4 2 -5 -2 Z" />
+                                <g class="pip-flick">
+                                    <path
+                                        class="pip-hair"
+                                        d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
+                                    />
+                                    <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
+                                    <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
+                                    <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
+                                </g>
+                                <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
+                                <path class="pip-ink" d="M60 68 L60 77" />
+                                <path
+                                    class="pip-ink pip-jacket"
+                                    d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z"
+                                />
+                                <path class="pip-ink" d="M53 78 Q60 85 67 78" />
+                                <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
+                                <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
+                                <path class="pip-cord" d="M65 83 q2 5 1 8" />
+                                <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
+                                <path
+                                    class="pip-ink"
+                                    d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z"
+                                />
+                                <path class="pip-ink" d="M45 84 Q34 96 33 108" />
+                                <circle class="pip-ink pip-paper" cx="32" cy="111" r="4" />
+                                <path class="pip-ink" d="M52 115 Q48 129 49 145" />
+                                <path class="pip-ink" d="M69 115 Q73 129 72 145" />
+                                <path
+                                    class="pip-ink pip-solid"
+                                    d="M49 145 Q40 146 40 150 L51 150 Z"
+                                />
+                                <path
+                                    class="pip-ink pip-solid"
+                                    d="M72 145 Q81 146 81 150 L70 150 Z"
+                                />
+                                <g class="pip-scribble">
+                                    <path class="pip-ink" d="M76 84 Q94 88 108 98" />
+                                    <circle class="pip-ink pip-paper" cx="112" cy="100" r="4.6" />
+                                    <path
+                                        class="pip-ink pip-pencil"
+                                        d="M110 96 L114 91 L131 78 L134 84 L117 97 Z"
+                                    />
+                                    <path class="pip-ink" d="M131 78 L134 84" />
+                                </g>
+                            </g>
+                            <g class="pip-speed">
+                                <line x1="96" y1="60" x2="106" y2="54" />
+                                <line x1="100" y1="70" x2="111" y2="66" />
+                                <line x1="94" y1="50" x2="102" y2="43" />
+                            </g>
                             <path
-                                d="M40 10 L46 14 L54 12 L58 20 L66 22 L66 30 L72 36 L68 44 L72 52 L66 58 L66 66 L58 68 L54 76 L46 74 L40 78 L34 74 L26 76 L22 68 L14 66 L14 58 L8 52 L12 44 L8 36 L14 30 L14 22 L22 20 L26 12 L34 14 Z"
+                                class="pip-ink pip-shaving pip-drift"
+                                d="M140 74 q6 -4 8 2 q-5 4 -8 -2 Z"
                             />
-                            <circle cx="40" cy="44" r="12" />
-                            <path d="M40 26 V34 M28 44 H36 M44 44 H52 M40 54 V62" />
                         </g>
                     </svg>
                 </div>
@@ -1573,20 +2328,100 @@
                 <div class="progress-canvas-wrap">
                     <canvas id="progressCanvas"></canvas>
                 </div>
-                <div class="progress-gear-wrap" aria-hidden="true">
-                    <svg class="progress-gear" viewBox="0 0 80 80">
-                        <g
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2.4"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
+                <!-- Pip does the waiting: hood up, pen already moving. -->
+                <div class="progress-mascot-wrap" aria-hidden="true">
+                    <svg class="pip-loader" viewBox="0 0 210 160" focusable="false">
+                        <g filter="url(#pipWobble)">
+                            <g transform="rotate(-4 152 106)">
+                                <rect
+                                    class="pip-ink pip-paper"
+                                    x="118"
+                                    y="72"
+                                    width="74"
+                                    height="62"
+                                    rx="3"
+                                />
+                                <path class="pip-ink pip-mark" d="M128 88 Q145 82 166 90 T182 86" />
+                                <path
+                                    class="pip-ink pip-mark pip-mark-2"
+                                    d="M128 104 Q148 98 168 105 T182 101"
+                                />
+                                <path
+                                    class="pip-ink pip-mark pip-mark-3"
+                                    d="M128 120 Q142 115 158 121"
+                                />
+                            </g>
+                            <g class="pip-bob">
+                                <path
+                                    class="pip-ink pip-hood"
+                                    d="M43 86 C38 76 41 62 52 63 C55 68 65 68 68 63 C79 62 82 76 77 86 Q60 90 43 86 Z"
+                                />
+                                <circle class="pip-ink pip-paper" cx="60" cy="46" r="22" />
+                                <path class="pip-ink" d="M38 46 Q33 49 38 54" />
+                                <path class="pip-ink pip-brow" d="M47.5 44 Q52 40.5 56.5 43.5" />
+                                <path class="pip-ink pip-brow" d="M72.5 43 Q68 39.5 63.5 42.5" />
+                                <g class="pip-blink">
+                                    <circle class="pip-eye" cx="52" cy="49" r="3.2" />
+                                    <circle class="pip-eye" cx="68" cy="49" r="3.2" />
+                                </g>
+                                <path class="pip-ink" d="M60 52 Q63 56 59 57" />
+                                <path class="pip-ink" d="M51 59 Q60 64 68 58" />
+                                <path class="pip-ink pip-tongue" d="M53 60 q5 0 4 5 q-4 2 -5 -2 Z" />
+                                <g class="pip-flick">
+                                    <path
+                                        class="pip-hair"
+                                        d="M42 34 C38 26 40 18 50 15 C60 11 72 14 77 22 C81 28 81 33 80 39 L77 44 Q76 34 73.5 37 Q70 24 67 30 Q64 22 60 32 Q57 22 53 30 Q49.5 21 46 31 Z"
+                                    />
+                                    <path class="pip-wisp" d="M64 12 q5 -3 9 0" />
+                                    <path class="pip-wisp" d="M54 13.4 q3 -3 6 -1" />
+                                    <path class="pip-wisp" d="M43 33 q-2 4 -1 7" />
+                                </g>
+                                <path class="pip-ink" d="M48 66 C52 72 68 72 72 66" />
+                                <path class="pip-ink" d="M60 68 L60 77" />
+                                <path
+                                    class="pip-ink pip-jacket"
+                                    d="M44 81 Q60 74 76 81 L79 112 Q60 118 41 112 Z"
+                                />
+                                <path class="pip-ink" d="M53 78 Q60 85 67 78" />
+                                <path class="pip-cord" d="M55 83 q-2 5 -1 8" />
+                                <ellipse class="pip-aglet" cx="54" cy="93" rx="2" ry="2.8" />
+                                <path class="pip-cord" d="M65 83 q2 5 1 8" />
+                                <ellipse class="pip-aglet" cx="66" cy="93" rx="2" ry="2.8" />
+                                <path
+                                    class="pip-ink"
+                                    d="M48 100 Q60 106 72 100 L71 108 Q60 112 49 108 Z"
+                                />
+                                <path class="pip-ink" d="M45 84 Q34 96 33 108" />
+                                <circle class="pip-ink pip-paper" cx="32" cy="111" r="4" />
+                                <path class="pip-ink" d="M52 115 Q48 129 49 145" />
+                                <path class="pip-ink" d="M69 115 Q73 129 72 145" />
+                                <path
+                                    class="pip-ink pip-solid"
+                                    d="M49 145 Q40 146 40 150 L51 150 Z"
+                                />
+                                <path
+                                    class="pip-ink pip-solid"
+                                    d="M72 145 Q81 146 81 150 L70 150 Z"
+                                />
+                                <g class="pip-scribble">
+                                    <path class="pip-ink" d="M76 84 Q94 88 108 98" />
+                                    <circle class="pip-ink pip-paper" cx="112" cy="100" r="4.6" />
+                                    <path
+                                        class="pip-ink pip-pencil"
+                                        d="M110 96 L114 91 L131 78 L134 84 L117 97 Z"
+                                    />
+                                    <path class="pip-ink" d="M131 78 L134 84" />
+                                </g>
+                            </g>
+                            <g class="pip-speed">
+                                <line x1="96" y1="60" x2="106" y2="54" />
+                                <line x1="100" y1="70" x2="111" y2="66" />
+                                <line x1="94" y1="50" x2="102" y2="43" />
+                            </g>
                             <path
-                                d="M40 10 L46 14 L54 12 L58 20 L66 22 L66 30 L72 36 L68 44 L72 52 L66 58 L66 66 L58 68 L54 76 L46 74 L40 78 L34 74 L26 76 L22 68 L14 66 L14 58 L8 52 L12 44 L8 36 L14 30 L14 22 L22 20 L26 12 L34 14 Z"
+                                class="pip-ink pip-shaving pip-drift"
+                                d="M140 74 q6 -4 8 2 q-5 4 -8 -2 Z"
                             />
-                            <circle cx="40" cy="44" r="12" />
-                            <path d="M40 26 V34 M28 44 H36 M44 44 H52 M40 54 V62" />
                         </g>
                     </svg>
                 </div>

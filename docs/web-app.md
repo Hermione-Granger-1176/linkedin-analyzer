@@ -172,7 +172,7 @@ Message bodies leave the app only inside the file you download, to the location 
 
 ## Loading and Performance
 
-- A shared loading overlay (gear animation) is used for analytics/connections/messages/insights data loading.
+- A shared loading overlay (Pip, the mascot, scribbling on a pad) is used for analytics/connections/messages/insights data loading.
 - Active content is blurred while loading to keep the loading state clear.
 - Tutorial auto-start and mini-tip rendering are gated by loading state, so onboarding UI does not appear while loading overlays are active.
 - Analytics computation runs in `features/analytics/analytics-worker.js`.

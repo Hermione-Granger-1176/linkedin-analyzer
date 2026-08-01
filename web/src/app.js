@@ -23,6 +23,7 @@ import { Session } from "./platform/persistence/session.js";
 import { SESSION_CLEANUP_PROMISE_KEY } from "./shared/constants.js";
 import { DomEvents } from "./shared/dom-events.js";
 import { initDecorations } from "./shared/ui/decorations.js";
+import { initMascot } from "./shared/ui/mascot.js";
 import { NavMenu } from "./shared/ui/nav-menu.js";
 import { Theme } from "./shared/ui/theme.js";
 
@@ -86,6 +87,7 @@ function init() {
     }
     initRuntime();
     initDecorations();
+    initMascot();
     Theme.init();
     PdfExport.init();
     NavMenu.init();

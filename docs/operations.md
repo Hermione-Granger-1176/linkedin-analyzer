@@ -133,7 +133,7 @@ The monitored security mailbox is `adityadarak9314@outlook.com`, the contact pub
 | Surface                                                  | Holder / owner                                                       | Recovery path                                                                                                                                                                                                                        |
 | -------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | GitHub repository                                        | `Hermione-Granger-1176` (org/user account)                           | GitHub account recovery on the owning account; the account uses 2FA, so keep the recovery codes safe.                                                                                                                                |
-| GitHub App (`APP_ID` variable, `APP_PRIVATE_KEY` secret) | Same GitHub account (App owner)                                      | Rotate by generating a new private key in the App settings and updating the `APP_PRIVATE_KEY` repository secret. If the App is lost, the maintenance writeback workflows degrade gracefully (they skip when credentials are absent). |
+| GitHub Apps (primary and escalation, see Token model)    | Same GitHub account (App owner)                                      | Rotate by generating a new private key in each App's settings and updating the matching repository secret. If an App is lost, the maintenance writeback workflows degrade gracefully (they skip when credentials are absent).        |
 | Vercel project (web hosting)                             | Maintainer's Vercel account, linked to the GitHub repo               | Vercel account recovery via its linked email/GitHub login; re-link the repository and re-add the environment variables listed under Web Deployment.                                                                                  |
 | Sentry org/project (opt-in diagnostics)                  | Maintainer's Sentry account                                          | Sentry account recovery; rotate `VITE_SENTRY_DSN` / `SENTRY_AUTH_TOKEN` and update the Vercel environment variables. Telemetry is opt-in and non-critical, so an outage here does not affect users.                                  |
 | PyPI trusted publisher                                   | Maintainer's PyPI account (OIDC trusted publishing, no stored token) | PyPI account recovery; re-configure the trusted publisher for this repository under the project's publishing settings. No API token exists to rotate.                                                                                |
@@ -151,10 +151,12 @@ The workflow structure mirrors the stricter automation pattern used in the `arti
 - The writeback workflow independently validates the completed run against the live same-repository Dependabot PR before downloading its artifact.
 - Writeback jobs re-check the PR branch SHA before applying generated files, so stale artifacts cannot overwrite newer commits.
 - Automated commits use `.github/actions/verified-commit`, which creates GitHub-verified commits through the API and can fall back to a PR branch.
+- GitHub App credentials are scoped to the two steps that need them, the credential check and `create-github-app-token`, never to a whole job. A job-level `env:` block hands the private key to every step in the job, including steps that resolve third-party dependencies. New workflows that use the App must follow the same scoping.
+- A workflow whose target branch is protected uses `commit-mode: force-pr`. A direct commit there can never land, so attempting one only produces a failed API call and a misleading log line.
 
 Configured automation:
 
-- `refresh-action-shas.yml` runs monthly or manually and refreshes the pins Dependabot cannot safely couple. It aligns `@playwright/test` with the immutable Playwright container, refreshes the exact pre-commit hook version, and converts tag-based workflow/action `uses:` refs to full commit SHAs. uv is not among them: `tool.uv.required-version` is a minimum rather than an exact pin, and it is raised by hand when a newer uv is actually needed. Dependabot owns the remaining npm, Python, Dockerfile, and GitHub Action updates. TypeScript major releases remain explicitly deferred until a dedicated migration can adapt the JavaScript type-checking surface.
+- `refresh-action-shas.yml` runs monthly or manually and refreshes the pins Dependabot cannot safely couple. It aligns `@playwright/test` with the immutable Playwright container, refreshes the exact pre-commit hook version, and converts tag-based workflow/action `uses:` refs to full commit SHAs. uv is not among them: `tool.uv.required-version` is a minimum rather than an exact pin, and it is raised by hand when a newer uv is actually needed. Dependabot owns the remaining npm, Python, Dockerfile, and GitHub Action updates. TypeScript major releases remain explicitly deferred until a dedicated migration can adapt the JavaScript type-checking surface. It targets the protected default branch, so it runs in `force-pr` mode and always lands its changes as a reviewable pull request.
 - `refresh-python-locks.yml` refreshes `uv.lock` for same-repository Dependabot uv PRs.
 - `commit-python-locks.yml` validates the triggering workflow run against the live Dependabot PR, downloads a `uv.lock`-only artifact, validates its contents, revalidates the branch head, and commits only if it is still safe.
 
@@ -229,7 +231,7 @@ Expectations live in `scripts/ci/repo_audit.py` as named constants, so changing 
 | Repository        | Default branch is `main`; squash is the only merge method; merged branches are deleted                                                                                                                                         |
 | Security          | Secret scanning, push protection, and Dependabot security updates are all enabled                                                                                                                                              |
 | Branch protection | Required checks are `analyze-javascript`, `analyze-python`, `CodeQL`, and `CI result`; at least one approving review; signed commits, linear history, and conversation resolution required; force pushes and deletions refused |
-| Actions           | Variable `APP_ID` and secret `APP_PRIVATE_KEY` exist                                                                                                                                                                           |
+| Actions           | Variables `APP_ID` and `ESCALATION_APP_ID`, and secrets `APP_PRIVATE_KEY` and `ESCALATION_APP_PRIVATE_KEY`, all exist                                                                                                          |
 
 The script's exit codes match the schedule watchdog: `0` clean, `1` drift found and listed, `2` the audit could not complete. They are distinct because a failure to look must never read as a clean result, which is also why a setting the API declines to report is treated as missing rather than assumed correct. The one exception is a branch with no protection at all, which answers `404`: that is the single worst drift the audit can find, so it becomes a finding rather than a failure to check.
 
@@ -294,12 +296,39 @@ The lock refresh pair preserves the existing writeback flow while making the wor
 
 A failed workflow-run context validation, missing artifact, unchanged lock, or stale branch skips the writeback cleanly (the job stays green) without changing the pull request. Downloaded-artifact content validation is the one deliberate exception: an artifact with symlinks, unexpected files, or unexpected directories fails the job loudly rather than skipping, because unexpected contents point to tampering that must not pass silently. The validation job receives no GitHub App credential or repository write permission.
 
-To enable app-authored maintenance commits, configure these repository values:
+### Token model
 
-- Repository variable: `APP_ID`
-- Repository secret: `APP_PRIVATE_KEY`
+Two GitHub Apps provide elevated permissions beyond the default `GITHUB_TOKEN`, each scoped to a single role. The split mirrors the token model documented in the `artifacts` repository.
 
-If they are missing, the action-SHA refresh workflow records a skipped summary instead of attempting a write. The Python lock refresh workflow instead uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
+| App                    | ID variable         | Private-key secret           | Used for                                       |
+| ---------------------- | ------------------- | ---------------------------- | ---------------------------------------------- |
+| Hermione1176 (primary) | `APP_ID`            | `APP_PRIVATE_KEY`            | Python lock writeback onto Dependabot branches |
+| Harry1176 (escalation) | `ESCALATION_APP_ID` | `ESCALATION_APP_PRIVATE_KEY` | The monthly CI pin refresh pull request        |
+
+Each installation carries only the permissions its role actually exercises.
+
+Hermione1176 (primary) makes one kind of write: a verified `createCommitOnBranch` onto an existing, unprotected `dependabot/uv/` branch. Its minimal installation is:
+
+- `metadata: read` (implicit, required to call any repository endpoint)
+- `contents: write` (the verified `uv.lock` commit)
+
+It never opens a pull request and never touches workflow files, so it needs neither `pull_requests` nor `workflows`. Do not add them. Routing a second write path through this app is what collapses the separation.
+
+Harry1176 (escalation) opens the monthly pin-refresh pull request against the protected default branch. Its minimal installation is:
+
+- `metadata: read` (implicit, required to call any repository endpoint)
+- `contents: write` (create or force-reset the dated fallback branch, and its verified commit)
+- `pull_requests: write` (open or update the pin-refresh pull request)
+- `workflows: write` (the pin refresh rewrites files under `.github/workflows`, which GitHub refuses for an app token that lacks this grant)
+
+Both missing-grant failures arrive as a bare 403, so it is worth knowing them apart:
+
+- Without `pull_requests: write`, the branch and the verified commit both succeed and only the final `POST /repos/{owner}/{repo}/pulls` fails with `Resource not accessible by integration`.
+- Without `workflows: write`, the commit itself fails, but only on the runs where an action SHA actually moved, so it can stay hidden for months.
+
+Scope both installations to selected repositories rather than all of them.
+
+If the escalation credentials are missing, the CI pin refresh workflow records a skipped summary instead of attempting a write. If the primary credentials are missing, the Python lock refresh workflow uses its documented `GITHUB_TOKEN` fallback path after the same validation checks.
 
 ## CLI Environment Variables
 

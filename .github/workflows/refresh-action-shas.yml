@@ -12,26 +12,26 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      APP_ID: ${{ vars.APP_ID }}
-      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
     steps:
-      - name: Check GitHub App credentials
+      - name: Check escalation app credentials
         id: credentials
+        env:
+          ESCALATION_APP_ID: ${{ vars.ESCALATION_APP_ID }}
+          ESCALATION_APP_PRIVATE_KEY: ${{ secrets.ESCALATION_APP_PRIVATE_KEY }}
         run: |
-          if [ -n "$APP_ID" ] && [ -n "$APP_PRIVATE_KEY" ]; then
+          if [ -n "$ESCALATION_APP_ID" ] && [ -n "$ESCALATION_APP_PRIVATE_KEY" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create GitHub App token
+      - name: Create escalation token
         if: steps.credentials.outputs.available == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         id: app-token
         with:
-          app-id: ${{ env.APP_ID }}
-          private-key: ${{ env.APP_PRIVATE_KEY }}
+          app-id: ${{ vars.ESCALATION_APP_ID }}
+          private-key: ${{ secrets.ESCALATION_APP_PRIVATE_KEY }}
 
       - name: Checkout repository
         if: steps.credentials.outputs.available == 'true'
@@ -78,6 +78,7 @@ jobs:
           github-token: ${{ steps.app-token.outputs.token }}
           base-branch: ${{ github.event.repository.default_branch }}
           expected-head-sha: ${{ steps.head.outputs.sha }}
+          commit-mode: force-pr
           commit-headline: "Refresh CI pins"
           fallback-branch-prefix: ci/refresh-ci-pins
           pr-title: "Refresh CI pins"
@@ -96,11 +97,11 @@ jobs:
             package-lock.json
             pyproject.toml
 
-      - name: Note missing app credentials
+      - name: Note missing escalation credentials
         if: steps.credentials.outputs.available != 'true'
         run: |
           {
             echo "## Refresh CI Pins"
             echo
-            echo "Skipped because APP_ID and APP_PRIVATE_KEY are not configured."
+            echo "Skipped because ESCALATION_APP_ID and ESCALATION_APP_PRIVATE_KEY are not configured."
           } >> "$GITHUB_STEP_SUMMARY"

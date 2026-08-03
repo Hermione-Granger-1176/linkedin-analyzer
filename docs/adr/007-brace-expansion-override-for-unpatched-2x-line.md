@@ -1,12 +1,14 @@
 # ADR-007: npm override for the unpatched brace-expansion 2.x line
 
-**Date:** 2026-07-26 **Status:** Accepted **Deciders:** Aditya Kumar Darak
+**Date:** 2026-07-26 **Status:** Superseded **Resolved:** 2026-08-03 **Deciders:** Aditya Kumar Darak
+
+This decision is superseded because upstream backported the fix to the 2.x line. `brace-expansion@2.1.4` falls outside the advisory range (`2.0.0 - 2.1.2`), so the nested `filelist` path now resolves to a patched release on its own and the override has been removed.
 
 ## Context
 
 `brace-expansion` is affected by CVE-2026-14257 (GHSA-mh99-v99m-4gvg, high, CVSS 7.5). Its `expand()` function bounds the number of results but not their length. Chained brace groups can therefore keep the result count under the limit while making each result grow until the Node process exhausts memory.
 
-Every version at or below 5.0.7 is affected. The patched release is 5.0.8. There is no patched 2.x release.
+This section records the situation as it stood on 2026-07-26. Every version at or below 5.0.7 was affected, the patched release was 5.0.8, and the 2.x line had no patched release at all. That last point is what later changed and superseded this decision, as noted above.
 
 The dependency tree contains both a 5.0.7 copy and this nested dependency path:
 
@@ -41,4 +43,4 @@ Forcing 5.0.8 across the dependency tree is compatible with the repository's con
 - The dependency tree resolves a single patched `brace-expansion` version.
 - `make check-overrides` verifies that the override remains necessary by testing the tree without it.
 - The override applies to every consumer in the tree. This is intentional because no consumer should resolve an affected version.
-- Once upstream dependency ranges accept a patched release, remove the override and mark this ADR as superseded.
+- Once upstream dependency ranges accept a patched release, remove the override and mark this ADR as superseded. This happened on 2026-08-03, when `brace-expansion@2.1.4` shipped a patched 2.x line.

@@ -26,7 +26,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const fix = process.argv.includes("--fix");
-const rootDir = resolve(import.meta.dirname, "..");
+const rootDir = resolve(import.meta.dirname, "..", "..");
 const pkgPath = join(rootDir, "package.json");
 const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 const overrides = pkg.overrides ?? {};
@@ -78,7 +78,10 @@ const testWithout = (overridesToRemove) => {
     }
 
     try {
-        run("npm audit --audit-level=high");
+        // Gate every severity, matching the default in scripts/ci/run_npm_audit.py.
+        // A higher floor would call an override stale because the advisory it
+        // holds back happens to sit below the threshold.
+        run("npm audit --audit-level=info");
     } catch (err) {
         cleanup();
         return { ok: false, phase: "audit", err };

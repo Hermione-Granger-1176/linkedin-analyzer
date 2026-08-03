@@ -121,8 +121,9 @@ Diagnostics are **off until the user explicitly grants consent** (telemetry bann
 - Dependency review runs on pull requests.
 - Scheduled dependency audits run weekly for npm and Python dependencies resolved from `uv.lock`.
 - The npm and Python audits fail closed on malformed audit data. Reviewed exceptions are ecosystem-specific and time-bounded in `config/security_audit.json`. They become invalid when a fix appears if configured that way, and fail when they no longer match a reported advisory. The Python audit also fails when `pip-audit --strict` reports a skipped dependency.
-- The weekly generic override-policy check verifies that npm overrides remain necessary (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)).
-- Docker image publish includes Trivy scan for HIGH/CRITICAL vulnerabilities.
+- Both audits gate every advisory severity, down to informational. There is no severity floor to fall through: a reviewed, time-bounded exception is the only thing that silences a finding.
+- The weekly generic override-policy check verifies that npm overrides remain necessary (`make check-overrides`; see [ADR-001](adr/001-npm-overrides-for-transitive-dependency-gaps.md) and [ADR-007](adr/007-brace-expansion-override-for-unpatched-2x-line.md)). It resolves the tree without each override and audits it at the same floor, so an override is never called stale merely because the advisory it holds back sits low on the severity ladder.
+- Docker image publish includes a Trivy scan gating every severity Trivy reports, `UNKNOWN` included, so an unclassified finding cannot slip past the list. `ignore-unfixed` is set, so a publish fails only on findings that already have a fix available.
 
 ## Custody and Recovery
 

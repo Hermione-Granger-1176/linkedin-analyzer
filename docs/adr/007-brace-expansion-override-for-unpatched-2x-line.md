@@ -8,7 +8,7 @@ This decision is superseded because upstream backported the fix to the 2.x line.
 
 `brace-expansion` is affected by CVE-2026-14257 (GHSA-mh99-v99m-4gvg, high, CVSS 7.5). Its `expand()` function bounds the number of results but not their length. Chained brace groups can therefore keep the result count under the limit while making each result grow until the Node process exhausts memory.
 
-Every version at or below 5.0.7 is affected. The patched release is 5.0.8. There is no patched 2.x release.
+This section records the situation as it stood on 2026-07-26. Every version at or below 5.0.7 was affected, the patched release was 5.0.8, and the 2.x line had no patched release at all. That last point is what later changed and superseded this decision, as noted above.
 
 The dependency tree contains both a 5.0.7 copy and this nested dependency path:
 

@@ -78,7 +78,10 @@ const testWithout = (overridesToRemove) => {
     }
 
     try {
-        run("npm audit --audit-level=high");
+        // Gate every severity, matching the default in scripts/ci/run_npm_audit.py.
+        // A higher floor would call an override stale because the advisory it
+        // holds back happens to sit below the threshold.
+        run("npm audit --audit-level=info");
     } catch (err) {
         cleanup();
         return { ok: false, phase: "audit", err };

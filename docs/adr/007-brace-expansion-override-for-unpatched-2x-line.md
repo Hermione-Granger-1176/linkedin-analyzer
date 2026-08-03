@@ -1,6 +1,8 @@
 # ADR-007: npm override for the unpatched brace-expansion 2.x line
 
-**Date:** 2026-07-26 **Status:** Accepted **Deciders:** Aditya Kumar Darak
+**Date:** 2026-07-26 **Status:** Superseded **Resolved:** 2026-08-03 **Deciders:** Aditya Kumar Darak
+
+This decision is superseded because upstream backported the fix to the 2.x line. `brace-expansion@2.1.4` falls outside the advisory range (`2.0.0 - 2.1.2`), so the nested `filelist` path now resolves to a patched release on its own and the override has been removed.
 
 ## Context
 
@@ -41,4 +43,4 @@ Forcing 5.0.8 across the dependency tree is compatible with the repository's con
 - The dependency tree resolves a single patched `brace-expansion` version.
 - `make check-overrides` verifies that the override remains necessary by testing the tree without it.
 - The override applies to every consumer in the tree. This is intentional because no consumer should resolve an affected version.
-- Once upstream dependency ranges accept a patched release, remove the override and mark this ADR as superseded.
+- Once upstream dependency ranges accept a patched release, remove the override and mark this ADR as superseded. This happened on 2026-08-03, when `brace-expansion@2.1.4` shipped a patched 2.x line.

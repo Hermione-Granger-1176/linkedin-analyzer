@@ -26,7 +26,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const fix = process.argv.includes("--fix");
-const rootDir = resolve(import.meta.dirname, "..");
+const rootDir = resolve(import.meta.dirname, "..", "..");
 const pkgPath = join(rootDir, "package.json");
 const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 const overrides = pkg.overrides ?? {};

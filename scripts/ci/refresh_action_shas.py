@@ -35,9 +35,16 @@ def is_pinnable(action: str, ref: str) -> bool:
     Local (``./``), Docker, and templated references are left untouched, and a
     ref that is already a 40-character SHA needs no change.
     """
-    if action.startswith(("./", "docker://")) or "${{" in action:
+    if action.startswith(("./", "docker://")) or "${{" in action or "${{" in ref:
         return False
     return not SHA_PATTERN.fullmatch(ref)
+
+
+def _validate_resolved_sha(sha: object, *, action: str, ref: str) -> str:
+    """Return a valid resolver result or fail before it reaches a workflow."""
+    if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
+        raise ValueError(f"Resolver returned an invalid commit SHA for {action}@{ref}")
+    return sha
 
 
 def update_line(line: str, resolve: ResolveSha) -> tuple[str, bool]:
@@ -53,7 +60,7 @@ def update_line(line: str, resolve: ResolveSha) -> tuple[str, bool]:
     if not is_pinnable(action, ref):
         return line, False
 
-    sha = resolve(action, ref)
+    sha = _validate_resolved_sha(resolve(action, ref), action=action, ref=ref)
     ref_suffix = suffix if suffix.strip() else f" # {ref}"
     return f"{prefix}{action}@{sha}{ref_suffix}", True
 
@@ -113,13 +120,13 @@ def make_resolver(
             return cache[key]
         for attempt in range(1, max_attempts):
             try:
-                sha = fetch(repo, ref)
+                sha = _validate_resolved_sha(fetch(repo, ref), action=action, ref=ref)
             except Exception:  # retried below; the final attempt propagates instead
                 sleep(attempt * 0.25)
                 continue
             cache[key] = sha
             return sha
-        sha = fetch(repo, ref)  # final attempt: let the failure reach the caller
+        sha = _validate_resolved_sha(fetch(repo, ref), action=action, ref=ref)
         cache[key] = sha
         return sha
 

@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 ACTIONS_DIR = REPO_ROOT / ".github" / "actions"
 TOKEN_ACTION_REFERENCE = re.compile(
-    r"^\s*uses:\s*actions/create-github-app-token@(?P<ref>\S+)(?:\s+#.*)?$",
+    r"^\s*(?:-\s+)?uses:\s*actions/create-github-app-token@(?P<ref>\S+)(?:\s+#.*)?$",
     re.MULTILINE,
 )
 TOKEN_ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -41,14 +41,18 @@ def _token_steps(source: str) -> list[str]:
     ]
     blocks: list[str] = []
     for token_index in token_indexes:
-        action_indent = len(lines[token_index]) - len(lines[token_index].lstrip())
         start = token_index
-        while start > 0:
-            previous = LIST_ITEM.match(lines[start - 1])
-            if previous and len(previous.group("indent")) <= action_indent:
+        list_item = LIST_ITEM.match(lines[token_index])
+        if list_item:
+            action_indent = len(list_item.group("indent"))
+        else:
+            action_indent = len(lines[token_index]) - len(lines[token_index].lstrip())
+            while start > 0:
+                previous = LIST_ITEM.match(lines[start - 1])
+                if previous and len(previous.group("indent")) <= action_indent:
+                    start -= 1
+                    break
                 start -= 1
-                break
-            start -= 1
         end = token_index + 1
         while end < len(lines):
             following = LIST_ITEM.match(lines[end])
@@ -57,6 +61,24 @@ def _token_steps(source: str) -> list[str]:
             end += 1
         blocks.append("".join(lines[start:end]))
     return blocks
+
+
+def test_token_step_parser_handles_inline_uses_list_items() -> None:
+    """Keep inline ``- uses`` steps inside their own YAML list item."""
+    source = """\
+jobs:
+  token:
+    steps:
+      - uses: actions/create-github-app-token@0123456789abcdef0123456789abcdef01234567
+        with:
+          client-id: ${{ vars.APP_ID }}
+      - name: Next step
+        run: echo done
+"""
+
+    steps = _token_steps(source)
+    assert len(steps) == 1
+    assert CLIENT_ID_INPUT.search(steps[0])
 
 
 def test_github_app_token_actions_use_client_id_without_renaming_repository_variables() -> None:

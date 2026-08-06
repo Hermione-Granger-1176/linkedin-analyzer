@@ -318,6 +318,14 @@ def test_buffered_targets_read_stdin_once_into_a_private_file(target: str, templ
     assert 'chmod 600 "$$tmp"' in recipe
 
 
+def test_commit_fails_fast_when_stdin_is_a_terminal() -> None:
+    """An interactive commit invocation must not hang waiting for a message."""
+    recipe = _target_recipe("commit")
+
+    assert "if [ -t 0 ]; then" in recipe
+    assert "Commit message must be provided on stdin." in recipe
+
+
 def test_alert_issue_takes_its_detail_from_stdin() -> None:
     """A failing workflow's output never has to survive a make command line."""
     recipe = _target_recipe("ci-alert-issue")

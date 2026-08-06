@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from scripts.lint import SKIP_DIRECTORIES, iter_lint_paths
+from scripts import REPO_ROOT
+from scripts.lint import iter_lint_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
 MARKDOWN_SUFFIX = ".md"
 SOURCE_SUFFIXES = frozenset({".py", ".mjs", ".js"})
@@ -28,7 +27,8 @@ GROUP_PATTERN = re.compile(
 MAKE_REFERENCE_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_./$-])"
     r"(?:[A-Z_][A-Z0-9_]*=(?:\"[^\"]*\"|'[^']*'|[^\s\"']+)\s+)*"
-    r"make\s+([A-Za-z][A-Za-z0-9_-]*)\b"
+    r"make\s+(?:--[A-Za-z][A-Za-z0-9-]*(?:=[^\s\"']+)?\s+)*"
+    r"([A-Za-z][A-Za-z0-9_-]*)\b"
     r"(?![A-Za-z0-9_?*./:=+%-])"
 )
 INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
@@ -47,7 +47,7 @@ RECIPE_PREFIX_PATTERN = re.compile(r"^[@\-+]+")
 # list is a ratchet: ``test_control_flow_allowlist_has_no_unused_entries`` fails
 # if a target is fixed and left behind here.
 #
-# Seven of these exist *because* of the free-text rule. An optional flag whose
+# Several of these exist *because* of the free-text rule. An optional flag whose
 # value is prose cannot be added with ``$(if $(COMMENT),--comment "$$COMMENT")``,
 # since a Make conditional expands the value and would run ``$(shell ...)`` inside
 # it. Testing in the recipe's shell is the only safe way to append the flag, so
@@ -190,28 +190,12 @@ def load_makefile_targets(path: Path | None = None) -> set[str]:
     return parse_makefile_targets(makefile_path.read_text(encoding="utf-8"))
 
 
-def iter_markdown_files(root: Path) -> list[Path]:
+def iter_markdown_files(root: Path | None = None) -> list[Path]:
     """Return Markdown paths while pruning ignored and symlinked directories."""
-    files: list[Path] = []
-    for current_root, directory_names, file_names in os.walk(
-        root,
-        topdown=True,
-        followlinks=False,
-    ):
-        current_path = Path(current_root)
-        directory_names[:] = sorted(
-            name
-            for name in directory_names
-            if name not in SKIP_DIRECTORIES and not (current_path / name).is_symlink()
-        )
-        files.extend(
-            path
-            for name in sorted(file_names)
-            if (path := current_path / name).suffix.lower() == ".md"
-            and path.is_file()
-            and not path.is_symlink()
-        )
-    return files
+    workspace_root = root or REPO_ROOT
+    return [
+        path for path in iter_lint_paths(workspace_root) if path.suffix.lower() == MARKDOWN_SUFFIX
+    ]
 
 
 def extract_markdown_code_snippets(text: str) -> list[CodeSnippet]:

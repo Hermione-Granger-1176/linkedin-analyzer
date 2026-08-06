@@ -10,6 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from scripts import REPO_ROOT
 from scripts.lint import contains_symlink as _contains_symlink
 from scripts.lint.make_targets import (
     MAKEFILE_PATH,
@@ -19,8 +20,6 @@ from scripts.lint.make_targets import (
     load_makefile_targets,
     snippet_extractor,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:

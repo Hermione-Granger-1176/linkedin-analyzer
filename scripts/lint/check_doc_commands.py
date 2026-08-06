@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts import REPO_ROOT
 from scripts.lint import contains_symlink as _contains_symlink
 from scripts.lint.make_targets import (
     INLINE_CODE_PATTERN,
@@ -16,7 +17,6 @@ from scripts.lint.make_targets import (
     load_makefile_targets,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DOC_PATHS = (
     Path("README.md"),
     Path("CLAUDE.md"),

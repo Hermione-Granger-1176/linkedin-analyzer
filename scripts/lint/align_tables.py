@@ -7,9 +7,9 @@ import re
 import sys
 from pathlib import Path
 
+from scripts import REPO_ROOT
 from scripts.lint import iter_lint_paths
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 SEPARATOR_PATTERN = re.compile(r"^[\s|:*-]+$")
 
 

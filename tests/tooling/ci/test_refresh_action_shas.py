@@ -22,6 +22,7 @@ def test_is_pinnable_skips_local_docker_and_templated() -> None:
     assert not ras.is_pinnable("./.github/actions/ci-setup", "main")
     assert not ras.is_pinnable("docker://alpine", "3.20")
     assert not ras.is_pinnable("${{ matrix.action }}", "v1")
+    assert not ras.is_pinnable("actions/checkout", "${{ matrix.ref }}")
 
 
 def test_is_pinnable_skips_existing_sha() -> None:
@@ -49,6 +50,12 @@ def test_update_line_ignores_non_uses_and_local() -> None:
     assert ras.update_line("name: CI", fixed_resolver()) == ("name: CI", False)
     local = "      uses: ./.github/actions/ci-setup"
     assert ras.update_line(local, fixed_resolver()) == (local, False)
+
+
+def test_update_line_rejects_an_invalid_resolver_result() -> None:
+    """A resolver cannot write a non-immutable ref into a workflow."""
+    with pytest.raises(ValueError, match=r"invalid commit SHA.*actions/checkout@v4"):
+        ras.update_line("  - uses: actions/checkout@v4", fixed_resolver("not-a-sha"))
 
 
 def test_update_text_reports_no_change_when_all_pinned() -> None:
@@ -124,6 +131,34 @@ def test_make_resolver_retries_then_succeeds() -> None:
     assert resolve("actions/checkout", "v4") == SHA_A
     assert attempts["n"] == 2
     assert slept == [0.25]
+
+
+def test_make_resolver_retries_an_invalid_sha_then_succeeds() -> None:
+    """An invalid fetch result is treated like a transient resolution failure."""
+    attempts = {"n": 0}
+    slept: list[float] = []
+
+    def fetch(_repo: str, _ref: str) -> str:
+        attempts["n"] += 1
+        return "not-a-sha" if attempts["n"] == 1 else SHA_A
+
+    resolve = ras.make_resolver(fetch, sleep=slept.append)
+
+    assert resolve("actions/checkout", "v4") == SHA_A
+    assert attempts["n"] == 2
+    assert slept == [0.25]
+
+
+def test_make_resolver_rejects_an_invalid_final_sha() -> None:
+    """An invalid result on the final attempt fails instead of being cached."""
+    resolve = ras.make_resolver(
+        lambda _repo, _ref: "not-a-sha",
+        max_attempts=1,
+        sleep=lambda _seconds: None,
+    )
+
+    with pytest.raises(ValueError, match=r"invalid commit SHA.*actions/checkout@v4"):
+        resolve("actions/checkout", "v4")
 
 
 def test_make_resolver_raises_after_max_attempts() -> None:

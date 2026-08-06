@@ -58,7 +58,7 @@ def test_latest_run_rejects_a_non_list_payload() -> None:
     """A non-list run payload is surfaced as a GhError."""
     runner = FakeGh([(has("run", "list"), completed_process(0, json.dumps({})))])
 
-    with pytest.raises(GhError):
+    with pytest.raises(GhError, match="expected a list"):
         ci_status.latest_run("feature", run_fn=runner)
 
 
@@ -79,9 +79,10 @@ def test_latest_run_rejects_a_missing_database_id() -> None:
         ci_status.latest_run("feature", run_fn=runner)
 
 
-def test_latest_run_rejects_a_non_integer_database_id() -> None:
+@pytest.mark.parametrize("database_id", ["abc", 1.9, True])
+def test_latest_run_rejects_a_non_integer_database_id(database_id: object) -> None:
     """A malformed database id is reported rather than coerced ambiguously."""
-    payload = json.dumps([{"databaseId": "abc"}])
+    payload = json.dumps([{"databaseId": database_id}])
     runner = FakeGh([(has("run", "list"), completed_process(0, payload))])
 
     with pytest.raises(GhError):

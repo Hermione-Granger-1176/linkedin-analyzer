@@ -54,6 +54,40 @@ def test_latest_run_raises_without_runs() -> None:
         ci_status.latest_run("feature", run_fn=runner)
 
 
+def test_latest_run_rejects_a_non_list_payload() -> None:
+    """A non-list run payload is surfaced as a GhError."""
+    runner = FakeGh([(has("run", "list"), completed_process(0, json.dumps({})))])
+
+    with pytest.raises(GhError):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
+def test_latest_run_rejects_a_non_mapping_entry() -> None:
+    """A run list entry must be a mapping."""
+    runner = FakeGh([(has("run", "list"), completed_process(0, json.dumps([123])))])
+
+    with pytest.raises(GhError):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
+def test_latest_run_rejects_a_missing_database_id() -> None:
+    """A run without a database id cannot be used by the log helper."""
+    payload = json.dumps([{"status": "completed", "conclusion": "failure"}])
+    runner = FakeGh([(has("run", "list"), completed_process(0, payload))])
+
+    with pytest.raises(GhError):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
+def test_latest_run_rejects_a_non_integer_database_id() -> None:
+    """A malformed database id is reported rather than coerced ambiguously."""
+    payload = json.dumps([{"databaseId": "abc"}])
+    runner = FakeGh([(has("run", "list"), completed_process(0, payload))])
+
+    with pytest.raises(GhError):
+        ci_status.latest_run("feature", run_fn=runner)
+
+
 def test_failure_digest_short_circuits_on_success() -> None:
     """Succeeded runs report success without fetching logs."""
     runner = _run_list(1, status="completed", conclusion="success")

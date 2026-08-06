@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from datetime import UTC, datetime
 
@@ -12,6 +13,18 @@ from tests.support.gh import FakeGh, completed_process, has
 _CLEAN_BODY = "Copilot reviewed 8 files and generated no new comments."
 _COMMENT_BODY = "Copilot reviewed 8 files and generated 2 comments."
 _SUBMITTED_AT = "2026-07-26T12:00:00Z"
+
+
+def test_watch_helpers_share_the_expected_check_default() -> None:
+    """Both watcher entry points derive their default from one constant."""
+    assert (
+        inspect.signature(pr_watch.poll_once).parameters["expected_checks"].default
+        == pr_watch.DEFAULT_EXPECTED_CHECKS
+    )
+    assert (
+        inspect.signature(pr_watch.watch_pr).parameters["expected_checks"].default
+        == pr_watch.DEFAULT_EXPECTED_CHECKS
+    )
 
 
 def _review(
@@ -260,37 +273,33 @@ def test_review_summary_flags_an_unrecognized_overview() -> None:
     assert pr_watch._review_summary(review, requested=True) == "unrecognized Copilot overview"
 
 
-def test_an_approval_without_a_comment_count_is_clean() -> None:
-    """Copilot approves with wording that carries no count, so state is the signal."""
+def test_an_approval_state_does_not_bypass_unrecognized_wording() -> None:
+    """A review state without clean wording must not be treated as clean."""
     review = _parsed_review(count=None, state="APPROVED")
 
-    assert review.is_approved
-    assert review.is_explicitly_clean
-    assert pr_watch._review_summary(review, requested=True) == "approved with no comments"
+    assert not review.is_explicitly_clean
+    assert pr_watch._review_summary(review, requested=True) == "unrecognized Copilot overview"
 
 
 def test_a_non_approving_review_still_needs_recognizable_wording() -> None:
     """A commented or dismissed review must not inherit the approval shortcut."""
     review = _parsed_review(count=None, state="COMMENTED")
 
-    assert not review.is_approved
     assert not review.is_explicitly_clean
     assert pr_watch._review_summary(review, requested=True) == "unrecognized Copilot overview"
 
 
-def test_watch_pr_accepts_an_approving_fresh_review(
+def test_watch_pr_rejects_an_approval_state_without_clean_wording(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An approval with no comments settles the watch instead of failing it."""
+    """An approval state without recognizable wording blocks the watch."""
     _watch_stubs(
         monkeypatch,
         [_status(settled=True, review=_parsed_review(count=None, state="APPROVED"))],
     )
 
-    report = pr_watch.watch_pr(12, interval=0, max_polls=1)
-
-    assert "approved with no comments" in report
-    assert "merge ready: yes" in report
+    with pytest.raises(GhError, match="could not be classified"):
+        pr_watch.watch_pr(12, interval=0, max_polls=1)
 
 
 @pytest.mark.parametrize("conclusion", ["SUCCESS", "NEUTRAL", "SKIPPED"])
@@ -522,7 +531,7 @@ def test_watch_pr_captures_baseline_before_request_and_reports_clean_state(
     )
     monkeypatch.setattr(pr_review, "list_threads", lambda *_args, **_kwargs: [])
 
-    report = pr_watch.watch_pr(12, interval=0, max_polls=1)
+    report = pr_watch.watch_pr(12, interval=0, max_polls=1, request_copilot=True)
 
     assert order == ["baseline", "request"]
     assert "latest Copilot review: generated no comments" in report
@@ -546,6 +555,7 @@ def test_watch_pr_sleeps_until_checks_and_review_are_ready(
         12,
         interval=2.5,
         max_polls=2,
+        request_copilot=True,
         sleep_fn=sleeps.append,
     )
 
@@ -615,6 +625,7 @@ def test_watch_pr_waits_for_threads_to_catch_up_with_comment_overview(
         12,
         interval=1,
         max_polls=2,
+        request_copilot=True,
         sleep_fn=sleeps.append,
     )
 
@@ -672,6 +683,7 @@ def test_watch_pr_counts_only_threads_newer_than_the_request_baseline(
         12,
         interval=1,
         max_polls=2,
+        request_copilot=True,
         sleep_fn=sleeps.append,
     )
 
@@ -785,6 +797,28 @@ def test_watch_pr_checks_only_skips_review_request(
     assert "merge ready: no" in report
 
 
+def test_watch_pr_waits_for_auto_requested_review_without_mutating_reviewers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default watcher observes an automatic review without requesting another."""
+    requested, _ = _watch_stubs(
+        monkeypatch,
+        [_status(settled=True, review=_parsed_review())],
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "watch_baseline",
+        lambda *_args, **_kwargs: pytest.fail(
+            "observation mode should not capture a request baseline"
+        ),
+    )
+
+    report = pr_watch.watch_pr(12, interval=0, max_polls=1)
+
+    assert requested == []
+    assert "latest Copilot review: generated no comments" in report
+
+
 def test_watch_pr_defaults_current_pr_and_sleep(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -874,6 +908,7 @@ def test_watch_cli_forwards_every_option_and_prints_report(
             "--expected-checks",
             "17",
             "--checks-only",
+            "--request-copilot",
         ]
     )
 
@@ -884,6 +919,7 @@ def test_watch_cli_forwards_every_option_and_prints_report(
         "max_polls": 3,
         "expected_checks": 17,
         "checks_only": True,
+        "request_copilot": True,
     }
     assert capsys.readouterr().out.strip() == "compact watch report"
 
@@ -904,6 +940,7 @@ def test_watch_cli_uses_conservative_defaults(monkeypatch: pytest.MonkeyPatch) -
         "pr": None,
         "interval": 45.0,
         "max_polls": 40,
-        "expected_checks": 15,
+        "expected_checks": pr_watch.DEFAULT_EXPECTED_CHECKS,
         "checks_only": False,
+        "request_copilot": False,
     }

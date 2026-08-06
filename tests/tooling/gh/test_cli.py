@@ -172,8 +172,9 @@ def test_watch_defaults_match_the_documented_options(monkeypatch: pytest.MonkeyP
             {
                 "interval": 45.0,
                 "max_polls": 40,
-                "expected_checks": 15,
+                "expected_checks": pr_watch.DEFAULT_EXPECTED_CHECKS,
                 "checks_only": False,
+                "request_copilot": False,
             },
         )
     ]

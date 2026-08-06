@@ -1,4 +1,4 @@
-"""Conservatively watch PR checks and a newly requested Copilot review."""
+"""Conservatively watch PR checks and an optionally requested Copilot review."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 _COPILOT_LOGIN = "copilot-pull-request-reviewer"
 _PENDING_STATES = {"EXPECTED", "PENDING"}
 _SUCCESSFUL_CHECK_OUTCOMES = {"NEUTRAL", "SKIPPED", "SUCCESS"}
+DEFAULT_EXPECTED_CHECKS = 15
 # Copilot writes "generated no comments" on a first review and "generated no new
 # comments" on a re-review, so "new" has to be optional or a clean first pass is
 # reported as unclassifiable.
@@ -37,26 +38,15 @@ class CopilotReview:
     state: str = ""
 
     @property
-    def is_approved(self) -> bool:
-        """Return whether Copilot submitted this review as an approval.
-
-        Copilot approves with a "Ready to approve" overview that carries no
-        comment-count sentence at all, so the wording patterns below cannot
-        recognize it and the state is the only reliable signal.
-        """
-        return self.state == "APPROVED"
-
-    @property
     def is_explicitly_clean(self) -> bool:
         """Return whether the review reports nothing to address.
 
-        An approval counts on its own. Otherwise both Copilot phrasings do:
-        "generated no comments" on a first review and "generated no new
-        comments" on a re-review. A numeric "generated 0 comments" deliberately
-        does not, so an unexpected wording fails closed.
+        Copilot review state is not evidence of a clean review. The review
+        wording must say "generated no comments" on a first review or
+        "generated no new comments" on a re-review. A numeric "generated 0
+        comments" deliberately does not count, so unexpected wording fails
+        closed.
         """
-        if self.is_approved:
-            return True
         match = _COMMENT_COUNT_PATTERN.search(self.body)
         return match is not None and match.group(1) is not None
 
@@ -74,7 +64,7 @@ class PollStatus:
 
 @dataclass(frozen=True)
 class WatchBaseline:
-    """Copilot review ids and every review thread id seen before a request.
+    """Copilot review and thread ids seen before an explicit request.
 
     ``thread_ids`` deliberately includes resolved threads so that a thread
     resolved between polls is never mistaken for a newly generated one.
@@ -159,7 +149,7 @@ def _review_payload(pr: int, *, run_fn: RunFunction | None = None) -> dict[str, 
 
 
 def watch_baseline(pr: int, *, run_fn: RunFunction | None = None) -> WatchBaseline:
-    """Capture existing Copilot reviews and every review thread before a request.
+    """Capture existing Copilot reviews and threads before an explicit request.
 
     Resolved threads are captured alongside open ones so that later polls only
     wait on threads the requested review actually created.
@@ -222,7 +212,7 @@ def poll_once(
     pr: int,
     baseline_ids: frozenset[str],
     *,
-    expected_checks: int = 15,
+    expected_checks: int = DEFAULT_EXPECTED_CHECKS,
     checks_only: bool = False,
     run_fn: RunFunction | None = None,
 ) -> PollStatus:
@@ -258,9 +248,7 @@ def _review_summary(review: CopilotReview | None, *, requested: bool) -> str:
     if review is None:
         return "no new review yet" if requested else "not requested"
     if review.generated_comment_count is None:
-        return (
-            "approved with no comments" if review.is_approved else "unrecognized Copilot overview"
-        )
+        return "unrecognized Copilot overview"
     if review.is_explicitly_clean:
         return "generated no comments"
     return f"generated {review.generated_comment_count} comment(s)"
@@ -299,15 +287,19 @@ def watch_pr(
     *,
     interval: float = 45.0,
     max_polls: int = 40,
-    expected_checks: int = 15,
+    expected_checks: int = DEFAULT_EXPECTED_CHECKS,
     checks_only: bool = False,
+    request_copilot: bool = False,
     run_fn: RunFunction | None = None,
     sleep_fn: Callable[[float], None] | None = None,
 ) -> str:
-    """Wait for settled successful checks and, unless ``checks_only``, a fresh review.
+    """Wait for settled successful checks and the latest available Copilot review.
 
-    With ``checks_only`` no Copilot review is requested or awaited, so the
-    report classifies the review state as not requested.
+    Automatic PR review starts outside this command, so the default mode observes
+    the latest available review without mutating reviewer state. Set
+    ``request_copilot`` when the caller explicitly wants this command to capture a
+    baseline and request a new review. With ``checks_only`` no Copilot review is
+    requested or awaited.
     """
     if interval < 0:
         raise GhError("interval must not be negative.")
@@ -318,7 +310,7 @@ def watch_pr(
 
     pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
     baseline = WatchBaseline(frozenset(), frozenset())
-    if not checks_only:
+    if request_copilot and not checks_only:
         baseline = watch_baseline(pr, run_fn=run_fn)
         pr_review.request_copilot_review(pr, run_fn=run_fn)
     sleeper = sleep_fn or time.sleep
@@ -353,7 +345,6 @@ def watch_pr(
                 if (
                     status.fresh_review is not None
                     and status.fresh_review.generated_comment_count is None
-                    and not status.fresh_review.is_approved
                 ):
                     raise GhError(
                         "The fresh Copilot review overview could not be classified; "

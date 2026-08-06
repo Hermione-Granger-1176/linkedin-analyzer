@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import gh_runner
 from .gh_runner import GhError, GhRateLimitError, RunFunction
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _THREADS_QUERY = """
 query($owner: String!, $name: String!, $pr: Int!, $after: String) {
@@ -120,20 +123,47 @@ def _review_threads(data: Any) -> dict[str, Any]:
     pull_request = repository.get("pullRequest") if isinstance(repository, dict) else None
     if not isinstance(pull_request, dict):
         raise GhError("No pull request in GraphQL response (invalid or inaccessible PR?).")
-    connection: dict[str, Any] = pull_request["reviewThreads"]
+    connection = pull_request.get("reviewThreads")
+    if not isinstance(connection, dict):
+        raise GhError("No review threads in GraphQL response (unexpected shape?).")
     return connection
 
 
-def _parse_nodes(nodes: list[Any]) -> list[ReviewThread]:
+def _review_thread_nodes(connection: dict[str, Any]) -> list[Any]:
+    """Return ``reviewThreads.nodes`` from a validated connection."""
+    nodes = connection.get("nodes")
+    if not isinstance(nodes, list):
+        raise GhError("Unexpected reviewThreads.nodes shape in GraphQL response.")
+    return nodes
+
+
+def _parse_nodes(nodes: Any) -> list[ReviewThread]:
     """Convert ``reviewThreads.nodes`` entries into ``ReviewThread`` objects."""
+    if not isinstance(nodes, list):
+        raise GhError("Unexpected reviewThreads.nodes shape in GraphQL response.")
     threads: list[ReviewThread] = []
     for node in nodes:
-        comments = node.get("comments", {}).get("nodes", [])
+        if not isinstance(node, dict):
+            raise GhError("Unexpected review thread node shape in GraphQL response.")
+        thread_id = node.get("id")
+        if not thread_id:
+            raise GhError("Review thread node missing id in GraphQL response.")
+        raw_comments = node.get("comments")
+        if raw_comments is not None and not isinstance(raw_comments, dict):
+            raise GhError("Unexpected review thread comments shape in GraphQL response.")
+        comments = [] if raw_comments is None else raw_comments.get("nodes")
+        if not isinstance(comments, list):
+            raise GhError("Unexpected review thread comments nodes shape in GraphQL response.")
         first = comments[0] if comments else {}
-        author = first.get("author") or {}
+        if not isinstance(first, dict):
+            raise GhError("Unexpected review thread comment node shape in GraphQL response.")
+        author = first.get("author")
+        if author is not None and not isinstance(author, dict):
+            raise GhError("Unexpected review comment author shape in GraphQL response.")
+        author = author or {}
         threads.append(
             ReviewThread(
-                thread_id=str(node["id"]),
+                thread_id=str(thread_id),
                 state="resolved" if node.get("isResolved") else "open",
                 path=str(node.get("path") or ""),
                 line=node.get("line"),
@@ -147,7 +177,70 @@ def _parse_nodes(nodes: list[Any]) -> list[ReviewThread]:
 
 def parse_threads(data: Any) -> list[ReviewThread]:
     """Convert a single GraphQL ``reviewThreads`` page into ``ReviewThread`` objects."""
-    return _parse_nodes(_review_threads(data)["nodes"])
+    return _parse_nodes(_review_thread_nodes(_review_threads(data)))
+
+
+def _page_info(connection: dict[str, Any], message: str) -> dict[str, Any]:
+    """Return a GraphQL connection's pageInfo mapping, or raise ``GhError``."""
+    page_info = connection.get("pageInfo")
+    if not isinstance(page_info, dict):
+        raise GhError(message)
+    return page_info
+
+
+def _page_has_next(page_info: dict[str, Any], message: str) -> bool:
+    """Return ``pageInfo.hasNextPage`` as a bool, raising on a malformed value.
+
+    The GraphQL ``PageInfo.hasNextPage`` field is non-null, so a valid response
+    always carries it. A missing or non-boolean value is therefore malformed and
+    surfaces as ``GhError`` rather than silently truncating pagination.
+    """
+    has_next = page_info.get("hasNextPage")
+    if not isinstance(has_next, bool):
+        raise GhError(message)
+    return has_next
+
+
+def _require_end_cursor(page_info: dict[str, Any], message: str) -> str:
+    """Return ``pageInfo.endCursor`` as a non-empty string, or raise ``GhError``.
+
+    Only call this after ``_page_has_next`` has confirmed ``hasNextPage`` is true,
+    since pagination must then continue from this cursor. A missing, non-string,
+    or empty ``endCursor`` is malformed and surfaces as a clear error instead of
+    being forwarded into the next query as a confusing value.
+    """
+    after = page_info.get("endCursor")
+    if not isinstance(after, str) or not after:
+        raise GhError(message)
+    return after
+
+
+def _review_thread_pages(
+    query: str,
+    *,
+    owner: str,
+    name: str,
+    pr: int,
+    run_fn: RunFunction | None,
+) -> Iterator[dict[str, Any]]:
+    """Yield every ``reviewThreads`` connection page for ``query``."""
+    after: str | None = None
+    while True:
+        variables: dict[str, object] = {"owner": owner, "name": name, "pr": pr}
+        if after is not None:
+            variables["after"] = after
+        connection = _review_threads(gh_runner.graphql(query, variables=variables, run_fn=run_fn))
+        yield connection
+        page_info = _page_info(
+            connection, "Unexpected reviewThreads pageInfo shape in GraphQL response."
+        )
+        if not _page_has_next(
+            page_info, "Unexpected reviewThreads pageInfo shape in GraphQL response."
+        ):
+            break
+        after = _require_end_cursor(
+            page_info, "Unexpected reviewThreads pageInfo shape in GraphQL response."
+        )
 
 
 def list_threads(
@@ -165,19 +258,10 @@ def list_threads(
     pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
 
     threads: list[ReviewThread] = []
-    after: str | None = None
-    while True:
-        variables: dict[str, object] = {"owner": owner, "name": name, "pr": pr}
-        if after is not None:
-            variables["after"] = after
-        connection = _review_threads(
-            gh_runner.graphql(_THREADS_QUERY, variables=variables, run_fn=run_fn)
-        )
-        threads.extend(_parse_nodes(connection["nodes"]))
-        page_info = connection["pageInfo"]
-        after = page_info.get("endCursor")
-        if not page_info.get("hasNextPage") or not after:
-            break
+    for connection in _review_thread_pages(
+        _THREADS_QUERY, owner=owner, name=name, pr=pr, run_fn=run_fn
+    ):
+        threads.extend(_parse_nodes(_review_thread_nodes(connection)))
 
     if include_resolved:
         return threads
@@ -223,14 +307,24 @@ class ReviewComment:
     url: str
 
 
-def _parse_comment_nodes(nodes: list[Any]) -> list[ReviewComment]:
+def _parse_comment_nodes(nodes: Any) -> list[ReviewComment]:
     """Convert raw comment nodes into ``ReviewComment`` objects."""
+    if not isinstance(nodes, list):
+        raise GhError("Unexpected review comment nodes shape in GraphQL response.")
     comments: list[ReviewComment] = []
     for comment in nodes:
-        author = comment.get("author") or {}
+        if not isinstance(comment, dict):
+            raise GhError("Unexpected review comment node shape in GraphQL response.")
+        comment_id = comment.get("id")
+        if not comment_id:
+            raise GhError("Review comment node missing id in GraphQL response.")
+        author = comment.get("author")
+        if author is not None and not isinstance(author, dict):
+            raise GhError("Unexpected review comment author shape in GraphQL response.")
+        author = author or {}
         comments.append(
             ReviewComment(
-                comment_id=str(comment["id"]),
+                comment_id=str(comment_id),
                 author=str(author.get("login") or "unknown"),
                 body=str(comment.get("body") or ""),
                 url=str(comment.get("url") or ""),
@@ -243,19 +337,62 @@ def _remaining_thread_comments(
     thread_id: str, page_info: dict[str, Any], *, run_fn: RunFunction | None = None
 ) -> list[ReviewComment]:
     """Page a single thread's comments beyond the first 100 already collected."""
+    if not isinstance(page_info, dict):
+        raise GhError(
+            f"Unexpected review thread pageInfo shape for {thread_id} in GraphQL response."
+        )
     comments: list[ReviewComment] = []
-    after = page_info.get("endCursor")
-    while page_info.get("hasNextPage") and after:
-        node = gh_runner.graphql(
+    while True:
+        if not _page_has_next(
+            page_info,
+            f"Unexpected review thread pageInfo.hasNextPage shape for {thread_id} "
+            "in GraphQL response.",
+        ):
+            break
+        after = _require_end_cursor(
+            page_info,
+            f"Unexpected review thread pageInfo.endCursor shape for {thread_id} "
+            "in GraphQL response.",
+        )
+        result = gh_runner.graphql(
             _THREAD_COMMENTS_QUERY,
             variables={"thread": thread_id, "after": after},
             run_fn=run_fn,
-        )["node"]
+        )
+        if not isinstance(result, dict):
+            raise GhError(
+                f"Unexpected review thread response shape for {thread_id} "
+                "in GraphQL response: expected a mapping."
+            )
+        node = result.get("node")
+        if not isinstance(node, dict) or "comments" not in node:
+            raise GhError(
+                f"Review thread {thread_id} not found or inaccessible in GraphQL response."
+            )
         connection = node["comments"]
-        comments.extend(_parse_comment_nodes(connection["nodes"]))
-        page_info = connection["pageInfo"]
-        after = page_info.get("endCursor")
+        if not isinstance(connection, dict):
+            raise GhError(
+                f"Unexpected review thread comments shape for {thread_id} in GraphQL response."
+            )
+        comments.extend(_parse_comment_nodes(connection.get("nodes")))
+        page_info = _page_info(
+            connection,
+            f"Unexpected review thread pageInfo shape for {thread_id} in GraphQL response.",
+        )
     return comments
+
+
+def _thread_comments_connection(node: Any) -> tuple[str, dict[str, Any]]:
+    """Return ``(thread_id, comments)`` from a review-thread node."""
+    if not isinstance(node, dict):
+        raise GhError("Unexpected review thread node shape in GraphQL response.")
+    node_id = node.get("id")
+    if not node_id:
+        raise GhError("Review thread node missing id in GraphQL response.")
+    thread_comments = node.get("comments")
+    if not isinstance(thread_comments, dict):
+        raise GhError("Unexpected thread comments shape in GraphQL response.")
+    return str(node_id), thread_comments
 
 
 def list_comments(
@@ -273,26 +410,17 @@ def list_comments(
     pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
 
     comments: list[ReviewComment] = []
-    after: str | None = None
-    while True:
-        variables: dict[str, object] = {"owner": owner, "name": name, "pr": pr}
-        if after is not None:
-            variables["after"] = after
-        connection = _review_threads(
-            gh_runner.graphql(_COMMENTS_QUERY, variables=variables, run_fn=run_fn)
-        )
-        for node in connection["nodes"]:
-            thread_comments = node["comments"]
-            comments.extend(_parse_comment_nodes(thread_comments["nodes"]))
-            comments.extend(
-                _remaining_thread_comments(
-                    str(node["id"]), thread_comments["pageInfo"], run_fn=run_fn
-                )
+    for connection in _review_thread_pages(
+        _COMMENTS_QUERY, owner=owner, name=name, pr=pr, run_fn=run_fn
+    ):
+        for node in _review_thread_nodes(connection):
+            node_id, thread_comments = _thread_comments_connection(node)
+            comments.extend(_parse_comment_nodes(thread_comments.get("nodes")))
+            thread_page_info = _page_info(
+                thread_comments,
+                "Unexpected thread comments pageInfo shape in GraphQL response.",
             )
-        page_info = connection["pageInfo"]
-        after = page_info.get("endCursor")
-        if not page_info.get("hasNextPage") or not after:
-            break
+            comments.extend(_remaining_thread_comments(node_id, thread_page_info, run_fn=run_fn))
     return comments
 
 
@@ -345,6 +473,8 @@ def pr_summary(pr: int | None = None, *, run_fn: RunFunction | None = None) -> s
         ["pr", "view", str(pr), "--json", "number,title,state,url,statusCheckRollup"],
         run_fn=run_fn,
     )
+    if not isinstance(meta, dict):
+        raise GhError(f"Unexpected PR view response shape for PR {pr}.")
     open_threads = list_threads(pr, include_resolved=False, run_fn=run_fn)
     lines = [
         f"PR #{meta.get('number')} [{meta.get('state')}] {meta.get('title')}",
@@ -432,6 +562,8 @@ def rollup_summary(rollup: list[dict[str, Any]]) -> str:
         return "none"
     counts: Counter[str] = Counter()
     for check in rollup:
+        if not isinstance(check, dict):
+            raise GhError("Unexpected statusCheckRollup entry shape in PR view response.")
         outcome = check.get("conclusion") or check.get("state") or "PENDING"
         counts[str(outcome).lower()] += 1
     return ", ".join(f"{count} {label}" for label, count in sorted(counts.items()))

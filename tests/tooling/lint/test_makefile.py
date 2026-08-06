@@ -363,6 +363,7 @@ def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:
     assert '$(if $(interval),--interval "$(interval)")' in recipe
     assert '$(if $(max_polls),--max-polls "$(max_polls)")' in recipe
     assert '$(if $(expected_checks),--expected-checks "$(expected_checks)")' in recipe
+    assert "$(if $(filter 1,$(request)),--request-copilot)" in recipe
     assert "$(if $(filter 1,$(checks_only)),--checks-only)" in recipe
     assert "gh pr checks --watch" not in recipe
 

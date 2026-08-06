@@ -123,6 +123,526 @@ COMMENTS_PAYLOAD = _comments_page(
 )
 
 
+def test_parse_nodes_rejects_non_list() -> None:
+    """Reject a review-thread node container with the wrong type."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes("not a list")
+
+
+def test_parse_nodes_rejects_non_dict_node() -> None:
+    """Reject a review-thread node with the wrong type."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes([None])
+
+
+def test_parse_nodes_rejects_node_missing_id() -> None:
+    """Reject a review-thread node without its required id."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes([{}])
+
+
+def test_parse_nodes_null_comments_is_empty() -> None:
+    """Treat an explicitly null comments connection as an empty thread."""
+    threads = pr_review._parse_nodes([{"id": "PRRT_x", "comments": None}])
+    assert [thread.thread_id for thread in threads] == ["PRRT_x"]
+
+
+def test_parse_nodes_rejects_non_dict_comments() -> None:
+    """Reject a review-thread comments connection with the wrong type."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes([{"id": "PRRT_x", "comments": "not a dict"}])
+
+
+def test_parse_nodes_rejects_non_list_comment_nodes() -> None:
+    """Reject a review-thread comments node list with the wrong type."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes([{"id": "PRRT_x", "comments": {"nodes": "not a list"}}])
+
+
+def test_parse_nodes_rejects_missing_comment_nodes() -> None:
+    """Reject a review-thread comments connection without nodes."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes([{"id": "PRRT_x", "comments": {}}])
+
+
+def test_parse_nodes_rejects_non_dict_first_comment() -> None:
+    """Reject a malformed first comment node."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes([{"id": "PRRT_x", "comments": {"nodes": ["not a dict"]}}])
+
+
+def test_parse_nodes_rejects_non_dict_author() -> None:
+    """Reject a malformed review comment author."""
+    with pytest.raises(GhError):
+        pr_review._parse_nodes(
+            [{"id": "PRRT_x", "comments": {"nodes": [{"author": "not a dict"}]}}]
+        )
+
+
+def test_parse_comment_nodes_rejects_non_list() -> None:
+    """Reject a review comment node container with the wrong type."""
+    with pytest.raises(GhError):
+        pr_review._parse_comment_nodes(123)
+
+
+def test_parse_comment_nodes_rejects_non_dict_element() -> None:
+    """Reject a review comment node with the wrong type."""
+    with pytest.raises(GhError):
+        pr_review._parse_comment_nodes([None])
+
+
+def test_parse_comment_nodes_rejects_missing_id() -> None:
+    """Reject a review comment node without its required id."""
+    with pytest.raises(GhError):
+        pr_review._parse_comment_nodes([{"url": "x"}])
+
+
+def test_parse_comment_nodes_rejects_non_dict_author() -> None:
+    """Reject a malformed review comment author."""
+    with pytest.raises(GhError):
+        pr_review._parse_comment_nodes(
+            [{"id": "PRRC_x", "author": "not a dict", "url": "u", "body": "b"}]
+        )
+
+
+def test_remaining_thread_comments_bad_connection_shape() -> None:
+    """Reject a paginated thread response with a malformed comments connection."""
+
+    def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return completed_process(0, json.dumps({"data": {"node": {"comments": "bad"}}}))
+
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments(
+            "PRRT_x", {"hasNextPage": True, "endCursor": "CUR"}, run_fn=runner
+        )
+
+
+def test_remaining_thread_comments_rejects_non_dict_page_info() -> None:
+    """Reject a malformed initial pageInfo value."""
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments("PRRT_x", "not a dict")
+
+
+def test_remaining_thread_comments_hasnext_without_cursor_raises() -> None:
+    """Reject a page that promises another page without a cursor."""
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments("PRRT_x", {"hasNextPage": True})
+
+
+def test_remaining_thread_comments_bad_hasnext_type_raises() -> None:
+    """Reject a non-boolean hasNextPage value."""
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments("PRRT_x", {"hasNextPage": "yes", "endCursor": "CUR"})
+
+
+def test_remaining_thread_comments_bad_endcursor_type_raises() -> None:
+    """Reject a non-string endCursor value."""
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments("PRRT_x", {"hasNextPage": True, "endCursor": 123})
+
+
+def test_remaining_thread_comments_bad_pageinfo_shape() -> None:
+    """Reject malformed pageInfo returned by a thread-comments page."""
+
+    def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return completed_process(
+            0,
+            json.dumps({"data": {"node": {"comments": {"nodes": [], "pageInfo": "bad"}}}}),
+        )
+
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments(
+            "PRRT_x", {"hasNextPage": True, "endCursor": "CUR"}, run_fn=runner
+        )
+
+
+def test_remaining_thread_comments_missing_nodes_raises() -> None:
+    """Reject a thread-comments page without a nodes field."""
+
+    def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return completed_process(
+            0,
+            json.dumps(
+                {
+                    "data": {
+                        "node": {
+                            "comments": {"pageInfo": {"hasNextPage": False, "endCursor": None}}
+                        }
+                    }
+                }
+            ),
+        )
+
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments(
+            "PRRT_x", {"hasNextPage": True, "endCursor": "CUR"}, run_fn=runner
+        )
+
+
+def _threads_runner(payload: dict[str, Any]) -> FakeGh:
+    return FakeGh(
+        [
+            (
+                has("repo", "view"),
+                completed_process(0, json.dumps({"nameWithOwner": "o/r"})),
+            ),
+            (has("pr", "view"), completed_process(0, json.dumps({"number": 7}))),
+            (has("graphql"), completed_process(0, json.dumps(payload))),
+        ]
+    )
+
+
+def test_list_threads_nodes_not_list_raises() -> None:
+    """Reject a reviewThreads page whose nodes value is not a list."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": "x",
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_threads(7, run_fn=runner)
+
+
+def test_list_threads_pageinfo_not_dict_raises() -> None:
+    """Reject a reviewThreads page whose pageInfo value is not a mapping."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {"pullRequest": {"reviewThreads": {"nodes": [], "pageInfo": "bad"}}}
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_threads(7, run_fn=runner)
+
+
+def test_list_threads_hasnext_without_cursor_raises() -> None:
+    """Reject a reviewThreads page that promises another page without a cursor."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X"}],
+                            "pageInfo": {"hasNextPage": True},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_threads(7, run_fn=runner)
+
+
+def test_list_threads_bad_hasnext_type_raises() -> None:
+    """Reject a non-boolean reviewThreads hasNextPage value."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X"}],
+                            "pageInfo": {"hasNextPage": "yes"},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_threads(7, run_fn=runner)
+
+
+def test_list_threads_bad_endcursor_type_raises() -> None:
+    """Reject a non-string reviewThreads endCursor value."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X"}],
+                            "pageInfo": {"hasNextPage": True, "endCursor": 123},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_threads(7, run_fn=runner)
+
+
+def test_list_comments_nodes_not_list_raises() -> None:
+    """Reject a comments query whose reviewThreads nodes value is not a list."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": "x",
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_null_node_raises() -> None:
+    """Reject a null review thread node in the comments query."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [None],
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_node_missing_id_raises() -> None:
+    """Reject a review thread without its id in the comments query."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{}],
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_node_missing_comments_raises() -> None:
+    """Reject a review thread without its comments connection."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X"}],
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_bad_pageinfo_raises() -> None:
+    """Reject a malformed top-level comments pageInfo value."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X", "comments": {"nodes": [], "pageInfo": {}}}],
+                            "pageInfo": "bad",
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_bad_thread_pageinfo_raises() -> None:
+    """Reject a malformed thread comments pageInfo value."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [
+                                {
+                                    "id": "X",
+                                    "comments": {"nodes": [], "pageInfo": "not a dict"},
+                                }
+                            ],
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_missing_thread_nodes_raises() -> None:
+    """Reject a thread comments connection without nodes."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [
+                                {
+                                    "id": "X",
+                                    "comments": {"pageInfo": {"hasNextPage": False}},
+                                }
+                            ],
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_hasnext_without_cursor_raises() -> None:
+    """Reject a top-level comments page that lacks its continuation cursor."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X", "comments": {"nodes": []}}],
+                            "pageInfo": {"hasNextPage": True},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_bad_hasnext_type_raises() -> None:
+    """Reject a non-boolean top-level comments hasNextPage value."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X", "comments": {"nodes": []}}],
+                            "pageInfo": {"hasNextPage": 1},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_bad_endcursor_type_raises() -> None:
+    """Reject a non-string top-level comments endCursor value."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X", "comments": {"nodes": []}}],
+                            "pageInfo": {"hasNextPage": True, "endCursor": 123},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_missing_thread_pageinfo_raises() -> None:
+    """Reject a thread comments connection without pageInfo."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [{"id": "X", "comments": {"nodes": [], "pageInfo": None}}],
+                            "pageInfo": {"hasNextPage": False},
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
+def test_list_comments_bad_top_level_pageinfo_raises() -> None:
+    """Reject a top-level comments page without valid pageInfo."""
+    runner = _threads_runner(
+        {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [
+                                {
+                                    "id": "X",
+                                    "comments": {
+                                        "nodes": [],
+                                        "pageInfo": {"hasNextPage": False},
+                                    },
+                                }
+                            ],
+                            "pageInfo": "bad",
+                        }
+                    }
+                }
+            }
+        }
+    )
+    with pytest.raises(GhError):
+        pr_review.list_comments(7, run_fn=runner)
+
+
 def test_parse_threads_maps_fields() -> None:
     """Map a GraphQL payload into ReviewThread objects."""
     threads = pr_review.parse_threads(THREADS_PAYLOAD["data"])
@@ -195,6 +715,18 @@ def test_parse_threads_raises_on_missing_pull_request() -> None:
     for payload in ({}, {"repository": None}, {"repository": {"pullRequest": None}}):
         with pytest.raises(GhError):
             pr_review.parse_threads(payload)
+
+
+def test_review_threads_rejects_missing_connection() -> None:
+    """A pull request without reviewThreads raises a clear GhError."""
+    with pytest.raises(GhError):
+        pr_review._review_threads({"repository": {"pullRequest": {}}})
+
+
+def test_review_threads_rejects_non_dict_connection() -> None:
+    """A non-mapping reviewThreads value raises a clear GhError."""
+    with pytest.raises(GhError):
+        pr_review._review_threads({"repository": {"pullRequest": {"reviewThreads": []}}})
 
 
 def test_list_threads_filters_resolved_by_default() -> None:
@@ -331,9 +863,26 @@ def test_pr_summary_omits_the_thread_block_when_none_are_open() -> None:
     assert text.endswith("open review threads: 0")
 
 
+def test_pr_summary_rejects_non_dict_meta(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A malformed gh pr view payload raises a clear GhError."""
+    monkeypatch.setattr(pr_review, "list_threads", lambda *_args, **_kwargs: [])
+
+    def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return completed_process(0, json.dumps([1, 2]))
+
+    with pytest.raises(GhError):
+        pr_review.pr_summary(7, run_fn=runner)
+
+
 def test_rollup_summary_reports_none_without_any_checks() -> None:
     """A PR with no checks reads as none rather than an empty tally."""
     assert pr_review.rollup_summary([]) == "none"
+
+
+def test_rollup_summary_rejects_a_non_dict_entry() -> None:
+    """Malformed status rollup entries fail closed instead of being coerced."""
+    with pytest.raises(GhError, match="statusCheckRollup entry shape"):
+        pr_review.rollup_summary([{"conclusion": "SUCCESS"}, "not a dict"])  # type: ignore[list-item]
 
 
 def test_owner_name_rejects_a_slug_missing_a_side(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -732,3 +1281,27 @@ def test_edit_pr_defaults_to_current_pr() -> None:
     pr_review.edit_pr(None, title="New title", run_fn=runner)
 
     assert ["gh", "pr", "edit", "7", "--title", "New title"] in runner.calls
+
+
+def test_remaining_thread_comments_rejects_null_node() -> None:
+    """A missing thread node is surfaced as a GhError naming the thread."""
+
+    def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return completed_process(0, json.dumps({"data": {"node": None}}))
+
+    with pytest.raises(GhError, match="PRRT_x"):
+        pr_review._remaining_thread_comments(
+            "PRRT_x", {"hasNextPage": True, "endCursor": "CUR"}, run_fn=runner
+        )
+
+
+def test_remaining_thread_comments_rejects_non_dict_result() -> None:
+    """A non-mapping paginated thread response raises a clear GhError."""
+
+    def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return completed_process(0, json.dumps({"data": "not a mapping"}))
+
+    with pytest.raises(GhError):
+        pr_review._remaining_thread_comments(
+            "PRRT_x", {"hasNextPage": True, "endCursor": "CUR"}, run_fn=runner
+        )

@@ -149,7 +149,7 @@ def _build_parser() -> argparse.ArgumentParser:
     watch_parser.add_argument(
         "--checks-only",
         action="store_true",
-        help="Wait for checks without requesting a Copilot review",
+        help="Wait for checks without waiting for a Copilot review",
     )
     watch_parser.add_argument(
         "--request-copilot",

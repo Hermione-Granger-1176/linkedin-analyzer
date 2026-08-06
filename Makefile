@@ -568,6 +568,10 @@ stage-all: ## Stage all working tree changes
 # (`EOF && make push 2>&1 | tail -3`) as part of the commit.
 commit: ## Commit staged changes, message on stdin (make commit < msg.txt, or a heredoc)
 	@set -e; \
+	if [ -t 0 ]; then \
+		printf 'Commit message must be provided on stdin. Usage: make commit < msg.txt, or a heredoc\n' >&2; \
+		exit 1; \
+	fi; \
 	tmp=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-commit-message.XXXXXX"); \
 	chmod 600 "$$tmp"; \
 	trap 'rm -f -- "$$tmp"' EXIT; \

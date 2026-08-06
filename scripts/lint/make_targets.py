@@ -55,6 +55,7 @@ RECIPE_PREFIX_PATTERN = re.compile(r"^[@\-+]+")
 CONTROL_FLOW_ALLOWLIST = frozenset(
     {
         "branch",  # pull only when the base branch has an upstream
+        "commit",  # reject an interactive terminal before reading the required message
         "release-create",  # optional gh flags around a trap-cleaned temp file
         "pr-create",  # TITLE selects --fill or an explicit title and body
         "pr-edit",  # which of title and body to change

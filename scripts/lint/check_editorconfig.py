@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+from scripts import REPO_ROOT
 from scripts.lint import contains_symlink as _contains_symlink
 from scripts.lint import iter_lint_paths
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 EDITORCONFIG_FILE = REPO_ROOT / ".editorconfig"
 BINARY_SUFFIXES = {
     ".avif",
@@ -266,9 +266,17 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
 
         try:
             resolved = candidate.resolve(strict=True)
+        except FileNotFoundError:
+            errors.append(f"{raw}: path does not exist")
+            continue
+        except OSError:
+            errors.append(f"{raw}: path could not be accessed")
+            continue
+
+        try:
             resolved.relative_to(root.resolve())
-        except (OSError, ValueError):
-            errors.append(f"{raw}: path does not exist or is outside the repository")
+        except ValueError:
+            errors.append(f"{raw}: path resolves outside the repository")
             continue
 
         if not resolved.is_file():

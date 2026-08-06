@@ -42,6 +42,7 @@ def test_extract_make_references_handles_environment_prefixes() -> None:
     references = make_targets.extract_make_references(
         "Use `make check-local`.\n"
         'Run `ARTIFACTS_BROWSER_APP_SLUGS="demo" make test-browser-apps`.\n'
+        "Run `make --no-print-directory playwright-version`.\n"
         "Generic `make <target>` guidance is ignored.\n"
     )
 
@@ -55,6 +56,11 @@ def test_extract_make_references_handles_environment_prefixes() -> None:
             target="test-browser-apps",
             line_number=2,
             snippet='ARTIFACTS_BROWSER_APP_SLUGS="demo" make test-browser-apps',
+        ),
+        make_targets.MakeReference(
+            target="playwright-version",
+            line_number=3,
+            snippet="make --no-print-directory playwright-version",
         ),
     ]
 
@@ -103,6 +109,15 @@ def test_iter_markdown_files_does_not_follow_directory_symlinks(tmp_path: Path) 
     (tmp_path / "linked-docs").symlink_to(external, target_is_directory=True)
 
     assert make_targets.iter_markdown_files(tmp_path) == []
+
+
+def test_iter_markdown_files_skips_file_symlinks(tmp_path: Path) -> None:
+    """Repository scans do not return symlinked Markdown files."""
+    target = tmp_path / "target.md"
+    write_text(target, "# Target\n")
+    (tmp_path / "README.md").symlink_to(target)
+
+    assert make_targets.iter_markdown_files(tmp_path) == [target]
 
 
 def test_check_file_reports_unknown_target(tmp_path: Path) -> None:

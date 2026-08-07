@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Audit the GitHub repository settings the release and review flow depends on.
 
-Branch protection, secret scanning, and the Actions inventory are configured in
-the GitHub web UI, so they are the part of this repository that no test, lint,
-or review can see. They drift silently: a required check renamed out of the
-protection list, or push protection switched off, changes nothing locally and
-shows up only the next time it was supposed to stop something.
+Branch protection, Actions policy, environment protection, release tag rules,
+and secret scanning are configured in the GitHub web UI, so they are the part
+of this repository that no test, lint, or review can see. They drift silently:
+a required check renamed out of the protection list, or push protection
+switched off, changes nothing locally and shows up only the next time it was
+supposed to stop something.
 
 This audit reads those settings back and reports the drift as a list. Reading
-branch protection needs ``administration: read`` and listing secrets needs
-``secrets: read``, and ``GITHUB_TOKEN`` can grant neither. Neither writeback App
-carries them either, deliberately, so ``audit-repo-settings.yml`` runs this on a
-third read-only App instead. It stays runnable by hand against a maintainer's
-own credentials, which is the faster way to check a setting you just changed.
+branch protection, Actions policy, environment protection, and rulesets needs
+``administration: read`` and listing secrets needs ``secrets: read``, and
+``GITHUB_TOKEN`` can grant neither. Neither writeback App carries them either,
+deliberately, so ``audit-repo-settings.yml`` runs this on a third read-only App
+instead. It stays runnable by hand against a maintainer's own credentials,
+which is the faster way to check a setting you just changed.
 
 The audit is deliberately fail-closed. A setting it cannot read is never
 reported as correct: an unreadable response ends the run with EXIT_CHECK_FAILED
@@ -83,6 +85,33 @@ EXPECTED_SECURITY_FEATURES = frozenset(
     }
 )
 
+EXPECTED_ACTIONS_ALLOWED = "selected"
+EXPECTED_ACTIONS_SHA_PINNING = True
+EXPECTED_GITHUB_OWNED_ACTIONS = True
+EXPECTED_VERIFIED_ACTIONS = False
+EXPECTED_ACTION_PATTERNS = frozenset(
+    {
+        "aquasecurity/trivy-action@*",
+        "astral-sh/setup-uv@*",
+        "docker/build-push-action@*",
+        "docker/login-action@*",
+        "docker/setup-buildx-action@*",
+        "docker/setup-qemu-action@*",
+        "pypa/gh-action-pypi-publish@*",
+    }
+)
+
+PYPI_ENVIRONMENT_NAME = "pypi"
+EXPECTED_PYPI_REVIEWERS = frozenset({"Hermione-Granger-1176"})
+EXPECTED_PYPI_CAN_ADMINS_BYPASS = True
+EXPECTED_PYPI_PREVENT_SELF_REVIEW = False
+
+RELEASE_TAG_RULESET_NAME = "Protect version tags"
+EXPECTED_RELEASE_TAG_RULESET_TARGET = "tag"
+EXPECTED_RELEASE_TAG_RULESET_ENFORCEMENT = "active"
+EXPECTED_RELEASE_TAG_PATTERNS = frozenset({"refs/tags/v*"})
+EXPECTED_RELEASE_TAG_RULES = frozenset({"creation", "deletion", "non_fast_forward"})
+
 # Branch protection blocks that must report ``enabled``, and how each reads as a
 # finding when it does not.
 REQUIRED_PROTECTION_BLOCKS = {
@@ -132,6 +161,19 @@ def _fetch_object(
     return payload
 
 
+def _fetch_list(
+    path: str,
+    description: str,
+    *,
+    run_fn: gh_runner.RunFunction | None = None,
+) -> list[object]:
+    """Fetch one GitHub API path and require a JSON array back."""
+    payload = gh_runner.gh_json(["api", path], run_fn=run_fn)
+    if not isinstance(payload, list):
+        raise GhError(f"{description} must be a JSON array.")
+    return payload
+
+
 def _fetch_protection(
     repo: str,
     default_branch: str,
@@ -159,6 +201,30 @@ def _fetch_protection(
         raise
 
 
+def _fetch_ruleset_details(
+    repo: str,
+    *,
+    run_fn: gh_runner.RunFunction | None = None,
+) -> list[dict[str, object]]:
+    """Fetch every repository ruleset detail after reading its summary list."""
+    summaries = _fetch_list(f"repos/{repo}/rulesets", "Repository rulesets response", run_fn=run_fn)
+    details: list[dict[str, object]] = []
+    for summary in summaries:
+        if not isinstance(summary, dict):
+            raise GhError("Repository rulesets response contains a non-object entry.")
+        ruleset_id = summary.get("id")
+        if not isinstance(ruleset_id, int) or isinstance(ruleset_id, bool):
+            raise GhError("Repository rulesets response contains an entry without a numeric id.")
+        details.append(
+            _fetch_object(
+                f"repos/{repo}/rulesets/{ruleset_id}",
+                f"repository ruleset {ruleset_id}",
+                run_fn=run_fn,
+            )
+        )
+    return details
+
+
 def collect_named_items(payload: dict[str, object], key: str) -> set[str]:
     """Collect the string ``name`` fields from a GitHub API list payload."""
     items = payload.get(key)
@@ -173,6 +239,125 @@ def collect_named_items(payload: dict[str, object], key: str) -> set[str]:
             raise GhError(f"Actions {key} response contains an entry without a name.")
         names.add(name)
     return names
+
+
+def _unexpected(actual: set[str], expected: frozenset[str], label: str) -> list[str]:
+    """Return one finding naming everything present that was not expected."""
+    unexpected = actual - expected
+    if not unexpected:
+        return []
+    return [f"unexpected {label}: " + ", ".join(sorted(unexpected))]
+
+
+def extract_allowed_action_patterns(payload: object) -> set[str]:
+    """Return the non-GitHub Actions patterns from a selected-actions response."""
+    if not isinstance(payload, dict):
+        raise GhError("Selected Actions response must be a JSON object.")
+    raw_patterns = payload.get("patterns_allowed")
+    if not isinstance(raw_patterns, list):
+        raise GhError("Selected Actions patterns_allowed must be a JSON array.")
+    patterns: set[str] = set()
+    for pattern in raw_patterns:
+        if not isinstance(pattern, str) or not pattern:
+            raise GhError("Selected Actions patterns_allowed must contain non-empty strings.")
+        patterns.add(pattern)
+    return patterns
+
+
+def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | None]:
+    """Return required reviewer logins and self-review policy from an environment."""
+    if not isinstance(payload, dict):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} environment must be a JSON object.")
+    raw_rules = payload.get("protection_rules")
+    if not isinstance(raw_rules, list):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} protection_rules must be a JSON array.")
+
+    required_rule: dict[str, object] | None = None
+    for raw_rule in raw_rules:
+        if not isinstance(raw_rule, dict):
+            raise GhError(f"{PYPI_ENVIRONMENT_NAME} protection rules contains a non-object entry.")
+        rule_type = raw_rule.get("type")
+        if not isinstance(rule_type, str) or not rule_type:
+            raise GhError(
+                f"{PYPI_ENVIRONMENT_NAME} protection rules contains an entry without a type."
+            )
+        if rule_type == "required_reviewers":
+            if required_rule is not None:
+                raise GhError(f"{PYPI_ENVIRONMENT_NAME} has multiple required reviewer rules.")
+            required_rule = raw_rule
+
+    if required_rule is None:
+        return set(), None
+
+    prevent_self_review = required_rule.get("prevent_self_review")
+    if not isinstance(prevent_self_review, bool):
+        raise GhError(
+            f"{PYPI_ENVIRONMENT_NAME} required reviewer rule has an invalid self-review policy."
+        )
+    raw_reviewers = required_rule.get("reviewers")
+    if not isinstance(raw_reviewers, list):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} required reviewers must be a JSON array.")
+
+    reviewers: set[str] = set()
+    for raw_reviewer in raw_reviewers:
+        if not isinstance(raw_reviewer, dict):
+            raise GhError(
+                f"{PYPI_ENVIRONMENT_NAME} required reviewers contains a non-object entry."
+            )
+        if raw_reviewer.get("type") != "User":
+            raise GhError(f"{PYPI_ENVIRONMENT_NAME} required reviewers must contain User entries.")
+        reviewer = raw_reviewer.get("reviewer")
+        if not isinstance(reviewer, dict):
+            raise GhError(
+                f"{PYPI_ENVIRONMENT_NAME} required reviewers contains an entry without a reviewer."
+            )
+        login = reviewer.get("login")
+        if not isinstance(login, str) or not login:
+            raise GhError(
+                f"{PYPI_ENVIRONMENT_NAME} required reviewers contains an entry without a login."
+            )
+        reviewers.add(login)
+    return reviewers, prevent_self_review
+
+
+def extract_ruleset_ref_patterns(payload: object) -> tuple[set[str], set[str]]:
+    """Return included and excluded ref patterns from a ruleset response."""
+    if not isinstance(payload, dict):
+        raise GhError("Repository ruleset must be a JSON object.")
+    conditions = payload.get("conditions")
+    if not isinstance(conditions, dict):
+        raise GhError("Repository ruleset conditions must be a JSON object.")
+    ref_name = conditions.get("ref_name")
+    if not isinstance(ref_name, dict):
+        raise GhError("Repository ruleset ref_name condition must be a JSON object.")
+
+    patterns: list[set[str]] = []
+    for key in ("include", "exclude"):
+        raw_patterns = ref_name.get(key)
+        if not isinstance(raw_patterns, list):
+            raise GhError(f"Repository ruleset ref_name {key} must be a JSON array.")
+        if any(not isinstance(pattern, str) or not pattern for pattern in raw_patterns):
+            raise GhError(f"Repository ruleset ref_name {key} must contain non-empty strings.")
+        patterns.append(set(raw_patterns))
+    return patterns[0], patterns[1]
+
+
+def extract_ruleset_rule_types(payload: object) -> set[str]:
+    """Return rule type names from a repository ruleset response."""
+    if not isinstance(payload, dict):
+        raise GhError("Repository ruleset must be a JSON object.")
+    raw_rules = payload.get("rules")
+    if not isinstance(raw_rules, list):
+        raise GhError("Repository ruleset rules must be a JSON array.")
+    rule_types: set[str] = set()
+    for raw_rule in raw_rules:
+        if not isinstance(raw_rule, dict):
+            raise GhError("Repository ruleset rules contains a non-object entry.")
+        rule_type = raw_rule.get("type")
+        if not isinstance(rule_type, str) or not rule_type:
+            raise GhError("Repository ruleset rules contains an entry without a type.")
+        rule_types.add(rule_type)
+    return rule_types
 
 
 def enabled_security_features(repository: dict[str, object]) -> set[str]:
@@ -237,6 +422,104 @@ def _missing(actual: set[str], expected: frozenset[str], label: str) -> list[str
     if not missing:
         return []
     return [f"missing {label}: " + ", ".join(sorted(missing))]
+
+
+def audit_actions(
+    actions_permissions: dict[str, object],
+    selected_actions: dict[str, object] | None,
+) -> list[str]:
+    """Audit Actions enablement, pinning, and selected action patterns."""
+    findings: list[str] = []
+    if actions_permissions.get("enabled") is not True:
+        findings.append("GitHub Actions are not enabled")
+
+    actions_allowed = actions_permissions.get("allowed_actions")
+    if actions_allowed != EXPECTED_ACTIONS_ALLOWED:
+        findings.append(
+            f"Actions allowed policy is {actions_allowed!r} instead of {EXPECTED_ACTIONS_ALLOWED!r}"
+        )
+    if actions_permissions.get("sha_pinning_required") is not EXPECTED_ACTIONS_SHA_PINNING:
+        findings.append("Actions are not required to use full-length commit SHAs")
+
+    if selected_actions is None:
+        return findings
+
+    if selected_actions.get("github_owned_allowed") is not EXPECTED_GITHUB_OWNED_ACTIONS:
+        findings.append("GitHub-owned Actions are not allowed")
+    if selected_actions.get("verified_allowed") is not EXPECTED_VERIFIED_ACTIONS:
+        findings.append("Verified Marketplace Actions are allowed")
+    allowed_patterns = extract_allowed_action_patterns(selected_actions)
+    findings.extend(
+        _missing(allowed_patterns, EXPECTED_ACTION_PATTERNS, "allowed Actions patterns")
+    )
+    findings.extend(
+        _unexpected(allowed_patterns, EXPECTED_ACTION_PATTERNS, "allowed Actions patterns")
+    )
+    return findings
+
+
+def audit_pypi_environment(payload: dict[str, object]) -> list[str]:
+    """Audit the PyPI environment's reviewer and administrator bypass policy."""
+    reviewers, prevent_self_review = extract_environment_reviewers(payload)
+    findings = _missing(reviewers, EXPECTED_PYPI_REVIEWERS, "pypi required reviewers")
+
+    can_admins_bypass = payload.get("can_admins_bypass")
+    if not isinstance(can_admins_bypass, bool):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} can_admins_bypass must be a boolean.")
+    if can_admins_bypass is not EXPECTED_PYPI_CAN_ADMINS_BYPASS:
+        findings.append(f"{PYPI_ENVIRONMENT_NAME} administrator bypass is disabled")
+
+    if prevent_self_review is None:
+        findings.append(f"{PYPI_ENVIRONMENT_NAME} has no required reviewer rule")
+    elif prevent_self_review is not EXPECTED_PYPI_PREVENT_SELF_REVIEW:
+        findings.append(f"{PYPI_ENVIRONMENT_NAME} prevents self-review")
+    return findings
+
+
+def audit_release_tag_rulesets(rulesets: list[dict[str, object]]) -> list[str]:
+    """Audit the active ruleset protecting version tags."""
+    matching = []
+    for ruleset in rulesets:
+        name = ruleset.get("name")
+        if not isinstance(name, str) or not name:
+            raise GhError("Repository ruleset contains an entry without a name.")
+        if name == RELEASE_TAG_RULESET_NAME:
+            matching.append(ruleset)
+
+    if not matching:
+        return [f"missing release tag ruleset: {RELEASE_TAG_RULESET_NAME}"]
+
+    findings: list[str] = []
+    if len(matching) > 1:
+        findings.append(f"multiple release tag rulesets named {RELEASE_TAG_RULESET_NAME!r}")
+
+    ruleset = matching[0]
+    target = ruleset.get("target")
+    if target != EXPECTED_RELEASE_TAG_RULESET_TARGET:
+        findings.append(
+            f"release tag ruleset target is {target!r} instead of "
+            f"{EXPECTED_RELEASE_TAG_RULESET_TARGET!r}"
+        )
+    enforcement = ruleset.get("enforcement")
+    if enforcement != EXPECTED_RELEASE_TAG_RULESET_ENFORCEMENT:
+        findings.append(
+            f"release tag ruleset enforcement is {enforcement!r} instead of "
+            f"{EXPECTED_RELEASE_TAG_RULESET_ENFORCEMENT!r}"
+        )
+
+    included_patterns, excluded_patterns = extract_ruleset_ref_patterns(ruleset)
+    findings.extend(
+        _missing(included_patterns, EXPECTED_RELEASE_TAG_PATTERNS, "release tag patterns")
+    )
+    findings.extend(
+        _unexpected(included_patterns, EXPECTED_RELEASE_TAG_PATTERNS, "release tag patterns")
+    )
+    findings.extend(_unexpected(excluded_patterns, frozenset(), "excluded release tag patterns"))
+
+    rule_types = extract_ruleset_rule_types(ruleset)
+    findings.extend(_missing(rule_types, EXPECTED_RELEASE_TAG_RULES, "release tag rules"))
+    findings.extend(_unexpected(rule_types, EXPECTED_RELEASE_TAG_RULES, "release tag rules"))
+    return findings
 
 
 def audit_repository(repository: dict[str, object], *, default_branch: str) -> list[str]:
@@ -310,11 +593,30 @@ def audit_repo_settings(
 ) -> list[str]:
     """Return one finding per repository setting that drifted from expectations."""
     repository = _fetch_object(f"repos/{repo}", "repository metadata", run_fn=run_fn)
+    actions_permissions = _fetch_object(
+        f"repos/{repo}/actions/permissions", "Actions permissions", run_fn=run_fn
+    )
+    selected_actions = None
+    if actions_permissions.get("allowed_actions") == EXPECTED_ACTIONS_ALLOWED:
+        selected_actions = _fetch_object(
+            f"repos/{repo}/actions/permissions/selected-actions",
+            "Selected Actions settings",
+            run_fn=run_fn,
+        )
+    pypi_environment = _fetch_object(
+        f"repos/{repo}/environments/{PYPI_ENVIRONMENT_NAME}",
+        f"{PYPI_ENVIRONMENT_NAME} environment",
+        run_fn=run_fn,
+    )
+    rulesets = _fetch_ruleset_details(repo, run_fn=run_fn)
     protection = _fetch_protection(repo, default_branch, run_fn=run_fn)
     variables = _fetch_object(f"repos/{repo}/actions/variables", "Actions variables", run_fn=run_fn)
     secrets = _fetch_object(f"repos/{repo}/actions/secrets", "Actions secrets", run_fn=run_fn)
 
     findings = audit_repository(repository, default_branch=default_branch)
+    findings.extend(audit_actions(actions_permissions, selected_actions))
+    findings.extend(audit_pypi_environment(pypi_environment))
+    findings.extend(audit_release_tag_rulesets(rulesets))
     findings.extend(audit_protection(protection, default_branch=default_branch))
     findings.extend(
         _missing(

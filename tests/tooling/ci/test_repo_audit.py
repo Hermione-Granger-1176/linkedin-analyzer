@@ -26,6 +26,11 @@ REPO_PATH = f"repos/{REPO}"
 PROTECTION_PATH = f"{REPO_PATH}/branches/main/protection"
 VARIABLES_PATH = f"{REPO_PATH}/actions/variables"
 SECRETS_PATH = f"{REPO_PATH}/actions/secrets"
+ACTIONS_PERMISSIONS_PATH = f"{REPO_PATH}/actions/permissions"
+SELECTED_ACTIONS_PATH = f"{ACTIONS_PERMISSIONS_PATH}/selected-actions"
+PYPI_ENVIRONMENT_PATH = f"{REPO_PATH}/environments/{repo_audit.PYPI_ENVIRONMENT_NAME}"
+RULESETS_PATH = f"{REPO_PATH}/rulesets"
+RULESET_DETAIL_PATH = f"{RULESETS_PATH}/42"
 EXPECTED_CHECKS = sorted(repo_audit.EXPECTED_REQUIRED_CHECKS)
 
 HEALTHY_REPOSITORY: dict[str, object] = {
@@ -51,6 +56,53 @@ HEALTHY_PROTECTION: dict[str, object] = {
 
 HEALTHY_VARIABLES = {"variables": [{"name": name} for name in repo_audit.EXPECTED_VARIABLES]}
 HEALTHY_SECRETS = {"secrets": [{"name": name} for name in repo_audit.EXPECTED_SECRETS]}
+HEALTHY_ACTIONS_PERMISSIONS = {
+    "enabled": True,
+    "allowed_actions": repo_audit.EXPECTED_ACTIONS_ALLOWED,
+    "sha_pinning_required": repo_audit.EXPECTED_ACTIONS_SHA_PINNING,
+}
+HEALTHY_SELECTED_ACTIONS = {
+    "github_owned_allowed": repo_audit.EXPECTED_GITHUB_OWNED_ACTIONS,
+    "verified_allowed": repo_audit.EXPECTED_VERIFIED_ACTIONS,
+    "patterns_allowed": sorted(repo_audit.EXPECTED_ACTION_PATTERNS),
+}
+HEALTHY_PYPI_ENVIRONMENT = {
+    "can_admins_bypass": repo_audit.EXPECTED_PYPI_CAN_ADMINS_BYPASS,
+    "protection_rules": [
+        {
+            "type": "required_reviewers",
+            "prevent_self_review": repo_audit.EXPECTED_PYPI_PREVENT_SELF_REVIEW,
+            "reviewers": [
+                {
+                    "type": "User",
+                    "reviewer": {"login": reviewer},
+                }
+                for reviewer in sorted(repo_audit.EXPECTED_PYPI_REVIEWERS)
+            ],
+        }
+    ],
+}
+HEALTHY_RULESET_DETAIL = {
+    "id": 42,
+    "name": repo_audit.RELEASE_TAG_RULESET_NAME,
+    "target": repo_audit.EXPECTED_RELEASE_TAG_RULESET_TARGET,
+    "enforcement": repo_audit.EXPECTED_RELEASE_TAG_RULESET_ENFORCEMENT,
+    "conditions": {
+        "ref_name": {
+            "include": sorted(repo_audit.EXPECTED_RELEASE_TAG_PATTERNS),
+            "exclude": [],
+        }
+    },
+    "rules": [{"type": rule} for rule in sorted(repo_audit.EXPECTED_RELEASE_TAG_RULES)],
+}
+HEALTHY_RULESETS = [
+    {
+        "id": 42,
+        "name": repo_audit.RELEASE_TAG_RULESET_NAME,
+        "target": repo_audit.EXPECTED_RELEASE_TAG_RULESET_TARGET,
+        "enforcement": repo_audit.EXPECTED_RELEASE_TAG_RULESET_ENFORCEMENT,
+    }
+]
 
 
 def _repository(**overrides: object) -> dict[str, object]:
@@ -69,13 +121,26 @@ def _runner(
     protection: object = None,
     variables: object = None,
     secrets: object = None,
+    actions_permissions: object = None,
+    selected_actions: object = None,
+    pypi_environment: object = None,
+    rulesets: object = None,
+    ruleset_detail: object = None,
 ) -> FakeGh:
-    """Return a fake gh runner answering all four audit calls.
+    """Return a fake gh runner answering all repository audit calls.
 
     Any argument may be an exception, which the fake raises for that call.
     """
     return FakeGh(
         [
+            (has(RULESET_DETAIL_PATH), _response(ruleset_detail, HEALTHY_RULESET_DETAIL)),
+            (has(RULESETS_PATH), _response(rulesets, HEALTHY_RULESETS)),
+            (has(SELECTED_ACTIONS_PATH), _response(selected_actions, HEALTHY_SELECTED_ACTIONS)),
+            (
+                has(ACTIONS_PERMISSIONS_PATH),
+                _response(actions_permissions, HEALTHY_ACTIONS_PERMISSIONS),
+            ),
+            (has(PYPI_ENVIRONMENT_PATH), _response(pypi_environment, HEALTHY_PYPI_ENVIRONMENT)),
             (has(PROTECTION_PATH), _response(protection, HEALTHY_PROTECTION)),
             (has(VARIABLES_PATH), _response(variables, HEALTHY_VARIABLES)),
             (has(SECRETS_PATH), _response(secrets, HEALTHY_SECRETS)),
@@ -107,11 +172,21 @@ def test_the_expected_configuration_produces_no_findings() -> None:
 
 
 def test_every_audited_setting_is_read_from_the_api() -> None:
-    """All four payloads are fetched, so no expectation is silently unchecked."""
+    """Every settings payload is fetched, so no expectation is silently unchecked."""
     runner = _runner()
     repo_audit.audit_repo_settings(repo=REPO, run_fn=runner)
     requested = {call[-1] for call in runner.calls}
-    assert requested == {REPO_PATH, PROTECTION_PATH, VARIABLES_PATH, SECRETS_PATH}
+    assert requested == {
+        REPO_PATH,
+        PROTECTION_PATH,
+        VARIABLES_PATH,
+        SECRETS_PATH,
+        ACTIONS_PERMISSIONS_PATH,
+        SELECTED_ACTIONS_PATH,
+        PYPI_ENVIRONMENT_PATH,
+        RULESETS_PATH,
+        RULESET_DETAIL_PATH,
+    }
 
 
 # ─── Branch protection ───────────────────────────────────────────────────────
@@ -228,6 +303,11 @@ def test_a_non_default_branch_is_audited_under_its_own_name() -> None:
     """The branch argument has to reach both the API path and the findings."""
     runner = FakeGh(
         [
+            (has(RULESET_DETAIL_PATH), _response(None, HEALTHY_RULESET_DETAIL)),
+            (has(RULESETS_PATH), _response(None, HEALTHY_RULESETS)),
+            (has(SELECTED_ACTIONS_PATH), _response(None, HEALTHY_SELECTED_ACTIONS)),
+            (has(ACTIONS_PERMISSIONS_PATH), _response(None, HEALTHY_ACTIONS_PERMISSIONS)),
+            (has(PYPI_ENVIRONMENT_PATH), _response(None, HEALTHY_PYPI_ENVIRONMENT)),
             (has(f"{REPO_PATH}/branches/release/protection"), _response(None, HEALTHY_PROTECTION)),
             (has(VARIABLES_PATH), _response(None, HEALTHY_VARIABLES)),
             (has(SECRETS_PATH), _response(None, HEALTHY_SECRETS)),
@@ -280,6 +360,322 @@ def test_security_features_that_cannot_be_read_are_reported_as_missing(
     findings = _audit(repository=_repository(security_and_analysis=security_and_analysis))
     expected = ", ".join(sorted(repo_audit.EXPECTED_SECURITY_FEATURES))
     assert findings == [f"missing security and analysis features: {expected}"]
+
+
+# ─── New repository policy settings ──────────────────────────────────────────
+
+
+def test_actions_policy_drift_is_reported() -> None:
+    """Actions enablement, allowlisting, and SHA pinning all remain enforced."""
+    findings = _audit(
+        actions_permissions={
+            "enabled": False,
+            "allowed_actions": "all",
+            "sha_pinning_required": False,
+        }
+    )
+    assert findings == [
+        "GitHub Actions are not enabled",
+        "Actions allowed policy is 'all' instead of 'selected'",
+        "Actions are not required to use full-length commit SHAs",
+    ]
+
+
+def test_selected_actions_drift_is_reported() -> None:
+    """The selected Actions policy reports missing and unexpected patterns."""
+    findings = _audit(
+        selected_actions={
+            "github_owned_allowed": False,
+            "verified_allowed": True,
+            "patterns_allowed": ["astral-sh/setup-uv@*", "example/unused-action@*"],
+        }
+    )
+    assert "GitHub-owned Actions are not allowed" in findings
+    assert "Verified Marketplace Actions are allowed" in findings
+    assert "missing allowed Actions patterns" in findings[2]
+    assert findings[3] == "unexpected allowed Actions patterns: example/unused-action@*"
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "must be a JSON object"),
+        ({}, "patterns_allowed must be a JSON array"),
+        ({"patterns_allowed": [7]}, "must contain non-empty strings"),
+        ({"patterns_allowed": [""]}, "must contain non-empty strings"),
+    ],
+    ids=["not-an-object", "missing-patterns", "non-string-pattern", "empty-pattern"],
+)
+def test_selected_actions_malformed_patterns_fail_closed(payload: object, message: str) -> None:
+    """Selected Actions data cannot certify a policy when its shape is malformed."""
+    with pytest.raises(GhError, match=message):
+        repo_audit.extract_allowed_action_patterns(payload)
+
+
+def test_pypi_environment_drift_is_reported() -> None:
+    """The PyPI environment keeps review protection and the intended bypass policy."""
+    findings = _audit(
+        pypi_environment={
+            "can_admins_bypass": False,
+            "protection_rules": [
+                {
+                    "type": "required_reviewers",
+                    "prevent_self_review": True,
+                    "reviewers": [],
+                }
+            ],
+        }
+    )
+    assert findings == [
+        "missing pypi required reviewers: Hermione-Granger-1176",
+        "pypi administrator bypass is disabled",
+        "pypi prevents self-review",
+    ]
+
+
+def test_pypi_without_required_reviewer_rule_is_reported() -> None:
+    """An environment without a reviewer rule cannot protect package publishing."""
+    findings = _audit(
+        pypi_environment={
+            "can_admins_bypass": True,
+            "protection_rules": [{"type": "wait_timer"}],
+        }
+    )
+    assert findings == [
+        "missing pypi required reviewers: Hermione-Granger-1176",
+        "pypi has no required reviewer rule",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "must be a JSON object"),
+        ({}, "protection_rules must be a JSON array"),
+        ({"protection_rules": ["bad"]}, "contains a non-object entry"),
+        ({"protection_rules": [{}]}, "contains an entry without a type"),
+        (
+            {"protection_rules": [{"type": "required_reviewers"}]},
+            "invalid self-review policy",
+        ),
+        (
+            {"protection_rules": [{"type": "required_reviewers", "prevent_self_review": False}]},
+            "required reviewers must be a JSON array",
+        ),
+        (
+            {
+                "protection_rules": [
+                    {
+                        "type": "required_reviewers",
+                        "prevent_self_review": False,
+                        "reviewers": ["bad"],
+                    }
+                ]
+            },
+            "required reviewers contains a non-object entry",
+        ),
+        (
+            {
+                "protection_rules": [
+                    {
+                        "type": "required_reviewers",
+                        "prevent_self_review": False,
+                        "reviewers": [{"type": "Team"}],
+                    }
+                ]
+            },
+            "must contain User entries",
+        ),
+        (
+            {
+                "protection_rules": [
+                    {
+                        "type": "required_reviewers",
+                        "prevent_self_review": False,
+                        "reviewers": [{"type": "User"}],
+                    }
+                ]
+            },
+            "without a reviewer",
+        ),
+        (
+            {
+                "protection_rules": [
+                    {
+                        "type": "required_reviewers",
+                        "prevent_self_review": False,
+                        "reviewers": [{"type": "User", "reviewer": {}}],
+                    }
+                ]
+            },
+            "without a login",
+        ),
+        (
+            {
+                "protection_rules": [
+                    {"type": "required_reviewers", "prevent_self_review": False, "reviewers": []},
+                    {"type": "required_reviewers", "prevent_self_review": False, "reviewers": []},
+                ]
+            },
+            "multiple required reviewer rules",
+        ),
+    ],
+    ids=[
+        "not-an-object",
+        "missing-rules",
+        "non-object-rule",
+        "missing-rule-type",
+        "missing-self-review-policy",
+        "missing-reviewers",
+        "non-object-reviewer",
+        "team-reviewer",
+        "missing-reviewer-object",
+        "missing-login",
+        "multiple-rules",
+    ],
+)
+def test_pypi_environment_malformed_reviewers_fail_closed(payload: object, message: str) -> None:
+    """Malformed environment protection data must not be treated as healthy."""
+    with pytest.raises(GhError, match=message):
+        repo_audit.extract_environment_reviewers(payload)
+
+
+def test_release_tag_ruleset_drift_is_reported() -> None:
+    """The release tag ruleset reports all of its policy drift in one pass."""
+    findings = _audit(
+        ruleset_detail={
+            "id": 42,
+            "name": repo_audit.RELEASE_TAG_RULESET_NAME,
+            "target": "branch",
+            "enforcement": "disabled",
+            "conditions": {
+                "ref_name": {
+                    "include": ["refs/tags/v*", "refs/tags/beta*"],
+                    "exclude": ["refs/tags/v0.*"],
+                }
+            },
+            "rules": [{"type": "creation"}, {"type": "update"}],
+        }
+    )
+    assert findings == [
+        "release tag ruleset target is 'branch' instead of 'tag'",
+        "release tag ruleset enforcement is 'disabled' instead of 'active'",
+        "unexpected release tag patterns: refs/tags/beta*",
+        "unexpected excluded release tag patterns: refs/tags/v0.*",
+        "missing release tag rules: deletion, non_fast_forward",
+        "unexpected release tag rules: update",
+    ]
+
+
+def test_missing_release_tag_ruleset_is_reported() -> None:
+    """Removing the release tag ruleset is visible as repository settings drift."""
+    assert _audit(rulesets=[]) == ["missing release tag ruleset: Protect version tags"]
+
+
+def test_unrelated_ruleset_is_ignored() -> None:
+    """Other repository rulesets do not change the release tag contract."""
+    detail = {**HEALTHY_RULESET_DETAIL, "name": "Unrelated ruleset"}
+    assert _audit(ruleset_detail=detail) == ["missing release tag ruleset: Protect version tags"]
+
+
+def test_duplicate_release_tag_rulesets_are_reported() -> None:
+    """Duplicate ruleset names make the release protection ambiguous."""
+    findings = repo_audit.audit_release_tag_rulesets(
+        [HEALTHY_RULESET_DETAIL, HEALTHY_RULESET_DETAIL]
+    )
+    assert findings == ["multiple release tag rulesets named 'Protect version tags'"]
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "must be a JSON object"),
+        ({}, "conditions must be a JSON object"),
+        ({"conditions": {}}, "ref_name condition must be a JSON object"),
+        (
+            {"conditions": {"ref_name": {}}},
+            "ref_name include must be a JSON array",
+        ),
+        (
+            {"conditions": {"ref_name": {"include": []}}},
+            "ref_name exclude must be a JSON array",
+        ),
+        (
+            {"conditions": {"ref_name": {"include": [7], "exclude": []}}},
+            "ref_name include must contain non-empty strings",
+        ),
+        (
+            {"conditions": {"ref_name": {"include": [], "exclude": [""]}}},
+            "ref_name exclude must contain non-empty strings",
+        ),
+    ],
+    ids=[
+        "not-an-object",
+        "missing-conditions",
+        "missing-ref-name",
+        "missing-include",
+        "missing-exclude",
+        "invalid-include",
+        "invalid-exclude",
+    ],
+)
+def test_release_tag_ref_patterns_malformed_data_fail_closed(payload: object, message: str) -> None:
+    """Malformed ruleset ref conditions cannot certify the protected tag scope."""
+    with pytest.raises(GhError, match=message):
+        repo_audit.extract_ruleset_ref_patterns(payload)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "must be a JSON object"),
+        ({}, "rules must be a JSON array"),
+        ({"rules": ["bad"]}, "contains a non-object entry"),
+        ({"rules": [{}]}, "contains an entry without a type"),
+    ],
+    ids=["not-an-object", "missing-rules", "non-object-rule", "missing-rule-type"],
+)
+def test_release_tag_rules_malformed_data_fail_closed(payload: object, message: str) -> None:
+    """Malformed ruleset rules cannot certify release tag protection."""
+    with pytest.raises(GhError, match=message):
+        repo_audit.extract_ruleset_rule_types(payload)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"actions_permissions": []}, "Actions permissions must be a JSON object"),
+        ({"selected_actions": []}, "Selected Actions settings must be a JSON object"),
+        ({"pypi_environment": []}, "pypi environment must be a JSON object"),
+        ({"rulesets": {}}, "Repository rulesets response must be a JSON array"),
+        ({"rulesets": ["bad"]}, "contains a non-object entry"),
+        (
+            {"rulesets": [{"id": "42"}]},
+            "contains an entry without a numeric id",
+        ),
+        ({"ruleset_detail": []}, "repository ruleset 42 must be a JSON object"),
+        (
+            {"pypi_environment": {"can_admins_bypass": "yes", "protection_rules": []}},
+            "can_admins_bypass must be a boolean",
+        ),
+        ({"ruleset_detail": {"id": 42}}, "contains an entry without a name"),
+    ],
+    ids=[
+        "actions-permissions",
+        "selected-actions",
+        "pypi-environment",
+        "rulesets-not-list",
+        "rulesets-not-object",
+        "ruleset-id",
+        "ruleset-detail",
+        "pypi-bypass-policy",
+        "ruleset-name",
+    ],
+)
+def test_new_repository_policy_responses_fail_closed(kwargs: object, message: str) -> None:
+    """Every new settings endpoint rejects malformed top-level responses."""
+    with pytest.raises(GhError, match=message):
+        _audit(**kwargs)  # type: ignore[arg-type]
 
 
 # ─── Actions inventory ───────────────────────────────────────────────────────

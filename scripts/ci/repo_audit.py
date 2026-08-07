@@ -275,11 +275,11 @@ def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | Non
     required_rule: dict[str, object] | None = None
     for raw_rule in raw_rules:
         if not isinstance(raw_rule, dict):
-            raise GhError(f"{PYPI_ENVIRONMENT_NAME} protection rules contains a non-object entry.")
+            raise GhError(f"{PYPI_ENVIRONMENT_NAME} protection rules contain a non-object entry.")
         rule_type = raw_rule.get("type")
         if not isinstance(rule_type, str) or not rule_type:
             raise GhError(
-                f"{PYPI_ENVIRONMENT_NAME} protection rules contains an entry without a type."
+                f"{PYPI_ENVIRONMENT_NAME} protection rules contain an entry without a type."
             )
         if rule_type == "required_reviewers":
             if required_rule is not None:
@@ -352,10 +352,10 @@ def extract_ruleset_rule_types(payload: object) -> set[str]:
     rule_types: set[str] = set()
     for raw_rule in raw_rules:
         if not isinstance(raw_rule, dict):
-            raise GhError("Repository ruleset rules contains a non-object entry.")
+            raise GhError("Repository ruleset rules contain a non-object entry.")
         rule_type = raw_rule.get("type")
         if not isinstance(rule_type, str) or not rule_type:
-            raise GhError("Repository ruleset rules contains an entry without a type.")
+            raise GhError("Repository ruleset rules contain an entry without a type.")
         rule_types.add(rule_type)
     return rule_types
 

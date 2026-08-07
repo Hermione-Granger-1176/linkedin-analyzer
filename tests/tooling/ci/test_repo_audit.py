@@ -452,8 +452,8 @@ def test_pypi_without_required_reviewer_rule_is_reported() -> None:
     [
         (None, "must be a JSON object"),
         ({}, "protection_rules must be a JSON array"),
-        ({"protection_rules": ["bad"]}, "contains a non-object entry"),
-        ({"protection_rules": [{}]}, "contains an entry without a type"),
+        ({"protection_rules": ["bad"]}, "contain a non-object entry"),
+        ({"protection_rules": [{}]}, "contain an entry without a type"),
         (
             {"protection_rules": [{"type": "required_reviewers"}]},
             "invalid self-review policy",
@@ -630,8 +630,8 @@ def test_release_tag_ref_patterns_malformed_data_fail_closed(payload: object, me
     [
         (None, "must be a JSON object"),
         ({}, "rules must be a JSON array"),
-        ({"rules": ["bad"]}, "contains a non-object entry"),
-        ({"rules": [{}]}, "contains an entry without a type"),
+        ({"rules": ["bad"]}, "contain a non-object entry"),
+        ({"rules": [{}]}, "contain an entry without a type"),
     ],
     ids=["not-an-object", "missing-rules", "non-object-rule", "missing-rule-type"],
 )

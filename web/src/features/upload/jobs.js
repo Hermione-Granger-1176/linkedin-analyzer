@@ -62,7 +62,7 @@ export function resolveJobId(activeJobs, pendingFiles, jobId, fileName) {
         return pendingJobId;
     }
 
-    return getFirstActiveJobId(activeJobs);
+    return getSoleActiveJobId(activeJobs);
 }
 
 /**
@@ -96,7 +96,7 @@ function resolvePendingJobIdByFileName(pendingFiles, fileName) {
  * @param {Set<string>} activeJobs - In-flight job IDs
  * @returns {string|null}
  */
-function getFirstActiveJobId(activeJobs) {
+function getSoleActiveJobId(activeJobs) {
     if (activeJobs.size !== 1) {
         return null;
     }

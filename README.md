@@ -113,6 +113,7 @@ docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-
 | **Mobile friendly**  | Hamburger nav and compact filters on narrow screens        |
 | **Excel export**     | Formatted .xlsx with proper columns                        |
 | **Connections**      | Network growth, top companies, top positions               |
+| **PDF export**       | Light-palette A4 report with optional names and messages   |
 | **Chart export**     | Download any chart as PNG                                  |
 | **PWA-ready**        | Installable with auto-refreshing service worker caching    |
 | **Session cleanup**  | Stale uploads and cached analytics cleared asynchronously  |

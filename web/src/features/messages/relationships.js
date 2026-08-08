@@ -12,21 +12,21 @@ import { MS_PER_DAY } from "./format.js";
 export function getTopContactsInRange(messageState, rangeStart) {
     const rangeCounts = new Map();
 
-    messageState.events.forEach((event) => {
+    for (const event of messageState.events) {
         if (rangeStart && event.timestamp < rangeStart) {
-            return;
+            continue;
         }
         const existing = rangeCounts.get(event.contactKey);
         if (existing) {
             existing.count += 1;
             existing.lastTimestamp = Math.max(existing.lastTimestamp, event.timestamp);
-            return;
+            continue;
         }
         rangeCounts.set(event.contactKey, {
             count: 1,
             lastTimestamp: event.timestamp,
         });
-    });
+    }
 
     const items = Array.from(rangeCounts.entries()).map(([contactKey, metric]) => {
         const base = messageState.contacts.get(contactKey);
@@ -107,15 +107,15 @@ export function getFadingConversations(messageState, connectionState) {
     const now = Date.now();
     const fading = [];
 
-    messageState.contacts.forEach((contact) => {
+    for (const contact of messageState.contacts.values()) {
         const connection = findMatchingConnection(contact, connectionState);
         if (!connection) {
-            return;
+            continue;
         }
 
         const daysSince = Math.floor((now - contact.lastTimestamp) / MS_PER_DAY);
         if (daysSince < 30) {
-            return;
+            continue;
         }
 
         fading.push({
@@ -125,7 +125,7 @@ export function getFadingConversations(messageState, connectionState) {
             lastTimestamp: contact.lastTimestamp,
             company: connection.company,
         });
-    });
+    }
 
     fading.sort((left, right) => {
         if (right.lastTimestamp !== left.lastTimestamp) {

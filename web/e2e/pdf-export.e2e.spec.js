@@ -5,6 +5,7 @@ const AxeBuilder = require("@axe-core/playwright").default;
 const { expect, test } = require("@playwright/test");
 
 const { extractPdfText } = require("./helpers/pdf-text");
+const { uploadFiles, waitForLoadedStatus } = require("./helpers/upload.js");
 
 const SHARES_CSV = path.join(__dirname, "fixtures", "Shares.csv");
 const COMMENTS_CSV = path.join(__dirname, "fixtures", "Comments.csv");
@@ -23,27 +24,6 @@ const EXPORTED_BODIES = [
     "@Bob could you take a look",
     "-2 days later is fine",
 ];
-
-/**
- * Upload one or more CSV fixtures using the hidden file input.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string[]} files - Absolute fixture paths
- */
-async function uploadFiles(page, files) {
-    await page.goto("/#home");
-    await page.getByTestId("upload-input").setInputFiles(files);
-}
-
-/**
- * Wait for one file status row to switch from default to loaded,
- * then wait for the progress overlay to disappear.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string} id - Status element id
- */
-async function waitForLoadedStatus(page, id) {
-    await expect(page.locator(`#${id}`)).not.toHaveText("Not uploaded", { timeout: 20000 });
-    await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 20000 });
-}
 
 /**
  * Wait for the export trigger to actually be available, then return it.
@@ -192,13 +172,17 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
 
     // The build minifies the token values, so these are compared as colors
     // rather than as the exact text in variables.css.
-    expect(probed.bgPrimary.toLowerCase()).toMatch(/^(#fffdf7|rgba?\(255,\s?253,\s?247(,\s?1)?\))$/);
+    expect(probed.bgPrimary.toLowerCase()).toMatch(
+        /^(#fffdf7|rgba?\(255,\s?253,\s?247(,\s?1)?\))$/,
+    );
     expect(probed.textPrimary.toLowerCase()).toMatch(/^(#1c1917|rgba?\(28,\s?25,\s?23(,\s?1)?\))$/);
     expect(probed.accentBlue.toLowerCase()).toMatch(
         /^(#4285f4|rgba?\(66,\s?133,\s?244(,\s?1)?\))$/,
     );
     // The tinted tokens keep their alpha, in whichever form the minifier picks.
-    expect(probed.accentYellowBg.toLowerCase()).toMatch(/^(#fbbc0526|rgba\(251,\s?188,\s?5,\s?\.?0?\.?15\))$/);
+    expect(probed.accentYellowBg.toLowerCase()).toMatch(
+        /^(#fbbc0526|rgba\(251,\s?188,\s?5,\s?\.?0?\.?15\))$/,
+    );
 
     // Opted in with no messages export uploaded: the section is simply omitted
     // and the export still succeeds.

@@ -360,6 +360,7 @@ Maintenance workflows also keep generated repository state current:
 
 ### JavaScript
 
+- Prettier for formatting
 - ESLint for linting
 - Vitest for tests
 - Vite for bundling

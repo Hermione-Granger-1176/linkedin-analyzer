@@ -3,32 +3,13 @@ const path = require("path");
 
 const { expect, test } = require("@playwright/test");
 
+const { uploadFiles, waitForLoadedStatus } = require("./helpers/upload.js");
+
 // Synthetic comments export with known cleaned outputs: a plain row, four
 // formula-injection payloads (= + - @), and a row whose message carries an
 // XML-illegal control character. The Python validator asserts the workbook
 // internals; this spec only proves the real browser produces and saves the file.
 const FIXTURE = path.join(__dirname, "fixtures", "BrowserXlsx.csv");
-
-/**
- * Upload one or more CSV fixtures using the hidden file input.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string[]} files - Absolute fixture paths
- */
-async function uploadFiles(page, files) {
-    await page.goto("/#home");
-    await page.getByTestId("upload-input").setInputFiles(files);
-}
-
-/**
- * Wait for one file status row to switch from default to loaded,
- * then wait for the progress overlay to disappear.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string} id - Status element id
- */
-async function waitForLoadedStatus(page, id) {
-    await expect(page.locator(`#${id}`)).not.toHaveText("Not uploaded", { timeout: 20000 });
-    await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 20000 });
-}
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -36,7 +17,9 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-test("browser generates and downloads a real comments xlsx workbook", async ({ page }, testInfo) => {
+test("browser generates and downloads a real comments xlsx workbook", async ({
+    page,
+}, testInfo) => {
     await uploadFiles(page, [FIXTURE]);
     await waitForLoadedStatus(page, "commentsStatus");
 

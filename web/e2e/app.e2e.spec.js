@@ -3,38 +3,19 @@ const path = require("path");
 const AxeBuilder = require("@axe-core/playwright").default;
 const { expect, test } = require("@playwright/test");
 
+const { uploadFiles, waitForLoadedStatus } = require("./helpers/upload.js");
+
 const SHARES_CSV = path.join(__dirname, "fixtures", "Shares.csv");
 const COMMENTS_CSV = path.join(__dirname, "fixtures", "Comments.csv");
 const MESSAGES_CSV = path.join(__dirname, "fixtures", "Messages.csv");
 const CONNECTIONS_CSV = path.join(__dirname, "fixtures", "Connections.csv");
 const INVALID_CSV = path.join(__dirname, "fixtures", "Invalid.csv");
 
-/**
- * Upload one or more CSV fixtures using the hidden file input.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string[]} files - Absolute fixture paths
- */
-async function uploadFiles(page, files) {
-    await page.goto("/#home");
-    await page.getByTestId("upload-input").setInputFiles(files);
-}
-
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
         window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
     });
 });
-
-/**
- * Wait for one file status row to switch from default to loaded,
- * then wait for the progress overlay to disappear.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string} id - Status element id
- */
-async function waitForLoadedStatus(page, id) {
-    await expect(page.locator(`#${id}`)).not.toHaveText("Not uploaded", { timeout: 20000 });
-    await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 20000 });
-}
 
 /**
  * Run an axe scan after route-level loading and finite animations settle.

@@ -134,6 +134,11 @@ def _log_dropped(before: int, after: int, reason: str) -> None:
         LOG.info("Dropped %d rows %s", dropped, reason)
 
 
+def _normalize_header(name: object) -> str:
+    """Return a stripped column name without a leading byte-order mark."""
+    return str(name).strip().lstrip("\ufeff")
+
+
 def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
     """Validate that required columns exist in the DataFrame.
 
@@ -144,7 +149,7 @@ def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
     Raises:
         ValueError: If any required columns are missing
     """
-    normalized_columns = {str(col).strip().lstrip("\ufeff") for col in df.columns}
+    normalized_columns = {_normalize_header(column) for column in df.columns}
     missing = [col for col in required if col not in normalized_columns]
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
@@ -201,6 +206,23 @@ def _limit_error(name: str, value: int) -> str | None:
     return None
 
 
+def _failure_result(
+    config: CleanerConfig,
+    error: str,
+    *,
+    missing_input: bool = False,
+) -> CleanerResult:
+    """Return a failed cleaner result for the configured paths."""
+    return CleanerResult(
+        success=False,
+        rows_processed=0,
+        input_path=config.input_path,
+        output_path=config.output_path,
+        error=error,
+        missing_input=missing_input,
+    )
+
+
 def _apply_row_read_limit(csv_kwargs: dict[str, Any], max_rows: int) -> None:
     """Bound CSV parsing to one row past the configured row limit."""
     if max_rows <= 0:
@@ -226,12 +248,9 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
     output_path = config.output_path
 
     if not input_path.exists():
-        return CleanerResult(
-            success=False,
-            rows_processed=0,
-            input_path=input_path,
-            output_path=output_path,
-            error=f"Input file does not exist: {input_path}",
+        return _failure_result(
+            config,
+            f"Input file does not exist: {input_path}",
             missing_input=True,
         )
 
@@ -241,36 +260,19 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
     ):
         error = _limit_error(name, value)
         if error:
-            return CleanerResult(
-                success=False,
-                rows_processed=0,
-                input_path=input_path,
-                output_path=output_path,
-                error=error,
-            )
+            return _failure_result(config, error)
 
     if config.max_input_bytes > 0:
         try:
             input_size = input_path.stat().st_size
         except OSError as exc:
-            return CleanerResult(
-                success=False,
-                rows_processed=0,
-                input_path=input_path,
-                output_path=output_path,
-                error=str(exc),
-            )
+            return _failure_result(config, str(exc))
         if input_size > config.max_input_bytes:
-            return CleanerResult(
-                success=False,
-                rows_processed=0,
-                input_path=input_path,
-                output_path=output_path,
-                error=(
-                    "Input file is too large: "
-                    f"{input_size} {_byte_unit(input_size)} exceeds limit of "
-                    f"{config.max_input_bytes} {_byte_unit(config.max_input_bytes)}"
-                ),
+            return _failure_result(
+                config,
+                "Input file is too large: "
+                f"{input_size} {_byte_unit(input_size)} exceeds limit of "
+                f"{config.max_input_bytes} {_byte_unit(config.max_input_bytes)}",
             )
 
     try:
@@ -287,7 +289,7 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
                 f"Input CSV has too many rows: {len(df)} exceeds limit of {config.max_rows}"
             )
 
-        df = df.rename(columns=lambda name: str(name).strip().lstrip("\ufeff"))
+        df = df.rename(columns=_normalize_header)
         duplicate_columns = [str(name) for name in df.columns[df.columns.duplicated()].unique()]
         if duplicate_columns:
             raise ValueError(
@@ -342,10 +344,4 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
 
     except Exception as exc:
         LOG.exception("Failed to clean and export data")
-        return CleanerResult(
-            success=False,
-            rows_processed=0,
-            input_path=input_path,
-            output_path=output_path,
-            error=str(exc),
-        )
+        return _failure_result(config, str(exc))

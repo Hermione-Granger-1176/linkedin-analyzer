@@ -11,7 +11,7 @@
 ## Formatting Style
 
 - Python: Ruff formatting, 100-char lines, type hints everywhere.
-- JavaScript: ESLint formatting, prefer explicit semicolons.
+- JavaScript: Prettier formatting and ESLint linting, prefer explicit semicolons.
 - Keep imports ordered and grouped by stdlib, third-party, local.
 - Use blank lines to separate logical blocks, not every line.
 - `.editorconfig` enforces indent style/size, charset, and line endings across editors.

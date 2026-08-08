@@ -4,7 +4,7 @@
  *
  * Public facade composed from three focused modules:
  * - csv-parser.js: low-level CSV tokenizing/row splitting
- * - cleaner-configs.js: per-file-type column/validation/skip-row config
+ * - configs.js: per-file-type column/validation/skip-row config
  * - field-cleaners.js: cell-level value normalization
  */
 
@@ -274,6 +274,21 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
+     * Detect a supported type other than the one selected by the user.
+     * @param {string} csvText - Raw CSV text
+     * @param {string} selectedType - Type selected by the user
+     * @param {Map<string, object>} parseCache - Full-file parse cache
+     * @returns {string|null} First alternate type, or null when none matches
+     */
+    function detectAlternateFileType(csvText, selectedType, parseCache) {
+        return (
+            detectMatchingFileTypes(csvText, parseCache).find(
+                (match) => match.type !== selectedType,
+            )?.type || null
+        );
+    }
+
+    /**
      * Cheaply detect a file's type from its header row by parsing only a prefix
      * of the text. Returns the first supported type (in FILE_TYPES order) whose
      * required columns are present, or null when no prefix match is found.
@@ -499,9 +514,7 @@ export const LinkedInCleaner = (() => {
         const parsed = parseCSV(csvText, fileType, parseCache);
         if (parsed.error) {
             if (parsed.error.includes("data row has more fields than the header")) {
-                const alternateType = detectMatchingFileTypes(csvText, parseCache).find(
-                    (match) => match.type !== fileType,
-                )?.type;
+                const alternateType = detectAlternateFileType(csvText, fileType, parseCache);
                 if (alternateType) {
                     const missing = CONFIGS[fileType]?.requiredColumns || [];
                     return makeResult(
@@ -520,10 +533,7 @@ export const LinkedInCleaner = (() => {
         if (!validation.valid) {
             detectedType =
                 detectedType ||
-                detectMatchingFileTypes(csvText, parseCache).find(
-                    (match) => match.type !== fileType,
-                )?.type ||
-                null;
+                detectAlternateFileType(csvText, fileType, parseCache);
             return makeResult(
                 false,
                 buildColumnErrorMessage(fileType, detectedType, validation.missing),

@@ -4,7 +4,7 @@
  * These functions resolve popover placement, clamp coordinates inside the
  * viewport, and compute spotlight/pointer edge points. They are stateless and
  * depend only on their arguments, so the Tutorial engine imports them back and
- * they are unit-tested directly in tutorial-geometry.test.js.
+ * they are unit-tested directly in web/tests/features/tutorial/geometry.test.js.
  */
 
 /** Minimum padding kept between overlay elements and the viewport edges. */

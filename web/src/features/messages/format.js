@@ -2,7 +2,7 @@
  *
  * Everything here is stateless: each function takes its inputs and returns a
  * value with no reads or writes of worker, DOM, or cache state. The messages
- * page engine (messages-insights.js) wires these into its controller lifecycle.
+ * page engine (screen.js) wires these into its controller lifecycle.
  */
 
 /** Default time range used when no valid range is provided. */

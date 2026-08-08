@@ -5,7 +5,7 @@ import { LoadingOverlay } from "../shared/ui/loading-overlay.js";
 export const ScreenManager = (() => {
     "use strict";
 
-    /* Keep in sync with the CSS --screen-transition value in css/variables.css. */
+    /* Keep in sync with --screen-transition in styles/foundations/variables.css. */
     const TRANSITION_DURATION_MS = 50;
 
     const routes = new Map();

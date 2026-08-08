@@ -39,12 +39,12 @@ export function hydrateMessageState(payload) {
     /** @type {Map<string, MessageContact>} */
     const contacts = new Map();
     const contactList = Array.isArray(safePayload.contacts) ? safePayload.contacts : [];
-    contactList.forEach((contact) => {
+    for (const contact of contactList) {
         if (!contact || !contact.key) {
-            return;
+            continue;
         }
         contacts.set(contact.key, contact);
-    });
+    }
 
     return {
         contacts,
@@ -77,11 +77,11 @@ export function hydrateConnectionState(payload) {
     const byUrl = new Map();
     const byName = new Map();
 
-    list.forEach((connection) => {
+    for (const connection of list) {
         // the worker never emits null list rows, so this guard is defensive.
         /* v8 ignore next 3 */
         if (!connection) {
-            return;
+            continue;
         }
         if (connection.url && !byUrl.has(connection.url)) {
             byUrl.set(connection.url, connection);
@@ -89,7 +89,7 @@ export function hydrateConnectionState(payload) {
         if (connection.nameKey && !byName.has(connection.nameKey)) {
             byName.set(connection.nameKey, connection);
         }
-    });
+    }
 
     return { list, byUrl, byName };
 }

@@ -2,6 +2,8 @@ const path = require("path");
 
 const { expect, test } = require("@playwright/test");
 
+const { waitForLoadedStatus } = require("./helpers/upload.js");
+
 const FIXTURES = path.join(__dirname, "fixtures");
 const SHARES_CSV = path.join(FIXTURES, "Shares.csv");
 const COMMENTS_CSV = path.join(FIXTURES, "Comments.csv");
@@ -17,17 +19,6 @@ const VIEWPORTS = [
 
 // Hash routes / screen sections rendered by the SPA.
 const ROUTES = ["home", "clean", "analytics", "connections", "messages", "insights"];
-
-/**
- * Wait for one file status row to leave its default text, then for the
- * progress overlay to disappear. Mirrors the app spec's upload helper.
- * @param {import('@playwright/test').Page} page - Playwright page instance
- * @param {string} id - Status element id
- */
-async function waitForLoadedStatus(page, id) {
-    await expect(page.locator(`#${id}`)).not.toHaveText("Not uploaded", { timeout: 30000 });
-    await expect(page.locator("#progressOverlay")).toBeHidden({ timeout: 30000 });
-}
 
 /**
  * Navigate to a hash route and wait for its screen section to activate and any
@@ -90,10 +81,10 @@ test.describe("viewport screenshots", () => {
         await page
             .getByTestId("upload-input")
             .setInputFiles([SHARES_CSV, COMMENTS_CSV, MESSAGES_CSV, CONNECTIONS_CSV]);
-        await waitForLoadedStatus(page, "sharesStatus");
-        await waitForLoadedStatus(page, "commentsStatus");
-        await waitForLoadedStatus(page, "messagesStatus");
-        await waitForLoadedStatus(page, "connectionsStatus");
+        await waitForLoadedStatus(page, "sharesStatus", 30000);
+        await waitForLoadedStatus(page, "commentsStatus", 30000);
+        await waitForLoadedStatus(page, "messagesStatus", 30000);
+        await waitForLoadedStatus(page, "connectionsStatus", 30000);
 
         for (const viewport of VIEWPORTS) {
             await page.setViewportSize({ width: viewport.width, height: viewport.height });

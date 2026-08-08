@@ -525,7 +525,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch branch-current rebase log diff diff-staged stage stage-all commit push release-create
+.PHONY: git branch branch-current branch-prune rebase log diff diff-staged stage stage-all commit push release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -539,6 +539,13 @@ branch: ## Create and switch to a new branch off main, or off base for a stacked
 branch-current: ## Create a branch from the current checkout without updating its base
 	@test -n "$(name)" || (printf 'Usage: make branch-current name=my-feature\n' >&2; exit 1)
 	git checkout -b "$(name)"
+
+# Branch names reach the helper through the environment, never interpolated
+# into the recipe, so the target holds no shell logic of its own.
+branch-prune: export PRUNE_MAIN_BRANCH := main
+branch-prune: export PRUNE_CONFIRM := $(confirm)
+branch-prune: ## Prune local branches whose content is already in main (make branch-prune [confirm=1])
+	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.lib.prune_branches
 
 rebase: ## Rebase the current branch onto its remote base (make rebase base=origin/main)
 	@test -n "$(base)" || (printf 'Usage: make rebase base=origin/main\n' >&2; exit 1)

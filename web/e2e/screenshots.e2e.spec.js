@@ -70,10 +70,7 @@ test.describe("viewport screenshots", () => {
         test.skip(testInfo.project.name !== "chromium", "Capture on chromium only");
         test.setTimeout(240000);
 
-        const outDir = process.env.SCREENS_DIR;
-        if (!outDir) {
-            return;
-        }
+        const outDir = /** @type {string} */ (process.env.SCREENS_DIR);
 
         await page.addInitScript(() => {
             /** @type {Window & { __LINKEDIN_ANALYZER_DISABLE_TUTORIALS__?: boolean }} */

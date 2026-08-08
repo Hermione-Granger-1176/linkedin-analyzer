@@ -4,7 +4,7 @@ const path = require("path");
 const AxeBuilder = require("@axe-core/playwright").default;
 const { expect, test } = require("@playwright/test");
 
-const { extractPdfText } = require("./helpers/pdf-text");
+const { extractPdfText } = require("./helpers/pdf-text.js");
 const { uploadFiles, waitForLoadedStatus } = require("./helpers/upload.js");
 
 const SHARES_CSV = path.join(__dirname, "fixtures", "Shares.csv");
@@ -43,7 +43,9 @@ async function waitForExportTrigger(page) {
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-        window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
+        /** @type {Window & { __LINKEDIN_ANALYZER_DISABLE_TUTORIALS__?: boolean }} */
+        const globalWindow = window;
+        globalWindow.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
     });
 });
 

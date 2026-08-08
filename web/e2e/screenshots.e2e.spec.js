@@ -56,7 +56,7 @@ async function gotoRoute(page, route) {
     await page.evaluate(
         () =>
             new Promise((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
             }),
     );
     await page.waitForTimeout(400);
@@ -70,10 +70,12 @@ test.describe("viewport screenshots", () => {
         test.skip(testInfo.project.name !== "chromium", "Capture on chromium only");
         test.setTimeout(240000);
 
-        const outDir = process.env.SCREENS_DIR;
+        const outDir = /** @type {string} */ (process.env.SCREENS_DIR);
 
         await page.addInitScript(() => {
-            window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
+            /** @type {Window & { __LINKEDIN_ANALYZER_DISABLE_TUTORIALS__?: boolean }} */
+            const globalWindow = window;
+            globalWindow.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
         });
 
         // Upload every fixture once so all screens have real content.

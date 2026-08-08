@@ -272,7 +272,7 @@ test-js: ## Run JS unit tests only
 	$(NPM) run test
 
 test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick ARGS="analytics")
-	$(NPX) vitest run --config web/vitest.config.js $(ARGS)
+	$(NPX) vitest run --config web/vitest.config.mjs $(ARGS)
 
 test-e2e: ## Run Playwright browser tests (make test-e2e ARGS="--project=chromium web/e2e/app.e2e.spec.js")
 	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- $(ARGS)

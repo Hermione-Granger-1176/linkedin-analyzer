@@ -209,7 +209,7 @@ def test_the_summary_is_printed_for_the_job_summary(
 def test_the_default_report_paths_match_where_the_test_tools_write_them() -> None:
     """A default that drifts from the tools' own configuration turns this into two notes."""
     pyproject = (Path(__file__).parents[3] / "pyproject.toml").read_text(encoding="utf-8")
-    vitest = (Path(__file__).parents[3] / "web" / "vitest.config.js").read_text(encoding="utf-8")
+    vitest = (Path(__file__).parents[3] / "web" / "vitest.config.mjs").read_text(encoding="utf-8")
     assert f"--cov-report=json:{coverage_summary.DEFAULT_PYTHON_REPORT}" in pyproject
     assert "json-summary" in vitest
     assert Path("coverage/coverage-summary.json") == coverage_summary.DEFAULT_JS_REPORT

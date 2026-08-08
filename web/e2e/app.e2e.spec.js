@@ -13,7 +13,9 @@ const INVALID_CSV = path.join(__dirname, "fixtures", "Invalid.csv");
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-        window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
+        /** @type {Window & { __LINKEDIN_ANALYZER_DISABLE_TUTORIALS__?: boolean }} */
+        const globalWindow = window;
+        globalWindow.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
     });
 });
 
@@ -191,7 +193,9 @@ test("telemetry consent: grant, dismiss, and revoke flow", async ({ page }) => {
     // Force the diagnostics offer without baking a Sentry DSN into the build, so
     // the banner/footer render but enabling never actually starts the SDK.
     await page.addInitScript(() => {
-        window.__LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__ = true;
+        /** @type {Window & { __LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__?: boolean }} */
+        const globalWindow = window;
+        globalWindow.__LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__ = true;
     });
     await page.goto("/#home");
 

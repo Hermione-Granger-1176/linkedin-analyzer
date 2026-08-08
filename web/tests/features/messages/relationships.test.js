@@ -1,6 +1,6 @@
 /**
  * Vitest unit tests for the pure relationship queries over messages and
- * connections state. These were extracted from messages-insights.js and take
+ * connections state. These were extracted from the messages screen and take
  * plain state objects, so they run without a DOM.
  */
 

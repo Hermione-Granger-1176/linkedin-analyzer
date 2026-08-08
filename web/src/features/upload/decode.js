@@ -4,7 +4,7 @@
  * These functions decode raw file bytes to text, concatenate stream chunks, and
  * classify storage quota errors. They are stateless and depend only on their
  * arguments (plus the shared MAX_CSV_CHARS limit), so the UploadPage engine
- * imports them back and they are unit-tested directly in upload-decode.test.js.
+ * imports them back and they are unit-tested directly in web/tests/features/upload/decode.test.js.
  */
 
 import { MAX_CSV_CHARS } from "../../shared/constants.js";

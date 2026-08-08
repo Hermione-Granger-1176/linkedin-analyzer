@@ -36,6 +36,13 @@ linkedin-analyzer/
 ├── tests/                              # Python package, integration, and tooling tests
 ├── web/                                # Vite single-page application
 ├── .github/                            # GitHub metadata, actions, and workflows
+├── .dockerignore                       # Container build-context exclusions
+├── .editorconfig                       # Cross-editor text conventions
+├── .env.example                        # Optional web diagnostics configuration
+├── .gitignore                          # Local and generated file exclusions
+├── .npmrc                              # Node package-manager policy
+├── .pre-commit-config.yaml             # Local Git hook checks
+├── .yamllint.yml                       # YAML lint configuration
 ├── CHANGELOG.md                        # Python package changelog
 ├── CLAUDE.md                           # Shared repository agent guidance
 ├── AGENTS.md                           # Symlink to CLAUDE.md
@@ -374,6 +381,7 @@ scripts/
 │   ├── coverage_summary.py
 │   ├── issue_alerts.py
 │   ├── refresh_action_shas.py
+│   ├── refresh_ci_pins.py
 │   ├── repo_audit.py
 │   ├── run_npm_audit.py
 │   ├── run_parallel_checks.py

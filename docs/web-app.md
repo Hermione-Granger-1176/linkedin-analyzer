@@ -162,6 +162,8 @@ Each panel includes a full-list Excel export button.
 
 Rule-based recommendations and summaries generated from analytics aggregates.
 
+An All-time section shows lifetime network growth and, when the relevant message data is available, outreach initiated, reply rate, unanswered contacts, and sent-to-received message totals.
+
 ## Save as PDF
 
 A **Save as PDF** button sits beside the theme toggle on every screen, and downloads an A4 document named `linkedin-insights-YYYY-MM-DD.pdf`.
@@ -214,7 +216,7 @@ Message bodies leave the app only inside the file you download, to the location 
 - Tutorial auto-start and mini-tip rendering are gated by loading state, so onboarding UI does not appear while loading overlays are active.
 - Analytics computation runs in `features/analytics/analytics-worker.js`.
 - Connections parsing runs in `features/connections/connections-worker.js` with client-side filtering.
-- Messages/connections parsing runs in `features/messages/messages-worker.js` with safe fallback.
+- Messages parsing runs in `features/messages/messages-worker.js` with safe fallback.
 - PDF export thread selection runs in `features/export/threads-worker.js`, created on demand and terminated as soon as the export has its threads, with a main-thread fallback for exports under 5 MB when no worker is available. That worker is also handed the raw connections file, and derives the contact keys itself: an export holding one conversation cannot say which of its two people is the account owner, but nobody is in their own connections list. The keys come off the parsed rows rather than the cleaned ones, because cleaning drops a connection whose export recorded no date, and somebody you are connected to is still not you whether or not the date survived.
 - The PDF export's connections and messages dashboards run the two screens' own parsing workers the same way, each through its own transport, so nothing an export parses is parsed on the UI thread.
 - Cleaning resolves each file type's column cleaners once, then reuses that plan for every row instead of repeating configuration lookups for every cell.

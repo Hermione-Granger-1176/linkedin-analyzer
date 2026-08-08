@@ -13,6 +13,15 @@ export const AppRouter = (() => {
     let currentState = null;
 
     /**
+     * Check whether a route param should be omitted from the URL.
+     * @param {unknown} value - Route param value
+     * @returns {boolean} True when the value represents an absent param
+     */
+    function isEmptyParamValue(value) {
+        return value === null || value === undefined || value === "";
+    }
+
+    /**
      * Register a route.
      * @param {string} name - Route name
      * @param {object} [options] - Route options
@@ -104,9 +113,8 @@ export const AppRouter = (() => {
         }
 
         const merged = { ...current.params };
-        Object.keys(patch || {}).forEach(key => {
-            const value = patch[key];
-            if (value === null || value === undefined || value === "") {
+        Object.entries(patch || {}).forEach(([key, value]) => {
+            if (isEmptyParamValue(value)) {
                 delete merged[key];
                 return;
             }
@@ -177,7 +185,7 @@ export const AppRouter = (() => {
             .sort()
             .forEach(key => {
                 const value = params[key];
-                if (value === null || value === undefined || value === "") {
+                if (isEmptyParamValue(value)) {
                     return;
                 }
                 search.set(key, String(value));
@@ -276,7 +284,7 @@ export const AppRouter = (() => {
 
             if (hasExplicitValue) {
                 const explicitValue = providedParams[key];
-                if (explicitValue === null || explicitValue === undefined || explicitValue === "") {
+                if (isEmptyParamValue(explicitValue)) {
                     delete nextParams[key];
                     return;
                 }
@@ -313,7 +321,7 @@ export const AppRouter = (() => {
             const value = Object.prototype.hasOwnProperty.call(state.params, key)
                 ? state.params[key]
                 : getDefaultParamValue(routeOptions, key);
-            if (value === null || value === undefined || value === "") {
+            if (isEmptyParamValue(value)) {
                 sharedParamValues.delete(key);
                 return;
             }
@@ -336,7 +344,7 @@ export const AppRouter = (() => {
         }
 
         const value = defaults[key];
-        if (value === null || value === undefined || value === "") {
+        if (isEmptyParamValue(value)) {
             return null;
         }
         return String(value);

@@ -4,7 +4,7 @@
  * These functions build the empty tracked-file map, resolve the upload hint
  * message, test analytics readiness, and map a file type to its cache key. They
  * are stateless and depend only on their arguments, so the UploadPage engine
- * imports them back and they are unit-tested directly in upload-state.test.js.
+ * imports them back and they are unit-tested directly in web/tests/features/upload/state.test.js.
  */
 
 const UPLOAD_HINT_BY_STATE = Object.freeze({

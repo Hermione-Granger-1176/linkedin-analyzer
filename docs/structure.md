@@ -110,8 +110,8 @@ web/
 │   ├── platform/
 │   └── shared/
 ├── index.html                          # SPA document and screen markup
-├── vite.config.js                      # Vite and PWA build configuration
-└── vitest.config.js                    # Vitest and coverage configuration
+├── vite.config.mjs                     # Vite and PWA build configuration
+└── vitest.config.mjs                   # Vitest and coverage configuration
 ```
 
 ### Application Composition

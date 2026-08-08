@@ -13,7 +13,9 @@ const FIXTURE = path.join(__dirname, "fixtures", "BrowserXlsx.csv");
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-        window.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
+        /** @type {Window & { __LINKEDIN_ANALYZER_DISABLE_TUTORIALS__?: boolean }} */
+        const globalWindow = window;
+        globalWindow.__LINKEDIN_ANALYZER_DISABLE_TUTORIALS__ = true;
     });
 });
 

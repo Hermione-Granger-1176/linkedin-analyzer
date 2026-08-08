@@ -303,7 +303,7 @@ Browsers pick the best format automatically:
 
 ### PWA Manifest
 
-`web/vite.config.js` is the single source for the PWA manifest metadata, including the app name, description, icons, theme color, and standalone display mode. `vite-plugin-pwa` generates `manifest.webmanifest` and injects its link during the production build. Relative URLs keep the app installable under any base path.
+`web/vite.config.mjs` is the single source for the PWA manifest metadata, including the app name, description, icons, theme color, and standalone display mode. `vite-plugin-pwa` generates `manifest.webmanifest` and injects its link during the production build. Relative URLs keep the app installable under any base path.
 
 ### Open Graph and Twitter Cards
 

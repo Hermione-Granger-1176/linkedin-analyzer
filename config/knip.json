@@ -3,10 +3,10 @@
   "entry": ["web/index.html", "api/**/*.mjs", "scripts/**/*.{js,mjs}"],
   "project": ["web/src/**/*.js", "api/**/*.mjs", "config/**/*.{js,mjs}", "scripts/**/*.{js,mjs}"],
   "vite": {
-    "config": ["web/vite.config.js"]
+    "config": ["web/vite.config.mjs"]
   },
   "vitest": {
-    "config": ["web/vitest.config.js"]
+    "config": ["web/vitest.config.mjs"]
   },
   "playwright": {
     "config": ["config/playwright.config.js"]

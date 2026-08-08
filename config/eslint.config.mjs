@@ -4,7 +4,7 @@ import jsdoc from "eslint-plugin-jsdoc";
 
 export default [
     {
-        files: ["web/src/**/*.js", "web/tests/**/*.js"],
+        files: ["web/src/**/*.js", "web/tests/**/*.js", "web/e2e/**/*.js"],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: "module",
@@ -139,6 +139,23 @@ export default [
         files: ["web/tests/**/*.js"],
         languageOptions: {
             globals: {
+                ...globals.node,
+            },
+        },
+        rules: {
+            "jsdoc/require-param": "off",
+            "jsdoc/require-param-type": "off",
+            "jsdoc/require-returns": "off",
+            "jsdoc/require-returns-type": "off",
+        },
+    },
+    {
+        files: ["web/e2e/**/*.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: {
+                ...globals.browser,
+                ...globals.es2021,
                 ...globals.node,
             },
         },

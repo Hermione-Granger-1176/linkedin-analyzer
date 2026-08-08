@@ -26,7 +26,11 @@ function decodePdfString(literal) {
             continue;
         }
         if (next >= "0" && next <= "7") {
-            const octal = body.slice(index, index + 3).match(/^[0-7]{1,3}/)[0];
+            const octalMatch = body.slice(index, index + 3).match(/^[0-7]{1,3}/);
+            if (octalMatch === null) {
+                throw new TypeError("Invalid octal escape in PDF string");
+            }
+            const octal = octalMatch[0];
             index += octal.length - 1;
             out += String.fromCharCode(parseInt(octal, 8));
             continue;

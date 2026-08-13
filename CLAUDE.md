@@ -6,7 +6,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. Two surfaces share 
 
 1. **The Makefile is the only interface.** Always `make <target>`, never the underlying tool. `make help` lists the groups, `make help-<group>` expands one, `make help-json` emits the whole surface for tooling. All of it is generated from the Makefile, so it is never out of date.
 2. **If a target is missing, add it.** Put `## description` after the target name and it appears in `make help` automatically.
-3. **Do GitHub work through `make pr` / `make git` / `make issue` / `make ci`.** PR number and repo are auto-detected (override with `pr_num=N`). `make pr-review-comments` prints a `thread=PRRT_...` id for each thread; pass it to `make pr-address` to reply and resolve in one step. `make pr-watch` requests Copilot and waits for a genuinely new review; run it in the background. Pass make arguments only, never tool flags like `--jq`.
+3. **Do GitHub work through `make pr` / `make git` / `make issue` / `make ci`.** PR number and repo are auto-detected (override with `pr_num=N`). `make pr-review-comments` prints a `thread=PRRT_...` id for each thread; pass it to `make pr-address` to reply and resolve in one step. `make pr-watch request=1` captures a baseline, re-requests Copilot, and waits for a genuinely new review; bare `make pr-watch` only observes the review already there, so after pushing a fix you need `request=1` or it settles on the previous round. Run it in the background. Pass make arguments only, never tool flags like `--jq`.
 4. **Text goes in on stdin; a title goes in the environment.** A heredoc is the everyday form:
 
    ```bash
@@ -44,7 +44,7 @@ Enough to work without looking anything up. `make help` has the rest.
 | Open a PR                          | `make pr-create` (`--fill` from commits) or `TITLE='...' make pr-create <<'EOF'`        |
 | Review threads, with `thread=` ids | `make pr-review-comments`                                                               |
 | Reply and resolve in one           | `make pr-address thread=PRRT_... <<'EOF'`                                               |
-| Wait for review and checks         | `make pr-watch` (run it in the background)                                              |
+| Wait for a new review and checks   | `make pr-watch request=1` (background)                                                  |
 | PR overview                        | `make pr-summary`                                                                       |
 | Why CI is red                      | `make ci-failures`                                                                      |
 | Issues                             | `make issue-list` / `make issue-view issue=N` / `TITLE='...' make issue-create <<'EOF'` |

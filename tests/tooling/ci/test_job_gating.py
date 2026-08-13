@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import itertools
+import re
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path
@@ -8,9 +10,11 @@ import pytest
 from scripts.ci.job_gating import (
     BOTH_AREAS,
     NO_AREA,
+    PATH_RULES,
     PYTHON_ONLY,
     WEB_ONLY,
     GatedJob,
+    GitRunner,
     PathRule,
     _report_areas,
     active_areas,
@@ -24,7 +28,7 @@ from scripts.ci.job_gating import (
 )
 
 
-def fake_runner(stdout: str = "", returncode: int = 0) -> tuple[list[Sequence[str]], object]:
+def fake_runner(stdout: str = "", returncode: int = 0) -> tuple[list[Sequence[str]], GitRunner]:
     """Return a recording git runner and the list it records commands into."""
     commands: list[Sequence[str]] = []
 
@@ -38,6 +42,37 @@ def fake_runner(stdout: str = "", returncode: int = 0) -> tuple[list[Sequence[st
 def failing_runner(_command: Sequence[str]) -> subprocess.CompletedProcess[str]:
     """Stand in for a git binary that is missing from the runner image."""
     raise OSError("git not found")
+
+
+DEVELOPMENT_DOC = Path(__file__).resolve().parents[3] / "docs" / "development.md"
+DOC_TABLE_HEADING = "### Which jobs a change pays for"
+DOC_TABLE_AREAS = {
+    "Python": PYTHON_ONLY,
+    "Web": WEB_ONLY,
+    "Both": BOTH_AREAS,
+    "Neither": NO_AREA,
+}
+BACKTICKED = re.compile(r"`([^`]+)`")
+
+
+def _documented_path_rules() -> dict[str, frozenset[str]]:
+    """Return the classification table as `docs/development.md` states it.
+
+    Rows whose final cell is not an area name skip themselves, which covers the
+    header, the alignment row, and the fail-open `anything else` row that names
+    no pattern at all.
+    """
+    body = DEVELOPMENT_DOC.read_text(encoding="utf-8").partition(DOC_TABLE_HEADING)[2]
+    lines = body.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith("|"))
+    documented: dict[str, frozenset[str]] = {}
+    for line in itertools.takewhile(lambda row: row.startswith("|"), lines[start:]):
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        areas = DOC_TABLE_AREAS.get(cells[-1])
+        if areas is None:
+            continue
+        documented.update(dict.fromkeys(BACKTICKED.findall(cells[0]), areas))
+    return documented
 
 
 ENVIRONMENT_FOR_FULL_RUN = {
@@ -103,6 +138,17 @@ ENVIRONMENT_FOR_DOCS_RUN = {
 def test_classify_path_matches_the_documented_table(path: str, expected: frozenset[str]) -> None:
     """Classify every path class the repository actually contains."""
     assert classify_path(path) == expected
+
+
+def test_the_documented_table_lists_exactly_the_rules_that_exist() -> None:
+    """Keep the table in `docs/development.md` honest about what CI actually skips.
+
+    The table is the only place a contributor looks before trusting a skipped
+    job, and nothing else compares it to the rules. Checking the whole mapping
+    catches a rule added without a row, a row left behind by a deleted rule, and
+    a path quietly moved from one area to another.
+    """
+    assert _documented_path_rules() == {rule.pattern: rule.areas for rule in PATH_RULES}
 
 
 def test_classify_path_treats_shared_fixtures_as_both_areas() -> None:
@@ -188,27 +234,25 @@ def test_changed_paths_reports_both_ends_of_a_rename(tmp_path: Path) -> None:
     module = repository / "web" / "src" / "feature.js"
     module.write_text("export const value = 1;\n" * 4, encoding="utf-8")
 
-    def git(*arguments: str) -> None:
-        subprocess.run(["git", "-C", str(repository), *arguments], check=True, capture_output=True)
+    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", str(repository), *command], capture_output=True, text=True, check=False
+        )
+
+    def git(*arguments: str) -> str:
+        """Run one setup command through the same runner the assertion uses."""
+        result = runner(arguments)
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
 
     git("init", "-q")
     git("config", "user.email", "tests@example.com")
     git("config", "user.name", "tests")
     git("add", "-A")
     git("commit", "-qm", "base")
-    base = subprocess.run(
-        ["git", "-C", str(repository), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    base = git("rev-parse", "HEAD")
     git("mv", "web/src/feature.js", "docs/feature.md")
     git("commit", "-qm", "move the module into the documentation tree")
-
-    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["git", "-C", str(repository), *command], capture_output=True, text=True, check=False
-        )
 
     paths = changed_paths(base, "HEAD", runner=runner)
 

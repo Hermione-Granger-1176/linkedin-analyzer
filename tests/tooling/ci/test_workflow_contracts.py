@@ -26,7 +26,10 @@ LEGACY_APP_ID_INPUT = re.compile(r"^\s+app-id:\s+", re.MULTILINE)
 # this workflow happens to use would let a job named `security_scan` slip past
 # the discovery below and never be checked for a guard at all.
 CI_JOB_HEADER = re.compile(r"^  (?P<name>[A-Za-z0-9_-]+):$", re.MULTILINE)
-CI_RESULT_NEED = re.compile(r"^      - (?P<name>[a-z0-9-]+)$", re.MULTILINE)
+# Same character class as the header above, for the same reason: a `needs` entry
+# naming a job this pattern cannot spell would read as a missing dependency and
+# blame the wrong job for the mismatch.
+CI_RESULT_NEED = re.compile(r"^      - (?P<name>[A-Za-z0-9_-]+)$", re.MULTILINE)
 CI_RESULT_ENV_VARIABLE = re.compile(r"^          (?P<name>[A-Z0-9_]+): ", re.MULTILINE)
 
 # quick-gates runs on every change because it is where documentation, Markdown,
@@ -160,6 +163,22 @@ def test_every_expensive_ci_job_is_gated_on_the_detected_areas() -> None:
     for name, condition in GATED_CI_JOBS.items():
         assert f"\n    if: {condition}\n" in jobs[name], name
         assert "\n    needs: [changes, quick-gates]\n" in jobs[name], name
+
+
+def test_the_ungated_ci_jobs_carry_no_area_condition() -> None:
+    """Keep a guard off the three jobs that must run on every change.
+
+    `changes` computes the areas, so gating it on them is circular; `quick-gates`
+    is the only job a documentation-only change runs, so gating it would leave
+    such a change unchecked entirely; `ci-result` is the required check and has
+    to report on runs where earlier jobs failed. The four-space prefix matches a
+    job-level condition only, leaving the step-level `if: always()` blocks alone.
+    """
+    jobs = _ci_jobs()
+
+    for name in ("changes", "quick-gates"):
+        assert "\n    if: " not in jobs[name], name
+    assert "\n    if: always()\n" in jobs["ci-result"]
 
 
 def test_the_ci_result_job_waits_for_every_other_job() -> None:

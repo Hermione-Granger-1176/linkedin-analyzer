@@ -362,7 +362,7 @@ Quick gates is never gated, which is why Markdown, YAML, table alignment, and fo
 
 `CI result` does not simply treat a skipped job as a pass. It runs `make ci-check-results`, which compares every job against what the detected areas said it should have done, and fails on a job that skipped when its area did change. That is what keeps a mistyped `if:` condition from turning the required check silently green. The detection job itself must succeed outright, because a failed one leaves the area flags empty, which would otherwise read as "nothing changed, so every skip is fine".
 
-One limitation: merge queues are not supported. Neither `ci.yml`, `codeql.yml`, nor `dependency-review.yml` carries a `merge_group` trigger, so enabling a queue would leave every required check unreported on the merge commit. Adding that support means changing all three workflows plus base and head resolution for merge-group events.
+One limitation: merge queues are not supported. None of `ci.yml`, `codeql.yml`, or `dependency-review.yml` carries a `merge_group` trigger, so enabling a queue would leave every required check unreported on the merge commit. Adding that support means changing all three workflows plus base and head resolution for merge-group events.
 
 A weekly `dependency-audit.yml` workflow also runs two audit jobs every Monday:
 

@@ -228,9 +228,14 @@ def resolve_areas(
     return classify_paths(paths), paths
 
 
-def _flag(areas: frozenset[str], area: str) -> str:
-    """Render one area as the string a workflow condition compares against."""
-    return TRUE if area in areas else FALSE
+def _area_flags(areas: frozenset[str]) -> list[str]:
+    """Render the verdict as the ``area=value`` lines a workflow condition compares against.
+
+    The job log and the job outputs are produced from this one list rather than
+    formatted separately, so what the log says the detector decided is by
+    construction what the ``if:`` conditions downstream actually read.
+    """
+    return [f"{area}={TRUE if area in areas else FALSE}" for area in AREAS]
 
 
 def _report_areas(areas: frozenset[str], paths: list[str] | None) -> None:
@@ -241,8 +246,8 @@ def _report_areas(areas: frozenset[str], paths: list[str] | None) -> None:
         print(f"Changed paths ({len(paths)}):")
         for path in paths:
             print(f"  {path}")
-    for area in AREAS:
-        print(f"{area}={_flag(areas, area)}")
+    for line in _area_flags(areas):
+        print(line)
 
 
 def _write_github_output(areas: frozenset[str], env: Mapping[str, str]) -> None:
@@ -251,8 +256,7 @@ def _write_github_output(areas: frozenset[str], env: Mapping[str, str]) -> None:
     if not output_path:
         return
     with Path(output_path).open("a", encoding="utf-8") as handle:
-        for area in AREAS:
-            handle.write(f"{area}={_flag(areas, area)}\n")
+        handle.writelines(f"{line}\n" for line in _area_flags(areas))
 
 
 def active_areas(env: Mapping[str, str]) -> frozenset[str]:

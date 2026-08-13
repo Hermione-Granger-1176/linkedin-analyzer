@@ -29,6 +29,7 @@ SECRETS_PATH = f"{REPO_PATH}/actions/secrets"
 ACTIONS_PERMISSIONS_PATH = f"{REPO_PATH}/actions/permissions"
 SELECTED_ACTIONS_PATH = f"{ACTIONS_PERMISSIONS_PATH}/selected-actions"
 PYPI_ENVIRONMENT_PATH = f"{REPO_PATH}/environments/{repo_audit.PYPI_ENVIRONMENT_NAME}"
+DEPLOYMENT_POLICIES_PATH = f"{PYPI_ENVIRONMENT_PATH}/deployment-branch-policies"
 RULESETS_PATH = f"{REPO_PATH}/rulesets"
 RULESET_DETAIL_PATH = f"{RULESETS_PATH}/42"
 EXPECTED_CHECKS = sorted(repo_audit.EXPECTED_REQUIRED_CHECKS)
@@ -66,8 +67,16 @@ HEALTHY_SELECTED_ACTIONS = {
     "verified_allowed": repo_audit.EXPECTED_VERIFIED_ACTIONS,
     "patterns_allowed": sorted(repo_audit.EXPECTED_ACTION_PATTERNS),
 }
+SELECTED_REFS_POLICY = {"protected_branches": False, "custom_branch_policies": True}
+HEALTHY_DEPLOYMENT_POLICIES = {
+    "branch_policies": [
+        {"type": entry.split(" ", 1)[0], "name": entry.split(" ", 1)[1]}
+        for entry in sorted(repo_audit.EXPECTED_PYPI_DEPLOYMENT_POLICIES)
+    ]
+}
 HEALTHY_PYPI_ENVIRONMENT = {
     "can_admins_bypass": repo_audit.EXPECTED_PYPI_CAN_ADMINS_BYPASS,
+    "deployment_branch_policy": SELECTED_REFS_POLICY,
     "protection_rules": [
         {
             "type": "required_reviewers",
@@ -115,6 +124,11 @@ def _protection(**overrides: object) -> dict[str, object]:
     return {**HEALTHY_PROTECTION, **overrides}
 
 
+def _pypi_environment(**overrides: object) -> dict[str, object]:
+    """Return the healthy PyPI environment payload with fields replaced."""
+    return {**HEALTHY_PYPI_ENVIRONMENT, **overrides}
+
+
 def _runner(
     *,
     repository: object = None,
@@ -124,6 +138,7 @@ def _runner(
     actions_permissions: object = None,
     selected_actions: object = None,
     pypi_environment: object = None,
+    deployment_policies: object = None,
     rulesets: object = None,
     ruleset_detail: object = None,
 ) -> FakeGh:
@@ -139,6 +154,10 @@ def _runner(
             (
                 has(ACTIONS_PERMISSIONS_PATH),
                 _response(actions_permissions, HEALTHY_ACTIONS_PERMISSIONS),
+            ),
+            (
+                has(DEPLOYMENT_POLICIES_PATH),
+                _response(deployment_policies, HEALTHY_DEPLOYMENT_POLICIES),
             ),
             (has(PYPI_ENVIRONMENT_PATH), _response(pypi_environment, HEALTHY_PYPI_ENVIRONMENT)),
             (has(PROTECTION_PATH), _response(protection, HEALTHY_PROTECTION)),
@@ -184,6 +203,7 @@ def test_every_audited_setting_is_read_from_the_api() -> None:
         ACTIONS_PERMISSIONS_PATH,
         SELECTED_ACTIONS_PATH,
         PYPI_ENVIRONMENT_PATH,
+        DEPLOYMENT_POLICIES_PATH,
         RULESETS_PATH,
         RULESET_DETAIL_PATH,
     }
@@ -307,6 +327,7 @@ def test_a_non_default_branch_is_audited_under_its_own_name() -> None:
             (has(RULESETS_PATH), _response(None, HEALTHY_RULESETS)),
             (has(SELECTED_ACTIONS_PATH), _response(None, HEALTHY_SELECTED_ACTIONS)),
             (has(ACTIONS_PERMISSIONS_PATH), _response(None, HEALTHY_ACTIONS_PERMISSIONS)),
+            (has(DEPLOYMENT_POLICIES_PATH), _response(None, HEALTHY_DEPLOYMENT_POLICIES)),
             (has(PYPI_ENVIRONMENT_PATH), _response(None, HEALTHY_PYPI_ENVIRONMENT)),
             (has(f"{REPO_PATH}/branches/release/protection"), _response(None, HEALTHY_PROTECTION)),
             (has(VARIABLES_PATH), _response(None, HEALTHY_VARIABLES)),
@@ -417,6 +438,7 @@ def test_pypi_environment_drift_is_reported() -> None:
     findings = _audit(
         pypi_environment={
             "can_admins_bypass": False,
+            "deployment_branch_policy": SELECTED_REFS_POLICY,
             "protection_rules": [
                 {
                     "type": "required_reviewers",
@@ -438,6 +460,7 @@ def test_pypi_without_required_reviewer_rule_is_reported() -> None:
     findings = _audit(
         pypi_environment={
             "can_admins_bypass": True,
+            "deployment_branch_policy": SELECTED_REFS_POLICY,
             "protection_rules": [{"type": "wait_timer"}],
         }
     )
@@ -445,6 +468,63 @@ def test_pypi_without_required_reviewer_rule_is_reported() -> None:
         "missing pypi required reviewers: Hermione-Granger-1176",
         "pypi has no required reviewer rule",
     ]
+
+
+def test_pypi_environment_open_to_every_ref_is_reported() -> None:
+    """A null policy lets a release from any ref request publishing credentials."""
+    findings = _audit(pypi_environment=_pypi_environment(deployment_branch_policy=None))
+    assert findings == ["pypi allows deployments from any branch or tag"]
+
+
+def test_pypi_environment_limited_to_protected_branches_is_reported() -> None:
+    """Protected branches are not the release refs, so publishing stays unconstrained."""
+    findings = _audit(
+        pypi_environment=_pypi_environment(
+            deployment_branch_policy={"protected_branches": True, "custom_branch_policies": False}
+        )
+    )
+    assert findings == ["pypi does not restrict deployments to selected refs"]
+
+
+def test_pypi_deployment_ref_drift_is_reported() -> None:
+    """The tag pattern must be present, and nothing may be added alongside it."""
+    findings = _audit(deployment_policies={"branch_policies": [{"name": "main", "type": "branch"}]})
+    assert findings == [
+        "missing pypi deployment refs: tag v*",
+        "unexpected pypi deployment refs: branch main",
+    ]
+
+
+def test_pypi_deployment_policies_are_only_fetched_when_they_exist() -> None:
+    """An unrestricted environment has no policy list, so the audit must not ask for one."""
+    runner = _runner(pypi_environment=_pypi_environment(deployment_branch_policy=None))
+    repo_audit.audit_repo_settings(repo=REPO, run_fn=runner)
+    assert DEPLOYMENT_POLICIES_PATH not in {call[-1] for call in runner.calls}
+
+
+def test_pypi_deployment_policies_must_be_fetched_before_they_are_audited() -> None:
+    """Auditing selected refs without the policy list would silently pass."""
+    with pytest.raises(GhError, match="deployment branch policies were not fetched"):
+        repo_audit.audit_pypi_environment(HEALTHY_PYPI_ENVIRONMENT)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (None, "deployment branch policies must be a JSON object"),
+        ({}, "branch_policies must be a JSON array"),
+        ({"branch_policies": ["bad"]}, "contains a non-object entry"),
+        ({"branch_policies": [{"type": "tag"}]}, "contains an entry without a name"),
+        ({"branch_policies": [{"name": "v*"}]}, "contains an entry without a type"),
+    ],
+    ids=["not-object", "not-array", "non-object-entry", "no-name", "no-type"],
+)
+def test_pypi_deployment_policies_malformed_entries_fail_closed(
+    payload: object, message: str
+) -> None:
+    """Malformed policy data must not read as a correctly restricted environment."""
+    with pytest.raises(GhError, match=message):
+        repo_audit.extract_deployment_policies(payload)
 
 
 @pytest.mark.parametrize(
@@ -659,6 +739,11 @@ def test_release_tag_rules_malformed_data_fail_closed(payload: object, message: 
             "can_admins_bypass must be a boolean",
         ),
         ({"ruleset_detail": {"id": 42}}, "contains an entry without a name"),
+        (
+            {"pypi_environment": _pypi_environment(deployment_branch_policy="all")},
+            "deployment_branch_policy must be a JSON object or null",
+        ),
+        ({"deployment_policies": []}, "pypi deployment branch policies must be a JSON object"),
     ],
     ids=[
         "actions-permissions",
@@ -670,6 +755,8 @@ def test_release_tag_rules_malformed_data_fail_closed(payload: object, message: 
         "ruleset-detail",
         "pypi-bypass-policy",
         "ruleset-name",
+        "pypi-deployment-policy-shape",
+        "pypi-deployment-policies",
     ],
 )
 def test_new_repository_policy_responses_fail_closed(kwargs: object, message: str) -> None:

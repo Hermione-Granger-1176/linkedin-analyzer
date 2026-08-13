@@ -105,6 +105,7 @@ PYPI_ENVIRONMENT_NAME = "pypi"
 EXPECTED_PYPI_REVIEWERS = frozenset({"Hermione-Granger-1176"})
 EXPECTED_PYPI_CAN_ADMINS_BYPASS = True
 EXPECTED_PYPI_PREVENT_SELF_REVIEW = False
+EXPECTED_PYPI_DEPLOYMENT_POLICIES = frozenset({"tag v*"})
 
 RELEASE_TAG_RULESET_NAME = "Protect version tags"
 EXPECTED_RELEASE_TAG_RULESET_TARGET = "tag"
@@ -320,6 +321,32 @@ def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | Non
     return reviewers, prevent_self_review
 
 
+def extract_deployment_policies(payload: object) -> set[str]:
+    """Return ``"<type> <name>"`` entries from an environment's branch policy list."""
+    if not isinstance(payload, dict):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} deployment branch policies must be a JSON object.")
+    raw_policies = payload.get("branch_policies")
+    if not isinstance(raw_policies, list):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} branch_policies must be a JSON array.")
+
+    policies: set[str] = set()
+    for raw_policy in raw_policies:
+        if not isinstance(raw_policy, dict):
+            raise GhError(f"{PYPI_ENVIRONMENT_NAME} branch_policies contains a non-object entry.")
+        name = raw_policy.get("name")
+        if not isinstance(name, str) or not name:
+            raise GhError(
+                f"{PYPI_ENVIRONMENT_NAME} branch_policies contains an entry without a name."
+            )
+        policy_type = raw_policy.get("type")
+        if not isinstance(policy_type, str) or not policy_type:
+            raise GhError(
+                f"{PYPI_ENVIRONMENT_NAME} branch_policies contains an entry without a type."
+            )
+        policies.add(f"{policy_type} {name}")
+    return policies
+
+
 def extract_ruleset_ref_patterns(payload: object) -> tuple[set[str], set[str]]:
     """Return included and excluded ref patterns from a ruleset response."""
     if not isinstance(payload, dict):
@@ -458,10 +485,47 @@ def audit_actions(
     return findings
 
 
-def audit_pypi_environment(payload: dict[str, object]) -> list[str]:
-    """Audit the PyPI environment's reviewer and administrator bypass policy."""
+def _uses_custom_deployment_policies(payload: dict[str, object]) -> bool:
+    """Report whether the environment restricts deployments to selected refs."""
+    policy = payload.get("deployment_branch_policy")
+    return isinstance(policy, dict) and policy.get("custom_branch_policies") is True
+
+
+def _audit_pypi_deployment_refs(
+    payload: dict[str, object],
+    deployment_policies: dict[str, object] | None,
+) -> list[str]:
+    """Audit which refs may deploy to the PyPI environment.
+
+    A null policy means every branch and tag can reach the environment, which
+    lets a release cut from an unexpected ref request publishing credentials.
+    """
+    policy = payload.get("deployment_branch_policy")
+    if policy is None:
+        return [f"{PYPI_ENVIRONMENT_NAME} allows deployments from any branch or tag"]
+    if not isinstance(policy, dict):
+        raise GhError(
+            f"{PYPI_ENVIRONMENT_NAME} deployment_branch_policy must be a JSON object or null."
+        )
+    if policy.get("custom_branch_policies") is not True:
+        return [f"{PYPI_ENVIRONMENT_NAME} does not restrict deployments to selected refs"]
+    if deployment_policies is None:
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} deployment branch policies were not fetched.")
+
+    actual = extract_deployment_policies(deployment_policies)
+    findings = _missing(actual, EXPECTED_PYPI_DEPLOYMENT_POLICIES, "pypi deployment refs")
+    findings.extend(_unexpected(actual, EXPECTED_PYPI_DEPLOYMENT_POLICIES, "pypi deployment refs"))
+    return findings
+
+
+def audit_pypi_environment(
+    payload: dict[str, object],
+    deployment_policies: dict[str, object] | None = None,
+) -> list[str]:
+    """Audit the PyPI environment's reviewer, bypass, and deployment ref policy."""
     reviewers, prevent_self_review = extract_environment_reviewers(payload)
     findings = _missing(reviewers, EXPECTED_PYPI_REVIEWERS, "pypi required reviewers")
+    findings.extend(_audit_pypi_deployment_refs(payload, deployment_policies))
 
     can_admins_bypass = payload.get("can_admins_bypass")
     if not isinstance(can_admins_bypass, bool):
@@ -608,6 +672,13 @@ def audit_repo_settings(
         f"{PYPI_ENVIRONMENT_NAME} environment",
         run_fn=run_fn,
     )
+    deployment_policies = None
+    if _uses_custom_deployment_policies(pypi_environment):
+        deployment_policies = _fetch_object(
+            f"repos/{repo}/environments/{PYPI_ENVIRONMENT_NAME}/deployment-branch-policies",
+            f"{PYPI_ENVIRONMENT_NAME} deployment branch policies",
+            run_fn=run_fn,
+        )
     rulesets = _fetch_ruleset_details(repo, run_fn=run_fn)
     protection = _fetch_protection(repo, default_branch, run_fn=run_fn)
     variables = _fetch_object(f"repos/{repo}/actions/variables", "Actions variables", run_fn=run_fn)
@@ -615,7 +686,7 @@ def audit_repo_settings(
 
     findings = audit_repository(repository, default_branch=default_branch)
     findings.extend(audit_actions(actions_permissions, selected_actions))
-    findings.extend(audit_pypi_environment(pypi_environment))
+    findings.extend(audit_pypi_environment(pypi_environment, deployment_policies))
     findings.extend(audit_release_tag_rulesets(rulesets))
     findings.extend(audit_protection(protection, default_branch=default_branch))
     findings.extend(

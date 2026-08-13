@@ -22,7 +22,10 @@ CLIENT_ID_INPUT = re.compile(
 )
 LEGACY_APP_ID_INPUT = re.compile(r"^\s+app-id:\s+", re.MULTILINE)
 
-CI_JOB_HEADER = re.compile(r"^  (?P<name>[a-z0-9-]+):$", re.MULTILINE)
+# GitHub job ids allow underscores and uppercase too. Matching only the spelling
+# this workflow happens to use would let a job named `security_scan` slip past
+# the discovery below and never be checked for a guard at all.
+CI_JOB_HEADER = re.compile(r"^  (?P<name>[A-Za-z0-9_-]+):$", re.MULTILINE)
 CI_RESULT_NEED = re.compile(r"^      - (?P<name>[a-z0-9-]+)$", re.MULTILINE)
 CI_RESULT_ENV_VARIABLE = re.compile(r"^          (?P<name>[A-Z0-9_]+): ", re.MULTILINE)
 
@@ -30,6 +33,17 @@ CI_RESULT_ENV_VARIABLE = re.compile(r"^          (?P<name>[A-Z0-9_]+): ", re.MUL
 # YAML, and formatting checks live; changes computes the areas; ci-result reads
 # them back. Everything else has to earn its run.
 UNGATED_CI_JOBS = {"changes", "quick-gates", "ci-result"}
+
+# Spelled out rather than derived from the implementation, so that removing a job
+# from both the truth table and the workflow at once still fails.
+EXPECTED_RESULT_VARIABLES = {
+    "CHANGES_RESULT",
+    "QUICK_GATES_RESULT",
+    "HEAVY_CHECKS_RESULT",
+    "PYTHON_COMPATIBILITY_RESULT",
+    "NODE_COMPATIBILITY_RESULT",
+    "WEB_E2E_RESULT",
+}
 
 GATED_CI_JOBS = {
     "heavy-checks": "needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'",
@@ -160,11 +174,13 @@ def test_the_ci_result_job_passes_every_result_the_truth_table_reads() -> None:
     """Keep the workflow's environment block and the Python truth table in step.
 
     `check-results` compares each job against what the areas required. A result
-    the workflow forgets to pass arrives as an empty string, which would read as
-    a mismatch for every job at once, and a variable the table stopped reading
-    would quietly stop being checked at all.
+    the workflow forgets to pass arrives as an empty string, and a variable the
+    table stopped reading would quietly stop being checked at all. Both sides are
+    compared against the literal list rather than against each other, because
+    dropping a job from the table and from the workflow in one edit would satisfy
+    any assertion that only checked the two for agreement.
     """
     environment = set(CI_RESULT_ENV_VARIABLE.findall(_ci_jobs()["ci-result"]))
-    expected = {job.variable for job in GATED_JOBS} | {"PYTHON_CHANGED", "WEB_CHANGED"}
 
-    assert environment == expected
+    assert environment == EXPECTED_RESULT_VARIABLES | {"PYTHON_CHANGED", "WEB_CHANGED"}
+    assert {job.variable for job in GATED_JOBS} == EXPECTED_RESULT_VARIABLES

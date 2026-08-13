@@ -351,11 +351,12 @@ A Markdown edit cannot break a Playwright run, so it does not pay for one. `scri
 | `docs/`, any `*.md`, `data/`, `LICENSE`, `.gitignore`, `.env.example`                                                                                                                         | Neither |
 | anything else                                                                                                                                                                                 | Both    |
 
-Three properties are worth knowing before you trust it:
+Four properties are worth knowing before you trust it:
 
 - **It fails open.** An unrecognized path, a diff that cannot be computed, and an absent base commit all run the full matrix. A new top-level directory is covered the day it lands, and making a path cheap takes a deliberate edit to the table.
 - **Rules union rather than fall through.** `.github/SECURITY.md` matches both the `.github/` rule and the `*.md` rule and lands in Both, so the outcome never depends on rule order.
 - **`tests/fixtures/` is Both, not Python.** It holds the cross-runtime parity corpus that `web/tests/integration/parity.test.js` reads directly, so a fixture-only change alters JavaScript test inputs too.
+- **A rename counts as both of its paths.** The diff runs with `--no-renames`, because rename detection reports only the destination: moving `web/src/feature.js` to `docs/feature.md` would otherwise read as a documentation change and skip the web jobs the deleted module just broke.
 
 Quick gates is never gated, which is why Markdown, YAML, table alignment, and formatting checks all live there: on a documentation-only change it is the only job that runs.
 

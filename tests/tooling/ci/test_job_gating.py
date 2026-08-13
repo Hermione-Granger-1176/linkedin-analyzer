@@ -159,11 +159,62 @@ def test_path_rule_matches_only_its_own_pattern_form() -> None:
 
 
 def test_changed_paths_returns_the_diff_and_drops_blank_lines() -> None:
-    """Read the three-dot diff, which compares a branch against its merge base."""
+    """Compare the two commits directly, which is what a push needs."""
     commands, runner = fake_runner("README.md\n\nsrc/cli.py\n")
 
     assert changed_paths("base-sha", "head-sha", runner=runner) == ["README.md", "src/cli.py"]
-    assert commands == [["diff", "--name-only", "base-sha...head-sha"]]
+    assert commands == [["diff", "--name-only", "--no-renames", "base-sha..head-sha"]]
+
+
+def test_changed_paths_compares_against_the_merge_base_on_request() -> None:
+    """Use the three-dot range for a pull request, whose base moves on without it."""
+    commands, runner = fake_runner("src/cli.py\n")
+
+    changed_paths("base-sha", "head-sha", merge_base=True, runner=runner)
+
+    assert commands == [["diff", "--name-only", "--no-renames", "base-sha...head-sha"]]
+
+
+def test_changed_paths_reports_both_ends_of_a_rename(tmp_path: Path) -> None:
+    """Keep the source of a rename in the diff, against real git rather than a fake.
+
+    With rename detection on, `--name-only` reports only the destination. Moving
+    `web/src/feature.js` to `docs/feature.md` would then list one Markdown path,
+    report `web=false`, and skip the web jobs the deleted module just broke.
+    """
+    repository = tmp_path / "repository"
+    (repository / "web" / "src").mkdir(parents=True)
+    (repository / "docs").mkdir()
+    module = repository / "web" / "src" / "feature.js"
+    module.write_text("export const value = 1;\n" * 4, encoding="utf-8")
+
+    def git(*arguments: str) -> None:
+        subprocess.run(["git", "-C", str(repository), *arguments], check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "tests@example.com")
+    git("config", "user.name", "tests")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    base = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    git("mv", "web/src/feature.js", "docs/feature.md")
+    git("commit", "-qm", "move the module into the documentation tree")
+
+    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", str(repository), *command], capture_output=True, text=True, check=False
+        )
+
+    paths = changed_paths(base, "HEAD", runner=runner)
+
+    assert paths is not None
+    assert sorted(paths) == ["docs/feature.md", "web/src/feature.js"]
+    assert classify_paths(paths) == WEB_ONLY
 
 
 @pytest.mark.parametrize(
@@ -171,7 +222,7 @@ def test_changed_paths_returns_the_diff_and_drops_blank_lines() -> None:
     [("", "head-sha"), ("base-sha", ""), ("0" * 40, "head-sha")],
 )
 def test_changed_paths_fails_open_without_usable_commits(base: str, head: str) -> None:
-    """Fail open when GitHub supplies no base, as it does on a branch's first push."""
+    """Fail open when GitHub supplies no base, as it does when a ref is first created."""
     commands, runner = fake_runner("README.md\n")
 
     assert changed_paths(base, head, runner=runner) is None
@@ -243,6 +294,46 @@ def test_result_problems_accepts_a_full_run() -> None:
 def test_result_problems_accepts_a_documentation_run() -> None:
     """Pass when every gated job skipped for a change that touched no code."""
     assert result_problems(ENVIRONMENT_FOR_DOCS_RUN) == []
+
+
+@pytest.mark.parametrize(
+    ("variable", "label"),
+    [
+        ("CHANGES_RESULT", "Detect changes"),
+        ("QUICK_GATES_RESULT", "Quick gates"),
+        ("HEAVY_CHECKS_RESULT", "Heavy checks"),
+        ("PYTHON_COMPATIBILITY_RESULT", "Python compatibility"),
+        ("NODE_COMPATIBILITY_RESULT", "Node.js compatibility"),
+        ("WEB_E2E_RESULT", "Web E2E"),
+    ],
+)
+def test_result_problems_rejects_a_failure_in_any_job(variable: str, label: str) -> None:
+    """Fail on any job that failed while both areas changed, with no row left unwatched.
+
+    Enumerating every row keeps a job from dropping out of the table and its
+    workflow environment together, which no single-job test would notice.
+    """
+    environment = {**ENVIRONMENT_FOR_FULL_RUN, variable: "failure"}
+
+    assert result_problems(environment) == [f"{label} was 'failure', expected 'success'."]
+
+
+@pytest.mark.parametrize(
+    ("variable", "label"),
+    [
+        ("HEAVY_CHECKS_RESULT", "Heavy checks"),
+        ("PYTHON_COMPATIBILITY_RESULT", "Python compatibility"),
+        ("NODE_COMPATIBILITY_RESULT", "Node.js compatibility"),
+        ("WEB_E2E_RESULT", "Web E2E"),
+    ],
+)
+def test_result_problems_rejects_any_job_that_ran_outside_its_areas(
+    variable: str, label: str
+) -> None:
+    """Fail any gated job that ran on a change touching neither area."""
+    environment = {**ENVIRONMENT_FOR_DOCS_RUN, variable: "success"}
+
+    assert result_problems(environment) == [f"{label} was 'success', expected 'skipped'."]
 
 
 def test_result_problems_rejects_a_skip_the_areas_did_not_ask_for() -> None:

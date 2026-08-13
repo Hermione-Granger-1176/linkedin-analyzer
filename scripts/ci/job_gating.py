@@ -184,17 +184,33 @@ def classify_paths(paths: Iterable[str]) -> frozenset[str]:
     return areas
 
 
-def changed_paths(base: str, head: str, *, runner: GitRunner = run_git) -> list[str] | None:
+def changed_paths(
+    base: str, head: str, *, merge_base: bool = False, runner: GitRunner = run_git
+) -> list[str] | None:
     """Return the paths differing between two commits, or ``None`` when unknown.
 
-    ``None`` is the fail-open signal. It covers a base GitHub could not supply (a
-    branch's first push sends an all-zero SHA), a commit missing from a shallow
-    or force-pushed history, and a ``git`` that could not run at all.
+    ``--no-renames`` is load-bearing rather than cosmetic. With rename detection
+    on, ``--name-only`` reports a rename as its destination alone, so moving
+    ``web/src/feature.js`` to ``docs/feature.md`` would list only the Markdown
+    path, report ``web=false``, and skip the very jobs the now-deleted module
+    breaks. Disabling detection reports a rename as a delete and an add, which
+    puts both areas back in the answer.
+
+    ``merge_base`` picks the comparison to match the event. A pull request wants
+    the three-dot range, everything on the branch since it diverged, because its
+    base moves on without it. A push wants the two-dot range, what those commits
+    actually did, which also stays correct if a non-fast-forward push ever makes
+    the previous tip something other than an ancestor.
+
+    ``None`` is the fail-open signal. It covers a base GitHub could not supply
+    (creating a branch sends an all-zero SHA), a commit missing from a shallow or
+    rewritten history, and a ``git`` that could not run at all.
     """
     if not base or not head or set(base) == {"0"}:
         return None
+    separator = "..." if merge_base else ".."
     try:
-        result = runner(["diff", "--name-only", f"{base}...{head}"])
+        result = runner(["diff", "--name-only", "--no-renames", f"{base}{separator}{head}"])
     except OSError:
         return None
     if result.returncode != 0:
@@ -203,10 +219,10 @@ def changed_paths(base: str, head: str, *, runner: GitRunner = run_git) -> list[
 
 
 def resolve_areas(
-    base: str, head: str, *, runner: GitRunner = run_git
+    base: str, head: str, *, merge_base: bool = False, runner: GitRunner = run_git
 ) -> tuple[frozenset[str], list[str] | None]:
     """Return the areas a diff touches, with the paths behind the verdict for the log."""
-    paths = changed_paths(base, head, runner=runner)
+    paths = changed_paths(base, head, merge_base=merge_base, runner=runner)
     if paths is None:
         return BOTH_AREAS, None
     return classify_paths(paths), paths
@@ -258,7 +274,7 @@ def result_problems(env: Mapping[str, str]) -> list[str]:
 
 def _handle_changed_areas(args: argparse.Namespace, env: Mapping[str, str]) -> int:
     """Classify a diff into CI areas and publish the result."""
-    areas, paths = resolve_areas(args.base, args.head)
+    areas, paths = resolve_areas(args.base, args.head, merge_base=args.merge_base)
     _report_areas(areas, paths)
     _write_github_output(areas, env)
     return 0
@@ -284,6 +300,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     areas_parser.add_argument("--base", default="")
     areas_parser.add_argument("--head", default="")
+    areas_parser.add_argument(
+        "--merge-base",
+        action="store_true",
+        help="Compare against the merge base, as a pull request needs",
+    )
 
     subparsers.add_parser("check-results", help="Check CI job results against changed areas")
 

@@ -800,9 +800,9 @@ ci-coverage-summary: ## Print the coverage totals as markdown for a job summary 
 
 # Both run before any toolchain is installed, in jobs that set up nothing, so
 # they use the system interpreter and the standard library alone.
-ci-changed-areas: ## Report which CI areas a change touches (make ci-changed-areas base=SHA head=SHA)
+ci-changed-areas: ## Report which CI areas a change touches (make ci-changed-areas base=SHA head=SHA [merge_base=1])
 	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.ci.job_gating changed-areas \
-		--base "$(base)" --head "$(head)"
+		--base "$(base)" --head "$(head)" $(if $(merge_base),--merge-base)
 
 # Reads each job result from the environment; see the CI result job in ci.yml.
 ci-check-results: ## Check CI job results against the areas a change touched (make ci-check-results)

@@ -48,7 +48,11 @@ jobs:
           HEAD_SHA: >-
             ${{ github.event_name == 'pull_request'
             && github.event.pull_request.head.sha || github.sha }}
-        run: make ci-changed-areas base="$BASE_SHA" head="$HEAD_SHA"
+          # A pull request compares against its merge base, because its base
+          # branch moves on without it. A push compares the two commits, which
+          # is what those commits actually did.
+          MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: make ci-changed-areas base="$BASE_SHA" head="$HEAD_SHA" merge_base="$MERGE_BASE"
 
   quick-gates:
     name: Quick gates

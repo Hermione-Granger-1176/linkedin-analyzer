@@ -1,9 +1,11 @@
-"""Keep GitHub App token workflow inputs aligned with the repository contract."""
+"""Keep workflow inputs and the CI job graph aligned with the repository contract."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
+
+from scripts.ci.job_gating import GATED_JOBS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
@@ -19,6 +21,22 @@ CLIENT_ID_INPUT = re.compile(
     re.MULTILINE,
 )
 LEGACY_APP_ID_INPUT = re.compile(r"^\s+app-id:\s+", re.MULTILINE)
+
+CI_JOB_HEADER = re.compile(r"^  (?P<name>[a-z0-9-]+):$", re.MULTILINE)
+CI_RESULT_NEED = re.compile(r"^      - (?P<name>[a-z0-9-]+)$", re.MULTILINE)
+CI_RESULT_ENV_VARIABLE = re.compile(r"^          (?P<name>[A-Z0-9_]+): ", re.MULTILINE)
+
+# quick-gates runs on every change because it is where documentation, Markdown,
+# YAML, and formatting checks live; changes computes the areas; ci-result reads
+# them back. Everything else has to earn its run.
+UNGATED_CI_JOBS = {"changes", "quick-gates", "ci-result"}
+
+GATED_CI_JOBS = {
+    "heavy-checks": "needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'",
+    "python-compatibility": "needs.changes.outputs.python == 'true'",
+    "node-compatibility": "needs.changes.outputs.web == 'true'",
+    "web-e2e": "needs.changes.outputs.web == 'true'",
+}
 
 
 def _workflow_and_action_files() -> list[Path]:
@@ -96,3 +114,57 @@ def test_github_app_token_actions_use_client_id_without_renaming_repository_vari
 
     for variable in ("APP_ID", "ESCALATION_APP_ID", "AUDIT_APP_ID"):
         assert f"vars.{variable}" in source
+
+
+def _ci_jobs() -> dict[str, str]:
+    """Return each job definition in the CI workflow, keyed by job id.
+
+    Job ids are the only keys indented two spaces once the header is stripped,
+    so splitting on them needs no YAML parser. This module already prefers text
+    matching over a parse, and PyYAML reaches the environment only as a
+    transitive dependency of yamllint.
+    """
+    source = (WORKFLOWS_DIR / "ci.yml").read_text(encoding="utf-8")
+    body = source.split("\njobs:\n", 1)[1]
+    headers = list(CI_JOB_HEADER.finditer(body))
+    return {
+        header.group("name"): body[
+            header.start() : (headers[index + 1].start() if index + 1 < len(headers) else len(body))
+        ]
+        for index, header in enumerate(headers)
+    }
+
+
+def test_every_expensive_ci_job_is_gated_on_the_detected_areas() -> None:
+    """Gate each expensive job on the areas a change touched, and on nothing else.
+
+    A job added later without a guard shows up here rather than as a bill.
+    """
+    jobs = _ci_jobs()
+    assert set(jobs) == UNGATED_CI_JOBS | set(GATED_CI_JOBS)
+
+    for name, condition in GATED_CI_JOBS.items():
+        assert f"\n    if: {condition}\n" in jobs[name], name
+        assert "\n    needs: [changes, quick-gates]\n" in jobs[name], name
+
+
+def test_the_ci_result_job_waits_for_every_other_job() -> None:
+    """Aggregate every job, so a new one cannot merge unwatched."""
+    jobs = _ci_jobs()
+    needed = set(CI_RESULT_NEED.findall(jobs["ci-result"]))
+
+    assert needed == set(jobs) - {"ci-result"}
+
+
+def test_the_ci_result_job_passes_every_result_the_truth_table_reads() -> None:
+    """Keep the workflow's environment block and the Python truth table in step.
+
+    `check-results` compares each job against what the areas required. A result
+    the workflow forgets to pass arrives as an empty string, which would read as
+    a mismatch for every job at once, and a variable the table stopped reading
+    would quietly stop being checked at all.
+    """
+    environment = set(CI_RESULT_ENV_VARIABLE.findall(_ci_jobs()["ci-result"]))
+    expected = {job.variable for job in GATED_JOBS} | {"PYTHON_CHANGED", "WEB_CHANGED"}
+
+    assert environment == expected

@@ -328,15 +328,40 @@ Guard tests in `tests/tooling/lint/test_makefile.py` fail if a free-text name re
 
 GitHub Actions runs on pull requests and pushes to `main`:
 
+- **Detect changes**: classifies the diff into the `python` and `web` areas through `make ci-changed-areas`, in parallel with quick gates
 - **Quick gates**: formatting, lint, and type checks run first through `make ci-quick-gates`
-- **Heavy checks**: tests, dead-code checks, and the production build run through `make ci-heavy-checks` after quick gates pass
-- **Compatibility**: Python 3.12/3.13/3.14 and Node.js 22/24 matrix jobs start after quick gates (the primary gates use Python 3.14)
-- **Browser checks**: Playwright E2E starts after quick gates, runs with four workers, and uploads failure artifacts
+- **Heavy checks**: tests, dead-code checks, and the production build run through `make ci-heavy-checks` after quick gates pass, when either area changed
+- **Compatibility**: Python 3.12/3.13/3.14 and Node.js 22/24 matrix jobs start after quick gates, each when its own area changed (the primary gates use Python 3.14)
+- **Browser checks**: Playwright E2E starts after quick gates when the web area changed, runs with four workers, and uploads failure artifacts
 - **Result**: one stable `CI result` job aggregates every required job for branch protection
 
 Run the primary non-browser workflow locally with `make ci-platform-checks`. It runs the quick and heavy gates in the same order as GitHub Actions.
 
 See `.github/workflows/ci.yml`.
+
+### Which jobs a change pays for
+
+A Markdown edit cannot break a Playwright run, so it does not pay for one. `scripts/ci/job_gating.py` classifies every path in the diff and the workflow gates its jobs on the result:
+
+| Paths                                                                                                                                                                                         | Area    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `src/`, `tests/package/`, `tests/integration/`, `tests/support/`, `tests/__init__.py`, `pyproject.toml`, `uv.lock`                                                                            | Python  |
+| `web/`, `api/`, `config/`, `package.json`, `package-lock.json`, `vercel.json`                                                                                                                 | Web     |
+| `Makefile`, `.github/`, `scripts/`, `tests/tooling/`, `tests/fixtures/`, `constraints/`, `Dockerfile`, `.dockerignore`, `.editorconfig`, `.npmrc`, `.pre-commit-config.yaml`, `.yamllint.yml` | Both    |
+| `docs/`, any `*.md`, `data/`, `LICENSE`, `.gitignore`, `.env.example`                                                                                                                         | Neither |
+| anything else                                                                                                                                                                                 | Both    |
+
+Three properties are worth knowing before you trust it:
+
+- **It fails open.** An unrecognized path, a diff that cannot be computed, and an absent base commit all run the full matrix. A new top-level directory is covered the day it lands, and making a path cheap takes a deliberate edit to the table.
+- **Rules union rather than fall through.** `.github/SECURITY.md` matches both the `.github/` rule and the `*.md` rule and lands in Both, so the outcome never depends on rule order.
+- **`tests/fixtures/` is Both, not Python.** It holds the cross-runtime parity corpus that `web/tests/integration/parity.test.js` reads directly, so a fixture-only change alters JavaScript test inputs too.
+
+Quick gates is never gated, which is why Markdown, YAML, table alignment, and formatting checks all live there: on a documentation-only change it is the only job that runs.
+
+`CI result` does not simply treat a skipped job as a pass. It runs `make ci-check-results`, which compares every job against what the detected areas said it should have done, and fails on a job that skipped when its area did change. That is what keeps a mistyped `if:` condition from turning the required check silently green. The detection job itself must succeed outright, because a failed one leaves the area flags empty, which would otherwise read as "nothing changed, so every skip is fine".
+
+One limitation: merge queues are not supported. Neither `ci.yml`, `codeql.yml`, nor `dependency-review.yml` carries a `merge_group` trigger, so enabling a queue would leave every required check unreported on the merge commit. Adding that support means changing all three workflows plus base and head resolution for merge-group events.
 
 A weekly `dependency-audit.yml` workflow also runs two audit jobs every Monday:
 

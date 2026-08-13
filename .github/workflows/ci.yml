@@ -18,6 +18,42 @@ env:
   PRIMARY_PYTHON_VERSION: "3.14"
 
 jobs:
+  # Runs alongside quick-gates rather than ahead of it, so path detection costs
+  # no wall-clock time. Every gated job below waits on both.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.detect.outputs.python }}
+      web: ${{ steps.detect.outputs.web }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Both ends of the diff have to be present, so this is the one job
+          # that cannot use the shallow checkout the rest of the workflow does.
+          fetch-depth: 0
+
+      # The classification table and its fail-open rules live in
+      # scripts/ci/job_gating.py, where they are unit tested. This job installs
+      # no toolchain: the script is standard library only and runs on the
+      # runner's system Python.
+      - name: Detect changed areas
+        id: detect
+        env:
+          BASE_SHA: >-
+            ${{ github.event_name == 'pull_request'
+            && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: >-
+            ${{ github.event_name == 'pull_request'
+            && github.event.pull_request.head.sha || github.sha }}
+          # A pull request compares against its merge base, because its base
+          # branch moves on without it. A push compares the two commits, which
+          # is what those commits actually did.
+          MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: make ci-changed-areas base="$BASE_SHA" head="$HEAD_SHA" merge_base="$MERGE_BASE"
+
   quick-gates:
     name: Quick gates
     runs-on: ubuntu-latest
@@ -50,7 +86,11 @@ jobs:
 
   heavy-checks:
     name: Heavy checks
-    needs: quick-gates
+    needs: [changes, quick-gates]
+    # Stays all-or-nothing rather than splitting by area: the 100% coverage gate
+    # is computed across the whole Python surface in one run, and splitting it to
+    # save a couple of minutes would weaken it.
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -93,7 +133,8 @@ jobs:
 
   python-compatibility:
     name: Python ${{ matrix.python-version }}
-    needs: quick-gates
+    needs: [changes, quick-gates]
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -118,7 +159,8 @@ jobs:
 
   node-compatibility:
     name: Node.js ${{ matrix.node-version }}
-    needs: quick-gates
+    needs: [changes, quick-gates]
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -143,7 +185,8 @@ jobs:
 
   web-e2e:
     name: Web E2E
-    needs: quick-gates
+    needs: [changes, quick-gates]
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -176,6 +219,7 @@ jobs:
     name: CI result
     if: always()
     needs:
+      - changes
       - quick-gates
       - heavy-checks
       - python-compatibility
@@ -184,13 +228,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      # Not "success or skipped": that would accept a job that skipped when its
+      # area did change, which is exactly how a mistyped `if:` condition above
+      # would turn this required check silently green. The check compares each
+      # result against what the detected areas say it should have been, and the
+      # detection job itself must have succeeded outright. The truth table lives
+      # in scripts/ci/job_gating.py, where every row is tested.
       - name: Check required jobs
-        run: |
-          if [ "${{ needs.quick-gates.result }}" != "success" ] ||
-             [ "${{ needs.heavy-checks.result }}" != "success" ] ||
-             [ "${{ needs.python-compatibility.result }}" != "success" ] ||
-             [ "${{ needs.node-compatibility.result }}" != "success" ] ||
-             [ "${{ needs.web-e2e.result }}" != "success" ]; then
-            echo "::error::One or more CI jobs failed."
-            exit 1
-          fi
+        env:
+          PYTHON_CHANGED: ${{ needs.changes.outputs.python }}
+          WEB_CHANGED: ${{ needs.changes.outputs.web }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          QUICK_GATES_RESULT: ${{ needs.quick-gates.result }}
+          HEAVY_CHECKS_RESULT: ${{ needs.heavy-checks.result }}
+          PYTHON_COMPATIBILITY_RESULT: ${{ needs.python-compatibility.result }}
+          NODE_COMPATIBILITY_RESULT: ${{ needs.node-compatibility.result }}
+          WEB_E2E_RESULT: ${{ needs.web-e2e.result }}
+        run: make ci-check-results

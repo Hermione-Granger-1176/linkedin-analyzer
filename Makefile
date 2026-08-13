@@ -388,10 +388,12 @@ ci-platform-checks: ## Run quick and heavy non-browser CI gates in order
 	@$(MAKE) --no-print-directory ci-quick-gates
 	@$(MAKE) --no-print-directory ci-heavy-checks
 
+# A documentation-only change skips every other CI job, so this gate is the only
+# one that sees it. Markdown table alignment belongs here for that reason.
 ci-quick-gates: ## Run fast formatting, lint, and type checks in parallel
 	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py --timeout 1200 \
 		editorconfig-check lint-doc-commands lint-make-targets \
-		lint-py lint-yaml format-py-check typecheck-py \
+		lint-py lint-yaml format-py-check align-tables-check typecheck-py \
 		lint-workflows lint-js lint-css format-js-check typecheck-web
 
 ci-heavy-checks: ## Run tests, dead-code checks, and the production build
@@ -715,7 +717,7 @@ pr-close: ## Close the current PR and delete branch
 
 # ─── CI @ci ───────────────────────────────────────────────────────────────────────
 
-.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-workflows ci-workflow-disable ci-workflow-enable ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog ci-audit-repo-settings ci-coverage-summary
+.PHONY: ci-runs ci-jobs ci-watch ci-failures ci-cancel ci-rerun ci-dispatch ci-workflows ci-workflow-disable ci-workflow-enable ci-caches ci-cache-delete ci-alert-issue ci-schedule-watchdog ci-audit-repo-settings ci-coverage-summary ci-changed-areas ci-check-results
 
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
@@ -795,6 +797,16 @@ ci-audit-repo-settings: ## Report drift in GitHub repository settings (make ci-a
 # Reads the reports that test-py and test-js leave behind, so run it after them.
 ci-coverage-summary: ## Print the coverage totals as markdown for a job summary (make ci-coverage-summary)
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.coverage_summary
+
+# Both run before any toolchain is installed, in jobs that set up nothing, so
+# they use the system interpreter and the standard library alone.
+ci-changed-areas: ## Report which CI areas a change touches (make ci-changed-areas base=SHA head=SHA [merge_base=1])
+	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.ci.job_gating changed-areas \
+		--base "$(base)" --head "$(head)" $(if $(merge_base),--merge-base)
+
+# Reads each job result from the environment; see the CI result job in ci.yml.
+ci-check-results: ## Check CI job results against the areas a change touched (make ci-check-results)
+	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.ci.job_gating check-results
 
 # ─── Issues @issue ────────────────────────────────────────────────────────────────
 

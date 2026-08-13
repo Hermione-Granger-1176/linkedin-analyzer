@@ -499,6 +499,8 @@ def _audit_pypi_deployment_refs(
 
     A null policy means every branch and tag can reach the environment, which
     lets a release cut from an unexpected ref request publishing credentials.
+    The protected-branches option is the opposite failure: it admits no tags at
+    all, so releases stop at the gate instead of passing through it.
     """
     policy = payload.get("deployment_branch_policy")
     if policy is None:
@@ -508,7 +510,9 @@ def _audit_pypi_deployment_refs(
             f"{PYPI_ENVIRONMENT_NAME} deployment_branch_policy must be a JSON object or null."
         )
     if policy.get("custom_branch_policies") is not True:
-        return [f"{PYPI_ENVIRONMENT_NAME} does not restrict deployments to selected refs"]
+        return [
+            f"{PYPI_ENVIRONMENT_NAME} restricts deployments to protected branches, not release tags"
+        ]
     if deployment_policies is None:
         raise GhError(f"{PYPI_ENVIRONMENT_NAME} deployment branch policies were not fetched.")
 

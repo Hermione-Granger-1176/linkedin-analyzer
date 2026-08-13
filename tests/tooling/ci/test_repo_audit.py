@@ -477,13 +477,13 @@ def test_pypi_environment_open_to_every_ref_is_reported() -> None:
 
 
 def test_pypi_environment_limited_to_protected_branches_is_reported() -> None:
-    """Protected branches are not the release refs, so publishing stays unconstrained."""
+    """Releases are tagged, and this option admits only branches, so it blocks every release."""
     findings = _audit(
         pypi_environment=_pypi_environment(
             deployment_branch_policy={"protected_branches": True, "custom_branch_policies": False}
         )
     )
-    assert findings == ["pypi does not restrict deployments to selected refs"]
+    assert findings == ["pypi restricts deployments to protected branches, not release tags"]
 
 
 def test_pypi_deployment_ref_drift_is_reported() -> None:

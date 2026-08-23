@@ -541,13 +541,15 @@ branch-current: ## Create a branch from the current checkout without updating it
 	@test -n "$(name)" || (printf 'Usage: make branch-current name=my-feature\n' >&2; exit 1)
 	git checkout -b "$(name)"
 
+branch-switch: export BRANCH_NAME := $(name)
 branch-switch: ## Switch to an existing branch (make branch-switch name=X)
-	@test -n "$(name)" || (printf 'Usage: make branch-switch name=branch-name\n' >&2; exit 1)
-	git switch -- "$(name)"
+	@test -n "$$BRANCH_NAME" || (printf 'Usage: make branch-switch name=branch-name\n' >&2; exit 1)
+	git switch -- "$$BRANCH_NAME"
 
+branch-delete: export BRANCH_NAME := $(name)
 branch-delete: ## Delete a local branch (make branch-delete name=X [force=1])
-	@test -n "$(name)" || (printf 'Usage: make branch-delete name=branch-name [force=1]\n' >&2; exit 1)
-	git branch $(if $(filter 1,$(force)),-D,-d) -- "$(name)"
+	@test -n "$$BRANCH_NAME" || (printf 'Usage: make branch-delete name=branch-name [force=1]\n' >&2; exit 1)
+	git branch $(if $(filter 1,$(force)),-D,-d) -- "$$BRANCH_NAME"
 
 # Branch names reach the helper through the environment, never interpolated
 # into the recipe, so the target holds no shell logic of its own.

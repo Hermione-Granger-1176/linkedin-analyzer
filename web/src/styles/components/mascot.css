@@ -3,9 +3,9 @@
    SVG definitions shared by multiple poses live in web/index.html. One-use poses
    remain inline. JavaScript-built poses use the same pip-* classes.
 
-   This file owns Pip's colors, placement, shared animations, one-shot animations,
-   and reduced-motion rules. Feature stylesheets own surrounding layout and
-   feature-specific overrides. */
+   This file owns Pip's shared styling and animation rules, along with the
+   remaining pose placements. Feature stylesheets own feature-specific
+   placements and surrounding layout. */
 
 /* Hide shared SVG definitions without affecting layout. */
 .pip-defs {

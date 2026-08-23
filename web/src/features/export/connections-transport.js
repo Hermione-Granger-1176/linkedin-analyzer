@@ -62,8 +62,8 @@ export function terminateConnectionsWorker() {
  * Build the rows, timeline and stats the connections dashboard is drawn from.
  *
  * Runs in a worker when one is available and falls back to the main thread for
- * small exports; a large export with no worker yields null so the PDF simply
- * omits the dashboard.
+ * small exports. A large export without a worker returns null, so the PDF omits
+ * the dashboard.
  * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
  * @param {{isCancelled?: () => boolean}} [options] - The run's cancellation check
  * @returns {Promise<ConnectionsData|null>} Dashboard data, or null when there is none

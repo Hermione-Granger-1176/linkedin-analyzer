@@ -29,8 +29,8 @@ from scripts.lib import gh_policy
 
 RunFunction = Callable[..., subprocess.CompletedProcess[str]]
 
-# Timeouts (seconds). API calls should answer quickly; failed-log downloads can
-# be large, so they get a longer budget.
+# Timeouts (seconds). API calls use the default budget; failed-log downloads
+# can be large, so they get a longer budget.
 DEFAULT_TIMEOUT = 30
 LOG_TIMEOUT = 120
 

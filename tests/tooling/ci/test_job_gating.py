@@ -226,7 +226,7 @@ def test_changed_paths_reports_both_ends_of_a_rename(tmp_path: Path) -> None:
 
     With rename detection on, `--name-only` reports only the destination. Moving
     `web/src/feature.js` to `docs/feature.md` would then list one Markdown path,
-    report `web=false`, and skip the web jobs the deleted module just broke.
+    report `web=false`, and skip the web jobs the deleted module broke.
     """
     repository = tmp_path / "repository"
     (repository / "web" / "src").mkdir(parents=True)

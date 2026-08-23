@@ -618,7 +618,7 @@ def test_is_gated_applies_the_npm_severity_ladder() -> None:
 
 
 def test_audit_gates_every_severity_by_default() -> None:
-    """The default gate reviews weak advisories too, not just high and critical."""
+    """The default gate reviews every advisory severity, including high and critical."""
     for severity in run_npm_audit.SEVERITY_ORDER:
         ignored, errors = run_npm_audit._audit_npm_dependencies(
             today=date(2026, 1, 1),

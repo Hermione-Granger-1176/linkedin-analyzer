@@ -14,7 +14,7 @@ branch protection, Actions policy, environment protection, and rulesets needs
 ``GITHUB_TOKEN`` can grant neither. Neither writeback App carries them either,
 deliberately, so ``audit-repo-settings.yml`` runs this on a third read-only App
 instead. It stays runnable by hand against a maintainer's own credentials,
-which is the faster way to check a setting you just changed.
+which is the faster way to check a setting you changed.
 
 The audit is deliberately fail-closed. A setting it cannot read is never
 reported as correct: an unreadable response ends the run with EXIT_CHECK_FAILED
@@ -409,7 +409,7 @@ def extract_required_checks(protection: dict[str, object]) -> set[str]:
 
     GitHub reports the same list twice, as plain ``contexts`` and as ``checks``
     entries pinned to an app id. Both are read so a repository configured
-    through either the old or the new API surface audits the same.
+    through either the old or the new API audits the same.
 
     Each must be a list before it is read. Iterating a dict yields its keys, so
     a payload of the wrong shape would otherwise hand back check names that were

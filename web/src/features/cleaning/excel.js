@@ -252,8 +252,7 @@ export const ExcelGenerator = (() => {
         const rows = data.map((row) => headers.map((header) => row[header] ?? ""));
 
         return {
-            // getConfig() above rejects unknown types, and every known type has a
-            // label, so the "Sheet1" fallback is a defensive default.
+            // Known file types have labels. Use "Sheet1" for malformed config.
             /* v8 ignore next */
             sheetName: FILE_TYPE_LABELS[fileType] || "Sheet1",
             headers,

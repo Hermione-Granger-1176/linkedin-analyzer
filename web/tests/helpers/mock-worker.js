@@ -1,17 +1,8 @@
 /**
- * The Worker stand-in the export's transport suites share.
+ * Shared Worker stand-in for the export transport suites.
  *
- * All three transports run the same mechanism, so their suites should differ
- * only where the transports do. Three private copies of this harness is how
- * that stopped being true: the messages suite proved its watchdog on one of the
- * two files it scales with while the threads suite proved both, and nothing
- * made the omission visible, because the two files could not be read side by
- * side. One harness makes them diffable.
- *
- * The worker it builds is inert. It records what was posted, hands out the
- * listeners the transport attached so a test can drive them, and can be told to
- * throw from its constructor or its `postMessage` for the paths that need a
- * browser to refuse.
+ * It records posted requests, exposes attached listeners so tests can dispatch
+ * events, and can throw from its constructor or `postMessage`.
  */
 
 import { vi } from "vitest";
@@ -36,8 +27,8 @@ import { vi } from "vitest";
  */
 
 /**
- * Build a Worker stand-in and the handle a suite drives it through.
- * @returns {WorkerHarness} Harness holding the constructed workers and the knobs
+ * Build a Worker stand-in and return the harness a suite uses to drive it.
+ * @returns {WorkerHarness} Harness containing workers and test controls
  */
 export function createWorkerHarness() {
     class MockWorker {

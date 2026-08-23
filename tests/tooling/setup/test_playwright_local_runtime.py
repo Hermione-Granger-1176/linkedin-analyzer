@@ -1118,7 +1118,7 @@ def test_cache_lock_reports_a_failed_lock(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Surface a lock failure as a setup error instead of an OSError traceback."""
+    """Report a lock failure as a setup error instead of an OSError traceback."""
     paths = runtime.RuntimePaths.from_repo(tmp_path)
     runtime.ensure_cache_root(paths)
 
@@ -1586,7 +1586,7 @@ def test_clean_is_idempotent(tmp_path: Path) -> None:
     assert not paths.cache_root.exists()
 
 
-# ─── Command-line surface ────────────────────────────────────────────────────
+# Command-line interface
 
 
 def test_prepare_action_takes_no_engine_selection() -> None:

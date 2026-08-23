@@ -87,7 +87,7 @@ const EMPTY_WORKER_CONNECTION_STATE = Object.freeze({ list: [] });
 const harness = createWorkerHarness();
 
 /**
- * Answer the request the worker was just given.
+ * Answer the worker request.
  * @param {object} payload - Worker payload, success flag and all
  * @param {number} [idOffset] - Shift applied to the request id, for stale replies
  */

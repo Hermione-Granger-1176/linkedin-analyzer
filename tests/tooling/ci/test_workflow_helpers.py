@@ -139,7 +139,7 @@ def test_validate_lock_refresh_context_accepts_expected_values(
 def test_validate_lock_refresh_context_rejects_untrusted_values(
     pr_number: str, head_sha: str, head_ref: str, message: str
 ) -> None:
-    """Reject values that cannot safely select a trusted writeback target."""
+    """Reject values that cannot select a trusted writeback target."""
     with pytest.raises(ValueError, match=message):
         validate_lock_refresh_context(pr_number, head_sha, head_ref)
 

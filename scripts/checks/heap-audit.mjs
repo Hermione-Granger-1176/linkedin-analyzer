@@ -55,7 +55,7 @@ const APP_TITLE_MARKER = "<title>LinkedIn Analyzer</title>";
 const TELEMETRY_CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
 
 // Per-route readiness signals, copied from web/e2e/app.e2e.spec.js, so each
-// surface's real IndexedDB reads and Web Worker processing complete before the
+// route's real IndexedDB reads and Web Worker processing complete before the
 // heap is sampled. Keys drive both the hub-card click and the wait.
 const ROUTE_READY = {
     analytics: async (page) => {
@@ -274,7 +274,7 @@ async function measureHeap(browser, inputDir) {
         const afterUpload = await readHeap(client);
         peakUsed = Math.max(peakUsed, afterUpload.used);
 
-        // Exercise each analytics surface so the heap reflects a full session.
+        // Exercise each analytics route so the heap reflects a full session.
         // Navigate within the SPA by changing the hash rather than reloading the
         // page, so the upload and every screen accumulate in one continuous
         // session instead of resetting per route.

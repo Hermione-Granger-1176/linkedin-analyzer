@@ -17,7 +17,7 @@ export function nextFrame() {
  * @param {string} name - Mark name
  */
 export function markPerformance(name) {
-    // performance.mark is always available in supported browsers, so this env guard is defensive.
+    // Keep the guard for environments without the Performance API.
     /* v8 ignore next 3 */
     if (typeof performance === "undefined" || typeof performance.mark !== "function") {
         return;
@@ -32,7 +32,7 @@ export function markPerformance(name) {
  * @param {string} end - End mark
  */
 export function measurePerformance(name, start, end) {
-    // performance.measure is always available in supported browsers, so this env guard is defensive.
+    // Keep the guard for environments without the Performance API.
     /* v8 ignore next 3 */
     if (typeof performance === "undefined" || typeof performance.measure !== "function") {
         return;
@@ -40,7 +40,7 @@ export function measurePerformance(name, start, end) {
     try {
         performance.measure(name, start, end);
 
-        // getEntriesByName is always available in supported browsers, so this guard is defensive.
+        // Keep the guard for partial Performance API implementations.
         /* v8 ignore next 3 */
         if (typeof performance.getEntriesByName !== "function") {
             return;

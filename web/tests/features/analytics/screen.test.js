@@ -526,7 +526,7 @@ describe("AnalyticsPage", () => {
 
         vi.useRealTimers();
         globalThis.ResizeObserver = savedResizeObserver;
-        // Just verify no throw occurred
+        // The resize callback should not throw.
         expect(true).toBe(true);
     });
 
@@ -605,9 +605,9 @@ describe("AnalyticsPage", () => {
             });
         }
 
-        // Trigger resize observer - canvases are still zero so it shouldn't render
+        // Canvases are still zero, so this callback should not render them.
         ro.trigger();
-        // Just verify no throw occurred
+        // The resize callback should not throw.
         expect(true).toBe(true);
     });
 
@@ -789,8 +789,8 @@ describe("AnalyticsPage", () => {
         // is structurally identical to the month case and shares the same
         // syncRouteFromFilters() call. Coverage for that branch is achieved by
         // the 'updates route params when chart interactions toggle filters' test
-        // which exercises the same post-switch code path. This test simply documents
-        // that week uses monthKey to set monthFocus.
+        // which exercises the same post-switch code path. This test records that
+        // the week uses monthKey to set monthFocus.
         const weekItem = { type: "week", key: "week-4", monthKey: "2024-03" };
         expect(weekItem.monthKey || weekItem.key).toBe("2024-03");
     });
@@ -951,7 +951,7 @@ describe("AnalyticsPage", () => {
     it("onRouteChange returns early when init fails (no analyticsGrid)", async () => {
         // Remove required elements so init() fails
         document.body.innerHTML = '<div id="analyticsEmpty"><h2></h2><p></p></div>';
-        // onRouteChange should not throw, just return early
+        // onRouteChange should return early without throwing.
         expect(() => AnalyticsPage.onRouteChange({})).not.toThrow();
     });
 

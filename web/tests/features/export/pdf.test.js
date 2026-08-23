@@ -101,7 +101,7 @@ let LoadingOverlay;
 let runtimeChunk = null;
 
 /**
- * Re-import the export surface and every module it is mocked against.
+ * Re-import the export module and every mocked collaborator.
  *
  * The module keeps an init latch, so each test needs a fresh instance; that
  * means re-reading the mocks too, since resetModules recreates them.
@@ -155,8 +155,8 @@ function ui() {
  * Stand in for the network the chunk the export's own modules live in arrives
  * over.
  *
- * The factory hands back the real barrel, so the surface still drives the real
- * modules; the wrapper only counts the fetches and, when a test passes a gate,
+ * The factory returns the real runtime module, so the export still drives the
+ * real modules. The wrapper counts fetches and, when a test passes a gate,
  * holds one open the way a slow or failing connection would. Registered per
  * test rather than for the file because a mock is cached once it has been
  * built, and re-registering is what makes the next fetch a fetch again.
@@ -212,17 +212,17 @@ const DOCUMENT_MODEL = Object.freeze({
 });
 
 /**
- * Load a fresh export surface, stub its collaborators, mount it and init.
+ * Load a fresh export module, stub its collaborators, mount it, and initialize it.
  * @param {() => void} [configure] - Applied after the defaults, before init
  * @returns {Promise<void>}
  */
 async function setup(configure) {
-    // Registered before the surface is imported, so a chunk that stopped being
+    // Registered before the export module is imported, so a chunk that stopped being
     // fetched on demand would be counted here rather than quietly missed.
     runtimeChunk = interceptRuntimeChunk();
     await loadModules();
     // The mocked modules are shared across resetModules(), so their call
-    // history has to be cleared explicitly for each fresh surface.
+    // history has to be cleared explicitly for each fresh module instance.
     vi.clearAllMocks();
 
     docStub = { output: vi.fn(() => new Blob(["%PDF-1.3"], { type: "application/pdf" })) };
@@ -268,7 +268,7 @@ describe("PdfExport", () => {
     });
 
     it("does nothing when the export markup is absent", async () => {
-        // A fresh surface: beforeEach already init()ed this one, and a second
+        // A fresh module instance: beforeEach already called init(), and a second
         // call returns at the `initialized` latch without ever resolving the
         // markup, so the path this test names would go unexercised.
         await loadModules();
@@ -444,7 +444,7 @@ describe("PdfExport", () => {
         expect(ui().backdrop.hidden).toBe(false);
 
         // The keydown listener is on the document, so it outlives its own
-        // markup. A re-render swaps the dialog out from under this surface; it
+        // markup. A re-render swaps the dialog out from under this instance; it
         // is no longer the modal the user is in and must not fight the live one.
         document.body.innerHTML = MARKUP;
 

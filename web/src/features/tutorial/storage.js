@@ -87,7 +87,7 @@ export function setStorageValue(key, value) {
 }
 
 /**
- * Remove a localStorage value safely.
+ * Remove a localStorage value when storage is available.
  * @param {string} key - Storage key
  */
 export function removeStorageValue(key) {

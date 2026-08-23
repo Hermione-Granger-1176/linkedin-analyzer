@@ -278,7 +278,7 @@ export const ConnectionsPage = (() => {
             pendingRequestId = id;
             clearWorkerTimeout();
             workerTimeoutId = window.setTimeout(() => {
-                // A response clears this timeout, so a stale firing is defensive.
+                // A response clears this timeout. Keep the check for a stale callback.
                 /* v8 ignore next 3 */
                 if (pendingRequestId !== id) {
                     return;
@@ -364,8 +364,8 @@ export const ConnectionsPage = (() => {
 
         captureError(
             new Error(
-                // A valid parse always carries text (handled above) and invalid()
-                // always supplies an error, so those arms are defensive.
+                // A valid parse carries text and invalid() returns an error. Keep this
+                // branch for malformed parsed data.
                 /* v8 ignore next 3 */
                 parsed.valid
                     ? "Unexpected file type in connections cache."
@@ -393,7 +393,7 @@ export const ConnectionsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseConnectionsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            // invalid() always supplies an error string, so the fallback is defensive.
+            // invalid() returns an error string. Keep the fallback for malformed worker data.
             /* v8 ignore next */
             captureError(new Error(parsed.error || "Invalid connections worker message."), {
                 module: "connections-ui",
@@ -429,7 +429,7 @@ export const ConnectionsPage = (() => {
             "connections:worker-parse:end",
         );
 
-        // The contract parser always supplies a payload object, so the fallback is defensive.
+        // The contract parser returns an object. Keep the fallback for malformed worker data.
         /* v8 ignore next */
         const payload = message.payload || {};
 
@@ -440,7 +440,7 @@ export const ConnectionsPage = (() => {
         }
 
         const analytics = payload.analytics || {};
-        // The parser always normalizes rows to an array, so the fallback is defensive.
+        // The parser returns an array. Keep the fallback for malformed worker data.
         /* v8 ignore next */
         const rawRows = payload.rows || [];
 
@@ -482,7 +482,7 @@ export const ConnectionsPage = (() => {
      */
     function handleWorkerErrorPayload(message) {
         clearWorkerTimeout();
-        // The contract parser always supplies a payload message, so the default arm is defensive.
+        // The contract parser returns a message. Keep the fallback for malformed worker data.
         /* v8 ignore next 4 */
         const text =
             message.payload && message.payload.message
@@ -506,7 +506,7 @@ export const ConnectionsPage = (() => {
         captureError(
             event && "error" in event && event.error
                 ? event.error
-                : // A dispatched event always carries a type, so the "error" fallback is defensive.
+                : // Dispatched events have a type. Keep an "error" fallback for malformed events.
                   /* v8 ignore next */
                   new Error(
                       `Connections worker ${event && event.type ? event.type : "error"} event`,
@@ -784,7 +784,7 @@ export const ConnectionsPage = (() => {
         const heading = elements.connectionsEmpty.querySelector("h2");
         const text = elements.connectionsEmpty.querySelector("p");
 
-        // The empty-state shell always contains both nodes, so the guards are defensive.
+        // The static shell includes both nodes. Keep the guards for incomplete DOM setup.
         /* v8 ignore next */
         if (heading) {
             heading.textContent = title;

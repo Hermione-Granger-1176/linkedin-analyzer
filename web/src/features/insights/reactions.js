@@ -108,7 +108,7 @@ const ARMS_STRETCH = `
     <path class="pip-ink" d="M85 84 Q100 74 104 60" />
     <circle class="pip-ink pip-paper" cx="105" cy="54" r="7" />`;
 
-/* A steaming mug for the hours after everyone else has logged off. */
+/* Draw the mug pose. */
 const ARMS_MUG = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q99 82 102 74" />
     <circle class="pip-ink pip-paper" cx="103" cy="68" r="7" />
@@ -117,29 +117,29 @@ const ARMS_MUG = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M102 36 q5 -4 0 -9" />
     <path class="pip-ink" d="M110 36 q5 -4 0 -9" />`;
 
-/* Arms hanging, and the two beads of sweat of a job just finished. */
+/* Draw the finished-job pose with hanging arms and sweat drops. */
 const ARMS_BREATHER = `
     <path class="pip-ink" d="M55 84 Q42 94 44 104" />
     <path class="pip-ink" d="M85 84 Q98 94 96 104" />
     <ellipse class="pip-drop" cx="100" cy="30" rx="4.2" ry="5.6" />
     <ellipse class="pip-drop" cx="108" cy="45" rx="2.8" ry="3.8" />`;
 
-/* Tucked in, with a "z" drifting off the top corner. Kept well inside the right
-   edge: the lean below swings it further out, and it drifts further still. */
+/* Draw the dozing pose. Keep the sleep marker inside the right edge after the
+   figure leans. */
 const ARMS_DOZE = `
     <path class="pip-ink" d="M55 84 Q47 94 53 101" />
     <path class="pip-ink" d="M85 84 Q93 94 87 101" />
     <path class="pip-ink insight-reaction-zzz" d="M92 26 h14 l-14 16 h14" />`;
 
-/* Pointing off to one side, under an arrow bending the same way. */
+/* Draw the pointing pose and its arrow. */
 const ARMS_POINT = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q101 82 108 76" />
     <circle class="pip-ink pip-paper" cx="110" cy="72" r="6" />
     <path class="pip-ink" d="M96 46 Q110 38 119 46" />
     <path class="pip-ink" d="M114 40 L120 46 L114 52" />`;
 
-/* An open palm, held up for someone to hit. Fingers first, so the palm covers
-   where they join it. */
+/* Draw the high-five pose. Place fingers before the palm so the palm covers
+   their join. */
 const ARMS_HIGH_FIVE = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q102 80 105 70" />
     <path class="pip-ink pip-paper" d="M98 58 V46 Q98 42 101 42 Q104 42 104 46 V58 Z" />
@@ -147,7 +147,7 @@ const ARMS_HIGH_FIVE = `${ARM_LEFT_REST}
     <path class="pip-ink pip-paper" d="M110 58 V46 Q110 42 113 42 Q116 42 116 46 V58 Z" />
     <circle class="pip-ink pip-paper" cx="106" cy="62" r="9" />`;
 
-/* One fist punched high, with the ticks that followed it up. */
+/* Draw the raised-fist pose and motion marks. */
 const ARMS_PUNCH = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 85 Q101 80 101 62" />
     <circle class="pip-ink pip-paper" cx="101" cy="52" r="9" />
@@ -155,7 +155,7 @@ const ARMS_PUNCH = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M112 42 l8 -6" />
     <path class="pip-ink" d="M114 52 l9 -3" />`;
 
-/* Arms down, a speech bubble mid-sentence beside his head. */
+/* Draw the speech pose. */
 const ARMS_SPEECH = `${ARMS_REST}
     <path
         class="pip-ink pip-paper"
@@ -185,7 +185,7 @@ function pose(brows, eyes, mouth, arms, lean = UPRIGHT) {
     };
 }
 
-/* Nothing else is known about the card, so Pip just stands there pleasantly. */
+/* Use the neutral pose when the card id is unknown. */
 const FALLBACK_POSE = pose(PIP_BROWS_HAPPY, EYES_OPEN, MOUTH_SMILE, ARMS_REST);
 
 /**

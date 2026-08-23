@@ -228,7 +228,7 @@ def test_sleep_delegates_to_time_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_run_gh_retries_a_timeout_then_succeeds(_no_sleep: list[float]) -> None:
-    """A timeout inside the retry budget is retried rather than surfaced."""
+    """A timeout inside the retry budget is retried rather than raised."""
     runner = SequenceRunner([subprocess.TimeoutExpired(["gh"], 30), completed_process(0, "ok\n")])
 
     assert gh_runner.run_gh(["repo", "view"], run_fn=runner, retries=1) == "ok\n"

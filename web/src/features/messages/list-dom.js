@@ -39,8 +39,8 @@ function cleanText(value) {
  */
 function appendContactName(container, label, url) {
     const cleanUrl = cleanText(url);
-    // Defense in depth: current callers pass URLs already validated by MessagesAnalytics, but
-    // guard the scheme here so a future caller cannot introduce a javascript: URL.
+    // Callers validate URLs with MessagesAnalytics. Keep this scheme check so a
+    // future caller cannot introduce a javascript: URL.
     if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
         container.textContent = label;
         return;

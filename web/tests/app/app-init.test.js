@@ -265,7 +265,7 @@ describe("app init wiring", () => {
         const toggle = document.getElementById("telemetryToggleBtn");
         expect(toggle.textContent).toContain("Turn off");
         expect(toggle.getAttribute("aria-pressed")).toBe("true");
-        // Enabling from the footer also clears the proactive banner.
+        // Enabling from the footer also clears the consent banner.
         expect(document.getElementById("telemetryBanner").hidden).toBe(true);
 
         import.meta.env.VITE_SENTRY_DSN = original;

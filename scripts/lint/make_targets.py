@@ -254,8 +254,7 @@ def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
 
     The whole directory is scanned rather than an enumerated list of workflow
     and action paths, so a new kind of ``.github`` YAML that runs shell is
-    covered the day it is added. Files without a ``run:`` key simply yield
-    nothing.
+    covered the day it is added. Files without a ``run:`` key return no snippets.
 
     A ``run:`` value is shell, so every ``make`` word in it is a real
     invocation. These are the references that break CI silently when a target
@@ -279,7 +278,7 @@ def extract_workflow_run_snippets(text: str) -> list[CodeSnippet]:
                 snippets.append(CodeSnippet(line_number=index, text=value))
             continue
 
-        # The block ends at the first key indented no further than ``run:``
+        # The block ends at the first key indented no farther than ``run:``
         # itself. In a `- run: |` step the sequence dash sits left of the key,
         # so sibling keys such as `shell:` and `env:` are more indented than
         # the line's leading whitespace and would otherwise be read as shell.

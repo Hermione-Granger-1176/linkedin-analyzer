@@ -1136,7 +1136,7 @@ def test_request_copilot_review_defaults_to_current_pr() -> None:
 
 
 def test_request_copilot_review_wraps_failure() -> None:
-    """A gh failure surfaces as a GhError naming the PR."""
+    """A gh failure raises GhError naming the PR."""
     runner = FakeGh([(has("pr", "edit"), completed_process(1, "", "Copilot review not enabled"))])
 
     with pytest.raises(GhError, match=r"Copilot review on PR #7"):
@@ -1154,7 +1154,7 @@ def test_request_copilot_review_does_not_retry_transient_failures() -> None:
 
 
 def test_request_copilot_review_reraises_rate_limit() -> None:
-    """A rate limit surfaces unchanged so callers stop instead of retrying."""
+    """A rate limit is re-raised unchanged so callers stop retrying."""
     runner = FakeGh(
         [(has("pr", "edit"), completed_process(1, "", "API rate limit exceeded (HTTP 429)"))]
     )
@@ -1284,7 +1284,7 @@ def test_edit_pr_defaults_to_current_pr() -> None:
 
 
 def test_remaining_thread_comments_rejects_null_node() -> None:
-    """A missing thread node is surfaced as a GhError naming the thread."""
+    """A missing thread node raises GhError naming the thread."""
 
     def runner(_cmd: Sequence[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return completed_process(0, json.dumps({"data": {"node": None}}))

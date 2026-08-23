@@ -338,7 +338,7 @@ def test_snippet_extractor_selects_a_rule_per_file_kind() -> None:
         is make_targets.extract_workflow_run_snippets
     )
     # Scanned by directory rather than by an enumerated list of workflow paths,
-    # so YAML with no `run:` key is read and simply yields nothing.
+    # so YAML with no `run:` key is read and returns no snippets.
     assert (
         make_targets.snippet_extractor(Path(".github/dependabot.yml"))
         is make_targets.extract_workflow_run_snippets

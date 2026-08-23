@@ -1,6 +1,6 @@
-/* CSS Custom Properties for Theming */
+/* CSS custom properties for theming. */
 
-/* Self-hosted fonts (eliminates Google Fonts DNS lookup) */
+/* Self-hosted fonts avoid a Google Fonts DNS lookup. */
 
 @font-face {
     font-family: "Patrick Hand";
@@ -21,7 +21,7 @@
 :root,
 [data-theme="light"],
 .theme-light {
-    /* Light Theme (Default): warm, doodly, marker-on-paper */
+    /* Light theme. */
     --bg-primary: rgba(255, 253, 247, 1);
     --bg-secondary: rgba(253, 250, 245, 1);
     --bg-tertiary: rgba(255, 248, 230, 1);
@@ -32,7 +32,7 @@
     --border-color: rgba(68, 64, 60, 1);
     --border-light: rgba(214, 211, 209, 1);
 
-    /* Accent Colors: doodle marker palette */
+    /* Accent colors. */
     --accent-blue: rgba(66, 133, 244, 1);
     --accent-blue-contrast: rgba(30, 82, 175, 1);
     --accent-blue-light: rgba(210, 227, 252, 1);
@@ -47,7 +47,7 @@
     --accent-red-light: rgba(254, 215, 210, 1);
     --accent-red-bg: rgba(249, 74, 54, 0.1);
 
-    /* Filter controls */
+    /* Filter controls. */
     --filter-bar-text: rgba(53, 47, 43, 1);
     --filter-label-text: rgba(68, 64, 60, 1);
     --filter-btn-bg: rgba(245, 240, 228, 1);
@@ -73,49 +73,41 @@
     --decoration-yellow: rgba(251, 188, 5, 0.1);
     --decoration-purple: rgba(155, 81, 224, 0.1);
 
-    /* Shadows: warm brown pencil-on-paper feel */
+    /* Light-theme shadows. */
     --shadow-sm: 2px 2px 0 rgba(87, 65, 47, 0.08);
     --shadow-md: 4px 4px 0 rgba(87, 65, 47, 0.08);
     --shadow-lg: 6px 6px 0 rgba(87, 65, 47, 0.12);
 
-    /* Grid background */
+    /* Grid background. */
     --grid-color: rgba(28, 25, 23, 0.03);
 
-    /* Notebook furniture: the margin rule down the left edge, the ring inside a
-       punched hole, the masking tape, and the ruling on an index card. The
-       margin rule is a pencil-weight red, well under the marker red it is
-       mixed from, because a full-strength line would read as an error state. */
+    /* Notebook decoration: margin rule, binder-hole ring, tape, and card ruling. */
     --paper-margin-color: rgba(249, 74, 54, 0.26);
     --paper-punch-ring: rgba(87, 65, 47, 0.24);
     --tape-fill: rgba(251, 188, 5, 0.6);
     --index-rule-color: rgba(249, 74, 54, 0.42);
     --index-line-color: rgba(66, 133, 244, 0.14);
 
-    /* Selection */
+    /* Selection color. */
     --selection-text: rgba(28, 25, 23, 1);
 
-    /* Transitions */
+    /* Transitions. */
     --transition-fast: 0.15s ease;
     --transition-normal: 0.3s ease;
 
-    /* What every card and button on the desk animates when the theme flips or a
-       pointer lands on it. Read as-is in sketch.css, and appended to by the one
-       rule that has two more properties to settle. */
+    /* Shared card and button transition properties. Component rules add properties
+       when their interactions need them. */
     --card-transition:
         background-color var(--transition-normal), border-color var(--transition-normal),
         color var(--transition-normal), box-shadow var(--transition-normal),
         transform var(--transition-normal);
-    /* Screen swap duration. Keep in sync with TRANSITION_DURATION_MS in screen-manager.js. */
+    /* Keep this in sync with TRANSITION_DURATION_MS in screen-manager.js. */
     --screen-transition: 50ms;
 }
 
-/* Dark Theme: the same notebook at night. A warm espresso desk, a sheet of
-   paper lifted out of it by a desk lamp, chalk-cream ink, and marker that keeps
-   its hue instead of fading to pastel. Every ground stays on the red side of
-   neutral so nothing composited over it turns grey or olive. */
+/* Dark theme. */
 [data-theme="dark"] {
-    /* Grounds: desk, paper, warm note. Each step is a visible lift, so cards
-       read as objects on a surface rather than panels on a panel. */
+    /* Background levels for the page, cards, and notes. */
     --bg-primary: rgba(32, 26, 21, 1);
     --bg-secondary: rgba(46, 38, 31, 1);
     --bg-tertiary: rgba(62, 50, 39, 1);
@@ -126,10 +118,8 @@
     --border-color: rgba(178, 161, 141, 1);
     --border-light: rgba(97, 82, 67, 1);
 
-    /* Accent colors: the same markers, held under a desk lamp. Hues match the
-       light palette; only lightness moves, so charts and icons stay themselves.
-       The tinted -bg washes run thin and warm, because a heavy wash of yellow
-       or green over a dark ground is what turned surfaces olive. */
+    /* Dark-mode accent colors. Keep the hues from the light palette and adjust
+       lightness and alpha for the dark background. */
     --accent-blue: rgba(122, 189, 255, 1);
     --accent-blue-contrast: rgba(168, 214, 255, 1);
     --accent-blue-light: rgba(38, 66, 94, 1);
@@ -144,7 +134,7 @@
     --accent-red-light: rgba(88, 47, 42, 1);
     --accent-red-bg: rgba(255, 133, 118, 0.13);
 
-    /* Filter controls */
+    /* Filter controls. */
     --filter-bar-text: rgba(228, 219, 206, 1);
     --filter-label-text: rgba(245, 238, 226, 1);
     --filter-btn-bg: rgba(58, 47, 38, 1);
@@ -164,48 +154,31 @@
     --accent-purple-light: rgba(64, 42, 84, 1);
     --accent-purple-bg: rgba(205, 158, 242, 0.12);
 
-    /* Label sitting on a filled accent. White on a lit marker is unreadable, so
-       at night the reversed ink is the desk itself. */
+    /* Text color for labels on filled accents. */
     --text-on-accent: rgba(26, 21, 17, 1);
     --shimmer-highlight: rgba(245, 238, 226, 0.22);
 
-    /* Background doodles are drawn as chalk outlines after dark, so these are
-       stroke colors rather than fills and carry a stroke's alpha. */
+    /* Colors for dark-mode outline decorations. */
     --decoration-blue: rgba(122, 189, 255, 0.14);
     --decoration-yellow: rgba(252, 205, 90, 0.13);
     --decoration-purple: rgba(205, 158, 242, 0.14);
 
-    /* Shadows: a lamp casts a real shadow onto the desk, so the offset goes to
-       near-opaque black. A brown shadow on a brown ground is what flattened the
-       cards, because the two were only a few levels apart. */
+    /* Dark-mode shadows. */
     --shadow-sm: 2px 2px 0 rgba(0, 0, 0, 0.45);
     --shadow-md: 4px 4px 0 rgba(0, 0, 0, 0.5);
     --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.55);
 
-    /* Grid background: chalk ruling. Alpha is far above the light theme's 3%
-       because that 3% is a subtraction from near-white and here it is an
-       addition to near-black, which needs roughly twice the step to read. */
+    /* Dark-mode grid color. */
     --grid-color: rgba(240, 228, 210, 0.055);
 
-    /* Notebook furniture after dark. The margin rule keeps its hue but drops to
-       a whisper: a lit red line down a near-black page is the one thing on it
-       that would shout. The punch ring becomes real shadow rather than a wash
-       of brown, the tape turns tan the way masking tape does under a lamp
-       (matching the strips the preview section already wore), and the index
-       ruling switches from marker blue to chalk, because a blue line only
-       reads as ruling on white paper. */
+    /* Dark-mode notebook decoration. */
     --paper-margin-color: rgba(255, 133, 118, 0.17);
     --paper-punch-ring: rgba(0, 0, 0, 0.5);
     --tape-fill: rgba(176, 140, 88, 0.85);
     --index-rule-color: rgba(255, 133, 118, 0.3);
     --index-line-color: rgba(240, 228, 210, 0.07);
 
-    /* Opaque surfaces after dark. A wash of the ground is either too thin to
-       separate a surface from it or thick enough to read as a block of colour,
-       so these six are mixed as colours of their own, on the warm side so they
-       belong to the same desk. The lamp is the pool of light the page sits
-       under. There is no light-theme twin for any of them: every rule that
-       reads them fires only after dark. */
+    /* Dark-mode fills and the desk-lamp color. */
     --surface-drop: rgba(59, 46, 32, 1);
     --surface-drop-hover: rgba(35, 51, 68, 1);
     --surface-green: rgba(28, 57, 44, 1);
@@ -214,11 +187,11 @@
     --surface-error: rgba(82, 46, 40, 1);
     --desk-lamp: rgba(96, 74, 52, 0.22);
 
-    /* Selection */
+    /* Selection color. */
     --selection-text: rgba(32, 26, 21, 1);
 }
 
-/* Typography Variables */
+/* Typography variables. */
 :root {
     --font-hand: "Patrick Hand", cursive;
     --font-hand-alt: "Caveat", cursive;
@@ -230,7 +203,7 @@
     --font-size-2xl: 32px;
     --font-size-3xl: 40px;
 
-    /* Spacing */
+    /* Spacing. */
     --space-xs: 4px;
     --space-sm: 8px;
     --space-md: 16px;
@@ -239,25 +212,14 @@
     --space-2xl: 48px;
     --space-3xl: 64px;
 
-    /* Border Radius (slightly irregular for hand-drawn feel) */
+    /* Irregular border radii for the hand-drawn style. */
     --radius-sm: 4px;
     --radius-md: 8px;
     --radius-lg: 12px;
     --radius-xl: 20px;
 
-    /* Notebook furniture geometry. The margin rule and the punched holes both
-       live in the strip left of the content, so their offsets track the
-       viewport: on a wide screen there is a real gutter to sit in, and on a
-       phone they tuck against the edge instead of crowding the cards, whose
-       own inset bottoms out at var(--space-md). The punches repeat down the
-       whole sheet on one step rather than sitting at three fixed points,
-       because the page is as long as its content: a ring binder holds a stack,
-       and a reader who scrolls should keep seeing the edge they started with.
-       The ruling on a stat tile is geometry of that one card, so it is scoped
-       to .stat-card in features/analytics.css rather than kept here. The punch
-       fill sits with the geometry rather than with its three sibling colours in
-       the theme blocks, because it is not a colour of its own: a hole shows the
-       page under it, so it resolves per theme through --bg-primary. */
+    /* Geometry for the margin rule and repeating binder holes. The punch fill
+       resolves from --bg-primary so it follows the active theme. */
     --paper-margin-x: clamp(11px, 1.8vw, 28px);
     --paper-margin-width: 1.5px;
     --paper-punch-x: clamp(11px, 0.9vw, 14px);
@@ -265,25 +227,20 @@
     --paper-punch-step: 320px;
     --paper-punch-fill: var(--bg-primary);
 
-    /* The round buttons pinned to the corners of the viewport: the theme toggle
-       and the PDF export at the top, the tutorial help button at the foot. Each
-       size is read by the button itself, by whatever is pinned beside it, and by
-       the poses that have to keep out of the lane it owns, so it is one number
-       here rather than a literal in each of those places. */
+    /* Shared sizes for fixed corner buttons and the space reserved around them. */
     --corner-btn-size: 48px;
     --help-btn-size: 58px;
 
-    /* Container */
+    /* Container widths. */
     --container-max-width: 1400px;
     --container-wide: 1600px;
 
-    /* Responsive type */
+    /* Responsive type sizes. */
     --title-size: clamp(35px, 4.5vw + 16px, 72px);
     --subtitle-size: clamp(16px, 2vw + 8px, 28px);
 }
 
-/* The help button comes down a size on a narrow screen, and everything keeping
-   out of its way comes with it. */
+/* Reduce the help button size on narrow screens. */
 @media (max-width: 700px) {
     :root {
         --help-btn-size: 54px;

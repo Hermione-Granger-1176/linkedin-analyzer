@@ -142,9 +142,9 @@ function viewWindow(view) {
  * Read the months the messages dashboard covers.
  *
  * The range start is midnight on the first of the oldest month in range, so the
- * window is simply the months the range runs between. Null when the parse found
- * no dated message at all: `getRangeStart` has nothing to anchor on, and there
- * is no window to report.
+ * window contains the months between the range endpoints. Return null when parsing
+ * finds no dated message: `getRangeStart` has no anchor, so there is no window to
+ * report.
  * @param {number|null} rangeStart - Start of the messages range
  * @param {number} latestTimestamp - Newest message in the file
  * @returns {MonthWindow|null} Window, or null when there is nothing in range
@@ -207,9 +207,8 @@ function buildAllTimeStats(networkGrowth, outreach) {
 /**
  * Run a one-shot analytics worker to produce a view and its insights.
  *
- * The worker computes the timeline, topics and heatmap alongside the insight
- * cards whatever it is asked for, so the whole view is kept: the activity
- * dashboard is drawn from data this run was already paying for.
+ * The worker computes the timeline, topics, and heatmap with the insight cards.
+ * Keep that complete view so the activity dashboard uses data from this run.
  * @param {object} analyticsBase - Persisted analytics base
  * @param {string} timeRange - Range key to build the view at
  * @returns {Promise<{insights: object[], tip: string|null, networkGrowth: object|null, view: object|null}>} Worker view
@@ -300,11 +299,8 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
          * @param {object} value - Resolution value
          */
         function finish(value) {
-            // Every settle path below detaches the listeners and clears the
-            // watchdog before it returns, so nothing can settle this run twice
-            // today. The latch is defensive, as the transports' own identity
-            // guards are: it exists so that stops being something the next
-            // reader has to re-derive before adding a path.
+            // Every completion path removes listeners and clears the watchdog.
+            // This latch prevents duplicate cleanup if finish() runs twice.
             /* v8 ignore next 3 */
             if (settled) {
                 return;
@@ -866,8 +862,8 @@ async function collectThreads(files, isCancelled) {
  * a second run started meanwhile could deadlock against it over the shared
  * worker handle. Each step that is about to start real work checks it; unlike
  * the threads transport, which distinguishes cancellation from failure by
- * symbol, a cancelled run here simply yields the same empty sections as a run
- * with no data, and the caller discards the result either way.
+ * symbol, a cancelled run returns the same empty sections as a run with no data,
+ * and the caller discards the result either way.
  * @param {{includeNames?: boolean, includeMessages?: boolean, generatedAt?: Date, isCancelled?: () => boolean}} [options] - Export options
  * @returns {Promise<import("./pdf-document.js").DocumentModel>} Document model
  */

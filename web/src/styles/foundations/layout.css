@@ -1,6 +1,6 @@
-/* Page containers, headers, top navigation, and buttons */
+/* Page containers, headers, navigation, and buttons. */
 
-/* Layout Containers */
+/* Layout containers. */
 .screens-container {
     position: relative;
     width: 100%;
@@ -26,7 +26,7 @@
     padding-bottom: var(--space-xl);
 }
 
-/* Header and Titles */
+/* Headers and titles. */
 .title {
     font-size: var(--title-size);
     color: var(--text-primary);
@@ -52,7 +52,7 @@
     text-align: center;
 }
 
-/* Top Navigation */
+/* Top navigation. */
 .top-nav {
     display: flex;
     align-items: center;
@@ -89,8 +89,7 @@
     outline-offset: 2px;
 }
 
-/* Mobile navigation toggle. Hidden above the narrow breakpoint; the max-width
-   540px block reveals it and collapses the pill row into a stacked panel. */
+/* Hide the mobile navigation toggle above the narrow breakpoint. */
 .nav-toggle {
     display: none;
     align-items: center;
@@ -150,8 +149,7 @@
 .screen-header .title::before {
     left: 0;
     transform: none;
-    /* Fixed length so the underline stays consistent across pages instead of
-       tracking the per-page title/subtitle width. */
+    /* Use a fixed underline length across pages. */
     width: clamp(190px, 22vw, 290px);
 }
 
@@ -178,7 +176,7 @@
     justify-content: center;
 }
 
-/* Buttons */
+/* Buttons. */
 .primary-btn {
     padding: var(--space-md) var(--space-2xl);
     border: 3px solid var(--accent-blue);
@@ -233,10 +231,8 @@
     color: var(--accent-blue);
 }
 
-/* Dark theme: the call to action needs a body, not a whisper. A 12% blue wash
-   over near-black is barely a shade off the ground, which left the button as an
-   outline; an opaque ink blue gives it the same weight the pale fill carries in
-   the light theme. The filled hover state outranks this on its own. */
+/* Use an opaque dark-mode fill so the primary button remains distinct from the
+   page background. */
 [data-theme="dark"] .primary-btn {
     background-color: var(--surface-cta);
 }

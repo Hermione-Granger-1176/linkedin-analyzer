@@ -1,6 +1,6 @@
-/* Insights and messages insights panels */
+/* Insights and message insight panels. */
 
-/* Insights */
+/* Insights. */
 .insights-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -9,9 +9,7 @@
 }
 
 .insight-card {
-    /* The strip along the foot of the card that Pip's reaction stands in. Kept
-       as a custom property so the reserved padding and his own size can never
-       drift apart. */
+    /* Reserve space for Pip's reaction at the bottom of the card. */
     --insight-reaction-size: 56px;
 
     position: relative;
@@ -19,11 +17,7 @@
     border: 2px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--space-lg);
-    /* Text stops above the reaction instead of running under it, at every width
-       the grid can produce. Reserved downwards rather than sideways: the grid
-       goes as narrow as 240px, where taking 56px off every line would cost more
-       than the cards can spare, and a row is only ever as tall as its longest
-       card anyway. */
+    /* Keep card text above the reaction without reducing the card width. */
     padding-bottom: calc(var(--space-sm) + var(--insight-reaction-size));
     box-shadow: var(--shadow-sm);
     display: flex;
@@ -70,12 +64,9 @@
     border-color: var(--accent-red);
 }
 
-/* Pip's reaction stamp, one per card, injected by features/insights/screen.js.
-   It is inked by the shared .pip-* classes in components/mascot.css, so it
-   flips with the theme along with every other pose. Out of the card's flow and
-   out of the pointer's way: the card reserves his strip with padding instead.
-   Flush with the bottom edge, so the jacket running off the crop reads as Pip
-   standing behind the card rather than as a drawing that got cut off. */
+/* Position the reaction stamp injected by features/insights/screen.js. The card
+   reserves its space with padding, so the stamp stays out of the layout and
+   pointer hit testing. */
 .insight-reaction {
     position: absolute;
     right: var(--space-xs);
@@ -85,9 +76,7 @@
     pointer-events: none;
 }
 
-/* The stamps bob and blink on Pip's own loops from components/mascot.css, just
-   slower: a drawing this small in the corner of a card should read as calm
-   rather than busy. */
+/* Slow the shared bob and blink loops for the small card stamp. */
 .insight-reaction .pip-bob {
     animation-duration: 4.2s;
 }
@@ -96,16 +85,14 @@
     animation-duration: 6.4s;
 }
 
-/* Idle only, and infinite: the cards already arrive on a card-in stagger, and
-   the screenshot harness waits for finite animations to finish. */
+/* Keep the idle reaction animation infinite. */
 .insight-reaction-zzz {
     transform-box: fill-box;
     transform-origin: center;
     animation: insight-reaction-zzz 3.4s ease-in-out infinite;
 }
 
-/* Distances are in the pose's own user units, not screen pixels: the 98-unit
-   viewBox draws at 56px, so a couple of units is the small breath it looks. */
+/* Animate the reaction marker in SVG user units. */
 @keyframes insight-reaction-zzz {
     0% {
         opacity: 0;
@@ -131,22 +118,19 @@
     color: var(--text-secondary);
 }
 
-/* The tip is a row of two: Pip on the left and the bubble he speaks through on
-   the right. Both of those are drawn in mascot.css, so all this rule owns is
-   the row itself. */
+/* Lay out Pip and the speech bubble as one row. */
 .insight-tip {
     display: flex;
     align-items: center;
     margin-bottom: var(--space-xl);
 }
 
-/* The display:flex above outranks the [hidden] UA rule, so the tip stayed on
-   screen with nothing to say. Re-hide it explicitly when it is empty. */
+/* Override display:flex when the tip is hidden. */
 .insight-tip[hidden] {
     display: none;
 }
 
-/* Messages Insights */
+/* Message insights. */
 .messages-layout {
     display: flex;
     flex-direction: column;
@@ -376,7 +360,7 @@
     height: 24px;
 }
 
-/* Matches the .message-item-avatar footprint so skeleton rows don't shift. */
+/* Match the avatar footprint so skeleton rows do not shift. */
 .skeleton-avatar {
     flex-shrink: 0;
     width: 34px;
@@ -394,8 +378,7 @@
     flex: 1;
 }
 
-/* No Pip stands on a skeleton, so it gives back the strip the real cards
-   reserve for him and keeps the height it was tuned to before he arrived. */
+/* Skeleton rows do not need the reaction space reserved by real cards. */
 .skeleton-insight {
     min-height: 118px;
     padding-bottom: var(--space-lg);
@@ -407,15 +390,14 @@
     }
 }
 
-/* On a phone every card is a full row of its own, so the strip Pip reserves is
-   height the screen actually notices. He takes a little less of it. */
+/* Reduce the reserved reaction space on phone-width cards. */
 @media (max-width: 540px) {
     .insight-card {
         --insight-reaction-size: 46px;
     }
 }
 
-/* Reduced motion: the reactions are still there, they just hold their pose. */
+/* Keep reactions visible but still when reduced motion is requested. */
 @media (prefers-reduced-motion: reduce) {
     .insight-reaction-zzz {
         animation: none;

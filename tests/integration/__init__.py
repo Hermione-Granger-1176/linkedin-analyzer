@@ -1,1 +1,1 @@
-"""Cross-surface integration tests."""
+"""Integration tests for package metadata and web parity."""

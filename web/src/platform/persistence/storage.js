@@ -1,4 +1,4 @@
-/* IndexedDB storage helpers with in-memory fallback support */
+/* IndexedDB storage with an in-memory fallback. */
 
 const FILE_SCHEMA_VERSION = 2;
 const ANALYTICS_SCHEMA_VERSION = 2;
@@ -23,7 +23,7 @@ function normalizeStoredFile(record) {
 
 /**
  * Normalize a stored file record to metadata only (no CSV text). Used by the
- * metadata reads so large exports are never materialized just to list files.
+ * metadata reads so large exports are not materialized when listing files.
  * @param {object|null} record - Raw stored record
  * @returns {object|null}
  */
@@ -151,7 +151,7 @@ export const Storage = (() => {
 
     /**
      * Register a callback fired once when persistence degrades to memory at
-     * runtime. Lets the UI surface a "won't persist" hint.
+     * runtime. Lets the UI show a "won't persist" hint.
      * @param {(error: unknown) => void} listener
      */
     function onPersistenceLost(listener) {

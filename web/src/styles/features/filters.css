@@ -1,6 +1,6 @@
-/* Filter chips, selects, and the active-filter summary row */
+/* Filter chips, selects, and the active-filter summary. */
 
-/* Filters */
+/* Filters. */
 .filters-bar {
     display: flex;
     flex-wrap: wrap;
@@ -67,8 +67,7 @@
     border-color: var(--accent-blue);
 }
 
-/* Compact swap for the chip row on narrow screens: hidden until the max-width
-   540px block reveals it in place of .filter-buttons. */
+/* Hide the compact select until the narrow-screen rules replace the filter chips. */
 .filter-select {
     display: none;
     padding: var(--space-xs) var(--space-md);
@@ -88,8 +87,7 @@
     margin-bottom: var(--space-lg);
 }
 
-/* The display:flex above outranks the [hidden] UA rule, so the "Active filters:"
-   label lingered with no chips. Re-hide it explicitly when there are none. */
+/* Override display:flex when the active-filter summary is hidden. */
 .active-filters[hidden] {
     display: none;
 }

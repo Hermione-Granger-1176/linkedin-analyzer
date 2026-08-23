@@ -30,7 +30,8 @@ let rateWindowCount = 0;
 let rateWindowNoticeLogged = false;
 
 /**
- * Build an Error carrying an HTTP status code for the handler to surface.
+ * Build an Error carrying an HTTP status code for the handler to include in its
+ * response.
  * @param {number} statusCode - HTTP status to send in the response.
  * @param {string} message - Error message.
  * @returns {Error} The error with a `statusCode` property attached.

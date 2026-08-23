@@ -40,8 +40,8 @@ export function createEmptyFileMap() {
  */
 export function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
     const stateKey = `${hasAny ? 1 : 0}-${hasAnalyticsFiles ? 1 : 0}-${analyticsReady ? 1 : 0}`;
-    // All eight boolean-triple keys are enumerated above, so the fallback is a
-    // defensive default that valid inputs never reach.
+    // The ternaries map every input to one of the eight boolean keys. Keep the
+    // fallback if the lookup table is incomplete.
     /* v8 ignore next 2 */
     return (
         UPLOAD_HINT_BY_STATE[stateKey] ||

@@ -52,8 +52,8 @@ export function terminateMessagesWorker() {
  * Build the message and connection state the messages dashboard is drawn from.
  *
  * Runs in a worker when one is available and falls back to the main thread for
- * small exports; a large export with no worker yields null so the PDF simply
- * omits the dashboard.
+ * small exports. A large export without a worker returns null, so the PDF omits
+ * the dashboard.
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
  * @param {{isCancelled?: () => boolean}} [options] - The run's cancellation check

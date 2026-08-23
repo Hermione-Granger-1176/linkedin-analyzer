@@ -2,9 +2,8 @@
 
 Backs ``make issue-summary``: one screen with an issue's state, author, labels,
 assignees, milestone, and its most recent comments, so triaging an issue does
-not need several ``gh issue view`` passes. Every parse helper is defensive so a
-malformed field surfaces as a clear ``GhError`` instead of an opaque
-``TypeError``.
+not need several ``gh issue view`` passes. Each parser validates field types and
+raises a clear ``GhError`` for malformed data instead of an opaque ``TypeError``.
 """
 
 from __future__ import annotations

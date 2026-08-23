@@ -386,9 +386,7 @@ export const SketchCharts = (() => {
                 if (!isStart && !isJan && !isLast) {
                     return;
                 }
-                // Well-formed monthly keys contribute one label candidate per
-                // year before the year changes, so a repeat never occurs; the
-                // dedupe guard is defensive against duplicated month keys.
+                // Month keys should produce one label per year. Keep the check for duplicate keys.
                 /* v8 ignore next 3 */
                 if (year === lastYear && !isLast) {
                     return;
@@ -580,7 +578,7 @@ export const SketchCharts = (() => {
 
         const items = [];
 
-        // Draw cells (no RoughJS - just fills)
+        // Draw cells with fills instead of RoughJS paths.
         for (let day = 0; day < 7; day++) {
             const values = grid[day];
             const dayLabel = DAY_LABELS[day];
@@ -678,7 +676,7 @@ export const SketchCharts = (() => {
 
         const items = [];
 
-        // Draw segments with simple canvas (no RoughJS per segment)
+        // Draw segments with canvas instead of a RoughJS object per segment.
         values.forEach((item) => {
             if (item.value === 0) {
                 return;
@@ -720,8 +718,8 @@ export const SketchCharts = (() => {
                     if (anglePoint < -Math.PI / 2) {
                         anglePoint += Math.PI * 2;
                     }
-                    // Segment angles accumulate upward from -PI/2, so they never
-                    // fall below it; the wrap adjustment is defensive only.
+                    // Segment angles should not cross this boundary. Keep the wrap
+                    // adjustment for malformed angles.
                     /* v8 ignore next 3 */
                     const ns =
                         segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
@@ -842,7 +840,7 @@ export const SketchCharts = (() => {
             return;
         }
 
-        // Export from the detached temp canvas (immune to further redraws)
+        // Export from the detached canvas, which no longer receives redraws.
         tempCanvas.toBlob((blob) => {
             if (!blob) {
                 return;

@@ -59,7 +59,7 @@ export const AnalyticsEngine = (() => {
         let totalPosts = 0;
         let totalComments = 0;
 
-        // Helper to ensure month bucket exists
+        // Create the month bucket when needed.
         function getMonthBucket(monthKey) {
             if (!monthIndex.has(monthKey)) {
                 monthIndex.set(monthKey, {
@@ -210,7 +210,7 @@ export const AnalyticsEngine = (() => {
     /**
      * Bucket cleaned connection rows into "YYYY-MM" -> new-connection counts.
      * The cleaner emits "Connected On" as an ISO "YYYY-MM-DD" string, so the
-     * month key is just the first seven characters once both parts are present.
+     * month key is the first seven characters once both parts are present.
      * @param {object[]|null|undefined} connectionsData - Cleaned connections rows
      * @returns {Map<string, number>} Monthly new-connection counts
      */
@@ -331,7 +331,7 @@ export const AnalyticsEngine = (() => {
         if (!filters.topic || filters.topic === "all") {
             return 1;
         }
-        // An existing bucket always has total >= 1, so this guard is defensive.
+        // Existing buckets have a positive total. Return zero for malformed data.
         /* v8 ignore next 3 */
         if (!bucket.total) {
             return 0;
@@ -356,7 +356,7 @@ export const AnalyticsEngine = (() => {
             return dayTotal > 0 ? dayHour / dayTotal : 0;
         }
         const hourTotal = bucket.hours[filters.hour] || 0;
-        // bucket.total is always >= 1 for an existing bucket; the 0 arm is defensive.
+        // Existing buckets have a positive total. Return zero for malformed data.
         /* v8 ignore next */
         return bucket.total > 0 ? hourTotal / bucket.total : 0;
     }
@@ -411,7 +411,7 @@ export const AnalyticsEngine = (() => {
         const dimensionKey = hasDay && hasHour ? "both" : hasDay ? "day" : hasHour ? "hour" : null;
         if (useMonth && dimensionKey) {
             const filterCount = DIMENSION_COUNT_BY_KEY[dimensionKey](bucket, filters);
-            // bucket.total is always >= 1 for an existing bucket; the 0 arm is defensive.
+            // Existing buckets have a positive total. Return zero for malformed data.
             /* v8 ignore next */
             const ratio = bucket.total > 0 ? filterCount / bucket.total : 0;
             monthPosts = Math.round(monthPosts * ratio);
@@ -650,7 +650,7 @@ export const AnalyticsEngine = (() => {
     function topTopicOf(monthlyStats) {
         const counts = new Map();
         for (const month of monthlyStats) {
-            // monthlyStats entries always carry a topics object; the fallback is defensive.
+            // Normalized month stats include topics. Treat missing topics as empty.
             /* v8 ignore next */
             for (const [topic, count] of Object.entries(month.topics || {})) {
                 counts.set(topic, (counts.get(topic) || 0) + count);
@@ -776,20 +776,20 @@ export const AnalyticsEngine = (() => {
                 continue;
             }
             const date = parseDateKey(dateKey);
-            // dayIndex keys always come from formatDateKey, so a parse miss is defensive.
+            // Date keys come from formatDateKey. Skip an invalid key.
             /* v8 ignore next 3 */
             if (date === null) {
                 continue;
             }
             const weekKey = formatDateKey(startOfWeek(date));
             const index = weekIndex.get(weekKey);
-            // Every in-range date maps to a week bucket built above, so a miss is defensive.
+            // Each in-range date maps to a bucket. Skip a missing map entry.
             /* v8 ignore next 3 */
             if (index === undefined) {
                 continue;
             }
 
-            // Day buckets always carry a positive total; the fallback is defensive.
+            // Activity days normally have a positive total. Use zero for malformed data.
             /* v8 ignore next */
             const dayTotal = entry.total || 0;
             baselineTotals[index] += dayTotal;
@@ -811,7 +811,7 @@ export const AnalyticsEngine = (() => {
             if (filters.topic && filters.topic !== "all") {
                 const monthKey = dateKey.slice(0, 7);
                 const meta = monthMeta[monthKey];
-                // A day with activity always has month metadata; the 0 arm is defensive.
+                // Activity days normally have month metadata. Use zero when it is missing.
                 /* v8 ignore next */
                 const ratio = meta ? meta.topicRatio : 0;
                 value *= ratio;
@@ -820,7 +820,7 @@ export const AnalyticsEngine = (() => {
             if (hasHour) {
                 const monthKey = dateKey.slice(0, 7);
                 const meta = monthMeta[monthKey];
-                // A day with activity always has month metadata; the 0 arm is defensive.
+                // Activity days normally have month metadata. Use zero when it is missing.
                 /* v8 ignore next */
                 const ratio = meta ? meta.hourRatio : 0;
                 value *= ratio;
@@ -896,8 +896,7 @@ export const AnalyticsEngine = (() => {
         for (let i = 1; i < days.length; i++) {
             const prev = parseDateKey(days[i - 1]);
             const curr = parseDateKey(days[i]);
-            // Active day keys always come from formatDateKey, so a parse miss is
-            // defensive; break the streak rather than bridging across a bad key.
+            // Date keys come from formatDateKey. Break the streak when a key is invalid.
             /* v8 ignore next 4 */
             if (prev === null || curr === null) {
                 streak = 1;
@@ -920,8 +919,7 @@ export const AnalyticsEngine = (() => {
         let current = 1;
 
         const latest = parseDateKey(latestDay);
-        // Active day keys always come from formatDateKey, so a parse miss is
-        // defensive; without a parseable latest day the current streak is unknown.
+        // Date keys come from formatDateKey. Return no current streak when the latest key is invalid.
         /* v8 ignore next 3 */
         if (latest === null) {
             return { current: 0, longest };

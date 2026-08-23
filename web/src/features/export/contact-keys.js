@@ -7,9 +7,9 @@
  * already share `messages-parse.js`.
  *
  * Used only as a self-detection tiebreak: an export holding one conversation
- * cannot say which of its two people is the account owner, but you are never in
- * your own connections list, so whoever is in it is not you. A missing or
- * unreadable connections file simply leaves the tie unresolved.
+ * cannot say which of its two people is the account owner, but the account owner
+ * does not appear in the connections list. A missing or unreadable connections
+ * file leaves the tie unresolved.
  *
  * Parsed rather than cleaned, unlike the connections dashboard: the cleaner
  * drops a row with no connection date, and somebody you are connected to is

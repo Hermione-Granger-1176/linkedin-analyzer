@@ -744,7 +744,7 @@ describe("Tutorial.onRouteChange()", () => {
         Tutorial.start("home");
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
 
-        // Route change to a complete route should just close the active one
+        // A completed route closes the active tutorial.
         markRouteComplete("analytics");
         Tutorial.onRouteChange("analytics");
 
@@ -987,7 +987,7 @@ describe("keyboard shortcuts", () => {
         fireKeydown("Escape"); // closes tutorial
         expect(document.body.classList.contains("tutorial-open")).toBe(false);
 
-        // Further presses should not throw
+        // Additional key presses should not throw.
         expect(() => fireKeydown("ArrowRight")).not.toThrow();
         expect(() => fireKeydown("ArrowLeft")).not.toThrow();
     });
@@ -1351,7 +1351,7 @@ describe("spotlight and pointer geometry", () => {
         Tutorial.start("home");
 
         const popover = document.querySelector(".tutorial-popover");
-        // Just verify the style properties were written (actual values depend on jsdom layout)
+        // Verify that jsdom received both style properties. Exact values depend on layout.
         expect(popover.style.left).toBeTruthy();
         expect(popover.style.top).toBeTruthy();
     });
@@ -1938,7 +1938,7 @@ describe("geometry: resolvePlacement and calculatePopoverPosition", () => {
         // Trigger a resize which queues requestAnimationFrame → updateCurrentStepGeometry
         window.dispatchEvent(new Event("resize"));
 
-        // No assertion on exact position, just verify no error thrown
+        // The resize handler should not throw. Exact position depends on layout.
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 });
@@ -1959,10 +1959,10 @@ describe("scheduleMiniTipRetry", () => {
 
         Tutorial.onRouteChange("analytics");
 
-        // Advance past mini-tip initial delay (2200ms + 2*90ms = 2380ms)
-        // but NOT past MINI_TIP_RETRY_MAX retries.
-        // Each retry is 300ms. We advance just past initial delay so renderMiniTips
-        // fires once, finds no target, schedules one retry.
+        // Advance past the mini-tip initial delay (2200ms + 2*90ms = 2380ms), but
+        // not past MINI_TIP_RETRY_MAX retries. Each retry is 300ms. Advance past
+        // the initial delay so renderMiniTips fires once, finds no target, and
+        // schedules one retry.
         vi.advanceTimersByTime(2500);
         expect(document.querySelector(".tutorial-mini-tip")).toBeNull();
 
@@ -2542,7 +2542,7 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
         vi.advanceTimersByTime(5000);
 
         // After loading clears, mini-tips may render
-        expect(() => {}).not.toThrow(); // just verify no crash
+        expect(() => {}).not.toThrow(); // Verify that no error was raised.
     });
 });
 
@@ -2681,7 +2681,7 @@ describe("findRenderableStepIndex edge cases", () => {
     it("returns -1 when navigating back past step 0", () => {
         // noback route has 2 steps. At step 0, back-click with allowBack=true
         // should call moveToStep(-1, -1, false) → findRenderableStepIndex(-1, -1) → -1
-        // Then completeCurrentRoute is called. We just verify no crash.
+        // Then completeCurrentRoute is called. Verify that no error is raised.
         Tutorial.start("noback");
         // Step 0 has no allowBack set (undefined → treated as allowed)
         expect(() => ui_backButton().click()).not.toThrow();

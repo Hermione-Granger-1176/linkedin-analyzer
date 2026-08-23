@@ -125,7 +125,7 @@ describe("ConnectionsPage", () => {
 
     it("shows the storage-error state when the connections text record is missing", async () => {
         // Metadata is present but the text record is gone (cleared in another
-        // tab / degraded persistence); this must surface as a load failure, not
+        // tab or unavailable in degraded persistence). Report a load failure, not
         // the "not uploaded" empty state.
         Storage.getFile.mockResolvedValue({
             type: "connections",

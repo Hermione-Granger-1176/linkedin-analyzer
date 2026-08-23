@@ -1,11 +1,9 @@
 /**
  * The stored data an export is built from, and the cheap check over it.
  *
- * Split out of collect.js rather than left beside the collection it serves. The
- * export button is on every screen, so the surface that owns it is wired up on
- * load and asks this question straight away, while collect.js reaches the layout
- * engine, the charts and three worker transports. Keeping the question here is
- * what lets all of that be fetched only when someone actually exports.
+ * Split this module out of collect.js because the export button is on every
+ * screen. The button needs a cheap availability check on load, while collect.js
+ * loads the layout engine, charts, and worker transports only for an export.
  *
  * The dependency runs one way: collect.js reads through these, and nothing here
  * may reach back into the collection graph.

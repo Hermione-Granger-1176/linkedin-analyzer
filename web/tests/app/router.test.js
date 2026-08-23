@@ -105,7 +105,7 @@ describe("AppRouter navigation", () => {
     });
 
     it("getCurrentRoute returns null before any navigation", () => {
-        // The router has state from prior tests, so just verify structure
+        // The router has state from prior tests, so verify the returned structure.
         const route = AppRouter.getCurrentRoute();
         if (route !== null) {
             expect(route).toHaveProperty("name");
@@ -115,15 +115,16 @@ describe("AppRouter navigation", () => {
         }
     });
 
-    it("setParams does nothing when no current route", () => {
-        // If no route is active, setParams should not throw
-        // We can test this implicitly via updateParams on a fresh-ish state
-        expect(() => AppRouter.setParams({ x: "1" })).not.toThrow();
+    it("setParams does nothing when no current route", async () => {
+        vi.resetModules();
+        const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
+        // If no route is active, setParams should return without throwing.
+        expect(() => FreshRouter.setParams({ x: "1" })).not.toThrow();
     });
 
     it("navigate ignores unknown route names", () => {
         AppRouter.navigate("does-not-exist-xyz", { foo: "bar" }, { replaceHistory: true });
-        // Hash should not contain the unknown route
+        // The hash should not contain the unknown route.
         expect(window.location.hash).not.toContain("does-not-exist-xyz");
     });
 
@@ -135,9 +136,11 @@ describe("AppRouter navigation", () => {
         expect(parsed.params.saved).toBe("yes");
     });
 
-    it("updateParams does nothing when no current route", () => {
-        // Just verify it doesn't throw
-        expect(() => AppRouter.updateParams({ x: "1" })).not.toThrow();
+    it("updateParams does nothing when no current route", async () => {
+        vi.resetModules();
+        const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
+        // Verify that updateParams is a no-op and does not throw without an active route.
+        expect(() => FreshRouter.updateParams({ x: "1" })).not.toThrow();
     });
 
     it("sharedParams applies default value when no stored value exists", () => {

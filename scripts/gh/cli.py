@@ -2,7 +2,7 @@
 
 Run as ``python -m scripts.gh.cli <command>``. The Makefile wraps each command
 in a thin target, and ``<command> --help`` documents its options, so an agent
-can discover the full surface without re-deriving any ``gh`` plumbing.
+can discover all commands without re-deriving any ``gh`` plumbing.
 """
 
 from __future__ import annotations

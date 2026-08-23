@@ -365,10 +365,8 @@ export const InsightsPage = (() => {
      */
     function applyWorkerInsightsPayload(payload) {
         state.currentInsights = payload.insights || null;
-        // The whole view is kept, not just the growth figure off it: the PDF
-        // export plots its activity dashboard from the timeline, topics and
-        // heatmap on it, and without this the snapshot below would send it back
-        // to the worker for numbers this screen has already been given.
+        // Keep the complete view. The PDF export uses the timeline, topics, and
+        // heatmap, and should not request data the screen already received.
         state.currentView = payload.view || null;
         // Recorded with the view, not read off the filters later: the filter is
         // updated the moment the user picks a range, while the view only arrives
@@ -532,8 +530,7 @@ export const InsightsPage = (() => {
      * @returns {string}
      */
     function getWorkerMessage(payload, fallback) {
-        // Callers pass parser-normalized payloads that always carry a message,
-        // so the fallback arm is defensive.
+        // Parser-normalized payloads normally carry a message. Use the fallback for malformed data.
         /* v8 ignore next */
         return payload && payload.message ? payload.message : fallback;
     }
@@ -546,7 +543,7 @@ export const InsightsPage = (() => {
         captureError(
             event && "error" in event && event.error
                 ? event.error
-                : // A dispatched event always carries a type, so the fallback is defensive.
+                : // Dispatched events have a type. Keep an "error" fallback for malformed events.
                   /* v8 ignore next */
                   new Error(`Insights worker ${event && event.type ? event.type : "error"} event`),
             {
@@ -692,7 +689,7 @@ export const InsightsPage = (() => {
     function setEmptyState(title, message) {
         const heading = elements.insightsEmpty.querySelector("h2");
         const text = elements.insightsEmpty.querySelector("p");
-        // The empty-state shell always contains both nodes, so the guards are defensive.
+        // The static shell includes both nodes. Keep the guards for incomplete DOM setup.
         /* v8 ignore next */
         if (heading) {
             heading.textContent = title;
@@ -705,7 +702,7 @@ export const InsightsPage = (() => {
         elements.insightsGrid.hidden = true;
         elements.insightTip.hidden = true;
         // The All-time section is governed solely by renderAllTime (driven by
-        // data presence), so it can still surface lifetime outreach even when
+        // data presence), so it can still show lifetime outreach even when
         // there are no shares/comments for the filtered cards.
     }
 

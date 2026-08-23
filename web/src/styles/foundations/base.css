@@ -1,6 +1,6 @@
-/* Reset, base typography, background canvas, and theme toggle */
+/* Reset, base typography, page background, and theme toggle. */
 
-/* Reset & Base */
+/* Reset and base styles. */
 *,
 *::before,
 *::after {
@@ -25,12 +25,7 @@ body {
         background-color var(--transition-normal),
         color var(--transition-normal);
 
-    /* The furniture punched into the sheet: a column of binder holes down the
-       outside edge, and the margin rule beside them. Both are background layers
-       rather than elements, so they scroll with the paper, sit under every
-       card, and take no part in layout. They are held as a pair of lists rather
-       than written into the background below because the dark theme restates
-       that background to add its lamp, and the furniture does not change. */
+    /* Keep the binder holes and margin rule in one reusable background layer. */
     --paper-furniture:
         radial-gradient(
             circle at var(--paper-punch-x) 50%,
@@ -48,24 +43,18 @@ body {
         );
     --paper-furniture-size: 100% var(--paper-punch-step), 100% 100%;
 
-    /* The ruling, held as its own pair for the same reason as the furniture. */
+    /* Keep the grid layers separate so dark mode can reuse them. */
     --paper-ruling:
         linear-gradient(var(--grid-color) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
     --paper-ruling-size: 25px 25px, 25px 25px;
 
-    /* Grid paper background, under the furniture: the holes are listed first
-       because they paint over the ruling, and a hole is a hole, so the grid has
-       to stop at its edge. */
+    /* Paint the binder holes above the grid. */
     background-image: var(--paper-furniture), var(--paper-ruling);
     background-size: var(--paper-furniture-size), var(--paper-ruling-size);
 }
 
-/* Below the narrow breakpoint the left edge belongs to the fixed nav toggle and
-   the cards run nearly to the paper's edge, so the punches drop out and the
-   margin rule carries the notebook on its own. Emptying the two punch colors
-   leaves the layer in place and paints nothing, which keeps the layer lists
-   above as the single description of this background. */
+/* Hide binder holes below the narrow breakpoint without changing the margin rule. */
 @media (max-width: 540px) {
     body {
         --paper-punch-fill: transparent;
@@ -73,11 +62,8 @@ body {
     }
 }
 
-/* Dark theme: the same ruled page and the same furniture, plus the pool of a
-   desk lamp above it. The ruling comes from the token; the last layer is a
-   single static gradient that keeps a flat near-black from reading as a void,
-   and it sizes to the document rather than the viewport so it never slides
-   against the content while scrolling. */
+/* Add the dark-mode lamp gradient after the shared layers. Size it to the document
+   so it stays aligned while scrolling. */
 [data-theme="dark"] body {
     background-image:
         var(--paper-furniture), var(--paper-ruling),
@@ -116,7 +102,7 @@ body {
     border: 0;
 }
 
-/* Background decoration canvas */
+/* Background decoration canvas. */
 #roughCanvas {
     position: fixed;
     top: 0;
@@ -143,7 +129,7 @@ button {
     color: inherit;
 }
 
-/* Theme Toggle */
+/* Theme toggle. */
 .theme-toggle {
     position: fixed;
     top: var(--space-lg);
@@ -190,8 +176,7 @@ button {
     display: block;
 }
 
-/* Save as PDF: sits immediately left of the theme toggle on every screen, so
-   its offset is one toggle width plus one gutter. */
+/* Place the Save as PDF button to the left of the theme toggle. */
 .pdf-export-btn {
     position: fixed;
     top: var(--space-lg);
@@ -216,8 +201,7 @@ button {
     color: var(--text-primary);
 }
 
-/* No :disabled half: this button is never natively disabled, deliberately, so
-   it keeps its place in the tab order and the reason on it stays reachable. */
+/* Keep the button in the tab order with aria-disabled instead of :disabled. */
 .pdf-export-btn:hover:not([aria-disabled="true"]) {
     transform: scale(1.06) rotate(-8deg);
     box-shadow: var(--shadow-md);

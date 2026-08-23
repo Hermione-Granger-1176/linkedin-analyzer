@@ -55,7 +55,7 @@ def test_latest_run_raises_without_runs() -> None:
 
 
 def test_latest_run_rejects_a_non_list_payload() -> None:
-    """A non-list run payload is surfaced as a GhError."""
+    """A non-list run payload raises GhError."""
     runner = FakeGh([(has("run", "list"), completed_process(0, json.dumps({})))])
 
     with pytest.raises(GhError, match="expected a list"):

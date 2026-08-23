@@ -46,7 +46,7 @@ export function terminateThreadsWorker() {
  *
  * Runs in a worker when one is available and falls back to the main thread for
  * small exports; a large export with no worker yields an empty list so the PDF
- * simply omits the section.
+ * omits the section.
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
  * @param {{people?: number, messagesPerPerson?: number, isCancelled?: () => boolean}} [options] - Selection limits and the run's cancellation check

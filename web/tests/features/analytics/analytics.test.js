@@ -881,7 +881,7 @@ describe("AnalyticsEngine network growth", () => {
     it("returns null when the busiest-vs-quiet lift rounds below 2x", () => {
         // Connections track posts perfectly (positive correlation) but the
         // busiest months only edge out the quiet ones, so the multiplier rounds
-        // to 1x, too weak a headline to surface.
+        // to 1x, too weak a headline to show.
         const { shares, connections } = buildMonthly(
             monthsRange(14, i => ({ posts: i + 1, connections: 101 + i, topic: "x" }))
         );

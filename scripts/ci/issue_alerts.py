@@ -195,7 +195,7 @@ def sync_alert_issue(
     """
     _require_argument(title, "title")
     _require_argument(label, "label")
-    # Ensured before the lookup, not just before a create, so that syncing a
+    # Ensure this before the lookup, not only before a create, so syncing a
     # recovery on a repository that has never failed cannot fail on a label
     # that does not exist yet.
     ensure_label(repo, label, f"Alerts for: {title}", run_fn=run_fn)

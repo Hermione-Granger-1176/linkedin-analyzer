@@ -79,10 +79,16 @@ Setup needs Python 3.12+, uv, and Node.js 22.22.2+ or 24.15.0+ within those supp
 
 ## Docs
 
-- [`structure.md`](docs/structure.md): full repository layout
-- [`development.md`](docs/development.md): local workflow, and why free text travels the way it does
-- [`cli.md`](docs/cli.md): Python CLI usage
-- [`web-app.md`](docs/web-app.md): web app architecture and deployment
-- [`operations.md`](docs/operations.md): production targets, CI, releases, and deployment
-- [`style-guide.md`](docs/style-guide.md): coding conventions
-- [`adr/`](docs/adr): architecture decision records
+- [`index.md`](docs/index.md): documentation map and page selection
+- [`getting-started.md`](docs/getting-started.md): first web and CLI cleaning run
+- [`web-app.md`](docs/web-app.md): browser workflow, exports, limits, and privacy
+- [`cli.md`](docs/cli.md): Python CLI commands and API
+- [`data-formats.md`](docs/data-formats.md): CSV columns and cleaning rules
+- [`development.md`](docs/development.md): local setup, Make targets, and GitHub helpers
+- [`testing.md`](docs/testing.md): test layers, coverage, parity, and browser checks
+- [`structure.md`](docs/structure.md): repository layout and ownership
+- [`web-architecture.md`](docs/web-architecture.md): browser design and data flow
+- [`operations.md`](docs/operations.md): deployment, releases, CI, and incident response
+- [`troubleshooting.md`](docs/troubleshooting.md): setup and runtime failure recovery
+- [`style-guide.md`](docs/style-guide.md): code and documentation conventions
+- [`adr/README.md`](docs/adr/README.md): architecture decision records

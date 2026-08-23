@@ -1,437 +1,138 @@
-# Project Structure
+# Project structure
 
-This document is a map of the repository. Trees show ownership and relationships directly. Tool configuration continues to discover files from directory roots, so adding a file inside an existing boundary automatically places it under the normal quality gates.
+The repository contains a Python package, a browser app, a Vercel function, tests, and tested repository automation. Directory ownership determines which quality gates discover a file.
 
-## Repository
+## Map the repository
 
 ```text
 linkedin-analyzer/
-├── api/                                # Vercel serverless functions
-│   └── csp-report.mjs                  # CSP violation report collector
-├── config/                             # JavaScript and repository tool configuration
-│   ├── eslint.config.mjs
-│   ├── jsconfig.json
-│   ├── knip.json
-│   ├── playwright.config.js
-│   ├── prettierignore
-│   ├── prettierrc.json
-│   ├── security_audit.json
-│   └── stylelint.config.mjs
-├── constraints/
-│   └── container-build                 # Container-only Python constraints
-├── data/                               # Ignored local workspace
-│   ├── input/                          # LinkedIn CSV exports
-│   └── output/                         # Generated workbooks
-├── docs/                               # User and developer documentation
-│   ├── adr/                            # Architecture decision records
-│   ├── cli.md
-│   ├── development.md
-│   ├── operations.md
-│   ├── structure.md
-│   ├── style-guide.md
-│   └── web-app.md
-├── scripts/                            # Tested repository automation
-├── src/
-│   └── linkedin_analyzer/              # Published Python package
-├── tests/                              # Python package, integration, and tooling tests
-├── web/                                # Vite single-page application
-├── .github/                            # GitHub metadata, actions, and workflows
-├── .dockerignore                       # Container build-context exclusions
-├── .editorconfig                       # Cross-editor text conventions
-├── .env.example                        # Optional web diagnostics configuration
-├── .gitignore                          # Local and generated file exclusions
-├── .npmrc                              # Node package-manager policy
-├── .pre-commit-config.yaml             # Local Git hook checks
-├── .yamllint.yml                       # YAML lint configuration
-├── CHANGELOG.md                        # Python package changelog
-├── CLAUDE.md                           # Shared repository agent guidance
-├── AGENTS.md                           # Symlink to CLAUDE.md
-├── Dockerfile                          # Python CLI container image
-├── LICENSE
-├── Makefile                            # Only command interface for the repository
-├── README.md
-├── package.json                        # Node dependencies and script definitions
-├── package-lock.json                   # Frozen Node dependency resolution
-├── pyproject.toml                      # Python build and quality configuration
-├── uv.lock                             # Frozen Python dependency resolution
-└── vercel.json                         # Vercel deployment configuration
+├── api/                         # Vercel serverless functions
+├── config/                      # JavaScript, browser, and audit configuration
+├── constraints/                 # Container build constraints
+├── data/                        # Local input and output directories
+├── docs/                        # Product, developer, operations, and ADR docs
+├── scripts/                     # Tested checks, CI, GitHub, lint, and setup code
+├── src/linkedin_analyzer/       # Published Python package
+├── tests/                       # Python integration, package, and tooling tests
+├── web/                         # Vite single-page app
+├── .github/                     # Workflows, actions, templates, and policy files
+├── .env.example                 # Optional browser and server diagnostics settings
+├── .pre-commit-config.yaml       # Local hook definitions
+├── .editorconfig                 # Cross-editor text rules
+├── Dockerfile                   # CLI container image
+├── Makefile                     # Repository command interface
+├── package.json                 # Node manifest and script definitions
+├── pyproject.toml               # Python manifest and Python tool configuration
+├── uv.lock                      # Frozen Python dependency resolution
+├── package-lock.json            # Frozen Node dependency resolution
+└── vercel.json                  # Static deployment and security headers
 ```
 
-The root intentionally retains files that package managers, deployment platforms, and contributors expect to find there. Moving those conventional entry points into another directory would reduce visible root files but increase operational surprise.
+`data/input/` and `data/output/` contain local exports and generated workbooks. Git ignores their contents and keeps only `.gitkeep` files. Never commit a real LinkedIn export.
 
-## Web Application
+The repository keeps one source of truth for tool configuration. `pyproject.toml` owns Python linting, typing, tests, coverage, and dead-code settings. Files under `config/` own JavaScript, CSS, browser, formatting, and audit settings. `web/` owns Vite and Vitest configuration.
 
-The browser application uses feature-first ownership. Application composition, browser infrastructure, reusable modules, styles, and user-facing features have separate boundaries.
+`CLAUDE.md` is the repository instruction source and `AGENTS.md` is its symlink. `CHANGELOG.md` records Python package releases only. `LICENSE`, `.gitignore`, `.npmrc`, and `.yamllint.yml` remain at the root because package managers, deployment platforms, and repository checks expect those conventional locations.
+
+## Browse the web app
 
 ```text
 web/
-├── e2e/                                # Playwright browser tests
-│   ├── fixtures/
-│   ├── helpers/                        # Shared spec helpers, such as PDF text extraction
-│   ├── app.e2e.spec.js
-│   ├── browser-xlsx.e2e.spec.js
-│   ├── pdf-export.e2e.spec.js
-│   └── screenshots.e2e.spec.js
-├── public/
-│   ├── assets/                         # Icons and application images
-│   ├── fonts/                          # Self-hosted fonts
-│   └── robots.txt
+├── e2e/                         # Playwright specs, fixtures, and helpers
+├── public/                      # Icons, fonts, security.txt, and robots.txt
 ├── src/
-│   ├── app/                            # Application composition primitives
-│   │   ├── router.js                   # Hash routes and shared query parameters
-│   │   ├── runtime.js                  # Global runtime and service worker setup
-│   │   ├── screen-manager.js           # Screen lifecycle and transitions
-│   │   └── worker-contracts.js         # Shared worker message contracts
-│   ├── features/                       # User-facing capabilities
-│   │   ├── analytics/
-│   │   ├── cleaning/
-│   │   ├── connections/
-│   │   ├── export/
-│   │   ├── insights/
-│   │   ├── messages/
-│   │   ├── tutorial/
-│   │   └── upload/
-│   ├── platform/                       # Browser and operational infrastructure
-│   │   ├── observability/
-│   │   └── persistence/
-│   ├── shared/                         # Reused application primitives
-│   │   └── ui/
-│   ├── styles/                         # Styles grouped by responsibility
-│   │   ├── components/
-│   │   ├── features/
-│   │   └── foundations/
-│   ├── app.js                          # SPA bootstrap and route registration
-│   └── sw.js                           # PWA source kept here for VitePWA
-├── tests/                              # Vitest tests mirroring source ownership
-│   ├── app/
-│   ├── features/
-│   ├── helpers/
-│   ├── integration/
-│   ├── platform/
-│   └── shared/
-├── index.html                          # SPA document and screen markup
-├── vite.config.mjs                     # Vite and PWA build configuration
-└── vitest.config.mjs                   # Vitest and coverage configuration
+│   ├── app/                     # Bootstrap, router, screen lifecycle, worker contracts
+│   ├── features/                # User-facing capabilities
+│   │   ├── analytics/           # Activity aggregation and Analytics screen
+│   │   ├── cleaning/            # Bounded CSV parser and Excel cleaner
+│   │   ├── connections/         # Network aggregation and Connections screen
+│   │   ├── export/              # Excel lists, chart downloads, and PDF export
+│   │   ├── insights/             # Rule-based insight screen
+│   │   ├── messages/             # Message parsing and relationship screen
+│   │   ├── tutorial/             # Guided tutorials and mini-tips
+│   │   └── upload/               # File reading, decoding, upload state, and progress
+│   ├── platform/                # Persistence and observability services
+│   ├── shared/                  # Reused constants, events, workers, and UI
+│   ├── styles/                  # Foundation, feature, component, and responsive CSS
+│   ├── app.js                   # Application composition and route registration
+│   └── sw.js                    # Injected service worker source
+├── tests/                       # Vitest tests that mirror source ownership
+├── index.html                   # App markup, screen containers, and inline SVG definitions
+├── vite.config.mjs              # Vite, PWA, and optional Sentry source-map setup
+└── vitest.config.mjs            # Vitest environment, coverage, and include rules
 ```
 
-### Application Composition
+Keep feature code inside its feature directory. Put code used by multiple features in `web/src/shared/` or `web/src/platform/` only when its ownership is clear. Keep screen controllers responsible for screen state, and keep worker code responsible for parsing or aggregation that does not need the DOM.
 
-```text
-web/src/
-├── app.js
-└── app/
-    ├── router.js
-    ├── runtime.js
-    ├── screen-manager.js
-    └── worker-contracts.js
-```
-
-`app.js` wires the application together. Modules under `app/` define cross-feature composition and lifecycle behavior. Feature implementation does not belong in this boundary.
-
-### Features
-
-```text
-web/src/features/
-├── analytics/
-│   ├── analytics-worker.js             # Aggregate and view computation worker
-│   ├── analytics.js                    # Analytics engine
-│   ├── constants.js                    # Calendar labels and analytics constants
-│   ├── dates.js                        # Date parsing and calendar calculations
-│   ├── insights.js                     # Narrative insight generation
-│   ├── screen.js                       # Analytics screen controller
-│   ├── stats.js                        # Numeric helpers
-│   └── text.js                         # Topic and text normalization
-├── cleaning/
-│   ├── cleaner.js                      # Browser cleaner facade
-│   ├── configs.js                      # Per-export cleaner configuration
-│   ├── csv-parser.js                   # Bounded CSV parser
-│   ├── excel.js                        # Workbook generation and download
-│   ├── field-cleaners.js               # Field-level normalization
-│   └── screen.js                       # Clean screen controller
-├── connections/
-│   ├── connections-worker.js           # Network analytics worker
-│   ├── screen.js                       # Connections screen controller
-│   └── view.js                         # Network aggregates shared by screen, worker, and export
-├── export/
-│   ├── availability.js                 # Stored-data reads and the export availability check
-│   ├── collect.js                      # PDF document model assembly
-│   ├── connections-transport.js        # Connections worker transport and fallback
-│   ├── contact-keys.js                 # Contact keys for the self-detection tiebreak
-│   ├── drawable-text.js                # Placeholders for characters the fonts cannot draw
-│   ├── fonts.js                        # TrueType loading for jsPDF
-│   ├── messages-parse.js               # CSV parsing that keeps message bodies verbatim
-│   ├── messages-transport.js           # Messages worker transport and fallback
-│   ├── palette.js                      # Light palette read from the stylesheet
-│   ├── pdf-charts.js                   # Vector chart drawing for the dashboards
-│   ├── pdf-document.js                 # A4 measure-and-draw layout engine
-│   ├── pdf-layout.js                   # Page geometry and color arithmetic
-│   ├── pdf-runtime.js                  # Lazy entry point to everything a run needs
-│   ├── pdf.js                          # Export button, dialog, and orchestration
-│   ├── threads-transport.js            # Thread worker transport and fallback
-│   ├── threads-worker.js               # Message thread selection worker
-│   ├── threads.js                      # Recent-thread selection
-│   └── worker-transport.js             # Worker ownership, watchdog, and settling for all three
-├── insights/
-│   ├── reactions.js                    # Pip's stamp-sized pose for each insight card
-│   └── screen.js                       # Cross-export insights controller
-├── messages/
-│   ├── analytics.js                    # Message analytics
-│   ├── format.js                       # Formatting and range helpers
-│   ├── hydrate.js                      # Map and Set state hydration
-│   ├── list-dom.js                     # Message list row builders
-│   ├── messages-worker.js              # Message parsing worker
-│   ├── parse.js                        # Worker transport and fallback
-│   ├── relationships.js                # Relationship queries
-│   └── screen.js                       # Messages screen controller
-├── tutorial/
-│   ├── arrows.js                       # Pointer arrow variants
-│   ├── geometry.js                     # Overlay geometry
-│   ├── mascot.js                       # Pip drawn on the tutorial callout card
-│   ├── pacing.js                       # Mini-tip pacing
-│   ├── shell.js                        # Overlay DOM shell
-│   ├── steps.js                        # Route tutorial definitions
-│   ├── storage.js                      # Tutorial persistence
-│   ├── targets.js                      # Target resolution
-│   └── tutorial.js                     # Tutorial engine
-└── upload/
-    ├── decode.js                       # Byte decoding
-    ├── jobs.js                         # Upload job identity
-    ├── mascot.js                       # Drop-zone catcher poses
-    ├── progress.js                     # Progress overlay controller
-    ├── read.js                         # Streaming and FileReader input
-    ├── state.js                        # File state and hints
-    └── upload.js                       # Upload screen controller
-```
-
-Each feature owns its screen, domain logic, and worker when applicable. A module moves to `shared/` only after multiple features genuinely depend on it.
-
-### Platform
-
-```text
-web/src/platform/
-├── observability/
-│   ├── metrics.js                      # Bounded telemetry metric helpers
-│   ├── perf.js                         # Frame, mark, and measure helpers
-│   ├── sentry.js                       # Opt-in error reporting
-│   └── telemetry.js                    # Web vitals and performance telemetry
-└── persistence/
-    ├── data-cache.js                   # In-memory route cache
-    ├── session.js                      # Session lifetime management
-    └── storage.js                      # IndexedDB with memory fallback
-```
-
-Platform modules integrate with browser capabilities or operational services. They do not implement one user-facing feature.
-
-### Shared Modules
-
-```text
-web/src/shared/
-├── constants.js                        # Dependency-free cross-feature constants
-├── dom-events.js                       # Delegated event target helpers
-├── ui/
-│   ├── alive.js                        # Hero Pip's gaze, boredom, and theme flinch
-│   ├── avatar.js                       # Deterministic contact avatars
-│   ├── chart-tooltip.js                # Shared chart tooltip
-│   ├── charts.js                       # Canvas chart rendering and export
-│   ├── decorations.js                  # Rough.js background decorations
-│   ├── loading-overlay.js              # Shared loading overlay
-│   ├── mascot.js                       # Click splats and the one-shot moments
-│   ├── motion.js                       # Reduced-motion check and the one-shot mechanism
-│   ├── nav-menu.js                     # Mobile navigation
-│   ├── pip-parts.js                    # The SVG parts every drawing of Pip shares
-│   └── theme.js                        # Theme selection
-└── worker-timeout.js                   # Size-scaled watchdog budget for parsing workers
-```
-
-`shared/` is not a general utility bucket. Modules remain with their owning feature until reuse is concrete.
-
-### Styles
-
-```text
-web/src/styles/
-├── components/
-│   ├── export-dialog.css
-│   ├── mascot.css
-│   └── overlays.css
-├── features/
-│   ├── analytics.css
-│   ├── filters.css
-│   ├── insights.css
-│   ├── tutorial.css
-│   └── upload.css
-├── foundations/
-│   ├── base.css
-│   ├── layout.css
-│   └── variables.css
-├── responsive.css
-├── screens.css
-└── sketch.css
-```
-
-Foundation styles load first. Feature and component styles build on those foundations. Cross-cutting responsive and visual treatment files load last.
-
-### Web Tests
-
-```text
-web/tests/
-├── app/                                # app/ and app.js behavior
-├── features/
-│   ├── analytics/
-│   ├── cleaning/
-│   ├── connections/
-│   ├── export/
-│   ├── insights/
-│   ├── messages/
-│   ├── tutorial/
-│   └── upload/
-├── helpers/                            # Test-only DOM, telemetry, and Worker stand-ins
-├── integration/
-│   ├── cleaner-diff.test.js
-│   ├── csp-report.test.js
-│   ├── parity.test.js
-│   ├── verified-commit.test.js
-│   └── web-smoke.test.js
-├── platform/
-│   ├── observability/
-│   ├── persistence/
-│   └── pwa/
-└── shared/
-    └── ui/
-```
-
-Unit tests mirror the source boundary they verify. Integration tests cross application, runtime, or repository boundaries.
-
-## Python Package
-
-The Python package remains intentionally compact. Its existing package boundaries are already proportional to its size.
+## Browse the Python package
 
 ```text
 src/linkedin_analyzer/
+├── __init__.py                  # Public package exports and version
+├── cli.py                       # Argument parsing, logging, dispatch, and exit codes
 ├── cleaners/
-│   ├── __init__.py
-│   ├── comments.py                     # Comments export cleaner
-│   ├── connections.py                  # Connections export cleaner
-│   ├── messages.py                     # Messages export cleaner
-│   └── shares.py                       # Shares export cleaner
+│   ├── comments.py              # Comments columns and cleaner configuration
+│   ├── connections.py            # Connections columns, preamble, and row rules
+│   ├── messages.py              # Messages columns and cleaner configuration
+│   └── shares.py                # Shares columns and cleaner configuration
 ├── core/
-│   ├── __init__.py
-│   ├── cleaner.py                      # Shared cleaner pipeline
-│   ├── excel.py                        # Workbook formatting
-│   ├── limits.py                       # Resource limits
-│   ├── paths.py                        # Default input and output paths
-│   ├── text.py                         # Text and date normalization
-│   └── types.py                        # Cleaner configuration and results
-├── __init__.py                         # Package exports and version
-├── cli.py                              # argparse command dispatch
-└── py.typed                            # PEP 561 marker
+│   ├── cleaner.py               # Shared CSV read, validation, row filtering, and write flow
+│   ├── excel.py                 # Workbook formatting
+│   ├── limits.py                # Default byte and row limits
+│   ├── paths.py                 # Data directory and default paths
+│   ├── text.py                  # Missing values, dates, escaping, and formula protection
+│   └── types.py                 # Cleaner and column configuration types
+└── py.typed                     # Type-checker marker
 ```
 
-Adding more Python package layers now would create navigation overhead without clarifying an existing ownership problem.
+The four modules under `cleaners/` provide the public `clean_*` functions. `core/cleaner.py` owns the common pipeline so the file-specific modules only declare columns and parsing rules.
 
-## Python Tests
-
-Python tests distinguish published package behavior, cross-surface integration, reusable support, and repository tooling.
+## Browse tests
 
 ```text
 tests/
-├── fixtures/                           # Shared cleaner and parity fixtures
-├── integration/
-│   ├── test_package.py
-│   └── test_web_parity.py
-├── package/
-│   ├── cleaners/
-│   │   ├── test_connections.py
-│   │   └── test_messages.py
-│   ├── core/
-│   │   ├── test_excel.py
-│   │   ├── test_paths.py
-│   │   ├── test_text.py
-│   │   └── test_types.py
-│   ├── test_cleaner.py
-│   └── test_cli.py
-├── support/
-│   └── gh.py                           # Shared GitHub test doubles
-└── tooling/
-    ├── checks/                         # Tests for scripts/checks
-    ├── ci/                             # Tests for scripts/ci
-    ├── gh/                             # Tests for scripts/gh
-    ├── lib/                            # Tests for scripts/lib
-    ├── lint/                           # Tests for scripts/lint and Makefile policy
-    └── setup/                          # Tests for scripts/setup
+├── fixtures/                    # Input, parity, malformed-input, and expected-output fixtures
+├── integration/                 # Package integration and web parity tests
+├── package/                     # Python cleaners, CLI, core, and Excel tests
+├── support/                     # Shared GitHub test helpers
+└── tooling/                     # Tests for checks, CI, GitHub, lint, and setup scripts
 ```
 
-The nested Python test directories are packages. Their `__init__.py` files give duplicate test basenames unambiguous import names.
+The browser suite follows the same ownership structure under `web/tests/`. Playwright specs live under `web/e2e/` because they exercise the built app in a real browser rather than the Vitest `jsdom` environment.
 
-## Repository Scripts
+## Browse repository scripts
 
 ```text
 scripts/
-├── checks/
-│   ├── audit_memory_python.py
-│   ├── check-overrides.mjs
-│   ├── cleaner-diff.mjs
-│   ├── heap-audit.mjs
-│   ├── li_explore.py
-│   ├── perf-bench.mjs
-│   ├── pipeline-bench.mjs
-│   ├── validate_browser_xlsx.py
-│   ├── web-smoke.mjs
-│   └── xrt-diff.py
-├── ci/
-│   ├── coverage_summary.py
-│   ├── issue_alerts.py
-│   ├── refresh_action_shas.py
-│   ├── refresh_ci_pins.py
-│   ├── repo_audit.py
-│   ├── run_npm_audit.py
-│   ├── run_parallel_checks.py
-│   ├── run_security_audit.py
-│   ├── schedule_watchdog.py
-│   ├── security_audit_policy.py
-│   └── workflow_helpers.py
-├── fixtures/
-│   └── gen-parity-corpus.mjs
-├── gh/
-│   ├── ci_status.py
-│   ├── cli.py
-│   ├── commit_message.py
-│   ├── gh_runner.py
-│   ├── issues.py
-│   ├── pr_review.py
-│   └── pr_watch.py
-├── lib/
-│   ├── gh_policy.py
-│   ├── stage_files.py
-│   └── workspace_status.py
-├── lint/
-│   ├── align_tables.py
-│   ├── check_doc_commands.py
-│   ├── check_editorconfig.py
-│   ├── check_make_targets.py
-│   ├── lint-workflows.mjs
-│   └── make_targets.py
-└── setup/
-    ├── clean_venv.py
-    └── playwright_local_runtime.py
+├── checks/                      # Private export comparisons, benchmarks, and memory checks
+├── ci/                          # Coverage, audits, job gating, pins, and watchdogs
+├── fixtures/                    # Deterministic parity corpus generator
+├── gh/                          # Tested pull request, issue, and CI helpers
+├── lib/                         # Shared Git and workspace helpers
+├── lint/                        # Documentation, Makefile, EditorConfig, and workflow checks
+└── setup/                       # Safe cleanup and repository-local Playwright runtime
 ```
 
-Every script is invoked through a documented Make target. Direct script paths exist for implementation and testing, not as a second user interface.
+Scripts are part of the Python coverage target. A new Python script needs tests in the same change. The Makefile exposes the scripts through named targets instead of asking contributors to call modules directly.
 
-## Data Flow
+## Follow the data flow
 
-### Web
+### Browser data flow
 
-1. `features/upload/` reads and decodes selected CSV files.
-2. `features/cleaning/` validates, cleans, and exports those files.
-3. `platform/persistence/` stores raw input and prepared analytics locally.
-4. Feature workers prepare analytics away from the main thread.
-5. Feature screen controllers read through persistence and shared UI modules.
-6. `app/router.js` and `app/screen-manager.js` coordinate route changes.
+1. `web/src/features/upload/` reads file bytes and decodes them locally.
+2. `web/src/features/cleaning/` identifies the export type, parses bounded rows, and cleans fields.
+3. Workers under `analytics/`, `connections/`, and `messages/` build aggregates for the screens.
+4. `web/src/platform/persistence/storage.js` stores raw file text and selected aggregates in IndexedDB when available.
+5. Screens render local results and exports use local data to create files.
 
-### Python CLI
+`api/csp-report.mjs` receives only browser CSP violation reports. It does not receive uploaded file contents.
 
-1. `cli.py` parses the command and selects a cleaner.
-2. `cleaners/` provides export-specific configuration.
-3. `core/cleaner.py` runs the shared pipeline.
-4. `core/text.py` applies normalization.
-5. `core/excel.py` formats the generated workbook.
+### CLI data flow
+
+1. `src/linkedin_analyzer/cli.py` parses global options and dispatches a command.
+2. A file-specific cleaner builds a `CleanerConfig`.
+3. `core/cleaner.py` checks file limits, reads and decodes the CSV, validates headers, drops invalid rows, and applies column cleaners.
+4. `core/text.py` removes unsafe or invalid cell content before `core/excel.py` formats the workbook.
+5. The writer replaces the destination atomically after the workbook is complete.
+
+See [data formats](data-formats.md) for the shared cleaning rules and [web architecture](web-architecture.md) for the browser design decisions.

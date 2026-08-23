@@ -1,32 +1,27 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+## Supported versions
 
-Security fixes are applied to the latest commit on `main` and the latest release on PyPI. Before reporting, upgrade to the latest release (or `main` for the web app) to confirm the issue is not already fixed.
+Security fixes apply to the latest commit on `main` and the latest release published to PyPI. Update the package or checkout before you report an issue. The web app follows `main` because the browser deployment does not use the Python package version.
 
-## Reporting a Vulnerability
+## Report a vulnerability privately
 
-Please do **not** open public GitHub issues for security vulnerabilities.
+Do not open a public issue for a security vulnerability.
 
-The preferred channel is GitHub Private Vulnerability Reporting, which keeps the report and discussion private with the maintainers:
+Use [GitHub Private Vulnerability Reporting](https://github.com/Hermione-Granger-1176/linkedin-analyzer/security/advisories/new) when possible. If that channel is unavailable, email `adityadarak9314@outlook.com`.
 
-- [Open a private advisory](https://github.com/Hermione-Granger-1176/linkedin-analyzer/security/advisories/new)
+Do not attach a real LinkedIn export, workbook, browser storage dump, or message transcript. Replace personal data with a minimal fixture that still reproduces the issue.
 
-If you cannot use GitHub advisories, report privately by email instead:
+Include these details when they are available:
 
-- `adityadarak9314@outlook.com`
+- A short description of the issue and its impact.
+- Reproduction steps or a proof of concept.
+- The affected version, commit, operating system, browser, Python version, or Node.js version.
+- The input shape or fixture needed to reproduce the behavior, with personal data removed.
+- A suggested mitigation.
 
-When possible, include:
+## Response
 
-- A clear description of the issue and impact
-- Reproduction steps or proof-of-concept
-- Affected version/commit and environment details
-- Suggested mitigation (if available)
+The maintainer targets an initial response within five business days. Triage and severity assessment start when the issue is reproducible. Fix timing depends on impact, exploitability, and the affected release target.
 
-## Response Expectations
-
-- Initial response target: within 5 business days
-- Triage and severity assessment: as soon as reproducible
-- Fix timeline: based on impact and exploitability
-
-We appreciate responsible disclosure and coordinated release of fixes.
+The repository also publishes the same contact and policy through `web/public/.well-known/security.txt`.

@@ -142,9 +142,9 @@ function viewWindow(view) {
  * Read the months the messages dashboard covers.
  *
  * The range start is midnight on the first of the oldest month in range, so the
- * window contains the months between the range endpoints. Return null when the parse found
- * no dated message at all: `getRangeStart` has nothing to anchor on, and there
- * is no window to report.
+ * window contains the months between the range endpoints. Return null when parsing
+ * finds no dated message: `getRangeStart` has no anchor, so there is no window to
+ * report.
  * @param {number|null} rangeStart - Start of the messages range
  * @param {number} latestTimestamp - Newest message in the file
  * @returns {MonthWindow|null} Window, or null when there is nothing in range

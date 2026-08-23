@@ -1123,8 +1123,8 @@ export const UploadPage = (() => {
     function scheduleJobTimeout(jobId, fileName) {
         clearJobTimeout(jobId);
         const timeoutId = window.setTimeout(() => {
-            // completeJob() and resetProcessingState() clear this timer on success.
-            // Ignore a callback for a job that has already been removed.
+            // completeJob() clears this timer when a job settles, including error paths.
+            // resetProcessingState() clears all job timers during teardown.
             /* v8 ignore next 3 */
             if (!activeJobs.has(jobId)) {
                 return;

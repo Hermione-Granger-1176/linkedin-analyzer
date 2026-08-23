@@ -1,154 +1,93 @@
-<h1 align="center">LinkedIn Analyzer</h1>
+# LinkedIn Analyzer
 
-<p align="center">
-  Clean and analyze your LinkedIn data exports.<br>
-  <sub>Web app or Python CLI. File contents stay local in the web app; optional diagnostics are opt-in.</sub>
-</p>
+Clean LinkedIn data exports into Excel workbooks, or inspect the same exports in a private browser app.
 
-<p align="center">
-  <a href="https://github.com/Hermione-Granger-1176/linkedin-analyzer/actions/workflows/ci.yml"><img src="https://github.com/Hermione-Granger-1176/linkedin-analyzer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://pypi.org/project/linkedin-analyzer/"><img src="https://img.shields.io/pypi/v/linkedin-analyzer" alt="PyPI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
-</p>
+The repository ships two products:
 
-<br>
+- A browser app that reads, cleans, analyzes, and exports your files without uploading file contents.
+- The `linkedin-analyzer` Python CLI for local scripts, batch jobs, and container use.
 
-## What it does
+[![CI](https://github.com/Hermione-Granger-1176/linkedin-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/Hermione-Granger-1176/linkedin-analyzer/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/linkedin-analyzer)](https://pypi.org/project/linkedin-analyzer/) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-LinkedIn's data exports are messy. This tool fixes that.
+## What it cleans
 
-- **Shares.csv** has weird nested quote escaping
-- **Comments.csv** has backslash-escaped quotes
-- **messages.csv** has mixed participant/profile fields that need normalization
-- **Connections.csv** often includes preamble rows and noisy identity fields
+LinkedIn exports use different CSV conventions for different file types. The cleaner handles the four exports below and writes formatted `.xlsx` files.
 
-Upload your files, get clean Excel outputs. Plus analytics dashboards, relationship views from messages/connections, and rule-based insights.
+| Export file       | Default workbook   | Main cleanup                                                  |
+| ----------------- | ------------------ | ------------------------------------------------------------- |
+| `Shares.csv`      | `Shares.xlsx`      | Share commentary quoting and dates                            |
+| `Comments.csv`    | `Comments.xlsx`    | Backslash-escaped message text and dates                      |
+| `messages.csv`    | `Messages.xlsx`    | Message quoting, dates, and conversation fields               |
+| `Connections.csv` | `Connections.xlsx` | Three-row preamble, connection dates, and empty identity rows |
 
-<br>
+The browser app also provides activity charts, connection and message relationship views, rule-based insights, PNG chart downloads, Excel list exports, and an optional A4 PDF report.
 
-## Quick start
+## Start the web app
 
-**Development:** Install locked Python and Node dependencies:
+Install the locked development dependencies. The project needs Python 3.12 or newer, `uv` 0.11.0 or newer, and Node.js 22.22.2 or 24.15.0 within the supported major lines.
 
 ```bash
-# Requires Python 3.12+, uv, and Node.js 22.22.2+ or 24.15.0+
 make setup
-```
-
-**Web:** Run the Vite dev server and open the local URL:
-
-```bash
-cp .env.example .env  # optional; set VITE_SENTRY_DSN for opt-in diagnostics (VITE_APP_RELEASE adds release metadata)
 make web
 ```
 
-**CLI:** For automation:
+Open the Vite URL printed in the terminal. To enable the optional diagnostics prompt in a local build, copy `.env.example` to `.env` and set `VITE_SENTRY_DSN`. Diagnostics still remain off until a user opts in.
+
+## Run the CLI
+
+Install the published package for normal use:
 
 ```bash
 pip install linkedin-analyzer
-linkedin-analyzer shares
-linkedin-analyzer comments
-linkedin-analyzer messages
-linkedin-analyzer connections
 linkedin-analyzer all
 ```
 
-**Container:** Run the published CLI image:
+The CLI reads from `data/input/` and writes to `data/output/` by default. Use `linkedin-analyzer --help` for the command list, or read the [CLI reference](docs/cli.md) for paths, limits, encodings, required columns, and the Python API.
+
+For a checkout, use the repository's Make target after `make setup`:
 
 ```bash
-docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-analyzer:latest --version
+make run-cli args="all"
 ```
 
-<br>
+## Run the container
 
-## Tech stack
+The release workflow publishes a multi-platform image to GHCR for each stable release and tags the latest stable release as `latest`.
 
-<p>
-  <img src="https://img.shields.io/badge/HTML5-E34F26?style=flat&logo=html5&logoColor=white" alt="HTML5">
-  <img src="https://img.shields.io/badge/CSS3-1572B6?style=flat&logo=css3&logoColor=white" alt="CSS3">
-  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat&logo=javascript&logoColor=black" alt="JavaScript">
-  <img src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
-</p>
+```bash
+docker run --rm -v "$PWD/data:/app/data" ghcr.io/hermione-granger-1176/linkedin-analyzer:latest all
+```
 
-**Web app**
+The container runs as an unprivileged `app` user. The mounted `data` directory must be writable by that user. See [CLI reference](docs/cli.md) for custom paths and [operations](docs/operations.md) for release details.
 
-<p>
-  <img src="https://img.shields.io/badge/Rough.js-000000?style=flat" alt="Rough.js">
-  <img src="https://img.shields.io/badge/Canvas_API-FF6384?style=flat" alt="Canvas API">
-  <img src="https://img.shields.io/badge/IndexedDB-4285F4?style=flat" alt="IndexedDB">
-  <img src="https://img.shields.io/badge/Web_Workers-FF9800?style=flat" alt="Web Workers">
-  <img src="https://img.shields.io/badge/write--excel--file-107C10?style=flat" alt="write-excel-file">
-</p>
+## Privacy and storage
 
-**Python CLI**
+The web app processes files in the browser. It does not send CSV contents to an application server. The app may retain raw CSV text and computed analytics in IndexedDB so a reload can restore the session. A 24-hour inactivity sweep removes stored data, and **Clear data** removes it immediately.
 
-<p>
-  <img src="https://img.shields.io/badge/openpyxl-217346?style=flat" alt="openpyxl">
-  <img src="https://img.shields.io/badge/argparse-4EAA25?style=flat" alt="argparse">
-  <img src="https://img.shields.io/badge/mypy-strict-blue?style=flat" alt="mypy strict">
-</p>
-
-**Dev & CI**
-
-<p>
-  <img src="https://img.shields.io/badge/pytest-0A9EDC?style=flat&logo=pytest&logoColor=white" alt="pytest">
-  <img src="https://img.shields.io/badge/Ruff-D7FF64?style=flat&logo=ruff&logoColor=black" alt="Ruff">
-  <img src="https://img.shields.io/badge/ESLint-4B32C3?style=flat&logo=eslint&logoColor=white" alt="ESLint">
-  <img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white" alt="GitHub Actions">
-</p>
-
-<br>
-
-## Features
-
-| Feature              | Detail                                                     |
-| -------------------- | ---------------------------------------------------------- |
-| **100% client-side** | File contents stay local in your browser                   |
-| **Local restore**    | Raw CSV data may be saved in browser storage until cleared |
-| **Light/dark theme** | Hand-drawn sketch aesthetic                                |
-| **Guided tutorials** | Per-page tutorials                                         |
-| **Analytics**        | Timeline, topics, heatmap                                  |
-| **Messages view**    | Top contacts, silent connections, fading chats             |
-| **SPA routing**      | Hash routes with URL-synced filters                        |
-| **Mobile friendly**  | Hamburger nav and compact filters on narrow screens        |
-| **Excel export**     | Formatted .xlsx with proper columns                        |
-| **Connections**      | Network growth, top companies, top positions               |
-| **PDF export**       | Light-palette A4 report with optional names and messages   |
-| **Chart export**     | Download any chart as PNG                                  |
-| **PWA-ready**        | Installable with auto-refreshing service worker caching    |
-| **Session cleanup**  | Stale uploads and cached analytics cleared asynchronously  |
-| **Social previews**  | Open Graph and Twitter Card meta tags                      |
-| **Type-safe CLI**    | Strict mypy, high test coverage (100% threshold)           |
-
-<br>
+Diagnostics use Sentry only when the build contains a DSN and the user opts in. The app reduces error events to fixed diagnostic values and safe source locations. It does not attach file contents, file names, message bodies, contact names, or URLs to diagnostics. Read [web app behavior](docs/web-app.md) for the complete storage and export rules.
 
 ## Documentation
 
-See the [`docs/`](docs/) folder for:
+Start with the [documentation index](docs/index.md). The pages are grouped by the task or question they answer:
 
-- [Web App Guide](docs/web-app.md)
-- [Python CLI Reference](docs/cli.md)
-- [Development Setup](docs/development.md)
-- [Project Structure](docs/structure.md)
-- [Style Guide](docs/style-guide.md)
-- [Operations and Deployment](docs/operations.md)
-
-Architecture Decision Records: [`docs/adr/`](docs/adr/)
-
-Contributor guide: [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md)
-
-Changelog (Python package): [`CHANGELOG.md`](CHANGELOG.md)
-
-Security reporting guidelines: [`.github/SECURITY.md`](.github/SECURITY.md)
-
-<br>
+- [Clean an export](docs/getting-started.md) is the tutorial for a first run.
+- [Web app](docs/web-app.md) describes the browser workflow, screens, exports, limits, and privacy behavior.
+- [CLI reference](docs/cli.md) lists commands, options, input files, output files, and the Python API.
+- [Data formats](docs/data-formats.md) records required columns and cleaner behavior for each export.
+- [Development](docs/development.md) covers setup, dependency changes, local commands, and GitHub helpers.
+- [Testing](docs/testing.md) explains unit, integration, parity, browser, coverage, and benchmark checks.
+- [Project structure](docs/structure.md) maps ownership across the repository.
+- [Web architecture](docs/web-architecture.md) explains routing, workers, persistence, export, and observability decisions.
+- [Operations](docs/operations.md) covers deployment, releases, CI, monitoring, and incident response.
+- [Style guide](docs/style-guide.md) records code and documentation conventions.
+- [Troubleshooting](docs/troubleshooting.md) starts with common setup, upload, test, and deployment failures.
+- [Architecture decision records](docs/adr/README.md) explain decisions that affect the system design.
+- [Contributing](.github/CONTRIBUTING.md) describes the contribution workflow.
+- [Security policy](.github/SECURITY.md) describes private vulnerability reporting.
+- [Changelog](CHANGELOG.md) records Python package changes only.
 
 ## License
 
 [MIT](LICENSE)
 
----
-
-<p align="center">
-  <sub>Created by <a href="https://github.com/Hermione-Granger-1176">Aditya Kumar Darak</a></sub>
-</p>
+Created by [Aditya Kumar Darak](https://github.com/Hermione-Granger-1176).

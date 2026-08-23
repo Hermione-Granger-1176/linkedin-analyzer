@@ -1,183 +1,127 @@
-# Python CLI Reference
+# Python CLI reference
 
-Command-line tool for cleaning LinkedIn CSV exports into formatted Excel files.
+`linkedin-analyzer` reads a LinkedIn CSV export and writes a formatted Excel workbook. The package supports Python 3.12 and newer.
 
-## Installation
+## Install the package
+
+Install the published package with:
 
 ```bash
-# From PyPI
 pip install linkedin-analyzer
-
-# From source for development
-make install
-
-# Run the local CLI
-make run-cli args="--help"
 ```
 
-## Commands
+For a repository checkout, run `make setup`, then use `make run-cli args="..."`. The Make target uses the repository virtual environment. Run `make install` when you need to refresh only the Python environment.
 
-### Shares
+## Run a command
 
-```bash
-linkedin-analyzer shares
-```
+Each single-file command reads one CSV and writes one workbook:
 
-Reads `data/input/Shares.csv`, writes `data/output/Shares.xlsx`.
+| Command                         | Default input                | Default output                 |
+| ------------------------------- | ---------------------------- | ------------------------------ |
+| `linkedin-analyzer shares`      | `data/input/Shares.csv`      | `data/output/Shares.xlsx`      |
+| `linkedin-analyzer comments`    | `data/input/Comments.csv`    | `data/output/Comments.xlsx`    |
+| `linkedin-analyzer messages`    | `data/input/messages.csv`    | `data/output/Messages.xlsx`    |
+| `linkedin-analyzer connections` | `data/input/Connections.csv` | `data/output/Connections.xlsx` |
 
-### Comments
-
-```bash
-linkedin-analyzer comments
-```
-
-Reads `data/input/Comments.csv`, writes `data/output/Comments.xlsx`.
-
-### Messages
-
-```bash
-linkedin-analyzer messages
-```
-
-Reads `data/input/messages.csv`, writes `data/output/Messages.xlsx`.
-
-### Connections
-
-```bash
-linkedin-analyzer connections
-```
-
-Reads `data/input/Connections.csv`, writes `data/output/Connections.xlsx`.
-
-### All
+Run all four cleaners with:
 
 ```bash
 linkedin-analyzer all
 ```
 
-Processes all four exports in one run.
+`all` returns exit code 1 when any file is missing or fails to process. Pass `--skip-missing` to skip only files that do not exist. A file that exists but is malformed still fails the run.
 
-By default, `all` exits with code 1 if any input file is absent. Pass `--skip-missing` to treat a missing input file as a skip (logged as a warning) rather than a failure, so a partial export set still succeeds:
+## Set input and output paths
 
-```bash
-linkedin-analyzer all --skip-missing
-```
-
-Only genuinely absent input files are skipped. A file that exists but is malformed or otherwise fails to process still exits with code 1. Without the flag, behavior is unchanged.
-
-## Options
-
-### Version
+Single-file commands accept `--input` and `--output`:
 
 ```bash
-linkedin-analyzer --version
+linkedin-analyzer shares --input raw/Shares.csv --output clean/Shares.xlsx
+linkedin-analyzer comments --input raw/Comments.csv --output clean/Comments.xlsx
+linkedin-analyzer messages --input raw/messages.csv --output clean/Messages.xlsx
+linkedin-analyzer connections --input raw/Connections.csv --output clean/Connections.xlsx
 ```
 
-### Global log level
-
-```bash
-linkedin-analyzer --log-level DEBUG shares
-linkedin-analyzer --log-level INFO all
-```
-
-Defaults to `INFO`. Also configurable via the `LOG_LEVEL` environment variable.
-
-### Log format
-
-```bash
-linkedin-analyzer --log-format json all
-```
-
-Choose `text` (default, human-readable) or `json` (structured, one object per line). Also configurable via the `LOG_FORMAT` environment variable. See [Operations and Deployment](operations.md) for production logging guidance.
-
-### Input encoding
-
-```bash
-linkedin-analyzer --encoding iso-8859-1 shares
-linkedin-analyzer --encoding utf-8 all
-```
-
-Forces the encoding used to read input CSVs. When omitted, the encoding is auto-detected (see Cleaning Notes below). Explicit encodings are passed through unchanged, so `iso-8859-1` retains its C1 control-code mappings instead of using the automatic Windows-1252 mapping. Pass this option when characters look wrong, or when you already know the export's encoding. Like `--log-level` and `--log-format`, it is a global option and goes before the command.
-
-### Resource limits
-
-```bash
-linkedin-analyzer --max-input-bytes 104857600 --max-rows 1000000 shares
-linkedin-analyzer --max-input-bytes 0 --max-rows 0 all
-```
-
-By default, the CLI rejects input files larger than 104857600 bytes and CSVs with more than 1000000 parsed rows. Pass `0` to disable either limit. These are global options and go before the command.
-
-The web app enforces its own, different caps (per-file size, decoded text, rows, columns, and per-field length); see [web app Limits](web-app.md#limits).
-
-Environment defaults:
-
-- `LINKEDIN_ANALYZER_MAX_INPUT_BYTES`
-- `LINKEDIN_ANALYZER_MAX_ROWS`
-
-### Custom paths for single-file commands
-
-```bash
-linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
-linkedin-analyzer comments --input my_comments.csv --output cleaned_comments.xlsx
-linkedin-analyzer messages --input my_messages.csv --output cleaned_messages.xlsx
-linkedin-analyzer connections --input my_connections.csv --output cleaned_connections.xlsx
-```
-
-### Custom paths for `all`
+`all` accepts a named pair for each file type:
 
 ```bash
 linkedin-analyzer all \
-  --shares-input data/input/Shares.csv \
-  --shares-output data/output/Shares.xlsx \
-  --comments-input data/input/Comments.csv \
-  --comments-output data/output/Comments.xlsx \
-  --messages-input data/input/messages.csv \
-  --messages-output data/output/Messages.xlsx \
-  --connections-input data/input/Connections.csv \
-  --connections-output data/output/Connections.xlsx
+  --shares-input raw/Shares.csv --shares-output clean/Shares.xlsx \
+  --comments-input raw/Comments.csv --comments-output clean/Comments.xlsx \
+  --messages-input raw/messages.csv --messages-output clean/Messages.xlsx \
+  --connections-input raw/Connections.csv --connections-output clean/Connections.xlsx
 ```
 
-## Cleaning Notes
+## Set global options
 
-- Shares commentary escaping is normalized.
-- Comments CSV uses backslash escaping for special characters.
-- Comments and messages escaped quotes are normalized.
-- UTC timestamps are converted to local time where applicable.
-- NA-like values are treated as missing.
-- Rows missing required fields are dropped.
-- Cell values that start with Excel formula prefixes are quote-prefixed to avoid spreadsheet formula execution.
-- Excel output is written atomically in one workbook pass. Column widths, wrapped text, header alignment, and blank-cell normalization are applied before one save replaces any existing output.
-- Encoding is auto-detected when `--encoding` is not set: UTF-8 (BOM-aware) is tried first, then WHATWG Windows-1252, matching browser `TextDecoder` behavior across the full C1 byte range. On fallback the CLI logs a WARNING suggesting `--encoding`; pass it if characters look wrong.
-- Connections CSV skips the first 3 header rows before parsing.
-- Connections rows missing all of First Name, Last Name, and URL are dropped.
+Put global options before the command name.
 
-## Required Columns
+| Option              | Default         | Description                                                                                |
+| ------------------- | --------------- | ------------------------------------------------------------------------------------------ |
+| `--version`         | package version | Print the CLI version and exit.                                                            |
+| `--log-level`       | `INFO`          | Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.                                |
+| `--log-format`      | `text`          | Accepts `text` or `json`. JSON writes one object per line.                                 |
+| `--encoding`        | auto-detect     | Read CSV data with the specified encoding instead of the UTF-8 then Windows-1252 fallback. |
+| `--max-input-bytes` | `104857600`     | Reject an input file above this byte count. `0` disables the limit.                        |
+| `--max-rows`        | `1000000`       | Reject a CSV above this parsed row count. `0` disables the limit.                          |
 
-- Shares: `Date`, `ShareLink`, `ShareCommentary`
-- Comments: `Date`, `Link`, `Message`
-- Messages: `FROM`, `TO`, `DATE`, `CONTENT`
-- Connections: `First Name`, `Last Name`, `Connected On`
+Examples:
 
-For Connections rows, only `Connected On` must contain a value. Rows are also dropped when `First Name`, `Last Name`, and `URL` are all missing.
+```bash
+linkedin-analyzer --version
+linkedin-analyzer --log-level DEBUG shares
+linkedin-analyzer --log-format json all
+linkedin-analyzer --encoding iso-8859-1 shares
+linkedin-analyzer --max-input-bytes 0 --max-rows 0 all
+```
 
-## Python API
+The environment variables `LOG_LEVEL`, `LOG_FORMAT`, `LINKEDIN_ANALYZER_MAX_INPUT_BYTES`, and `LINKEDIN_ANALYZER_MAX_ROWS` provide defaults for the matching options. A command-line option overrides its environment default. Invalid numeric environment values fall back to the built-in default.
+
+When `--encoding` is omitted, the CLI tries BOM-aware UTF-8 and then applies the browser-compatible WHATWG Windows-1252 mapping to the fallback bytes. An explicit encoding is passed through unchanged, so `iso-8859-1` preserves its C1 code points instead of applying that mapping.
+
+## Set the data directory
+
+Set `LINKEDIN_ANALYZER_DATA_DIR` to change the base directory used by the default paths:
+
+```bash
+LINKEDIN_ANALYZER_DATA_DIR=/srv/linkedin-data linkedin-analyzer all
+```
+
+The CLI then reads from `/srv/linkedin-data/input/` and writes to `/srv/linkedin-data/output/`. Explicit `--input` and `--output` paths take precedence over the base directory.
+
+## Read the logs
+
+Text logs use this shape:
+
+```text
+2026-08-23 12:00:00,000 INFO linkedin_analyzer: Successfully processed 10 rows: data/input/Shares.csv -> data/output/Shares.xlsx
+```
+
+JSON logs contain `timestamp`, `level`, `logger`, and `message`. Error records can also include `exception`.
+
+The process returns 0 when the requested operation succeeds, 1 for a processing error, and 130 when the user interrupts it with Ctrl-C. Running the CLI without a command prints help and returns 0.
+
+## Use the Python API
+
+The package exports four cleaning functions and their configuration types:
 
 ```python
 from pathlib import Path
+
 from linkedin_analyzer import clean_comments, clean_connections, clean_messages, clean_shares
 
-result = clean_shares(input_path=Path("Shares.csv"), output_path=Path("Shares.xlsx"))
-print(result)
-
-result = clean_messages(input_path=Path("messages.csv"), output_path=Path("Messages.xlsx"))
-print(result)
+result = clean_shares(
+    input_path=Path("Shares.csv"),
+    output_path=Path("Shares.xlsx"),
+)
+if not result.success:
+    raise RuntimeError(result.error)
 ```
 
-## Default Paths
+The functions are `clean_shares`, `clean_comments`, `clean_messages`, and `clean_connections`. Each accepts `input_path`, `output_path`, `encoding`, `max_input_bytes`, and `max_rows`, and returns a `CleanerResult`. Passing `None` for an input or output path uses the configured default path.
 
-Configured in `src/linkedin_analyzer/core/paths.py`:
+The package also exports `CleanerConfig`, `ColumnConfig`, the four cleaner configuration types, and `__version__`. The package includes `py.typed` for type checker support.
 
-- Base data directory: `data/`, configurable with `LINKEDIN_ANALYZER_DATA_DIR`
-- Input directory: `data/input/`
-- Output directory: `data/output/`
+## Read the data rules
+
+See [data formats](data-formats.md) for required columns, output columns, row filtering, encoding behavior, formula escaping, date conversion, and workbook formatting.

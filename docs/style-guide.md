@@ -1,86 +1,84 @@
-# Style Guide
+# Style guide
 
-## Naming Conventions
+Keep code, tests, docs, and repository automation consistent with the names already used in the codebase. Prefer the smallest change that makes behavior clearer or safer.
 
-- Use descriptive nouns for data, verbs for actions.
-- Python: snake_case for functions, variables, modules.
-- JavaScript: camelCase for functions and local variables; PascalCase for classes and exported module namespaces (for example `AppRouter`).
-- Constants: UPPER_SNAKE_CASE.
-- File names: lowercase; Python uses underscores. Docs prefer hyphens for new files, but existing underscores are acceptable.
+## Name code consistently
 
-## Formatting Style
+- Use nouns for data and verbs for actions.
+- Use `snake_case` for Python functions, variables, and modules.
+- Use `camelCase` for JavaScript functions and local variables.
+- Use PascalCase for JavaScript classes and exported module namespaces such as `AppRouter`.
+- Use `UPPER_SNAKE_CASE` for constants.
+- Use lowercase file names. Use underscores in Python names and hyphens for new documentation file names.
+- Use the existing symbol name in docs, comments, tests, and error messages.
 
-- Python: Ruff formatting, 100-char lines, type hints everywhere.
-- JavaScript: Prettier formatting and ESLint linting, prefer explicit semicolons.
-- Keep imports ordered and grouped by stdlib, third-party, local.
-- Use blank lines to separate logical blocks, not every line.
-- `.editorconfig` enforces indent style/size, charset, and line endings across editors.
+## Format code
 
-## Comment Usage
+- Run Ruff through `make format-py-check` and `make lint-py`.
+- Keep Python lines at 100 characters and use type hints for new code.
+- Run Prettier and ESLint through `make format-js-check` and `make lint-js`.
+- Use explicit semicolons in JavaScript.
+- Group imports by standard library, third-party, and local modules.
+- Use four spaces in Python, JavaScript, CSS, and HTML. Use two spaces in JSON and YAML.
+- Keep Markdown paragraphs on one line. Use `make align-tables-check` for Markdown tables.
+- Follow `.editorconfig` for line endings, final newlines, character encoding, and trailing whitespace.
 
-- Prefer self-explanatory code; comment only non-obvious intent.
-- Avoid narrating the code; explain why, not what.
-- Keep comments short and aligned with nearby logic.
-- Match project tone: direct, neutral, and implementation-focused.
-- Mascot drawings and the stylesheets that pose them are the one exception: they describe the pose in plain language, because a run of path coordinates says nothing about what it draws.
+## Write comments that explain a reason
 
-## Maintainer Voice and Consistency
+Let the code explain what it does. Add a comment when the reason would otherwise be hard to infer from the code or from a test. Do not restate the next line.
 
-- This repository is maintainer-led; changes should read like one coherent codebase.
-- Follow existing naming, module boundaries, and terminology before introducing new patterns.
-- Avoid broad style rewrites in unrelated files; keep diffs focused and reviewable.
-- When updating docs, keep wording consistent with existing command names and feature terms.
+Keep comments short, direct, and near the code they explain. Name the real constraint, such as a browser API limitation, a privacy rule, or a compatibility requirement.
 
-## Control Flow Preferences
+Mascot SVG and CSS comments can describe the pose because path coordinates do not show what the drawing represents.
 
-- Avoid deeply nested if statements.
-- Use guard clauses and early returns.
-- Prefer flat, linear flow over complex branching.
-- For delegated DOM click handlers, use `DomEvents.closest(event, selector)` to avoid repeating `instanceof Element` guards.
+## Keep control flow readable
 
-## Loops
+Validate inputs early and return on invalid state. Prefer guard clauses over nested conditionals. Keep one decision in each branch.
 
-- Prefer for-loops over while-loops.
-- Use while-loops only when the end condition is unclear at start.
-- Keep loop bodies small; extract helpers when needed.
+Use a `for` loop when the collection and stopping point are clear. Use a `while` loop only when the stopping point depends on work performed inside the loop. Extract a helper when a loop body carries more than one responsibility.
 
-## Comprehensions
+Use a comprehension for a simple transform. Use a normal loop when it contains branching, error handling, or side effects.
 
-- Use list/dict/set comprehensions for simple transforms.
-- Avoid multi-branch logic inside comprehensions.
-- If readability drops, use a normal loop.
+## Handle errors deliberately
 
-## Error Handling
+Raise `ValueError` for user-facing validation errors in Python. Catch narrow exception types when the caller can recover. Include the input or operation in the error message when that helps the user fix it.
 
-- Validate inputs early and fail fast.
-- Raise ValueError for user-facing validation errors.
-- Catch narrow exceptions and log helpful context.
-- Never swallow exceptions silently.
+Do not swallow an exception without a reason. If a fallback is intentional, record the fallback in a log, return value, or user-visible state.
 
-## Tests Expectations
+In browser code, keep worker failures, timeouts, and storage failures distinct when the caller needs different recovery. Use `captureError` only with the fixed context values that the observability layer accepts.
 
-- Cover new logic and edge cases for every change.
-- Keep tests deterministic and isolated.
-- Prefer small, focused tests over one large test.
-- Maintain the 100% statement and branch coverage threshold for `src/linkedin_analyzer/` and `scripts/`.
+## Test changes
 
-## Documentation Updates
+Add a focused test for new behavior and an edge case for each new branch. Keep tests deterministic and independent of the local timezone, current time, network, and private exports.
 
-- Update docs whenever behavior, flags, or outputs change.
-- Keep docs short; link to deeper references when needed.
-- Use consistent terminology across web and CLI docs.
-- Align Markdown table pipes with `make align-tables`.
+Maintain 100 percent statement and branch coverage over `src/linkedin_analyzer/` and `scripts/`. Maintain the JavaScript thresholds in `web/vitest.config.mjs`.
 
-## Refactoring Philosophy
+Update parity fixtures when a cleaner rule changes intentionally. Run `make gen-parity-corpus` only when the expected behavior changed, and review the generated diff.
 
-- Refactor only when it improves clarity or reduces risk.
-- Keep changes incremental and reviewable.
-- Do not mix refactors with unrelated feature work.
+## Update documentation
 
-## Cross-Runtime Parity (Python vs JS)
+Update docs when a command, option, route, output file, limit, workflow, or privacy rule changes. Put user actions in the user guide, lookup facts in a reference page, design reasons in an explanation, and multi-step tasks in a how-to page.
 
-- Outputs must match in columns and cleaning rules.
-- Formatting may differ between CLI and web; document intentional differences.
-- Keep file naming and defaults aligned unless documented.
-- Date handling must convert UTC to local time in both.
-- If behavior differs, document it in `docs/cli.md`.
+Use sentence case headings. Use one H1 per page and do not skip heading levels. Use numbered lists for sequences and bullets for non-sequential facts. Put conditions before the step they guard.
+
+Write paths, symbols, flags, and Make targets exactly as they appear in the repository. Use code formatting for commands and symbols. Keep one name for each concept across all docs.
+
+Run these checks after a documentation change:
+
+```bash
+make lint-doc-commands
+make lint-make-targets
+make align-tables-check
+```
+
+## Keep the runtimes aligned
+
+The Python and JavaScript cleaners must agree on cleaned values, required columns, dropped rows, date handling, and formula protection. Workbook formatting can differ when the two libraries expose different APIs.
+
+If a behavior differs intentionally, document the difference in [data formats](data-formats.md) and add a parity test that protects the boundary.
+
+## Review a refactor
+
+Refactor only when the change improves clarity, reduces duplication, or lowers a known risk without changing behavior. Read the complete control flow before flattening conditionals. Do not replace a clear branch with a shorter expression that hides the fallback.
+
+Keep unrelated documentation, formatting, and feature changes out of the same patch. Run the narrow test for the changed module, then the full gate that covers its runtime.

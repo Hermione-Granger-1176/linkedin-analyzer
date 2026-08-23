@@ -1,63 +1,76 @@
 # Contributing
 
-Thanks for contributing to LinkedIn Analyzer. This repo contains a Python CLI and a browser-based web app.
+This repository contains a Python CLI and a browser app. Keep changes focused, test behavior at the runtime you change, and update the relevant docs when the public behavior changes.
 
-## Development setup
+## Set up the repository
 
-1. Install Python 3.12+, uv, and Node.js 22.22.2+ or 24.15.0+ within those supported major lines
-2. Install locked Python and Node dependencies:
+Install Python 3.12 or newer, Node.js 22.22.2 or newer in the 22 line or 24.15.0 or newer in the 24 line, and `uv` 0.11.0 or newer. Then run:
 
 ```bash
 make setup
-```
-
-3. Configure optional local diagnostics:
-
-```bash
-cp .env.example .env  # optional; configure VITE_SENTRY_DSN if needed for opt-in diagnostics
-```
-
-4. Install git hooks:
-
-```bash
 make install-hooks
 ```
 
-See [`docs/style-guide.md`](../docs/style-guide.md) for code conventions.
+Read [development](../docs/development.md) for browser setup, dependency changes, local diagnostics, and GitHub helpers.
 
-## Running locally
+## Create a branch
 
-- CLI: `make run-cli args="--help"`
-- Web app: `make web`
+Create a branch from `main` with:
 
-## Checks
+```bash
+make branch name=describe-the-change
+```
 
-- All linters: `make lint`
-- Workflow lint: `make lint-workflows`
-- Python lint: `make lint-py`
-- Python typecheck: `make typecheck-py`
-- Python tests: `make test-py`
-- Web lint: `make lint-js`
-- CSS lint: `make lint-css`
-- CSS auto-fix: `make fmt-css`
-- Web typecheck: `make typecheck-web`
-- Web format check: `make format-js-check`
-- Web tests: `make test-js`
-- Web E2E tests: `make test-e2e`
-- Web build: `make web-build`
-- Dead-code detection: `make dead-code` (vulture for Python, knip for JS)
-- Non-browser gate in parallel: `make ci-fast` (excludes `web-build-size`)
-- Non-browser gate alias: `make check-fast`
-- Full local gate: `make ci`
+Use `make branch-current` only when the current checkout is already the intended base.
 
-## Pull requests
+## Run checks
 
-- Keep changes focused and describe why the change is needed.
-- Add tests for new behavior.
-- Ensure all checks pass before requesting review.
+Run the narrow checks while you work:
 
-## Maintainer-first workflow
+```bash
+make lint-py
+make lint-js
+make lint-css
+make typecheck-py
+make typecheck-web
+make test-py
+make test-js
+```
 
-- Treat existing project conventions as the default unless a maintainer-approved change says otherwise.
-- Keep docs, comments, and naming aligned with the current repository voice.
-- Prefer incremental refactors over broad stylistic rewrites so history stays easy to review.
+Run the full non-browser gate before review:
+
+```bash
+make ci
+```
+
+Run `make check` when the change affects browser behavior, browser files, or the Playwright suite. Read [testing](../docs/testing.md) for coverage, parity, browser runtime, and benchmark checks.
+
+## Update documentation
+
+Use [the documentation index](../docs/index.md) to choose the page. Put user actions in a how-to or tutorial, facts in a reference, and design reasons in an explanation. Keep Markdown paragraphs on one line and align tables with `make align-tables`.
+
+Run these checks after documentation changes:
+
+```bash
+make lint-doc-commands
+make lint-make-targets
+make align-tables-check
+```
+
+## Open a pull request
+
+Describe the behavior change and the reason for it. Include the tests you ran and call out any intentionally untested path. Add a parity fixture when Python and browser cleaner behavior changes together.
+
+Use the Make wrappers for GitHub work. Put pull request bodies on standard input and titles in `TITLE`:
+
+```bash
+TITLE='Describe the change' make pr-create < pull-request.md
+```
+
+The maintainer decides when to commit, push, open, or merge a pull request. Follow the repository commit format in [the style guide](../docs/style-guide.md).
+
+## Protect private data
+
+Do not commit LinkedIn exports, generated workbooks, browser storage dumps, screenshots containing personal data, or logs containing names or message text. Use the checked-in fixtures under `tests/fixtures/` and `web/e2e/fixtures/` for tests.
+
+Report security issues through the [security policy](SECURITY.md), not through a public issue.

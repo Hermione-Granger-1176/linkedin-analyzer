@@ -26,6 +26,20 @@ export default defineConfig({
             injectManifest: {
                 globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
             },
+            integration: {
+                configureCustomSWViteBuild: (inlineConfig) => {
+                    const output = inlineConfig.build?.rollupOptions?.output;
+                    if (!output) {
+                        return;
+                    }
+                    // Vite 8 renamed this service-worker option, but the current PWA plugin still supplies the deprecated property.
+                    const outputs = Array.isArray(output) ? output : [output];
+                    for (const outputOptions of outputs) {
+                        delete outputOptions.inlineDynamicImports;
+                        outputOptions.codeSplitting = false;
+                    }
+                },
+            },
             manifest: {
                 name: "LinkedIn Analyzer",
                 short_name: "LI Analyzer",

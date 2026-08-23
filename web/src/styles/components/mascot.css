@@ -1398,7 +1398,7 @@
     }
 }
 
-/* Disable automatic mascot motion when reduced motion is requested. Keep
+/* Disable mascot animations when reduced motion is requested. Keep
    pointer-triggered card transforms. */
 @media (prefers-reduced-motion: reduce) {
     .pip-bob,

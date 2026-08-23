@@ -24,10 +24,10 @@ test.beforeEach(async ({ page }) => {
  * @param {import('@playwright/test').Page} page - Playwright page instance
  */
 async function runAxeScan(page) {
-    // Match the twenty-second worker wait above. This helper runs after an action
-    // that sends the analytics worker a fresh view request, and the loading class
-    // clears only after the response. Five seconds was too short for WebKit with
-    // four parallel CI workers.
+    // Match the 20-second timeout used by waitForLoadedStatus(). This helper runs
+    // after an action that sends the analytics worker a fresh view request, and the
+    // loading class clears only after the response. Five seconds was too short for
+    // WebKit with four parallel CI workers.
     await expect(page.locator(".screen.is-loading")).toHaveCount(0, { timeout: 20000 });
     await page.waitForFunction(
         () =>

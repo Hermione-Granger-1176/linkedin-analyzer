@@ -1025,7 +1025,7 @@ describe("buildBlocks", () => {
         expect(drawn).toContain("Received");
         expect(drawn).toContain("Network growth");
         expect(drawn).toContain("3.4×");
-        // Include the message bodies, not only the surrounding dialog text. This
+        // Include the message bodies, not only the other text drawn in the PDF. This
         // is the behaviour the whole opt-in exists for.
         expect(drawn).toContain("Hello");
         expect(drawn).toContain("Hi");

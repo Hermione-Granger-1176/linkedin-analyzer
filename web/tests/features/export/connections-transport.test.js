@@ -118,8 +118,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("takes an analytics payload with neither half the way the screen does", async () => {
-        // The contract checks only that analytics is an object, so the two
-        // fields on it are validated before use: the view draws an empty timeline
+        // The contract checks only that analytics is an object. The transport
+        // uses fallbacks for both fields, so the view draws an empty timeline
         // and counts the rows itself rather than throwing.
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         replyToRequest({ success: true, analytics: {}, rows: WORKER_ROWS });

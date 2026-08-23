@@ -484,7 +484,7 @@ export const AnalyticsPage = (() => {
             filters.monthFocus || "none",
             filters.day !== null && filters.day !== undefined ? filters.day : "none",
             filters.hour !== null && filters.hour !== undefined ? filters.hour : "none",
-            // Storage normally provides a share type. Use "all" for malformed filter state.
+            // Use "all" when the filter state does not include a share type.
             /* v8 ignore next */
             filters.shareType || "all",
         ].join("|");
@@ -814,7 +814,7 @@ export const AnalyticsPage = (() => {
             filters.push({ key: "month", label });
         }
         if (state.filters.day !== null && state.filters.day !== undefined) {
-            // Storage validates the day range. Use "Unknown" for malformed filter state.
+            // Use "Unknown" when the selected day has no label in DAY_LABELS.
             /* v8 ignore next */
             const label = DAY_LABELS[state.filters.day] || "Unknown";
             filters.push({ key: "day", label: `Day: ${label}` });

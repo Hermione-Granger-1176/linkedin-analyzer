@@ -178,7 +178,7 @@
     --index-rule-color: rgba(255, 133, 118, 0.3);
     --index-line-color: rgba(240, 228, 210, 0.07);
 
-    /* Opaque dark-mode fills for drop zones, status cards, buttons, and errors. */
+    /* Dark-mode fills and the desk-lamp color. */
     --surface-drop: rgba(59, 46, 32, 1);
     --surface-drop-hover: rgba(35, 51, 68, 1);
     --surface-green: rgba(28, 57, 44, 1);

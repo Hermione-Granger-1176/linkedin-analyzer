@@ -42,7 +42,7 @@ Make the smallest grouped fix and run the relevant Make checks. Commit and push 
 Reply to and resolve every addressed open thread:
 
 ```bash
-make pr-address thread=PRRT_...
+make pr-address thread=PRRT_... < notes.md
 ```
 
 The reply should state what was verified, what changed or why no change was needed, and the validation result. A pushed fix does not replace the reply and resolution.

@@ -146,8 +146,8 @@
     opacity: 0.6;
 }
 
-/* Use --accent-blue-contrast for button text. It has sufficient contrast with
- * --bg-primary in both themes. */
+/* Use --accent-blue-contrast for the button background and --bg-primary for its
+ * text. The pair meets the contrast requirement in both themes. */
 .export-dialog-btn--primary {
     background: var(--accent-blue-contrast);
     border-color: var(--accent-blue-contrast);

@@ -661,9 +661,9 @@
     }
 }
 
-/* Upload catch. features/upload/mascot.js selects the pose. The body is shared
-   with the definitions in web/index.html, while the pose-specific arms and
-   mouth stay inline. */
+/* Upload catch. features/upload/mascot.js selects the data-pose value. The
+   catcher body, arms, and mouth are inline in web/index.html; only the open
+   hands reuse shared definitions. */
 
 .pip-catcher {
     pointer-events: none;

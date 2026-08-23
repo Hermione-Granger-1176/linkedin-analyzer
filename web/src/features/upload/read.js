@@ -23,7 +23,7 @@ const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
  */
 export function readFileAsText(file) {
     // The upload page rejects oversized files before calling this helper. Keep
-    // this second check for direct callers and race conditions.
+    // this check for direct callers that bypass page-level validation.
     /* v8 ignore next 4 */
     if (file.size > MAX_FILE_BYTES) {
         const maxMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));

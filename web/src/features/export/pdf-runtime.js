@@ -19,8 +19,9 @@ export { collectExportData, readPdfPalette, registerPdfFonts, renderPdfDocument 
 /**
  * Stop every worker an export can start.
  *
- * Keep worker termination here so cancellation does not load each worker module
- * when stopping a run that never reached that worker.
+ * Keep worker termination here so `pdf.js` can cancel before this chunk loads
+ * without importing it solely for cleanup. The worker modules are static imports
+ * once this runtime chunk loads.
  */
 export function terminateExportWorkers() {
     terminateThreadsWorker();

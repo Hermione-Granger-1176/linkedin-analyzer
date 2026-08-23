@@ -732,11 +732,9 @@
                             <div class="drop-zone-hover">
                                 <p>Release to upload</p>
                             </div>
-                            <!-- Upload catcher pose. Keep the arm and body animation
-                            inline so .is-uploading and .is-caught can control it.
-                            The shared standing body is reused, but the arm poses
-                            stay local because selectors cannot cross a use element's
-                            shadow tree. -->
+                            <!-- Upload catcher pose. data-pose selects the ready or
+                            catch drawing. The bodies and arms stay inline; only the
+                            open hands reuse a shared definition. -->
                             <svg
                                 class="pip-catcher"
                                 id="uploadCatcher"

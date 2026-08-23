@@ -10,7 +10,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def run_make_target(
-    tmp_path: Path, target: str, *assignments: str
+    tmp_path: Path,
+    target: str,
+    *assignments: str,
+    variables: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     """Run a branch helper with a fake Git executable and capture its arguments."""
     fake_bin = tmp_path / "bin"
@@ -24,6 +27,7 @@ def run_make_target(
     fake_git.chmod(0o755)
 
     environment = os.environ.copy()
+    environment.update(variables or {})
     environment["GIT_ARGS_FILE"] = str(args_file)
     environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
     result = subprocess.run(
@@ -67,6 +71,26 @@ def test_branch_helpers_pass_shell_metacharacters_as_literal_names(
     assert not marker.exists()
 
 
+@pytest.mark.parametrize(
+    ("target", "expected_prefix"),
+    [
+        ("branch-switch", ["switch", "--"]),
+        ("branch-delete", ["branch", "-d", "--"]),
+    ],
+)
+def test_branch_helpers_preserve_make_syntax_from_environment(
+    target: str, expected_prefix: list[str], tmp_path: Path
+) -> None:
+    """Environment values keep Make functions inert until Git receives them."""
+    marker = tmp_path / "expanded-from-environment"
+    name = f"feature$(shell touch {marker})"
+    result, args_file = run_make_target(tmp_path, target, variables={"name": name})
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text(encoding="utf-8").splitlines() == [*expected_prefix, name]
+    assert not marker.exists()
+
+
 def test_branch_delete_force_selects_force_delete(tmp_path: Path) -> None:
     """The force flag selects Git's force-delete option without changing the name."""
     name = "feature/old"
@@ -74,3 +98,23 @@ def test_branch_delete_force_selects_force_delete(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert args_file.read_text(encoding="utf-8").splitlines() == ["branch", "-D", "--", name]
+
+
+def test_branch_delete_preserves_force_make_syntax_from_environment(tmp_path: Path) -> None:
+    """An environment force value with Make syntax selects the safe default option."""
+    marker = tmp_path / "expanded-force"
+    force = f"$(shell touch {marker})"
+    result, args_file = run_make_target(
+        tmp_path,
+        "branch-delete",
+        variables={"name": "feature/old", "force": force},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text(encoding="utf-8").splitlines() == [
+        "branch",
+        "-d",
+        "--",
+        "feature/old",
+    ]
+    assert not marker.exists()

@@ -27,7 +27,7 @@ import { vi } from "vitest";
  */
 
 /**
- * Build a Worker stand-in and the handle a suite drives it through.
+ * Build a Worker stand-in and return the harness a suite uses to drive it.
  * @returns {WorkerHarness} Harness containing workers and test controls
  */
 export function createWorkerHarness() {

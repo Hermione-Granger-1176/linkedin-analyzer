@@ -543,7 +543,7 @@ branch-current: ## Create a branch from the current checkout without updating it
 
 branch-switch: ## Switch to an existing branch (make branch-switch name=X)
 	@test -n "$(name)" || (printf 'Usage: make branch-switch name=branch-name\n' >&2; exit 1)
-	git checkout "$(name)"
+	git switch -- "$(name)"
 
 branch-delete: ## Delete a local branch (make branch-delete name=X [force=1])
 	@test -n "$(name)" || (printf 'Usage: make branch-delete name=branch-name [force=1]\n' >&2; exit 1)

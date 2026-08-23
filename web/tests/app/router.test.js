@@ -135,7 +135,7 @@ describe("AppRouter navigation", () => {
     });
 
     it("updateParams does nothing when no current route", () => {
-        // Verify that no route can still return without throwing.
+        // Verify that updateParams is a no-op and does not throw without an active route.
         expect(() => AppRouter.updateParams({ x: "1" })).not.toThrow();
     });
 

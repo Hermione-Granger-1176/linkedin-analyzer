@@ -186,8 +186,8 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
         /^(#fbbc0526|rgba\(251,\s?188,\s?5,\s?\.?0?\.?15\))$/,
     );
 
-    // Opted in with no messages export uploaded: the section is simply omitted
-    // and the export still succeeds.
+    // The opted-in section is omitted when no messages export is uploaded, and
+    // the export still succeeds.
     await trigger.click();
     await page.locator("#pdfExportIncludeMessages").check();
     const downloadPromise = page.waitForEvent("download");
@@ -374,10 +374,8 @@ test("captions name the months the data covers, not a relative range", async ({
 test("a name the fonts cannot draw is marked, and the site still shows it whole", async ({
     page,
 }, testInfo) => {
-    // Two halves of one claim. The export marks what its font cannot draw
-    // rather than dropping it silently, and the site, which has the browser's
-    // own font fallback, still shows the same data whole: this is a rendering
-    // limit of one surface, not damage to the file.
+    // The export marks characters its font cannot draw instead of dropping them.
+    // The site uses the browser's font fallback and still shows the full data.
     //
     // The fonts are blocked as they are in the specs above, so the text is
     // readable in the content stream. That puts the document on the Helvetica

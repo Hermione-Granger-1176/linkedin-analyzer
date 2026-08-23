@@ -1,19 +1,9 @@
-/* The alive layer: the three things hero Pip does on his own, without anyone
-   asking him to. His eyes follow the pointer, he gets visibly bored when the
-   page has been still for a while, and he flinches when the lights change.
+/* Hero mascot behavior: pointer gaze, idle yawn, and wake-up animation.
 
-   All three are decoration on a drawing that is already aria-hidden, so all
-   three sit out under reduced motion. The preference is read when a move would
-   play rather than once at startup, so a visitor who turns it on or off part way
-   through the session is obeyed from the next move onwards; the timers behind a
-   move keep running either way, they just stop producing anything visible. The
-   gaze also sits out on touch, where there is no pointer to follow, and that one
-   is settled at startup because it is a property of the device, not a choice.
-
-   The one-shots are finite CSS animations, and each one is taken off by a timer
-   rather than by animationend: an animation that starts inside a hidden subtree
-   never ends, and a class left on for good would leave the screenshot harness
-   waiting for a move that is never going to finish. */
+   The drawing is aria-hidden. Reduced motion is checked when each animation
+   starts, so a preference change applies to the next animation. Gaze is disabled
+   on touch devices. Timers remove one-shot classes because hidden SVG elements do
+   not reliably emit animationend. */
 
 import { prefersReducedMotion } from "./motion.js";
 
@@ -23,9 +13,8 @@ const HOME_SCREEN_ID = "screen-home";
 
 /* Pip is bored after this long with nothing happening on the page. */
 const IDLE_DELAY_MS = 20000;
-/* Each one-shot's class comes off a little after its animation is due to end,
-   so the move always plays out and never outstays it. Keep these in step with
-   the pip-idle-yawn and pip-wake-* durations in components/mascot.css. */
+/* Remove each one-shot class after its CSS animation. Keep these values in sync
+   with the pip-idle-yawn and pip-wake-* durations in components/mascot.css. */
 const IDLE_DOODLE_MS = 2600;
 const WAKE_MS = 800;
 

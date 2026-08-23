@@ -48,7 +48,7 @@ def test_retry_retries_then_returns() -> None:
 
 
 def test_retry_rejects_empty_budget_and_propagates_final_error() -> None:
-    """Reject an empty budget and let the final failed attempt surface."""
+    """Reject an empty budget and propagate the final failed attempt."""
     with pytest.raises(ValueError, match="at least 1"):
         pins.retry(lambda: "unused", attempts=0)
     with pytest.raises(RuntimeError, match="final"):

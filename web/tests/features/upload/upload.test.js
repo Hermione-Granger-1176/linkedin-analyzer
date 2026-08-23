@@ -1957,7 +1957,7 @@ describe("UploadPage", () => {
                 onerror: null,
                 readAsArrayBuffer() {
                     // A successful onload but with a non-ArrayBuffer result must
-                    // surface as an error, not a silently empty file.
+                    // report an error, not a silently empty file.
                     this.result = null;
                     if (this.onload) {
                         this.onload();
@@ -3447,7 +3447,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         // Storage.getAllFiles should NOT have been called during getStoredFilesSnapshot
-        // (cache was used instead), just verify no errors occurred
+        // (cache was used instead), verify that no error occurred.
         expect(document.getElementById("uploadHint").textContent).toBeTruthy();
 
         globalThis.FileReader = originalFileReader;
@@ -4010,7 +4010,7 @@ describe("UploadPage", () => {
         };
 
         // rAF advances from performance.now() so elapsed is always positive and
-        // animations terminate. Step by 700ms to finish quickly.
+        // animations terminate. Advance by 700ms for each frame.
         window.requestAnimationFrame = makeSyncRaf(700);
 
         Storage.getAllFiles.mockResolvedValue([]);
@@ -4124,7 +4124,7 @@ describe("UploadPage", () => {
             };
         };
 
-        // Use makeSyncRaf so animations terminate quickly
+        // Use makeSyncRaf so animations terminate at a known time.
         window.requestAnimationFrame = makeSyncRaf(700);
 
         Storage.getAllFiles.mockResolvedValue([

@@ -98,7 +98,7 @@ export const UploadProgress = (() => {
         stopProgressAnimation();
         const start = performance.now();
         const startValue = progressValue;
-        // show()/hide() always pass a live session token, so the fallback is defensive.
+        // show() and hide() pass a session token. Keep the fallback for direct callers.
         /* v8 ignore next */
         const animationSession = sessionId || progressSessionId;
 
@@ -119,7 +119,7 @@ export const UploadProgress = (() => {
             }
 
             progressAnimationId = null;
-            // show()/hide() always pass a completion callback, so the guard is defensive.
+            // show() and hide() pass a callback when the animation should notify a caller.
             /* v8 ignore next */
             if (callback) {
                 queueMicrotask(callback);

@@ -1,4 +1,4 @@
-"""Safely remove the repository-local Python virtual environment."""
+"""Remove the repository-local Python virtual environment."""
 
 from __future__ import annotations
 

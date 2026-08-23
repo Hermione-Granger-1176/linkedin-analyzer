@@ -1,6 +1,6 @@
-/* Progress overlay and chart tooltip */
+/* Progress overlay and chart tooltip. */
 
-/* Progress Overlay */
+/* Progress overlay. */
 .progress-overlay {
     position: fixed;
     inset: 0;
@@ -39,10 +39,7 @@
     display: none;
 }
 
-/* Pip scribbling on a pad, in place of the gear that used to spin here. The
-   drawing arm and the marks on the paper carry the motion, so the frame around
-   him only has to hold a sensible width. Both of those loops belong to
-   mascot.css, along with the preference that switches them off. */
+/* mascot.css controls the animation. This wrapper sets the width and centers it. */
 .progress-mascot-wrap {
     width: min(240px, 64vw);
     display: grid;
@@ -80,7 +77,7 @@
     min-height: 28px;
 }
 
-/* Tooltip */
+/* Chart tooltip. */
 .chart-tooltip {
     position: fixed;
     z-index: 400;

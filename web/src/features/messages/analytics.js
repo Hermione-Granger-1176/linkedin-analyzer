@@ -70,7 +70,7 @@ export const MessagesAnalytics = (() => {
             // self-sent messages whose only recipients are self/anonymous still
             // count toward sent totals and conversation initiation.
             // Pass the raw sender fields straight to the helpers; each normalizes
-            // once internally, so pre-normalizing here would just repeat the work.
+            // once internally, so pre-normalizing here would repeat the work.
             const senderIsSelf = isSelfContact(row.FROM, row["SENDER PROFILE URL"], context);
             // A non-self sender only counts as a real correspondent when it
             // survives the same filtering as participants (non-blank,
@@ -105,9 +105,8 @@ export const MessagesAnalytics = (() => {
             participants.forEach(contact => {
                 // Only non-anonymous names are safe to merge on: "LinkedIn Member"
                 // placeholders belong to different people and must not collapse.
-                // sanitizeParticipant already guarantees a real, non-anonymous
-                // name (blank names become "Unknown"), so the empty arm here and
-                // the anonymity re-checks below are defensive.
+                // sanitizeParticipant supplies a real name or "Unknown". Keep the
+                // empty branch and anonymity checks for malformed participant data.
                 /* v8 ignore next 4 */
                 const mergeNameKey =
                     contact.name && !isAnonymousName(contact.name)
@@ -149,7 +148,7 @@ export const MessagesAnalytics = (() => {
                 } else {
                     existing = {
                         key: contactKey,
-                        // contact.name is always truthy here; the fallback is defensive.
+                        // sanitizeParticipant supplies a name. Keep "Unknown" for malformed data.
                         /* v8 ignore next */
                         name: contact.name || "Unknown",
                         url: contact.url,
@@ -159,8 +158,8 @@ export const MessagesAnalytics = (() => {
                     contacts.set(contactKey, existing);
                 }
 
-                // mergeNameKey and nameKey are always truthy for a sanitized
-                // participant, so the skip arms are defensive.
+                // Sanitized participants normally produce both keys. Keep these
+                // branches for malformed participant data.
                 /* v8 ignore next */
                 if (mergeNameKey) {
                     nameToKey.set(mergeNameKey, existing.key);
@@ -367,7 +366,7 @@ export const MessagesAnalytics = (() => {
      * @returns {{selfUrls: Set<string>, selfNames: Set<string>}}
      */
     function detectSelfContext(rows) {
-        // buildMessageState always passes an array, so the fallback is defensive.
+        // buildMessageState passes an array. Keep an empty list for malformed input.
         /* v8 ignore next */
         const safeRows = Array.isArray(rows) ? rows : [];
         const urlStats = new Map();
@@ -450,8 +449,7 @@ export const MessagesAnalytics = (() => {
             return;
         }
 
-        // Callers only pass "sender" or "recipient", so the null fallback and the
-        // roleField guards below are defensive.
+        // Callers pass "sender" or "recipient". Keep the null fallback for malformed input.
         /* v8 ignore next 4 */
         const roleField = {
             sender: "senderCount",
@@ -668,8 +666,7 @@ export const MessagesAnalytics = (() => {
         if (contact.url) {
             return `url:${contact.url}`;
         }
-        // A sanitized contact name always normalizes to a non-empty key; the
-        // "unknown" fallback is defensive.
+        // A sanitized contact name normally produces a key. Use "unknown" for malformed data.
         /* v8 ignore next 2 */
         const nameKey = normalizeName(contact.name);
         return `name:${nameKey || "unknown"}`;
@@ -727,7 +724,7 @@ export const MessagesAnalytics = (() => {
                 return cached;
             }
             const computed = computeNormalizedUrl(value);
-            // The cache never reaches its six-figure cap in practice; the guard is defensive.
+            // Keep the cache bounded when normalization receives many unique values.
             /* v8 ignore next */
             if (urlNormalizeCache.size < NORMALIZE_CACHE_LIMIT) {
                 urlNormalizeCache.set(value, computed);
@@ -791,7 +788,7 @@ export const MessagesAnalytics = (() => {
                 return cached;
             }
             const computed = computeNormalizedName(value);
-            // The cache never reaches its six-figure cap in practice; the guard is defensive.
+            // Keep the cache bounded when normalization receives many unique values.
             /* v8 ignore next */
             if (nameNormalizeCache.size < NORMALIZE_CACHE_LIMIT) {
                 nameNormalizeCache.set(value, computed);

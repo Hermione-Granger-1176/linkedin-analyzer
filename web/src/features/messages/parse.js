@@ -103,7 +103,7 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
         const handleMessage = (event) => {
             const parsed = parseMessagesWorkerMessage(event.data || {});
             if (!parsed.valid) {
-                // Invalid worker responses always carry an error string, so the fallback is defensive.
+                // Invalid worker responses normally include an error string. Keep the fallback for malformed responses.
                 /* v8 ignore next */
                 captureError(new Error(parsed.error || "Invalid messages worker response."), {
                     module: "messages-insights",

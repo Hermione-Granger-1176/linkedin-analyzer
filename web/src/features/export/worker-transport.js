@@ -1,44 +1,18 @@
 /**
- * The mechanism behind the export's dedicated worker transports.
+ * Shared lifecycle code for the export worker transports.
  *
- * `messages-transport.js`, `connections-transport.js` and `threads-transport.js`
- * each own a short-lived Web Worker: created on demand, watchdogged, and
- * terminated as soon as the export has its answer. Owned outright rather than
- * borrowed from the screen that runs the same worker, because a screen keeps its
- * worker, its watchdog and its request counter in one module-level set: loading
- * one while an export runs would clear the other's watchdog and leave its
- * promise pending for the life of the page, and the export could not terminate
- * it on cancellation without killing a worker the screen might be mid-request
- * on.
+ * Each transport owns a short-lived worker, watchdog, request settlement, and
+ * cancellation path. The transport modules keep the worker request and response
+ * formats because those differ by export type.
  *
- * How all of that is done lives here. What is asked of the worker, and how its
- * reply is read, stays with each transport, because that is the only part that
- * genuinely differs between them.
- *
- * The three were written to one shape and then drifted, and every divergence
- * review found was inside the part that was meant to be identical: a watchdog id
- * nulled in two of them and not the third, listeners attached inside the `try`
- * in one, error strings saying the same thing three ways. Sharing the mechanism
- * makes that class of drift unrepresentable rather than something review has to
- * keep catching.
- *
- * Termination is a settling event, not just a teardown. Killing the worker
- * removes every event that could have answered the in-flight request, so
- * `terminate()` settles it explicitly; a request left pending would keep its
- * frame, and the raw export inside it, alive.
- *
- * Nothing a worker was handed is ever reported. Every error raised here is a
- * fixed string naming the transport and nothing else, because a failure while
- * parsing one of these files can carry the user's message text, or the name and
- * employer of everyone they know.
+ * Worker errors use fixed messages. They must not include uploaded message text,
+ * names, employers, or other export data.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
 
-// Above this size, re-parsing on the UI thread would freeze the page, so the
-// export drops the section rather than blocking on it. One number for all three
-// because they fall back onto the same thread: a transport holding its own
-// opinion about how much that thread can take would be a bug, not a setting.
+// Above this size, re-parsing on the UI thread could freeze the page. Use one
+// limit for all transports because they share the same main-thread fallback.
 export const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
 /**
@@ -245,11 +219,8 @@ export function createWorkerTransport(config) {
              * @param {*} result - Outcome for the caller
              */
             const settle = (result) => {
-                // Identity-guarded. Every settle path detaches the listeners and
-                // clears the watchdog before it returns, so nothing can settle a
-                // request twice today and the guard is defensive: it exists so
-                // that stops being something the next reader has to re-derive
-                // before adding a path.
+                // Every completion path removes listeners and clears the watchdog.
+                // This identity check prevents a second settlement if paths race.
                 /* v8 ignore next 3 */
                 if (pendingRequest === entry) {
                     pendingRequest = null;

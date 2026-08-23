@@ -75,8 +75,8 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
     let parseError = null;
 
     // Reject oversized fields *before* appending, so we never allocate a
-    // huge string just to discard it. addLength is the number of characters
-    // about to be appended to the current field.
+    // large string to discard. addLength is the number of characters
+    // about to be appended to the field being parsed.
     const wouldOverflowField = (addLength) => {
         if (field.length + addLength > CSV_LIMITS.maxFieldChars) {
             parseError = "CSV parsing error: one field is too large to process safely.";
@@ -90,7 +90,7 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
             parseError = "CSV parsing error: trailing escape character.";
             return length;
         }
-        // start + 1 < length was just checked, so the index is in range and
+        // start + 1 < length was checked, so the index is in range and
         // codePointAt always returns a code point (never undefined) here.
         const escapedCodePoint = /** @type {number} */ (csvText.codePointAt(start + 1));
         const escapedCharacter = String.fromCodePoint(escapedCodePoint);

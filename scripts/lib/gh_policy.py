@@ -3,8 +3,8 @@
 Keeping the retry decisions here rather than in one caller means every ``gh``
 wrapper shares the same rules: rate limits always fail fast, transient
 infrastructure failures can retry, and all other errors are final.
-``scripts.gh.gh_runner`` is the current consumer; the CI workflow helpers
-adopt it when they gain a ``gh api`` wrapper of their own.
+``scripts.gh.gh_runner`` uses this module; CI workflow helpers can use it when
+they gain a ``gh api`` wrapper of their own.
 """
 
 from __future__ import annotations

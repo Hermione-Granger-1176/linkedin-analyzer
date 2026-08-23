@@ -50,7 +50,7 @@ WEBKIT_LAUNCHER_LOCAL_LD_LINE = (
 
 
 class RuntimeSetupError(RuntimeError):
-    """Raised when a private runtime cannot be built or used safely."""
+    """Raised when a private runtime cannot be built or used."""
 
 
 @dataclass(frozen=True)
@@ -1014,7 +1014,7 @@ def clean(paths: RuntimePaths) -> None:
 
 
 def parse_args(arguments: Sequence[str]) -> argparse.Namespace:
-    """Parse the small command surface exposed through Make targets."""
+    """Parse the commands exposed through Make targets."""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
     subparsers.add_parser("prepare", help="prepare or reuse private libraries")

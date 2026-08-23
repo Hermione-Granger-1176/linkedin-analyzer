@@ -43,7 +43,7 @@ export const LinkedInCleaner = (() => {
     const EMPTY_CSV_ERROR = "CSV file is empty or has no data rows";
 
     // Auto-detection only needs the header row, which sits at the top of the file
-    // (after at most a few skip rows). For large files, parse just this prefix to
+    // (after at most a few skip rows). For large files, parse this prefix to
     // match a type, then full-parse the matched type once, instead of full-parsing
     // the whole file up to three times (one per distinct option/skip-row combo).
     // Files at or below this size skip the pre-pass and use the original full
@@ -57,8 +57,7 @@ export const LinkedInCleaner = (() => {
      * @returns {boolean}
      */
     function hasRequiredRowValues(row, requiredColumns) {
-        // Every config defines a non-empty required-column set, so the empty
-        // guard is defensive and unreachable from process().
+        // Configurations normally define required columns. Treat an empty list as valid for malformed config.
         /* v8 ignore next 2 */
         if (!requiredColumns.length) {
             return true;
@@ -73,8 +72,7 @@ export const LinkedInCleaner = (() => {
      * @returns {boolean}
      */
     function hasAnyRowValue(row, columns) {
-        // Only called when dropIfAllMissing is non-empty, so the empty guard is
-        // defensive and unreachable from cleanData().
+        // cleanData() normally passes a non-empty list. Treat an empty list as valid for malformed config.
         /* v8 ignore next 2 */
         if (!columns.length) {
             return true;
@@ -88,7 +86,7 @@ export const LinkedInCleaner = (() => {
      * @returns {string} Normalized header
      */
     function normalizeHeader(header) {
-        // Parsed CSV headers are always strings, so the type guard is defensive.
+        // CSV parsing normally returns strings. Ignore malformed headers.
         /* v8 ignore next 2 */
         if (typeof header !== "string") {
             return "";
@@ -347,8 +345,7 @@ export const LinkedInCleaner = (() => {
     function cleanData(data, fileType) {
         const config = CONFIGS[fileType];
         const cleaningPlan = CLEANING_PLANS[fileType];
-        // process() validates the file type before cleaning, so a missing config
-        // here is defensive and unreachable.
+        // process() validates the file type before cleaning. Keep the branch for an unknown type.
         /* v8 ignore next 2 */
         if (!config) {
             return data;
@@ -394,7 +391,7 @@ export const LinkedInCleaner = (() => {
      */
     function buildColumnErrorMessage(selectedType, detectedType, missing) {
         if (selectedType !== "auto" && detectedType && detectedType !== selectedType) {
-            // Known file types always have labels, so the `|| type` fallbacks are defensive.
+            // Known file types have labels. Fall back to the type name for malformed config.
             /* v8 ignore next 2 */
             const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
             const detectedLabel = FILE_TYPE_LABELS[detectedType] || detectedType;
@@ -407,9 +404,8 @@ export const LinkedInCleaner = (() => {
             return `This file doesn't appear to be a LinkedIn ${selectedLabel} export. Missing columns: ${missing.join(", ")}. Please check that you uploaded the correct file.`;
         }
 
-        // Unreachable in practice: process() only calls this on the non-"auto"
-        // path, so selectedType is never "auto" and one of the branches above
-        // always returns. Kept as a defensive default.
+        // process() normally returns through one of the branches above. Keep a
+        // generic error for malformed input.
         /* v8 ignore next */
         return `Missing required columns: ${missing.join(", ")}`;
     }

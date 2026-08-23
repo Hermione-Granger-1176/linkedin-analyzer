@@ -1,4 +1,4 @@
-/* Tutorial overlays, spotlight, and mini tips */
+/* Tutorial overlays, spotlight, and mini tips. */
 
 .tutorial-open {
     overflow: hidden;
@@ -37,8 +37,7 @@
 }
 
 .tutorial-popover {
-    /* Pip's width, read by his own rule and by the gutter the title gives him,
-       so the two can never drift apart. */
+    /* Share Pip's width with the title gutter. */
     --tutorial-mascot-width: 40px;
 
     position: fixed;
@@ -70,11 +69,8 @@
     line-height: 1.1;
 }
 
-/* Pip presents the step from a top corner of the card. He is out of flow on
-   purpose: the popover is measured before it is placed, and he must not change
-   the size that measurement returns. He stands deep enough into the card that
-   the viewport never crops him when the card is pinned to the top edge, and the
-   title gives up a gutter beside him so no heading ever runs underneath. */
+/* Position Pip in the popover without affecting its measured size. Reserve a
+   title gutter so the heading does not overlap him. */
 .tutorial-mascot {
     position: absolute;
     left: 8px;
@@ -84,9 +80,7 @@
     pointer-events: none;
 }
 
-/* He takes the corner away from the target and gestures across the card toward
-   it, which keeps him off both the pointer arrow and the highlighted element.
-   One flip covers every step whose target sits back the other way. */
+/* Move Pip to the opposite corner when the target is on the other side. */
 .tutorial-mascot[data-facing="left"] {
     left: auto;
     right: 8px;
@@ -102,7 +96,7 @@
     padding-right: calc(var(--tutorial-mascot-width) + 10px);
 }
 
-/* Both arms ship in the same drawing; the pose attribute picks one. */
+/* Show the arm selected by the pose attribute. */
 .tutorial-mascot-arm {
     display: none;
 }
@@ -340,8 +334,7 @@
     cursor: pointer;
     display: grid;
     place-items: center;
-    /* The circle is the crop: Pip is drawn a little larger than it and sits low
-       inside, so his hood is cut off by the rim and he reads as peeking out. */
+    /* Crop the mascot inside the circular help button. */
     overflow: hidden;
     transition:
         transform var(--transition-fast),
@@ -366,8 +359,7 @@
     height: auto;
 }
 
-/* The question stays on the accent so it still reads as the hint the "?" was.
-   Scoped past .pip-ink rather than tied to which stylesheet lands last. */
+/* Keep the help mark above the shared .pip-ink stroke color. */
 .tutorial-help-pip .tutorial-help-mark {
     stroke: var(--accent-blue);
     stroke-width: 3.4;
@@ -394,9 +386,7 @@
 }
 
 @media (max-width: 700px) {
-    /* A narrow card is often pinned to the top of the viewport, and the
-       smaller Pip reaches above its top edge by less, so nothing crops his
-       hair. His gutter follows him down. */
+    /* Reduce the mascot width and title gutter on narrow cards. */
     .tutorial-popover {
         --tutorial-mascot-width: 34px;
 
@@ -428,8 +418,7 @@
         height: 82px;
     }
 
-    /* The size comes down with --help-btn-size, which changes on this same
-       breakpoint; all this band owns is the tighter gutter. */
+    /* Match the smaller corner-button gutter at this breakpoint. */
     .tutorial-help-btn {
         right: var(--space-md);
         bottom: var(--space-md);

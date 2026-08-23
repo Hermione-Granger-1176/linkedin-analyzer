@@ -86,7 +86,7 @@ def test_issue_summary_handles_empty_optional_fields() -> None:
     ],
 )
 def test_issue_summary_rejects_invalid_required_fields(field: str, value: object) -> None:
-    """Missing or malformed required metadata surfaces as a field-specific GhError."""
+    """Missing or malformed required metadata raises a field-specific GhError."""
     payload: dict[str, object] = {
         "number": 5,
         "title": "Issue title",
@@ -100,7 +100,7 @@ def test_issue_summary_rejects_invalid_required_fields(field: str, value: object
 
 
 def test_issue_summary_non_dict_payload_raises() -> None:
-    """A non-mapping ``gh issue view`` payload surfaces as a GhError."""
+    """A non-mapping ``gh issue view`` payload raises GhError."""
     with pytest.raises(GhError):
         issues.issue_summary(1, run_fn=_issue_runner([1, 2]))
 

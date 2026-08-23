@@ -2,7 +2,7 @@
 """Small, tested helpers for GitHub Actions workflows.
 
 The workflow shell should stay thin: trust-boundary decisions and downloaded
-artifact validation live here so automated writebacks can be reused safely.
+artifact validation live here so automated writebacks can reuse the same checks.
 """
 
 from __future__ import annotations

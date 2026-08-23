@@ -1,6 +1,6 @@
-/* Analytics dashboard: stat cards, charts, and heatmap */
+/* Analytics dashboard, stat cards, charts, and heatmap. */
 
-/* Analytics */
+/* Analytics layout. */
 .analytics-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -75,8 +75,7 @@
     height: 320px;
 }
 
-/* Empty charts collapse to a short band with a centered message so the card
-   shrinks instead of leaving a tall blank canvas. */
+/* Reduce empty charts to a short band with a centered message. */
 .chart-canvas-wrap--empty,
 .chart-card--wide .chart-canvas-wrap--empty {
     height: 140px;
@@ -87,8 +86,7 @@
     height: 100%;
 }
 
-/* The 24-hour heatmap needs a minimum width to stay tappable; let it scroll
-   horizontally inside its card on narrow screens instead of squashing. */
+/* Keep the 24-hour heatmap wide enough to read and scroll it inside the card. */
 #heatmapCard .chart-canvas-wrap {
     overflow-x: auto;
 }
@@ -171,11 +169,7 @@
     text-align: center;
 }
 
-/* position and the top margin between them give the waiting mascot in
-   mascot.css somewhere to hang from: whichever pose the screen calls for is
-   absolutely positioned against this box and leans over the top edge, so the
-   box needs to be its containing block and to keep a little clear air above
-   itself. */
+/* Provide a containing block and top margin for the empty-state mascot. */
 .analytics-empty,
 .insights-empty {
     position: relative;
@@ -195,18 +189,8 @@
     margin-bottom: var(--space-xl);
 }
 
-/* Every stat tile in the app is an index card: one red rule under the top edge,
-   then faint ruling down the body, both painted as background layers so the
-   card gains no elements and keeps the wobble and hover it already had. The
-   ruled layer is sized to exactly one step and left to repeat, which keeps the
-   spacing honest however tall the card grows.
-
-   The three offsets are measured, not guessed. Text is written on a ruled line
-   when its baseline lands there, so the first line sits at the number's
-   baseline and the rest follow one step apart: the number's row is 40px tall
-   and the caption's is one step, which puts the two baselines exactly one step
-   apart and every wrapped caption row on a line of its own. Retune the top
-   padding and the first line together if either type size changes. */
+/* Draw stat-card ruling as background layers. Keep the line positions aligned
+   with the value and label line heights. */
 .stat-card {
     --index-rule-top: 14px;
     --index-line-top: 50px;
@@ -224,8 +208,7 @@
     text-align: center;
 }
 
-/* The number and its caption are the handwriting on the card. The number
-   overhangs its row the way a hand-written figure overhangs a ruled line. */
+/* Align the value and caption with the card ruling. */
 .stat-value {
     position: relative;
     font-size: var(--font-size-2xl);
@@ -239,8 +222,7 @@
     color: var(--text-secondary);
 }
 
-/* Lifetime/all-time stats live in their own zone below the filtered cards, set
-   apart by a divider so it is clear the filters above do not apply to them. */
+/* Separate lifetime statistics from the filtered cards. */
 .all-time-section {
     margin-top: var(--space-xl);
     padding-top: var(--space-lg);

@@ -2403,7 +2403,7 @@ describe("MessagesPage", () => {
         MessagesPage.onRouteChange({});
         await tick();
 
-        // The connections file metadata is present, so the missing text surfaces
+        // The connections file metadata is present, so missing text is reported
         // as a load error rather than silently dropping connection insights.
         expect(document.getElementById("silentConnectionsList").innerHTML).toContain(
             "Unable to load Connections.csv",

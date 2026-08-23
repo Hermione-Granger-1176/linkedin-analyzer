@@ -203,7 +203,7 @@ describe("loadRecentThreads", () => {
     it("does not re-parse on the main thread when the worker reports failure", async () => {
         // The worker has already run this exact code over this exact CSV and
         // said it cannot yield threads. Re-running it on the UI thread freezes
-        // the page to reach the same answer, so the section is simply dropped.
+        // the page to reach the same answer, so the section is dropped.
         const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = harness.instance;
         const [request] = worker.postMessage.mock.calls[0];

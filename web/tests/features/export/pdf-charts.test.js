@@ -742,7 +742,7 @@ describe("buildListBlocks", () => {
         for (const call of doc.calls.text) {
             expect(call.value.endsWith("…"), call.value).toBe(true);
             expect(textWidth(call.value, 7.5), call.value).toBeLessThanOrEqual(column);
-            // Every row keeps most of the surname, not just the first token.
+            // Every row keeps most of the surname, including more than the first token.
             expect(call.value.length, call.value).toBeGreaterThan(
                 "Bartholomewkonstantinos13".length + 10,
             );

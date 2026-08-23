@@ -190,7 +190,7 @@ def main_runner(
 def test_main_dry_run_reports_both_groups_and_deletes_nothing(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Without confirm the helper only reports, and unique branches are surfaced."""
+    """Without confirm the helper only reports, including unique branches."""
     calls: list[tuple[str, ...]] = []
     assert prune_branches.main(environ=base_environment(), runner=main_runner(calls=calls)) == 0
 
@@ -238,7 +238,7 @@ def test_main_prints_a_fallback_line_when_git_is_quiet(
 def test_main_stops_and_reports_when_a_delete_is_refused(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A refused deletion surfaces git's stderr and exits non-zero instead of continuing."""
+    """A refused deletion reports Git's stderr and exits without continuing."""
     responses = {
         ("branch", "--show-current"): (0, "main\n"),
         ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"): (0, ""),

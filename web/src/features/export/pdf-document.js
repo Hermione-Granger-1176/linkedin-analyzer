@@ -154,7 +154,7 @@ function leadingRequirement(blocks, from, usableHeight) {
  * than splitting; anything taller flows row by row. Every placed row ends inside
  * the usable area: a row that could not is dropped rather than drawn past it.
  *
- * A block that is both `keepTogether` and `keepWithNext` additionally reserves
+ * A block that is both `keepTogether` and `keepWithNext` also reserves
  * the room whatever follows it needs to start here: all of a block that moves
  * whole, the first row of one that flows. On the row-by-row path the flag does
  * not apply. A heading is only a heading if something comes after it on the same
@@ -588,7 +588,7 @@ function buildInsightBlock(painter, insight, index) {
                 // The accent stays the card's rule and roundel, exactly as the
                 // Insights screen uses it for the border and icon; the heading is
                 // measured against the tint rather than taking the accent, which
-                // on this palette lands on `--text-primary` just as it does on
+                // on this palette lands on `--text-primary`, as it does on
                 // screen.
                 painter.text(
                     line,

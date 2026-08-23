@@ -33,7 +33,7 @@
  * @returns {MessageState}
  */
 export function hydrateMessageState(payload) {
-    // only called with a truthy processed.messageState, so the fallback is defensive.
+    // Worker payloads normally contain an object. Use an empty object for malformed data.
     /* v8 ignore next */
     const safePayload = payload || {};
     /** @type {Map<string, MessageContact>} */
@@ -70,7 +70,7 @@ export function hydrateMessageState(payload) {
  * @returns {{list: object[], byUrl: Map<string, object>, byName: Map<string, object>}}
  */
 export function hydrateConnectionState(payload) {
-    // only called with a truthy processed.connectionState, so the fallback is defensive.
+    // Worker payloads normally contain an object. Use an empty object for malformed data.
     /* v8 ignore next */
     const safePayload = payload || {};
     const list = Array.isArray(safePayload.list) ? safePayload.list : [];
@@ -78,7 +78,7 @@ export function hydrateConnectionState(payload) {
     const byName = new Map();
 
     for (const connection of list) {
-        // the worker never emits null list rows, so this guard is defensive.
+        // Worker output contains object rows. Ignore null entries in malformed data.
         /* v8 ignore next 3 */
         if (!connection) {
             continue;

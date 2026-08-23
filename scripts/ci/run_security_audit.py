@@ -9,7 +9,7 @@ becomes available (when it was granted only while unfixed), and unused
 exceptions are reported so the allow-list never rots.
 
 ``--strict`` semantics are preserved twice over: the flag is always passed, and
-any dependency pip-audit reports as skipped is surfaced as an audit error.
+any dependency pip-audit reports as skipped is reported as an audit error.
 
 Exceptions live under ``python_vulnerability_exceptions`` in
 ``config/security_audit.json``.

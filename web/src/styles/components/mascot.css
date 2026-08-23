@@ -1,37 +1,13 @@
-/* Pip: the doodled character who lives in the app, and the small moves around him.
+/* Pip styles.
 
-   Ownership, so a redesign knows where to go:
+   SVG definitions shared by multiple poses live in web/index.html. One-use poses
+   remain inline. JavaScript-built poses use the same pip-* classes.
 
-   - The drawings are SVG. A pose used more than once is a group in the hidden
-     defs block at the top of index.html and every placement is a use element;
-     a pose used once stays inline where it appears. The two poses built in
-     JavaScript, features/insights/reactions.js and features/tutorial/mascot.js,
-     draw with the same pip-* classes as the rest.
-   - This file is the character himself: the ink and fill classes every pose is
-     drawn with, the loops they share, the one-shot moves, and the reduced-motion
-     guard that switches all of it off. Nothing here knows which screen a pose
-     lands on.
-   - Where a pose sits on a surface belongs to that surface's stylesheet:
-     .pip-loader inside the progress card in components/overlays.css,
-     .insight-reaction on the card in features/insights.css, .tutorial-mascot and
-     .tutorial-help-pip in features/tutorial.css. The placement section below
-     holds only the poses whose surface has no stylesheet of its own, and the
-     five empty-state poses have a section of their own at the foot of the file:
-     one screen each, so what they are made of and where they hang read better
-     together than split across two files.
-   - The two exceptions are deliberate and commented where they live: the help
-     button's "?" is a button affordance drawn into a pose rather than part of
-     Pip, and the insight stamps run the shared loops at their own pace, which
-     is set beside the component that builds them.
+   This file owns Pip's colors, shared animations, one-shot animations, and the
+   reduced-motion rules. Feature stylesheets own placement when a pose belongs to
+   a specific component. */
 
-   Responsive breakpoints are repeated section by section rather than gathered
-   into one block per width, so everything about a pose reads in one place.
-
-   Colours stay on the app tokens so the character flips with the theme instead
-   of staying a light-mode drawing. */
-
-/* Hidden host for the shared feTurbulence wobble filter and the reusable pose
-   groups. Kept out of flow so the defs block never takes part in layout. */
+/* Hide shared SVG definitions without affecting layout. */
 .pip-defs {
     position: absolute;
     width: 0;
@@ -39,9 +15,7 @@
     overflow: hidden;
 }
 
-/* ---------- Ink and colour ----------
-   Single class selectors on purpose: the fill helpers share the specificity of
-   .pip-ink and come later, so they win without any !important. */
+/* Ink and color. Keep fill helpers at the same specificity as .pip-ink. */
 
 .pip-ink {
     fill: none;
@@ -63,7 +37,7 @@
     fill: var(--accent-blue);
 }
 
-/* Hood lining, a shade back from the jacket so the two read apart. */
+/* Use a separate color for the hood lining. */
 .pip-hood {
     fill: var(--accent-blue-light);
 }
@@ -87,8 +61,7 @@
     stroke: none;
 }
 
-/* Pip's crop. One filled mass with a scalloped hem reads as a styled fringe,
-   where a bundle of open strokes only ever reads as scribble. */
+/* Draw the hair as one filled, scalloped shape. */
 .pip-hair {
     fill: var(--text-primary);
     stroke: var(--text-primary);
@@ -104,7 +77,7 @@
     stroke-linecap: round;
 }
 
-/* Heavier than the face line, so the brows carry the expression. */
+/* Use a heavier stroke for the brows. */
 .pip-brow {
     stroke-width: 3.9;
 }
@@ -136,10 +109,8 @@
     opacity: 0.5;
 }
 
-/* ---------- Idle loops ----------
-   Every loop here is infinite on purpose: the screenshot harness waits for
-   finite animations to finish, so anything that never settles must never
-   claim to. One-shot moves (wiggle, splat, cheer) are finite instead. */
+/* Idle loops. Keep these animations infinite. The screenshot harness waits for
+   finite animations to finish. One-shot animations are finite. */
 
 .pip-bob {
     transform-box: fill-box;
@@ -347,11 +318,7 @@
     }
 }
 
-/* ---------- Placement ----------
-   Every pose is decoration, so none of them takes a pointer event away from
-   the controls they sit next to. The declaration is repeated in each section
-   below rather than gathered here, so a new pose is inert from the rule that
-   places it: five poses share the list here, and the rest say it themselves. */
+/* Placement. Decorative poses do not receive pointer events. */
 
 .pip-hero,
 .pip-loader,
@@ -361,8 +328,7 @@
     pointer-events: none;
 }
 
-/* The hero title and the waving Pip share one centred row, so the mascot sits
-   beside the heading instead of pushing the subtitle around. */
+/* Keep the hero title and mascot in one row without moving the subtitle. */
 .hero-title-row {
     display: flex;
     align-items: center;
@@ -377,13 +343,7 @@
     height: auto;
 }
 
-/* Off to the side of the sticky note, which holds still itself. Kept small so
-   the note stays the compact strip it was before he turned up. The right
-   margin keeps him out of the lane the fixed tutorial help button owns in the
-   bottom-right of the viewport (that circle plus the offset it is pinned by,
-   and the circle comes down a size on a narrow screen with him).
-   The note is page content and scrolls under that button, so without the lane
-   Pip ends up beneath it whenever the note reaches the foot of the screen. */
+/* Keep the error mascot beside the note and clear of the fixed tutorial button. */
 .pip-alarm {
     flex: 0 0 auto;
     align-self: center;
@@ -393,15 +353,12 @@
     margin-right: calc(var(--help-btn-size) + var(--space-md));
 }
 
-/* The cheer pops up over the download button rather than sitting in the row:
-   in the flow it would shove the centred button sideways every time it played. */
+/* Position the cheer over the download button so it does not change row layout. */
 .download-section {
     position: relative;
 }
 
-/* Centred with the individual translate property rather than with `transform`,
-   because the moment envelope animates `transform` and would otherwise drop the
-   centring for the length of the move. */
+/* Use translate instead of transform because the moment animation owns transform. */
 .pip-cheer {
     position: absolute;
     left: 50%;
@@ -415,19 +372,14 @@
     display: none;
 }
 
-/* ---------- Pip says ----------
-   The Insights and Messages tips are Pip talking. He leans on the left edge of
-   a drawn speech bubble, and the tip text is what comes out of it. The row
-   itself belongs to .insight-tip in features/insights.css; everything the two
-   halves are made of lives here. */
+/* Pip tips. The row belongs to features/insights.css. These rules own the mascot
+   and speech bubble. */
 
 .pip-tipster {
     flex: 0 0 auto;
     width: 78px;
     height: auto;
-    /* His hand is inked at the right edge of the frame, so the pull-in parks it
-       across the bubble's border rather than a few pixels short of it, and the
-       stacking context keeps the hand on top of the border it rests on. */
+    /* Keep the hand over the bubble border. */
     position: relative;
     z-index: 1;
     margin-right: -11px;
@@ -438,16 +390,13 @@
     flex: 1 1 auto;
     padding: var(--space-md) var(--space-lg);
     border: 2px solid var(--border-color);
-    /* The same imperfect corners the sketch cards are drawn with. */
+    /* Match the irregular corners used by sketch cards. */
     border-radius: 16px 14px 17px 15px / 14px 17px 15px 16px;
     background: var(--bg-secondary);
     box-shadow: var(--shadow-sm);
 }
 
-/* The tail, pointing back at Pip's head. Two triangles: the outer one is the
-   ink, the inner one is the fill laid over it, and the inner one reaches a few
-   pixels into the bubble so the border it crosses disappears behind it. It sits
-   high on the edge, above the arm he is leaning with. */
+/* Draw the bubble tail with an outer border triangle and an inner fill triangle. */
 .pip-bubble::before,
 .pip-bubble::after {
     content: "";
@@ -477,8 +426,7 @@
     color: var(--text-primary);
 }
 
-/* The lightbulb that used to headline the tip, kept as a small mark next to his
-   name instead of the 48px icon it was. */
+/* Keep the lightbulb as a small mark beside the tip title. */
 .pip-bubble-bulb {
     flex: 0 0 auto;
     width: 18px;
@@ -497,10 +445,9 @@
     color: var(--text-secondary);
 }
 
-/* ---------- One-shot moves ---------- */
+/* One-shot moves. */
 
-/* Fist pump for a clean export that actually landed. Finite, and the element
-   is hidden again once it has played. */
+/* Animate the fist pump after a successful clean export. */
 .is-cheering .pip-jump {
     transform-box: fill-box;
     transform-origin: 50% 100%;
@@ -543,7 +490,7 @@
     }
 }
 
-/* Hub icons redraw themselves under the pointer. */
+/* Animate hub icons on hover and focus. */
 .hub-card:hover .hub-icon svg,
 .hub-card:focus-visible .hub-icon svg {
     animation: pip-doodle-wiggle 0.65s ease-in-out;
@@ -565,11 +512,8 @@
     }
 }
 
-/* Stat tiles settle like they were dropped on the desk. card-in runs with
-   animation-fill-mode: both, which pins `transform` for good, so the settle
-   uses the individual rotate/translate properties instead. This rule replaces
-   the shared transition rather than adding to it, so it restates the shared
-   list and appends the two properties it settles. */
+/* Add rotate and translate transitions to stat cards. The card-in animation owns
+   transform, so use the individual properties for the hover state. */
 .stat-card {
     transition:
         var(--card-transition),
@@ -583,15 +527,14 @@
     box-shadow: var(--shadow-md);
 }
 
-/* Ink splat, dropped where a primary or download button was clicked. The
-   buttons become the containing block so the splat lands under the pointer. */
+/* Position the click splat relative to primary and download buttons. */
 .primary-btn,
 .download-btn {
     position: relative;
 }
 
 .pip-splat {
-    /* Half of it hangs back up and left, so the blot centres on the click. */
+    /* Center the splat on the click position. */
     --pip-splat-size: 26px;
 
     position: absolute;
@@ -628,33 +571,26 @@
     }
 }
 
-/* ---------- Alive layer ----------
-   The three moves hero Pip makes on his own, driven by shared/ui/alive.js. Both
-   one-shots are finite and both borrow an element that already carries an idle
-   loop: the loop is replaced for the length of the move and comes straight back
-   when the class comes off, so nothing here has to unwind by hand. */
+/* Alive layer. shared/ui/alive.js drives the hero's idle actions. */
 
-/* His eyes follow the pointer. alive.js writes the offset as an inline
-   transform and caps it at a fraction of an eye's width; the transition is what
-   keeps the glance from snapping across. */
+/* alive.js writes a bounded gaze offset as an inline transform. */
 .pip-gaze {
     transition: transform 220ms ease-out;
 }
 
-/* Bored: he leans back into a yawn, holds it, and settles. */
+/* Animate the idle yawn. */
 .pip-hero.is-bored .pip-bob {
     animation: pip-idle-yawn 2.4s ease-in-out;
 }
 
 .pip-hero.is-bored .pip-mouth {
     transform-box: fill-box;
-    /* Top of the mouth, so a yawn opens down towards the chin instead of
-       growing in both directions and swallowing the nose. */
+    /* Open the yawn toward the chin. */
     transform-origin: 50% 0%;
     animation: pip-idle-yawn-mouth 2.4s ease-in-out;
 }
 
-/* The lights just changed: one hard double blink and a shake of the hair. */
+/* Animate the wake-up blink and hair shake. */
 .pip-hero.is-waking .pip-blink {
     animation: pip-wake-blink 0.62s ease-in-out;
 }
@@ -725,17 +661,9 @@
     }
 }
 
-/* ---------- Upload catch ----------
-   Pip at the foot of the drop zone, driven by features/upload/mascot.js. One
-   drawing carries the whole moment: the face and the body are shared, and the
-   arms and the mouth are switched by the pose the upload page writes on the
-   svg, which is why he is inked inline rather than referenced out of the defs
-   block. His box belongs to features/upload.css, as the zone he stands in does.
-
-   The rise and the brace are one animation list, because they are the same
-   element arriving and then waiting. The wait never settles, so it is infinite;
-   the catch is finite and short, because it has to be over before the upload it
-   belongs to has anything to say. */
+/* Upload catch. features/upload/mascot.js selects the pose. The body is shared
+   with the definitions in web/index.html, while the pose-specific arms and
+   mouth stay inline. */
 
 .pip-catcher {
     pointer-events: none;
@@ -743,12 +671,11 @@
 
 .pip-catch-body {
     transform-box: fill-box;
-    /* The foot of the drawing, which the viewBox crops away: he leans and
-       bounces from the ground he is standing on rather than about his chest. */
+    /* Anchor motion at the cropped foot of the drawing. */
     transform-origin: 50% 100%;
 }
 
-/* One pose at a time: each carries the arms and the mouth that go with it. */
+/* Show one upload pose at a time. */
 .pip-catch-pose {
     display: none;
 }
@@ -758,8 +685,7 @@
     display: block;
 }
 
-/* The rise happens inside the viewBox, so the zone's edge clips it and he comes
-   up from behind the border instead of sliding down over it. */
+/* Keep the rise inside the viewBox so the drop-zone edge clips it. */
 .pip-catcher[data-pose="ready"] .pip-catch-body {
     animation:
         pip-catch-rise 0.32s ease-out,
@@ -770,8 +696,7 @@
     animation: pip-catch-hug 0.9s ease-in-out;
 }
 
-/* The fade is on the wrapper rather than the body, so it plays over the hug
-   instead of fighting it for the transform. */
+/* Fade the wrapper so the body can keep its hug transform. */
 .pip-catcher[data-pose="catch"] {
     animation: pip-catch-away 1.05s ease-in forwards;
 }
@@ -798,7 +723,7 @@
     }
 }
 
-/* Catch, absorb, one bounce, settle. */
+/* Animate the catch, bounce, and settle. */
 @keyframes pip-catch-hug {
     0% {
         transform: translateY(-5px) scaleY(1.03);
@@ -825,21 +750,8 @@
     }
 }
 
-/* ---------- Export and clear moments ----------
-   Two one-shots that mark a job as finished: Pip staples the PDF that has just
-   downloaded, and rubs the Files card clean once the stored uploads have gone.
-   Both are finite, both are driven from a class on the pose itself, and both are
-   put away again by the timer in shared/ui/mascot.js: an animation in a
-   display:none subtree never ends, so nothing here waits on animationend.
-
-   Every step holds its last frame, because a moment that reverted to its resting
-   styles would flash back into view for the gap between the animation ending and
-   the timer hiding it.
-
-   Placement sits here beside the moves, the way the cheer's does: one moment is
-   pinned to the viewport corner under the export button, the other floats over
-   the Home action row, and neither surface has a stylesheet that owns anything
-   else about them. */
+/* Export and clear animations. shared/ui/mascot.js adds the state classes and
+   hides these elements after the finite animations finish. */
 
 .pip-staple,
 .pip-eraser {
@@ -851,9 +763,7 @@
     display: none;
 }
 
-/* Directly under the two fixed circles in the top-right corner: one button
-   height plus a gutter clears both, and the right edge lines up with the theme
-   toggle rather than reaching past it. */
+/* Place the staple below the fixed corner buttons. */
 .pip-staple {
     position: fixed;
     top: calc(var(--space-lg) + var(--corner-btn-size) + var(--space-sm));
@@ -863,10 +773,7 @@
     z-index: 200;
 }
 
-/* Over the action row rather than in it: in the flow he would shove the two
-   buttons sideways every time a wipe landed. Scoped to the Files card, because
-   .action-buttons is a row six other screens use and only this one has a pose
-   to hang off it. */
+/* Position the eraser above the Files action row without changing its layout. */
 .upload-status-card .action-buttons {
     position: relative;
 }
@@ -879,9 +786,7 @@
     height: auto;
 }
 
-/* The envelope all three moments arrive and leave in. The cheer is on the list
-   too, so a fist pump fades out the way the other two do instead of being cut
-   off mid-air. */
+/* Use the same entry and exit animation for all three moments. */
 .pip-cheer.is-cheering,
 .pip-staple.is-stapling,
 .pip-eraser.is-erasing {
@@ -904,8 +809,7 @@
     }
 }
 
-/* The staple: the sheets come into line, the jaw goes down under his hand, the
-   "chk" comes off the nose, and one page corner flutters up after it. */
+/* Animate the staple sheets, jaw, check marks, and page corner. */
 
 .pip-sheet {
     transform-box: fill-box;
@@ -920,8 +824,7 @@
     animation: pip-staple-square-right 1.4s ease-out forwards;
 }
 
-/* Pivoted at the shoulder the arm is drawn from, so the press swings the hand
-   down without detaching the sleeve from the jacket. */
+/* Pivot the pressing arm at the shoulder. */
 .pip-press {
     transform-box: fill-box;
     transform-origin: 0% 67%;
@@ -931,7 +834,7 @@
     animation: pip-staple-press 1.4s ease-in-out forwards;
 }
 
-/* Hinged at its own left end, the way a stapler is. */
+/* Pivot the stapler jaw at its left end. */
 .pip-jaw {
     transform-box: fill-box;
     transform-origin: 5% 90%;
@@ -1039,10 +942,9 @@
     }
 }
 
-/* The eraser: two scrubs that take the marks off the page and leave crumbs
-   behind, then the arms swap over for the all-clean dust-off. */
+/* Animate two eraser passes, then the dust-off pose. */
 
-/* Pivoted at the shoulder, so the rubber travels the arc an arm travels. */
+/* Pivot the scrubbing arm at the shoulder. */
 .pip-scrub {
     transform-box: fill-box;
     transform-origin: 0% 0%;
@@ -1073,7 +975,7 @@
     animation: pip-eraser-pat 1.4s ease-in-out forwards;
 }
 
-/* Long enough to cover either mark whole, so the offset takes all of it. */
+/* Set the dash length long enough to cover each erase mark. */
 .pip-erase-mark {
     stroke-dasharray: 130;
     stroke-dashoffset: 0;
@@ -1087,9 +989,7 @@
     animation-delay: 0.12s;
 }
 
-/* The three bits of debris in this file, resting: out of sight until the move
-   that throws them starts. The staple's flutter is in with them because there
-   is nothing to say about it that is not said here. */
+/* Hide debris until an eraser or staple animation starts. */
 .pip-crumb,
 .pip-puff,
 .pip-flutter {
@@ -1233,10 +1133,8 @@
     }
 }
 
-/* The two corner buttons move in to the smaller gutter below the tablet
-   breakpoint, so the staple follows them in and comes down a size with them. The
-   eraser narrows for the same reason: the card it floats over is the width of
-   the screen by then, and the message under it stays readable. */
+/* Move the export animation inward and reduce its size below the tablet
+   breakpoint. Reduce the eraser width to preserve the Files card layout. */
 @media (max-width: 768px) {
     .pip-staple {
         top: calc(var(--space-md) + var(--corner-btn-size) + var(--space-sm));
@@ -1249,10 +1147,7 @@
     }
 }
 
-/* At phone width the hint above the buttons runs the width of the card, and a
-   right-aligned Pip lands on the end of it. He comes down a size again and
-   steps out into the card's own padding, which is the only space left that
-   holds no text. */
+/* Reduce and reposition the eraser at phone width. */
 @media (max-width: 540px) {
     .pip-eraser {
         right: calc(-1 * var(--space-lg));
@@ -1260,13 +1155,7 @@
     }
 }
 
-/* Below the tablet breakpoint .title turns into a column, so its pencil icon
-   stacks above the words and a vertically centred Pip ends up level with the
-   icon: detached, floating over the empty space beside it, and high enough to
-   reach the theme toggle and PDF export button fixed in the top-right corner.
-   Standing him on the foot of the title block instead ties him to the words and
-   drops him clear of that pair, and the smaller size keeps the row from growing
-   wide enough to run into them again. */
+/* Align the hero mascot with the stacked title below the tablet breakpoint. */
 @media (max-width: 768px) {
     .hero-title-row {
         gap: var(--space-sm);
@@ -1279,17 +1168,12 @@
 }
 
 @media (max-width: 540px) {
-    /* A phone-width note has no room for both Pip and a readable message: his
-       own width plus the lane that clears the help button would leave the text
-       barely a third of the note. He sits this one out, the way the filter
-       chips do, and the message keeps the whole strip to itself. */
+    /* Hide the error mascot when the note cannot fit beside the fixed help button. */
     .pip-alarm {
         display: none;
     }
 
-    /* Pip stays in the tip at phone width, small enough that the bubble keeps a
-       readable line. A smaller Pip sits lower against a bubble of the same
-       height, so the tail comes down the edge to meet his head again. */
+    /* Reduce the tip mascot and adjust the bubble tail at phone width. */
     .pip-tipster {
         width: 56px;
         margin-right: -8px;
@@ -1314,26 +1198,8 @@
     }
 }
 
-/* ---------- Empty states ----------
-   Five boxes say "nothing here yet", and each one gets the Pip its own screen
-   earned: he waits for files on Clean, hunts for numbers through a magnifying
-   glass on Analytics, holds an empty mailbox open on Connections, launches a
-   paper plane on Messages, and waits for an idea under an unlit bulb on
-   Insights. Each pose is drawn once, in the box it belongs to, so all five are
-   inline in index.html rather than definitions in the defs block.
-
-   Placement sits here rather than in features/analytics.css, which owns the
-   boxes: that file draws the dashed frame and gives it a containing block and a
-   little clear air above, which is all these five take from it. Every pose is
-   cropped by its own viewBox at the box's top edge, so hands and props land on
-   the border instead of floating over it.
-
-   The props are inked here too, beside the poses they belong to: each of them
-   turns up on exactly one screen, which is not true of anything in the ink
-   section above.
-
-   Every idle below is infinite, for the same reason the rest of Pip's loops
-   are: the screenshot harness waits for finite animations to finish. */
+/* Empty states. Each screen's decorative pose is drawn inline in web/index.html.
+   This file controls their size, placement, and shared idle behavior. */
 
 .pip-peeker,
 .pip-inspector,
@@ -1363,22 +1229,19 @@
     width: 139px;
 }
 
-/* The bulb sits above his head, so this one is the tallest of the five and
-   starts a little higher up the page. */
+/* Reserve extra height for the bulb above the head. */
 .pip-dreamer {
     top: -68px;
     width: 104px;
 }
 
-/* A wash rather than a fill: the face keeps reading through the glass, which is
-   what makes the eye behind it look magnified rather than pasted on. */
+/* Use a translucent lens so the eye remains visible through it. */
 .pip-lens {
     fill: var(--accent-blue);
     fill-opacity: 0.14;
 }
 
-/* Heavier than the face line, so the glass reads as a rim and not as another
-   circle drawn on Pip. */
+/* Use a heavier stroke for the lens rim. */
 .pip-rim {
     stroke-width: 4.2;
 }
@@ -1396,8 +1259,7 @@
     fill-opacity: 0.8;
 }
 
-/* Where the plane has been. Dashes rather than a line, so it reads as a flight
-   path instead of a wire holding the plane up. */
+/* Draw the plane path as a dashed line. */
 .pip-trail {
     fill: none;
     stroke: var(--text-secondary);
@@ -1408,8 +1270,7 @@
     animation: pip-trail-march 3s linear infinite;
 }
 
-/* The bulb is a pencil sketch, not a light: secondary ink, no yellow anywhere,
-   and no rays coming off it. Switched off is the whole point of the pose. */
+/* Draw the unlit bulb with secondary ink and no yellow fill. */
 .pip-bulb-line {
     fill: none;
     stroke: var(--text-secondary);
@@ -1423,15 +1284,14 @@
     animation: pip-bulb-flicker 5.6s ease-in-out infinite;
 }
 
-/* Pivoted at the wrist end of the forearm, which is the one part of the arm the
-   box edge holds still, so the glass sweeps instead of sliding. */
+/* Pivot the magnifying glass at the wrist. */
 .pip-scan {
     transform-box: fill-box;
     transform-origin: 50% 100%;
     animation: pip-scan 4.6s ease-in-out infinite;
 }
 
-/* Hinged where the flag is bolted to the side of the mailbox. */
+/* Pivot the mailbox flag at its hinge. */
 .pip-flag-twitch {
     transform-box: fill-box;
     transform-origin: 100% 0%;
@@ -1468,7 +1328,7 @@
     }
 }
 
-/* Along the line rather than across it, so the plane keeps riding the dashes. */
+/* Move the plane along the dashed path. */
 @keyframes pip-glide {
     0%,
     100% {
@@ -1479,7 +1339,7 @@
     }
 }
 
-/* One dash plus one gap, so the march loops without a seam. */
+/* Repeat one dash and one gap without a visible seam. */
 @keyframes pip-trail-march {
     0% {
         stroke-dashoffset: 0;
@@ -1489,8 +1349,7 @@
     }
 }
 
-/* A flicker inside the range a pencil line lives in. The top of it is still
-   fainter than the ink Pip is drawn with, so the bulb never reads as lit. */
+/* Flicker the bulb without making it brighter than Pip's ink. */
 @keyframes pip-bulb-flicker {
     0%,
     100% {
@@ -1507,9 +1366,7 @@
     }
 }
 
-/* Phone width: the boxes run the width of the screen and their messages need
-   the room, so all five come down a size and sit closer to the edge they hang
-   from. */
+/* Reduce empty-state poses at phone width. */
 @media (max-width: 540px) {
     .pip-peeker,
     .pip-inspector,
@@ -1541,10 +1398,8 @@
     }
 }
 
-/* Reduced motion: Pip holds still, and the one-shot moves never start. The
-   hover transforms on the cards are deliberately kept: they answer the pointer
-   rather than starting on their own, which is what .hub-card:hover already
-   did before the stat cards joined it. */
+/* Disable automatic mascot motion when reduced motion is requested. Keep
+   pointer-triggered card transforms. */
 @media (prefers-reduced-motion: reduce) {
     .pip-bob,
     .pip-blink,
@@ -1593,8 +1448,7 @@
         animation: none;
     }
 
-    /* alive.js never writes a gaze offset under reduced motion, so there is
-       nothing to ease. Stated anyway, so the guard is the whole answer. */
+    /* Disable the gaze transition with the other reduced-motion rules. */
     .pip-gaze {
         transition: none;
     }

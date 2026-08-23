@@ -1191,8 +1191,8 @@ describe("collectExportData", () => {
                 value: formatShortDate(GRACE_CONNECTED_MS),
             },
             // Neither a position nor a company, and no date on the record. The
-            // screen leaves the line blank; a page whose middle column simply
-            // stopped would read as a rendering fault, so it says so.
+            // screen leaves the line blank; a page whose middle column stopped
+            // would read as a rendering fault, so it reports the missing data.
             { primary: "Alan Turing", secondary: "No role info", value: "No date" },
         ]);
         expect(messages.charts[3].items).toEqual([

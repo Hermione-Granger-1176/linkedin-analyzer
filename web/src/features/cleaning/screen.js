@@ -189,8 +189,7 @@ export const CleanPage = (() => {
         const fallbackInput = document.querySelector(
             `input[name="cleanFileType"][value="${fallbackType}"]`,
         );
-        // fallbackType is always a loaded FILE_TYPES value, and every such
-        // value has a radio in the page shell, so the miss is defensive only.
+        // loadedTypes comes from FILE_TYPES. Keep the guard for incomplete DOM setup.
         /* v8 ignore next */
         if (fallbackInput) {
             /** @type {HTMLInputElement} */ (fallbackInput).checked = true;

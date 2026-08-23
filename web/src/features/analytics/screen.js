@@ -373,7 +373,7 @@ export const AnalyticsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            // invalid() always supplies an error string, so the fallback is defensive.
+            // invalid() returns an error string. Keep the fallback for malformed worker data.
             /* v8 ignore next */
             captureError(new Error(parsed.error || "Invalid analytics worker message."), {
                 module: "analytics-ui",
@@ -396,7 +396,7 @@ export const AnalyticsPage = (() => {
                 if (message.requestId !== pendingViewId) {
                     return;
                 }
-                // parser defaults a view payload to {}, so the fallback is defensive.
+                // The parser returns an object. Keep the fallback for malformed worker data.
                 /* v8 ignore next */
                 applyWorkerViewPayload(message.payload || {});
                 return;
@@ -446,7 +446,7 @@ export const AnalyticsPage = (() => {
      * @returns {string}
      */
     function getWorkerMessage(payload, fallback) {
-        // the error parser defaults payload.message, so the fallback arm is defensive.
+        // The parser may omit the message. Use the supplied fallback in that case.
         /* v8 ignore next */
         return payload && payload.message ? payload.message : fallback;
     }
@@ -484,7 +484,7 @@ export const AnalyticsPage = (() => {
             filters.monthFocus || "none",
             filters.day !== null && filters.day !== undefined ? filters.day : "none",
             filters.hour !== null && filters.hour !== undefined ? filters.hour : "none",
-            // shareType always defaults to a non-empty string, so "all" fallback is defensive.
+            // Storage normally provides a share type. Use "all" for malformed filter state.
             /* v8 ignore next */
             filters.shareType || "all",
         ].join("|");
@@ -657,7 +657,7 @@ export const AnalyticsPage = (() => {
         }
 
         try {
-            // callers only pass a truthy view; the guard is defensive.
+            // Callers pass a view object. Keep the branch for malformed worker data.
             /* v8 ignore next */
             if (!view) {
                 setEmptyState("No analytics data", "Try resetting filters.");
@@ -814,7 +814,7 @@ export const AnalyticsPage = (() => {
             filters.push({ key: "month", label });
         }
         if (state.filters.day !== null && state.filters.day !== undefined) {
-            // day is validated to 0-6 before storage, so "Unknown" is defensive.
+            // Storage validates the day range. Use "Unknown" for malformed filter state.
             /* v8 ignore next */
             const label = DAY_LABELS[state.filters.day] || "Unknown";
             filters.push({ key: "day", label: `Day: ${label}` });

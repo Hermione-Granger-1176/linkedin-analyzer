@@ -399,7 +399,7 @@ export const MessagesPage = (() => {
 
         const parsed = parseStoredUploadFile(file);
         if (!parsed.valid) {
-            // invalid() always supplies an error string, so the fallback is defensive.
+            // invalid() returns an error string. Keep the fallback for malformed stored data.
             /* v8 ignore next */
             captureError(new Error(parsed.error || "Invalid stored file payload."), {
                 module: "messages-insights",
@@ -563,7 +563,7 @@ export const MessagesPage = (() => {
 
     /** Sync current range filter into route query params. */
     function syncRouteRange() {
-        // route application never re-enters sync, so this guard is defensive.
+        // Route application does not re-enter this function. Keep the guard for a future caller.
         /* v8 ignore next 3 */
         if (isApplyingRouteParams) {
             return;
@@ -608,7 +608,7 @@ export const MessagesPage = (() => {
 
         updateStats(
             topSummary,
-            // hasConnections implies a connectionState with a list, so the ?. and ?? are defensive.
+            // hasConnections implies a connection list. Keep the optional access for malformed state.
             /* v8 ignore next */
             hasConnections ? (state.connectionState?.list.length ?? 0) : 0,
             fadingConversations.length,
@@ -640,7 +640,7 @@ export const MessagesPage = (() => {
      */
     function renderTopContacts(items) {
         const listElement = elements.topContactsList;
-        // list element is part of the static shell, so the guard is defensive.
+        // The static shell includes this list. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!listElement) {
             return;
@@ -670,7 +670,7 @@ export const MessagesPage = (() => {
      */
     function renderSilentConnections(items) {
         const listElement = elements.silentConnectionsList;
-        // list element is part of the static shell, so the guard is defensive.
+        // The static shell includes this list. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!listElement) {
             return;
@@ -713,7 +713,7 @@ export const MessagesPage = (() => {
      */
     function renderFadingConversations(items) {
         const listElement = elements.fadingConversationsList;
-        // list element is part of the static shell, so the guard is defensive.
+        // The static shell includes this list. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!listElement) {
             return;
@@ -759,7 +759,7 @@ export const MessagesPage = (() => {
             msgStatConnected,
             msgStatFading,
         } = elements;
-        // stat cells are part of the static shell, so the guard is defensive.
+        // The static shell includes these stat cells. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!msgStatMessages || !msgStatContacts || !msgStatConnected || !msgStatFading) {
             return;
@@ -852,7 +852,7 @@ export const MessagesPage = (() => {
      */
     function updateTip(topContacts, silentConnections, fadingConversations) {
         const { messagesTip, messagesTipText } = elements;
-        // tip elements are part of the static shell, so the guard is defensive.
+        // The static shell includes these tip elements. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!messagesTip || !messagesTipText) {
             return;
@@ -915,7 +915,7 @@ export const MessagesPage = (() => {
         };
 
         if (!state.hasConnectionsFile) {
-            // section is always a known key, so the .tip fallback is defensive.
+            // section is a known key in normal calls. Use the tip message for malformed input.
             /* v8 ignore next */
             return missingFileMessages[section] || missingFileMessages.tip;
         }
@@ -996,7 +996,7 @@ export const MessagesPage = (() => {
         }
 
         const headers = Object.keys(rows[0]);
-        // every export row is built with the same fully-populated keys, so ?? "" is defensive.
+        // Export rows use the same keys. Keep an empty cell for malformed rows.
         /* v8 ignore next */
         const orderedRows = rows.map((row) => headers.map((header) => row[header] ?? ""));
         const result = await ExcelGenerator.downloadFromSpec(
@@ -1055,7 +1055,7 @@ export const MessagesPage = (() => {
      */
     function setEmptyState(title, message) {
         const { messagesEmpty, messagesLayout } = elements;
-        // empty/layout containers are part of the static shell, so the guard is defensive.
+        // The static shell includes both containers. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!messagesEmpty || !messagesLayout) {
             return;
@@ -1079,7 +1079,7 @@ export const MessagesPage = (() => {
     /** Hide empty state and show layout. */
     function hideEmptyState() {
         const { messagesEmpty, messagesLayout } = elements;
-        // empty/layout containers are part of the static shell, so the guard is defensive.
+        // The static shell includes both containers. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!messagesEmpty || !messagesLayout) {
             return;
@@ -1104,7 +1104,7 @@ export const MessagesPage = (() => {
     /** Render temporary skeleton rows while loading data. */
     function renderLoadingSkeleton() {
         const { messagesEmpty, messagesLayout } = elements;
-        // empty/layout containers are part of the static shell, so the guard is defensive.
+        // The static shell includes both containers. Keep the guard for incomplete DOM setup.
         /* v8 ignore next 3 */
         if (!messagesEmpty || !messagesLayout) {
             return;

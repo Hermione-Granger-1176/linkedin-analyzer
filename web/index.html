@@ -62,10 +62,8 @@
         <link rel="preload" href="./src/styles/foundations/variables.css" as="style" />
 
         <link rel="stylesheet" href="./src/styles/foundations/variables.css" />
-        <!-- Order is load-bearing: these eight files were one stylesheet, and
-             later rules still rely on overriding earlier ones. Keep
-             responsive.css last within this group, ahead of the stylesheets
-             that follow it. -->
+        <!-- Load these stylesheets in order. Later files override earlier rules.
+             Keep responsive.css last in the foundation and feature group. -->
         <link rel="stylesheet" href="./src/styles/foundations/base.css" />
         <link rel="stylesheet" href="./src/styles/foundations/layout.css" />
         <link rel="stylesheet" href="./src/styles/features/upload.css" />
@@ -90,14 +88,11 @@
 
         <a class="skip-link" href="#appMain">Skip to main content</a>
 
-        <!-- The parts of Pip that more than one place needs: the ink wobble
-        filter, every pose that turns up on more than one surface, and the pieces
-        more than one pose is drawn from. -->
+        <!-- Shared Pip definitions: the wobble filter, reusable poses, and parts
+        used by more than one inline drawing. -->
         <svg class="pip-defs" aria-hidden="true" focusable="false" width="0" height="0">
             <defs>
-                <!-- feTurbulence plus feDisplacementMap gives the clean paths a
-                hand-drawn tremble, so every pose references this one definition
-                instead of carrying its own copy. -->
+                <!-- Apply one shared displacement filter to the clean paths. -->
                 <filter id="pipWobble" x="-25%" y="-25%" width="150%" height="150%">
                     <feTurbulence
                         type="fractalNoise"
@@ -115,45 +110,22 @@
                     />
                 </filter>
 
-                <!-- Pip's reusable poses, and the parts more than one pose is
-                built from. Anything drawn in more than one place is defined here,
-                so redrawing the tipster, the scribbler or a hand is one edit
-                rather than two. A pose is placed by a wrapper svg carrying the
-                class the stylesheet that owns its surface positions it by, around
-                a use element pointing back here; the wrapper keeps the viewBox,
-                because that is what gives the placement its aspect ratio. A part
-                is placed by a bare use element inside the drawing that wants it,
-                under whatever transform puts it where that drawing needs it.
+                <!-- Shared poses and parts. Use wrapper SVGs for poses so CSS can
+                position them without changing their viewBox. Use groups instead
+                of symbols to avoid nested viewport rasterization differences.
+                Keep pose-specific animation classes on inline content because
+                ancestor selectors cannot cross a <use> shadow tree. -->
 
-                Groups rather than symbols: a symbol renders through a nested
-                viewport, and that rounds an instance sitting on a fractional pixel
-                differently from the inline drawing it replaced. A referenced group
-                is placed by a plain translate, so every instance rasterises exactly
-                as the inline markup did.
-
-                Everything a pose is inked and moved by is a class on the content
-                below, because a selector written outside the placement cannot reach
-                into the shadow tree a use element builds. The cheer, the staple,
-                the eraser, the upload catcher, the help-button head and the hero
-                (is-bored, is-waking) are styled from an ancestor, so none of them
-                could move here even if it wanted to; they stay inline, as do the
-                panic and the five empty-state poses, which are each drawn in only
-                one place. The staple and the eraser do take their standing body
-                from here, because what the ancestor class moves is the arms and
-                the props around him; the body itself holds still. -->
-
-                <!-- Pip, leaning on the bubble he speaks through. Decorative: the
-                tip beside him carries the whole message. -->
+                <!-- Pip leaning on the speech bubble. The adjacent text carries the
+                meaning, so this drawing is decorative. -->
                 <g id="pip-tipster">
                     <g filter="url(#pipWobble)">
-                        <!-- Ankles crossed: the far leg carries him, the near one
-                        crosses over it and rests on its toe. -->
+                        <!-- Crossed ankles. -->
                         <path class="pip-ink" d="M40 108 Q38 126 36 140" />
                         <path class="pip-ink pip-solid" d="M36 140 Q26 142 26 146 L37 146 Z" />
                         <path class="pip-ink" d="M26 108 Q30 128 43 139" />
                         <path class="pip-ink pip-solid" d="M43 139 Q51 143 49 147 L40 143 Z" />
-                        <!-- The lean: the body tips toward the bubble, and the head
-                        tips a little further into the same corner. -->
+                        <!-- Tilt the body and head toward the bubble. -->
                         <g transform="rotate(7 34 114)">
                             <g transform="rotate(6 34 70)">
                                 <path
@@ -192,8 +164,8 @@
                             <ellipse class="pip-aglet" cx="40" cy="91" rx="2" ry="2.8" />
                             <path class="pip-ink" d="M22 98 Q34 104 46 98 L45 106 Q34 110 23 106 Z" />
                         </g>
-                        <!-- One hand in the pocket, the other arm folded up against
-                        the bubble with the elbow taking his weight. -->
+                        <!-- Keep one hand in the pocket and rest the other arm against
+                        the speech bubble. -->
                         <path class="pip-ink" d="M22 80 Q12 92 20 99" />
                         <path class="pip-ink" d="M55 86 Q70 94 81 92" />
                         <path class="pip-ink" d="M81 92 Q84 74 80 62" />
@@ -201,7 +173,7 @@
                     </g>
                 </g>
 
-                <!-- Pip does the waiting: hood up, pen already moving. -->
+                <!-- Waiting pose with the hood up and pen moving. -->
                 <g id="pip-loader">
                     <g filter="url(#pipWobble)">
                         <g transform="rotate(-4 152 106)">
@@ -285,13 +257,8 @@
                     </g>
                 </g>
 
-                <!-- Pip standing, from the hood down to the shoes, with no arms
-                and nothing in his hands. The staple and the eraser are drawn
-                around this exact body, so it is inked once here and placed by
-                both of them. Arms stay with the moment that swings them.
-                The loader is not on that list: its hair sits inside the animated
-                .pip-flick group and its mouth is a different line, so its copy
-                stays where it is. -->
+                <!-- Shared standing body. The staple and eraser reuse this body;
+                each pose keeps its own arms and other moving parts. -->
                 <g id="pip-body-standing">
                     <path
                         class="pip-ink pip-hood"
@@ -332,10 +299,8 @@
                     <path class="pip-ink pip-solid" d="M72 145 Q81 146 81 150 L70 150 Z" />
                 </g>
 
-                <!-- One open hand: fingers and thumb inked first as fat capsules,
-                then the palm laid over where they join it. Drawn where the hero's
-                waving hand sits, so each placement is the transform that site was
-                already wrapping the drawing in and nothing more. -->
+                <!-- Shared open hand. Draw the fingers first and place the palm over
+                their join. Each caller supplies the placement transform. -->
                 <g id="pip-hand-open">
                     <path
                         class="pip-ink pip-paper"
@@ -356,10 +321,8 @@
                     <circle class="pip-ink pip-paper" cx="110" cy="57" r="8.4" />
                 </g>
 
-                <!-- One closed hand: a fat palm with the thumb wrapped round the
-                near edge, so the hand reads as one shape rather than a row of
-                fingers. Drawn where the eraser's scrubbing hand sits, and placed
-                everywhere else by a whole-number translate. -->
+                <!-- Shared closed hand. Place other uses with an integer translate
+                so the hand keeps its drawn alignment. -->
                 <g id="pip-hand-closed">
                     <path
                         class="pip-ink pip-paper"
@@ -373,12 +336,8 @@
             </defs>
         </svg>
 
-        <!-- Availability is resolved asynchronously after boot, so the resting
-        state is unavailable: an enabled button here would open an export dialog
-        over data that may not exist yet, under a label that claims it does.
-        aria-disabled rather than the disabled attribute, so the button keeps its
-        place in the tab order and a keyboard or screen-reader user can reach it
-        and hear why it is unavailable; open() refuses the click instead. -->
+        <!-- Availability is resolved after boot. Start with aria-disabled so the
+        button stays in the tab order and can expose its unavailable reason. -->
         <button
             class="pdf-export-btn"
             id="pdfExportBtn"
@@ -411,13 +370,9 @@
             >Upload a LinkedIn export to enable saving as PDF.</span
         >
 
-        <!-- Pip staples the finished PDF together, in the corner under the button
-        that made it. Shown only once a file has actually downloaded, and hidden
-        again as soon as the moment has played. The moving parts are inline rather
-        than a defs group: every move below is driven from .is-stapling on this
-        element, and an ancestor class cannot reach into the shadow tree a use
-        element builds. The body he does it all with holds still, so that comes
-        from #pip-body-standing. -->
+        <!-- Show the staple pose after a PDF download. Keep animated parts inline
+        so .is-stapling can control them; reuse the standing body from the shared
+        definitions. -->
         <svg
             class="pip-staple"
             id="pdfStaple"
@@ -427,9 +382,8 @@
             hidden
         >
             <g filter="url(#pipWobble)">
-                <!-- The stack he is squaring up. Each sheet is wrapped so the
-                nudge into line is a transform on the group, leaving the sheet
-                itself at its drawn position. -->
+                <!-- Wrap each sheet so its alignment nudge does not change the
+                sheet's base coordinates. -->
                 <g class="pip-sheet pip-sheet-left">
                     <rect class="pip-ink pip-paper" x="108" y="116" width="56" height="9" rx="2" />
                 </g>
@@ -444,7 +398,7 @@
                     <rect class="pip-ink pip-jacket" x="116" y="84" width="44" height="8" rx="3" />
                     <path class="pip-ink" d="M119 92 L119 97" />
                 </g>
-                <!-- The "chk", three marks thrown off the nose of the stapler. -->
+                <!-- Three marks from the stapler. -->
                 <g class="pip-chk">
                     <path class="pip-ink" d="M164 82 L170 77" />
                     <path class="pip-ink" d="M166 90 L173 90" />
@@ -455,11 +409,10 @@
                     d="M152 98 q7 -4 9 2 q-6 4 -9 -2 Z"
                 />
                 <use href="#pip-body-standing" />
-                <!-- The arm that is not doing anything, hanging at his side. -->
+                <!-- Resting arm. -->
                 <path class="pip-ink" d="M45 84 Q34 96 33 108" />
                 <circle class="pip-ink pip-paper" cx="32" cy="111" r="4" />
-                <!-- The pressing arm, drawn last so the hand lands on top of the
-                stapler. -->
+                <!-- Pressing arm, drawn last so the hand covers the stapler. -->
                 <g class="pip-press">
                     <path class="pip-ink" d="M76 84 Q102 76 128 78" />
                     <use href="#pip-hand-closed" transform="translate(18 -22)" />
@@ -500,8 +453,8 @@
             data-tutorial-action="restart"
             aria-label="Open tutorial for this page"
         >
-            <!-- Pip peeks out of the button with the question floating beside his
-            head. Decorative: the button's own label says what it does. -->
+            <!-- Decorative help-button drawing. The button label carries the
+            meaning. -->
             <svg
                 class="tutorial-help-pip"
                 viewBox="26 4 74 76"
@@ -578,8 +531,8 @@
                                 </span>
                                 LinkedIn Analyzer
                             </h1>
-                            <!-- Pip, waving hello. Decorative: the heading beside him
-                            already carries the meaning. -->
+                            <!-- Decorative hero drawing. The heading carries the
+                            meaning. -->
                             <svg
                                 class="pip-hero"
                                 viewBox="0 0 140 160"
@@ -604,9 +557,8 @@
                                             d="M82.5 38 Q78 34.5 73.5 37.5"
                                         />
                                         <g class="pip-blink">
-                                            <!-- Wrapped so the gaze offset written by
-                                            shared/ui/alive.js and the blink loop never
-                                            fight over one transform. -->
+                                            <!-- Keep the gaze transform separate from
+                                            the blink transform. -->
                                             <g class="pip-gaze">
                                                 <circle
                                                     class="pip-eye"
@@ -670,11 +622,8 @@
                                             cy="111"
                                             r="4"
                                         />
-                                        <!-- An open palm, fanned wide enough to
-                                        read as a wave at the size the hero
-                                        actually renders. The wave is on the
-                                        wrapper, so the hand itself is the shared
-                                        drawing. -->
+                                        <!-- Open palm. The wrapper carries the wave
+                                        transform, so the hand remains reusable. -->
                                         <g class="pip-wave">
                                             <path class="pip-ink" d="M85 84 Q101 79 106 65" />
                                             <use href="#pip-hand-open" />
@@ -783,15 +732,11 @@
                             <div class="drop-zone-hover">
                                 <p>Release to upload</p>
                             </div>
-                            <!-- Pip comes up behind the bottom edge with his arms
-                            out while a file is over the zone, and hugs the page he
-                            caught once it lands. Decorative: the copy above him
-                            already says what the zone does. The viewBox crops him
-                            at the waist, so the edge he rises from is the drop
-                            zone's own border rather than a line drawn for him.
-                            Inline rather than a defs group: the two arm poses are
-                            switched by a selector on the svg, which cannot reach
-                            into the shadow tree a use element builds. -->
+                            <!-- Upload catcher pose. Keep the arm and body animation
+                            inline so .is-uploading and .is-caught can control it.
+                            The shared standing body is reused, but the arm poses
+                            stay local because selectors cannot cross a use element's
+                            shadow tree. -->
                             <svg
                                 class="pip-catcher"
                                 id="uploadCatcher"
@@ -810,10 +755,8 @@
                                         <circle class="pip-ink pip-paper" cx="70" cy="46" r="22" />
                                         <path class="pip-ink" d="M48 46 Q43 49 48 54" />
                                         <path class="pip-ink" d="M92 46 Q97 49 92 54" />
-                                        <!-- Brows up under the fringe and the eyes
-                                        opened out to whites with the pupils high in
-                                        them: he is watching the file, not the
-                                        visitor. -->
+                                        <!-- Raised brows and open eyes show that Pip is
+                                        watching the file. -->
                                         <path
                                             class="pip-ink pip-brow"
                                             d="M57.5 37.5 Q62 33.8 66.5 37"
@@ -873,13 +816,9 @@
                                             class="pip-ink"
                                             d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
                                         />
-                                        <!-- Arms out, mouth open, hands up and tipped
-                                        outwards. Both hands are the shared open
-                                        hand, and the far one, drawn first, is that
-                                        drawing mirrored so the thumbs both point
-                                        away from him. The mouth belongs to the pose
-                                        rather than the body, so the catch can grin
-                                        without redrawing the face it grins on. -->
+                                        <!-- Raised arms and open hands for the catch
+                                        pose. Mirror the far hand so both thumbs point
+                                        outward. -->
                                         <g class="pip-catch-pose" data-pose="ready">
                                             <ellipse
                                                 class="pip-ink pip-solid"
@@ -899,13 +838,9 @@
                                                 transform="translate(105 52) rotate(20) translate(-110 -57)"
                                             />
                                         </g>
-                                        <!-- Caught it: a grin, and the page held flat
-                                        against his chest. The arms are inked before
-                                        the page and the hands after it, so the hug
-                                        reads as two hands on the near edge rather
-                                        than a loop of ink around a rectangle. Each
-                                        hand is a mitt: the thumb up over the page,
-                                        then the palm over where it joins. -->
+                                        <!-- Caught pose. Draw the arms before the page
+                                        and the hands after it so the hands appear on
+                                        the near edge. -->
                                         <g class="pip-catch-pose" data-pose="catch">
                                             <path
                                                 class="pip-ink pip-solid"
@@ -1007,16 +942,10 @@
                                 >
                                     Clear data
                                 </button>
-                                <!-- Pip rubs the card clean once a wipe has gone
-                                through, then dusts his hands off. Shown only for
-                                the moment itself, and out of the flow, so the two
-                                buttons never shift to make room for him. The
-                                moving parts are inline rather than a defs group:
-                                every move below hangs off .is-erasing on this
-                                element, and an ancestor class cannot reach into a
-                                use element's shadow tree. The body he does it all
-                                with holds still, so that comes from
-                                #pip-body-standing. -->
+                                <!-- Eraser pose. Keep it inline so .is-erasing can
+                                control the wipe and dust animations. Reuse the
+                                standing body while the arms stay local to this
+                                drawing. -->
                                 <svg
                                     class="pip-eraser"
                                     id="clearEraser"
@@ -1042,8 +971,7 @@
                                             class="pip-ink pip-erase-mark pip-erase-mark-2"
                                             d="M106 124 Q130 118 152 125"
                                         />
-                                        <!-- Rubber crumbs, left along the sweep
-                                        and gone again a moment later. -->
+                                        <!-- Temporary eraser crumbs. -->
                                         <ellipse
                                             class="pip-shaving pip-crumb"
                                             cx="126"
@@ -1073,8 +1001,8 @@
                                             ry="1.6"
                                         />
                                         <use href="#pip-body-standing" />
-                                        <!-- Both arms, in the pose the sweep needs:
-                                        one hanging, the other scrubbing. -->
+                                        <!-- Resting and scrubbing arms for the erase
+                                        pose. -->
                                         <g class="pip-erase">
                                             <path class="pip-ink" d="M45 84 Q34 96 33 108" />
                                             <circle
@@ -1097,14 +1025,10 @@
                                                 <use href="#pip-hand-closed" />
                                             </g>
                                         </g>
-                                        <!-- And the same two arms out front for the
-                                        all-clean dust-off, swapped in as the sweep
-                                        fades. -->
+                                        <!-- Arms for the completed erase pose. -->
                                         <g class="pip-dust">
-                                            <!-- The far forearm comes out from
-                                            behind him rather than across the
-                                            jacket, where a line over the blue
-                                            reads as a strike through it. -->
+                                            <!-- Place the far forearm behind the body
+                                            so it does not cross the jacket. -->
                                             <path class="pip-ink" d="M78 106 Q84 111 89 113" />
                                             <use
                                                 href="#pip-hand-closed"
@@ -1370,8 +1294,8 @@
                     </nav>
 
                     <div class="analytics-empty" id="cleanEmpty" hidden>
-                        <!-- Nothing to clean yet, so Pip leans in over the top edge
-                        to see whether anything has turned up. -->
+                        <!-- Decorative empty-state drawing. The surrounding text
+                        explains why there is nothing to clean. -->
                         <svg
                             class="pip-peeker"
                             viewBox="0 0 118 76"
@@ -1564,8 +1488,8 @@
                                     </svg>
                                     Download Clean Excel
                                 </button>
-                                <!-- One fist pump, shown only once an export has landed
-                                and hidden again straight after. -->
+                                <!-- Show the celebratory fist pump after an export
+                                completes, then hide it again. -->
                                 <svg
                                     class="pip-cheer"
                                     id="cleanCheer"
@@ -1677,9 +1601,8 @@
                                                     cy="111"
                                                     r="4"
                                                 />
-                                                <!-- Three knuckle bumps along the
-                                                outer edge, so the hand the pump
-                                                throws reads as a closed fist. -->
+                                                <!-- Add three knuckle bumps to the
+                                                outer edge of the closed fist. -->
                                                 <g class="pip-arm">
                                                     <path
                                                         class="pip-ink"
@@ -1741,8 +1664,8 @@
                                 />
                             </svg>
                             <p id="cleanErrorText"></p>
-                            <!-- Pip does the panicking, off to the side. The note itself
-                            holds still so it stays readable. -->
+                            <!-- Decorative error-state drawing. Keep the note still
+                            so it remains readable while Pip moves. -->
                             <svg
                                 class="pip-alarm"
                                 viewBox="0 0 140 160"
@@ -1937,9 +1860,8 @@
                         data-testid="analytics-empty"
                         hidden
                     >
-                        <!-- No numbers to chart, so Pip goes looking for them: he
-                        leans over the edge with a magnifying glass, and the eye
-                        behind the lens comes out several sizes too big. -->
+                        <!-- Decorative empty-state drawing. The surrounding text
+                        explains that chart data is missing. -->
                         <svg
                             class="pip-inspector"
                             viewBox="0 0 132 76"
@@ -1978,9 +1900,8 @@
                                 <path class="pip-wisp" d="M77 10 q3 -2 5 -0.5" />
                                 <path class="pip-wisp" d="M67 25 q-1.5 3 -0.8 5" />
                                 <path class="pip-ink pip-paper" d="M94 66 q-1 -9 7 -9 q8 0 7 9 Z" />
-                                <!-- Glass, grip and forearm move as one, so the
-                                enlarged eye travels with the lens it is seen
-                                through instead of sliding out from behind it. -->
+                                <!-- Move the glass, grip, forearm, and enlarged eye
+                                together so the eye stays behind the lens. -->
                                 <g class="pip-scan">
                                     <path class="pip-ink" d="M54 76 Q51 66 50 59" />
                                     <g class="pip-blink">
@@ -2232,9 +2153,8 @@
                     </div>
 
                     <div class="analytics-empty" id="connectionsEmpty" hidden>
-                        <!-- Nobody has written, so Pip holds the mailbox open and
-                        looks in anyway. Flag down, and nothing inside but the
-                        dark. -->
+                        <!-- Decorative empty-state drawing. The surrounding text
+                        explains that no connection data is available. -->
                         <svg
                             class="pip-mailer"
                             viewBox="0 0 146 78"
@@ -2520,9 +2440,8 @@
                     </div>
 
                     <div class="analytics-empty" id="messagesEmpty" hidden>
-                        <!-- No thread to read, so Pip starts one himself: the plane
-                        has just left his hand, and the dotted line is where it has
-                        been. -->
+                        <!-- Decorative empty-state drawing. The surrounding text
+                        explains that no message thread is available. -->
                         <svg
                             class="pip-pilot"
                             viewBox="0 0 158 78"
@@ -2787,9 +2706,8 @@
                     </div>
 
                     <div class="insights-empty" id="insightsEmpty" hidden>
-                        <!-- No insight to have yet, so Pip waits for one: chin on
-                        his fist, and the bulb over his head still a pencil sketch
-                        with nothing switched on in it. -->
+                        <!-- Decorative empty-state drawing. The surrounding text
+                        explains that insight data is missing. -->
                         <svg
                             class="pip-dreamer"
                             viewBox="0 0 118 84"
@@ -3062,10 +2980,8 @@
                         </span>
                     </span>
                 </label>
-                <!--
-                    Both regions stay rendered and empty rather than hidden: a
-                    live region that is inserted, or unhidden, with its text
-                    already in it is not reliably announced.
+                <!-- Keep both regions rendered and empty rather than hidden. A live
+                    region inserted with text already present may not be announced.
                 -->
                 <p class="export-dialog-error" id="pdfExportDialogError" role="alert"></p>
                 <p

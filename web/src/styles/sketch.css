@@ -1,6 +1,6 @@
-/* Sketch Effects CSS - Hand-drawn aesthetic */
+/* Sketch effects. */
 
-/* Wobbly border effect using subtle rotation */
+/* Apply a small rotation to the hand-drawn components. */
 .drop-zone,
 .upload-status-card,
 .hub-card,
@@ -13,7 +13,7 @@
     transform: rotate(calc(var(--sketch-rotate, 0) * 0.1deg));
 }
 
-/* Randomize rotation for different elements */
+/* Vary the rotation by component. */
 .drop-zone {
     --sketch-rotate: 0.3;
 }
@@ -30,7 +30,7 @@
     --sketch-rotate: -0.3;
 }
 
-/* Sketch-style focus ring */
+/* Draw the focus ring used by the sketch theme. */
 *:focus-visible {
     outline: none;
     box-shadow:
@@ -38,18 +38,18 @@
         0 0 0 4px var(--accent-blue);
 }
 
-/* tabindex="-1" elements receive only programmatic focus (never keyboard-tabbed),
-   so suppress the visible ring. The .focus() call still fires for screen readers */
+/* Suppress the ring for programmatically focused elements that are not in the
+   keyboard tab order. */
 [tabindex="-1"]:focus-visible {
     box-shadow: none;
 }
 
-/* Imperfect circles for radio buttons */
+/* Use irregular circles for radio buttons. */
 .option-radio {
     border-radius: 48% 52% 51% 49% / 52% 48% 52% 48%;
 }
 
-/* Slightly imperfect rectangles */
+/* Use irregular rectangles for cards and buttons. */
 .drop-zone {
     border-radius: 12px 14px 13px 15px / 14px 12px 15px 13px;
 }
@@ -72,7 +72,7 @@
     border-radius: 14px 16px 15px 17px / 16px 14px 17px 15px;
 }
 
-/* Dashed border that looks hand-drawn */
+/* Draw the drop-zone border with four dashed gradients. */
 .drop-zone {
     background-image:
         repeating-linear-gradient(
@@ -126,7 +126,7 @@
     pointer-events: none;
 }
 
-/* Hover wobble animation */
+/* Wobble interactive buttons on hover. */
 @keyframes wobble {
     0%,
     100% {
@@ -145,7 +145,7 @@
     animation: wobble 0.3s ease-in-out;
 }
 
-/* Pencil stroke effect for titles */
+/* Draw the title underline. */
 .title {
     position: relative;
 }
@@ -169,11 +169,8 @@
     opacity: 0.5;
 }
 
-/* On the home hero the underline rules itself in on first paint, left to right.
-   One pass, then it stays put: the screenshot harness waits for every finite
-   animation to finish, and a decoration that keeps redrawing would never settle.
-   The keyframes carry the hero's own translateX(-50%) centering so the scale
-   does not undo it; transform-origin pins the growth to the left end. */
+/* Animate the home title underline once. Keep translateX(-50%) in both keyframes
+   so scaling does not change its centered position. */
 @keyframes underline-draw {
     from {
         transform: translateX(-50%) scaleX(0);
@@ -188,11 +185,8 @@
     animation: underline-draw 0.6s ease-out;
 }
 
-/* Masking tape. One strip, one look, shared by every surface that claims one:
-   the rules below only say where a strip sits and which way it leans, and the
-   two size properties carry defaults so a claim can be a single line. The tape
-   is torn from the same roll in both themes, so its color is a token rather
-   than a tint of the marker yellow it started as. */
+/* Shared tape decoration. Component rules set placement and rotation, while
+   these variables provide the default size and fill. */
 .preview-section:not([hidden])::before,
 .preview-section:not([hidden])::after,
 .upload-status-card::before,
@@ -209,8 +203,7 @@
     pointer-events: none;
 }
 
-/* The preview section is taped down by both top corners, and its strips are
-   the wider ones the panel shipped with. */
+/* Place wide tape strips at both preview corners. */
 .preview-section:not([hidden])::before,
 .preview-section:not([hidden])::after {
     --tape-width: 60px;
@@ -227,10 +220,8 @@
     transform: rotate(3deg);
 }
 
-/* The Files card is the one panel on Home that holds the page together, so it
-   gets a strip on each corner. The cards that head a data screen get one, on
-   the left, which is enough to say the page was assembled by hand without
-   turning every card into a scrapbook page. */
+/* Place tape on both Files card corners and on the leading edge of selected
+   cards. */
 .upload-status-card::before,
 .upload-status-card::after,
 .chart-card--wide::before,
@@ -245,9 +236,7 @@
     transform: rotate(4deg);
 }
 
-/* Nobody tears three strips off a roll at the same angle, so the panels in a
-   row lean differently, the way the cards around them are each rotated by a
-   fraction of a degree. */
+/* Vary the tape angle for adjacent message panels. */
 .message-panel:nth-child(2)::before {
     left: 30px;
     transform: rotate(3deg);
@@ -258,15 +247,14 @@
     transform: rotate(-2deg);
 }
 
-/* The strips overhang the top edge, so the cards that wear them have to be
-   their containing block. .chart-card is already positioned by its own rule in
+/* Position elements that own overhanging tape. The chart card is positioned in
    analytics.css. */
 .upload-status-card,
 .message-panel {
     position: relative;
 }
 
-/* Animated doodle entrance */
+/* Animate content into view. */
 @keyframes sketch-in {
     from {
         opacity: 0;
@@ -286,7 +274,7 @@
     animation: sketch-in 0.5s ease-out;
 }
 
-/* Sticky note effect for error messages */
+/* Style error messages as notes. */
 .error-message {
     position: relative;
     background: var(--accent-red-bg);
@@ -306,19 +294,18 @@
     border-radius: 0 0 4px 4px;
 }
 
-/* Dark theme: the two paper props in this file are physical objects, so after
-   dark they take an opaque color rather than a tint of the ground. */
+/* Use opaque colors for the two decorative paper elements in dark mode. */
 [data-theme="dark"] .error-message {
     background: var(--surface-error);
 }
 
-/* Selection styling: dark text keeps contrast on the yellow highlight */
+/* Keep selected text readable on the yellow highlight. */
 ::selection {
     background: var(--accent-yellow);
     color: var(--selection-text);
 }
 
-/* Cursor customization for interactive elements */
+/* Mark interactive elements with the pointer cursor. */
 .drop-zone,
 .hub-card,
 .file-type-option,
@@ -329,7 +316,7 @@
     cursor: pointer;
 }
 
-/* Transition key interactive elements smoothly */
+/* Animate state changes on interactive elements. */
 .theme-toggle,
 .top-link,
 .primary-btn,
@@ -349,8 +336,7 @@
     transition: var(--card-transition);
 }
 
-/* Reduced motion: the decorative movement in this file stops. Kept at the foot
-   of the file, the way the guard in screens.css is. */
+/* Disable decorative motion when reduced motion is requested. */
 @media (prefers-reduced-motion: reduce) {
     .download-btn:hover,
     .primary-btn:hover,

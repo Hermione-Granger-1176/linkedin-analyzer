@@ -16,7 +16,7 @@ const STEP_SCROLL_MARGIN = 56;
  * @returns {(string|Element)[]}
  */
 function collectTargetCandidates(step) {
-    // Defensive: callers always pass a resolved step object.
+    // Return no candidates when the step config is missing or malformed.
     /* v8 ignore next 3 */
     if (!step || typeof step !== "object") {
         return [];
@@ -151,7 +151,7 @@ export function ensureTargetInView(target) {
  * @returns {HTMLElement[]}
  */
 export function getFocusableElements(root) {
-    // Defensive: always called with the mounted popover as root.
+    // Return no controls when the popover root is missing.
     /* v8 ignore next 3 */
     if (!root) {
         return [];

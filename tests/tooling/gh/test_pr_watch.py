@@ -725,7 +725,7 @@ def test_watch_pr_clean_review_with_older_open_thread_is_not_merge_ready(
 def test_watch_pr_counts_resolved_fresh_threads_but_reports_only_open_threads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A quickly resolved fresh comment cannot leave the watcher polling."""
+    """A resolved fresh comment does not leave the watcher polling."""
     resolved = pr_review.ReviewThread(
         "PRRT_new",
         "resolved",
@@ -779,7 +779,7 @@ def test_watch_pr_rejects_unrecognized_fresh_overview(
     )
 
     # The remedy must name the review-thread target, since `make pr-comments`
-    # shows conversation comments and never surfaces review threads.
+    # shows conversation comments and does not show review threads.
     with pytest.raises(GhError, match=r"could not be classified.*make pr-review-comments"):
         pr_watch.watch_pr(12, interval=0, max_polls=2)
 

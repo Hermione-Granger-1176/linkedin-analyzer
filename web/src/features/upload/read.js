@@ -22,8 +22,8 @@ const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
  * @returns {Promise<{text: string, usedFallback: boolean}>}
  */
 export function readFileAsText(file) {
-    // The upload page rejects files above MAX_FILE_BYTES before calling this
-    // helper, so this per-file cap is a defensive backstop, not a live path.
+    // The upload page rejects oversized files before calling this helper. Keep
+    // this second check for direct callers and race conditions.
     /* v8 ignore next 4 */
     if (file.size > MAX_FILE_BYTES) {
         const maxMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));
@@ -89,7 +89,7 @@ function readBytesWithReader(file) {
             // Duck-type for an ArrayBuffer (avoids cross-realm instanceof
             // pitfalls): a successful read yields a byte buffer, so anything
             // without a numeric byteLength is an unexpected/failed read and is
-            // surfaced as an error rather than a silently empty file.
+            // reported as an error rather than treated as an empty file.
             const buffer = /** @type {ArrayBuffer} */ (reader.result);
             if (!buffer || typeof buffer.byteLength !== "number") {
                 finish(() => reject(new Error("Error reading file")));

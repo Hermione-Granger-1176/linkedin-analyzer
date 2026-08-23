@@ -2,7 +2,7 @@
  * Text safety for the PDF export: keep what the document's fonts can draw, and
  * show where the rest was.
  *
- * The handwritten faces the export embeds are Latin, and jsPDF simply omits a
+ * The handwritten faces the export embeds are Latin, and jsPDF omits a
  * character they have no glyph for. "Ňuňo Smith" reached the page as "uo Smith"
  * and "田中 Fernández-Hall" as " Fernández-Hall": names damaged with nothing on
  * the page to say they had been. A face with wider coverage would add megabytes

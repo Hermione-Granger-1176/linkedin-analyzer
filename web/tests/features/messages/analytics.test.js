@@ -14,8 +14,8 @@ describe("MessagesAnalytics", () => {
                 "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob",
             },
         ];
-        // Some environments (older Safari, restricted workers) lack performance.*;
-        // the instrumentation guards must degrade gracefully.
+        // Some environments, including older Safari and restricted workers, lack
+        // performance APIs. The instrumentation guards must tolerate that.
         vi.stubGlobal("performance", undefined);
         try {
             const state = MessagesAnalytics.buildMessageState(rows);

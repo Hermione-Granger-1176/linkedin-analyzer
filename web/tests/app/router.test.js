@@ -105,7 +105,7 @@ describe("AppRouter navigation", () => {
     });
 
     it("getCurrentRoute returns null before any navigation", () => {
-        // The router has state from prior tests, so just verify structure
+        // The router has state from prior tests, so verify the returned structure.
         const route = AppRouter.getCurrentRoute();
         if (route !== null) {
             expect(route).toHaveProperty("name");
@@ -116,14 +116,13 @@ describe("AppRouter navigation", () => {
     });
 
     it("setParams does nothing when no current route", () => {
-        // If no route is active, setParams should not throw
-        // We can test this implicitly via updateParams on a fresh-ish state
+        // If no route is active, setParams should return without throwing.
         expect(() => AppRouter.setParams({ x: "1" })).not.toThrow();
     });
 
     it("navigate ignores unknown route names", () => {
         AppRouter.navigate("does-not-exist-xyz", { foo: "bar" }, { replaceHistory: true });
-        // Hash should not contain the unknown route
+        // The hash should not contain the unknown route.
         expect(window.location.hash).not.toContain("does-not-exist-xyz");
     });
 
@@ -136,7 +135,7 @@ describe("AppRouter navigation", () => {
     });
 
     it("updateParams does nothing when no current route", () => {
-        // Just verify it doesn't throw
+        // Verify that no route can still return without throwing.
         expect(() => AppRouter.updateParams({ x: "1" })).not.toThrow();
     });
 

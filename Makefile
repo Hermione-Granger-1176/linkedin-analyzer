@@ -38,7 +38,6 @@ PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}
 # below are thin wrappers; the testable logic (repo and PR auto-detection,
 # GraphQL, CI triage) lives in Python.
 GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
-
 # ─── Free text ────────────────────────────────────────────────────────────────
 #
 # A body is read from standard input. That is the only way in, so no target
@@ -527,7 +526,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch branch-current branch-prune rebase log diff diff-staged stage stage-all commit push release-create
+.PHONY: git branch branch-current branch-switch branch-delete branch-prune rebase log diff diff-staged stage stage-all commit push release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -541,6 +540,14 @@ branch: ## Create and switch to a new branch off main, or off base for a stacked
 branch-current: ## Create a branch from the current checkout without updating its base
 	@test -n "$(name)" || (printf 'Usage: make branch-current name=my-feature\n' >&2; exit 1)
 	git checkout -b "$(name)"
+
+branch-switch: ## Switch to an existing branch (make branch-switch name=X)
+	@test -n "$(name)" || (printf 'Usage: make branch-switch name=branch-name\n' >&2; exit 1)
+	git checkout "$(name)"
+
+branch-delete: ## Delete a local branch (make branch-delete name=X [force=1])
+	@test -n "$(name)" || (printf 'Usage: make branch-delete name=branch-name [force=1]\n' >&2; exit 1)
+	git branch $(if $(filter 1,$(force)),-D,-d) -- "$(name)"
 
 # Branch names reach the helper through the environment, never interpolated
 # into the recipe, so the target holds no shell logic of its own.

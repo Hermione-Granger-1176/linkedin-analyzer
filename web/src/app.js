@@ -152,7 +152,7 @@ function init() {
         });
     }
 
-    /** Intercept route links for robust hash navigation. */
+    /** Intercept route links for hash navigation. */
     function bindRouteLinks() {
         document.addEventListener("click", (event) => {
             const link = DomEvents.closest(event, "a[data-route]");
@@ -176,8 +176,8 @@ function init() {
 
     /**
      * Wire the opt-in diagnostics banner and the persistent footer toggle.
-     * The banner is a one-time proactive prompt; the footer reflects the current
-     * consent state and lets the user enable or revoke diagnostics at any time.
+     * The banner appears once. The footer shows the saved consent state and lets
+     * the user enable or revoke diagnostics at any time.
      * @param {boolean} consentGranted - Whether telemetry consent is already stored
      */
     function initConsentControls(consentGranted) {

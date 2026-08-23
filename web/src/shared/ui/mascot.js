@@ -1,8 +1,6 @@
-/* Pip mascot interactions: an ink splat where a button was clicked, and the
-   short moments that close a finished job off. A cheer when a clean export
-   lands, a staple when a PDF is built, and an eraser sweep once the stored
-   uploads have been wiped. All of it is decoration, so all of it sits out
-   entirely when the visitor asked for reduced motion. */
+/* Pip mascot interactions: click splats, the clean-export cheer, the PDF staple,
+   and the upload eraser. These animations are decorative and disabled when
+   reduced motion is requested. */
 
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { DomEvents } from "../dom-events.js";
@@ -12,15 +10,13 @@ import { playOneShot, prefersReducedMotion } from "./motion.js";
 const SPLAT_TARGETS = ".primary-btn, .download-btn";
 const SPLAT_PATH =
     "M13 1 q5 5 6 10 q4 1 4 4 q-1 3 -5 2 q-2 5 -6 6 q-5 0 -7 -5 q-4 1 -4 -3 q0 -3 4 -4 q0 -6 8 -10 Z";
-/* Comfortably past the 0.55s splat animation. */
+/* Remove the splat after its 0.55s CSS animation. */
 const SPLAT_LIFETIME_MS = 800;
 /* The event upload.js broadcasts once a wipe has actually gone through. */
 const STORAGE_CLEARED = "storageCleared";
 
-/* Each one-shot pose: the element it is drawn in, the class its animations hang
-   off, and how long it stays on screen. All three share the 1.4s pip-moment-in
-   envelope in components/mascot.css and sit just past it, so each pose is fully
-   faded out before the timer takes it away. */
+/* One-shot pose configuration. Keep the durations slightly beyond the 1.4s
+   pip-moment-in animation in components/mascot.css. */
 const CHEER = Object.freeze({ id: "cleanCheer", activeClass: "is-cheering", durationMs: 1700 });
 const STAPLE = Object.freeze({ id: "pdfStaple", activeClass: "is-stapling", durationMs: 1700 });
 const ERASER = Object.freeze({ id: "clearEraser", activeClass: "is-erasing", durationMs: 1700 });

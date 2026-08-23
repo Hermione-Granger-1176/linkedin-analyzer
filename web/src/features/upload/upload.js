@@ -112,7 +112,7 @@ export const UploadPage = (() => {
             elements.uploadHint.textContent =
                 "Browser storage is unavailable. Uploads will not persist across sessions.";
         }
-        // Surface the same warning if storage works at load but fails mid-session
+        // Repeat the warning if storage works at load but fails mid-session
         // (private mode, corruption) and Storage transparently degrades to memory.
         Storage.onPersistenceLost(() => {
             setHint("Browser storage stopped working. Uploads won't persist across sessions.", false);
@@ -126,8 +126,7 @@ export const UploadPage = (() => {
 
     /** Request persistent browser storage when supported. */
     function requestPersistentStorage() {
-        // Re-entry guard: init() runs once, so the second-call short-circuit is a
-        // defensive idempotency guard never re-entered in a single page lifetime.
+        // init() runs once. Keep the flag check if a caller invokes this function again.
         /* v8 ignore next 3 */
         if (storagePersistenceRequested) {
             return;
@@ -309,7 +308,7 @@ export const UploadPage = (() => {
             // re-parse of shares+comments on every page load.
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
-            // If a stale 24h session was just wiped, tell the user once rather than
+            // If a stale 24h session was wiped, tell the user once rather than
             // letting their previously-uploaded files silently disappear.
             if (Session.consumeExpiryNotice()) {
                 setHint(
@@ -654,8 +653,8 @@ export const UploadPage = (() => {
      * @param {{jobId?: string|null, percent?: number}} payload - Progress payload
      */
     function handleProgressMessage(payload) {
-        // parseAnalyticsWorkerMessage normalizes percent to a number and defaults
-        // the payload object, so this shape guard is a defensive backstop.
+        // parseAnalyticsWorkerMessage normally returns a numeric percent. Keep the
+        // guard for malformed payloads.
         /* v8 ignore next 3 */
         if (!payload || typeof payload.percent !== "number") {
             return;
@@ -916,8 +915,8 @@ export const UploadPage = (() => {
      * @returns {Promise<void>|void}
      */
     function scheduleAnalyticsWorkerPrime(fileMap, options) {
-        // Priming only runs while a worker exists; upload flows that call this
-        // always have one (they post addFile right after), so the guard is defensive.
+        // Upload flows normally create the worker before priming. Keep the guard
+        // for a worker teardown race.
         /* v8 ignore next 3 */
         if (!worker) {
             return undefined;
@@ -1050,8 +1049,7 @@ export const UploadPage = (() => {
             return;
         }
 
-        // The worker may have been torn down (clear/restart) during the async load.
-        // That teardown race is not staged in unit tests, so this recheck is defensive.
+        // Async storage reads can outlive worker teardown. Recheck before posting.
         /* v8 ignore next 3 */
         if (!worker) {
             return;
@@ -1125,8 +1123,8 @@ export const UploadPage = (() => {
     function scheduleJobTimeout(jobId, fileName) {
         clearJobTimeout(jobId);
         const timeoutId = window.setTimeout(() => {
-            // completeJob/resetProcessingState clear this timer when a job finishes,
-            // so a fired watchdog for an already-removed job is a defensive backstop.
+            // completeJob() and resetProcessingState() clear this timer on success.
+            // Ignore a callback for a job that has already been removed.
             /* v8 ignore next 3 */
             if (!activeJobs.has(jobId)) {
                 return;

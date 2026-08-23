@@ -120,7 +120,7 @@ describe("InsightsPage", () => {
             expect(workerInstance.listeners.message.length).toBeGreaterThan(0);
 
             // Regression: without a watchdog a silent worker leaves the loading
-            // overlay up forever. Advancing past the timeout must surface an error
+            // overlay up forever. Advancing past the timeout must report an error
             // and hide the overlay.
             vi.advanceTimersByTime(30000);
 
@@ -307,7 +307,7 @@ describe("InsightsPage", () => {
         // Each card gets the pose for its own id: the doze leans, the flex does not.
         expect(reactions[0].innerHTML).toContain("insight-reaction-zzz");
         expect(reactions[1].innerHTML).not.toContain("insight-reaction-zzz");
-        // Decoration only: no assistive-technology surface, and the card's own
+        // Decoration only: no assistive-technology content, and the card's own
         // text is untouched by it.
         reactions.forEach((reaction) => expect(reaction.getAttribute("aria-hidden")).toBe("true"));
         expect(cards[1].querySelector(".insight-body h3").textContent).toBe("Trending Up");
@@ -825,7 +825,7 @@ describe("InsightsPage", () => {
         const viewCallsBefore = workerInstance.postMessage.mock.calls.filter(
             (c) => c[0].type === "view",
         ).length;
-        // Data is already loaded, so re-entering the route just re-requests a view.
+        // Data is already loaded, so re-entering the route requests a fresh view.
         await InsightsPage.onRouteChange({ range: "3m" });
         const viewCallsAfter = workerInstance.postMessage.mock.calls.filter(
             (c) => c[0].type === "view",

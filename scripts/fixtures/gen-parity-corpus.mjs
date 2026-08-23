@@ -4,7 +4,7 @@
  * Writes one CSV per cleaner type under tests/fixtures/*-corpus.csv plus a
  * single tests/fixtures/parity-corpus-expected.json holding the cleaned output.
  * The corpus is deterministic (seeded PRNG) and exercises a broad slice of the
- * cleaning surface: quote/backslash escaping, formula-injection prefixes,
+ * cleaning behavior: quote/backslash escaping, formula-injection prefixes,
  * XML-illegal control characters, smart quotes/emoji/multibyte text, sentinel
  * missing values, impossible dates, long fields, a BOM header, and rows that
  * drop out because a required or all-optional column is missing.

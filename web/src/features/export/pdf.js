@@ -8,8 +8,8 @@
  * anchor/object-URL dance the Excel export uses.
  *
  * The button is on every screen, so this module is on every page load and holds
- * only what that costs: the dialog, and an availability check that reads no
- * further than availability.js. Everything a run needs is behind the dynamic
+ * only what that costs: the dialog and an availability check. Everything a run
+ * needs is behind the dynamic
  * import in `loadExportRuntime`.
  *
  * Contact names, and message bodies, can end up inside the downloaded file, each
@@ -30,8 +30,8 @@ const OVERLAY_SOURCE = "pdf-export";
 const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
 const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), [href]";
 
-// The nodes the surface dereferences without checking first. `hint` is absent
-// on purpose: it is the one element every use of it already guards.
+// These nodes are read without a null check. `hint` is excluded because every
+// use of it already checks for null.
 const REQUIRED_ELEMENTS = Object.freeze([
     "trigger",
     "backdrop",
@@ -80,7 +80,7 @@ export const PdfExport = (() => {
     let exportRuntimeLoad = null;
 
     /**
-     * Resolve the DOM the export surface owns.
+     * Resolve the DOM elements used by the export.
      * @returns {object} Element references
      */
     function resolveElements() {
@@ -267,9 +267,8 @@ export const PdfExport = (() => {
      * @param {KeyboardEvent} event - Key event
      */
     function handleKeydown(event) {
-        // The listener is on the document, so it outlives its own markup. A
-        // surface whose dialog has been replaced under it is not the modal the
-        // user is in and must not fight the live one for focus.
+        // The document listener can outlive the dialog it was bound with. Ignore
+        // events when the dialog is no longer connected to the document.
         if (!isOpen || !elements.dialog.isConnected) {
             return;
         }
@@ -358,7 +357,7 @@ export const PdfExport = (() => {
         }
 
         elements.status.textContent = "Generating your PDF. Cancel to stop.";
-        // Confirm is the control that started this and has just been disabled,
+        // Confirm started this operation and is now disabled,
         // which drops focus onto the body. Cancel is the only thing left to do.
         elements.cancel.focus();
     }
@@ -402,10 +401,8 @@ export const PdfExport = (() => {
      * Fetch the export's own modules, at most once a session.
      *
      * The promise is kept rather than only the modules, so a second export
-     * started before the first has finished still shares the one fetch. A
-     * failure is forgotten instead: the chunk may simply not have arrived, and
-     * the next attempt should go back to the network rather than fail out of
-     * memory for the rest of the session.
+     * started before the first has finished still shares the one fetch. A failed
+     * fetch is not cached, so the next attempt can fetch the chunk again.
      * @returns {Promise<typeof import("./pdf-runtime.js")>} Loaded modules
      */
     function loadExportRuntime() {
@@ -481,7 +478,7 @@ export const PdfExport = (() => {
 
             // Clearing busy first is load-bearing: close() cancels a generation
             // it still believes is running, so the other order would terminate
-            // both workers and bump the token for a run that just downloaded,
+            // both workers and bump the token for a run that completed download,
             // making the finally below skip hiding its own overlay.
             setBusy(false);
             close();

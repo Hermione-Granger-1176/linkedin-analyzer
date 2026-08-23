@@ -117,7 +117,7 @@ def _review_threads(data: Any) -> dict[str, Any]:
     Raises:
         GhError: If the payload has no repository or pull request. An invalid or
             inaccessible PR returns ``pullRequest: null`` (with no ``errors``
-            array), which would otherwise surface as an opaque ``TypeError``.
+            array), which would otherwise raise an opaque ``TypeError``.
     """
     repository = data.get("repository") if isinstance(data, dict) else None
     pull_request = repository.get("pullRequest") if isinstance(repository, dict) else None
@@ -192,8 +192,8 @@ def _page_has_next(page_info: dict[str, Any], message: str) -> bool:
     """Return ``pageInfo.hasNextPage`` as a bool, raising on a malformed value.
 
     The GraphQL ``PageInfo.hasNextPage`` field is non-null, so a valid response
-    always carries it. A missing or non-boolean value is therefore malformed and
-    surfaces as ``GhError`` rather than silently truncating pagination.
+    always carries it. A missing or non-boolean value is malformed and raises
+    ``GhError`` rather than silently truncating pagination.
     """
     has_next = page_info.get("hasNextPage")
     if not isinstance(has_next, bool):
@@ -206,8 +206,8 @@ def _require_end_cursor(page_info: dict[str, Any], message: str) -> str:
 
     Only call this after ``_page_has_next`` has confirmed ``hasNextPage`` is true,
     since pagination must then continue from this cursor. A missing, non-string,
-    or empty ``endCursor`` is malformed and surfaces as a clear error instead of
-    being forwarded into the next query as a confusing value.
+    or empty ``endCursor`` is malformed and raises a clear error instead of being
+    forwarded into the next query as an invalid value.
     """
     after = page_info.get("endCursor")
     if not isinstance(after, str) or not after:

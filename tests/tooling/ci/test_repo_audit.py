@@ -991,7 +991,7 @@ def test_a_field_the_response_omitted_is_a_failure_to_look(omitted: str) -> None
 
 
 def test_the_unreadable_fields_are_all_named_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One run should name every field the token could not read, not just the first.
+    """One run should name every field the token could not read, including later fields.
 
     The judged set is one field today, so the set is widened here rather than
     letting the message-building go untested until a second field is added.

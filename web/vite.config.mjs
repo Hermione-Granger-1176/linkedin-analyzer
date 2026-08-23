@@ -29,12 +29,15 @@ export default defineConfig({
             integration: {
                 configureCustomSWViteBuild: (inlineConfig) => {
                     const output = inlineConfig.build?.rollupOptions?.output;
-                    if (!output || Array.isArray(output)) {
+                    if (!output) {
                         return;
                     }
                     // Vite 8 renamed this service-worker option, but the current PWA plugin still supplies the deprecated property.
-                    delete output.inlineDynamicImports;
-                    output.codeSplitting = false;
+                    const outputs = Array.isArray(output) ? output : [output];
+                    for (const outputOptions of outputs) {
+                        delete outputOptions.inlineDynamicImports;
+                        outputOptions.codeSplitting = false;
+                    }
                 },
             },
             manifest: {

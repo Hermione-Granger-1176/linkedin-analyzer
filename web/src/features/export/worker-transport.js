@@ -220,7 +220,8 @@ export function createWorkerTransport(config) {
              */
             const settle = (result) => {
                 // Every completion path removes listeners and clears the watchdog.
-                // This identity check prevents a second settlement if paths race.
+                // Only the current request may clear pendingRequest, so stale
+                // completion paths cannot clear the newer request's pointer.
                 /* v8 ignore next 3 */
                 if (pendingRequest === entry) {
                     pendingRequest = null;

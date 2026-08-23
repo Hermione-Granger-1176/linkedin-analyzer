@@ -115,9 +115,11 @@ describe("AppRouter navigation", () => {
         }
     });
 
-    it("setParams does nothing when no current route", () => {
+    it("setParams does nothing when no current route", async () => {
+        vi.resetModules();
+        const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
         // If no route is active, setParams should return without throwing.
-        expect(() => AppRouter.setParams({ x: "1" })).not.toThrow();
+        expect(() => FreshRouter.setParams({ x: "1" })).not.toThrow();
     });
 
     it("navigate ignores unknown route names", () => {
@@ -134,9 +136,11 @@ describe("AppRouter navigation", () => {
         expect(parsed.params.saved).toBe("yes");
     });
 
-    it("updateParams does nothing when no current route", () => {
+    it("updateParams does nothing when no current route", async () => {
+        vi.resetModules();
+        const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
         // Verify that updateParams is a no-op and does not throw without an active route.
-        expect(() => AppRouter.updateParams({ x: "1" })).not.toThrow();
+        expect(() => FreshRouter.updateParams({ x: "1" })).not.toThrow();
     });
 
     it("sharedParams applies default value when no stored value exists", () => {

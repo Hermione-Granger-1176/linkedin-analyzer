@@ -1959,10 +1959,10 @@ describe("scheduleMiniTipRetry", () => {
 
         Tutorial.onRouteChange("analytics");
 
-        // Advance past the mini-tip initial delay (2200ms + 2*90ms = 2380ms).
-        // but NOT past MINI_TIP_RETRY_MAX retries.
-        // Each retry is 300ms. Advance past the initial delay so renderMiniTips
-        // fires once, finds no target, schedules one retry.
+        // Advance past the mini-tip initial delay (2200ms + 2*90ms = 2380ms), but
+        // not past MINI_TIP_RETRY_MAX retries. Each retry is 300ms. Advance past
+        // the initial delay so renderMiniTips fires once, finds no target, and
+        // schedules one retry.
         vi.advanceTimersByTime(2500);
         expect(document.querySelector(".tutorial-mini-tip")).toBeNull();
 

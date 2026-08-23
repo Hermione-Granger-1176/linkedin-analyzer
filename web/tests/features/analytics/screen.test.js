@@ -790,7 +790,7 @@ describe("AnalyticsPage", () => {
         // syncRouteFromFilters() call. Coverage for that branch is achieved by
         // the 'updates route params when chart interactions toggle filters' test
         // which exercises the same post-switch code path. This test records that
-        // that week uses monthKey to set monthFocus.
+        // the week uses monthKey to set monthFocus.
         const weekItem = { type: "week", key: "week-4", monthKey: "2024-03" };
         expect(weekItem.monthKey || weekItem.key).toBe("2024-03");
     });

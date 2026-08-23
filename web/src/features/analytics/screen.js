@@ -446,7 +446,7 @@ export const AnalyticsPage = (() => {
      * @returns {string}
      */
     function getWorkerMessage(payload, fallback) {
-        // The parser may omit the message. Use the supplied fallback in that case.
+        // Keep the fallback for malformed worker data that omits the message.
         /* v8 ignore next */
         return payload && payload.message ? payload.message : fallback;
     }

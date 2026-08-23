@@ -119,11 +119,12 @@ PATH_RULES: tuple[PathRule, ...] = (
     PathRule(".npmrc", BOTH_AREAS),
     PathRule(".pre-commit-config.yaml", BOTH_AREAS),
     PathRule(".yamllint.yml", BOTH_AREAS),
-    # Prose and local scratch space. These rules exist to recognize the path,
-    # not to select anything: contributing no area is what makes a docs-only
-    # change cheap, and matching at all is what keeps it out of the fail-open
-    # default. Markdown, YAML, and formatting checks still run either way,
-    # because the quick-gates job is never gated.
+    # Prose, agent skills, and local scratch space. These rules exist to
+    # recognize the path, not to select anything: contributing no area is what
+    # makes a non-runtime change cheap, and matching at all is what keeps it out
+    # of the fail-open default. Markdown, YAML, and formatting checks still run
+    # either way, because the quick-gates job is never gated.
+    PathRule(".agents/skills/", NO_AREA),
     PathRule("*.md", NO_AREA),
     PathRule("docs/", NO_AREA),
     PathRule("data/", NO_AREA),

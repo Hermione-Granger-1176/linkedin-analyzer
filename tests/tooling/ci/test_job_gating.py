@@ -125,6 +125,8 @@ ENVIRONMENT_FOR_DOCS_RUN = {
         (".npmrc", BOTH_AREAS),
         (".pre-commit-config.yaml", BOTH_AREAS),
         (".yamllint.yml", BOTH_AREAS),
+        (".agents/skills/copilot-review-loop/SKILL.md", NO_AREA),
+        (".agents/skills/copilot-review-loop/agents/openai.yaml", NO_AREA),
         ("README.md", NO_AREA),
         ("CHANGELOG.md", NO_AREA),
         ("docs/development.md", NO_AREA),

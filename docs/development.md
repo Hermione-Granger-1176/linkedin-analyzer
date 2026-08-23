@@ -305,7 +305,7 @@ The classifier in `scripts/ci/job_gating.py` contributes every matching rule ins
 | `src/`, `tests/package/`, `tests/integration/`, `tests/support/`, `tests/__init__.py`, `pyproject.toml`, `uv.lock`                                                                            | Python  |
 | `web/`, `api/`, `config/`, `package.json`, `package-lock.json`, `vercel.json`                                                                                                                 | Web     |
 | `Makefile`, `.github/`, `scripts/`, `tests/tooling/`, `tests/fixtures/`, `constraints/`, `Dockerfile`, `.dockerignore`, `.editorconfig`, `.npmrc`, `.pre-commit-config.yaml`, `.yamllint.yml` | Both    |
-| `docs/`, any `*.md`, `data/`, `LICENSE`, `.gitignore`, `.env.example`                                                                                                                         | Neither |
+| `.agents/skills/`, `docs/`, any `*.md`, `data/`, `LICENSE`, `.gitignore`, `.env.example`                                                                                                      | Neither |
 | anything else                                                                                                                                                                                 | Both    |
 
 `tests/fixtures/` is Both because the browser parity suite reads the shared corpus directly. Renames are compared with `--no-renames`, so both the deleted and added paths contribute to the area decision. The required `CI result` job checks that every job expected for the detected areas ran and succeeded.

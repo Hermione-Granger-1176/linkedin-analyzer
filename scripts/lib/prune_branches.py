@@ -118,6 +118,19 @@ def merge_tree_result(
     return runner(["merge-tree", "--write-tree", base, branch])
 
 
+def merge_tree_error_detail(result: subprocess.CompletedProcess[str]) -> str:
+    """Return diagnostic output without mistaking a tree id for an error."""
+    stderr = result.stderr.strip()
+    if stderr:
+        return stderr
+
+    stdout = result.stdout.strip()
+    error_prefixes = ("error:", "fatal:", "usage:")
+    if any(line.lower().startswith(error_prefixes) for line in stdout.splitlines()):
+        return stdout
+    return ""
+
+
 def main(
     arguments: Sequence[str] | None = None,
     *,
@@ -140,7 +153,7 @@ def main(
 
     merge_tree_check = merge_tree_result(base, base, runner=runner)
     if merge_tree_check.returncode != 0:
-        detail = (merge_tree_check.stderr or merge_tree_check.stdout).strip()
+        detail = merge_tree_error_detail(merge_tree_check)
         if detail:
             print(f"ERROR: git merge-tree --write-tree failed: {detail}", file=sys.stderr)
         else:

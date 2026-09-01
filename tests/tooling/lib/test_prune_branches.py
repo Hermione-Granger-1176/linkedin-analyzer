@@ -157,6 +157,12 @@ def test_supports_merge_tree_reports_old_git() -> None:
     assert prune_branches.supports_merge_tree("main", runner=runner) is False
 
 
+def test_merge_tree_error_detail_accepts_error_like_stdout() -> None:
+    """Error-like stdout is useful when Git leaves stderr empty."""
+    result = subprocess.CompletedProcess(["git", "merge-tree"], 129, "fatal: unknown option\n", "")
+    assert prune_branches.merge_tree_error_detail(result) == "fatal: unknown option"
+
+
 def base_environment() -> dict[str, str]:
     """Return the Makefile-supplied inputs for a dry run."""
     return {"PRUNE_MAIN_BRANCH": "main"}

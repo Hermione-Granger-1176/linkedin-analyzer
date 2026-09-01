@@ -311,6 +311,28 @@ def test_main_fails_on_git_without_merge_tree(capsys: pytest.CaptureFixture[str]
     assert prune_branches.MERGE_TREE_HINT in capsys.readouterr().err
 
 
+def test_main_reports_merge_tree_execution_errors(capsys: pytest.CaptureFixture[str]) -> None:
+    """A merge-tree failure reports Git's detail instead of blaming its version."""
+    responses = {
+        ("branch", "--show-current"): (0, "main\n"),
+        ("show-ref", "--verify", "--quiet", "refs/remotes/origin/main"): (0, ""),
+        ("for-each-ref", "--format=%(refname:short)", "refs/heads/"): (0, "main\n"),
+        ("rev-parse", "origin/main^{tree}"): (0, "tree1"),
+        ("merge-tree", "--write-tree", "origin/main", "origin/main"): (
+            128,
+            "",
+            "error: unable to create temporary file: Read-only file system\n",
+        ),
+    }
+
+    assert prune_branches.main(environ=base_environment(), runner=make_runner(responses)) == 1
+
+    err = capsys.readouterr().err
+    assert "ERROR: git merge-tree --write-tree failed:" in err
+    assert "Read-only file system" in err
+    assert prune_branches.MERGE_TREE_HINT not in err
+
+
 def test_main_reads_the_process_environment_by_default(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

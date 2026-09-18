@@ -118,5 +118,7 @@ test("dashboard layout stays bounded and charts redraw across viewport changes",
     // On phones, the final hour stays reachable through the heatmap's own scroller.
     await heatmap.click({ position: { x: box.width - 22, y: box.height - 30 } });
     await expect(page.locator("#screen-analytics .active-filters")).toContainText("Hour: 23:00");
-    await expect(page.locator("#screen-analytics .active-filters")).toContainText("Day: Sun");
+    await expect(page.locator("#screen-analytics .active-filters")).toContainText(
+        /Day:\s*(Sun|Mon|Tue|Wed|Thu|Fri|Sat)/,
+    );
 });

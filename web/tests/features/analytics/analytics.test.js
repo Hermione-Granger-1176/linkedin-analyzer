@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AnalyticsEngine } from "../../../src/features/analytics/analytics.js";
+import { AnalyticsEngine } from "../../../src/features/analytics/activity.js";
 
 function sampleData() {
     const shares = [

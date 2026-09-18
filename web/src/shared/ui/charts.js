@@ -13,6 +13,7 @@ export const SketchCharts = (() => {
     const drawRegistry = new Map();
     let animationId = 0;
     let exportDpr = 0;
+    let sizeObserver = null;
 
     const EXPORT_DPR = 3;
 
@@ -35,6 +36,29 @@ export const SketchCharts = (() => {
     }
 
     /**
+     * Redraw visible charts whose backing stores no longer match their layout.
+     * @param {ResizeObserverEntry[]} entries - Canvases with changed dimensions.
+     */
+    function redrawResizedCharts(entries) {
+        const dpr = window.devicePixelRatio || 1;
+        for (const { target } of entries) {
+            const chart = /** @type {HTMLCanvasElement} */ (target);
+            const box = chart.getBoundingClientRect();
+            const width = chart.clientWidth || Math.round(box.width);
+            const height = chart.clientHeight || Math.round(box.height);
+            // Ignore hidden charts and notifications from our own redraw.
+            if (
+                box.width > 0 &&
+                box.height > 0 &&
+                (chart.width !== Math.round(width * dpr) ||
+                    chart.height !== Math.round(height * dpr))
+            ) {
+                drawRegistry.get(chart)?.();
+            }
+        }
+    }
+
+    /**
      * Resize canvas to match its CSS dimensions at device pixel ratio.
      * @param {HTMLCanvasElement} canvas - The canvas element to resize.
      * @returns {{ctx: CanvasRenderingContext2D, width: number, height: number}|null}
@@ -49,8 +73,9 @@ export const SketchCharts = (() => {
         // Round the CSS box first, then scale the backing store to whole device
         // pixels. A fractional backing store (rect.width is often sub-pixel) makes
         // the browser resample the canvas, which reads as blur on wide charts.
-        const cssWidth = Math.round(rect.width);
-        const cssHeight = Math.round(rect.height);
+        // Entrance transforms change the bounding rectangle, not the layout box.
+        const cssWidth = canvas.clientWidth || Math.round(rect.width);
+        const cssHeight = canvas.clientHeight || Math.round(rect.height);
         canvas.width = Math.round(cssWidth * ratio);
         canvas.height = Math.round(cssHeight * ratio);
         const ctx = canvas.getContext("2d");
@@ -59,6 +84,12 @@ export const SketchCharts = (() => {
             return null;
         }
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        if (typeof ResizeObserver !== "undefined") {
+            if (!sizeObserver) {
+                sizeObserver = new ResizeObserver(redrawResizedCharts);
+            }
+            sizeObserver.observe(canvas);
+        }
         return { ctx, width: cssWidth, height: cssHeight };
     }
 

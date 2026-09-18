@@ -67,6 +67,15 @@
 }
 
 @media (max-width: 540px) {
+    /* Keep heatmap cells readable on phones; only this chart may scroll. */
+    #heatmapCard .chart-canvas-wrap {
+        overflow-x: auto;
+    }
+
+    #heatmapChart {
+        min-width: 540px;
+    }
+
     /* Fix the menu button to the top-left corner. Position the open menu below
        it so opening the menu does not change page layout. */
     .nav-toggle {

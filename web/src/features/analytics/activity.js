@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics Engine (Optimized) */
+/* LinkedIn Analyzer - Local activity calculations */
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 import {

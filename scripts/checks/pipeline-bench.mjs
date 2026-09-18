@@ -46,7 +46,7 @@ const { LinkedInCleaner } = await import(
     new URL("../../web/src/features/cleaning/cleaner.js", import.meta.url).href
 );
 const { AnalyticsEngine } = await import(
-    new URL("../../web/src/features/analytics/analytics.js", import.meta.url).href
+    new URL("../../web/src/features/analytics/activity.js", import.meta.url).href
 );
 const { MessagesAnalytics } = await import(
     new URL("../../web/src/features/messages/analytics.js", import.meta.url).href

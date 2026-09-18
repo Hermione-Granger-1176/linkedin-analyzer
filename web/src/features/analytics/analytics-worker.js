@@ -3,7 +3,7 @@
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 
-import { AnalyticsEngine } from "./analytics.js";
+import { AnalyticsEngine } from "./activity.js";
 
 let sharesData = null;
 let commentsData = null;

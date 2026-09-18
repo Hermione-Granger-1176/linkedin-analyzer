@@ -65,6 +65,20 @@ make web-preview
 
 A browser failure after a successful build usually comes from a stale service worker. Use the browser's site storage controls to unregister the worker and clear the site data, then reload the preview.
 
+## Uploads fail with a worker error
+
+Check the browser's Network panel and your content blocker's filtering log for blocked script requests. Record the blocked URL and matching rule. A blocked local data-processing module can stop uploads even when Edge's built-in tracking protection is disabled.
+
+The activity engine uses `features/analytics/activity.js` to avoid EasyPrivacy's `/analytics/analytics.js` rule. That rule matched its previous development URL. Reload the page after updating the code. Diagnostics remain optional; do not enable them or disable your blocker globally to make local processing work.
+
+Run the development regression test to check this specific filter collision:
+
+```bash
+make test-e2e-dev ARGS="--project=chromium web/e2e/worker-blocking.e2e.spec.js"
+```
+
+If the deployed build still fails, capture its blocked URL separately. The development test simulates one URL rule, not every AdGuard, AdBlock, or browser privacy setting.
+
 ## A CSV is rejected
 
 Check the file size and the required header names in [data formats](data-formats.md). The browser rejects files above 80 MiB, decoded text above 60 MiB, rows above 500,000, columns above 256, and fields above 200,000 characters.

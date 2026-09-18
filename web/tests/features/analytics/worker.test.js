@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AnalyticsEngine } from "../../../src/features/analytics/activity.js";
 import {
     getViewKey,
     handleAddFile,
@@ -10,10 +11,9 @@ import {
     handleView,
     normalizeFilters
 } from "../../../src/features/analytics/analytics-worker.js";
-import { AnalyticsEngine } from "../../../src/features/analytics/analytics.js";
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 
-vi.mock("../../../src/features/analytics/analytics.js", () => ({
+vi.mock("../../../src/features/analytics/activity.js", () => ({
     AnalyticsEngine: {
         compute: vi.fn(),
         buildView: vi.fn(),
@@ -649,7 +649,7 @@ describe("message event dispatcher", () => {
 
         // Re-import mocks after resetModules
         const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
-        const { AnalyticsEngine: AE } = await import("../../../src/features/analytics/analytics.js");
+        const { AnalyticsEngine: AE } = await import("../../../src/features/analytics/activity.js");
         LC.process.mockReturnValue({ success: false, error: "bad" });
         AE.compute.mockReturnValue(makeAnalytics());
 

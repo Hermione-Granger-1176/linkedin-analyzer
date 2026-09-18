@@ -9,6 +9,7 @@
 }
 
 .chart-card {
+    min-width: 0;
     background: var(--bg-secondary);
     border: 2px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -82,17 +83,10 @@
 }
 
 .chart-canvas-wrap canvas {
+    /* Avoid inline baseline space below a canvas that fills its wrapper. */
+    display: block;
     width: 100%;
     height: 100%;
-}
-
-/* Keep the 24-hour heatmap wide enough to read and scroll it inside the card. */
-#heatmapCard .chart-canvas-wrap {
-    overflow-x: auto;
-}
-
-#heatmapChart {
-    min-width: 540px;
 }
 
 .chart-note {

@@ -260,7 +260,7 @@ dead-code-js: ## Detect unused JS code, exports, and deps (knip)
 
 # ─── Test @test ─────────────────────────────────────────────────────────────────────
 
-.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-container test-e2e-headed test-e2e-ui test-browser-xlsx
+.PHONY: test test-py test-js test-js-quick test-e2e test-e2e-dev test-e2e-container test-e2e-headed test-e2e-ui test-browser-xlsx
 
 test: test-py test-js ## Run non-browser Python and JS tests
 
@@ -275,6 +275,9 @@ test-js-quick: ## Run a subset of JS tests without coverage (make test-js-quick 
 
 test-e2e: ## Run Playwright browser tests (make test-e2e ARGS="--project=chromium web/e2e/app.e2e.spec.js")
 	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- $(ARGS)
+
+test-e2e-dev: ## Run Playwright against development modules, including content-blocker checks [ARGS=...]
+	PLAYWRIGHT_DEV_SERVER=1 $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- $(ARGS)
 
 test-e2e-container: ## Run Playwright tests in the immutable hosted-CI container
 	$(DOCKER) run --rm --init --ipc=host \

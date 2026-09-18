@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { AnalyticsEngine } from "../../../src/features/analytics/analytics.js";
+import { AnalyticsEngine } from "../../../src/features/analytics/activity.js";
 
 // Longest-streak detection compares local-midnight dates. Across a DST
 // transition two consecutive calendar days are only 23h (or 25h) apart, which

@@ -80,7 +80,7 @@
   ],
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@sentry/vite-plugin": "^5.4.0",
     "@size-limit/file": "^14.1.0",
     "@types/node": "^26.6.2",

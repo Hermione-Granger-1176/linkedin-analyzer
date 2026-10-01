@@ -19,6 +19,31 @@ export const ExcelGenerator = (() => {
     const MIN_COLUMN_WIDTH = 10;
     const MAX_COLUMN_WIDTH = 60;
 
+    function normalizeHyperlink(value) {
+        if (typeof value !== "string") {
+            return "";
+        }
+
+        const candidate = value.trim();
+        if (!candidate) {
+            return "";
+        }
+
+        try {
+            const url = new URL(candidate);
+            if (
+                (url.protocol !== "https:" && url.protocol !== "http:") ||
+                url.username ||
+                url.password
+            ) {
+                return "";
+            }
+            return url.href;
+        } catch {
+            return "";
+        }
+    }
+
     function getConfig(fileType) {
         const config = LinkedInCleaner.configs[fileType];
         if (!config) {
@@ -34,8 +59,7 @@ export const ExcelGenerator = (() => {
                 Object.prototype.hasOwnProperty.call(rawCell, "hyperlink");
 
             if (hasStructuredShape) {
-                const hyperlink =
-                    typeof rawCell.hyperlink === "string" ? rawCell.hyperlink.trim() : "";
+                const hyperlink = normalizeHyperlink(rawCell.hyperlink);
                 const value = Object.prototype.hasOwnProperty.call(rawCell, "value")
                     ? rawCell.value
                     : hyperlink;

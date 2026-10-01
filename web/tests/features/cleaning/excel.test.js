@@ -244,6 +244,23 @@ describe("ExcelGenerator", () => {
         expect(sheetData[1][0].type).not.toBe("Formula");
     });
 
+    it.each([
+        "javascript:alert(document.domain)",
+        "file:///etc/passwd",
+        "https://user:secret@example.com/profile",
+        "not a URL",
+    ])("keeps unsafe hyperlink %j as plain text", async (hyperlink) => {
+        await ExcelGenerator.generateFromSpec({
+            sheetName: "Links",
+            headers: ["Profile"],
+            rows: [[{ value: "Ada", hyperlink }]],
+        });
+
+        const [sheetData] = writeXlsxFile.mock.calls[0];
+        expect(sheetData[1][0]).toEqual(expect.objectContaining({ type: String, value: "Ada" }));
+        expect(sheetData[1][0].type).not.toBe("Formula");
+    });
+
     it("pads rows shorter than the header with empty cells", async () => {
         await ExcelGenerator.generateFromSpec({
             sheetName: "Short",

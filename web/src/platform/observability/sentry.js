@@ -495,7 +495,13 @@ export function initSentry() {
         environment,
         release,
         defaultIntegrations: false,
-        sendDefaultPii: false,
+        dataCollection: {
+            userInfo: false,
+            cookies: false,
+            httpHeaders: false,
+            httpBodies: [],
+            urlQueryParams: false,
+        },
         maxBreadcrumbs: 0,
         beforeSend(event, hint) {
             clearHintAttachments(hint);

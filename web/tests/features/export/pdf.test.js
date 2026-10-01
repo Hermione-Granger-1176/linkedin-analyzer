@@ -99,6 +99,8 @@ let DataCache;
 let LoadingOverlay;
 /** @type {{loads: number}|null} */
 let runtimeChunk = null;
+let activeChunk = null;
+let activeGate = null;
 
 /**
  * Re-import the export module and every mocked collaborator.
@@ -159,16 +161,20 @@ function ui() {
  * real modules. The wrapper counts fetches and, when a test passes a gate,
  * holds one open the way a slow or failing connection would. Registered per
  * test rather than for the file because a mock is cached once it has been
- * built, and re-registering is what makes the next fetch a fetch again.
+ * built, and re-registering is what makes the next fetch a fetch again. The
+ * factory reads the latest chunk and gate rather than closing over its own, as
+ * a later registration for the same path does not replace an earlier factory.
  * @param {Promise<unknown>} [gate] - Settled before the chunk is delivered
  * @returns {{loads: number}} Live count of the fetches since this call
  */
 function interceptRuntimeChunk(gate) {
     const chunk = { loads: 0 };
+    activeChunk = chunk;
+    activeGate = gate;
     vi.doMock(RUNTIME_PATH, async (importOriginal) => {
-        chunk.loads += 1;
-        if (gate) {
-            await gate;
+        activeChunk.loads += 1;
+        if (activeGate) {
+            await activeGate;
         }
         return importOriginal();
     });

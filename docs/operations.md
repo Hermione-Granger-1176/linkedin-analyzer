@@ -193,7 +193,7 @@ The scheduled workflows have these owners and times:
 | `web-smoke.yml`           | 07:00 and 19:00 UTC                  | Check the configured production origin                   |
 | `audit-repo-settings.yml` | Monday at 08:23 UTC                  | Check repository settings with the audit GitHub App      |
 | `refresh-action-shas.yml` | First day of each month at 03:00 UTC | Refresh CI pins and open a maintenance PR                |
-| `schedule-watchdog.yml`   | Push to `main` and manual dispatch   | Detect stale or disabled scheduled workflows             |
+| `schedule-watchdog.yml`   | Push to `main` and manual dispatch   | Detect disabled scheduled workflows                      |
 
 Run any workflow with `make ci-dispatch workflow=<workflow-file>`. Scheduled dependency audits fail closed on malformed reports, expired exceptions, unused exceptions, and ambiguous exceptions. The Docker publish scan also gates every severity that Trivy reports when a fix exists.
 
@@ -211,9 +211,9 @@ A repeated failure adds a comment instead of replacing the issue body. Give each
 
 ## Protect scheduled automation
 
-GitHub can disable cron workflows after repository inactivity. `schedule-watchdog.yml` runs from a push trigger that GitHub does not disable, then checks that scheduled workflows are active and that their recent schedule runs are within their expected cadence plus grace period.
+GitHub can disable cron workflows after repository inactivity. `schedule-watchdog.yml` runs from a push trigger that GitHub does not disable, then discovers YAML workflows declaring cron schedules and checks their enabled state. It does not query run history or infer failures from run age. An active workflow that stops firing is outside this check. Web smoke keeps its own failure and recovery alerts.
 
-The watchdog writes a `checked` result before it reports. A failed check after `checked=true` means stale or disabled schedules. A failure before that result means setup failure. This distinction prevents a permission or API problem from opening the wrong alert.
+The watchdog writes a `checked` result before it reports. A failed check after `checked=true` means disabled schedules. A failure before that result means setup failure. This distinction prevents a permission or API problem from opening the wrong alert.
 
 ## Refresh Python locks safely
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
 from scripts.ci.job_gating import GATED_JOBS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -203,3 +204,30 @@ def test_the_ci_result_job_passes_every_result_the_truth_table_reads() -> None:
 
     assert environment == EXPECTED_RESULT_VARIABLES | {"PYTHON_CHANGED", "WEB_CHANGED"}
     assert {job.variable for job in GATED_JOBS} == EXPECTED_RESULT_VARIABLES
+
+
+def test_watchdog_alerts_distinguish_disabled_workflows_and_setup_failures():
+    """Setup errors must alert even when the watchdog step never ran."""
+    workflow = yaml.load(
+        (WORKFLOWS_DIR / "schedule-watchdog.yml").read_text(), Loader=yaml.BaseLoader
+    )
+    assert set(workflow["on"]) == {"push", "workflow_dispatch"}
+    assert workflow["on"]["push"]["branches"] == ["main"]
+    jobs = workflow["jobs"]
+    assert jobs["watchdog"]["outputs"]["checked"] == "${{ steps.watchdog.outputs.checked }}"
+    assert jobs["report-failure"]["if"] == ("failure() && needs.watchdog.outputs.checked == 'true'")
+    assert jobs["report-setup-failure"]["if"] == (
+        "failure() && needs.watchdog.outputs.checked != 'true'"
+    )
+    assert jobs["report-recovery"]["if"] == "success()"
+    for name, state in (
+        ("report-failure", "open"),
+        ("report-setup-failure", "setup-failure"),
+        ("report-recovery", "close"),
+    ):
+        alert = jobs[name]
+        assert alert["needs"] == "watchdog"
+        assert alert["uses"] == "./.github/workflows/alert-issue.yml"
+        assert alert["with"]["state"] == state
+        assert alert["with"]["title"] == "Scheduled workflows are stale or disabled"
+        assert alert["with"]["label"] == "schedule-watchdog"

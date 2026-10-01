@@ -795,7 +795,7 @@ ci-alert-issue: ## Sync a monitored alert issue, detail on stdin (TITLE='...' ma
 	$(NO_TTY_READ) set -- "$$@" --detail-file -; \
 	$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.issue_alerts "$$@"
 
-ci-schedule-watchdog: ## Report scheduled workflows that are stale or auto-disabled (make ci-schedule-watchdog [repo=owner/name])
+ci-schedule-watchdog: ## Detect disabled scheduled workflows (make ci-schedule-watchdog [repo=owner/name])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.schedule_watchdog $(if $(repo),--repo "$(repo)")
 
 # Run by hand, not from a workflow. Reading branch protection needs

@@ -48,7 +48,8 @@ web/dist/
 testing/
 
 # Editor / tool config
-.claude/
+.claude/*
+!.claude/skills/
 
 # Local environment files
 .env

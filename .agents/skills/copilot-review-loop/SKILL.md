@@ -1,6 +1,6 @@
 ---
 name: copilot-review-loop
-description: "Use whenever the user asks to run, continue, or finish a GitHub Copilot review loop."
+description: "Use when the user wants a pull request taken through GitHub Copilot review: requesting a Copilot review, fixing or replying to Copilot review comments, resolving its threads, or looping until Copilot approves. Do not use for general code review or for reviews by people."
 ---
 
 # Copilot review loop

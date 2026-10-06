@@ -411,6 +411,14 @@ check: check-local test-e2e ## Full gate including browser tests
 
 fix: fmt ci ## Auto-fix formatting, then run the full local CI gate
 
+.PHONY: security-alerts security-code-alerts
+
+security-alerts: ## List open GitHub Dependabot alerts
+	gh api --paginate 'repos/{owner}/{repo}/dependabot/alerts?state=open'
+
+security-code-alerts: ## List open GitHub code scanning alerts
+	gh api --paginate 'repos/{owner}/{repo}/code-scanning/alerts?state=open'
+
 security: audit-python audit-node check-overrides ## Run dependency and override audits
 
 audit-node: ## Run policy-driven npm dependency audit (make audit-node [audit_level=high])

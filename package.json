@@ -78,6 +78,9 @@
       "limit": "140 kB"
     }
   ],
+  "overrides": {
+    "braces": "$braces"
+  },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
@@ -86,6 +89,7 @@
     "@types/node": "^26.6.4",
     "@vitest/coverage-v8": "^5.0.3",
     "actionlint": "2.0.6",
+    "braces": "https://codeload.github.com/FSDevelop/braces/tar.gz/28d440b5dd449dbf1fe6f3506cf94ecca4d02660",
     "eslint": "^10.11.0",
     "eslint-import-resolver-node": "^0.4.0",
     "eslint-plugin-import-x": "^4.17.1",

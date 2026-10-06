@@ -1,4 +1,13 @@
 {
-  "npm_vulnerability_exceptions": [],
+  "npm_override_dev_dependencies": ["braces"],
+  "npm_vulnerability_exceptions": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Issue #294: all braces consumers are overridden to the FSDevelop security fork at commit 28d440b5dd449dbf1fe6f3506cf94ecca4d02660, with archive integrity pinned in package-lock.json. Regression tests verify the hard nesting cap, caller-supplied AST guards, cycle rejection, and ordinary pattern compatibility. npm still reports the advisory because the patched fork retains the braces name and version 3.0.3. This exception covers that version-based finding while the tested override is installed. Review and replace it with an official patched release by 2026-11-05; npm's proposed Stylelint 7.7.0 downgrade is incompatible with the current lint configuration.",
+      "review_by": "2026-11-05",
+      "ignore_only_without_fix": false
+    }
+  ],
   "python_vulnerability_exceptions": []
 }

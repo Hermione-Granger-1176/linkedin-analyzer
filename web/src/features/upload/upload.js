@@ -18,7 +18,6 @@ import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
 import { hideCatcher, playCatch, showCatcher } from "./mascot.js";
 import { UploadProgress } from "./progress.js";
-import { readFileAsText } from "./read.js";
 import {
     createEmptyFileMap,
     getTypeSpecificFileCacheKey,
@@ -476,29 +475,29 @@ export const UploadPage = (() => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
             scheduleJobTimeout(jobId, file.name);
-            readFileAsText(file)
-                .then(({ text, usedFallback }) => {
-                    pendingFiles.set(jobId, { text, fileName: file.name, usedFallback });
-                    worker.postMessage({
-                        type: "addFile",
-                        payload: {
-                            csvText: text,
-                            fileName: file.name,
-                            jobId,
-                            totalSize: file.size,
-                        },
-                    });
-                })
-                .catch((error) => {
-                    captureError(error, {
-                        module: "upload",
-                        operation: "read-file",
+            // The worker reads the File itself. Posting a File clones a
+            // reference to its bytes, so the page never holds the text.
+            pendingFiles.set(jobId, { fileName: file.name });
+            try {
+                worker.postMessage({
+                    type: "addFile",
+                    payload: {
+                        file,
                         fileName: file.name,
-                        fileSize: file.size,
-                    });
-                    completeJob(jobId, file.name);
-                    setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
+                        jobId,
+                        totalSize: file.size,
+                    },
                 });
+            } catch (error) {
+                captureError(error, {
+                    module: "upload",
+                    operation: "post-file",
+                    fileName: file.name,
+                    fileSize: file.size,
+                });
+                completeJob(jobId, file.name);
+                setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
+            }
         });
     }
 
@@ -613,7 +612,7 @@ export const UploadPage = (() => {
         }
 
         try {
-            const text = pending.text;
+            const text = payload.csvText || "";
 
             await persistProcessedFile(fileType, fileName, text, rowCount, payload.analyticsBase);
             await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);
@@ -623,7 +622,7 @@ export const UploadPage = (() => {
             const analyticsReady = await hasAnalyticsData();
             updateStatus({ fileMap, analyticsReady });
             setHint(
-                pending.usedFallback
+                payload.usedFallback
                     ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a Windows-1252 fallback. Double-check accented names."
                     : "File loaded successfully.",
                 false,

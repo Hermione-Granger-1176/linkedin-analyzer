@@ -18,6 +18,7 @@ import { MAX_CSV_CHARS } from "../../src/shared/limits.js";
 vi.mock("../../src/shared/limits.js", async (importOriginal) => ({
     ...(await importOriginal()),
     MAX_CSV_CHARS: 1024,
+    MAX_FILE_BYTES: 2048,
 }));
 
 // Oversized payload (MAX_CSV_CHARS + 1 chars) used by the size-limit
@@ -62,14 +63,31 @@ describe("worker contracts", () => {
         expect(parsed.value.payload.fileName.length).toBeLessThan(5000);
     });
 
-    it("rejects analytics addFile request without csvText", () => {
+    it("rejects analytics addFile request without a file or csvText", () => {
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",
-            payload: { fileName: "Shares.csv" },
+            payload: { fileName: "Shares.csv", file: { size: 3 } },
         });
 
         expect(parsed.valid).toBe(false);
-        expect(parsed.error).toContain("csvText");
+        expect(parsed.error).toContain("Missing file");
+    });
+
+    it("accepts an uploaded File in addFile and bounds its size", () => {
+        const file = new File(["col\nval"], "Shares.csv");
+        const parsed = parseAnalyticsWorkerRequest({
+            type: "addFile",
+            payload: { file, csvText: "ignored", fileName: "Shares.csv", jobId: "job-1" },
+        });
+        expect(parsed.valid).toBe(true);
+        expect(parsed.value.payload).toMatchObject({ file, csvText: "", jobId: "job-1" });
+
+        const oversized = parseAnalyticsWorkerRequest({
+            type: "addFile",
+            payload: { file: new File([new Uint8Array(2049)], "Big.csv"), fileName: "Big.csv" },
+        });
+        expect(oversized.valid).toBe(false);
+        expect(oversized.error).toContain("File payload exceeds");
     });
 
     it("rejects unknown analytics request type", () => {
@@ -165,11 +183,15 @@ describe("worker contracts", () => {
                 jobId: "job-2",
                 fileName: "Shares.csv",
                 percent: 4,
+                bytesRead: 512,
+                totalBytes: "1024",
             },
         });
 
         expect(parsed.valid).toBe(true);
         expect(parsed.value.payload.percent).toBe(1);
+        expect(parsed.value.payload.bytesRead).toBe(512);
+        expect(parsed.value.payload.totalBytes).toBe(0);
     });
 
     it("normalizes analytics fileProcessed payload", () => {
@@ -180,12 +202,16 @@ describe("worker contracts", () => {
                 fileName: "Shares.csv",
                 rowCount: 5,
                 analyticsBase: { months: { "2025-01": {} } },
+                csvText: "col\nval",
+                usedFallback: 1,
             },
         });
 
         expect(parsed.valid).toBe(true);
         expect(parsed.value.payload.fileType).toBe("shares");
         expect(parsed.value.payload.rowCount).toBe(5);
+        expect(parsed.value.payload.csvText).toBe("col\nval");
+        expect(parsed.value.payload.usedFallback).toBe(true);
     });
 
     it("normalizes analytics error payload fallback message", () => {

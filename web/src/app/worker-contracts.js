@@ -1,12 +1,13 @@
 /* Runtime contracts for worker request/response payloads */
 
 import { FILE_TYPES as FILE_TYPE_LIST } from "../shared/constants.js";
-import { MAX_CSV_CHARS } from "../shared/limits.js";
+import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../shared/limits.js";
 
 const FILE_TYPES = new Set(FILE_TYPE_LIST);
 
 const LIMITS = Object.freeze({
     maxCsvChars: MAX_CSV_CHARS,
+    maxFileBytes: MAX_FILE_BYTES,
     maxFileNameChars: 255,
     maxJobIdChars: 128,
     maxMessageChars: 500,
@@ -119,7 +120,18 @@ function normalizeRequestId(value) {
 }
 
 /**
- * Parse upload worker addFile payload.
+ * Check whether a value is a Blob (a File is one), without relying on a
+ * same-realm instanceof where the global is missing.
+ * @param {unknown} value - Candidate value
+ * @returns {value is Blob}
+ */
+function isBlob(value) {
+    return typeof Blob !== "undefined" && value instanceof Blob;
+}
+
+/**
+ * Parse upload worker addFile payload. The page posts the uploaded `file` so
+ * the worker reads it; `csvText` remains for callers that already hold text.
  * @param {unknown} payload - Raw payload
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
@@ -128,9 +140,13 @@ function parseAddFilePayload(payload) {
         return invalid("Invalid addFile payload");
     }
 
-    const csvText = normalizeString(payload.csvText, LIMITS.maxCsvChars + 1);
-    if (!csvText) {
-        return invalid("Missing csvText payload");
+    const file = isBlob(payload.file) ? payload.file : null;
+    if (file && file.size > LIMITS.maxFileBytes) {
+        return invalid("File payload exceeds allowed size");
+    }
+    const csvText = file ? "" : normalizeString(payload.csvText, LIMITS.maxCsvChars + 1);
+    if (!file && !csvText) {
+        return invalid("Missing file payload");
     }
     if (csvText.length > LIMITS.maxCsvChars) {
         return invalid("CSV payload exceeds allowed size");
@@ -145,6 +161,7 @@ function parseAddFilePayload(payload) {
     const totalSize = normalizeNumber(payload.totalSize, 0, 0, Number.MAX_SAFE_INTEGER);
 
     return valid({
+        file,
         csvText,
         fileName,
         jobId,
@@ -261,6 +278,8 @@ export function parseAnalyticsWorkerMessage(message) {
                     jobId: normalizeOptionalString(payload.jobId, LIMITS.maxJobIdChars),
                     fileName: normalizeString(payload.fileName, LIMITS.maxFileNameChars),
                     percent: normalizeNumber(payload.percent, 0, 0, 1),
+                    bytesRead: normalizeNumber(payload.bytesRead, 0, 0, Number.MAX_SAFE_INTEGER),
+                    totalBytes: normalizeNumber(payload.totalBytes, 0, 0, Number.MAX_SAFE_INTEGER),
                 },
             });
         }
@@ -278,6 +297,9 @@ export function parseAnalyticsWorkerMessage(message) {
                         ? payload.analyticsBase
                         : null,
                     hasData: Boolean(payload.hasData),
+                    // The text the worker decoded, for the page to store.
+                    csvText: normalizeString(payload.csvText, LIMITS.maxCsvChars),
+                    usedFallback: Boolean(payload.usedFallback),
                     error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
                 },
             });

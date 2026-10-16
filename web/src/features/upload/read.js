@@ -5,6 +5,7 @@
  * small ones, then hands the raw bytes to the shared decoder. Every function
  * here derives its result from its arguments and holds no upload page state,
  * so the page owns orchestration and this module owns only how bytes are read.
+ * Nothing here touches the DOM, so the analytics worker reads uploads with it.
  */
 
 import { MAX_FILE_BYTES } from "../../shared/limits.js";
@@ -15,12 +16,19 @@ const FILE_READ_TIMEOUT_MS = 30000;
 const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
 /**
+ * @typedef {object} ReadOptions
+ * @property {AbortSignal} [signal] - Stops the read when aborted
+ * @property {(bytesRead: number, totalBytes: number) => void} [onProgress] - Called as bytes arrive
+ */
+
+/**
  * Read a File object as text, decoding as UTF-8 and falling back to
  * WHATWG windows-1252 for non-UTF-8 exports, matching the CLI.
  * @param {File} file - Uploaded file
+ * @param {ReadOptions} [options] - Cancellation and progress hooks
  * @returns {Promise<{text: string, usedFallback: boolean}>}
  */
-export function readFileAsText(file) {
+export function readFileAsText(file, options = {}) {
     // The upload page rejects oversized files before calling this helper. Keep
     // this check for direct callers that bypass page-level validation.
     /* v8 ignore next 4 */
@@ -36,20 +44,40 @@ export function readFileAsText(file) {
         typeof ReadableStream !== "undefined";
 
     if (useStreamingRead) {
-        return readFileAsTextStream(file);
+        return readFileAsTextStream(file, options);
     }
 
-    return readFileAsTextWithReader(file);
+    return readFileAsTextWithReader(file, options);
+}
+
+/**
+ * Build the error a cancelled read rejects with.
+ * @param {File} file - Uploaded file
+ * @returns {Error}
+ */
+function abortError(file) {
+    const error = new Error(`Reading ${file.name} was cancelled.`);
+    error.name = "AbortError";
+    return error;
 }
 
 /**
  * Read a File as text via FileReader, decoding the raw bytes so UTF-8
  * validity is checked directly rather than inferred from the output.
  * @param {File} file - Uploaded file
+ * @param {ReadOptions} options - Cancellation and progress hooks
  * @returns {Promise<{text: string, usedFallback: boolean}>}
  */
-function readFileAsTextWithReader(file) {
-    return readBytesWithReader(file).then((bytes) => decodeBytes(bytes, file.name));
+function readFileAsTextWithReader(file, { signal, onProgress }) {
+    return readBytesWithReader(file).then((bytes) => {
+        if (signal && signal.aborted) {
+            throw abortError(file);
+        }
+        if (onProgress) {
+            onProgress(bytes.byteLength, file.size);
+        }
+        return decodeBytes(bytes, file.name);
+    });
 }
 
 /**
@@ -61,7 +89,7 @@ function readBytesWithReader(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         let settled = false;
-        const timeoutId = window.setTimeout(() => {
+        const timeoutId = globalThis.setTimeout(() => {
             try {
                 reader.abort();
             } catch {
@@ -76,7 +104,7 @@ function readBytesWithReader(file) {
                 return;
             }
             settled = true;
-            window.clearTimeout(timeoutId);
+            globalThis.clearTimeout(timeoutId);
             callback();
         };
 
@@ -107,15 +135,16 @@ function readBytesWithReader(file) {
  * Read file text via stream chunks for large uploads, decoding as UTF-8 and
  * falling back to windows-1252 when the bytes are not valid UTF-8.
  * @param {File} file - Uploaded file
+ * @param {ReadOptions} options - Cancellation and progress hooks
  * @returns {Promise<{text: string, usedFallback: boolean}>}
  */
-async function readFileAsTextStream(file) {
+async function readFileAsTextStream(file, { signal, onProgress }) {
     const reader = file.stream().getReader();
     const chunks = [];
     let totalBytes = 0;
     let timedOut = false;
 
-    const timeoutId = window.setTimeout(() => {
+    const timeoutId = globalThis.setTimeout(() => {
         timedOut = true;
         /* v8 ignore next */
         reader.cancel().catch(() => {
@@ -128,9 +157,18 @@ async function readFileAsTextStream(file) {
             if (timedOut) {
                 throw new Error(`Reading ${file.name} timed out.`);
             }
+            if (signal && signal.aborted) {
+                reader.cancel().catch(() => {
+                    // The read is abandoned either way.
+                });
+                throw abortError(file);
+            }
 
             chunks.push(chunk.value);
             totalBytes += chunk.value.byteLength;
+            if (onProgress) {
+                onProgress(totalBytes, file.size);
+            }
         }
 
         // The in-loop check above throws first when the watchdog fires mid-read;
@@ -141,7 +179,7 @@ async function readFileAsTextStream(file) {
             throw new Error(`Reading ${file.name} timed out.`);
         }
     } finally {
-        window.clearTimeout(timeoutId);
+        globalThis.clearTimeout(timeoutId);
     }
 
     // Both read paths share decodeBytes: strict UTF-8 validation with a

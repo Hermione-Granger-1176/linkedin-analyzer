@@ -9,10 +9,9 @@
     "maxNodeModuleJsDepth": 0,
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
     "types": ["vite/client", "node", "@playwright/test"],
-    "strict": false,
-    "strictNullChecks": true,
-    "skipLibCheck": true,
+    "strict": true,
     "noImplicitAny": false,
+    "skipLibCheck": true,
     "paths": {
       "roughjs/bundled/rough.esm.js": ["../node_modules/roughjs/bundled/rough.d.ts"]
     }

@@ -227,7 +227,7 @@ export const CleanPage = (() => {
 
     /**
      * Report a file parse error and reset the preview UI.
-     * @param {Error} error - The error to report
+     * @param {unknown} error - The error to report
      * @param {string} message - User-facing error message
      * @param {string} fileType - The file type being parsed
      * @param {string|null} fileName - The file name, if available

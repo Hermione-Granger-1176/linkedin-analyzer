@@ -204,13 +204,13 @@ function handleActivity() {
 /**
  * React to the lights going on or off: a hard double blink and a shake of the
  * hair, over inside a second.
- * @param {CustomEvent} event - The themechange announcement.
+ * @param {Event} event - The themechange announcement, a CustomEvent.
  * @returns {void}
  */
 function handleThemeChange(event) {
     // Theme.init() announces the theme it settled on at boot, which is nobody
     // reaching for the switch, and it says so in the event it sends.
-    if (event.detail?.boot) {
+    if (/** @type {CustomEvent} */ (event).detail?.boot) {
         return;
     }
     if (prefersReducedMotion()) {

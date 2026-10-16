@@ -416,7 +416,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         }
         console.log(`RESULT   WROTE dir=${resolve(options.dir)} seconds=${seconds}`);
     } catch (error) {
-        console.error(`RESULT   FAILED reason=${error.message}`);
+        console.error(`RESULT   FAILED reason=${/** @type {Error} */ (error).message}`);
         process.exitCode = 1;
     }
 }

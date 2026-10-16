@@ -100,5 +100,6 @@ function getSoleActiveJobId(activeJobs) {
     if (activeJobs.size !== 1) {
         return null;
     }
-    return activeJobs.values().next().value;
+    // The size check above means the iterator has a value.
+    return /** @type {string} */ (activeJobs.values().next().value);
 }

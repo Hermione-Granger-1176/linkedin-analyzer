@@ -137,7 +137,7 @@ The browser enforces these independent limits:
 
 A file above 25 MiB also receives a large-file warning before processing. The warning does not reject the file when it remains under the hard limits.
 
-The CLI uses a 100 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
+The CLI uses a 128 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
 
 ## Choose visual effects
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { concatChunks, decodeBytes, isQuotaExceededError } from "../../../src/features/upload/decode.js";
-import { MAX_CSV_CHARS } from "../../../src/shared/constants.js";
+import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
 
 const encode = (str) => new TextEncoder().encode(str);
 

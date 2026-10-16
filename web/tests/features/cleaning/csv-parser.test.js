@@ -6,7 +6,7 @@ import {
     isRowEmpty,
     parseCsvRows,
 } from "../../../src/features/cleaning/csv-parser.js";
-import { MAX_CSV_CHARS } from "../../../src/shared/constants.js";
+import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
 
 describe("parseCsvRows input-size guard", () => {
     it("rejects input longer than the character limit", () => {

@@ -11,13 +11,14 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
-import { FILE_TYPES, MAX_CSV_CHARS } from "../../shared/constants.js";
+import { FILE_TYPES } from "../../shared/constants.js";
+import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../../shared/limits.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
 import { hideCatcher, playCatch, showCatcher } from "./mascot.js";
 import { UploadProgress } from "./progress.js";
-import { MAX_FILE_BYTES, readFileAsText } from "./read.js";
+import { readFileAsText } from "./read.js";
 import {
     createEmptyFileMap,
     getTypeSpecificFileCacheKey,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
     parseAnalyticsWorkerMessage,
@@ -11,11 +11,17 @@ import {
     parseThreadsWorkerMessage,
     parseThreadsWorkerRequest,
 } from "../../src/app/worker-contracts.js";
-import { MAX_CSV_CHARS } from "../../src/shared/constants.js";
+import { MAX_CSV_CHARS } from "../../src/shared/limits.js";
 
-// Oversized payload (MAX_CSV_CHARS + 1 chars, ~63M characters) used by the
-// size-limit assertions. Generated lazily and memoized so it is allocated once,
-// and only when one of those tests actually runs.
+// A small character limit keeps the size-limit assertions from allocating a
+// string as large as the real one.
+vi.mock("../../src/shared/limits.js", async (importOriginal) => ({
+    ...(await importOriginal()),
+    MAX_CSV_CHARS: 1024,
+}));
+
+// Oversized payload (MAX_CSV_CHARS + 1 chars) used by the size-limit
+// assertions. Generated lazily and memoized so it is allocated once.
 let cachedOversizeCsv;
 const getOversizeCsv = () => {
     if (cachedOversizeCsv === undefined) {

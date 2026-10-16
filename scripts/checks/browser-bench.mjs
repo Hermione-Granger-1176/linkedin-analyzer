@@ -2,8 +2,11 @@
  * Time the real browser flow on a large export, with simulated slow devices
  * and a combined page-plus-worker heap budget.
  *
- * Builds the production bundle, serves it from a private preview server, and
- * for each run opens a fresh Chromium, uploads the export, and records:
+ * Builds the bundle in "measurement" mode, which raises the upload limits
+ * (128 MiB per file, 128 Mi characters, 1,000,000 rows; see
+ * web/src/shared/limits.js) so exports above the public limits can be timed.
+ * It serves the bundle from a private preview server, and for each run opens
+ * a fresh Chromium, uploads the export, and records:
  *   - time from file drop to the Analytics screen showing data,
  *   - time from file drop to the Messages screen showing data (opened after
  *     Analytics, so it includes the Analytics time),
@@ -402,7 +405,7 @@ async function main() {
         return 1;
     }
 
-    await buildApp();
+    await buildApp({ measurementLimits: true });
     const preview = startPreview(PORT);
     try {
         await waitForServer(BASE_URL, preview);

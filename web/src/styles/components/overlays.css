@@ -16,6 +16,11 @@
     display: none;
 }
 
+/* The lite effects tier skips the blur: the tint alone separates the overlay. */
+:root[data-effects="lite"] .progress-overlay {
+    backdrop-filter: none;
+}
+
 .progress-card {
     background: var(--bg-secondary);
     border: 2px solid var(--border-color);

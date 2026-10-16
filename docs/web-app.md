@@ -104,7 +104,7 @@ The app keeps uploaded CSV text and computed analytics in browser storage when I
 
 A session has a 24-hour inactivity limit. On startup, the app clears stored uploads and analytics when the last activity is older than that limit. Select **Clear data** to remove the stored files and analytics immediately. Clear data before you leave a shared or public computer.
 
-The app stores the theme preference, tutorial completion, and mini-tip state in `localStorage`. Those values do not contain CSV contents.
+The app stores the theme preference, the visual effects choice, tutorial completion, and mini-tip state in `localStorage`. Those values do not contain CSV contents.
 
 While an upload is processing, the app also keeps a small marker in `localStorage` so the next visit can tell whether the run finished. The marker holds a random run ID, the tab ID, start and heartbeat times, the combined file size rounded to a bucket such as "30 to 60 MB", and whether one file or several were processed. It holds no file names and no contents, and the app removes it when the run ends.
 
@@ -119,7 +119,7 @@ Diagnostics are disabled until both conditions hold:
 1. The build contains `VITE_SENTRY_DSN`.
 2. You select the diagnostics consent control.
 
-You can revoke consent from the footer. After consent, the app may send reduced error events, numeric performance measurements, and one `processing-unfinished` event when a processing run did not finish. That event carries only the size bucket, the device memory bucket where the browser exposes it, and whether one file or several were processed. It does not attach CSV text, file names, message bodies, contact names, URLs, DOM text, or arbitrary exception values.
+You can revoke consent from the footer. After consent, the app may send reduced error events, numeric performance measurements, and the visual effects tier in use, and one `processing-unfinished` event when a processing run did not finish. That event carries only the size bucket, the device memory bucket where the browser exposes it, and whether one file or several were processed. It does not attach CSV text, file names, message bodies, contact names, URLs, DOM text, or arbitrary exception values.
 
 CSP violation reports use the same-origin `/api/csp-report` endpoint when the deployment provides it. The endpoint accepts only POST requests, limits the body to 64 KiB, keeps a bounded set of violation metadata, strips URL queries and fragments, and returns `204` when forwarding is disabled. Configure server-side forwarding with `CSP_REPORT_URI` or `SENTRY_DSN`. These variables must not be exposed to the client.
 
@@ -138,6 +138,12 @@ The browser enforces these independent limits:
 A file above 25 MiB also receives a large-file warning before processing. The warning does not reject the file when it remains under the hard limits.
 
 The CLI uses a 100 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
+
+## Choose visual effects
+
+The app picks how much animation and decoration to show from what the device offers: CPU cores, memory where the browser reports it, the data-saver setting, and whether hardware-accelerated WebGL works. A low-end phone, an old PC, or a browser with data saver on gets the **Lite** tier: still drawings and simple moves, no blur or filters. Every number, chart, list, export, and control works the same in every tier.
+
+The round button under the theme toggle cycles through **Auto**, **Lite**, and **Full**. **Auto** uses the device's tier, and steps down for the rest of the session if animation makes the page stutter while idle. **Lite** turns decoration down on any device. **Full** shows the most the device can do. The choice is stored in this browser. Your system's reduced-motion setting always wins, and the setting never changes how files are processed.
 
 ## Use tutorials and themes
 

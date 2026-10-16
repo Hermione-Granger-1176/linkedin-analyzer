@@ -1260,6 +1260,14 @@
 }
 
 /* Draw the plane path as a dashed line. */
+/* The lite effects tier keeps Pip's transform and opacity moves but stops the
+   stroke-dashoffset ones, which repaint the path on every frame. */
+:root[data-effects="lite"] .pip-mark,
+:root[data-effects="lite"] .is-erasing .pip-erase-mark,
+:root[data-effects="lite"] .pip-trail {
+    animation: none;
+}
+
 .pip-trail {
     fill: none;
     stroke: var(--text-secondary);

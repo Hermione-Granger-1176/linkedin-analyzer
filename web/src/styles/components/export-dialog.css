@@ -12,6 +12,11 @@
     z-index: 320;
 }
 
+/* The lite effects tier skips the blur: the tint alone separates the dialog. */
+:root[data-effects="lite"] .export-dialog-backdrop {
+    backdrop-filter: none;
+}
+
 .export-dialog-backdrop[hidden] {
     display: none;
 }

@@ -59,6 +59,12 @@ Python implements the CLI cleaner under `src/linkedin_analyzer/`. JavaScript imp
 
 The export collects dashboard data from the feature workers and keeps names and message bodies behind independent confirmation choices. [ADR-008](adr/008-jspdf-for-the-save-as-pdf-export.md) records the dependency and export design.
 
+## How the effects tier is chosen
+
+`web/src/platform/device/capabilities.js` reads CPU cores, `navigator.deviceMemory`, Save-Data, the coarse-pointer query, and accelerated WebGL once, picks the `lite`, `standard`, or `rich` tier, and caches the profile. `web/src/shared/ui/effects.js` applies the tier as `data-effects` on the root element, wires the **Auto**, **Lite**, and **Full** toggle, and, under **Auto**, drops one tier when `web/src/platform/device/jank.js` sees repeated long animation frames while no processing or screen load is running. Stylesheets gate expensive effects on `:root[data-effects="lite"]`.
+
+The page ships marked `lite` and upgrades after the profile is known, because the CSP forbids the inline script that could set it before first paint. The WebGL probe is skipped under the **Lite** override. The tier controls decoration only: processing reads the raw signals, never the tier. [ADR-009](adr/009-device-tiers-for-effects.md) records the thresholds and rules.
+
 ## Keep delegated events safe
 
 Shared delegated click handlers use `web/src/shared/dom-events.js` and its `DomEvents.closest(event, selector)` helper. The helper handles targets that are text nodes or other non-Element values before it searches for the matching control, so screens do not repeat inconsistent `instanceof Element` guards.

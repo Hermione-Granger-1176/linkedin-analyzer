@@ -105,6 +105,10 @@ const DIAGNOSTIC_TAG_VALUES = Object.freeze({
     expectedType: new Set(["connections", "messages"]),
     exportType: new Set(["fading-conversations", "silent-connections", "top-contacts"]),
 });
+// Effects tiers from web/src/platform/device/capabilities.js, sent as one tag
+// on the session-metrics event.
+const EFFECTS_TIER_VALUES = new Set(["lite", "standard", "rich"]);
+let effectsTier = "";
 // Allowlisted values for the processing-unfinished event. They match the
 // buckets in run-tracker.js; anything else is dropped before transport.
 const UNFINISHED_RUN_VALUES = Object.freeze({
@@ -468,6 +472,9 @@ function reduceMetricEvent(event, environment, release) {
     const reduced = reduceBaseEvent(event, environment, release, "info");
     reduced.message = "session-metrics";
     reduced.tags = { "telemetry.type": "session-metrics" };
+    if (EFFECTS_TIER_VALUES.has(event.tags.effects)) {
+        reduced.tags.effects = event.tags.effects;
+    }
     reduced.extra = extra;
     return reduced;
 }
@@ -686,6 +693,15 @@ export function captureMetric(name, value) {
     }
 }
 
+/**
+ * Record the effects tier in use, sent as one allowlisted tag with session
+ * metrics so the owner can see which tiers real users get.
+ * @param {string} tier - lite, standard, or rich
+ */
+export function setTelemetryEffectsTier(tier) {
+    effectsTier = EFFECTS_TIER_VALUES.has(tier) ? tier : "";
+}
+
 /** Send buffered metrics as one fixed-schema numeric session event. */
 export function flushMetrics() {
     if (!sentryReady || metricBuffer.size === 0) {
@@ -704,11 +720,12 @@ export function flushMetrics() {
                 extra[`metric:${name}:count`] = entry.count;
             }
         }
-        Sentry.captureMessage("session-metrics", {
-            level: "info",
-            tags: { "telemetry.type": "session-metrics" },
-            extra,
-        });
+        /** @type {Record<string, string>} */
+        const tags = { "telemetry.type": "session-metrics" };
+        if (effectsTier) {
+            tags.effects = effectsTier;
+        }
+        Sentry.captureMessage("session-metrics", { level: "info", tags, extra });
     } catch {
         // Ignore Sentry failures.
     }

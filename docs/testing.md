@@ -144,6 +144,18 @@ make gen-large-export size_mb=30 dir=/tmp/export-30mb
 
 The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comments.csv` under the system temp directory by default and refuses to write inside the repository. The same size always produces the same bytes. The data has one self account, a few thousand contacts with stable profile URLs (including different people who share a name), conversation IDs tied to participants, multi-year dates, and message bodies with commas, quotes, line breaks, emoji, and non-Latin scripts.
 
+`make bench-browser` times the real browser flow. It builds the production bundle, serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
+
+```bash
+make bench-browser size_mb=55
+make bench-browser size_mb=100 cpu=6 gpu=0 mobile=1 budget_mb=300
+make bench-browser input_dir=data/input runs=5
+```
+
+`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
+
+CPU throttling slows only the page's main thread. Chromium rejects it on worker targets, and a measured worker loop ran at the same speed at rates 1 and 4, so throttled timings understate slow-device time for work done in workers.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

@@ -100,7 +100,7 @@ Message contents remain in the file you download. The browser does not upload or
 
 ## Understand where the app keeps data
 
-The app keeps uploaded CSV text and computed analytics in browser storage when IndexedDB is available. That storage lets the app restore uploads after a reload. If IndexedDB is unavailable or fails, the app uses memory and the data does not survive a reload.
+The app keeps your uploaded CSV files and computed analytics in browser storage when IndexedDB is available. That storage lets the app restore uploads after a reload. If IndexedDB is unavailable or fails, the app uses memory and the data does not survive a reload.
 
 A session has a 24-hour inactivity limit. On startup, the app clears stored uploads and analytics when the last activity is older than that limit. Select **Clear data** to remove the stored files and analytics immediately. Clear data before you leave a shared or public computer.
 

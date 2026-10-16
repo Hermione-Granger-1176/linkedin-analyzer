@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { MessagesAnalytics } from "../../../src/features/messages/analytics.js";
+import { expandEvents } from "../../helpers/message-events.js";
 
 describe("MessagesAnalytics", () => {
     it("builds message state when the Performance API is unavailable", () => {
@@ -21,7 +22,7 @@ describe("MessagesAnalytics", () => {
         try {
             const state = MessagesAnalytics.buildMessageState(rows);
             expect(state.contacts.size).toBe(1);
-            expect(state.events.length).toBe(1);
+            expect(state.events.timestamps.length).toBe(1);
         } finally {
             vi.unstubAllGlobals();
         }
@@ -49,7 +50,7 @@ describe("MessagesAnalytics", () => {
 
         const state = MessagesAnalytics.buildMessageState(rows);
         expect(state.contacts.size).toBe(1);
-        expect(state.events.length).toBe(1);
+        expect(state.events.timestamps.length).toBe(1);
         expect(state.skippedRows).toBe(1);
     });
 
@@ -83,7 +84,7 @@ describe("MessagesAnalytics", () => {
         expect(contact.url).toBe("https://linkedin.com/in/bob");
         expect(contact.name).toBe("Bob Smith");
         // Both events point at the single merged key.
-        const eventKeys = new Set(state.events.map((event) => event.contactKey));
+        const eventKeys = new Set(expandEvents(state.events).map((event) => event.contactKey));
         expect(eventKeys.size).toBe(1);
         expect([...eventKeys][0]).toBe(contact.key);
     });
@@ -117,7 +118,7 @@ describe("MessagesAnalytics", () => {
         const contact = [...state.contacts.values()][0];
         expect(contact.count).toBe(2);
         expect(contact.url).toBe("https://linkedin.com/in/bob");
-        const eventKeys = new Set(state.events.map((event) => event.contactKey));
+        const eventKeys = new Set(expandEvents(state.events).map((event) => event.contactKey));
         expect(eventKeys.size).toBe(1);
         expect([...eventKeys][0]).toBe(contact.key);
     });
@@ -145,29 +146,11 @@ describe("MessagesAnalytics", () => {
         expect(contactA.count).toBe(3);
         expect(contactB.count).toBe(2);
         const eventCounts = new Map();
-        state.events.forEach((event) => {
+        expandEvents(state.events).forEach((event) => {
             eventCounts.set(event.contactKey, (eventCounts.get(event.contactKey) || 0) + 1);
         });
         expect(eventCounts.get(contactA.key)).toBe(3);
         expect(eventCounts.get(contactB.key)).toBe(2);
-    });
-
-    it("resolveRemappedKey follows a remap chain to its end", () => {
-        const keyRemap = new Map([
-            ["a", "b"],
-            ["b", "c"]
-        ]);
-        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "a")).toBe("c");
-        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "z")).toBe("z");
-    });
-
-    it("resolveRemappedKey stops on a cyclic remap instead of looping", () => {
-        const keyRemap = new Map([
-            ["a", "b"],
-            ["b", "a"]
-        ]);
-        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "a")).toBe("b");
-        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "b")).toBe("a");
     });
 
     it("buildMessageState computes the outreach funnel", () => {
@@ -410,14 +393,14 @@ describe("MessagesAnalytics", () => {
     it("buildMessageState handles empty rows array", () => {
         const state = MessagesAnalytics.buildMessageState([]);
         expect(state.contacts.size).toBe(0);
-        expect(state.events.length).toBe(0);
+        expect(state.events.timestamps.length).toBe(0);
         expect(state.skippedRows).toBe(0);
     });
 
     it("buildMessageState handles non-array input gracefully", () => {
         const state = MessagesAnalytics.buildMessageState(null);
         expect(state.contacts.size).toBe(0);
-        expect(state.events.length).toBe(0);
+        expect(state.events.timestamps.length).toBe(0);
     });
 
     it("buildConnectionState handles non-array input gracefully", () => {
@@ -471,7 +454,7 @@ describe("MessagesAnalytics", () => {
         ];
         const state = MessagesAnalytics.buildMessageState(rows);
         expect(state.skippedRows).toBe(1);
-        expect(state.events.length).toBe(0);
+        expect(state.events.timestamps.length).toBe(0);
     });
 
     it("excludes impossible dates and invalid times from message analytics", () => {
@@ -490,8 +473,33 @@ describe("MessagesAnalytics", () => {
         const state = MessagesAnalytics.buildMessageState(rows);
 
         expect(state.skippedRows).toBe(2);
-        expect(state.events).toHaveLength(1);
+        expect(state.events.timestamps).toHaveLength(1);
         expect(state.rowTimestamps).toHaveLength(1);
+    });
+
+    it("grows the event columns past their first capacity", () => {
+        const start = new Date(2024, 0, 1).getTime();
+        const rows = Array.from({ length: 1500 }, (unused, index) => {
+            const date = new Date(start + index * 60000);
+            const pad = (value) => String(value).padStart(2, "0");
+            return {
+                FROM: "Alice",
+                TO: "Bob",
+                DATE: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:00`,
+                "SENDER PROFILE URL": "https://linkedin.com/in/alice",
+                "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob",
+            };
+        });
+
+        const state = MessagesAnalytics.buildMessageState(rows);
+
+        expect(state.rowTimestamps).toBeInstanceOf(Float64Array);
+        expect(state.rowTimestamps).toHaveLength(1500);
+        expect(state.rowTimestamps[1499]).toBe(start + 1499 * 60000);
+        expect(state.events.timestamps).toHaveLength(state.events.contactIds.length);
+        expect(state.events.timestamps.length).toBeGreaterThanOrEqual(1500);
+        const keys = new Set(expandEvents(state.events).map((event) => event.contactKey));
+        expect(keys).toEqual(new Set(state.contacts.keys()));
     });
 
     it("buildMessageState merges duplicate contacts by URL across rows", () => {
@@ -514,7 +522,7 @@ describe("MessagesAnalytics", () => {
         const state = MessagesAnalytics.buildMessageState(rows);
         // Only 'alice' is the non-self contact; self is detected and excluded
         // Contact count depends on self-detection; at minimum no throw
-        expect(state.events.length).toBeGreaterThanOrEqual(0);
+        expect(state.events.timestamps.length).toBeGreaterThanOrEqual(0);
     });
 
     it("normalizeUrl extracts URL from text with surrounding content", () => {
@@ -572,7 +580,7 @@ describe("MessagesAnalytics", () => {
         const state = MessagesAnalytics.buildMessageState(rows);
         // Both participants are anonymous so row is skipped
         expect(state.skippedRows).toBe(1);
-        expect(state.events.length).toBe(0);
+        expect(state.events.timestamps.length).toBe(0);
     });
 
     it("sanitizeParticipant returns null when both name and url are empty", () => {

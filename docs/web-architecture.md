@@ -27,7 +27,7 @@ Long CSV parses and analytics calculations run in Web Workers so the main thread
 
 The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. A multi-file upload therefore processes its files one after another, so only one file's parse state is alive at a time. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. Until stored files move to `Blob` records, the worker returns the decoded text with its result so the page can store it.
 
-The Connections and Messages screens keep their own workers and request counters. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable.
+The Connections and Messages screens keep their own workers and request counters. The Messages worker keeps one event per participant per message as typed-array columns, a contact ID and a timestamp, instead of one object each, and transfers those buffers to the page rather than copying them. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable.
 
 The message export has a separate `threads-worker.js` because the Messages screen intentionally drops message bodies from its in-memory aggregates. The worker reads the stored message file only when the user opts in to message contents for a PDF.
 

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { compactEvents } from "../../helpers/message-events.js";
+
 vi.mock("../../../src/platform/persistence/data-cache.js", () => {
     const values = new Map();
     const DataCache = {
@@ -120,8 +122,8 @@ function makeMessageState(overrides = {}) {
                 },
             ],
         ]),
-        events: [{ contactKey: "c1", timestamp }],
-        rowTimestamps: [timestamp],
+        events: compactEvents([{ contactKey: "c1", timestamp }]),
+        rowTimestamps: Float64Array.of(timestamp),
         skippedRows: 0,
         talkedNameKeys: new Set(["ada lovelace"]),
         talkedUrlKeys: new Set(["https://linkedin.com/in/ada"]),
@@ -305,8 +307,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(["https://linkedin.com/in/ada"]),
@@ -356,8 +358,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 2,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(),
@@ -400,8 +402,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(),
@@ -440,8 +442,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -531,8 +533,8 @@ describe("MessagesPage", () => {
                     { name: "Ada Lovelace", url: "https://li.com/ada", lastTimestamp: timestamp },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(["https://li.com/ada"]),
@@ -585,8 +587,8 @@ describe("MessagesPage", () => {
         const timestamp = new Date("2024-01-15").getTime();
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -658,8 +660,8 @@ describe("MessagesPage", () => {
                     { name: "Old Friend", url: "https://li.com/old", lastTimestamp: oldTimestamp },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp: oldTimestamp }],
-            rowTimestamps: [oldTimestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp: oldTimestamp }]),
+            rowTimestamps: Float64Array.of(oldTimestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["old friend"]),
             talkedUrlKeys: new Set(["https://li.com/old"]),
@@ -720,8 +722,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp: recentTimestamp }],
-            rowTimestamps: [recentTimestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp: recentTimestamp }]),
+            rowTimestamps: Float64Array.of(recentTimestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["active person"]),
             talkedUrlKeys: new Set(["https://li.com/active"]),
@@ -776,8 +778,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -838,8 +840,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Fading Fred", url: "https://li.com/fred", lastTimestamp: oldTs }],
             ]),
-            events: [{ contactKey: "c1", timestamp: oldTs }],
-            rowTimestamps: [oldTs],
+            events: compactEvents([{ contactKey: "c1", timestamp: oldTs }]),
+            rowTimestamps: Float64Array.of(oldTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["fading fred"]),
             talkedUrlKeys: new Set(["https://li.com/fred"]),
@@ -897,8 +899,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Ada", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada"]),
             talkedUrlKeys: new Set(),
@@ -950,8 +952,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Ada", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada"]),
             talkedUrlKeys: new Set(),
@@ -1174,8 +1176,8 @@ describe("MessagesPage", () => {
             totalInputRows: 5,
             messageState: {
                 contacts: [{ key: "c1", name: "Hydra Test", url: "", lastTimestamp: timestamp }],
-                events: [{ contactKey: "c1", timestamp }],
-                rowTimestamps: [timestamp],
+                events: compactEvents([{ contactKey: "c1", timestamp }]),
+                rowTimestamps: Float64Array.of(timestamp),
                 skippedRows: 0,
                 talkedNameKeys: ["hydra test"],
                 talkedUrlKeys: [],
@@ -1248,8 +1250,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Ada", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada"]),
             talkedUrlKeys: new Set(),
@@ -1321,8 +1323,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Timeout User", url: "", lastTimestamp: timestamp }],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["timeout user"]),
             talkedUrlKeys: new Set(),
@@ -1386,8 +1388,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "No Worker", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["no worker"]),
             talkedUrlKeys: new Set(),
@@ -1510,8 +1512,8 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map(),
-            events: [], // empty, triggers the "No usable rows" path
-            rowTimestamps: [],
+            events: compactEvents([]), // empty, triggers the "No usable rows" path
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -1782,11 +1784,11 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Top Guy", url: "", lastTimestamp: now }],
                 ["c2", { name: "Old Pal", url: "https://li.com/pal", lastTimestamp: oldTs }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: now },
                 { contactKey: "c2", timestamp: oldTs },
-            ],
-            rowTimestamps: [now, oldTs],
+            ]),
+            rowTimestamps: Float64Array.of(now, oldTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["top guy", "old pal"]),
             talkedUrlKeys: new Set(["https://li.com/pal"]),
@@ -1844,8 +1846,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Active Conn", url: "https://li.com/ac", lastTimestamp: recentTs }],
             ]),
-            events: [{ contactKey: "c1", timestamp: recentTs }],
-            rowTimestamps: [recentTs],
+            events: compactEvents([{ contactKey: "c1", timestamp: recentTs }]),
+            rowTimestamps: Float64Array.of(recentTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["active conn"]),
             talkedUrlKeys: new Set(["https://li.com/ac"]),
@@ -1900,8 +1902,8 @@ describe("MessagesPage", () => {
         // No message events = no top contacts
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -2117,8 +2119,8 @@ describe("MessagesPage", () => {
                 // url is empty, forces name-key lookup in findMatchingConnection
                 ["c1", { name: "Name Match", url: "", lastTimestamp: oldTs }],
             ]),
-            events: [{ contactKey: "c1", timestamp: oldTs }],
-            rowTimestamps: [oldTs],
+            events: compactEvents([{ contactKey: "c1", timestamp: oldTs }]),
+            rowTimestamps: Float64Array.of(oldTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["name match"]),
             talkedUrlKeys: new Set(),
@@ -2185,8 +2187,8 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "DB User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["db user"]),
             talkedUrlKeys: new Set(),
@@ -2246,8 +2248,8 @@ describe("MessagesPage", () => {
         LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "Throw User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["throw user"]),
             talkedUrlKeys: new Set(),
@@ -2302,8 +2304,8 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "Err User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["err user"]),
             talkedUrlKeys: new Set(),
@@ -2386,8 +2388,8 @@ describe("MessagesPage", () => {
         LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["user"]),
             talkedUrlKeys: new Set(),
@@ -2445,11 +2447,11 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Recent Contact", url: "", lastTimestamp: recent }],
                 ["c2", { name: "Old Contact", url: "", lastTimestamp: old }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: recent },
                 { contactKey: "c2", timestamp: old },
-            ],
-            rowTimestamps: [recent, old],
+            ]),
+            rowTimestamps: Float64Array.of(recent, old),
             skippedRows: 0,
             talkedNameKeys: new Set(["recent contact", "old contact"]),
             talkedUrlKeys: new Set(),
@@ -2501,8 +2503,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["link person"]),
             talkedUrlKeys: new Set(["https://linkedin.com/in/link"]),
@@ -2548,8 +2550,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["sneaky person"]),
             talkedUrlKeys: new Set([]),
@@ -2635,8 +2637,8 @@ describe("MessagesPage", () => {
                             contacts: [
                                 { key: "c1", name: "Hyd User", url: "", lastTimestamp: oldTs },
                             ],
-                            events: [{ contactKey: "c1", timestamp: oldTs }],
-                            rowTimestamps: [oldTs],
+                            events: compactEvents([{ contactKey: "c1", timestamp: oldTs }]),
+                            rowTimestamps: Float64Array.of(oldTs),
                             skippedRows: 0,
                             talkedNameKeys: ["hyd user"],
                             talkedUrlKeys: [],
@@ -2679,8 +2681,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -2791,12 +2793,12 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Repeat Contact", url: "", lastTimestamp: t2 }],
                 ["c2", { name: "Single Contact", url: "", lastTimestamp: t1 }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: t1 },
                 { contactKey: "c1", timestamp: t2 }, // second event for c1
                 { contactKey: "c2", timestamp: t1 },
-            ],
-            rowTimestamps: [t1, t2, t1],
+            ]),
+            rowTimestamps: Float64Array.of(t1, t2, t1),
             skippedRows: 0,
             talkedNameKeys: new Set(["repeat contact", "single contact"]),
             talkedUrlKeys: new Set(),
@@ -2849,8 +2851,8 @@ describe("MessagesPage", () => {
         };
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -2925,11 +2927,11 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Old Fader", url: "https://li.com/old", lastTimestamp: t1 }],
                 ["c2", { name: "New Fader", url: "https://li.com/new", lastTimestamp: t2 }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: t1 },
                 { contactKey: "c2", timestamp: t2 },
-            ],
-            rowTimestamps: [t1, t2],
+            ]),
+            rowTimestamps: Float64Array.of(t1, t2),
             skippedRows: 0,
             talkedNameKeys: new Set(["old fader", "new fader"]),
             talkedUrlKeys: new Set(["https://li.com/old", "https://li.com/new"]),
@@ -2983,8 +2985,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Old Timer", url: "", lastTimestamp: old }]]),
-            events: [{ contactKey: "c1", timestamp: old }],
-            rowTimestamps: [old],
+            events: compactEvents([{ contactKey: "c1", timestamp: old }]),
+            rowTimestamps: Float64Array.of(old),
             skippedRows: 0,
             talkedNameKeys: new Set(["old timer"]),
             talkedUrlKeys: new Set(),
@@ -3081,8 +3083,8 @@ describe("MessagesPage", () => {
                                 { key: "", name: "No Key User" }, // empty key, should be skipped
                                 { key: "c1", name: "Valid User", url: "", lastTimestamp: now },
                             ],
-                            events: [{ contactKey: "c1", timestamp: now }],
-                            rowTimestamps: [now],
+                            events: compactEvents([{ contactKey: "c1", timestamp: now }]),
+                            rowTimestamps: Float64Array.of(now),
                             skippedRows: 0,
                             talkedNameKeys: ["valid user"],
                             talkedUrlKeys: [],
@@ -3109,8 +3111,8 @@ describe("MessagesPage", () => {
         const timestamp = new Date("2024-06-01").getTime();
         return {
             contacts: [{ key: "c1", name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: ["ada lovelace"],
             talkedUrlKeys: [],
@@ -3276,8 +3278,8 @@ describe("MessagesPage", () => {
                 contacts: [
                     { key: "c1", name: "Old Friend", url: "https://li.com/old", lastTimestamp: old },
                 ],
-                events: [{ contactKey: "c1", timestamp: old }],
-                rowTimestamps: [old],
+                events: compactEvents([{ contactKey: "c1", timestamp: old }]),
+                rowTimestamps: Float64Array.of(old),
                 skippedRows: 0,
                 talkedNameKeys: ["old friend"],
                 talkedUrlKeys: ["https://li.com/old"],
@@ -3501,8 +3503,8 @@ describe("MessagesPage", () => {
             totalInputRows: 1,
             messageState: {
                 contacts: [{ key: "c1", name: "Ancient", url: "", lastTimestamp: ancient }],
-                events: [{ contactKey: "c1", timestamp: ancient }],
-                rowTimestamps: [ancient],
+                events: compactEvents([{ contactKey: "c1", timestamp: ancient }]),
+                rowTimestamps: Float64Array.of(ancient),
                 skippedRows: 0,
                 talkedNameKeys: ["ancient"],
                 talkedUrlKeys: [],

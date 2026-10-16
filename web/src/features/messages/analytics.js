@@ -41,12 +41,14 @@ export const MessagesAnalytics = (() => {
         // under, so the same person seen once with a profile URL and once without
         // folds into one contact instead of splitting across a url: and a name: key.
         const nameToKey = new Map();
-        // Records name: -> url: re-keys (see promotion below) so events pushed
-        // under the old name key can be rewritten to the canonical key afterward;
-        // range views join events back to contacts by key and would otherwise split.
-        const keyRemap = new Map();
-        const events = [];
-        const rowTimestamps = [];
+        // Events are stored as columns, one entry per participant per row: a
+        // contact ID and a timestamp. A contact keeps its ID when it is promoted
+        // from a name: key to a url: key, so earlier events follow the merge.
+        const contactIds = new Map();
+        const contactKeys = [];
+        const eventContactIds = createGrowableColumn(Int32Array);
+        const eventTimestamps = createGrowableColumn(Float64Array);
+        const rowTimestamps = createGrowableColumn(Float64Array);
         const talkedNameKeys = new Set();
         const talkedUrlKeys = new Set();
         // Outreach-funnel accumulators, filled in the same pass as the contact
@@ -131,9 +133,9 @@ export const MessagesAnalytics = (() => {
                         // later URL-bearing rows find it directly.
                         existing = mapped;
                         contacts.delete(mapped.key);
-                        keyRemap.set(mapped.key, contactKey);
                         existing.key = contactKey;
                         contacts.set(contactKey, existing);
+                        contactKeys[/** @type {number} */ (contactIds.get(existing))] = contactKey;
                     }
                 }
 
@@ -158,6 +160,8 @@ export const MessagesAnalytics = (() => {
                         lastTimestamp: timestamp
                     };
                     contacts.set(contactKey, existing);
+                    contactIds.set(existing, contactKeys.length);
+                    contactKeys.push(contactKey);
                 }
 
                 // Sanitized participants normally produce both keys. Keep these
@@ -176,7 +180,8 @@ export const MessagesAnalytics = (() => {
                     talkedUrlKeys.add(contact.url);
                 }
 
-                events.push({ contactKey, timestamp });
+                eventContactIds.push(/** @type {number} */ (contactIds.get(existing)));
+                eventTimestamps.push(timestamp);
 
                 // For a self-sent row the sender is self, so the non-self
                 // participants are exactly its recipients, so mark each as outreach.
@@ -188,23 +193,44 @@ export const MessagesAnalytics = (() => {
             latestTimestamp = Math.max(latestTimestamp, timestamp);
         });
 
-        // Repoint events pushed under a name: key that was later promoted to a
-        // url: key, so range-based aggregation joins them to the merged contact.
-        if (keyRemap.size) {
-            events.forEach((event) => {
-                event.contactKey = resolveRemappedKey(keyRemap, event.contactKey);
-            });
-        }
-
         return {
             contacts,
-            events,
-            rowTimestamps,
+            events: {
+                contactKeys,
+                contactIds: eventContactIds.toArray(),
+                timestamps: eventTimestamps.toArray(),
+            },
+            rowTimestamps: rowTimestamps.toArray(),
             skippedRows,
             talkedNameKeys,
             talkedUrlKeys,
             latestTimestamp,
             outreach: summarizeOutreach(conversations, contactStats, sentMessages, receivedMessages)
+        };
+    }
+
+    /**
+     * Create a typed-array column that doubles its capacity as values arrive.
+     * @param {Int32ArrayConstructor|Float64ArrayConstructor} ArrayType - Typed array to store values in
+     * @returns {{push: (value: number) => void, toArray: () => Int32Array|Float64Array}} toArray copies
+     * the values into an exact-length array, so its buffer can be transferred whole.
+     */
+    function createGrowableColumn(ArrayType) {
+        let values = new ArrayType(1024);
+        let length = 0;
+        return {
+            push(value) {
+                if (length === values.length) {
+                    const grown = new ArrayType(length * 2);
+                    grown.set(values);
+                    values = grown;
+                }
+                values[length] = value;
+                length += 1;
+            },
+            toArray() {
+                return values.slice(0, length);
+            },
         };
     }
 
@@ -822,27 +848,6 @@ export const MessagesAnalytics = (() => {
     }
 
     /**
-     * Follow a chain of key remaps to its final key. A repeated key stops the
-     * walk, so a cyclic map cannot loop forever.
-     * @param {Map<string, string>} keyRemap - Old key to new key
-     * @param {string} key - Key to resolve
-     * @returns {string}
-     */
-    function resolveRemappedKey(keyRemap, key) {
-        const visited = new Set([key]);
-        let resolved = key;
-        while (keyRemap.has(resolved)) {
-            const next = /** @type {string} */ (keyRemap.get(resolved));
-            if (visited.has(next)) {
-                break;
-            }
-            visited.add(next);
-            resolved = next;
-        }
-        return resolved;
-    }
-
-    /**
      * Trim any value into a string.
      * @param {unknown} value - Raw value
      * @returns {string}
@@ -867,9 +872,6 @@ export const MessagesAnalytics = (() => {
         // breaks coverage ties by insertion order, which the export must not.
         isSelfContact,
         extractParticipantsFromRow,
-        buildContactKey,
-        // Exposed for tests: buildMessageState no longer produces a cyclic
-        // remap, so the cycle guard is only reachable directly.
-        resolveRemappedKey
+        buildContactKey
     };
 })();

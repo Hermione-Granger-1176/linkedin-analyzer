@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { processPayload } from "../../../src/features/messages/messages-worker.js";
+import { processPayload, transferablesOf } from "../../../src/features/messages/messages-worker.js";
 
 const VALID_MESSAGES_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
@@ -22,6 +22,19 @@ describe("messages worker", () => {
         expect(result.success).toBe(true);
         expect(result.messagesData.length).toBe(0);
         expect(result.connectionError).toBe(null);
+    });
+
+    it("transferablesOf lists the event and row timestamp buffers", () => {
+        const result = processPayload({ messagesCsv: VALID_MESSAGES_CSV });
+        const { events, rowTimestamps } = result.messageState;
+
+        expect(events.contactIds).toBeInstanceOf(Int32Array);
+        expect(transferablesOf(result)).toEqual([
+            events.contactIds.buffer,
+            events.timestamps.buffer,
+            rowTimestamps.buffer,
+        ]);
+        expect(transferablesOf({ success: false, error: "bad" })).toEqual([]);
     });
 
     it("processPayload returns error for invalid messages CSV", () => {
@@ -104,6 +117,7 @@ describe("messages worker", () => {
         expect(msg.type).toBe("processed");
         expect(msg.requestId).toBe("req-42");
         expect(msg.payload.success).toBe(true);
+        expect(postMessageSpy.mock.calls[0][1]).toHaveLength(3);
 
         postMessageSpy.mockRestore();
     });

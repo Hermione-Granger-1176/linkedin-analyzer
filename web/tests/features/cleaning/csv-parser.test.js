@@ -251,6 +251,19 @@ describe("createCsvRowParser errors and lifecycle", () => {
     });
 });
 
+describe("createCsvRowParser column limit at a row ending", () => {
+    it.each([
+        ["LF", "\n"],
+        ["CR", "\r"],
+    ])("reports too many columns when a %s ends the row", (_name, ending) => {
+        const text = `${",".repeat(256)}${ending}next`;
+        expect(parseChunks([text])).toEqual({
+            rows: [],
+            error: "CSV parsing error: too many columns in a row.",
+        });
+    });
+});
+
 describe("createCsvRowParser row limit", () => {
     it("counts every row, empty ones included, toward the row limit", async () => {
         vi.resetModules();

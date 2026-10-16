@@ -28,10 +28,19 @@ const COLUMNS = Object.freeze(
             read:
                 column.name === BODY_COLUMN
                     ? messageBodyText
-                    : CLEANERS[column.cleaner] || cleanValue,
+                    : CLEANERS[
+                          /** @type {import("../cleaning/field-cleaners.js").CleanerName} */ (
+                              column.cleaner
+                          )
+                      ] || cleanValue,
         }),
     ),
 );
+
+/**
+ * One parsed messages row, keyed by CSV column name.
+ * @typedef {Record<string, string>} MessageRow
+ */
 
 /**
  * Take the message body exactly as the CSV tokenizer produced it.
@@ -57,7 +66,7 @@ function messageBodyText(value) {
 /**
  * Parse a messages CSV for the PDF export, preserving message bodies verbatim.
  * @param {string} csvText - Raw messages CSV text
- * @returns {{success: boolean, rows: object[], error: string|null}} Parsed rows
+ * @returns {{success: boolean, rows: MessageRow[], error: string|null}} Parsed rows
  */
 export function parseMessagesForExport(csvText) {
     const parsed = LinkedInCleaner.parseCSV(csvText, FILE_TYPE);
@@ -74,8 +83,10 @@ export function parseMessagesForExport(csvText) {
         };
     }
 
+    /** @type {MessageRow[]} */
     const rows = [];
     for (const raw of parsed.data) {
+        /** @type {MessageRow} */
         const row = {};
         for (const column of COLUMNS) {
             row[column.name] = column.read(raw[column.name]);

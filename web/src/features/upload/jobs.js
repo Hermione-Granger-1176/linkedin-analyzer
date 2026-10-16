@@ -8,6 +8,13 @@
  */
 
 /**
+ * An upload waiting for the worker to process it.
+ * @typedef {object} PendingUpload
+ * @property {string} fileName - Original file name
+ * @property {File} file - The uploaded File, stored once the worker accepts it
+ */
+
+/**
  * Build a unique job ID for pending file processing.
  * @param {File} file - Uploaded file
  * @returns {string}
@@ -18,10 +25,10 @@ export function createJobId(file) {
 
 /**
  * Consume a pending upload entry for a processed worker job.
- * @param {Map<string, object>} pendingFiles - Pending uploads by job ID
+ * @param {Map<string, PendingUpload>} pendingFiles - Pending uploads by job ID
  * @param {string|null} jobId - Worker job ID
  * @param {string} fileName - Original file name
- * @returns {{fileName: string, file: File}|null}
+ * @returns {PendingUpload|null}
  */
 export function consumePendingFile(pendingFiles, jobId, fileName) {
     if (jobId && pendingFiles.has(jobId)) {
@@ -46,7 +53,7 @@ export function consumePendingFile(pendingFiles, jobId, fileName) {
 /**
  * Resolve a job ID from explicit ID, file name, or active queue fallback.
  * @param {Set<string>} activeJobs - In-flight job IDs
- * @param {Map<string, object>} pendingFiles - Pending uploads by job ID
+ * @param {Map<string, PendingUpload>} pendingFiles - Pending uploads by job ID
  * @param {string|null} jobId - Worker job ID
  * @param {string} fileName - Uploaded file name fallback
  * @returns {string|null}
@@ -67,7 +74,7 @@ export function resolveJobId(activeJobs, pendingFiles, jobId, fileName) {
 
 /**
  * Resolve pending job ID by uploaded file name.
- * @param {Map<string, object>} pendingFiles - Pending uploads by job ID
+ * @param {Map<string, PendingUpload>} pendingFiles - Pending uploads by job ID
  * @param {string} fileName - Uploaded file name
  * @returns {string|null}
  */

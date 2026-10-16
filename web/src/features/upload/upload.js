@@ -26,6 +26,12 @@ import {
     hasAnalyticsMonths,
 } from "./state.js";
 
+/** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+/** @typedef {import("../../app/worker-contracts.js").FileProcessedPayload} FileProcessedPayload */
+/** @typedef {import("../../app/worker-contracts.js").PlainObject} PlainObject */
+/** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
+/** @typedef {import("./state.js").UploadFileMap} UploadFileMap */
+
 export const UploadPage = (() => {
     "use strict";
 
@@ -74,30 +80,50 @@ export const UploadPage = (() => {
     const JOB_TIMEOUT_MS = 45000;
     const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024;
 
+    /**
+     * @param {number} count - Row count
+     * @returns {string} Count with its unit, e.g. "1 row"
+     */
     function formatRows(count) {
         return `${count} ${count === 1 ? "row" : "rows"}`;
     }
 
+    /**
+     * @param {unknown} error - Caught value
+     * @param {string} fallback - Message when the error has none
+     * @returns {string}
+     */
     function toErrorMessage(error, fallback) {
         return error instanceof Error && error.message ? error.message : fallback;
     }
 
+    /** @type {Worker|null} */
     let worker = null;
+    /** @type {Map<string, import("./jobs.js").PendingUpload>} */
     const pendingFiles = new Map();
+    /** @type {Set<string>} */
     const activeJobs = new Set();
+    /** @type {Map<string, number>} */
     const jobTimeouts = new Map();
     let initialized = false;
+    /** @type {string|null} */
     let lastPrimedSignature = null;
+    /** @type {Promise<void>|null} */
     let restorePromise = null;
     let restoredOnce = false;
+    /** @type {number|null} */
     let primeTimerId = null;
+    /** @type {number|null} */
     let primeIdleId = null;
+    /** @type {{signature: string}|null} */
     let pendingPrimePayload = null;
+    /** @type {Promise<void>|null} */
     let primeInFlight = null;
     let storagePersistenceRequested = false;
     // Restart throttle: at most MAX_WORKER_RESTARTS within WORKER_RESTART_WINDOW_MS.
     const MAX_WORKER_RESTARTS = 3;
     const WORKER_RESTART_WINDOW_MS = 10000;
+    /** @type {number[]} */
     let workerRestartTimes = [];
 
     /** Initialize the upload page. */
@@ -189,7 +215,9 @@ export const UploadPage = (() => {
         if (!worker) {
             return;
         }
-        const cachedFiles = DataCache.get("storage:files");
+        const cachedFiles = /** @type {StoredFileMetadata[]|undefined} */ (
+            DataCache.get("storage:files")
+        );
         if (cachedFiles) {
             scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "idle" });
         }
@@ -347,7 +375,9 @@ export const UploadPage = (() => {
 
     /** Sync upload status from cache when available, otherwise restore from storage. */
     function syncStatusFromCache() {
-        const files = DataCache.get("storage:files");
+        const files = /** @type {StoredFileMetadata[]|undefined} */ (
+            DataCache.get("storage:files")
+        );
         const analyticsReady = getAnalyticsReadyFromCache();
 
         if (!files || analyticsReady === null) {
@@ -481,7 +511,9 @@ export const UploadPage = (() => {
             // page keeps the File to store once the worker accepts it.
             pendingFiles.set(jobId, { fileName: file.name, file });
             try {
-                worker.postMessage({
+                // Checked above. A restart during the prime await can null it,
+                // and the throw lands in the catch below, as before.
+                /** @type {Worker} */ (worker).postMessage({
                     type: "addFile",
                     payload: {
                         file,
@@ -593,7 +625,7 @@ export const UploadPage = (() => {
 
     /**
      * Persist processed worker payload and refresh upload status.
-     * @param {object} payload - Worker payload for fileProcessed
+     * @param {FileProcessedPayload} payload - Worker payload for fileProcessed
      */
     async function handleFileProcessedMessage(payload) {
         const fileType = payload.fileType;
@@ -679,7 +711,7 @@ export const UploadPage = (() => {
      * @param {string} fileName - Uploaded file name
      * @param {Blob} blob - The uploaded File
      * @param {number} rowCount - Processed row count
-     * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @param {PlainObject|null|undefined} analyticsBase - Optional analytics aggregate base
      * @returns {Promise<void>}
      */
     async function persistProcessedFile(fileType, fileName, blob, rowCount, analyticsBase) {
@@ -693,7 +725,7 @@ export const UploadPage = (() => {
     /**
      * Sync in-memory caches and notify listeners after file persistence.
      * @param {string} fileType - Processed file type
-     * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @param {PlainObject|null|undefined} analyticsBase - Optional analytics aggregate base
      * @returns {Promise<void>}
      */
     async function syncCacheAfterProcessedFile(fileType, analyticsBase) {
@@ -722,7 +754,7 @@ export const UploadPage = (() => {
     /**
      * Sync type-specific file cache entries.
      * @param {string} fileType - Processed file type
-     * @param {object[]} files - Stored files snapshot
+     * @param {StoredFileMetadata[]} files - Stored files snapshot
      */
     function syncTypeSpecificFileCache(fileType, files) {
         const key = getTypeSpecificFileCacheKey(fileType);
@@ -741,10 +773,12 @@ export const UploadPage = (() => {
 
     /**
      * Read files from cache when available, otherwise from storage.
-     * @returns {Promise<object[]>}
+     * @returns {Promise<StoredFileMetadata[]>}
      */
     async function getStoredFilesSnapshot() {
-        const files = DataCache.get("storage:files");
+        const files = /** @type {StoredFileMetadata[]|undefined} */ (
+            DataCache.get("storage:files")
+        );
         if (files) {
             return files;
         }
@@ -807,7 +841,8 @@ export const UploadPage = (() => {
      * Update a single file type's status indicator and label.
      * @param {HTMLElement|null} statusItem - The .file-status-item element
      * @param {HTMLElement|null} statusLabel - The status text element
-     * @param {object|null} fileData - Stored file record, or null if not uploaded
+     * @param {{rowCount: number}|null|undefined} fileData - Stored file record, or null if
+     * not uploaded
      */
     function updateFileStatus(statusItem, statusLabel, fileData) {
         if (!statusItem || !statusLabel) {
@@ -824,7 +859,7 @@ export const UploadPage = (() => {
 
     /**
      * Update the upload page UI to reflect current file and analytics state.
-     * @param {{fileMap: {[key: string]: object|null}, analyticsReady: boolean}} status
+     * @param {{fileMap: UploadFileMap, analyticsReady: boolean}} status
      */
     function updateStatus({ fileMap, analyticsReady }) {
         STATUS_ITEMS.forEach(({ type, item, label }) => {
@@ -845,8 +880,8 @@ export const UploadPage = (() => {
 
     /**
      * Build a fixed file map for all tracked types.
-     * @param {object[]} files - Stored file records
-     * @returns {{shares: object|null, comments: object|null, messages: object|null, connections: object|null}}
+     * @param {readonly unknown[]} files - Stored file records
+     * @returns {UploadFileMap}
      */
     function getFileMap(files) {
         const map = createEmptyFileMap();
@@ -873,7 +908,9 @@ export const UploadPage = (() => {
      * @returns {Promise<boolean>}
      */
     async function hasAnalyticsData() {
-        let analyticsBase = DataCache.get("storage:analyticsBase") || null;
+        let analyticsBase = /** @type {StoredAnalytics|null} */ (
+            DataCache.get("storage:analyticsBase") || null
+        );
         if (!analyticsBase) {
             analyticsBase = await Storage.getAnalytics();
             DataCache.set("storage:analyticsBase", analyticsBase);
@@ -886,7 +923,9 @@ export const UploadPage = (() => {
      * @returns {boolean|null}
      */
     function getAnalyticsReadyFromCache() {
-        const analyticsBase = DataCache.get("storage:analyticsBase") || null;
+        const analyticsBase = /** @type {StoredAnalytics|null} */ (
+            DataCache.get("storage:analyticsBase") || null
+        );
         if (!analyticsBase) {
             return null;
         }
@@ -903,7 +942,9 @@ export const UploadPage = (() => {
      * @returns {Promise<void>}
      */
     async function primeWorkerFromStoredFiles() {
-        let cachedFiles = DataCache.get("storage:files");
+        let cachedFiles = /** @type {StoredFileMetadata[]|undefined} */ (
+            DataCache.get("storage:files")
+        );
         if (!cachedFiles) {
             const files = await Storage.getAllFiles();
             cachedFiles = files.map(toStoredFileMetadata);
@@ -922,7 +963,7 @@ export const UploadPage = (() => {
      * actually fires (see primeAnalyticsWorkerNow). Uses idle scheduling unless
      * priority is immediate, in which case it returns the prime promise so callers
      * can await the restoreFiles being posted.
-     * @param {{shares: object|null, comments: object|null, connections?: object|null}} fileMap - Stored files map
+     * @param {UploadFileMap} fileMap - Stored files map
      * @param {{priority?: 'idle'|'immediate'}} [options] - Scheduling options
      * @returns {Promise<void>|void}
      */

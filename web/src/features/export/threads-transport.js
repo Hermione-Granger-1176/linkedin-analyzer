@@ -43,6 +43,8 @@ export function terminateThreadsWorker() {
     transport.terminate();
 }
 
+/** @typedef {import("./threads.js").SelectedThread} SelectedThread */
+
 /**
  * Select recent message threads for the export.
  *
@@ -52,7 +54,7 @@ export function terminateThreadsWorker() {
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string|null} connectionsCsv - Stored connections upload, CSV text, or nothing
  * @param {{people?: number, messagesPerPerson?: number, isCancelled?: () => boolean}} [options] - Selection limits and the run's cancellation check
- * @returns {Promise<object[]>} Selected threads, newest conversation first
+ * @returns {Promise<SelectedThread[]>} Selected threads, newest conversation first
  */
 export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {}) {
     const text = toCsvSource(messagesCsv);
@@ -111,7 +113,7 @@ export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string} connectionsCsv - Stored connections upload, CSV text, or an empty string
  * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
- * @returns {Promise<object[]|null|typeof CANCELLED|typeof FAILED>} Threads, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
+ * @returns {Promise<SelectedThread[]|null|typeof CANCELLED|typeof FAILED>} Threads, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */
 function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
     return transport.request({
@@ -144,9 +146,9 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
- * @param {object} message - Parsed worker message
+ * @param {import("../../app/worker-contracts.js").ThreadsWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
- * @returns {object[]|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
+ * @returns {SelectedThread[]|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
 function interpretReply(message, context) {
     if (!message.payload.success) {
@@ -164,7 +166,9 @@ function interpretReply(message, context) {
     if (message.requestId !== context.requestId) {
         return PENDING;
     }
-    return message.payload.threads;
+    // The contract checks only that this is an array; the worker built it with
+    // `selectRecentThreads`, the same selector the fallback below runs.
+    return /** @type {SelectedThread[]} */ (message.payload.threads);
 }
 
 /**
@@ -172,7 +176,7 @@ function interpretReply(message, context) {
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {string} connectionsCsv - Raw connections CSV text
  * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
- * @returns {object[]} Selected threads
+ * @returns {SelectedThread[]} Selected threads
  */
 function selectThreadsOnMainThread(messagesCsv, connectionsCsv, options) {
     const result = parseMessagesForExport(messagesCsv);

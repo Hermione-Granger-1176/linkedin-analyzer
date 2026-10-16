@@ -3,13 +3,47 @@
 import { MessagesAnalytics } from "./analytics.js";
 import { MS_PER_DAY } from "./format.js";
 
+/** @typedef {import("./analytics.js").MessageState} MessageState */
+/** @typedef {import("./analytics.js").ConnectionState} ConnectionState */
+/** @typedef {import("./analytics.js").Connection} Connection */
+
+/**
+ * One contact's message totals inside the selected range.
+ * @typedef {object} RangeContact
+ * @property {string} key - Contact key
+ * @property {string} name - Display name ("Unknown" when the contact is missing)
+ * @property {string} url - Normalized profile URL, or ""
+ * @property {number} count - Messages in range
+ * @property {number} lastTimestamp - Latest in-range message timestamp (ms)
+ */
+
+/**
+ * Top contacts for a range, with range totals.
+ * @typedef {object} TopContactsResult
+ * @property {RangeContact[]} items - Contacts, most messages first
+ * @property {number} totalMessages - Participant events in range
+ * @property {number} totalRows - Message rows in range
+ * @property {number} totalPeople - Distinct contacts in range
+ */
+
+/**
+ * A connection that has gone quiet: no message in the past 30 days.
+ * @typedef {object} FadingConversation
+ * @property {string} name - Contact name
+ * @property {string} url - Profile URL, or ""
+ * @property {number} daysSince - Whole days since the last message
+ * @property {number} lastTimestamp - Latest message timestamp (ms)
+ * @property {string} company - Company from the connection record
+ */
+
 /**
  * Aggregate top contacts for the selected range.
- * @param {object} messageState - Message analytics state
+ * @param {MessageState} messageState - Message analytics state
  * @param {number|null} rangeStart - Start timestamp for selected range
- * @returns {{items: object[], totalMessages: number, totalRows: number, totalPeople: number}}
+ * @returns {TopContactsResult}
  */
 export function getTopContactsInRange(messageState, rangeStart) {
+    /** @type {Map<string, {count: number, lastTimestamp: number}>} */
     const rangeCounts = new Map();
     const { contactKeys, contactIds, timestamps } = messageState.events;
 
@@ -70,9 +104,9 @@ export function getTopContactsInRange(messageState, rangeStart) {
 
 /**
  * Get connections that have no messages at all.
- * @param {object} messageState - Message analytics state
- * @param {object} connectionState - Connection state
- * @returns {object[]}
+ * @param {MessageState} messageState - Message analytics state
+ * @param {ConnectionState} connectionState - Connection state
+ * @returns {Connection[]}
  */
 export function getSilentConnections(messageState, connectionState) {
     const silent = connectionState.list.filter((connection) => {
@@ -102,12 +136,13 @@ export function getSilentConnections(messageState, connectionState) {
 
 /**
  * Get connected contacts with no message in past 30 days.
- * @param {object} messageState - Message analytics state
- * @param {object} connectionState - Connection state
- * @returns {object[]}
+ * @param {MessageState} messageState - Message analytics state
+ * @param {ConnectionState} connectionState - Connection state
+ * @returns {FadingConversation[]}
  */
 export function getFadingConversations(messageState, connectionState) {
     const now = Date.now();
+    /** @type {FadingConversation[]} */
     const fading = [];
 
     for (const contact of messageState.contacts.values()) {
@@ -143,8 +178,8 @@ export function getFadingConversations(messageState, connectionState) {
 /**
  * Find the connection record that matches a message contact.
  * @param {{name: string, url: string}} contact - Contact from messages
- * @param {object} connectionState - Connection state
- * @returns {object|null}
+ * @param {ConnectionState} connectionState - Connection state
+ * @returns {Connection|null}
  */
 function findMatchingConnection(contact, connectionState) {
     if (contact.url && connectionState.byUrl.has(contact.url)) {

@@ -6,17 +6,66 @@ import { readCsvSource } from "../upload/read.js";
 
 import { MessagesAnalytics } from "./analytics.js";
 
+/** @typedef {import("./analytics.js").MessageRow} MessageRow */
+/** @typedef {import("./analytics.js").ConnectionRow} ConnectionRow */
+/** @typedef {import("./analytics.js").MessageState} MessageState */
+/** @typedef {import("./analytics.js").ConnectionState} ConnectionState */
+
+/**
+ * The fields of a LinkedInCleaner.process() result this feature reads.
+ * @template Row
+ * @typedef {object} CleanedRows
+ * @property {boolean} success - Whether the file parsed and validated
+ * @property {string|null} error - Parse error, if any
+ * @property {Row[]} cleanedData - Cleaned rows
+ */
+
+/**
+ * Message state flattened for structured clone: Maps and Sets become arrays.
+ * @typedef {object} SerializedMessageState
+ * @property {import("./analytics.js").MessageContact[]} contacts - Contacts, in insertion order
+ * @property {import("./analytics.js").MessageEvents} events - Event columns (transferred)
+ * @property {Float64Array<ArrayBuffer>} rowTimestamps - Row timestamps (transferred)
+ * @property {number} skippedRows - Rows without a date or a participant
+ * @property {string[]} talkedNameKeys - Normalized names of everyone messaged
+ * @property {string[]} talkedUrlKeys - Normalized URLs of everyone messaged
+ * @property {number} latestTimestamp - Latest counted message timestamp (ms)
+ * @property {import("./analytics.js").OutreachSummary|null} outreach - Outreach summary
+ */
+
+/**
+ * Connection state flattened for structured clone; the indexes are rebuilt on receipt.
+ * @typedef {object} SerializedConnectionState
+ * @property {import("./analytics.js").Connection[]} list - All connections
+ */
+
+/**
+ * Processed messages payload, from the worker or the main-thread fallback.
+ * The worker sends serialized state; the fallback sends cleaned rows instead.
+ * @typedef {object} MessagesProcessedPayload
+ * @property {boolean} success - Whether the messages file parsed
+ * @property {SerializedMessageState|null} [messageState] - Serialized message state
+ * @property {SerializedConnectionState|null} [connectionState] - Serialized connection state
+ * @property {number} [totalInputRows] - Cleaned message rows
+ * @property {string|null} [connectionError] - Connections parse error, if any
+ * @property {string} [error] - Messages parse error, when success is false
+ * @property {MessageRow[]} [messagesData] - Cleaned message rows (fallback only)
+ * @property {ConnectionRow[]} [connectionsData] - Cleaned connection rows (fallback only)
+ */
+
 /**
  * Parse messages and connections payload. Each file arrives as the stored
  * upload Blob, read here off the main thread, or as CSV text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Raw payload
- * @returns {Promise<{success: boolean, messageState?: object, connectionState?: object, totalInputRows?: number, connectionError?: string|null, error?: string, messagesData?: object[], connectionsData?: object[]}>}
+ * @returns {Promise<MessagesProcessedPayload>}
  */
 async function processPayload(payload) {
     const messagesCsv = await readCsvSource(payload.messagesCsv);
     const connectionsCsv = await readCsvSource(payload.connectionsCsv);
 
-    const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
+    const messagesResult = /** @type {CleanedRows<MessageRow>} */ (
+        LinkedInCleaner.process(messagesCsv, "messages")
+    );
     if (!messagesResult.success) {
         return {
             success: false,
@@ -25,11 +74,15 @@ async function processPayload(payload) {
         };
     }
 
+    /** @type {ConnectionRow[]} */
     let connectionsData = [];
+    /** @type {string|null} */
     let connectionError = null;
 
     if (connectionsCsv) {
-        const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");
+        const connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
+            LinkedInCleaner.process(connectionsCsv, "connections")
+        );
         if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {
@@ -59,8 +112,8 @@ async function processPayload(payload) {
 
 /**
  * Serialize message state for structured clone.
- * @param {object} state - Message state with Maps/Sets
- * @returns {object}
+ * @param {MessageState} state - Message state with Maps/Sets
+ * @returns {SerializedMessageState}
  */
 function serializeMessageState(state) {
     return {
@@ -78,7 +131,7 @@ function serializeMessageState(state) {
 /**
  * List the typed-array buffers in a processed payload, so posting it moves
  * them to the page instead of copying them.
- * @param {{messageState?: object|null}} payload - Processed payload
+ * @param {{messageState?: SerializedMessageState|null}} payload - Processed payload
  * @returns {ArrayBuffer[]}
  */
 function transferablesOf(payload) {
@@ -91,8 +144,8 @@ function transferablesOf(payload) {
 
 /**
  * Serialize connection state for structured clone.
- * @param {object} state - Connection state with Maps
- * @returns {object}
+ * @param {ConnectionState} state - Connection state with Maps
+ * @returns {SerializedConnectionState}
  */
 function serializeConnectionState(state) {
     return {

@@ -15,13 +15,31 @@ import { LinkedInCleaner } from "./cleaner.js";
 import { cleanedCsvName } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
+/** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+
+/**
+ * The previewed clean of one stored upload.
+ * @typedef {object} CleanPreview
+ * @property {number} updatedAt - Upload timestamp the preview was built from
+ * @property {number} sourceSize - Stored upload size in bytes
+ * @property {number} rowCount - Cleaned row count
+ * @property {string[][]} previewRows - Preview cells, in column order
+ */
+
+/**
+ * Display labels, indexable by an arbitrary type string.
+ * @type {Readonly<Record<string, string|undefined>>}
+ */
+const TYPE_LABELS = FILE_TYPE_LABELS;
+
 export const CleanPage = (() => {
     "use strict";
 
     const PREVIEW_CELL_LIMIT = 50;
     const CLEAN_HINT_BY_CATEGORY = Object.freeze({
         all: () => "All files loaded. Choose one to clean and export.",
-        many: (loadedCount) => `${loadedCount} files loaded. Choose one to clean.`,
+        many: (/** @type {number} */ loadedCount) =>
+            `${loadedCount} files loaded. Choose one to clean.`,
         single: () => "Only one file is loaded. Upload more files for full features.",
         none: () => "Upload LinkedIn CSV files to start cleaning.",
     });
@@ -57,6 +75,7 @@ export const CleanPage = (() => {
         cleanFileTypeInputs: document.querySelectorAll('input[name="cleanFileType"]'),
     };
 
+    /** @type {Record<string, CleanPreview|null>} */
     const cache = {
         shares: null,
         comments: null,
@@ -64,6 +83,7 @@ export const CleanPage = (() => {
         connections: null,
     };
 
+    /** @type {Record<string, StoredFileMetadata|null>} */
     const storedFiles = {
         shares: null,
         comments: null,
@@ -76,6 +96,10 @@ export const CleanPage = (() => {
     // past is dropped rather than drawn.
     let previewRequest = 0;
 
+    /**
+     * @param {number} count - Row count
+     * @returns {string} Count with its unit, e.g. "1 row"
+     */
     function formatRows(count) {
         return `${count} ${count === 1 ? "row" : "rows"}`;
     }
@@ -138,7 +162,9 @@ export const CleanPage = (() => {
     async function loadFiles() {
         await Session.waitForCleanup();
 
-        let files = DataCache.get("storage:files") || null;
+        let files = /** @type {StoredFileMetadata[]|null} */ (
+            DataCache.get("storage:files") || null
+        );
         if (!files) {
             // Cache metadata only; the selected file's text is loaded on demand in
             // renderPreview so large exports aren't kept in memory.
@@ -146,8 +172,9 @@ export const CleanPage = (() => {
             DataCache.set("storage:files", files);
         }
 
+        const fileList = files;
         FILE_TYPES.forEach((type) => {
-            storedFiles[type] = files.find((file) => file.type === type) || null;
+            storedFiles[type] = fileList.find((file) => file.type === type) || null;
         });
     }
 
@@ -309,7 +336,8 @@ export const CleanPage = (() => {
             };
         }
 
-        showPreview(cache[type], type);
+        // Either cached already or set just above.
+        showPreview(/** @type {CleanPreview} */ (cache[type]), type);
         showDownload();
     }
 
@@ -337,7 +365,7 @@ export const CleanPage = (() => {
         }
         const headers = config.columns.map((column) => column.name);
         /* v8 ignore next */
-        const label = FILE_TYPE_LABELS[fileType] || fileType;
+        const label = TYPE_LABELS[fileType] || fileType;
         elements.cleanFileInfo.textContent = `${label} - ${formatRows(result.rowCount)}`;
 
         const thead = /** @type {HTMLElement} */ (
@@ -401,7 +429,7 @@ export const CleanPage = (() => {
     /**
      * Return the previewed file for the selected type, or report that there is
      * nothing to download.
-     * @returns {{type: string, cached: object}|null}
+     * @returns {{type: string, cached: CleanPreview}|null}
      */
     function getDownloadable() {
         const type = getSelectedType();
@@ -421,7 +449,7 @@ export const CleanPage = (() => {
     /**
      * Build one download in the worker from the stored upload.
      * @param {string} type - File type
-     * @param {object} cached - Previewed file
+     * @param {CleanPreview} cached - Previewed file
      * @param {"xlsx"|"csv"} output - What to build
      * @returns {Promise<{success: boolean, error: string|null, blob: Blob|null}>}
      */
@@ -472,7 +500,11 @@ export const CleanPage = (() => {
             showError(`Error generating Excel: ${reply.error || "Try again."}`);
             return;
         }
-        ExcelGenerator.download(reply.blob, LinkedInCleaner.configs[type].outputName);
+        // The previewed type cleaned successfully, so it names a known config.
+        const config = /** @type {import("./configs.js").CleanerConfig} */ (
+            LinkedInCleaner.configs[type]
+        );
+        ExcelGenerator.download(reply.blob, config.outputName);
         celebrateDownload();
     }
 

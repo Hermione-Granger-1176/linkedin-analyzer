@@ -18,8 +18,18 @@ import { readCsvSource } from "../upload/read.js";
 // page, so the main-thread fallback is skipped in favor of an empty state.
 const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
+/** @typedef {import("./messages-worker.js").MessagesProcessedPayload} MessagesProcessedPayload */
+/** @typedef {import("./analytics.js").MessageRow} MessageRow */
+/** @typedef {import("./analytics.js").ConnectionRow} ConnectionRow */
+/**
+ * @template Row
+ * @typedef {import("./messages-worker.js").CleanedRows<Row>} CleanedRows
+ */
+
+/** @type {Worker|null} */
 let parseWorker = null;
 let parseWorkerRequestId = 0;
+/** @type {number|null} */
 let parseWorkerTimeoutId = null;
 
 /** Initialize background worker for messages/connections parsing. */
@@ -65,7 +75,7 @@ function clearWorkerTimeout() {
  * Falls back to main-thread parsing if worker is unavailable or fails.
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string|null} connectionsCsv - Stored connections upload, or CSV text
- * @returns {Promise<object>}
+ * @returns {Promise<MessagesProcessedPayload>}
  */
 export async function processFiles(messagesCsv, connectionsCsv) {
     if (!parseWorker) {
@@ -97,17 +107,19 @@ export async function processFiles(messagesCsv, connectionsCsv) {
  * Parse files using a dedicated Web Worker.
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string|null} connectionsCsv - Stored connections upload, or CSV text
- * @returns {Promise<object|null>} Parsed payload or null on worker failure
+ * @returns {Promise<MessagesProcessedPayload|null>} Parsed payload or null on worker failure
  */
 function processFilesInWorker(messagesCsv, connectionsCsv) {
     if (!parseWorker) {
         return Promise.resolve(null);
     }
 
+    const worker = parseWorker;
     const requestId = ++parseWorkerRequestId;
 
     return new Promise((resolve) => {
         clearWorkerTimeout();
+        /** @param {MessageEvent} event - Worker message event */
         const handleMessage = (event) => {
             const parsed = parseMessagesWorkerMessage(event.data || {});
             if (!parsed.valid) {
@@ -126,9 +138,10 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
                 return;
             }
             finishRequest();
-            resolve(message.payload || null);
+            resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
         };
 
+        /** @param {Event & {error?: unknown}} event - Worker error or messageerror event */
         const handleError = (event) => {
             captureError(
                 event && event.error
@@ -176,10 +189,10 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
         }, computeWorkerTimeout(messagesCsv, connectionsCsv));
 
         try {
-            parseWorker.addEventListener("message", handleMessage);
-            parseWorker.addEventListener("error", handleError);
-            parseWorker.addEventListener("messageerror", handleError);
-            parseWorker.postMessage({
+            worker.addEventListener("message", handleMessage);
+            worker.addEventListener("error", handleError);
+            worker.addEventListener("messageerror", handleError);
+            worker.postMessage({
                 type: "process",
                 requestId,
                 payload: {
@@ -204,10 +217,12 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
  * Parse files directly on main thread as fallback.
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {string} connectionsCsv - Raw connections CSV text
- * @returns {object}
+ * @returns {MessagesProcessedPayload}
  */
 function processFilesOnMainThread(messagesCsv, connectionsCsv) {
-    const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
+    const messagesResult = /** @type {CleanedRows<MessageRow>} */ (
+        LinkedInCleaner.process(messagesCsv, "messages")
+    );
     if (!messagesResult.success) {
         return {
             success: false,
@@ -215,11 +230,15 @@ function processFilesOnMainThread(messagesCsv, connectionsCsv) {
         };
     }
 
+    /** @type {ConnectionRow[]} */
     let connectionsData = [];
+    /** @type {string|null} */
     let connectionError = null;
 
     if (connectionsCsv) {
-        const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");
+        const connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
+            LinkedInCleaner.process(connectionsCsv, "connections")
+        );
         if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {

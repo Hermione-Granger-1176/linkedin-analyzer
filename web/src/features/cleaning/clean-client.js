@@ -15,6 +15,7 @@ import { runCleanJob } from "./clean-job.js";
 // Fixed text: a failure inside the worker can carry a row of the user's file.
 const CLEAN_FAILURE = "Unable to parse file.";
 
+/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}} CleanReply */
 
 /** @type {Worker|null} */
@@ -100,7 +101,7 @@ function getWorker() {
 
 /**
  * Run the job on the main thread, reporting a fixed error if it throws.
- * @param {object} payload - Request payload
+ * @param {CleaningRequestPayload} payload - Request payload
  * @returns {Promise<CleanReply>}
  */
 async function runOnMainThread(payload) {

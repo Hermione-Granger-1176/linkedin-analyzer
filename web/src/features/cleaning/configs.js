@@ -6,17 +6,52 @@
  * in cleaner.js.
  */
 
-import { FILE_TYPES } from "../../shared/constants.js";
+import { FILE_TYPES as SHARED_FILE_TYPES } from "../../shared/constants.js";
+
+/**
+ * A supported LinkedIn export type.
+ * @typedef {"shares"|"comments"|"messages"|"connections"} FileType
+ */
 
 // Re-exported so existing `import { FILE_TYPES } from "./configs.js"`
 // call sites keep working; the canonical definition lives in constants.js, a
-// dependency-free module that stays out of the worker bundle graph.
-export { FILE_TYPES };
+// dependency-free module that stays out of the worker bundle graph. Same array,
+// narrowed to the FileType union.
+export const FILE_TYPES = /** @type {readonly FileType[]} */ (SHARED_FILE_TYPES);
+
+/**
+ * One output column of a cleaned file.
+ * @typedef {object} ColumnConfig
+ * @property {string} name - Column header, as it appears in the CSV and the output
+ * @property {number} width - Excel column width
+ * @property {boolean} [wrapText] - Whether Excel wraps the cell text
+ * @property {import("./field-cleaners.js").CleanerName} [cleaner] - Named cell cleaner
+ */
+
+/**
+ * Column, validation, and output configuration for one file type.
+ * @typedef {object} CleanerConfig
+ * @property {readonly ColumnConfig[]} columns - Output columns, in order
+ * @property {readonly string[]} requiredColumns - Headers that must be present
+ * @property {readonly string[]} [requiredRowColumns] - Columns a kept row needs (default:
+ * requiredColumns)
+ * @property {readonly string[]} [dropIfAllMissing] - Drop a row when all are missing
+ * @property {string} outputName - Download filename for the cleaned workbook
+ * @property {number} [skipRows] - Preamble rows before the header row
+ */
+
+/** @typedef {Readonly<Record<FileType, CleanerConfig>>} CleanerConfigsByType */
+/** @typedef {Readonly<Partial<Record<string, CleanerConfig>>>} CleanerConfigsByName */
+
+/**
+ * Configs keyed by file type. Indexing with an arbitrary string may miss.
+ * @typedef {CleanerConfigsByType & CleanerConfigsByName} CleanerConfigs
+ */
 
 /**
  * Deep-freeze a cleaner configuration object.
- * @param {object} config - Configuration with columns, requiredColumns, and outputName
- * @returns {object} Frozen configuration object
+ * @param {CleanerConfig} config - Configuration with columns, requiredColumns, and outputName
+ * @returns {CleanerConfig} Frozen configuration object
  */
 function freezeConfig(config) {
     const frozenColumns = config.columns.map((column) => Object.freeze({ ...column }));
@@ -26,7 +61,10 @@ function freezeConfig(config) {
     });
 }
 
-/** Per-file-type column, validation, and output configuration. */
+/**
+ * Per-file-type column, validation, and output configuration.
+ * @type {CleanerConfigs}
+ */
 export const CONFIGS = Object.freeze({
     shares: freezeConfig({
         columns: [

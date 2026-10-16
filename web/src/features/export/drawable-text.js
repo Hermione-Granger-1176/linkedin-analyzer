@@ -82,8 +82,8 @@ export function sanitizeText(value, coverage) {
 
 /**
  * Report whether a value is a bare object worth walking into.
- * @param {any} value - Value from the document model
- * @returns {boolean} True for object literals and null-prototype objects
+ * @param {unknown} value - Value from the document model
+ * @returns {value is Record<string, unknown>} True for object literals and null-prototype objects
  */
 function isPlainObject(value) {
     if (typeof value !== "object" || value === null) {
@@ -102,24 +102,28 @@ function isPlainObject(value) {
  * exactly the one where the sixth is added and nobody remembers. Numbers, dates
  * and anything else carrying behavior of its own are handed straight back, so
  * only literals and arrays are rebuilt.
- * @param {any} value - Document model, or any part of one
+ * @template T
+ * @param {T} value - Document model, or any part of one
  * @param {Set<number>} coverage - Code points the document's fonts can draw
- * @returns {any} The same model with drawable text
+ * @returns {T} The same model with drawable text
  */
 export function sanitizeModel(value, coverage) {
+    // Each rebuilt value keeps the shape it came in with, which is what lets
+    // the casts below hand it back as the type it was given as.
     if (typeof value === "string") {
-        return sanitizeText(value, coverage);
+        return /** @type {T} */ (sanitizeText(value, coverage));
     }
     if (Array.isArray(value)) {
-        return value.map((entry) => sanitizeModel(entry, coverage));
+        return /** @type {T} */ (value.map((entry) => sanitizeModel(entry, coverage)));
     }
     if (!isPlainObject(value)) {
         return value;
     }
 
+    /** @type {Record<string, unknown>} */
     const sanitized = {};
     for (const [key, entry] of Object.entries(value)) {
         sanitized[key] = sanitizeModel(entry, coverage);
     }
-    return sanitized;
+    return /** @type {T} */ (sanitized);
 }

@@ -65,7 +65,7 @@ async function readConnections(connectionsCsv) {
  * Parse the messages CSV and pick the recent threads for the export. Each
  * file arrives as the stored upload Blob, read here, or as CSV text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string, people?: number, messagesPerPerson?: number}} payload - Raw payload
- * @returns {Promise<{success: boolean, threads: object[], error: string|null}>}
+ * @returns {Promise<{success: boolean, threads: import("./threads.js").SelectedThread[], error: string|null}>}
  */
 async function processPayload(payload) {
     const messagesCsv = await readCsvSource(payload.messagesCsv);

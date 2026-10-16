@@ -36,12 +36,18 @@ const CSV_LIMITS = Object.freeze({
 
 /**
  * Check if every cell in a row is missing.
- * @param {Array<*>} row - Array of cell values
+ * @param {unknown[]} row - Array of cell values
  * @returns {boolean} True if all cells are missing
  */
 export function isRowEmpty(row) {
     return row.every((cell) => isMissing(cell));
 }
+
+/**
+ * Incremental CSV parser. push returns the first error so far, or null; finish flushes
+ * the last row and returns the final error, or null.
+ * @typedef {{push: (chunk: string) => string|null, finish: () => string|null}} CsvRowParser
+ */
 
 /** Step result meaning the scanner needs the next chunk before it can decide. */
 const NEED_MORE = -1;
@@ -57,8 +63,8 @@ const NEED_MORE = -1;
  * not retracted; a caller that sees an error should discard them.
  * @param {{delimiter: string, quote: string, escape: string|null}} options
  * @param {(row: string[]) => void} onRow - Called once per complete row, in order
- * @returns {{push: (chunk: string) => string|null, finish: () => string|null}} push returns the
- * first error so far, or null; finish flushes the last row and returns the final error, or null.
+ * @returns {CsvRowParser} push returns the first error so far, or null; finish flushes the
+ * last row and returns the final error, or null.
  */
 export function createCsvRowParser(options, onRow) {
     const { delimiter, quote, escape } = options;
@@ -82,6 +88,7 @@ export function createCsvRowParser(options, onRow) {
     let heldEmptyRows = [];
     let finished = false;
 
+    /** @type {string[]} */
     let row = [];
     let field = "";
     /** @type {number} */
@@ -92,6 +99,10 @@ export function createCsvRowParser(options, onRow) {
     // Reject oversized fields *before* appending, so we never allocate a
     // large string to discard. addLength is the number of characters
     // about to be appended to the field being parsed.
+    /**
+     * @param {number} addLength - Characters about to be appended
+     * @returns {boolean} True when the field would exceed the limit
+     */
     const wouldOverflowField = (addLength) => {
         if (field.length + addLength > CSV_LIMITS.maxFieldChars) {
             parseError = "CSV parsing error: one field is too large to process safely.";
@@ -101,11 +112,19 @@ export function createCsvRowParser(options, onRow) {
     };
 
     // True when the character at index is a high surrogate whose pair may arrive in the next chunk.
+    /**
+     * @param {number} index - Index into csvText
+     * @returns {boolean}
+     */
     const splitsSurrogatePair = (index) => {
         const code = csvText.charCodeAt(index);
         return index + 1 >= length && !atEnd && code >= 0xd800 && code <= 0xdbff;
     };
 
+    /**
+     * @param {number} start - Index of the escape character
+     * @returns {number} Next index, or NEED_MORE
+     */
     const consumeEscape = (start) => {
         if (start + 1 >= length) {
             if (!atEnd) {
@@ -160,6 +179,10 @@ export function createCsvRowParser(options, onRow) {
     // Handle one step while inside a quoted field; returns the next index,
     // or NEED_MORE when the decision depends on the next chunk.
     // Setting parseError (here, in consumeEscape, or in wouldOverflowField) stops the outer loop.
+    /**
+     * @param {number} start - Current index
+     * @returns {number} Next index, or NEED_MORE
+     */
     const stepInsideQuotes = (start) => {
         // Bulk-copy the run of ordinary characters up to the next quote,
         // carriage return, or escape character.
@@ -212,6 +235,10 @@ export function createCsvRowParser(options, onRow) {
 
     // Handle one step while outside quotes; returns the next index,
     // or NEED_MORE when the decision depends on the next chunk.
+    /**
+     * @param {number} start - Current index
+     * @returns {number} Next index, or NEED_MORE
+     */
     const stepOutsideQuotes = (start) => {
         // Bulk-copy ordinary characters up to the next quote, escape,
         // delimiter, or line break.
@@ -294,6 +321,10 @@ export function createCsvRowParser(options, onRow) {
         length = 0;
     };
 
+    /**
+     * @param {string} chunk - Next text chunk
+     * @returns {string|null} First error so far, or null
+     */
     const push = (chunk) => {
         if (parseError || finished || chunk.length === 0) {
             return parseError;

@@ -6,45 +6,23 @@
  * pure: every result is derived from the payload argument alone.
  */
 
-/**
- * @typedef {object} MessageContact
- * @property {string} key
- * @property {string} name
- * @property {string} url
- * @property {number} count
- * @property {number} lastTimestamp
- */
-
-/**
- * Message events stored as columns, one entry per participant per message.
- * contactIds[i] indexes contactKeys; timestamps[i] is the message time.
- * @typedef {object} MessageEvents
- * @property {string[]} contactKeys
- * @property {Int32Array} contactIds
- * @property {Float64Array} timestamps
- */
-
-/**
- * @typedef {object} MessageState
- * @property {Map<string, MessageContact>} contacts
- * @property {MessageEvents} events
- * @property {Float64Array} rowTimestamps
- * @property {number} skippedRows
- * @property {Set<string>} talkedNameKeys
- * @property {Set<string>} talkedUrlKeys
- * @property {number} latestTimestamp
- * @property {object|null} outreach
- */
+/** @typedef {import("./analytics.js").MessageContact} MessageContact */
+/** @typedef {import("./analytics.js").MessageEvents} MessageEvents */
+/** @typedef {import("./analytics.js").MessageState} MessageState */
+/** @typedef {import("./analytics.js").Connection} Connection */
+/** @typedef {import("./analytics.js").ConnectionState} ConnectionState */
+/** @typedef {import("./messages-worker.js").SerializedMessageState} SerializedMessageState */
+/** @typedef {import("./messages-worker.js").SerializedConnectionState} SerializedConnectionState */
 
 /**
  * Rehydrate message state from worker payload.
- * @param {object|null} payload - Worker payload
+ * @param {unknown} payload - Worker payload
  * @returns {MessageState}
  */
 export function hydrateMessageState(payload) {
     // Worker payloads normally contain an object. Use an empty object for malformed data.
     /* v8 ignore next */
-    const safePayload = payload || {};
+    const safePayload = /** @type {Partial<SerializedMessageState>} */ (payload || {});
     /** @type {Map<string, MessageContact>} */
     const contacts = new Map();
     const contactList = Array.isArray(safePayload.contacts) ? safePayload.contacts : [];
@@ -62,7 +40,9 @@ export function hydrateMessageState(payload) {
             safePayload.rowTimestamps instanceof Float64Array
                 ? safePayload.rowTimestamps
                 : new Float64Array(0),
-        skippedRows: Number.isFinite(safePayload.skippedRows) ? safePayload.skippedRows : 0,
+        skippedRows: Number.isFinite(safePayload.skippedRows)
+            ? /** @type {number} */ (safePayload.skippedRows)
+            : 0,
         talkedNameKeys: new Set(
             Array.isArray(safePayload.talkedNameKeys) ? safePayload.talkedNameKeys : [],
         ),
@@ -70,7 +50,7 @@ export function hydrateMessageState(payload) {
             Array.isArray(safePayload.talkedUrlKeys) ? safePayload.talkedUrlKeys : [],
         ),
         latestTimestamp: Number.isFinite(safePayload.latestTimestamp)
-            ? safePayload.latestTimestamp
+            ? /** @type {number} */ (safePayload.latestTimestamp)
             : 0,
         outreach: safePayload.outreach || null,
     };
@@ -101,15 +81,17 @@ function hydrateEvents(events) {
 
 /**
  * Rehydrate connection state from worker payload.
- * @param {object|null} payload - Worker payload
- * @returns {{list: object[], byUrl: Map<string, object>, byName: Map<string, object>}}
+ * @param {unknown} payload - Worker payload
+ * @returns {ConnectionState}
  */
 export function hydrateConnectionState(payload) {
     // Worker payloads normally contain an object. Use an empty object for malformed data.
     /* v8 ignore next */
-    const safePayload = payload || {};
+    const safePayload = /** @type {Partial<SerializedConnectionState>} */ (payload || {});
     const list = Array.isArray(safePayload.list) ? safePayload.list : [];
+    /** @type {Map<string, Connection>} */
     const byUrl = new Map();
+    /** @type {Map<string, Connection>} */
     const byName = new Map();
 
     for (const connection of list) {

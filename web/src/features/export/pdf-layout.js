@@ -31,6 +31,22 @@ export const BASELINE_RATIO = 0.78;
  * @typedef {{r: number, g: number, b: number}} Rgb
  * @typedef {Readonly<Record<string, Rgb>>} Palette
  * @typedef {{height: number, draw: (x: number, y: number) => void}} Row
+ * @typedef {{x: number, y: number}} Point
+ * @typedef {import("jspdf").TextOptionsLight} TextOptions
+ */
+
+/**
+ * Drawing context the row painters close over, built by `createPainter`.
+ * @typedef {object} Painter
+ * @property {Palette} palette - Palette from readPdfPalette()
+ * @property {{body: string, accent: string}} fonts - Registered font families
+ * @property {(text: string, width: number, family: string, size: number) => string[]} wrap - Wrap text to a width
+ * @property {(text: string, family: string, size: number) => number} measure - Measure one line of text
+ * @property {(value: string, x: number, baseline: number, family: string, size: number, color: Rgb, options?: TextOptions) => void} text - Draw one line of text
+ * @property {(x: number, y: number, width: number, height: number, color: Rgb, radius?: number) => void} fillRect - Fill a rectangle, optionally rounded
+ * @property {(x: number, y: number, radius: number, color: Rgb) => void} fillCircle - Fill a circle
+ * @property {(points: Point[], color: Rgb) => void} polygon - Fill a closed path
+ * @property {(points: Point[], color: Rgb, width: number) => void} polyline - Stroke an open path
  */
 
 /**
@@ -67,6 +83,11 @@ export function spacerRow(height) {
  * @returns {number} Luminance between 0 and 1
  */
 function relativeLuminance(color) {
+    /**
+     * Linearize one sRGB channel.
+     * @param {number} value - Channel value between 0 and 255
+     * @returns {number} Linear channel value
+     */
     const channel = (value) => {
         const scaled = value / 255;
         return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
@@ -118,6 +139,12 @@ export function readableOn(palette, background) {
  */
 export function mixColors(from, to, amount) {
     const t = Number.isFinite(amount) ? Math.min(1, Math.max(0, amount)) : 0;
+    /**
+     * Blend one channel.
+     * @param {number} a - Channel at amount 0
+     * @param {number} b - Channel at amount 1
+     * @returns {number} Blended channel
+     */
     const channel = (a, b) => Math.round(a + (b - a) * t);
     return { r: channel(from.r, to.r), g: channel(from.g, to.g), b: channel(from.b, to.b) };
 }

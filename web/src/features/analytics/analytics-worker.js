@@ -11,13 +11,30 @@ import {
 
 import { AnalyticsEngine } from "./activity.js";
 
+/** @typedef {import("../../app/worker-contracts.js").PlainObject} PlainObject */
+/** @typedef {import("../../app/worker-contracts.js").RequestId} RequestId */
+/** @typedef {import("../cleaning/cleaner.js").CleanedRow} CleanedRow */
+/** @typedef {import("../cleaning/cleaner.js").ProcessResult} ProcessResult */
+/** @typedef {import("./activity.js").AnalyticsBase} AnalyticsBase */
+/** @typedef {import("./activity.js").AnalyticsFilterInput} AnalyticsFilterInput */
+/** @typedef {import("./activity.js").AnalyticsFilters} AnalyticsFilters */
+/** @typedef {import("./activity.js").AnalyticsViewPayload} AnalyticsViewPayload */
+/** @typedef {import("./activity.js").HydratedAnalytics} HydratedAnalytics */
+/** @typedef {"shares"|"comments"|"connections"} AnalyticsSourceType */
+
+/** @type {CleanedRow[]|null} */
 let sharesData = null;
+/** @type {CleanedRow[]|null} */
 let commentsData = null;
+/** @type {CleanedRow[]|null} */
 let connectionsData = null;
+/** @type {AnalyticsBase|HydratedAnalytics|null} */
 let analytics = null;
+/** @type {Map<string, AnalyticsViewPayload>} */
 let viewCache = new Map();
 const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
+/** @type {readonly AnalyticsSourceType[]} */
 const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments", "connections"]);
 const WORKER_REQUEST_TYPES = new Set(["addFile", "restoreFiles", "initBase", "view", "clear"]);
 // Reading the file fills this share of the progress bar, after the first 5%.
@@ -31,12 +48,13 @@ const READ_PROGRESS_STEP = 0.01;
 // bumps the epoch so requests queued before it are skipped.
 let requestQueue = Promise.resolve();
 let requestEpoch = 0;
+/** @type {AbortController|null} */
 let activeRead = null;
 
 /**
  * Normalize raw filter values into a safe, complete filter object.
- * @param {object} filters - Raw filter values from the UI
- * @returns {{timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string}}
+ * @param {AnalyticsFilterInput|null|undefined} filters - Raw filter values from the UI
+ * @returns {AnalyticsFilters}
  */
 function normalizeFilters(filters) {
     const safe = filters || {};
@@ -52,7 +70,7 @@ function normalizeFilters(filters) {
 
 /**
  * Build a cache key string from normalized filters.
- * @param {object} filters - Raw or normalized filter object
+ * @param {AnalyticsFilterInput|null|undefined} filters - Raw or normalized filter object
  * @returns {string} Pipe-delimited cache key
  */
 function getViewKey(filters) {
@@ -94,8 +112,8 @@ function hasAnalyticsData() {
 
 /**
  * Serialize the analytics aggregate for storage.
- * @param {object|null} analyticsData - Analytics aggregate payload
- * @returns {object|null}
+ * @param {AnalyticsBase|HydratedAnalytics|null} analyticsData - Analytics aggregate payload
+ * @returns {AnalyticsBase|HydratedAnalytics|null}
  */
 function serializeAnalytics(analyticsData) {
     if (!analyticsData) {
@@ -108,8 +126,8 @@ function serializeAnalytics(analyticsData) {
 
 /**
  * Hydrate the analytics aggregate from a stored payload.
- * @param {object|null} base - Stored analytics payload
- * @returns {object|null}
+ * @param {AnalyticsBase|null} base - Stored analytics payload
+ * @returns {HydratedAnalytics|null}
  */
 function hydrateAnalytics(base) {
     if (!base || !base.months) {
@@ -140,7 +158,7 @@ function hydrateAnalytics(base) {
  * analytics engine, which never interpolate row/cell content) so the value that
  * `analytics-ui` forwards to Sentry can never carry user data. `worker-contracts`
  * also length-caps it on receipt.
- * @param {number|string} requestId - ID of the originating request
+ * @param {RequestId} requestId - ID of the originating request
  * @param {string} message - Human-readable error description
  */
 function postError(requestId, message) {
@@ -171,7 +189,7 @@ function toErrorMessage(error) {
 /**
  * Store a view payload in the LRU cache, trimming old entries when full.
  * @param {string} key - Cache key from getViewKey
- * @param {object} payload - The view and insights payload to cache
+ * @param {AnalyticsViewPayload} payload - The view and insights payload to cache
  */
 function cacheView(key, payload) {
     viewCache.set(key, payload);
@@ -194,6 +212,7 @@ async function readUpload(read, jobId, fileName) {
     const controller = new AbortController();
     activeRead = controller;
     let lastPercent = READ_PROGRESS_START;
+    /** @type {(bytesRead: number, totalBytes: number) => void} */
     const onProgress = (bytesRead, totalBytes) => {
         const fraction = totalBytes > 0 ? Math.min(bytesRead / totalBytes, 1) : 1;
         const percent = READ_PROGRESS_START + READ_PROGRESS_SPAN * fraction;
@@ -233,7 +252,7 @@ async function readUpload(read, jobId, fileName) {
  * @param {File} file - Uploaded file
  * @param {string|null} jobId - Upload job ID
  * @param {string} fileName - Uploaded file name
- * @returns {Promise<{usedFallback: boolean, processed: object}|null>}
+ * @returns {Promise<{usedFallback: boolean, processed: ProcessResult}|null>}
  */
 async function readAndProcessUpload(file, jobId, fileName) {
     if (!canStreamFileText(file)) {
@@ -290,6 +309,7 @@ async function handleAddFile(payload) {
     const { file = null, fileName = "", jobId = null } = payload || {};
     const { csvText = "" } = payload || {};
     let usedFallback = false;
+    /** @type {ProcessResult} */
     let processed;
 
     self.postMessage({
@@ -335,8 +355,10 @@ async function handleAddFile(payload) {
         payload: { jobId, fileName, percent: 0.4 },
     });
 
-    const fileType = processed.fileType;
+    // A successful result always carries the type it was processed as.
+    const fileType = /** @type {string} */ (processed.fileType);
     let analyticsBase = null;
+    /** @type {Record<string, () => void>} */
     const updateSourceByType = {
         shares: () => {
             sharesData = processed.cleanedData;
@@ -394,6 +416,7 @@ async function handleRestoreFiles(payload) {
         comments: await readCsvSource(commentsCsv),
         connections: await readCsvSource(connectionsCsv),
     };
+    /** @type {Record<AnalyticsSourceType, (cleanedData: CleanedRow[]) => void>} */
     const assignSourceByType = {
         shares: (cleanedData) => {
             sharesData = cleanedData;
@@ -450,10 +473,11 @@ async function handleRestoreFiles(payload) {
 
 /**
  * Hydrate analytics from stored data and notify the main thread.
- * @param {object|null} payload - Serialized analytics base from IndexedDB
+ * @param {PlainObject|null} payload - Serialized analytics base from IndexedDB
  */
 function handleInitBase(payload) {
-    analytics = hydrateAnalytics(payload);
+    // The base is the one handleAddFile posted and the page stored.
+    analytics = hydrateAnalytics(/** @type {AnalyticsBase|null} */ (payload));
     viewCache = new Map();
     const hasData = hasAnalyticsData();
     self.postMessage({
@@ -465,7 +489,7 @@ function handleInitBase(payload) {
 /**
  * Build a filtered analytics view and post it back, using cache when available.
  * @param {import("../../app/worker-contracts.js").RequestId} requestId - Caller-assigned request identifier for deduplication
- * @param {object} filters - Filter parameters from the UI
+ * @param {PlainObject} filters - Filter parameters from the UI
  */
 function handleView(requestId, filters) {
     if (!analytics) {
@@ -473,11 +497,11 @@ function handleView(requestId, filters) {
         return;
     }
 
-    const safeFilters = normalizeFilters(filters || {});
+    const safeFilters = normalizeFilters(/** @type {AnalyticsFilterInput} */ (filters || {}));
     const key = getViewKey(safeFilters);
 
     if (viewCache.has(key)) {
-        const cachedPayload = viewCache.get(key);
+        const cachedPayload = /** @type {AnalyticsViewPayload} */ (viewCache.get(key));
         viewCache.delete(key);
         viewCache.set(key, cachedPayload);
         self.postMessage({
@@ -533,7 +557,7 @@ function cancelPendingRequests() {
 /**
  * Run a request after the ones before it, unless a clear arrives first.
  * @param {() => unknown} run - Request handler
- * @param {number|string} requestId - ID reported with a failure
+ * @param {RequestId} requestId - ID reported with a failure
  * @returns {Promise<void>}
  */
 function enqueueRequest(run, requestId) {

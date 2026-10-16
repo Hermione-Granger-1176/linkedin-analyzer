@@ -47,7 +47,14 @@ export function terminateMessagesWorker() {
 }
 
 /**
- * @typedef {{messageState: object, connectionState: object|null}} MessagesState
+ * @typedef {import("../messages/analytics.js").MessageState} MessageState
+ * @typedef {import("../messages/analytics.js").ConnectionState} ConnectionState
+ * @typedef {{messageState: MessageState, connectionState: ConnectionState|null}} MessagesState
+ */
+
+/**
+ * Result of `LinkedInCleaner.process`, as far as this transport reads it.
+ * @typedef {{success: boolean, cleanedData: Array<Record<string, string>>}} CleanedRows
  */
 
 /**
@@ -126,7 +133,7 @@ function requestStateFromWorker(messagesCsv, connectionsCsv) {
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
- * @param {object} message - Parsed worker message
+ * @param {import("../../app/worker-contracts.js").MessagesWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
  * @returns {MessagesState|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
@@ -161,7 +168,7 @@ function interpretReply(message, context) {
 
 /**
  * Rehydrate the Maps and Sets the worker had to flatten to send.
- * @param {object} payload - Successful worker payload
+ * @param {import("../../app/worker-contracts.js").PlainObject} payload - Successful worker payload
  * @returns {MessagesState|typeof FAILED} Hydrated state, or FAILED when it holds no messages
  */
 function hydrateWorkerPayload(payload) {
@@ -192,7 +199,9 @@ function hydrateWorkerPayload(payload) {
  */
 function buildStateOnMainThread(messagesCsv, connectionsCsv) {
     try {
-        const messages = LinkedInCleaner.process(messagesCsv, "messages");
+        const messages = /** @type {CleanedRows} */ (
+            LinkedInCleaner.process(messagesCsv, "messages")
+        );
         if (!messages.success) {
             return null;
         }
@@ -204,7 +213,7 @@ function buildStateOnMainThread(messagesCsv, connectionsCsv) {
         // A connections file is optional, and one that will not parse costs the
         // lists that need it rather than the whole dashboard.
         const connections = connectionsCsv
-            ? LinkedInCleaner.process(connectionsCsv, "connections")
+            ? /** @type {CleanedRows} */ (LinkedInCleaner.process(connectionsCsv, "connections"))
             : null;
         const connectionState =
             connections && connections.success

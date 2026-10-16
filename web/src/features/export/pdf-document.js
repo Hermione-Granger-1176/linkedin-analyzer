@@ -95,16 +95,41 @@ const ACCENT_TOKENS = Object.freeze({
 const DEFAULT_ACCENT = "--accent-blue";
 
 /**
- * @typedef {{r: number, g: number, b: number}} Rgb
- * @typedef {Readonly<Record<string, Rgb>>} Palette
- * @typedef {{height: number, draw: (x: number, y: number) => void}} Row
- * @typedef {{x: number, y: number}} Point
+ * @typedef {import("./pdf-layout.js").Rgb} Rgb
+ * @typedef {import("./pdf-layout.js").Palette} Palette
+ * @typedef {import("./pdf-layout.js").Row} Row
+ * @typedef {import("./pdf-layout.js").Point} Point
+ * @typedef {import("./pdf-layout.js").Painter} Painter
  * @typedef {{kind: string, rows: Row[], keepTogether?: boolean, keepWithNext?: boolean, pageBreakBefore?: boolean, spacingAfter?: number, continuation?: string, drawChrome?: (x: number, y: number, height: number) => void}} Block
  * @typedef {{block: Block, rows: Row[], y: number}} Segment
- * @typedef {{palette: Palette, fonts: {body: string, accent: string}, wrap: (text: string, width: number, family: string, size: number) => string[], measure: (text: string, family: string, size: number) => number, text: (value: string, x: number, baseline: number, family: string, size: number, color: Rgb, options?: object) => void, fillRect: (x: number, y: number, width: number, height: number, color: Rgb, radius?: number) => void, fillCircle: (x: number, y: number, radius: number, color: Rgb) => void, polygon: (points: Point[], color: Rgb) => void, polyline: (points: Point[], color: Rgb, width: number) => void}} Painter
  * @typedef {{label: string, value: string}} Stat
- * @typedef {{title: string, subtitle?: string, stats: Stat[], charts: object[]}} Dashboard
- * @typedef {{generatedAt: Date, rangeLabel: string, dashboards: Dashboard[], insights: object[], tip: string|null, allTime: Stat[], threads: object[]}} DocumentModel
+ */
+
+/**
+ * A chart a dashboard asks for, discriminated on `type`.
+ * @typedef {{type: "line", title: string, points: import("./pdf-charts.js").LinePoint[]}} LineChart
+ * @typedef {{type: "bar", title: string, items: import("./pdf-charts.js").BarItem[]}} BarChart
+ * @typedef {{type: "heatmap", title: string, grid: number[][]}} HeatmapChart
+ * @typedef {{type: "list", title: string, items: import("./pdf-charts.js").ListItem[]}} ListChart
+ * @typedef {LineChart|BarChart|HeatmapChart|ListChart} Chart
+ */
+
+/**
+ * An insight card, as the analytics worker or the Insights snapshot hands it over.
+ * @typedef {{title: string, body: string, accent: string}} Insight
+ */
+
+/**
+ * @typedef {import("./threads.js").ThreadMessage} ThreadMessage
+ * @typedef {import("./threads.js").SelectedThread} Thread
+ */
+
+/**
+ * @typedef {{title: string, subtitle?: string, stats: Stat[], charts: Chart[]}} Dashboard
+ */
+
+/**
+ * @typedef {{generatedAt: Date, rangeLabel: string, dashboards: Dashboard[], insights: Insight[], tip: string|null, allTime: Stat[], threads: Thread[]}} DocumentModel
  */
 
 /**
@@ -169,7 +194,9 @@ function leadingRequirement(blocks, from, usableHeight) {
  * @returns {Segment[][]} Placed segments per page
  */
 export function paginateBlocks(blocks, usableHeight) {
+    /** @type {Segment[][]} */
     const pages = [];
+    /** @type {Segment[]} */
     let page = [];
     let cursor = 0;
 
@@ -247,7 +274,7 @@ export function paginateBlocks(blocks, usableHeight) {
 
 /**
  * Build the drawing context the row painters close over.
- * @param {object} doc - jsPDF document
+ * @param {import("jspdf").jsPDF} doc - jsPDF document
  * @param {Palette} palette - Palette from readPdfPalette()
  * @param {{body: string, accent: string}} fonts - Registered font families
  * @returns {Painter} Drawing helpers
@@ -302,7 +329,7 @@ export function createPainter(doc, palette, fonts) {
      * @param {string} family - Registered family name
      * @param {number} size - Font size in points
      * @param {Rgb} color - Text color
-     * @param {object} [options] - jsPDF text options
+     * @param {import("./pdf-layout.js").TextOptions} [options] - jsPDF text options
      */
     const drawText = (value, x, baseline, family, size, color, options) => {
         useFont(family, size);
@@ -393,7 +420,7 @@ export function createPainter(doc, palette, fonts) {
  * @returns {Rgb} Accent color
  */
 function accentColor(palette, accent, suffix = "") {
-    const token = ACCENT_TOKENS[accent] || DEFAULT_ACCENT;
+    const token = /** @type {Record<string, string>} */ (ACCENT_TOKENS)[accent] || DEFAULT_ACCENT;
     return palette[`${token}${suffix}`] || palette[token];
 }
 
@@ -449,6 +476,7 @@ function buildHeaderBlock(painter, data) {
     const { palette, fonts } = painter;
     const titleSize = 26;
     const metaSize = 10.5;
+    /** @type {Row[]} */
     const rows = [
         {
             height: lineHeightMm(titleSize) + 2,
@@ -500,6 +528,7 @@ function buildSectionBlock(painter, label, options = {}) {
     const size = 15;
     const captionSize = 9;
 
+    /** @type {Row[]} */
     const rows = [
         {
             height: lineHeightMm(size) + 3,
@@ -547,7 +576,7 @@ function buildSectionBlock(painter, label, options = {}) {
 /**
  * Build one insight card block.
  * @param {Painter} painter - Drawing helpers
- * @param {object} insight - Insight from the analytics worker
+ * @param {Insight} insight - Insight from the analytics worker
  * @param {number} index - One-based card number shown in the roundel
  * @returns {Block} Block
  */
@@ -566,6 +595,7 @@ function buildInsightBlock(painter, insight, index) {
     );
     const bodyLines = painter.wrap(insight.body, CARD_TEXT_WIDTH, fonts.body, bodySize);
 
+    /** @type {Row[]} */
     const rows = titleLines.map((line, lineIndex) => {
         const top = lineIndex === 0 ? CARD_PADDING : 0;
         return {
@@ -625,6 +655,7 @@ function buildTipBlock(painter, tip) {
     const bodySize = 10.5;
     const lines = painter.wrap(tip, CARD_TEXT_WIDTH, fonts.body, bodySize);
 
+    /** @type {Row[]} */
     const rows = [
         {
             height: lineHeightMm(labelSize) + CARD_PADDING,
@@ -700,6 +731,7 @@ function buildStatsBlock(painter, stats, columns = STAT_COLUMNS) {
     const { palette, fonts } = painter;
     const tileWidth = (CONTENT_WIDTH - STAT_GAP * (columns - 1)) / columns;
     const valueWidth = tileWidth - CARD_GUTTER - CARD_PADDING;
+    /** @type {Row[]} */
     const rows = [];
 
     for (let index = 0; index < stats.length; index += columns) {
@@ -755,7 +787,7 @@ function buildStatsBlock(painter, stats, columns = STAT_COLUMNS) {
 /**
  * Build the header for one person's thread.
  * @param {Painter} painter - Drawing helpers
- * @param {object} thread - Selected thread
+ * @param {Thread} thread - Selected thread
  * @returns {Block} Block
  */
 function buildThreadHeaderBlock(painter, thread) {
@@ -767,6 +799,7 @@ function buildThreadHeaderBlock(painter, thread) {
     // fallback all overrun the right margin if they are drawn unmeasured.
     const nameLines = painter.wrap(thread.name, CONTENT_WIDTH, fonts.body, nameSize);
 
+    /** @type {Row[]} */
     const rows = nameLines.map((line, index) => ({
         height: lineHeightMm(nameSize) + (index === 0 ? 2 : 0),
         draw: (x, y) => {
@@ -839,7 +872,7 @@ function messageChip(palette, direction) {
 /**
  * Build one message block, chip and all.
  * @param {Painter} painter - Drawing helpers
- * @param {{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}} message - Message
+ * @param {ThreadMessage} message - Message
  * @returns {Block} Block
  */
 function buildMessageBlock(painter, message) {
@@ -849,6 +882,7 @@ function buildMessageBlock(painter, message) {
     const { rule, fill, label } = messageChip(palette, message.direction);
 
     const lines = painter.wrap(message.body, CARD_TEXT_WIDTH, fonts.body, bodySize);
+    /** @type {Row[]} */
     const rows = [
         {
             height: lineHeightMm(metaSize) + 3.2,
@@ -933,12 +967,15 @@ function buildEmptyBlock(painter) {
  * decides how it is drawn, so a new chart on a screen becomes one more entry in
  * a dashboard's `charts` array rather than another branch down here.
  */
-const CHART_BUILDERS = Object.freeze({
-    line: buildLineChartBlocks,
-    bar: buildBarChartBlocks,
-    heatmap: buildHeatmapBlocks,
-    list: buildListBlocks,
-});
+const CHART_BUILDERS =
+    /** @type {Readonly<Record<string, (painter: Painter, chart: Chart) => Block[]>>} */ (
+        Object.freeze({
+            line: buildLineChartBlocks,
+            bar: buildBarChartBlocks,
+            heatmap: buildHeatmapBlocks,
+            list: buildListBlocks,
+        })
+    );
 
 /**
  * Report whether a chart has anything to plot.
@@ -950,14 +987,19 @@ const CHART_BUILDERS = Object.freeze({
  * A heatmap is measured by its cells rather than by its rows: the analytics
  * worker always hands over a full week of hours, so a length test would call a
  * week with no activity in it data.
- * @param {object} chart - Chart configuration from the document model
+ * @param {Chart} chart - Chart configuration from the document model
  * @returns {boolean} True when the chart carries data
  */
 function hasChartData(chart) {
-    if (Array.isArray(chart.grid)) {
-        return chart.grid.flat().some((value) => value > 0);
+    // Read through one loose view: the model crosses no contract, so a chart may
+    // carry any of these whatever its `type` says.
+    const fields = /** @type {{grid?: number[][], points?: unknown[], items?: unknown[]}} */ (
+        chart
+    );
+    if (Array.isArray(fields.grid)) {
+        return fields.grid.flat().some((value) => value > 0);
     }
-    const series = chart.points || chart.items;
+    const series = fields.points || fields.items;
     return Array.isArray(series) && series.length > 0;
 }
 
@@ -1132,7 +1174,7 @@ function drawFooter(painter, pageNumber, pageCount) {
 
 /**
  * Draw the whole document onto a jsPDF instance.
- * @param {object} doc - jsPDF document, A4 in millimetres
+ * @param {import("jspdf").jsPDF} doc - jsPDF document, A4 in millimetres
  * @param {DocumentModel} data - Document model from collectExportData()
  * @param {{palette: Palette, fonts: {body: string, accent: string}}} theme - Palette and registered fonts
  * @returns {number} Page count

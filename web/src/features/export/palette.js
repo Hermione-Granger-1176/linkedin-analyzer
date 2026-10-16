@@ -223,11 +223,13 @@ function probeStyle(probe) {
  */
 export function readPdfPalette() {
     const probe = mountProbe();
+    /** @type {Record<string, Readonly<{r: number, g: number, b: number}>>} */
     const palette = {};
+    const fallback = /** @type {typeof palette} */ (FALLBACK_PALETTE);
     try {
         const computed = probeStyle(probe);
         for (const token of PDF_PALETTE_TOKENS) {
-            palette[token] = readToken(computed, token) || FALLBACK_PALETTE[token];
+            palette[token] = readToken(computed, token) || fallback[token];
         }
     } finally {
         if (probe && probe.parentNode) {

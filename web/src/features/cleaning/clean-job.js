@@ -19,13 +19,27 @@ import { ExcelGenerator } from "./excel.js";
 
 export const PREVIEW_ROW_LIMIT = 5;
 
-/** @type {{key: string, fileType: string, sourceSize: number, rows: object[], rowCount: number}|null} */
+/** @typedef {import("./cleaner.js").CleanedRow} CleanedRow */
+/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
+/** @typedef {import("../../app/worker-contracts.js").CleanedPayload} CleanedPayload */
+
+/**
+ * Cleaned rows of the last file, kept for a later download of the same upload.
+ * @typedef {object} HeldClean
+ * @property {string} key - Stored upload key
+ * @property {string} fileType - File type the rows were cleaned as
+ * @property {number} sourceSize - Size of the source, for the Excel size limit
+ * @property {CleanedRow[]} rows - Cleaned rows
+ * @property {number} rowCount - Cleaned row count
+ */
+
+/** @type {HeldClean|null} */
 let held = null;
 
 /**
  * Clean the requested file, or reuse the rows already cleaned from it.
  * @param {{fileType: string, source: Blob|string, key: string}} payload - Request payload
- * @returns {Promise<{rows: object[], rowCount: number, sourceSize: number}|{error: string}>}
+ * @returns {Promise<HeldClean|{error: string}>}
  */
 async function cleanFile({ fileType, source, key }) {
     if (held && key && held.key === key && held.fileType === fileType) {
@@ -59,15 +73,15 @@ function toPreviewText(value) {
 
 /**
  * Handle one cleaning request.
- * @param {{fileType: string, output: "preview"|"xlsx"|"csv", source: Blob|string, key: string}} payload - Request payload
- * @returns {Promise<{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}>}
+ * @param {CleaningRequestPayload} payload - Request payload
+ * @returns {Promise<CleanedPayload>}
  */
 export async function runCleanJob(payload) {
     const cleaned = await cleanFile(payload);
     if ("error" in cleaned) {
         return { success: false, error: cleaned.error, rowCount: 0, previewRows: [], blob: null };
     }
-    /** @type {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}} */
+    /** @type {CleanedPayload} */
     const reply = {
         success: true,
         error: null,
@@ -76,9 +90,11 @@ export async function runCleanJob(payload) {
         blob: null,
     };
     if (payload.output === "preview") {
-        const headers = LinkedInCleaner.configs[payload.fileType].columns.map(
-            (column) => column.name,
+        // The clean succeeded, so fileType names a known config.
+        const config = /** @type {import("./configs.js").CleanerConfig} */ (
+            LinkedInCleaner.configs[payload.fileType]
         );
+        const headers = config.columns.map((column) => column.name);
         reply.previewRows = cleaned.rows
             .slice(0, PREVIEW_ROW_LIMIT)
             .map((row) => headers.map((header) => toPreviewText(row[header])));

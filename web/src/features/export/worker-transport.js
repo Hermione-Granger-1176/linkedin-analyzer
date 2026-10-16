@@ -49,17 +49,18 @@ export const PENDING = Symbol("export-request-pending");
  */
 
 /**
+ * @template M, R
  * @typedef {object} RequestOptions
  * @property {{type: string, payload: object}} envelope - Message to post, which the transport stamps with the request id
- * @property {(data: object) => {valid: boolean, value?: object, error?: string}} parse - Contract parser for replies
- * @property {(message: object, context: ReplyContext) => *} interpret - Read one valid reply into an outcome, or PENDING to keep waiting
+ * @property {(data: unknown) => import("../../app/worker-contracts.js").ParseResult<M>} parse - Contract parser for replies
+ * @property {(message: M, context: ReplyContext) => R|typeof PENDING} interpret - Read one valid reply into an outcome, or PENDING to keep waiting
  * @property {number} timeoutMs - Watchdog budget for this request
  */
 
 /**
  * @typedef {object} WorkerTransport
  * @property {() => void} terminate - Terminate the worker and settle whatever it was answering
- * @property {(options: RequestOptions) => Promise<*>} request - Post one request and wait for its outcome
+ * @property {<M, R>(options: RequestOptions<M, R>) => Promise<R|null|typeof CANCELLED>} request - Post one request and wait for its outcome
  */
 
 /**
@@ -85,7 +86,7 @@ export const PENDING = Symbol("export-request-pending");
  * The request ends here either way rather than sitting out its watchdog: only
  * one request is ever in flight, and a worker that has reported it cannot
  * answer is not going to answer.
- * @param {object} message - Parsed reply reporting a failure
+ * @param {{requestId: import("../../app/worker-contracts.js").RequestId}} message - Parsed reply reporting a failure
  * @param {ReplyContext} context - The request's id and error reporter
  * @returns {null|typeof FAILED} FAILED when the worker attributed the failure to this request, null otherwise
  */
@@ -104,10 +105,12 @@ export function createWorkerTransport(config) {
     // and the message beside it can never end up naming different workers.
     const label = `${name[0].toUpperCase()}${name.slice(1)}`;
 
+    /** @type {Worker|null} */
     let worker = null;
     let requestCount = 0;
     // Set and cleared with pendingRequest: a watchdog exists exactly while a
     // request is in flight.
+    /** @type {number|null} */
     let timeoutId = null;
     /**
      * Settle hook for the one request that can be in flight, so termination can
@@ -169,8 +172,9 @@ export function createWorkerTransport(config) {
 
     /**
      * Post one request to the worker and wait for whatever settles it.
-     * @param {RequestOptions} options - What to ask, how to read the reply, and how long to wait
-     * @returns {Promise<*>} The interpreted outcome, CANCELLED, or null when the mechanism never got an answer
+     * @template M, R
+     * @param {RequestOptions<M, R>} options - What to ask, how to read the reply, and how long to wait
+     * @returns {Promise<R|null|typeof CANCELLED>} The interpreted outcome, CANCELLED, or null when the mechanism never got an answer
      */
     const request = (options) => {
         const { envelope, parse, interpret, timeoutMs } = options;
@@ -179,6 +183,9 @@ export function createWorkerTransport(config) {
         if (!worker) {
             return Promise.resolve(null);
         }
+        // The promise executor below runs synchronously, so this is the same
+        // worker it attaches to and posts through.
+        const activeWorker = worker;
         // Only one request can own the watchdog and the settle hook. A second
         // arriving while the first is in flight would adopt both, and the first
         // to be answered would then clear the second's watchdog and null its
@@ -216,7 +223,7 @@ export function createWorkerTransport(config) {
 
             /**
              * End the request, dropping everything it was holding.
-             * @param {*} result - Outcome for the caller
+             * @param {R|null|typeof CANCELLED} result - Outcome for the caller
              */
             const settle = (result) => {
                 // Every completion path removes listeners and clears the watchdog.
@@ -230,6 +237,7 @@ export function createWorkerTransport(config) {
                 resolve(result);
             };
 
+            /** @param {MessageEvent} event - Worker reply */
             const handleMessage = (event) => {
                 const parsed = parse(event.data || {});
                 if (!parsed.valid) {
@@ -237,10 +245,7 @@ export function createWorkerTransport(config) {
                     return;
                 }
 
-                // A valid parse always carries a value; the contract's return
-                // type marks it optional because an invalid one carries an error
-                // in its place.
-                const outcome = interpret(/** @type {object} */ (parsed.value), {
+                const outcome = interpret(parsed.value, {
                     requestId,
                     report: reportRequest,
                 });
@@ -249,6 +254,7 @@ export function createWorkerTransport(config) {
                 }
             };
 
+            /** @param {Event} event - Worker error or messageerror event */
             const handleError = (event) => {
                 // Cancelling the event suppresses the browser's own reporting of
                 // it, which would otherwise print the worker's error, and
@@ -269,9 +275,9 @@ export function createWorkerTransport(config) {
             const entry = { cancel: () => settle(CANCELLED) };
             pendingRequest = entry;
 
-            worker.addEventListener("message", handleMessage);
-            worker.addEventListener("error", handleError);
-            worker.addEventListener("messageerror", handleError);
+            activeWorker.addEventListener("message", handleMessage);
+            activeWorker.addEventListener("error", handleError);
+            activeWorker.addEventListener("messageerror", handleError);
 
             timeoutId = window.setTimeout(() => {
                 timeoutId = null;
@@ -280,7 +286,7 @@ export function createWorkerTransport(config) {
             }, timeoutMs);
 
             try {
-                worker.postMessage({ ...envelope, requestId });
+                activeWorker.postMessage({ ...envelope, requestId });
             } catch {
                 // A structured-clone failure names the value it could not clone,
                 // and that value is one of the raw exports.

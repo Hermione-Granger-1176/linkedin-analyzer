@@ -210,6 +210,16 @@ After step 4c (the analytics worker parses and cleans each chunk as it streams),
 
 - Analytics is about 0.75 s faster, but the workers now peak near 845 MB. Cleaned cells are slices of the decoded chunks, so the chunks stay alive, and the worker still joins them into one more full string to return to the page. Step 4e stops returning the text, which removes that copy.
 
+After step 4e (uploads are stored as `Blob` records and every worker reads the stored file itself), 3 runs at `cpu=1` on the same machine and export:
+
+| Size   | Options | Analytics ready    | Messages ready     | Cached filter    | Peak heap        |
+| ------ | ------- | ------------------ | ------------------ | ---------------- | ---------------- |
+| 100 MB | `cpu=1` | 7.99 s (7.64-8.29) | 8.40 s (8.12-8.60) | 180 ms (108-196) | 589 MB (585-593) |
+
+- The peak halved from 1177 MB after step 4c and is 37% below the 934 MB step 4a baseline. The page now holds about 6 MB at the peak, down from 330 MB: it never holds file text.
+- The workers still peak near 585 MB, about twice the provisional 300 MB budget, so the public limits stay where they are. The rest is the decoded text and cleaned rows inside the parsing workers.
+- Analytics is about 5% slower than the step 4a baseline at 100 MB and 1.6 s slower than after step 4c, because the Messages screen's worker now reads the stored file itself rather than receiving text.
+
 ### Retained analysis state
 
 `make audit-state` forces garbage collection around each step and reports how many bytes of heap and array-buffer memory each structure keeps alive. It loads the web modules in `measurement` mode, so a 100 MB export passes the raised limits. Cleaned rows are transient: a worker holds them only while it builds state. The page keeps the message and connection state, and the analytics worker keeps its analytics state for filter changes. Field rows show what dropping that field frees, in table order.
@@ -235,16 +245,17 @@ Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
 
 ### Export memory
 
-`make bench-browser export=excel` adds one cleaned `messages.csv` Excel download from the Clean screen after Messages is ready; `export=pdf` adds a PDF export with message bodies and `export=pdf-summary` one without. The run reports the export time and the combined peak while it runs, which includes every worker still alive. Measured on 2026-10-16 after step 4d, one run each at `cpu=1`:
+`make bench-browser export=excel` adds one cleaned `messages.csv` Excel download from the Clean screen after Messages is ready; `export=pdf` adds a PDF export with message bodies and `export=pdf-summary` one without. The run reports the export time and the combined peak while it runs, which includes every worker still alive. Measured on 2026-10-16 after step 4d, one run each at `cpu=1`, with the step 4e column the median of two runs:
 
-| Export      | 10 MB export   | 30 MB export   | 100 MB export    |
-| ----------- | -------------- | -------------- | ---------------- |
-| Excel       | 2.62 s, 191 MB | 7.64 s, 610 MB | 29.22 s, 1281 MB |
-| PDF, bodies | 2.47 s, 162 MB | 5.75 s, 458 MB | 18.08 s, 1114 MB |
-| PDF summary | not measured   | not measured   | 15.00 s, 1927 MB |
+| Export      | 10 MB export   | 30 MB export   | 100 MB export    | 100 MB after 4e |
+| ----------- | -------------- | -------------- | ---------------- | --------------- |
+| Excel       | 2.62 s, 191 MB | 7.64 s, 610 MB | 29.22 s, 1281 MB | refused         |
+| PDF, bodies | 2.47 s, 162 MB | 5.75 s, 458 MB | 18.08 s, 1114 MB | 19.26 s, 648 MB |
+| PDF summary | not measured   | not measured   | 15.00 s, 1927 MB | 12.94 s, 599 MB |
 
 - The Excel workbook costs about 25 MB of heap per MB of `messages.csv`, almost all on the page, so it would pass the 300 MB budget only up to about 12 MB. The Clean screen now builds workbooks only for files up to 10 MiB, says why for larger ones, and offers a cleaned CSV that it writes in 2,000-row parts into a `Blob`, so no single string holds the whole file.
-- Both PDF exports go over the budget at 100 MB, with or without message bodies. Most of the peak is the stored text read back from IndexedDB and the analysis workers that are still alive, not the bodies, so the PDF limit waits for step 4e, which stops storing and passing decoded text.
+- Before step 4e both PDF exports went over the budget at 100 MB, with or without message bodies. Most of the peak was the stored text read back from IndexedDB and the analysis workers still alive, not the bodies.
+- After step 4e the PDF export adds about 60 MB with message bodies and about 10 MB without them over the 589 MB analysis peak, and the page holds about 80 MB during the export. The export is no longer what sets the peak, so it gets no size limit of its own; the analysis workers are what must shrink.
 
 ## Run documentation and repository checks
 

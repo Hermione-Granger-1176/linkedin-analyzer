@@ -2,19 +2,19 @@
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { readCsvSource } from "../upload/read.js";
 
 import { MessagesAnalytics } from "./analytics.js";
 
 /**
- * Parse messages and connections CSV payload.
- * @param {{messagesCsv?: string, connectionsCsv?: string}} payload - Raw CSV payload
- * @returns {{success: boolean, messageState?: object, connectionState?: object, totalInputRows?: number, connectionError?: string|null, error?: string, messagesData?: object[], connectionsData?: object[]}}
+ * Parse messages and connections payload. Each file arrives as the stored
+ * upload Blob, read here off the main thread, or as CSV text.
+ * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Raw payload
+ * @returns {Promise<{success: boolean, messageState?: object, connectionState?: object, totalInputRows?: number, connectionError?: string|null, error?: string, messagesData?: object[], connectionsData?: object[]}>}
  */
-function processPayload(payload) {
-    /* v8 ignore next */
-    const messagesCsv = typeof payload.messagesCsv === "string" ? payload.messagesCsv : "";
-    /* v8 ignore next */
-    const connectionsCsv = typeof payload.connectionsCsv === "string" ? payload.connectionsCsv : "";
+async function processPayload(payload) {
+    const messagesCsv = await readCsvSource(payload.messagesCsv);
+    const connectionsCsv = await readCsvSource(payload.connectionsCsv);
 
     const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
     if (!messagesResult.success) {
@@ -164,7 +164,7 @@ function extractWorkerRejection(event) {
 
 /* v8 ignore next 19 */
 if (typeof self !== "undefined") {
-    self.addEventListener("message", (event) => {
+    self.addEventListener("message", async (event) => {
         const rawMessage = event.data || {};
         if (!rawMessage || rawMessage.type !== "process") {
             return;
@@ -178,7 +178,7 @@ if (typeof self !== "undefined") {
 
         const message = parsed.value;
         try {
-            const payload = processPayload(message.payload);
+            const payload = await processPayload(message.payload);
             self.postMessage(
                 {
                     type: "processed",

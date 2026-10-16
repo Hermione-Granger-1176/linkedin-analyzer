@@ -2,6 +2,7 @@
 
 import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { readCsvSource } from "../upload/read.js";
 
 import { buildGrowthTimeline, computeStats } from "./view.js";
 
@@ -103,7 +104,7 @@ function extractWorkerRejection(event) {
 /* -- Worker message handler -------------------------------------------------- */
 
 if (typeof self !== "undefined") {
-    self.addEventListener("message", (event) => {
+    self.addEventListener("message", async (event) => {
         const rawMessage = event.data || {};
         if (!rawMessage || rawMessage.type !== "process") {
             return;
@@ -117,7 +118,8 @@ if (typeof self !== "undefined") {
 
         const message = parsed.value;
         try {
-            const result = processConnections(message.payload.connectionsCsv);
+            // The page sends the stored upload Blob; read it here, off the main thread.
+            const result = processConnections(await readCsvSource(message.payload.connectionsCsv));
 
             self.postMessage({
                 type: "processed",

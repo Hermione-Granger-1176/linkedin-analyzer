@@ -114,7 +114,7 @@ try {
 
     // Page-side message state: what the page keeps after the worker transfer.
     let pageBase = used();
-    let payload = processPayload({
+    let payload = await processPayload({
         messagesCsv: text["messages.csv"],
         connectionsCsv: text["Connections.csv"],
     });

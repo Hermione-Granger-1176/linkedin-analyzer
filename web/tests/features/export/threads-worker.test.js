@@ -52,8 +52,8 @@ describe("threads worker", () => {
         vi.restoreAllMocks();
     });
 
-    it("cleans the CSV and selects threads", () => {
-        const result = processPayload({ messagesCsv: MESSAGES_CSV });
+    it("cleans the CSV and selects threads", async () => {
+        const result = await processPayload({ messagesCsv: MESSAGES_CSV });
 
         expect(result.success).toBe(true);
         expect(result.error).toBeNull();
@@ -68,8 +68,8 @@ describe("threads worker", () => {
         ]);
     });
 
-    it("honours the selection limits from the request", () => {
-        const result = processPayload({
+    it("honours the selection limits from the request", async () => {
+        const result = await processPayload({
             messagesCsv: MESSAGES_CSV,
             people: 1,
             messagesPerPerson: 1,
@@ -79,21 +79,21 @@ describe("threads worker", () => {
         expect(result.threads[0].messages).toHaveLength(1);
     });
 
-    it("breaks a self-detection tie with the connections file from the request", () => {
-        const unaided = processPayload({ messagesCsv: TIED_CSV });
+    it("breaks a self-detection tie with the connections file from the request", async () => {
+        const unaided = await processPayload({ messagesCsv: TIED_CSV });
         expect(directions(unaided)).toEqual(["unknown", "unknown"]);
 
         // Ada is a connection, and you are never in your own connections. The
         // keys are derived here rather than posted in: parsing this file is the
         // last piece of export work that used to run on the UI thread.
-        const aided = processPayload({
+        const aided = await processPayload({
             messagesCsv: TIED_CSV,
             connectionsCsv: adaConnectionsCsv("01 Jan 2024"),
         });
         expect(directions(aided)).toEqual(["sent", "received"]);
     });
 
-    it("keeps a connection whose export recorded no connection date", () => {
+    it("keeps a connection whose export recorded no connection date", async () => {
         // The spreadsheet cleaner drops a row with no "Connected On", which is
         // right for the connections dashboard and wrong here: somebody you are
         // connected to is still not you whether or not the export recorded when
@@ -102,13 +102,13 @@ describe("threads worker", () => {
         const undated = adaConnectionsCsv("");
         expect(LinkedInCleaner.process(undated, "connections").cleanedData).toHaveLength(0);
 
-        const result = processPayload({ messagesCsv: TIED_CSV, connectionsCsv: undated });
+        const result = await processPayload({ messagesCsv: TIED_CSV, connectionsCsv: undated });
 
         expect(directions(result)).toEqual(["sent", "received"]);
     });
 
-    it("leaves the tie unresolved when the connections file will not parse", () => {
-        const result = processPayload({
+    it("leaves the tie unresolved when the connections file will not parse", async () => {
+        const result = await processPayload({
             messagesCsv: TIED_CSV,
             connectionsCsv: "not,a,connections,export",
         });
@@ -117,14 +117,14 @@ describe("threads worker", () => {
         expect(directions(result)).toEqual(["unknown", "unknown"]);
     });
 
-    it("treats a non-string connections file as absent", () => {
-        const result = processPayload({ messagesCsv: TIED_CSV, connectionsCsv: 7 });
+    it("treats a non-string connections file as absent", async () => {
+        const result = await processPayload({ messagesCsv: TIED_CSV, connectionsCsv: 7 });
 
         expect(result.success).toBe(true);
         expect(directions(result)).toEqual(["unknown", "unknown"]);
     });
 
-    it("keeps the thread selection when the connections parse throws", () => {
+    it("keeps the thread selection when the connections parse throws", async () => {
         // A tiebreak is a nicety: losing it costs a direction chip, not the
         // section. Nothing the parse threw may reach the reply either, since it
         // was reading the user's own connections when it failed.
@@ -136,7 +136,7 @@ describe("threads worker", () => {
             return parseCSV.call(LinkedInCleaner, text, fileType);
         });
 
-        const result = processPayload({
+        const result = await processPayload({
             messagesCsv: TIED_CSV,
             connectionsCsv: adaConnectionsCsv("01 Jan 2024"),
         });
@@ -146,7 +146,31 @@ describe("threads worker", () => {
         expect(JSON.stringify(result)).not.toContain(PII_MARKER);
     });
 
-    it("keeps formula-prefixed and whitespace-led bodies verbatim", () => {
+    it("reads stored upload Blobs for both files", async () => {
+        const result = await processPayload({
+            messagesCsv: new Blob([TIED_CSV]),
+            connectionsCsv: new Blob([adaConnectionsCsv("01 Jan 2024")]),
+        });
+
+        expect(directions(result)).toEqual(["sent", "received"]);
+    });
+
+    it("keeps the thread selection when the connections file cannot be read", async () => {
+        const messagesCsv = await new Blob([TIED_CSV]).text();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        const result = await processPayload({
+            messagesCsv,
+            connectionsCsv: new Blob([adaConnectionsCsv("01 Jan 2024")]),
+        });
+
+        expect(result.success).toBe(true);
+        expect(directions(result)).toEqual(["unknown", "unknown"]);
+    });
+
+    it("keeps formula-prefixed and whitespace-led bodies verbatim", async () => {
         // The spreadsheet cleaner quote-prefixes every one of these and trims the
         // rest, which is right for a workbook and wrong for a PDF.
         const bodies = [
@@ -174,7 +198,7 @@ describe("threads worker", () => {
             ...rows,
         ].join("\n");
 
-        const result = processPayload({ messagesCsv: csv, people: 10 });
+        const result = await processPayload({ messagesCsv: csv, people: 10 });
 
         expect(result.success).toBe(true);
         const exported = result.threads
@@ -184,14 +208,14 @@ describe("threads worker", () => {
         expect(exported.some((body) => body.startsWith("'"))).toBe(false);
     });
 
-    it("keeps a body's own line breaks and control characters", () => {
+    it("keeps a body's own line breaks and control characters", async () => {
         const csv = [
             "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
             'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"line one\nline two",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
             'c2,Sam Self,Bob,2025-01-02 10:00:00 UTC,"she said ""yes"" twice",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
         ].join("\n");
 
-        const result = processPayload({ messagesCsv: csv });
+        const result = await processPayload({ messagesCsv: csv });
         const bodies = Object.fromEntries(
             result.threads.map((thread) => [thread.name, thread.messages[0].body]),
         );
@@ -200,12 +224,12 @@ describe("threads worker", () => {
         expect(bodies.Bob).toBe('she said "yes" twice');
     });
 
-    it("reports a fixed error for an unparseable CSV", () => {
+    it("reports a fixed error for an unparseable CSV", async () => {
         // The only test of the one string this worker is allowed to emit, and
         // truthiness was all it used to ask for. This worker holds the raw
         // messages CSV, so returning the head of it as the "error" would have
         // put message text across the worker boundary and still passed.
-        const result = processPayload({ messagesCsv: `not,a,valid,csv ${PII_MARKER}` });
+        const result = await processPayload({ messagesCsv: `not,a,valid,csv ${PII_MARKER}` });
 
         expect(result.success).toBe(false);
         expect(result.threads).toEqual([]);
@@ -213,8 +237,8 @@ describe("threads worker", () => {
         expect(JSON.stringify(result)).not.toContain(PII_MARKER);
     });
 
-    it("treats a non-string CSV as empty", () => {
-        expect(processPayload({ messagesCsv: null }).success).toBe(false);
+    it("treats a non-string CSV as empty", async () => {
+        expect((await processPayload({ messagesCsv: null })).success).toBe(false);
     });
 });
 
@@ -255,11 +279,13 @@ describe("threads worker listeners", () => {
      * explicitly is what lets each failure test assert the id it is answered
      * under rather than inheriting whichever one the previous test left behind.
      * @param {number} requestId - Request id to serve
+     * @returns {Promise<void>} Resolves once the request is answered
      */
-    function serveRequest(requestId) {
+    async function serveRequest(requestId) {
         dispatch("message", {
             data: { type: "threads", requestId, payload: { messagesCsv: MESSAGES_CSV } },
         });
+        await vi.waitFor(() => expect(postMessageSpy).toHaveBeenCalled());
     }
 
     /**
@@ -277,27 +303,27 @@ describe("threads worker listeners", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("ignores messages that are not thread requests", () => {
+    it("ignores messages that are not thread requests", async () => {
         spyOnPostMessage();
         dispatch("message", { data: { type: "process" } });
 
         expect(postMessageSpy).not.toHaveBeenCalled();
     });
 
-    it("answers a thread request with the selection", () => {
+    it("answers a thread request with the selection", async () => {
         spyOnPostMessage();
         dispatch("message", {
             data: { type: "threads", requestId: 7, payload: { messagesCsv: MESSAGES_CSV } },
         });
 
-        expect(postMessageSpy).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(postMessageSpy).toHaveBeenCalledOnce());
         const [message] = postMessageSpy.mock.calls[0];
         expect(message).toMatchObject({ type: "threads", requestId: 7 });
         expect(message.payload.success).toBe(true);
         expect(message.payload.threads).toHaveLength(2);
     });
 
-    it("reports an invalid request payload under the id it arrived with", () => {
+    it("reports an invalid request payload under the id it arrived with", async () => {
         spyOnPostMessage();
         dispatch("message", { data: { type: "threads", requestId: 12, payload: {} } });
 
@@ -309,11 +335,9 @@ describe("threads worker listeners", () => {
         expect(message.payload.error).toContain("Missing messagesCsv payload");
     });
 
-    it("answers a runtime error under the active request id without its text", () => {
+    it("answers a runtime error under the active request id without its text", async () => {
         spyOnPostMessage();
-        dispatch("message", {
-            data: { type: "threads", requestId: 21, payload: { messagesCsv: MESSAGES_CSV } },
-        });
+        await serveRequest(21);
         const event = dispatch("error", { error: piiError("worker-runtime") });
 
         // Uncancelled, the browser reports this event itself, and that report
@@ -324,9 +348,9 @@ describe("threads worker listeners", () => {
         expectFixedFailure(message);
     });
 
-    it("never forwards the text of a string-only error event", () => {
+    it("never forwards the text of a string-only error event", async () => {
         spyOnPostMessage();
-        serveRequest(41);
+        await serveRequest(41);
         const event = dispatch("error", { message: `boom ${PII_MARKER}` });
 
         expect(event.defaultPrevented).toBe(true);
@@ -335,9 +359,9 @@ describe("threads worker listeners", () => {
         expectFixedFailure(message);
     });
 
-    it("answers an error event that carries nothing", () => {
+    it("answers an error event that carries nothing", async () => {
         spyOnPostMessage();
-        serveRequest(42);
+        await serveRequest(42);
         const event = dispatch("error");
 
         expect(event.defaultPrevented).toBe(true);
@@ -346,9 +370,9 @@ describe("threads worker listeners", () => {
         expectFixedFailure(message);
     });
 
-    it("never forwards the reason of an unhandled rejection", () => {
+    it("never forwards the reason of an unhandled rejection", async () => {
         spyOnPostMessage();
-        serveRequest(43);
+        await serveRequest(43);
         const event = dispatch("unhandledrejection", { reason: piiError("worker-rejection") });
 
         expect(event.defaultPrevented).toBe(true);
@@ -357,9 +381,9 @@ describe("threads worker listeners", () => {
         expectFixedFailure(message);
     });
 
-    it("never forwards an opaque rejection reason", () => {
+    it("never forwards an opaque rejection reason", async () => {
         spyOnPostMessage();
-        serveRequest(44);
+        await serveRequest(44);
         const event = dispatch("unhandledrejection", {
             reason: { kind: "opaque", body: PII_MARKER },
         });
@@ -370,9 +394,9 @@ describe("threads worker listeners", () => {
         expectFixedFailure(message);
     });
 
-    it("answers a rejection event that carries no reason", () => {
+    it("answers a rejection event that carries no reason", async () => {
         spyOnPostMessage();
-        serveRequest(45);
+        await serveRequest(45);
         const event = dispatch("unhandledrejection");
 
         expect(event.defaultPrevented).toBe(true);
@@ -381,7 +405,7 @@ describe("threads worker listeners", () => {
         expectFixedFailure(message);
     });
 
-    it("never forwards the text of a failure thrown while answering", () => {
+    it("never forwards the text of a failure thrown while answering", async () => {
         spyOnPostMessage();
         postMessageSpy.mockImplementationOnce(() => {
             throw piiError("post");
@@ -390,6 +414,7 @@ describe("threads worker listeners", () => {
             data: { type: "threads", requestId: 31, payload: { messagesCsv: MESSAGES_CSV } },
         });
 
+        await vi.waitFor(() => expect(postMessageSpy).toHaveBeenCalledTimes(2));
         const [message] = postMessageSpy.mock.calls[1];
         expect(message.requestId).toBe(31);
         expectFixedFailure(message);

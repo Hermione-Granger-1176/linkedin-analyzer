@@ -438,14 +438,29 @@ describe("collectExportData", () => {
         return call;
     }
 
+    const storedBlobs = new Map();
+
     /**
-     * Answer both stored-file reads with the texts a full export would find.
+     * The stored upload Blob for a text, the same instance on every call so a
+     * test can follow it from storage to the consumer it was handed to.
+     * @param {string} text - Stored file contents
+     * @returns {Blob} Stored upload
+     */
+    function stored(text) {
+        if (!storedBlobs.has(text)) {
+            storedBlobs.set(text, new Blob([text]));
+        }
+        return storedBlobs.get(text);
+    }
+
+    /**
+     * Answer both stored-file reads with the uploads a full export would find.
      * @param {{messages?: string|null, connections?: string|null}} texts - Stored texts
      */
     function storeFiles(texts) {
         Storage.getFile.mockImplementation((type) => {
             const text = type === "messages" ? texts.messages : texts.connections;
-            return Promise.resolve(text ? { text } : null);
+            return Promise.resolve(text ? { blob: stored(text) } : null);
         });
     }
 
@@ -1027,7 +1042,7 @@ describe("collectExportData", () => {
 
         const connections = dashboardNamed(await collectExportData(), "Connections");
 
-        expect(loadConnectionsData).toHaveBeenCalledWith(connectionsCsv(), {
+        expect(loadConnectionsData).toHaveBeenCalledWith(stored(connectionsCsv()), {
             isCancelled: expect.any(Function),
         });
         expect(connections.subtitle).toBe("All time");
@@ -1138,13 +1153,13 @@ describe("collectExportData", () => {
         // One read each, and all four consumers were still served from it.
         expect(dashboardNamed(data, "Connections")).not.toBeNull();
         expect(dashboardNamed(data, "Messages")).not.toBeNull();
-        expect(loadConnectionsData).toHaveBeenCalledWith(connectionsCsv(), {
+        expect(loadConnectionsData).toHaveBeenCalledWith(stored(connectionsCsv()), {
             isCancelled: expect.any(Function),
         });
-        expect(loadMessagesState).toHaveBeenCalledWith(MESSAGES_CSV, connectionsCsv(), {
+        expect(loadMessagesState).toHaveBeenCalledWith(stored(MESSAGES_CSV), stored(connectionsCsv()), {
             isCancelled: expect.any(Function),
         });
-        expect(loadRecentThreads).toHaveBeenCalledWith(MESSAGES_CSV, connectionsCsv(), {
+        expect(loadRecentThreads).toHaveBeenCalledWith(stored(MESSAGES_CSV), stored(connectionsCsv()), {
             isCancelled: expect.any(Function),
         });
     });
@@ -1435,9 +1450,9 @@ describe("collectExportData", () => {
     });
 
     it("never reports what an unreadable stored record carried", async () => {
-        const thrown = piiError("record-text");
+        const thrown = piiError("record-blob");
         Storage.getFile.mockResolvedValue({
-            get text() {
+            get blob() {
                 throw thrown;
             },
         });
@@ -1461,7 +1476,7 @@ describe("collectExportData", () => {
 
         const data = await collectExportData({ includeMessages: true });
         expect(data.threads).toEqual([{ name: "Ada", messages: [] }]);
-        expect(loadRecentThreads).toHaveBeenCalledWith(MESSAGES_CSV, connectionsCsv(), {
+        expect(loadRecentThreads).toHaveBeenCalledWith(stored(MESSAGES_CSV), stored(connectionsCsv()), {
             isCancelled: expect.any(Function),
         });
     });
@@ -1488,7 +1503,7 @@ describe("collectExportData", () => {
 
         await collectExportData({ includeMessages: true });
 
-        expect(loadRecentThreads.mock.calls[0][1]).toBe(connections);
+        expect(loadRecentThreads.mock.calls[0][1]).toBe(stored(connections));
         expect(loadRecentThreads.mock.calls[0][2].contactKeys).toBeUndefined();
         expect(parseCSV).not.toHaveBeenCalled();
         expect(processFile).not.toHaveBeenCalled();
@@ -1510,7 +1525,7 @@ describe("collectExportData", () => {
         Storage.getFile.mockImplementation((type) =>
             type === "connections"
                 ? Promise.reject(thrown)
-                : Promise.resolve({ text: MESSAGES_CSV }),
+                : Promise.resolve({ blob: stored(MESSAGES_CSV) }),
         );
 
         await collectExportData({ includeMessages: true });
@@ -1528,8 +1543,8 @@ describe("collectExportData", () => {
         expect(loadRecentThreads).not.toHaveBeenCalled();
     });
 
-    it("omits threads when the stored text record is empty", async () => {
-        Storage.getFile.mockResolvedValue({ text: "" });
+    it("omits threads when the stored record has no upload", async () => {
+        Storage.getFile.mockResolvedValue({ blob: null });
 
         expect((await collectExportData({ includeMessages: true })).threads).toEqual([]);
     });

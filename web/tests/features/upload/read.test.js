@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     canStreamFileText,
+    readCsvSource,
+    readCsvSourcesOrNull,
     readFileAsText,
     streamFileText,
 } from "../../../src/features/upload/read.js";
@@ -61,6 +63,36 @@ function makeStreamFile(chunks, hooks = {}) {
         })
     );
 }
+
+describe("readCsvSource", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("passes text through, empties anything else, and decodes a Blob", async () => {
+        expect(await readCsvSource("a,b")).toBe("a,b");
+        expect(await readCsvSource(null)).toBe("");
+        expect(await readCsvSource(7)).toBe("");
+        stubFileReader(function read() {
+            this.result = encodeBuf("h\u00e9");
+            this.onload();
+        });
+        expect(await readCsvSource(new Blob(["x"]))).toBe("h\u00e9");
+    });
+
+    it("reads several sources, or resolves null when one cannot be read", async () => {
+        stubFileReader(function read() {
+            this.result = encodeBuf("col");
+            this.onload();
+        });
+        expect(await readCsvSourcesOrNull("a", new Blob(["x"]), "")).toEqual(["a", "col", ""]);
+
+        stubFileReader(function read() {
+            this.onerror();
+        });
+        expect(await readCsvSourcesOrNull("a", new Blob(["x"]))).toBeNull();
+    });
+});
 
 describe("readFileAsText with FileReader", () => {
     afterEach(() => {

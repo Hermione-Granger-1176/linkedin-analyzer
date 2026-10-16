@@ -495,7 +495,7 @@ describe("handleAddFile with an uploaded File", () => {
         handleClear();
     });
 
-    it("reads the File, reports bytes read, and returns the decoded text", async () => {
+    it("reads the File, reports bytes read, and replies without the text", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
         mockCleanerSuccess("shares");
@@ -508,7 +508,8 @@ describe("handleAddFile with an uploaded File", () => {
         const readProgress = messages.find((m) => m.type === "progress" && m.payload.bytesRead);
         expect(readProgress.payload).toMatchObject({ bytesRead: 7, totalBytes: 7, percent: 0.35 });
         const processed = messages.find((m) => m.type === "fileProcessed");
-        expect(processed.payload).toMatchObject({ csvText: "col\nval", usedFallback: false });
+        expect(processed.payload).toMatchObject({ usedFallback: false });
+        expect(processed.payload).not.toHaveProperty("csvText");
     });
 
     it("reports a windows-1252 fallback", async () => {
@@ -520,7 +521,7 @@ describe("handleAddFile with an uploaded File", () => {
         await handleAddFile({ file: new File([new Uint8Array([0xe9])], "a.csv"), fileName: "a.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
-        expect(processed.payload).toMatchObject({ csvText: "é", usedFallback: true });
+        expect(processed.payload).toMatchObject({ usedFallback: true });
     });
 
     it("skips progress updates too small to move the bar", async () => {
@@ -619,10 +620,10 @@ describe("handleAddFile with an uploaded File", () => {
         expect(processor.push.mock.calls).toEqual([["Date\n"], ["2025"]]);
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
         const processed = messages.find((m) => m.type === "fileProcessed");
-        expect(processed.payload).toMatchObject({ csvText: "Date\n2025", rowCount: 1, usedFallback: false });
+        expect(processed.payload).toMatchObject({ rowCount: 1, usedFallback: false });
     });
 
-    it("restarts the processor and text when the stream is not UTF-8", async () => {
+    it("restarts the processor and re-reads the whole File when the stream is not UTF-8", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
         mockCleanerSuccess("shares");
@@ -631,16 +632,17 @@ describe("handleAddFile with an uploaded File", () => {
         const second = { push: vi.fn(), finish: vi.fn(() => null) };
         LinkedInCleaner.createStreamProcessor.mockReturnValueOnce(first).mockReturnValueOnce(second);
 
-        await handleAddFile({
-            file: makeStreamFile([new Uint8Array([99]), new Uint8Array([0xe9])]),
-            fileName: "Shares.csv"
-        });
+        // A processor that cannot finish leaves the text to a whole-file read.
+        const file = new File([new Uint8Array([99, 0xe9])], "Shares.csv");
+        file.stream = makeStreamFile([new Uint8Array([99]), new Uint8Array([0xe9])]).stream;
+
+        await handleAddFile({ file, fileName: "Shares.csv" });
 
         expect(first.push.mock.calls).toEqual([["c"]]);
         expect(second.push.mock.calls).toEqual([["c"], ["é"]]);
         expect(LinkedInCleaner.process).toHaveBeenCalledWith("cé", "auto");
         const processed = messages.find((m) => m.type === "fileProcessed");
-        expect(processed.payload).toMatchObject({ csvText: "cé", usedFallback: true });
+        expect(processed.payload).toMatchObject({ usedFallback: true });
     });
 });
 
@@ -654,7 +656,7 @@ describe("handleRestoreFiles", () => {
         makePostMessageCapture();
     });
 
-    it("posts restored with hasData=true when shares CSV parses successfully", () => {
+    it("posts restored with hasData=true when shares CSV parses successfully", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -666,14 +668,14 @@ describe("handleRestoreFiles", () => {
         });
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleRestoreFiles({ sharesCsv: "shares-csv-text", commentsCsv: "" });
+        await handleRestoreFiles({ sharesCsv: "shares-csv-text", commentsCsv: "" });
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
         expect(restored.payload.hasData).toBe(true);
     });
 
-    it("restores connections csv into the analytics source set", () => {
+    it("restores connections csv into the analytics source set", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -688,38 +690,54 @@ describe("handleRestoreFiles", () => {
         });
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleRestoreFiles({ sharesCsv: "s", commentsCsv: "", connectionsCsv: "c" });
+        await handleRestoreFiles({ sharesCsv: "s", commentsCsv: "", connectionsCsv: "c" });
 
         expect(LinkedInCleaner.process).toHaveBeenCalledWith("c", "connections");
         const restored = messages.find((m) => m.type === "restored");
         expect(restored.payload.hasData).toBe(true);
     });
 
-    it("posts restored with hasData=false when both CSVs fail to parse", () => {
+    it("posts restored with hasData=false when both CSVs fail to parse", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         LinkedInCleaner.process.mockReturnValue({ success: false, error: "Bad CSV" });
 
-        handleRestoreFiles({ sharesCsv: "bad", commentsCsv: "also-bad" });
+        await handleRestoreFiles({ sharesCsv: "bad", commentsCsv: "also-bad" });
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
         expect(restored.payload.hasData).toBe(false);
     });
 
-    it("posts restored with hasData=false when payload is empty", () => {
+    it("reads stored upload Blobs", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        LinkedInCleaner.process.mockImplementation((csv, type) => ({
+            success: true,
+            fileType: type,
+            cleanedData: [{ Date: "2025-01-02 09:00" }],
+            rowCount: 1
+        }));
+
+        await handleRestoreFiles({ sharesCsv: new Blob(["shares"]), commentsCsv: "" });
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("shares", "shares");
+        expect(messages.find((m) => m.type === "restored").payload.hasData).toBe(true);
+    });
+
+    it("posts restored with hasData=false when payload is empty", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
-        handleRestoreFiles({});
+        await handleRestoreFiles({});
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
         expect(restored.payload.hasData).toBe(false);
     });
 
-    it("seeds both shares and comments without recomputing analytics", () => {
+    it("seeds both shares and comments without recomputing analytics", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -730,7 +748,7 @@ describe("handleRestoreFiles", () => {
             rowCount: 1
         }));
 
-        handleRestoreFiles({ sharesCsv: "shares", commentsCsv: "comments" });
+        await handleRestoreFiles({ sharesCsv: "shares", commentsCsv: "comments" });
 
         // restoreFiles only seeds the source datasets; the analytics aggregate is
         // (re)built and persisted by handleAddFile, so a compute here would be

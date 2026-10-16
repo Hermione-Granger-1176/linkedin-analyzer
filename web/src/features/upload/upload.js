@@ -476,8 +476,9 @@ export const UploadPage = (() => {
             activeJobs.add(jobId);
             scheduleJobTimeout(jobId, file.name);
             // The worker reads the File itself. Posting a File clones a
-            // reference to its bytes, so the page never holds the text.
-            pendingFiles.set(jobId, { fileName: file.name });
+            // reference to its bytes, so the page never holds the text; the
+            // page keeps the File to store once the worker accepts it.
+            pendingFiles.set(jobId, { fileName: file.name, file });
             try {
                 worker.postMessage({
                     type: "addFile",
@@ -612,9 +613,13 @@ export const UploadPage = (() => {
         }
 
         try {
-            const text = payload.csvText || "";
-
-            await persistProcessedFile(fileType, fileName, text, rowCount, payload.analyticsBase);
+            await persistProcessedFile(
+                fileType,
+                fileName,
+                pending.file,
+                rowCount,
+                payload.analyticsBase,
+            );
             await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);
 
             const files = await getStoredFilesSnapshot();
@@ -668,16 +673,16 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Persist processed file payload in IndexedDB.
+     * Persist the original upload and its analytics in IndexedDB.
      * @param {string} fileType - Processed file type
      * @param {string} fileName - Uploaded file name
-     * @param {string} text - Raw CSV text
+     * @param {Blob} blob - The uploaded File
      * @param {number} rowCount - Processed row count
      * @param {object|undefined} analyticsBase - Optional analytics aggregate base
      * @returns {Promise<void>}
      */
-    async function persistProcessedFile(fileType, fileName, text, rowCount, analyticsBase) {
-        await Storage.saveFile(fileType, { name: fileName, text, rowCount });
+    async function persistProcessedFile(fileType, fileName, blob, rowCount, analyticsBase) {
+        await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
         if (!analyticsBase) {
             return;
         }
@@ -1017,9 +1022,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Load the captured shares/comments text from storage and post it to the
-     * worker. Text is fetched here (not held in the file cache) so large exports
-     * stay in IndexedDB. Best-effort: a load failure is logged and skipped. Runs
+     * Load the stored shares/comments uploads and post them to the worker,
+     * which reads them. Blobs are fetched here (not held in the file cache),
+     * and posting one passes a reference rather than the file's contents. Best-effort: a load failure is logged and skipped. Runs
      * inside the `primeInFlight` chain so posts stay ordered.
      * @param {string} signature - Payload signature recorded once posted
      * @returns {Promise<void>}
@@ -1031,9 +1036,9 @@ export const UploadPage = (() => {
         if (!worker) {
             return;
         }
-        let sharesCsv = "";
-        let commentsCsv = "";
-        let connectionsCsv = "";
+        let sharesCsv = null;
+        let commentsCsv = null;
+        let connectionsCsv = null;
         try {
             // Connections feeds the posting-vs-network-growth correlation, so it
             // primes alongside shares/comments even though it is not a posting source.
@@ -1042,9 +1047,9 @@ export const UploadPage = (() => {
                 Storage.getFile("comments"),
                 Storage.getFile("connections"),
             ]);
-            sharesCsv = sharesFile && sharesFile.text ? sharesFile.text : "";
-            commentsCsv = commentsFile && commentsFile.text ? commentsFile.text : "";
-            connectionsCsv = connectionsFile && connectionsFile.text ? connectionsFile.text : "";
+            sharesCsv = sharesFile ? sharesFile.blob : null;
+            commentsCsv = commentsFile ? commentsFile.blob : null;
+            connectionsCsv = connectionsFile ? connectionsFile.blob : null;
         } catch (error) {
             // Leave lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-load-text" });

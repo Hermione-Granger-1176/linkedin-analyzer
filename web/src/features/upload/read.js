@@ -8,6 +8,7 @@
  * Nothing here touches the DOM, so the analytics worker reads uploads with it.
  */
 
+import { toCsvSource } from "../../shared/csv-source.js";
 import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../../shared/limits.js";
 
 import { concatChunks, decodeBytes } from "./decode.js";
@@ -48,6 +49,37 @@ export function readFileAsText(file, options = {}) {
     }
 
     return readFileAsTextWithReader(file, options);
+}
+
+/**
+ * Read a worker's CSV source as text. Text passes through unchanged; a stored
+ * upload Blob is decoded the same way an upload is, so every screen sees the
+ * text the upload produced.
+ * Anything else reads as empty text.
+ * @param {unknown} source - Stored upload or CSV text
+ * @returns {Promise<string>}
+ */
+export async function readCsvSource(source) {
+    const value = toCsvSource(source);
+    if (typeof value === "string") {
+        return value;
+    }
+    const { text } = await readFileAsText(/** @type {File} */ (value));
+    return text;
+}
+
+/**
+ * Read several CSV sources for a main-thread fallback parse, or resolve null
+ * when any of them cannot be read.
+ * @param {...(Blob|string)} sources - Stored uploads or CSV text
+ * @returns {Promise<string[]|null>}
+ */
+export async function readCsvSourcesOrNull(...sources) {
+    try {
+        return await Promise.all(sources.map((source) => readCsvSource(source)));
+    } catch {
+        return null;
+    }
 }
 
 /**

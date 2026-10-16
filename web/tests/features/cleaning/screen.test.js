@@ -31,6 +31,12 @@ vi.mock("../../../src/features/cleaning/csv-export.js", () => ({
     cleanedCsvName: vi.fn((type) => `${type}.csv`),
 }));
 
+// The stored upload is decoded by the real reader elsewhere; the parser is
+// mocked here, so any readable upload decodes to the same placeholder text.
+vi.mock("../../../src/features/upload/read.js", () => ({
+    readCsvSource: vi.fn(async () => "csv"),
+}));
+
 vi.mock("../../../src/platform/persistence/session.js", () => ({
     Session: { waitForCleanup: vi.fn(() => Promise.resolve()) },
 }));
@@ -91,9 +97,9 @@ describe("CleanPage", () => {
         ({ celebrateDownload } = await import("../../../src/shared/ui/mascot.js"));
 
         DataCache.get.mockReturnValue(null);
-        // renderPreview loads the selected file's text on demand; the parser is
-        // mocked, so the text content is irrelevant as long as the load resolves.
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        // renderPreview loads the selected upload on demand; the parser is
+        // mocked, so the contents are irrelevant as long as the load resolves.
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         LinkedInCleaner.process.mockReset();
         ExcelGenerator.generateAndDownload.mockReset();
         ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
@@ -210,7 +216,8 @@ describe("CleanPage", () => {
 
     it("refuses an Excel file over the export limit and points to CSV", async () => {
         Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 3 }]);
-        Storage.getFile.mockResolvedValue({ text: "x".repeat(10 * 1024 * 1024 + 1) });
+        // Only the stored upload's size decides the limit.
+        Storage.getFile.mockResolvedValue({ blob: { size: 10 * 1024 * 1024 + 1 } });
         LinkedInCleaner.process.mockReturnValue({
             success: true,
             rowCount: 1,
@@ -566,7 +573,7 @@ describe("CleanPage", () => {
         document.querySelector('input[value="shares"]').checked = false;
         document.querySelector('input[value="comments"]').checked = true;
 
-        resolveText({ text: "csv" });
+        resolveText({ blob: new Blob(["csv"]) });
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         // The stale shares render must bail after the await instead of parsing.

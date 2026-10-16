@@ -531,6 +531,80 @@ export function parseThreadsWorkerMessage(message) {
     });
 }
 
+const CLEAN_OUTPUTS = new Set(["preview", "xlsx", "csv"]);
+
+/**
+ * Parse cleaning worker request envelope. The page asks for one output of the
+ * selected file: the preview, an Excel workbook, or a cleaned CSV. `key`
+ * names the stored upload, so the worker can reuse the rows it cleaned for
+ * the preview when the download asks for the same file.
+ * @param {unknown} message - Raw request
+ * @returns {{valid: boolean, value?: object, error?: string, requestId: number|string}}
+ */
+export function parseCleaningWorkerRequest(message) {
+    const requestId = isPlainObject(message) ? normalizeRequestId(message.requestId) : 0;
+    if (!isPlainObject(message) || message.type !== "clean") {
+        return { ...invalid("Invalid cleaning worker request envelope"), requestId };
+    }
+    const payload = isPlainObject(message.payload) ? message.payload : {};
+    const fileType = normalizeString(payload.fileType, 32);
+    if (!FILE_TYPES.has(fileType)) {
+        return { ...invalid("Invalid cleaning file type"), requestId };
+    }
+    if (!CLEAN_OUTPUTS.has(payload.output)) {
+        return { ...invalid("Invalid cleaning output"), requestId };
+    }
+    const file = parseCsvSource(payload.source);
+    if (!file.source) {
+        return { ...invalid("Missing cleaning source payload"), requestId };
+    }
+    if (file.tooLarge) {
+        return { ...invalid("Cleaning source payload exceeds allowed size"), requestId };
+    }
+    return {
+        ...valid({
+            type: "clean",
+            requestId,
+            payload: {
+                fileType,
+                output: payload.output,
+                source: file.source,
+                key: normalizeString(payload.key, LIMITS.maxJobIdChars),
+            },
+        }),
+        requestId,
+    };
+}
+
+/**
+ * Parse cleaning worker outbound message. Preview cells are bounded strings;
+ * a download carries its Blob.
+ * @param {unknown} message - Raw worker message
+ * @returns {{valid: boolean, value?: object, error?: string}}
+ */
+export function parseCleaningWorkerMessage(message) {
+    if (!isPlainObject(message) || message.type !== "cleaned") {
+        return invalid("Invalid cleaning worker message envelope");
+    }
+    const payload = isPlainObject(message.payload) ? message.payload : {};
+    const previewRows = Array.isArray(payload.previewRows)
+        ? payload.previewRows
+              .filter(Array.isArray)
+              .map((row) => row.map((cell) => normalizeString(cell, LIMITS.maxCsvChars)))
+        : [];
+    return valid({
+        type: "cleaned",
+        requestId: normalizeRequestId(message.requestId),
+        payload: {
+            success: Boolean(payload.success),
+            error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
+            rowCount: normalizeNumber(payload.rowCount, 0, 0, Number.MAX_SAFE_INTEGER),
+            previewRows,
+            blob: isBlob(payload.blob) ? payload.blob : null,
+        },
+    });
+}
+
 /**
  * Parse a persisted upload record loaded from cache/storage.
  * @param {unknown} file - Raw file object

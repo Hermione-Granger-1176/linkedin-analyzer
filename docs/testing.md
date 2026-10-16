@@ -201,6 +201,14 @@ After step 4b (the analytics worker reads the uploaded `File` itself), 3 runs at
 
 - The workers now hold about 670 MB and the page about 330 MB. The page still receives the decoded text back from the worker for storage, so the total peak did not fall; step 4e removes that copy.
 
+After step 4c (the analytics worker parses and cleans each chunk as it streams), 3 runs at `cpu=1` on the same machine and export:
+
+| Size   | Options | Analytics ready    | Messages ready     | Cached filter    | Peak heap           |
+| ------ | ------- | ------------------ | ------------------ | ---------------- | ------------------- |
+| 100 MB | `cpu=1` | 6.34 s (6.15-7.04) | 6.79 s (6.59-7.44) | 155 ms (155-185) | 1177 MB (1174-1181) |
+
+- Analytics is about 0.75 s faster, but the workers now peak near 845 MB. Cleaned cells are slices of the decoded chunks, so the chunks stay alive, and the worker still joins them into one more full string to return to the page. Step 4e stops returning the text, which removes that copy.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

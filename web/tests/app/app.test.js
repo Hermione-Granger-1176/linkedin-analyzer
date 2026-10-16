@@ -4,6 +4,7 @@ vi.mock("../../src/app/runtime.js", () => ({ initRuntime: vi.fn() }));
 vi.mock("../../src/platform/observability/sentry.js", () => ({
     initSentry: vi.fn(),
     setTelemetryConsent: vi.fn(),
+    setTelemetryEffectsTier: vi.fn(),
     telemetryConsentGranted: vi.fn(() => false),
 }));
 vi.mock("../../src/platform/observability/telemetry.js", () => ({ initTelemetry: vi.fn() }));

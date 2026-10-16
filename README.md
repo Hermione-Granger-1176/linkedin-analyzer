@@ -62,7 +62,7 @@ The container runs as an unprivileged `app` user. The mounted `data` directory m
 
 ## Privacy and storage
 
-The web app processes files in the browser. It does not send CSV contents to an application server. The app may retain raw CSV text and computed analytics in IndexedDB so a reload can restore the session. A 24-hour inactivity sweep removes stored data, and **Clear data** removes it immediately.
+The web app processes files in the browser. It does not send CSV contents to an application server. The app may retain the uploaded CSV files and computed analytics in IndexedDB so a reload can restore the session. A 24-hour inactivity sweep removes stored data, and **Clear data** removes it immediately.
 
 Diagnostics use Sentry only when the build contains a DSN and the user opts in. The app reduces error events to fixed diagnostic values and safe source locations. It does not attach file contents, file names, message bodies, contact names, or URLs to diagnostics. Read [web app behavior](docs/web-app.md) for the complete storage and export rules.
 

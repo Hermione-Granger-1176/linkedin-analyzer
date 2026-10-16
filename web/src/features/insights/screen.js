@@ -11,6 +11,72 @@ import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
 import { buildInsightReaction } from "./reactions.js";
 
+/** @typedef {import("../../app/router.js").RouteParams} RouteParams */
+/** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
+/** @typedef {import("../analytics/screen.js").AnalyticsFilters} AnalyticsFilters */
+/** @typedef {import("../analytics/screen.js").AnalyticsScreenView} AnalyticsScreenView */
+
+/**
+ * One narrative card produced by the worker's insight generator.
+ * @typedef {object} InsightCard
+ * @property {string} id - Insight identifier, used to pick Pip's reaction
+ * @property {string} title - Card heading
+ * @property {string} body - Card text
+ * @property {string} icon - Icon name
+ * @property {string} accent - Accent class requested by the worker
+ */
+
+/**
+ * Insight cards and closing tip for one view.
+ * @typedef {object} InsightsResult
+ * @property {InsightCard[]} insights - Insight cards
+ * @property {string|null} tip - Closing tip, if any
+ */
+
+/** @typedef {{multiplier: number}} NetworkGrowth - Lifetime network-growth correlation */
+
+/**
+ * The analytics view as the insights screen keeps it.
+ * @typedef {AnalyticsScreenView & {networkGrowth?: NetworkGrowth|null}} InsightsView
+ */
+
+/**
+ * A worker "view" payload as the insights screen reads it.
+ * @typedef {{view?: InsightsView|null, insights?: InsightsResult|null}} InsightsViewPayload
+ */
+
+/**
+ * Persisted outreach summary produced by the messages worker.
+ * @typedef {object} OutreachSummary
+ * @property {number} selfInitiated - Conversations the user started
+ * @property {number|null} replyRate - Reply fraction in [0, 1], or null
+ * @property {number} unansweredContacts - Contacts who never replied
+ * @property {number|null} sentReceivedRatio - Sent/received ratio, or null
+ */
+
+/**
+ * DOM references the insights screen works with.
+ * @typedef {object} InsightsElements
+ * @property {NodeListOf<HTMLElement>} timeRangeButtons - Time range buttons
+ * @property {HTMLSelectElement|null} timeRangeSelect - Compact time range select
+ * @property {HTMLElement|null} resetFiltersBtn - Reset filters button
+ * @property {HTMLElement} insightsEmpty - Empty state
+ * @property {HTMLElement} insightsGrid - Insight card grid
+ * @property {HTMLElement} insightTip - Tip container
+ * @property {HTMLElement} insightTipText - Tip text node
+ * @property {HTMLElement|null} allTime - All-time section
+ * @property {HTMLElement|null} networkGrowthCard - Network growth stat card
+ * @property {HTMLElement|null} networkGrowthValue - Network growth value
+ * @property {HTMLElement|null} outreachInitiatedCard - Self-initiated stat card
+ * @property {HTMLElement|null} statInitiated - Self-initiated value
+ * @property {HTMLElement|null} outreachReplyCard - Reply rate stat card
+ * @property {HTMLElement|null} statReplyRate - Reply rate value
+ * @property {HTMLElement|null} outreachUnansweredCard - Unanswered stat card
+ * @property {HTMLElement|null} statUnanswered - Unanswered value
+ * @property {HTMLElement|null} outreachRatioCard - Sent/received stat card
+ * @property {HTMLElement|null} statSentRatio - Sent/received value
+ */
+
 const ACCENT_CLASSES = new Set([
     "accent-yellow",
     "accent-purple",
@@ -32,7 +98,7 @@ function resolveAccentClass(accent) {
 export const InsightsPage = (() => {
     "use strict";
 
-    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string }} */
+    /** @type {AnalyticsFilters} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
         topic: "all",
@@ -43,11 +109,12 @@ export const InsightsPage = (() => {
     });
 
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    /** @type {Set<unknown>} */
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
     // Guard against a worker that constructs but never responds (chunk load
     // failure, silent hang): without this the loading overlay would stay up forever.
     const WORKER_TIMEOUT_MS = 30000;
-    /** @type {{filters: {timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string}, analyticsReady: boolean, hasData: boolean, currentInsights: object|null, currentView: object|null, currentViewRange: string|null, networkGrowth: {multiplier: number}|null, outreach: {selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null, outreachLoaded: boolean}} */
+    /** @type {{filters: AnalyticsFilters, analyticsReady: boolean, hasData: boolean, currentInsights: InsightsResult|null, currentView: InsightsView|null, currentViewRange: string|null, networkGrowth: NetworkGrowth|null, outreach: OutreachSummary|null, outreachLoaded: boolean}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
@@ -63,10 +130,15 @@ export const InsightsPage = (() => {
         outreachLoaded: false,
     };
 
-    let elements = null;
+    // Assigned by init() before any handler that reads it can run.
+    /** @type {InsightsElements} */
+    let elements;
+    /** @type {Worker|null} */
     let worker = null;
+    /** @type {number|null} */
     let workerTimeoutId = null;
     let requestId = 0;
+    /** @type {import("../../app/worker-contracts.js").RequestId} */
     let pendingViewId = 0;
     let initialized = false;
     let needsBaseReload = true;
@@ -93,7 +165,7 @@ export const InsightsPage = (() => {
 
     /**
      * Handle route activation and query param changes.
-     * @param {object} params - Route query params
+     * @param {RouteParams} params - Route query params
      */
     function onRouteChange(params) {
         if (!initialized) {
@@ -139,17 +211,24 @@ export const InsightsPage = (() => {
 
     /**
      * Resolve insights DOM references.
-     * @returns {object}
+     *
+     * The static shell provides every node; init() bails out before binding
+     * anything when the grid or the empty state is missing.
+     * @returns {InsightsElements}
      */
     function resolveElements() {
         return {
-            timeRangeButtons: document.querySelectorAll("#insightsTimeRangeButtons .filter-btn"),
-            timeRangeSelect: document.getElementById("insightsTimeRangeSelect"),
+            timeRangeButtons: /** @type {NodeListOf<HTMLElement>} */ (
+                document.querySelectorAll("#insightsTimeRangeButtons .filter-btn")
+            ),
+            timeRangeSelect: /** @type {HTMLSelectElement|null} */ (
+                document.getElementById("insightsTimeRangeSelect")
+            ),
             resetFiltersBtn: document.getElementById("insightsResetFiltersBtn"),
-            insightsEmpty: document.getElementById("insightsEmpty"),
-            insightsGrid: document.getElementById("insightsGrid"),
-            insightTip: document.getElementById("insightTip"),
-            insightTipText: document.getElementById("insightTipText"),
+            insightsEmpty: /** @type {HTMLElement} */ (document.getElementById("insightsEmpty")),
+            insightsGrid: /** @type {HTMLElement} */ (document.getElementById("insightsGrid")),
+            insightTip: /** @type {HTMLElement} */ (document.getElementById("insightTip")),
+            insightTipText: /** @type {HTMLElement} */ (document.getElementById("insightTipText")),
             allTime: document.getElementById("insightsAllTime"),
             networkGrowthCard: document.getElementById("insightsNetworkGrowthCard"),
             networkGrowthValue: document.getElementById("insightsNetworkGrowthValue"),
@@ -184,7 +263,7 @@ export const InsightsPage = (() => {
 
     /**
      * Handle cache notifications from uploads/clear operations.
-     * @param {Event} event
+     * @param {{type?: unknown}} event - Notification payload
      */
     function handleCacheChange(event) {
         const type = event && event.type;
@@ -260,7 +339,9 @@ export const InsightsPage = (() => {
                 return;
             }
 
-            let analyticsBase = DataCache.get("storage:analyticsBase") || null;
+            let analyticsBase =
+                /** @type {StoredAnalytics|undefined} */ (DataCache.get("storage:analyticsBase")) ||
+                null;
 
             if (!analyticsBase) {
                 analyticsBase = await Storage.getAnalytics();
@@ -336,7 +417,9 @@ export const InsightsPage = (() => {
                     return;
                 }
                 /* v8 ignore next */
-                applyWorkerInsightsPayload(message.payload || {});
+                applyWorkerInsightsPayload(
+                    /** @type {InsightsViewPayload} */ (message.payload || {}),
+                );
                 return;
             case "error":
                 captureError(
@@ -361,7 +444,7 @@ export const InsightsPage = (() => {
 
     /**
      * Apply worker insights payload and render current cards.
-     * @param {object} payload - Worker payload
+     * @param {InsightsViewPayload} payload - Worker payload
      */
     function applyWorkerInsightsPayload(payload) {
         state.currentInsights = payload.insights || null;
@@ -525,7 +608,7 @@ export const InsightsPage = (() => {
 
     /**
      * Resolve a worker message text with fallback.
-     * @param {object} payload - Worker payload
+     * @param {{message?: string}|null|undefined} payload - Worker payload
      * @param {string} fallback - Fallback message
      * @returns {string}
      */
@@ -590,7 +673,7 @@ export const InsightsPage = (() => {
 
     /** Apply the range chosen from the compact select, ignoring unknown values. */
     function handleTimeRangeSelect() {
-        const range = elements.timeRangeSelect.value;
+        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
         if (!RANGE_VALUES.has(range)) {
             return;
         }
@@ -646,7 +729,7 @@ export const InsightsPage = (() => {
 
     /**
      * Render insight cards and tip from the worker response.
-     * @param {object} payload - The insights payload from the worker.
+     * @param {InsightsResult} payload - The insights payload from the worker.
      */
     function renderInsights(payload) {
         const insights = payload.insights || [];
@@ -791,7 +874,10 @@ export const InsightsPage = (() => {
         return div.innerHTML;
     }
 
-    /** SVG markup for insight card icons, keyed by icon name. */
+    /**
+     * SVG markup for insight card icons, keyed by icon name.
+     * @type {Readonly<Record<string, string>>}
+     */
     const INSIGHT_ICONS = Object.freeze({
         rooster: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><circle cx=\"32\" cy=\"32\" r=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M24 20 Q28 12 32 18 Q36 12 40 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M40 32 L50 28\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M22 44 Q32 52 42 44\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",
         owl: "<svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><circle cx=\"32\" cy=\"32\" r=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><circle cx=\"26\" cy=\"30\" r=\"4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><circle cx=\"38\" cy=\"30\" r=\"4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M30 40 L32 42 L34 40\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>",

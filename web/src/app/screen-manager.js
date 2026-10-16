@@ -36,6 +36,7 @@ import { LoadingOverlay } from "../shared/ui/loading-overlay.js";
  * @property {Promise<ScreenController|null>|null} loading - In-flight import
  * @property {RouteParams} params - Latest route params
  * @property {boolean} initialized - Whether `init` has run
+ * @property {number} activation - Count of loads started, so only the latest runs the hooks
  */
 
 export const ScreenManager = (() => {
@@ -143,7 +144,7 @@ export const ScreenManager = (() => {
     /**
      * Tell the user a screen's code did not arrive, with a way to try again.
      * @param {string} routeName - Route name
-     * @param {object} route - Registered route
+     * @param {ScreenRoute} route - Registered route
      */
     function showLoadError(routeName, route) {
         const screen = document.getElementById(route.screenId);
@@ -171,7 +172,7 @@ export const ScreenManager = (() => {
 
     /**
      * Remove a load-failure notice left on a route's screen.
-     * @param {object} route - Registered route
+     * @param {ScreenRoute} route - Registered route
      */
     function clearLoadError(route) {
         const screen = document.getElementById(route.screenId);

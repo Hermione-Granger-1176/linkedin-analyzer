@@ -155,6 +155,7 @@ function readBytesWithReader(file) {
             finish(() => reject(new Error(`Reading ${file.name} timed out.`)));
         }, FILE_READ_TIMEOUT_MS);
 
+        /** @param {() => void} callback - Settles the read promise */
         const finish = (callback) => {
             if (settled) {
                 return;
@@ -292,7 +293,9 @@ export async function streamFileText(file, options) {
  * @returns {Promise<ReadableStreamReadResult<Uint8Array>>}
  */
 function readChunkWithTimeout(reader, file) {
+    /** @type {ReturnType<typeof globalThis.setTimeout>|undefined} */
     let timeoutId;
+    /** @type {Promise<never>} */
     const timeout = new Promise((_resolve, reject) => {
         timeoutId = globalThis.setTimeout(() => {
             // Reject first: cancelling settles the pending read with done, which
@@ -319,6 +322,10 @@ async function decodeStream(file, encoding, { signal, onProgress, onText }) {
     let bytesRead = 0;
     let totalChars = 0;
 
+    /**
+     * @param {Uint8Array|undefined} bytes - Next chunk, or undefined to flush
+     * @param {boolean} stream - Whether more chunks follow
+     */
     const emit = (bytes, stream) => {
         let text;
         try {

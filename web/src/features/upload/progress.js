@@ -14,6 +14,7 @@ export const UploadProgress = (() => {
     };
 
     let progressValue = 0;
+    /** @type {number|null} */
     let progressAnimationId = null;
     let progressSessionId = 0;
     let lastProgressPercent = 0;
@@ -102,6 +103,7 @@ export const UploadProgress = (() => {
         /* v8 ignore next */
         const animationSession = sessionId || progressSessionId;
 
+        /** @param {number} now - Frame timestamp */
         function step(now) {
             /* v8 ignore next 4 */
             if (animationSession !== progressSessionId) {
@@ -147,6 +149,7 @@ export const UploadProgress = (() => {
         const crawlCap = 0.985;
         let previousTime = 0;
 
+        /** @param {number} now - Frame timestamp */
         function crawl(now) {
             /* v8 ignore next 4 */
             if (sessionId !== progressSessionId) {

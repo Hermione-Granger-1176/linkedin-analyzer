@@ -45,8 +45,24 @@ const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
  * @typedef {{urls: Set<string>, names: Set<string>, conversations: Set<string>, sent: number, received: number}} Identity
  * @typedef {{name: string, url: string}} Correspondent
  * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, sequence: number, body: string}} MessageEntry
- * @typedef {{row: object, date: Date}} DatedRow
+ * @typedef {import("./messages-parse.js").MessageRow} MessageRow
+ * @typedef {{row: MessageRow, date: Date}} DatedRow
  * @typedef {{selfUrls: Set<string>, selfNames: Set<string>}} SelfContext
+ */
+
+/**
+ * One message of a selected thread, as the document draws it.
+ * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}} ThreadMessage
+ */
+
+/**
+ * One selected thread: who it was with, and the tail of what was said.
+ * @typedef {object} SelectedThread
+ * @property {string} name - Correspondent names, comma separated
+ * @property {string} url - Profile URL of a one-to-one thread, or ""
+ * @property {number} messageCount - Messages in the whole thread
+ * @property {number} lastTimestamp - Newest message timestamp (ms)
+ * @property {ThreadMessage[]} messages - The thread's most recent messages
  */
 
 /**
@@ -64,7 +80,7 @@ const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
  * conversation, so two unrelated anonymous conversations never merge into one
  * person. Without an id there is no such scope and nothing to attribute the row
  * to, so it is dropped as before.
- * @param {object} row - Parsed message row
+ * @param {MessageRow} row - Parsed message row
  * @param {SelfContext} context - Self context
  * @param {boolean} keepAnonymous - Whether the row has a conversation to scope anonymity to
  * @returns {Array<{name: string, url: string, anonymous: boolean}>} Participants
@@ -81,7 +97,13 @@ function exportParticipants(row, context, keepAnonymous) {
     const seen = new Set(
         named.map((participant) => MessagesAnalytics.buildContactKey(participant)),
     );
+    /** @type {Array<{name: string, url: string, anonymous: boolean}>} */
     const anonymous = [];
+    /**
+     * Keep one anonymized participant, once per contact key.
+     * @param {unknown} rawName - Raw participant name
+     * @param {unknown} rawUrl - Raw profile URL
+     */
     const add = (rawName, rawUrl) => {
         const name = MessagesAnalytics.cleanText(rawName);
         if (MessagesAnalytics.normalizeName(name) !== ANONYMOUS_NAME_KEY) {
@@ -154,7 +176,7 @@ function messageBody(value) {
  * either: a pile of undated rows could otherwise give a contact wider
  * conversation coverage than the owner and invert the direction chip on the
  * dated messages that do get drawn.
- * @param {object[]} rows - Parsed message rows
+ * @param {MessageRow[]} rows - Parsed message rows
  * @returns {DatedRow[]} Dated rows, in file order
  */
 function withParsedDates(rows) {
@@ -225,7 +247,7 @@ function canonicalContactKey(participant, nameToUrl, scope) {
 
 /**
  * Resolve the canonical contact key of a row's sender.
- * @param {object} row - Parsed message row
+ * @param {MessageRow} row - Parsed message row
  * @param {Map<string, string>} nameToUrl - Name to canonical URL lookup
  * @param {string} scope - Conversation scope
  * @returns {string} Contact key, or "" when the sender cannot be identified
@@ -242,7 +264,7 @@ function senderContactKey(row, nameToUrl, scope) {
 
 /**
  * Read a row's conversation id.
- * @param {object} row - Parsed message row
+ * @param {MessageRow} row - Parsed message row
  * @returns {string} Conversation id, or "" when the column is blank
  */
 function conversationId(row) {
@@ -251,7 +273,7 @@ function conversationId(row) {
 
 /**
  * Build a stable conversation key for one row.
- * @param {object} row - Parsed message row
+ * @param {MessageRow} row - Parsed message row
  * @param {number} index - Row index, used when the id column is blank
  * @returns {string} Conversation key
  */
@@ -289,7 +311,7 @@ function realNameKey(participant) {
  * that contains one, and that is the safe direction: the only thing this
  * decides is whether a conversation may lend a profile URL to a bare name, and
  * declining to keeps two people apart rather than merging them.
- * @param {object} row - Parsed message row
+ * @param {MessageRow} row - Parsed message row
  * @returns {boolean} True when the row names more than one recipient
  */
 function namesSeveralRecipients(row) {
@@ -619,7 +641,7 @@ function correspondentLabel(correspondent) {
  * Order the tail of a thread chronologically and keep the last N messages.
  * @param {MessageEntry[]} entries - Recorded messages with a sequence number
  * @param {number} messagesPerPerson - How many messages to keep
- * @returns {Array<{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}>} Trimmed messages
+ * @returns {ThreadMessage[]} Trimmed messages
  */
 function tailMessages(entries, messagesPerPerson) {
     const ordered = entries
@@ -693,7 +715,7 @@ function groupConversations(dated, context, selfKnown, nameToUrl) {
 
 /**
  * Label one row's direction, or admit it is unknown.
- * @param {object} row - Parsed message row
+ * @param {MessageRow} row - Parsed message row
  * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
  * @param {boolean} selfKnown - Whether the account owner was identified
  * @returns {'sent'|'received'|'unknown'} Direction
@@ -756,9 +778,10 @@ function foldIntoThreads(conversations) {
  * a smaller, older one-to-one thread from being included. A single group larger
  * than the whole budget therefore never appears, which is the honest reading of
  * the promise rather than an edge case to work around.
- * @param {Array<{correspondents: Map<string, object>}>} threads - Threads, most recent first
+ * @template {{correspondents: Map<string, unknown>}} T
+ * @param {T[]} threads - Threads, most recent first
  * @param {number} people - Maximum distinct correspondents
- * @returns {Array<object>} Threads that fit
+ * @returns {T[]} Threads that fit
  */
 function takeWithinPeopleBudget(threads, people) {
     const taken = [];
@@ -787,9 +810,9 @@ function takeWithinPeopleBudget(threads, people) {
  * Rows whose date cannot be parsed are skipped before anything else, exactly as
  * `MessagesAnalytics.buildMessageState` does, so they cannot influence which
  * identity is taken to be the account owner.
- * @param {object[]} rows - Parsed message rows, including CONTENT
+ * @param {MessageRow[]} rows - Parsed message rows, including CONTENT
  * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} [options] - Selection limits and known connections
- * @returns {Array<{name: string, url: string, messageCount: number, lastTimestamp: number, messages: Array<{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}>}>} Threads, most recent first
+ * @returns {SelectedThread[]} Threads, most recent first
  */
 export function selectRecentThreads(rows, options = {}) {
     const safeRows = Array.isArray(rows) ? rows : [];

@@ -54,10 +54,20 @@ export function terminateConnectionsWorker() {
 }
 
 /**
+ * @typedef {{key: string, label: string, value: number}} GrowthPoint - One month of network growth
+ * @typedef {{total?: number, networkAgeMonths?: number}} NetworkStats - Whole-network summary stats
+ */
+
+/**
+ * Result of `LinkedInCleaner.process`, as far as this transport reads it.
+ * @typedef {{success: boolean, cleanedData: Array<Record<string, string>>}} CleanedConnections
+ */
+
+/**
  * @typedef {object} ConnectionsData
  * @property {import("../connections/view.js").ConnectionRow[]} rows - Cleaned rows, in the shape the view aggregates
- * @property {object[]} timeline - All-time growth timeline
- * @property {object|null} stats - Whole-network summary stats
+ * @property {GrowthPoint[]} timeline - All-time growth timeline
+ * @property {NetworkStats|null} stats - Whole-network summary stats
  */
 
 /**
@@ -130,7 +140,7 @@ function requestDataFromWorker(connectionsCsv) {
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
- * @param {object} message - Parsed worker message
+ * @param {import("../../app/worker-contracts.js").ConnectionsWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
  * @returns {ConnectionsData|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
@@ -180,7 +190,7 @@ function interpretReply(message, context) {
  * answer with one shape, and because the worker cannot do it: it sends the
  * cleaned rows on to the Connections screen, which filters them by a range this
  * export does not have.
- * @param {object} payload - Successful worker payload
+ * @param {import("../../app/worker-contracts.js").ConnectionsProcessedPayload} payload - Successful worker payload
  * @returns {ConnectionsData|null} Data, or null when the reply holds nothing to draw
  */
 function toConnectionsData(payload) {
@@ -191,14 +201,19 @@ function toConnectionsData(payload) {
         return null;
     }
     return {
-        rows: normalizeConnectionRows(payload.rows),
+        // The contract checks only that the rows are an array; they are the
+        // cleaned rows the worker produced, in the shape the main thread's own
+        // cleaner returns.
+        rows: normalizeConnectionRows(
+            /** @type {CleanedConnections["cleanedData"]} */ (payload.rows),
+        ),
         // Neither field inside analytics is validated by the contract, which
         // checks only that the object is one, so both are taken the way the
         // Connections screen takes them.
         timeline: Array.isArray(payload.analytics.growthTimeline)
             ? payload.analytics.growthTimeline
             : [],
-        stats: payload.analytics.stats || null,
+        stats: /** @type {NetworkStats|null} */ (payload.analytics.stats || null),
     };
 }
 
@@ -209,7 +224,9 @@ function toConnectionsData(payload) {
  */
 function buildDataOnMainThread(connectionsCsv) {
     try {
-        const processed = LinkedInCleaner.process(connectionsCsv, "connections");
+        const processed = /** @type {CleanedConnections} */ (
+            LinkedInCleaner.process(connectionsCsv, "connections")
+        );
         if (!processed.success || !processed.cleanedData.length) {
             return null;
         }

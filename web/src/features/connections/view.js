@@ -10,33 +10,62 @@
 import { MONTH_LABELS } from "../analytics/constants.js";
 import { parseLocalDate } from "../analytics/dates.js";
 
+/** @typedef {import("../../shared/ui/charts.js").TimelinePoint} TimelinePoint */
+/** @typedef {import("../../shared/ui/charts.js").TopicPoint} TopicPoint */
+
 /**
+ * A cleaned Connections.csv row in the cleaner's title-case columns
+ * ("Connected On", "Company", "Position", ...).
+ * @typedef {import("../cleaning/cleaner.js").CleanedRow} CleanedConnectionRow
+ */
+
+/**
+ * A connection row normalized for filtering and aggregation.
  * @typedef {object} ConnectionRow
- * @property {number} connectedOn
- * @property {string} company
- * @property {string} position
+ * @property {number} connectedOn - Connection date (epoch ms), or 0 when unparseable
+ * @property {string} company - Trimmed company name, possibly empty
+ * @property {string} position - Trimmed position title, possibly empty
+ */
+
+/** @typedef {TimelinePoint} GrowthPoint - One month of new connections */
+
+/**
+ * Range-independent stats computeStats() produces.
+ * @typedef {object} ConnectionStats
+ * @property {number} total - Connection count
+ * @property {number} networkAgeMonths - Whole months from the earliest connection to now
  */
 
 /**
+ * The analytics the connections worker posts.
+ * @typedef {object} ConnectionsAnalytics
+ * @property {GrowthPoint[]} growthTimeline - All-time monthly growth, gaps filled
+ * @property {ConnectionStats} stats - Range-independent stats
+ */
+
+/**
+ * The stats bar of a connections view.
  * @typedef {object} ViewStats
- * @property {number} total
- * @property {number} recent
- * @property {string} topCompany
- * @property {string} networkAge
+ * @property {number} total - Connection count
+ * @property {number} recent - Connections in the selected range
+ * @property {string} topCompany - Most frequent company in the range, or "-"
+ * @property {string} networkAge - Formatted network age, or "-"
  */
 
 /**
+ * The view the screen renders and the export draws.
  * @typedef {object} ConnectionsView
- * @property {Array<object>} timeline
- * @property {Array<{topic: string, count: number}>} companies
- * @property {Array<{topic: string, count: number}>} positions
- * @property {ViewStats} stats
+ * @property {GrowthPoint[]} timeline - All-time growth timeline
+ * @property {TopicPoint[]} companies - Top companies in the range
+ * @property {TopicPoint[]} positions - Top positions in the range
+ * @property {ViewStats} stats - Stats bar values
  */
 
 /* -- Constants --------------------------------------------------------------- */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** @type {Readonly<Record<string, number>>} */
 const RANGE_DAYS = Object.freeze({
     "1m": 30,
     "3m": 91,
@@ -115,10 +144,11 @@ export function monthKeyToLabel(key) {
  * months. Gaps look misleading on line/bar charts, so we insert zero-value
  * entries for any month between the earliest and latest connection dates.
  *
- * @param {object[]} rows - Cleaned connection rows
- * @returns {Array<{key: string, label: string, value: number}>} Sorted chronologically
+ * @param {CleanedConnectionRow[]} rows - Cleaned connection rows
+ * @returns {GrowthPoint[]} Sorted chronologically
  */
 export function buildGrowthTimeline(rows) {
+    /** @type {Map<string, number>} */
     const buckets = new Map();
 
     for (const row of rows) {
@@ -164,8 +194,8 @@ export function buildGrowthTimeline(rows) {
  * (recent adds, top company) is computed from the filtered rows by
  * buildConnectionsView below, which takes this result as its starting point.
  *
- * @param {object[]} rows - Cleaned connection rows
- * @returns {{total: number, networkAgeMonths: number}}
+ * @param {CleanedConnectionRow[]} rows - Cleaned connection rows
+ * @returns {Readonly<ConnectionStats>}
  */
 export function computeStats(rows) {
     const total = rows.length;
@@ -195,7 +225,7 @@ export function computeStats(rows) {
  * aggregation below expect. The screen gets those rows back from the worker and
  * the export cleans them itself, so both arrive here in the cleaner's casing.
  *
- * @param {object[]} rows - Cleaned connection rows with title-case keys
+ * @param {CleanedConnectionRow[]} rows - Cleaned connection rows with title-case keys
  * @returns {ConnectionRow[]} Normalized rows
  */
 export function normalizeConnectionRows(rows) {
@@ -210,9 +240,9 @@ export function normalizeConnectionRows(rows) {
 
 /**
  * Filter connection rows by the selected time range.
- * @param {Array<object>} rows - All parsed connection rows
+ * @param {ConnectionRow[]} rows - All parsed connection rows
  * @param {string} range - Time range key ('1m', '3m', '6m', '12m', 'all')
- * @returns {Array<object>} Filtered rows within the range
+ * @returns {ConnectionRow[]} Filtered rows within the range
  */
 export function filterRowsByRange(rows, range) {
     if (range === "all") {
@@ -230,11 +260,12 @@ export function filterRowsByRange(rows, range) {
 
 /**
  * Aggregate a string field into {topic, count} pairs, sorted descending.
- * @param {Array<object>} rows - Connection rows to aggregate
- * @param {string} field - Field name to aggregate ('company' or 'position')
- * @returns {Array<{topic: string, count: number}>} Top N aggregated entries
+ * @param {ConnectionRow[]} rows - Connection rows to aggregate
+ * @param {"company"|"position"} field - Field name to aggregate
+ * @returns {TopicPoint[]} Top N aggregated entries
  */
 export function aggregateField(rows, field) {
+    /** @type {Record<string, number>} */
     const counts = Object.create(null);
     for (const row of rows) {
         const value = row[field];
@@ -252,8 +283,8 @@ export function aggregateField(rows, field) {
 
 /**
  * Find the most frequent value for a given field.
- * @param {Array<object>} rows - Connection rows
- * @param {string} field - Field name
+ * @param {ConnectionRow[]} rows - Connection rows
+ * @param {"company"|"position"} field - Field name
  * @returns {string} Most frequent value or '-'
  */
 export function findTopValue(rows, field) {
@@ -261,6 +292,7 @@ export function findTopValue(rows, field) {
         return "-";
     }
 
+    /** @type {Record<string, number>} */
     const counts = Object.create(null);
     let maxKey = "";
     let maxCount = 0;
@@ -303,7 +335,8 @@ export function formatNetworkAge(months) {
  * positions, and recent adds follow the selected range.
  *
  * @param {ConnectionRow[]} rows - Normalized connection rows
- * @param {Array<object>|null|undefined} timeline - All-time growth timeline, defaulted here when absent
+ * @param {GrowthPoint[]|null|undefined} timeline - All-time growth timeline, defaulted here
+ * when absent
  * @param {{total?: number, networkAgeMonths?: number}|null} workerStats - Range-independent stats from computeStats()
  * @param {string} timeRange - Time range key ('1m', '3m', '6m', '12m', 'all')
  * @returns {ConnectionsView}

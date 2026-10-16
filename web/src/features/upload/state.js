@@ -7,6 +7,18 @@
  * imports them back and they are unit-tested directly in web/tests/features/upload/state.test.js.
  */
 
+/** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
+
+/** @typedef {import("../cleaning/configs.js").FileType} FileType */
+
+/**
+ * Tracked uploads by file type, null where a type has no upload. Also indexable
+ * by an arbitrary type string.
+ * @typedef {Record<FileType, StoredUploadFile|null>
+ * & Partial<Record<string, StoredUploadFile|null>>} UploadFileMap
+ */
+
+/** @type {Readonly<Record<string, string>>} */
 const UPLOAD_HINT_BY_STATE = Object.freeze({
     "0-0-0": "Upload at least one file to start.",
     "0-0-1": "Upload at least one file to start.",
@@ -20,7 +32,7 @@ const UPLOAD_HINT_BY_STATE = Object.freeze({
 
 /**
  * Create an empty file map.
- * @returns {{shares: null, comments: null, messages: null, connections: null}}
+ * @returns {UploadFileMap}
  */
 export function createEmptyFileMap() {
     return {
@@ -51,7 +63,7 @@ export function getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady) {
 
 /**
  * Check whether analytics base contains at least one month bucket.
- * @param {object|null} analyticsBase - Analytics aggregate base
+ * @param {{months?: unknown}|null} analyticsBase - Analytics aggregate base
  * @returns {boolean}
  */
 export function hasAnalyticsMonths(analyticsBase) {

@@ -16,10 +16,67 @@ import { prefersReducedMotion } from "../../shared/ui/motion.js";
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 
+/** @typedef {import("../../app/router.js").RouteParams} RouteParams */
+/** @typedef {import("../../shared/ui/charts.js").TimelinePoint} TimelinePoint */
+/** @typedef {import("../../shared/ui/charts.js").TopicPoint} TopicPoint */
+/** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
+
+/**
+ * Filter state the analytics and insights screens send with a worker view request.
+ * @typedef {object} AnalyticsFilters
+ * @property {string} timeRange - Range key ("1m", "3m", "6m", "12m" or "all")
+ * @property {string} topic - Topic filter, or "all"
+ * @property {string|null} monthFocus - Focused month ("YYYY-MM"), or null
+ * @property {number|null} day - Focused weekday index (0 = Monday), or null
+ * @property {number|null} hour - Focused hour (0-23), or null
+ * @property {string} shareType - Share type filter, or "all"
+ */
+
+/**
+ * The parts of the analytics worker's view that this screen renders.
+ * @typedef {object} AnalyticsScreenView
+ * @property {TimelinePoint[]} timeline - Timeline buckets
+ * @property {number} timelineMax - Y-axis maximum for the timeline
+ * @property {number[][]} heatmap - 7x24 activity grid (days x hours)
+ * @property {TopicPoint[]} topics - Topic bars
+ * @property {{current: number, longest: number}} streaks - Activity streaks in days
+ * @property {{hour: number, count: number}} peakHour - Busiest hour
+ * @property {{posts: number, comments: number, total: number}} totals - Activity totals
+ */
+
+/**
+ * A worker "view" payload as this screen reads it.
+ * @typedef {{view?: AnalyticsScreenView|null}} AnalyticsViewPayload
+ */
+
+/** @typedef {"topic"|"monthFocus"|"day"|"hour"} FilterResetField - Filters a chip can clear */
+
+/**
+ * DOM references the analytics screen works with.
+ * @typedef {object} AnalyticsElements
+ * @property {NodeListOf<HTMLElement>} timeRangeButtons - Time range buttons
+ * @property {HTMLSelectElement|null} timeRangeSelect - Compact time range select
+ * @property {HTMLElement|null} resetFiltersBtn - Reset filters button
+ * @property {HTMLElement} activeFilters - Active filters container
+ * @property {HTMLElement} activeFiltersList - Active filter chip list
+ * @property {HTMLElement} analyticsEmpty - Empty state
+ * @property {HTMLElement} analyticsGrid - Chart grid
+ * @property {HTMLElement} statsGrid - Stats bar
+ * @property {HTMLCanvasElement} timelineChart - Timeline canvas
+ * @property {HTMLCanvasElement} topicsChart - Topics canvas
+ * @property {HTMLCanvasElement} heatmapChart - Heatmap canvas
+ * @property {HTMLElement} statPosts - Posts stat value
+ * @property {HTMLElement} statComments - Comments stat value
+ * @property {HTMLElement} statTotal - Total stat value
+ * @property {HTMLElement} statPeak - Peak hour stat value
+ * @property {HTMLElement} statStreak - Streak stat value
+ * @property {HTMLElement|null} chartTooltip - Chart tooltip
+ */
+
 export const AnalyticsPage = (() => {
     "use strict";
 
-    /** @type {{ timeRange: string, topic: string, monthFocus: string|null, day: number|null, hour: number|null, shareType: string }} */
+    /** @type {AnalyticsFilters} */
     const FILTER_DEFAULTS = Object.freeze({
         timeRange: "12m",
         topic: "all",
@@ -30,10 +87,13 @@ export const AnalyticsPage = (() => {
     });
 
     const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    /** @type {Set<unknown>} */
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
+    /** @type {Set<string>} */
     const CLICKABLE_TYPES = new Set(["month", "week", "heatmap", "topic"]);
     const WORKER_TIMEOUT_MS = 30000;
 
+    /** @type {Readonly<Record<string, (value: string|undefined, normalized: AnalyticsFilters) => void>>} */
     const ROUTE_FILTER_PARSERS = Object.freeze({
         range: (value, normalized) => {
             const range = String(value || "").toLowerCase();
@@ -71,6 +131,7 @@ export const AnalyticsPage = (() => {
         },
     });
 
+    /** @type {Readonly<Record<string, (filters: AnalyticsFilters) => string|null>>} */
     const ROUTE_FILTER_SERIALIZERS = Object.freeze({
         topic: (filters) => (filters.topic && filters.topic !== "all" ? filters.topic : null),
         month: (filters) => filters.monthFocus || null,
@@ -82,6 +143,7 @@ export const AnalyticsPage = (() => {
             filters.shareType && filters.shareType !== "all" ? filters.shareType : null,
     });
 
+    /** @type {Readonly<Record<string, {field: FilterResetField, value: string|null}>>} */
     const FILTER_RESET_MAP = Object.freeze({
         topic: { field: "topic", value: "all" },
         month: { field: "monthFocus", value: null },
@@ -95,6 +157,7 @@ export const AnalyticsPage = (() => {
         msPerPoint: 45,
     };
 
+    /** @type {{filters: AnalyticsFilters, analyticsReady: boolean, hasData: boolean, currentView: AnalyticsScreenView|null}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         analyticsReady: false,
@@ -102,24 +165,35 @@ export const AnalyticsPage = (() => {
         currentView: null,
     };
 
-    let elements = null;
+    // Assigned by init() before any handler that reads it can run.
+    /** @type {AnalyticsElements} */
+    let elements;
+    /** @type {HTMLCanvasElement[]} */
     let chartCanvases = [];
     let initialized = false;
     let needsBaseReload = true;
     let isApplyingRouteParams = false;
 
+    /** @type {Worker|null} */
     let worker = null;
     let requestId = 0;
+    /** @type {import("../../app/worker-contracts.js").RequestId} */
     let pendingViewId = 0;
+    /** @type {string|null} */
     let lastRequestedKey = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
     let debounceTimer = null;
     let isRendering = false;
+    /** @type {AnalyticsScreenView|null} */
     let pendingRender = null;
 
+    /** @type {number|null} */
     let workerTimeoutId = null;
     let renderRetryCount = 0;
     const MAX_RENDER_RETRIES = 5;
+    /** @type {ResizeObserver|null} */
     let resizeObserver = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
     let renderRetryTimer = null;
 
     /** Initialize analytics page: bind events and worker lifecycle. */
@@ -148,7 +222,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Handle route activation and URL param changes.
-     * @param {object} params - Route query params
+     * @param {RouteParams} params - Route query params
      */
     function onRouteChange(params) {
         if (!initialized) {
@@ -185,26 +259,40 @@ export const AnalyticsPage = (() => {
 
     /**
      * Resolve analytics DOM element references.
-     * @returns {object}
+     *
+     * The static shell provides every node; init() bails out before binding
+     * anything when the grid or the timeline canvas is missing.
+     * @returns {AnalyticsElements}
      */
     function resolveElements() {
+        /**
+         * Look up an element the static shell always provides.
+         * @template {HTMLElement} [T=HTMLElement]
+         * @param {string} id - Element ID
+         * @returns {T}
+         */
+        const byId = (id) => /** @type {T} */ (document.getElementById(id));
         return {
-            timeRangeButtons: document.querySelectorAll("#analyticsTimeRangeButtons .filter-btn"),
-            timeRangeSelect: document.getElementById("analyticsTimeRangeSelect"),
+            timeRangeButtons: /** @type {NodeListOf<HTMLElement>} */ (
+                document.querySelectorAll("#analyticsTimeRangeButtons .filter-btn")
+            ),
+            timeRangeSelect: /** @type {HTMLSelectElement|null} */ (
+                document.getElementById("analyticsTimeRangeSelect")
+            ),
             resetFiltersBtn: document.getElementById("analyticsResetFiltersBtn"),
-            activeFilters: document.getElementById("activeFilters"),
-            activeFiltersList: document.getElementById("activeFiltersList"),
-            analyticsEmpty: document.getElementById("analyticsEmpty"),
-            analyticsGrid: document.getElementById("analyticsGrid"),
-            statsGrid: document.getElementById("statsGrid"),
-            timelineChart: document.getElementById("timelineChart"),
-            topicsChart: document.getElementById("topicsChart"),
-            heatmapChart: document.getElementById("heatmapChart"),
-            statPosts: document.getElementById("statPosts"),
-            statComments: document.getElementById("statComments"),
-            statTotal: document.getElementById("statTotal"),
-            statPeak: document.getElementById("statPeak"),
-            statStreak: document.getElementById("statStreak"),
+            activeFilters: byId("activeFilters"),
+            activeFiltersList: byId("activeFiltersList"),
+            analyticsEmpty: byId("analyticsEmpty"),
+            analyticsGrid: byId("analyticsGrid"),
+            statsGrid: byId("statsGrid"),
+            timelineChart: byId("timelineChart"),
+            topicsChart: byId("topicsChart"),
+            heatmapChart: byId("heatmapChart"),
+            statPosts: byId("statPosts"),
+            statComments: byId("statComments"),
+            statTotal: byId("statTotal"),
+            statPeak: byId("statPeak"),
+            statStreak: byId("statStreak"),
             chartTooltip: document.getElementById("chartTooltip"),
         };
     }
@@ -293,7 +381,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Handle cache notifications from uploads/clear operations.
-     * @param {object} event - Notification payload
+     * @param {{type?: unknown}} event - Notification payload
      */
     function handleCacheChange(event) {
         const type = event && event.type;
@@ -322,7 +410,9 @@ export const AnalyticsPage = (() => {
                 return;
             }
 
-            let analyticsBase = DataCache.get("storage:analyticsBase") || null;
+            let analyticsBase =
+                /** @type {StoredAnalytics|undefined} */ (DataCache.get("storage:analyticsBase")) ||
+                null;
 
             if (!analyticsBase) {
                 analyticsBase = await Storage.getAnalytics();
@@ -398,7 +488,7 @@ export const AnalyticsPage = (() => {
                 }
                 // The parser returns an object. Keep the fallback for malformed worker data.
                 /* v8 ignore next */
-                applyWorkerViewPayload(message.payload || {});
+                applyWorkerViewPayload(/** @type {AnalyticsViewPayload} */ (message.payload || {}));
                 return;
             case "error":
                 clearWorkerTimeout();
@@ -423,7 +513,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Apply worker view payload to analytics state and trigger rendering.
-     * @param {object} payload - Worker payload
+     * @param {AnalyticsViewPayload} payload - Worker payload
      */
     function applyWorkerViewPayload(payload) {
         state.currentView = payload.view || null;
@@ -441,7 +531,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Resolve a worker message text with fallback.
-     * @param {object} payload - Worker payload
+     * @param {{message?: string}|null|undefined} payload - Worker payload
      * @param {string} fallback - Fallback message
      * @returns {string}
      */
@@ -474,7 +564,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Build a unique string key from the current filter state.
-     * @param {object} filters - The current filter state.
+     * @param {AnalyticsFilters} filters - The current filter state.
      * @returns {string} A pipe-delimited key representing the filters.
      */
     function getFilterKey(filters) {
@@ -544,7 +634,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Defer rendering until chart containers have layout dimensions.
-     * @param {object} view - The analytics view data to render once sized.
+     * @param {AnalyticsScreenView} view - The analytics view data to render once sized.
      */
     function scheduleRenderWhenSized(view) {
         pendingRender = view;
@@ -553,7 +643,9 @@ export const AnalyticsPage = (() => {
             return;
         }
 
-        const wrappers = chartCanvases.map((canvas) => canvas.parentElement).filter(Boolean);
+        const wrappers = /** @type {HTMLElement[]} */ (
+            chartCanvases.map((canvas) => canvas.parentElement).filter(Boolean)
+        );
         if (typeof ResizeObserver !== "undefined" && wrappers.length) {
             resizeObserver = new ResizeObserver(() => {
                 /* v8 ignore next 3 */
@@ -562,19 +654,22 @@ export const AnalyticsPage = (() => {
                 }
                 const next = pendingRender;
                 pendingRender = null;
-                resizeObserver.disconnect();
+                /** @type {ResizeObserver} */ (resizeObserver).disconnect();
                 resizeObserver = null;
                 renderRetryCount = 0;
                 renderAnalyticsView(next);
             });
-            wrappers.forEach((wrapper) => resizeObserver.observe(wrapper));
+            wrappers.forEach((wrapper) =>
+                /** @type {ResizeObserver} */ (resizeObserver).observe(wrapper),
+            );
             return;
         }
 
         /* v8 ignore next 11 */
         if (renderRetryCount < MAX_RENDER_RETRIES) {
             renderRetryCount += 1;
-            clearTimeout(renderRetryTimer);
+            // clearTimeout ignores null at runtime; the cast only satisfies its signature.
+            clearTimeout(/** @type {ReturnType<typeof setTimeout>} */ (renderRetryTimer));
             renderRetryTimer = setTimeout(() => {
                 renderRetryTimer = null;
                 if (!pendingRender) {
@@ -589,12 +684,12 @@ export const AnalyticsPage = (() => {
 
     /**
      * Update the stats bar with totals from the current view.
-     * @param {object} view - The analytics view containing totals, peakHour, and streaks.
+     * @param {AnalyticsScreenView} view - The view containing totals, peakHour, and streaks.
      */
     function updateStats(view) {
-        elements.statPosts.textContent = view.totals.posts;
-        elements.statComments.textContent = view.totals.comments;
-        elements.statTotal.textContent = view.totals.total;
+        elements.statPosts.textContent = String(view.totals.posts);
+        elements.statComments.textContent = String(view.totals.comments);
+        elements.statTotal.textContent = String(view.totals.total);
         elements.statPeak.textContent = view.totals.total
             ? `${String(view.peakHour.hour).padStart(2, "0")}:00`
             : "-";
@@ -617,7 +712,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Draw all three chart canvases from the view data.
-     * @param {object} view - The analytics view containing timeline, topics, and heatmap data.
+     * @param {AnalyticsScreenView} view - The view containing timeline, topics, and heatmap data.
      */
     function renderCharts(view) {
         SketchCharts.drawHeatmap(elements.heatmapChart, view.heatmap, "No activity in this range yet.");
@@ -648,7 +743,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Main render entry point: update stats, filters, and charts.
-     * @param {object} view - The analytics view data to render.
+     * @param {AnalyticsScreenView|null} view - The analytics view data to render.
      */
     function renderAnalyticsView(view) {
         if (isRendering) {
@@ -737,7 +832,7 @@ export const AnalyticsPage = (() => {
 
     /** Apply the range chosen from the compact select, ignoring unknown values. */
     function handleTimeRangeSelect() {
-        const range = elements.timeRangeSelect.value;
+        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
         if (!RANGE_VALUES.has(range)) {
             return;
         }
@@ -792,7 +887,9 @@ export const AnalyticsPage = (() => {
         const filter = button.getAttribute("data-filter");
         const entry = filter ? FILTER_RESET_MAP[filter] : null;
         if (entry) {
-            state.filters[entry.field] = entry.value;
+            /** @type {Record<FilterResetField, string|number|null>} */ (state.filters)[
+                entry.field
+            ] = entry.value;
             syncRouteFromFilters();
             scheduleViewRequest(false);
         }
@@ -983,7 +1080,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Determine whether timeline animation should play.
-     * @param {object} view - The analytics view to check.
+     * @param {AnalyticsScreenView} view - The analytics view to check.
      * @returns {boolean} True if the timeline should animate.
      */
     function shouldAnimate(view) {
@@ -1006,8 +1103,8 @@ export const AnalyticsPage = (() => {
 
     /**
      * Parse route query params into a normalized filter object.
-     * @param {object} params - Route query params
-     * @returns {object}
+     * @param {RouteParams} params - Route query params
+     * @returns {AnalyticsFilters}
      */
     function parseRouteFilters(params) {
         const normalized = { ...FILTER_DEFAULTS };
@@ -1021,7 +1118,7 @@ export const AnalyticsPage = (() => {
 
     /**
      * Apply parsed route filters to state.
-     * @param {object} nextFilters - Parsed filters
+     * @param {AnalyticsFilters} nextFilters - Parsed filters
      * @returns {boolean} Whether filters changed
      */
     function applyFiltersFromRoute(nextFilters) {
@@ -1046,6 +1143,7 @@ export const AnalyticsPage = (() => {
             return;
         }
 
+        /** @type {Record<string, string>} */
         const params = {
             range: state.filters.timeRange,
         };

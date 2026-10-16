@@ -244,8 +244,9 @@ const BLOB_PROBE_TIMEOUT_MS = 2000;
 export function probeBlobStorage({ idb = indexedDB, timeoutMs = BLOB_PROBE_TIMEOUT_MS } = {}) {
     return new Promise((resolve) => {
         let settled = false;
+        /** @type {IDBDatabase|null} */
         let db = null;
-        const finish = (supported) => {
+        const finish = (/** @type {boolean} */ supported) => {
             if (settled) {
                 return;
             }
@@ -578,6 +579,7 @@ export const Storage = (() => {
         );
     }
 
+    /** @type {Promise<boolean>|null} */
     let blobSupport = null;
 
     /**

@@ -8,7 +8,10 @@ const SW_LOCATION_HREF =
 const APP_SHELL_URL = new URL("./index.html", SW_LOCATION_HREF).pathname;
 
 cleanupOutdatedCaches();
-precacheAndRoute(/* v8 ignore next */ /** @type {any} */ (self).__WB_MANIFEST || []);
+/** @typedef {{__WB_MANIFEST?: Array<string|{url: string, revision: string|null}>}} ManifestScope */
+// The build injects the precache manifest onto the worker's global scope.
+const manifestScope = /** @type {ManifestScope} */ (/** @type {unknown} */ (self));
+precacheAndRoute(/* v8 ignore next */ manifestScope.__WB_MANIFEST || []);
 
 const navigationStrategy = new NetworkFirst({
     cacheName: "app-shell-v1",

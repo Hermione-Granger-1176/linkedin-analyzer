@@ -19,6 +19,7 @@ import { resetCleanJob, runCleanJob } from "./clean-job.js";
 const CLEAN_FAILURE = "Unable to parse file.";
 const CLEAN_TIMEOUT = "Cleaning took too long. Try again.";
 
+/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null, cancelled?: boolean}} CleanReply */
 
 /** @type {Worker|null} */
@@ -124,7 +125,7 @@ function cancelled() {
  * Run the job on the main thread, reporting a fixed error if it throws. A run
  * that a newer request or a Clear overtook reports cancelled, and one that
  * outlived a Clear drops the rows it kept.
- * @param {object} payload - Request payload
+ * @param {CleaningRequestPayload} payload - Request payload
  * @returns {Promise<CleanReply>}
  */
 async function runOnMainThread(payload) {
@@ -184,7 +185,7 @@ export function requestClean(payload) {
 
 // Clearing stored data must not leave the last file's cleaned rows in memory.
 DataCache.subscribe((event) => {
-    if (event && event.type === "storageCleared") {
+    if (/** @type {{type?: string}} */ (event).type === "storageCleared") {
         clearCount += 1;
         terminateCleanWorker(cancelled());
         resetCleanJob();

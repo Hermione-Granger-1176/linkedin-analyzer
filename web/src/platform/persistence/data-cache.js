@@ -11,7 +11,7 @@ export const DataCache = (() => {
     /**
      * Read a value from cache.
      * @param {string} key - Cache key
-     * @returns {*|undefined}
+     * @returns {unknown} The cached value, or undefined; callers cast to the shape they stored
      */
     function get(key) {
         return values.get(key);
@@ -19,9 +19,10 @@ export const DataCache = (() => {
 
     /**
      * Save a value in cache.
+     * @template T
      * @param {string} key - Cache key
-     * @param {*} value - Cached value
-     * @returns {*}
+     * @param {T} value - Cached value
+     * @returns {T}
      */
     function set(key, value) {
         values.set(key, value);

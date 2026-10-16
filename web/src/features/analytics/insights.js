@@ -2,6 +2,21 @@
 
 import { DAY_LABELS } from "./constants.js";
 
+/** @typedef {import("./activity.js").ActivityTrend} ActivityTrend */
+/** @typedef {import("./activity.js").AnalyticsView} AnalyticsView */
+/** @typedef {import("./activity.js").Insight} Insight */
+/** @typedef {import("./activity.js").InsightsResult} InsightsResult */
+
+/**
+ * An insight card before its placeholders are filled.
+ * @typedef {object} InsightTemplate
+ * @property {string} id - Stable insight ID
+ * @property {string} title - Card title
+ * @property {string} template - Card text with "{placeholder}" slots
+ * @property {string} icon - Icon name
+ * @property {string} accent - Accent class name
+ */
+
 // Comment-to-post ratio tiers, highest threshold first so `find` matches the
 // strongest tier a value qualifies for.
 const ENGAGER_TIERS = Object.freeze([
@@ -35,6 +50,7 @@ const TIME_OF_DAY_INSIGHTS = Object.freeze([
     },
 ]);
 // Trend cards keyed by the view's trend direction.
+/** @type {Readonly<Partial<Record<ActivityTrend["direction"], InsightTemplate>>>} */
 const TREND_INSIGHTS = Object.freeze({
     up: {
         id: "trending-up",
@@ -54,14 +70,15 @@ const TREND_INSIGHTS = Object.freeze({
 
 /**
  * Derive the narrative insight cards and closing tip from a built view.
- * @param {object|null} view - View model produced by buildView
- * @returns {{ insights: object[], tip: string|null }} Insight cards and tip
+ * @param {AnalyticsView|null} view - View model produced by buildView
+ * @returns {InsightsResult} Insight cards and tip
  */
 export function generateInsights(view) {
     if (!view || !view.totals || view.totals.total === 0) {
         return { insights: [], tip: null };
     }
 
+    /** @type {Insight[]} */
     const insights = [];
     const peakHour = view.peakHour.hour;
     const peakDayLabel = DAY_LABELS[view.peakDay.dayIndex];
@@ -88,13 +105,12 @@ export function generateInsights(view) {
 
     const trendDef = view.trend && TREND_INSIGHTS[view.trend.direction];
     if (trendDef) {
+        // A trend card exists only when the view has a trend.
+        const trend = /** @type {ActivityTrend} */ (view.trend);
         insights.push({
             id: trendDef.id,
             title: trendDef.title,
-            body: trendDef.template.replace(
-                "{pct}",
-                String(Math.abs(Math.round(view.trend.percent))),
-            ),
+            body: trendDef.template.replace("{pct}", String(Math.abs(Math.round(trend.percent)))),
             icon: trendDef.icon,
             accent: trendDef.accent,
         });

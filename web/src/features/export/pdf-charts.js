@@ -91,6 +91,10 @@ const HOUR_LABEL_STEP = 3;
 /**
  * @typedef {import("./pdf-layout.js").Rgb} Rgb
  * @typedef {import("./pdf-layout.js").Row} Row
+ * @typedef {import("./pdf-layout.js").Painter} Painter
+ * @typedef {{label: string, value: number}} LinePoint - One plotted point of a line chart
+ * @typedef {{topic: string, count: number}} BarItem - One bar of a bar chart
+ * @typedef {{primary: string, secondary?: string, value?: string}} ListItem - One row of a list
  * @typedef {{kind: string, rows: Row[], keepTogether?: boolean, keepWithNext?: boolean, spacingAfter?: number}} Block
  */
 
@@ -189,7 +193,7 @@ export function pickLabelIndices(count, width) {
  * "Bartholomewkonstantinos9 Vandenbroucke-Steenhuyse-Papadopoulos-Rajagopalachari"
  * printed whole while "Bartholomewkonstantinos13 …" printed as its first token
  * and 53mm of empty row, one digit apart.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {string|null|undefined} value - Raw label
  * @param {number} width - Available width in millimetres
  * @param {number} size - Font size in points
@@ -222,7 +226,7 @@ function fitLabel(painter, value, width, size) {
 
 /**
  * Build the heading block a chart is introduced by.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {string} title - Chart title
  * @returns {Block} Block
  */
@@ -272,7 +276,7 @@ function plotArea(padding, height) {
 
 /**
  * Draw the horizontal gridlines and the values they stand for.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {{left: number, top: number, width: number, height: number}} plot - Plot area
  * @param {number[]} values - Gridline values from axisScale()
  */
@@ -296,8 +300,8 @@ function drawValueAxis(painter, plot, values) {
 
 /**
  * Build a line chart: gridded axis, filled area and plotted points.
- * @param {object} painter - Drawing helpers
- * @param {{title: string, points: Array<{label: string, value: number}>}} config - Chart configuration
+ * @param {Painter} painter - Drawing helpers
+ * @param {{title: string, points: LinePoint[]}} config - Chart configuration
  * @returns {Block[]} Title block and plot block
  */
 export function buildLineChartBlocks(painter, config) {
@@ -321,6 +325,7 @@ export function buildLineChartBlocks(painter, config) {
     const showValues = points.length <= MAX_VALUE_LABELS;
     const valueLabelHeight = lineHeightMm(AXIS_SIZE);
 
+    /** @type {Row} */
     const plotRow = {
         height: PLOT_HEIGHT,
         draw: (x, y) => {
@@ -422,8 +427,8 @@ export function buildLineChartBlocks(painter, config) {
 
 /**
  * Build a horizontal bar chart, one measured row per bar.
- * @param {object} painter - Drawing helpers
- * @param {{title: string, items: Array<{topic: string, count: number}>}} config - Chart configuration
+ * @param {Painter} painter - Drawing helpers
+ * @param {{title: string, items: BarItem[]}} config - Chart configuration
  * @returns {Block[]} Title block and bar block
  */
 export function buildBarChartBlocks(painter, config) {
@@ -441,6 +446,7 @@ export function buildBarChartBlocks(painter, config) {
     const trackWidth = CONTENT_WIDTH - trackLeft - BAR_VALUE_WIDTH;
     const maxValue = Math.max(1, ...items.map((item) => item.count));
 
+    /** @type {Row[]} */
     const rows = items.map((item) => {
         const label = fitLabel(painter, item.topic, labelWidth, LABEL_SIZE);
         // A count that rounds to nothing still gets a visible stub, so a row is
@@ -487,7 +493,7 @@ export function buildBarChartBlocks(painter, config) {
 
 /**
  * Build the day-by-hour activity heatmap.
- * @param {object} painter - Drawing helpers
+ * @param {Painter} painter - Drawing helpers
  * @param {{title: string, grid: number[][]}} config - Chart configuration
  * @returns {Block[]} Title block and plot block
  */
@@ -502,6 +508,7 @@ export function buildHeatmapBlocks(painter, config) {
     const cellHeight = plot.height / DAY_LABELS.length;
     const maxValue = Math.max(1, ...grid.flat());
 
+    /** @type {Row} */
     const plotRow = {
         height: HEATMAP_HEIGHT,
         draw: (x, y) => {
@@ -573,8 +580,8 @@ export function buildHeatmapBlocks(painter, config) {
 
 /**
  * Build a ranked list, used where the site shows one rather than a chart.
- * @param {object} painter - Drawing helpers
- * @param {{title: string, items: Array<{primary: string, secondary?: string, value?: string}>}} config - List configuration
+ * @param {Painter} painter - Drawing helpers
+ * @param {{title: string, items: ListItem[]}} config - List configuration
  * @returns {Block[]} Title block and list block
  */
 export function buildListBlocks(painter, config) {
@@ -592,6 +599,7 @@ export function buildListBlocks(painter, config) {
     const primaryWidth = textWidth * LIST_PRIMARY_FRACTION;
     const secondaryWidth = textWidth - primaryWidth - LIST_COLUMN_GAP;
 
+    /** @type {Row[]} */
     const rows = items.map((item, index) => {
         const zebra = index % 2 === 0 ? palette["--bg-tertiary"] : palette["--bg-primary"];
         const primary = fitLabel(painter, item.primary, primaryWidth, LABEL_SIZE);

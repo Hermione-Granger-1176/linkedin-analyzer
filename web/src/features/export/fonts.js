@@ -254,7 +254,7 @@ async function fetchFont(file) {
  * Registration is all-or-nothing: a document with one embedded face and one
  * core face would look broken, so a single failure falls back to Helvetica for
  * everything.
- * @param {object} doc - jsPDF document instance
+ * @param {import("jspdf").jsPDF} doc - jsPDF document instance
  * @returns {Promise<Readonly<{body: string, accent: string}>>} Registered family names
  */
 export async function registerPdfFonts(doc) {

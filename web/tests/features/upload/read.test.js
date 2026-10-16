@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readFileAsText } from "../../../src/features/upload/read.js";
+import {
+    canStreamFileText,
+    readFileAsText,
+    streamFileText,
+} from "../../../src/features/upload/read.js";
 import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
 
 const STREAM_SIZE = 6 * 1024 * 1024;
@@ -20,15 +24,16 @@ function stubFileReader(readAsArrayBuffer) {
 /**
  * Build a streaming File-like object whose stream yields the given byte chunks.
  * @param {Uint8Array[]} chunks - Byte chunks in order
- * @param {{onCancel?: () => void, onRead?: (index: number) => void}} [hooks] - Test hooks
+ * @param {{onCancel?: () => void, onRead?: (index: number) => void, rejectCancel?: boolean}} [hooks] - Test hooks
  */
 function makeStreamFile(chunks, hooks = {}) {
-    let index = 0;
     return /** @type {File} */ (
         /** @type {unknown} */ ({
             name: "Messages.csv",
             size: STREAM_SIZE,
             stream() {
+                // Each stream starts from the first byte, as a real File's does.
+                let index = 0;
                 return {
                     getReader() {
                         return {
@@ -45,7 +50,9 @@ function makeStreamFile(chunks, hooks = {}) {
                                 if (hooks.onCancel) {
                                     hooks.onCancel();
                                 }
-                                return Promise.resolve();
+                                return hooks.rejectCancel
+                                    ? Promise.reject(new Error("cancel failed"))
+                                    : Promise.resolve();
                             },
                         };
                     },
@@ -241,5 +248,111 @@ describe("readFileAsText with a stream", () => {
         await vi.advanceTimersByTimeAsync(41000);
         await assertion;
         expect(cancelled).toBe(true);
+    });
+});
+
+describe("streamFileText", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+    });
+
+    /** Collect what streamFileText emits for a file. */
+    async function collect(file, options = {}) {
+        const events = [];
+        const result = await streamFileText(file, {
+            ...options,
+            onText: (text) => events.push(text),
+            onRestart: () => events.push("<restart>"),
+        });
+        return { events, result };
+    }
+
+    it("reports whether the environment can stream", () => {
+        expect(canStreamFileText(makeStreamFile([]))).toBe(true);
+        expect(canStreamFileText(/** @type {File} */ (/** @type {unknown} */ ({})))).toBe(false);
+        vi.stubGlobal("TextDecoder", undefined);
+        expect(canStreamFileText(makeStreamFile([]))).toBe(false);
+    });
+
+    it("decodes UTF-8 chunks, joining a character split across chunks", async () => {
+        const onProgress = vi.fn();
+        const bytes = new TextEncoder().encode("a😀b");
+        const file = makeStreamFile([bytes.slice(0, 3), bytes.slice(3)]);
+        await expect(collect(file, { onProgress })).resolves.toEqual({
+            events: ["a", "😀b"],
+            result: { usedFallback: false },
+        });
+        expect(onProgress.mock.calls).toEqual([
+            [3, STREAM_SIZE],
+            [6, STREAM_SIZE],
+        ]);
+    });
+
+    it("restarts as windows-1252 when a chunk is not UTF-8", async () => {
+        const file = makeStreamFile([new Uint8Array([99]), new Uint8Array([0xe9])]);
+        await expect(collect(file)).resolves.toEqual({
+            events: ["c", "<restart>", "c", "é"],
+            result: { usedFallback: true },
+        });
+    });
+
+    it("restarts as windows-1252 when the file ends mid-character", async () => {
+        const file = makeStreamFile([new Uint8Array([99, 0xf0, 0x9f])]);
+        await expect(collect(file)).resolves.toEqual({
+            events: ["c", "<restart>", "cðŸ"],
+            result: { usedFallback: true },
+        });
+    });
+
+    it("rejects text past the character limit as a running count", async () => {
+        const file = makeStreamFile([new Uint8Array(MAX_CSV_CHARS), new Uint8Array(1)]);
+        await expect(collect(file)).rejects.toThrow("text limit");
+    });
+
+    it("cancels the stream when the signal aborts", async () => {
+        const controller = new AbortController();
+        const onCancel = vi.fn();
+        const file = makeStreamFile([new Uint8Array([99]), new Uint8Array([100])], {
+            onCancel,
+            onRead: (index) => {
+                if (index === 1) {
+                    controller.abort();
+                }
+            },
+        });
+        await expect(collect(file, { signal: controller.signal })).rejects.toMatchObject({
+            name: "AbortError",
+        });
+        expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it("ignores a cancel that fails while abandoning the read", async () => {
+        const file = makeStreamFile([new Uint8Array(MAX_CSV_CHARS + 1)], { rejectCancel: true });
+        await expect(collect(file)).rejects.toThrow("text limit");
+    });
+
+    it("times out a single chunk read that stalls", async () => {
+        vi.useFakeTimers();
+        const onCancel = vi.fn();
+        const file = /** @type {File} */ (
+            /** @type {unknown} */ ({
+                name: "Messages.csv",
+                size: STREAM_SIZE,
+                stream: () => ({
+                    getReader: () => ({
+                        read: () => new Promise(() => {}),
+                        cancel() {
+                            onCancel();
+                            return Promise.resolve();
+                        },
+                    }),
+                }),
+            })
+        );
+        const assertion = expect(collect(file)).rejects.toThrow(/timed out/i);
+        await vi.advanceTimersByTimeAsync(30001);
+        await assertion;
+        expect(onCancel).toHaveBeenCalledTimes(1);
     });
 });

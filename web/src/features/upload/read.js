@@ -8,7 +8,7 @@
  * Nothing here touches the DOM, so the analytics worker reads uploads with it.
  */
 
-import { MAX_FILE_BYTES } from "../../shared/limits.js";
+import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../../shared/limits.js";
 
 import { concatChunks, decodeBytes } from "./decode.js";
 
@@ -48,6 +48,16 @@ export function readFileAsText(file, options = {}) {
     }
 
     return readFileAsTextWithReader(file, options);
+}
+
+/**
+ * Cancel a stream reader whose read is being abandoned, ignoring a failed cancel.
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - Stream reader
+ */
+function cancelReader(reader) {
+    reader.cancel().catch(() => {
+        // The read is abandoned either way.
+    });
 }
 
 /**
@@ -146,10 +156,7 @@ async function readFileAsTextStream(file, { signal, onProgress }) {
 
     const timeoutId = globalThis.setTimeout(() => {
         timedOut = true;
-        /* v8 ignore next */
-        reader.cancel().catch(() => {
-            // Ignore cancellation failures after timeout.
-        });
+        cancelReader(reader);
     }, FILE_READ_TIMEOUT_MS);
 
     try {
@@ -158,9 +165,7 @@ async function readFileAsTextStream(file, { signal, onProgress }) {
                 throw new Error(`Reading ${file.name} timed out.`);
             }
             if (signal && signal.aborted) {
-                reader.cancel().catch(() => {
-                    // The read is abandoned either way.
-                });
+                cancelReader(reader);
                 throw abortError(file);
             }
 
@@ -186,4 +191,119 @@ async function readFileAsTextStream(file, { signal, onProgress }) {
     // windows-1252 fallback and the character-count limit applied after
     // decoding. Peak memory stays bounded by the upstream MAX_FILE_BYTES cap.
     return decodeBytes(concatChunks(chunks, totalBytes), file.name);
+}
+
+/**
+ * @typedef {object} StreamTextOptions
+ * @property {AbortSignal} [signal] - Stops the read when aborted
+ * @property {(bytesRead: number, totalBytes: number) => void} [onProgress] - Called as bytes arrive
+ * @property {(text: string) => void} onText - Receives each decoded text chunk in order
+ * @property {() => void} onRestart - Called before re-reading from the start as windows-1252
+ */
+
+/** Thrown inside decodeStream when the bytes are not valid UTF-8. */
+class Utf8DecodeError extends Error {}
+
+/**
+ * Check whether the streaming text read can run in this environment.
+ * @param {File} file - Uploaded file
+ * @returns {boolean}
+ */
+export function canStreamFileText(file) {
+    return typeof file.stream === "function" && typeof TextDecoder !== "undefined";
+}
+
+/**
+ * Read a File as decoded text chunks without holding the whole file.
+ *
+ * Decodes as strict UTF-8 in streaming mode. On a decode error it calls
+ * onRestart and reads the File again from the start as windows-1252, matching
+ * decodeBytes(). The character limit applies as a running count with the same
+ * message. The timeout applies to each chunk read rather than the whole file,
+ * because the caller may parse and clean between chunks.
+ * @param {File} file - Uploaded file
+ * @param {StreamTextOptions} options - Chunk, restart, cancellation, and progress hooks
+ * @returns {Promise<{usedFallback: boolean}>}
+ */
+export async function streamFileText(file, options) {
+    try {
+        await decodeStream(file, "utf-8", options);
+        return { usedFallback: false };
+    } catch (error) {
+        if (!(error instanceof Utf8DecodeError)) {
+            throw error;
+        }
+    }
+    options.onRestart();
+    await decodeStream(file, "windows-1252", options);
+    return { usedFallback: true };
+}
+
+/**
+ * Read one chunk, rejecting when it takes longer than the read timeout.
+ * @param {ReadableStreamDefaultReader<Uint8Array>} reader - Stream reader
+ * @param {File} file - Uploaded file
+ * @returns {Promise<ReadableStreamReadResult<Uint8Array>>}
+ */
+function readChunkWithTimeout(reader, file) {
+    let timeoutId;
+    const timeout = new Promise((_resolve, reject) => {
+        timeoutId = globalThis.setTimeout(() => {
+            cancelReader(reader);
+            reject(new Error(`Reading ${file.name} timed out.`));
+        }, FILE_READ_TIMEOUT_MS);
+    });
+    return Promise.race([reader.read(), timeout]).finally(() => {
+        globalThis.clearTimeout(timeoutId);
+    });
+}
+
+/**
+ * Stream and decode a File once with the given encoding.
+ * @param {File} file - Uploaded file
+ * @param {string} encoding - "utf-8" (strict) or "windows-1252"
+ * @param {StreamTextOptions} options - Chunk, cancellation, and progress hooks
+ * @returns {Promise<void>}
+ */
+async function decodeStream(file, encoding, { signal, onProgress, onText }) {
+    const decoder = new TextDecoder(encoding, { fatal: encoding === "utf-8" });
+    const reader = file.stream().getReader();
+    let bytesRead = 0;
+    let totalChars = 0;
+
+    const emit = (bytes, stream) => {
+        let text;
+        try {
+            text = decoder.decode(bytes, { stream });
+        } catch {
+            cancelReader(reader);
+            throw new Utf8DecodeError();
+        }
+        totalChars += text.length;
+        if (totalChars > MAX_CSV_CHARS) {
+            cancelReader(reader);
+            const maxMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
+            throw new Error(`"${file.name}" exceeds the ${maxMb}MB text limit.`);
+        }
+        if (text) {
+            onText(text);
+        }
+    };
+
+    for (
+        let chunk = await readChunkWithTimeout(reader, file);
+        !chunk.done;
+        chunk = await readChunkWithTimeout(reader, file)
+    ) {
+        if (signal && signal.aborted) {
+            cancelReader(reader);
+            throw abortError(file);
+        }
+        bytesRead += chunk.value.byteLength;
+        emit(chunk.value, true);
+        if (onProgress) {
+            onProgress(bytesRead, file.size);
+        }
+    }
+    emit(undefined, false);
 }

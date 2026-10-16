@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
@@ -679,5 +682,129 @@ describe("LinkedInCleaner", () => {
             expect(result.success).toBe(false);
             expect(result.error).toMatch(/too large/i);
         });
+    });
+});
+
+/**
+ * Run text through the stream processor in fixed-size chunks.
+ * @param {string} text - CSV text
+ * @param {number} chunkSize - Characters per chunk
+ * @returns {object|null} The processor's result
+ */
+function streamProcess(text, chunkSize) {
+    const processor = LinkedInCleaner.createStreamProcessor();
+    for (let start = 0; start < text.length; start += chunkSize) {
+        processor.push(text.slice(start, start + chunkSize));
+    }
+    return processor.finish();
+}
+
+describe("LinkedInCleaner.createStreamProcessor", () => {
+    const fixtureBase = resolve(process.cwd(), "tests/fixtures");
+    const readFixture = (name) => readFileSync(resolve(fixtureBase, name), "utf8");
+    const CHUNK_SIZES = [977, 4096, 70000];
+
+    /**
+     * Grow a corpus past the 64K detection prefix by repeating its data rows.
+     * The header sits on line skipRows, and no line before it has an embedded newline.
+     */
+    const growCorpus = (text, skipRows) => {
+        let bodyStart = 0;
+        for (let line = 0; line <= skipRows; line += 1) {
+            bodyStart = text.indexOf("\n", bodyStart) + 1;
+        }
+        const body = text.slice(bodyStart);
+        return text + body + body;
+    };
+
+    it.each([
+        ["shares", 0],
+        ["comments", 0],
+        ["messages", 0],
+        ["connections", 3],
+    ])("matches process() on the %s corpus, small and past the prefix", (type, skipRows) => {
+        const small = readFixture(`${type}-corpus.csv`);
+        const large = growCorpus(small, skipRows);
+        expect(large.length).toBeGreaterThan(64 * 1024);
+        for (const text of [small, large]) {
+            const expected = LinkedInCleaner.process(text, "auto");
+            expect(expected.success).toBe(true);
+            for (const chunkSize of CHUNK_SIZES) {
+                expect(streamProcess(text, chunkSize)).toEqual(expected);
+            }
+        }
+    });
+
+    it("never returns a result that differs from process() on the malformed cases", () => {
+        const { cases } = JSON.parse(readFixture("malformed-csv-outcomes.json"));
+        for (const testCase of cases) {
+            const expected = LinkedInCleaner.process(testCase.csv, "auto");
+            for (const chunkSize of [1, 7, 4096]) {
+                const streamed = streamProcess(testCase.csv, chunkSize);
+                if (streamed !== null) {
+                    expect(streamed).toEqual(expected);
+                }
+                if (!expected.success) {
+                    expect(streamed).toBeNull();
+                }
+            }
+        }
+    });
+
+    it.each([
+        ["no recognizable header", "a,b\n1,2\n"],
+        ["only skipped rows", "Notes:\nx\n"],
+        ["a duplicate header", "Date,Date,ShareCommentary\n2025-01-01,x,y\n"],
+        ["a data row wider than the header", "Date,ShareCommentary\n2025-01-01,x,extra\n"],
+        ["an unmatched quote", 'Date,ShareCommentary\n2025-01-01,"x\n'],
+        ["empty input", ""],
+    ])("gives up on %s", (_name, text) => {
+        expect(streamProcess(text, 5)).toBeNull();
+    });
+
+    it("gives up on a parse error past the prefix", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const row = "2025-01-01 10:00:00 UTC,https://example.test/s,hello,,,PUBLIC\n";
+        const text = `${header}${row.repeat(1200)}2025-01-01,a,b,c,d,e,f,g\n${row}`;
+        expect(text.length).toBeGreaterThan(64 * 1024);
+        expect(streamProcess(text, 4096)).toBeNull();
+    });
+
+    it("skips empty data rows the way process() does", () => {
+        const text = [
+            "Date,ShareLink,ShareCommentary",
+            "2025-01-01 10:00:00 UTC,https://example.test/a,a",
+            ",,",
+            "",
+            "2025-01-02 10:00:00 UTC,https://example.test/b,b",
+            "",
+        ].join("\n");
+        const expected = LinkedInCleaner.process(text, "auto");
+        expect(expected.rowCount).toBe(2);
+        expect(streamProcess(text, 3)).toEqual(expected);
+    });
+
+    it("gives up when the first chunk past the prefix breaks a parser limit", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const processor = LinkedInCleaner.createStreamProcessor();
+        processor.push(`${header}${"x".repeat(70 * 1024)}\n"${"y".repeat(200001)}`);
+        expect(processor.finish()).toBeNull();
+    });
+
+    it("gives up when the last row past the prefix has an unmatched quote", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const row = "2025-01-01 10:00:00 UTC,https://example.test/s,hello,,,PUBLIC\n";
+        const text = `${header}${row.repeat(1200)}2025-01-01,"open`;
+        expect(text.length).toBeGreaterThan(64 * 1024);
+        expect(streamProcess(text, 4096)).toBeNull();
+    });
+
+    it("gives up when a later chunk breaks a parser limit", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const processor = LinkedInCleaner.createStreamProcessor();
+        processor.push(header + "x".repeat(70 * 1024));
+        processor.push(`"${"y".repeat(200001)}`);
+        processor.push("more");
+        expect(processor.finish()).toBeNull();
     });
 });

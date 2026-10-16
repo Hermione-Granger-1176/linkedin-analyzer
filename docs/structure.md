@@ -119,8 +119,8 @@ Scripts are part of the Python coverage target. A new Python script needs tests 
 
 ### Browser data flow
 
-1. `web/src/features/upload/` hands each `File` to the analytics worker, which reads the bytes and decodes them locally.
-2. `web/src/features/cleaning/` identifies the export type, parses bounded rows, and cleans fields.
+1. `web/src/features/upload/` hands each `File` to the analytics worker, which streams the bytes and decodes them locally.
+2. `web/src/features/cleaning/` identifies the export type, then parses and cleans bounded rows as each chunk arrives.
 3. Workers under `analytics/`, `connections/`, and `messages/` build aggregates for the screens.
 4. `web/src/platform/persistence/storage.js` stores raw file text and selected aggregates in IndexedDB when available.
 5. Screens render local results and exports use local data to create files.

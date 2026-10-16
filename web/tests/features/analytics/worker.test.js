@@ -23,7 +23,9 @@ vi.mock("../../../src/features/analytics/activity.js", () => ({
 
 vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     LinkedInCleaner: {
-        process: vi.fn()
+        process: vi.fn(),
+        // By default the streaming processor gives up, so process() runs on the full text.
+        createStreamProcessor: vi.fn(() => ({ push: vi.fn(), finish: vi.fn(() => null) }))
     }
 }));
 
@@ -569,6 +571,76 @@ describe("handleAddFile with an uploaded File", () => {
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed.payload).toEqual({ error: "disk gone", jobId: "job-2", fileName: "Shares.csv" });
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+    });
+
+    /** Build a streamable File-like object from byte chunks. */
+    function makeStreamFile(chunks) {
+        return {
+            name: "Shares.csv",
+            size: chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0),
+            stream: () => {
+                let index = 0;
+                return {
+                    getReader: () => ({
+                        read: () =>
+                            Promise.resolve(
+                                index < chunks.length
+                                    ? { done: false, value: chunks[index++] }
+                                    : { done: true, value: undefined }
+                            ),
+                        cancel: () => Promise.resolve()
+                    })
+                };
+            }
+        };
+    }
+
+    it("uses the streaming processor's result without re-processing the text", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+        const processor = {
+            push: vi.fn(),
+            finish: vi.fn(() => ({
+                success: true,
+                fileType: "shares",
+                cleanedData: [{ Date: "2025-01-02 05:00" }],
+                rowCount: 1
+            }))
+        };
+        LinkedInCleaner.createStreamProcessor.mockReturnValueOnce(processor);
+        const encoder = new TextEncoder();
+
+        await handleAddFile({
+            file: makeStreamFile([encoder.encode("Date\n"), encoder.encode("2025")]),
+            fileName: "Shares.csv"
+        });
+
+        expect(processor.push.mock.calls).toEqual([["Date\n"], ["2025"]]);
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ csvText: "Date\n2025", rowCount: 1, usedFallback: false });
+    });
+
+    it("restarts the processor and text when the stream is not UTF-8", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+        const first = { push: vi.fn(), finish: vi.fn(() => null) };
+        const second = { push: vi.fn(), finish: vi.fn(() => null) };
+        LinkedInCleaner.createStreamProcessor.mockReturnValueOnce(first).mockReturnValueOnce(second);
+
+        await handleAddFile({
+            file: makeStreamFile([new Uint8Array([99]), new Uint8Array([0xe9])]),
+            fileName: "Shares.csv"
+        });
+
+        expect(first.push.mock.calls).toEqual([["c"]]);
+        expect(second.push.mock.calls).toEqual([["c"], ["é"]]);
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("cé", "auto");
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ csvText: "cé", usedFallback: true });
     });
 });
 

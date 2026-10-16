@@ -12,8 +12,8 @@ The registered routes are `home`, `clean`, `analytics`, `connections`, `messages
 
 ## How files move through the app
 
-1. `web/src/features/upload/` validates the uploaded `File` objects and posts each one to the analytics worker. Posting a `File` clones a reference to its bytes, not the bytes, so the page never holds the file text while it processes. The worker reads the bytes with `read.js`, reports bytes read as progress, and decodes them as UTF-8 or WHATWG Windows-1252.
-2. `web/src/features/cleaning/` identifies the file type from its header, parses bounded CSV rows, cleans fields, and creates workbooks.
+1. `web/src/features/upload/` validates the uploaded `File` objects and posts each one to the analytics worker. Posting a `File` clones a reference to its bytes, not the bytes, so the page never holds the file text while it processes. The worker streams the bytes with `read.js`, reports bytes read as progress, and decodes them as strict UTF-8, starting over as WHATWG Windows-1252 if the bytes are not valid UTF-8.
+2. `web/src/features/cleaning/` identifies the file type from the first 64K characters, then parses and cleans each row as its chunk arrives, so the worker never builds the full row and record arrays. The limits apply as running counts. If streaming cannot finish, for example on a parse error, the worker runs the whole-text cleaner instead, so results and error messages match. The same module creates workbooks.
 3. Feature workers parse or aggregate data for Analytics, Connections, Messages, and export dashboards.
 4. `web/src/platform/persistence/` stores raw file text and computed aggregates when IndexedDB works.
 5. Screens read aggregates and render charts, lists, and insight cards in the browser.
@@ -25,7 +25,7 @@ No application endpoint receives the uploaded file contents. The only server-sid
 
 Long CSV parses and analytics calculations run in Web Workers so the main thread can continue handling input, navigation, and cancellation. `web/src/app/worker-contracts.js` defines shared request and response shapes for worker messages.
 
-The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. Until stored files move to `Blob` records, the worker returns the decoded text with its result so the page can store it.
+The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. A multi-file upload therefore processes its files one after another, so only one file's parse state is alive at a time. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. Until stored files move to `Blob` records, the worker returns the decoded text with its result so the page can store it.
 
 The Connections and Messages screens keep their own workers and request counters. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable.
 

@@ -8,6 +8,7 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPE_LABELS, FILE_TYPES } from "../../shared/constants.js";
 import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 import { celebrateDownload } from "../../shared/ui/mascot.js";
+import { readCsvSource } from "../upload/read.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
 import { buildCleanedCsvBlob, cleanedCsvName } from "./csv-export.js";
@@ -261,22 +262,25 @@ export const CleanPage = (() => {
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
             let text;
+            let sourceSize;
             try {
-                // The cached record is metadata only; load the CSV text on demand.
+                // The cached record is metadata only; load the stored upload on
+                // demand and decode it the way the upload did.
                 const stored = await Storage.getFile(type);
-                // The selection may have changed while the text load was in
-                // flight; abandon this stale render so the newer one wins.
-                if (getSelectedType() !== type) {
-                    return;
-                }
-                if (!stored || !stored.text) {
-                    // Metadata says the file exists but its text record is gone
+                if (!stored || !stored.blob) {
+                    // Metadata says the file exists but its contents are gone
                     // (cleared in another tab or degraded persistence); report a
                     // load failure rather than parsing an empty payload into a
                     // misleading parse error.
-                    throw new Error("Stored file text record is missing.");
+                    throw new Error("Stored file record is missing.");
                 }
-                text = stored.text;
+                text = await readCsvSource(stored.blob);
+                sourceSize = stored.blob.size;
+                // The selection may have changed while the load was in flight;
+                // abandon this stale render so the newer one wins.
+                if (getSelectedType() !== type) {
+                    return;
+                }
             } catch (error) {
                 handleParseError(error, "Unable to load file.", type, file.name || null);
                 return;
@@ -290,7 +294,7 @@ export const CleanPage = (() => {
                 }
                 cache[type] = {
                     updatedAt: fileUpdatedAt,
-                    sourceSize: text.length,
+                    sourceSize,
                     result: processed,
                 };
             } catch (error) {

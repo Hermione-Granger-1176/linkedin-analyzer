@@ -90,6 +90,55 @@ describe("worker contracts", () => {
         expect(oversized.error).toContain("File payload exceeds");
     });
 
+    it("accepts stored upload Blobs as worker CSV sources and bounds their size", () => {
+        const blob = new Blob(["col\nval"]);
+        const big = new Blob([new Uint8Array(2049)]);
+        const restore = parseAnalyticsWorkerRequest({
+            type: "restoreFiles",
+            payload: { sharesCsv: blob, commentsCsv: new Blob([]), connectionsCsv: "a,b" },
+        });
+        expect(restore.valid).toBe(true);
+        expect(restore.value.payload).toEqual({
+            sharesCsv: blob,
+            commentsCsv: "",
+            connectionsCsv: "a,b",
+        });
+        expect(
+            parseAnalyticsWorkerRequest({ type: "restoreFiles", payload: { sharesCsv: big } })
+                .valid,
+        ).toBe(false);
+
+        const messages = parseMessagesWorkerRequest({
+            type: "process",
+            payload: { messagesCsv: blob, connectionsCsv: blob },
+        });
+        expect(messages.value.payload).toEqual({ messagesCsv: blob, connectionsCsv: blob });
+        expect(
+            parseMessagesWorkerRequest({ type: "process", payload: { messagesCsv: big } }).valid,
+        ).toBe(false);
+
+        expect(
+            parseConnectionsWorkerRequest({ type: "process", payload: { connectionsCsv: blob } })
+                .value.payload.connectionsCsv,
+        ).toBe(blob);
+        expect(
+            parseConnectionsWorkerRequest({ type: "process", payload: { connectionsCsv: big } })
+                .valid,
+        ).toBe(false);
+
+        const threads = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: { messagesCsv: blob, connectionsCsv: big },
+        });
+        expect(threads.valid).toBe(false);
+    });
+
+    it("keeps a stored upload Blob on a stored file record", () => {
+        const blob = new Blob(["col\nval"]);
+        const parsed = parseStoredUploadFile({ type: "shares", name: "Shares.csv", blob });
+        expect(parsed.value.blob).toBe(blob);
+    });
+
     it("rejects unknown analytics request type", () => {
         const parsed = parseAnalyticsWorkerRequest({ type: "unknown" });
         expect(parsed.valid).toBe(false);
@@ -210,7 +259,7 @@ describe("worker contracts", () => {
         expect(parsed.valid).toBe(true);
         expect(parsed.value.payload.fileType).toBe("shares");
         expect(parsed.value.payload.rowCount).toBe(5);
-        expect(parsed.value.payload.csvText).toBe("col\nval");
+        expect(parsed.value.payload).not.toHaveProperty("csvText");
         expect(parsed.value.payload.usedFallback).toBe(true);
     });
 
@@ -497,14 +546,14 @@ describe("worker contracts", () => {
         const parsed = parseStoredUploadFile({
             type: "comments",
             name: 10,
-            text: null,
+            blob: "not a blob",
             rowCount: Number.POSITIVE_INFINITY,
             updatedAt: -99,
         });
 
         expect(parsed.valid).toBe(true);
         expect(parsed.value.name).toBe("");
-        expect(parsed.value.text).toBe("");
+        expect(parsed.value.blob).toBe(null);
         expect(parsed.value.rowCount).toBe(0);
         expect(parsed.value.updatedAt).toBe(0);
     });

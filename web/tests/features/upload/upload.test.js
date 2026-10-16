@@ -1255,12 +1255,12 @@ describe("UploadPage", () => {
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getFile.mockImplementation((type) => {
             if (type === "shares") {
-                return Promise.resolve({ type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 });
+                return Promise.resolve({ type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 });
             }
             if (type === "comments") {
                 return Promise.resolve({
                     type: "comments",
-                    text: "comments-head\nc1\nc2\nc3",
+                    blob: new Blob(["comments-head\nc1\nc2\nc3"]),
                     rowCount: 3,
                 });
             }
@@ -1283,13 +1283,13 @@ describe("UploadPage", () => {
         // The pre-upload prime seeds existing shares+comments (text from storage)...
         expect(restoreIndex).toBeGreaterThanOrEqual(0);
         const restoreCall = workerInstance.postMessage.mock.calls[restoreIndex][0];
-        expect(restoreCall.payload.sharesCsv).toContain("shares-head");
-        expect(restoreCall.payload.commentsCsv).toContain("comments-head");
+        expect(await restoreCall.payload.sharesCsv.text()).toContain("shares-head");
+        expect(await restoreCall.payload.commentsCsv.text()).toContain("comments-head");
         // ...and lands before the new file's addFile so the recompute sees both.
         expect(addIndex).toBeGreaterThan(restoreIndex);
         // Connections always travels with the prime so the worker can correlate
         // posting with network growth; none stored here, so it primes empty.
-        expect(restoreCall.payload).toHaveProperty("connectionsCsv", "");
+        expect(restoreCall.payload).toHaveProperty("connectionsCsv", null);
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1357,12 +1357,12 @@ describe("UploadPage", () => {
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getFile.mockImplementation((type) => {
             if (type === "shares") {
-                return Promise.resolve({ type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 });
+                return Promise.resolve({ type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 });
             }
             if (type === "connections") {
                 return Promise.resolve({
                     type: "connections",
-                    text: "connections-head\nc1",
+                    blob: new Blob(["connections-head\nc1"]),
                     rowCount: 5,
                 });
             }
@@ -1383,7 +1383,7 @@ describe("UploadPage", () => {
             .map((c) => c[0])
             .find((m) => m && m.type === "restoreFiles");
         expect(restoreCall).toBeDefined();
-        expect(restoreCall.payload.connectionsCsv).toContain("connections-head");
+        expect(await restoreCall.payload.connectionsCsv.text()).toContain("connections-head");
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1412,7 +1412,7 @@ describe("UploadPage", () => {
             if (type === "connections") {
                 return Promise.resolve({
                     type: "connections",
-                    text: "connections-head\nc1",
+                    blob: new Blob(["connections-head\nc1"]),
                     rowCount: 5,
                 });
             }
@@ -1433,8 +1433,8 @@ describe("UploadPage", () => {
             .map((c) => c[0])
             .find((m) => m && m.type === "restoreFiles");
         expect(restoreCall).toBeDefined();
-        expect(restoreCall.payload.connectionsCsv).toContain("connections-head");
-        expect(restoreCall.payload.sharesCsv).toBe("");
+        expect(await restoreCall.payload.connectionsCsv.text()).toContain("connections-head");
+        expect(restoreCall.payload.sharesCsv).toBeNull();
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1469,7 +1469,7 @@ describe("UploadPage", () => {
         // later loads resolve immediately so the upload's prime can finish.
         let releaseFirstLoad;
         let firstSharesLoad = true;
-        const sharesRecord = { type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 };
+        const sharesRecord = { type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 };
         Storage.getFile.mockImplementation((type) => {
             if (type !== "shares") {
                 return Promise.resolve(null);
@@ -1536,7 +1536,7 @@ describe("UploadPage", () => {
 
         const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
-        Storage.getFile.mockResolvedValue({ type: "shares", text: "shares-head\nr1", rowCount: 2 });
+        Storage.getFile.mockResolvedValue({ type: "shares", blob: new Blob(["shares-head\nr1"]), rowCount: 2 });
         DataCache.get.mockImplementation((key) =>
             key === "storage:files" ? cachedFiles : null,
         );
@@ -1586,7 +1586,7 @@ describe("UploadPage", () => {
         Storage.getAllFiles.mockResolvedValue(storedFiles);
         Storage.getFile.mockImplementation((type) =>
             Promise.resolve(
-                type === "shares" ? { type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 } : null,
+                type === "shares" ? { type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 } : null,
             ),
         );
         // Cache miss for "storage:files" forces the storage fallback in the prime.
@@ -1605,9 +1605,8 @@ describe("UploadPage", () => {
         const restoreIndex = types.indexOf("restoreFiles");
         const addIndex = types.indexOf("addFile");
         expect(restoreIndex).toBeGreaterThanOrEqual(0);
-        expect(workerInstance.postMessage.mock.calls[restoreIndex][0].payload.sharesCsv).toContain(
-            "shares-head",
-        );
+        const primed = workerInstance.postMessage.mock.calls[restoreIndex][0].payload;
+        expect(await primed.sharesCsv.text()).toContain("shares-head");
         expect(addIndex).toBeGreaterThan(restoreIndex);
 
         globalThis.FileReader = originalFileReader;

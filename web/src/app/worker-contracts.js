@@ -130,6 +130,24 @@ function isBlob(value) {
 }
 
 /**
+ * Accept one CSV source for a worker: the stored upload as a Blob, which the
+ * worker reads itself, or text from a caller that already holds it. An empty
+ * Blob counts as missing, like empty text.
+ * @param {unknown} value - Raw payload field
+ * @returns {{source: Blob|string, tooLarge: boolean}}
+ */
+function parseCsvSource(value) {
+    if (isBlob(value)) {
+        return {
+            source: value.size > 0 ? value : "",
+            tooLarge: value.size > LIMITS.maxFileBytes,
+        };
+    }
+    const text = normalizeString(value, LIMITS.maxCsvChars + 1);
+    return { source: text, tooLarge: text.length > LIMITS.maxCsvChars };
+}
+
+/**
  * Parse upload worker addFile payload. The page posts the uploaded `file` so
  * the worker reads it; `csvText` remains for callers that already hold text.
  * @param {unknown} payload - Raw payload
@@ -179,19 +197,19 @@ function parseRestoreFilesPayload(payload) {
         return invalid("Invalid restoreFiles payload");
     }
 
-    const sharesCsv = normalizeString(payload.sharesCsv, LIMITS.maxCsvChars + 1);
-    const commentsCsv = normalizeString(payload.commentsCsv, LIMITS.maxCsvChars + 1);
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
+    const shares = parseCsvSource(payload.sharesCsv);
+    const comments = parseCsvSource(payload.commentsCsv);
+    const connections = parseCsvSource(payload.connectionsCsv);
 
-    if (
-        sharesCsv.length > LIMITS.maxCsvChars ||
-        commentsCsv.length > LIMITS.maxCsvChars ||
-        connectionsCsv.length > LIMITS.maxCsvChars
-    ) {
+    if (shares.tooLarge || comments.tooLarge || connections.tooLarge) {
         return invalid("CSV payload exceeds allowed size");
     }
 
-    return valid({ sharesCsv, commentsCsv, connectionsCsv });
+    return valid({
+        sharesCsv: shares.source,
+        commentsCsv: comments.source,
+        connectionsCsv: connections.source,
+    });
 }
 
 /**
@@ -297,8 +315,6 @@ export function parseAnalyticsWorkerMessage(message) {
                         ? payload.analyticsBase
                         : null,
                     hasData: Boolean(payload.hasData),
-                    // The text the worker decoded, for the page to store.
-                    csvText: normalizeString(payload.csvText, LIMITS.maxCsvChars),
                     usedFallback: Boolean(payload.usedFallback),
                     error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
                 },
@@ -333,17 +349,17 @@ export function parseConnectionsWorkerRequest(message) {
         return invalid("Invalid connections worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
-    if (!connectionsCsv) {
+    const connections = parseCsvSource(payload.connectionsCsv);
+    if (!connections.source) {
         return invalid("Missing connectionsCsv payload");
     }
-    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+    if (connections.tooLarge) {
         return invalid("connectionsCsv payload exceeds allowed size");
     }
     return valid({
         type: "process",
         requestId: normalizeRequestId(message.requestId),
-        payload: { connectionsCsv },
+        payload: { connectionsCsv: connections.source },
     });
 }
 
@@ -397,25 +413,25 @@ export function parseMessagesWorkerRequest(message) {
         return invalid("Invalid messages worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
-    if (!messagesCsv) {
+    const messages = parseCsvSource(payload.messagesCsv);
+    if (!messages.source) {
         return invalid("Missing messagesCsv payload");
     }
-    if (messagesCsv.length > LIMITS.maxCsvChars) {
+    if (messages.tooLarge) {
         return invalid("messagesCsv payload exceeds allowed size");
     }
     // connectionsCsv is optional, but when present it must respect the same size
     // ceiling as every other CSV payload rather than being silently truncated.
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
-    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+    const connections = parseCsvSource(payload.connectionsCsv);
+    if (connections.tooLarge) {
         return invalid("connectionsCsv payload exceeds allowed size");
     }
     return valid({
         type: "process",
         requestId: normalizeRequestId(message.requestId),
         payload: {
-            messagesCsv,
-            connectionsCsv,
+            messagesCsv: messages.source,
+            connectionsCsv: connections.source,
         },
     });
 }
@@ -453,11 +469,11 @@ export function parseThreadsWorkerRequest(message) {
         return rejected("Invalid threads worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
-    if (!messagesCsv) {
+    const messages = parseCsvSource(payload.messagesCsv);
+    if (!messages.source) {
         return rejected("Missing messagesCsv payload");
     }
-    if (messagesCsv.length > LIMITS.maxCsvChars) {
+    if (messages.tooLarge) {
         return rejected("messagesCsv payload exceeds allowed size");
     }
     // The connections file the worker derives its self-detection tiebreak keys
@@ -465,16 +481,16 @@ export function parseThreadsWorkerRequest(message) {
     // present it must respect the same size ceiling as every other CSV payload
     // rather than being silently truncated: half a connections file names half
     // the people in it, and the tiebreak would then be wrong rather than absent.
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
-    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+    const connections = parseCsvSource(payload.connectionsCsv);
+    if (connections.tooLarge) {
         return rejected("connectionsCsv payload exceeds allowed size");
     }
     return valid({
         type: "threads",
         requestId,
         payload: {
-            messagesCsv,
-            connectionsCsv,
+            messagesCsv: messages.source,
+            connectionsCsv: connections.source,
             people: normalizeNumber(
                 payload.people,
                 LIMITS.maxThreadPeople,
@@ -533,7 +549,7 @@ export function parseStoredUploadFile(file) {
     return valid({
         type,
         name: normalizeString(file.name, LIMITS.maxFileNameChars),
-        text: normalizeString(file.text, LIMITS.maxCsvChars),
+        blob: isBlob(file.blob) ? file.blob : null,
         rowCount: normalizeNumber(file.rowCount, 0, 0, Number.MAX_SAFE_INTEGER),
         updatedAt: normalizeNumber(file.updatedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER),
     });

@@ -2,7 +2,12 @@
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { canStreamFileText, readFileAsText, streamFileText } from "../upload/read.js";
+import {
+    canStreamFileText,
+    readCsvSource,
+    readFileAsText,
+    streamFileText,
+} from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -219,15 +224,16 @@ async function readUpload(read, jobId, fileName) {
  * Read, parse, and clean an uploaded File.
  *
  * Where the File can be streamed, each decoded chunk is parsed and cleaned as
- * it arrives, so the full row and record arrays are never built. The decoded
- * chunks are still joined for the page to store. When the streaming processor
- * cannot finish (an error, or no type found in the prefix), process() runs on
- * the joined text, so results and messages match the whole-text path.
+ * it arrives, so the full text and the full row arrays are never built. The
+ * page stores the original File, so no text goes back. When the streaming
+ * processor cannot finish (an error, or no type found in the prefix), the File
+ * is read again whole and process() runs on that text, so results and
+ * messages match the whole-text path.
  * Resolves null when a clear cancels the read.
  * @param {File} file - Uploaded file
  * @param {string|null} jobId - Upload job ID
  * @param {string} fileName - Uploaded file name
- * @returns {Promise<{csvText: string, usedFallback: boolean, processed: object}|null>}
+ * @returns {Promise<{usedFallback: boolean, processed: object}|null>}
  */
 async function readAndProcessUpload(file, jobId, fileName) {
     if (!canStreamFileText(file)) {
@@ -236,24 +242,20 @@ async function readAndProcessUpload(file, jobId, fileName) {
             return null;
         }
         return {
-            csvText: read.text,
             usedFallback: read.usedFallback,
             processed: LinkedInCleaner.process(read.text, "auto"),
         };
     }
 
-    let chunks = [];
     let processor = LinkedInCleaner.createStreamProcessor();
     const read = await readUpload(
         (options) =>
             streamFileText(file, {
                 ...options,
                 onText: (text) => {
-                    chunks.push(text);
                     processor.push(text);
                 },
                 onRestart: () => {
-                    chunks = [];
                     processor = LinkedInCleaner.createStreamProcessor();
                 },
             }),
@@ -263,25 +265,30 @@ async function readAndProcessUpload(file, jobId, fileName) {
     if (!read) {
         return null;
     }
-    const csvText = chunks.join("");
-    chunks = [];
+    const streamed = processor.finish();
+    if (streamed) {
+        return { usedFallback: read.usedFallback, processed: streamed };
+    }
+    const whole = await readUpload((options) => readFileAsText(file, options), jobId, fileName);
+    if (!whole) {
+        return null;
+    }
     return {
-        csvText,
-        usedFallback: read.usedFallback,
-        processed: processor.finish() || LinkedInCleaner.process(csvText, "auto"),
+        usedFallback: whole.usedFallback,
+        processed: LinkedInCleaner.process(whole.text, "auto"),
     };
 }
 
 /**
  * Process an uploaded CSV file: read, parse, clean, recompute analytics, and
  * reply. The page posts the File so the read happens here, off the main
- * thread; the decoded text goes back with the result for the page to store.
+ * thread, and stores that File itself, so the reply carries no text.
  * @param {{file?: File|null, csvText?: string, fileName: string, jobId?: string|null, totalSize?: number}} payload - File and name
  * @returns {Promise<void>}
  */
 async function handleAddFile(payload) {
     const { file = null, fileName = "", jobId = null } = payload || {};
-    let { csvText = "" } = payload || {};
+    const { csvText = "" } = payload || {};
     let usedFallback = false;
     let processed;
 
@@ -308,7 +315,7 @@ async function handleAddFile(payload) {
         if (!result) {
             return;
         }
-        ({ csvText, usedFallback, processed } = result);
+        ({ usedFallback, processed } = result);
     } else {
         processed = LinkedInCleaner.process(csvText, "auto");
     }
@@ -366,23 +373,24 @@ async function handleAddFile(payload) {
             rowCount: processed.rowCount,
             analyticsBase,
             hasData: hasAnalyticsData(),
-            csvText,
             usedFallback,
         },
     });
 }
 
 /**
- * Restore worker source datasets from persisted CSV texts.
- * @param {{sharesCsv?: string, commentsCsv?: string, connectionsCsv?: string}} payload - Persisted analytics inputs
+ * Restore worker source datasets from the stored uploads. Each file arrives as
+ * its stored Blob, read here, or as CSV text.
+ * @param {{sharesCsv?: Blob|string, commentsCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Persisted analytics inputs
+ * @returns {Promise<void>}
  */
-function handleRestoreFiles(payload) {
+async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
     const sourceCsvByType = {
-        shares: sharesCsv,
-        comments: commentsCsv,
-        connections: connectionsCsv,
+        shares: await readCsvSource(sharesCsv),
+        comments: await readCsvSource(commentsCsv),
+        connections: await readCsvSource(connectionsCsv),
     };
     const assignSourceByType = {
         shares: (cleanedData) => {

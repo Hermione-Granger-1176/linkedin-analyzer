@@ -18,6 +18,8 @@
  * doing.
  */
 
+import { csvSourceSize } from "./csv-source.js";
+
 // A base allowance, plus more time for every whole megabyte of CSV.
 const WORKER_TIMEOUT_BASE_MS = 30000;
 const WORKER_TIMEOUT_PER_MB_MS = 5000;
@@ -30,11 +32,11 @@ const BYTES_PER_MB = 1024 * 1024;
  * The connections transport used to pad the call with an empty messages file it
  * does not have, which read as a fact about that transport rather than as
  * filler for a fixed second parameter.
- * @param {...string} texts - Raw CSV text for every file the worker is given
+ * @param {...(Blob|string|null|undefined)} sources - CSV text or stored upload for every file the worker is given
  * @returns {number} Timeout in milliseconds
  */
-export function computeWorkerTimeout(...texts) {
-    const characters = texts.reduce((total, text) => total + text.length, 0);
-    const megabytes = characters / BYTES_PER_MB;
+export function computeWorkerTimeout(...sources) {
+    const size = sources.reduce((total, source) => total + csvSourceSize(source), 0);
+    const megabytes = size / BYTES_PER_MB;
     return WORKER_TIMEOUT_BASE_MS + Math.floor(megabytes) * WORKER_TIMEOUT_PER_MB_MS;
 }

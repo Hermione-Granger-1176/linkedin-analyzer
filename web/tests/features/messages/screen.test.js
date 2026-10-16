@@ -40,6 +40,12 @@ vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     LinkedInCleaner: { process: vi.fn() },
 }));
 
+// The main-thread fallback decodes the stored upload; the cleaner is mocked, so
+// a stand-in that answers on the next microtask keeps the tests' timing.
+vi.mock("../../../src/features/upload/read.js", () => ({
+    readCsvSource: vi.fn(async (source) => (source ? "csv" : "")),
+}));
+
 vi.mock("../../../src/features/messages/analytics.js", () => ({
     MessagesAnalytics: {
         buildMessageState: vi.fn(),
@@ -177,7 +183,7 @@ async function bootWithWorker(file = {}) {
     DataCache.set("storage:file:messages", {
         type: "messages",
         name: "w.csv",
-        text: "csv",
+        blob: new Blob(["csv"]),
         updatedAt: 1,
         rowCount: 1,
         ...file,
@@ -265,7 +271,7 @@ describe("MessagesPage", () => {
         // loadData loads the messages/connections text on demand (caches hold
         // metadata only); the parser is mocked, so any non-empty text resolves.
         Storage.getFile.mockReset();
-        Storage.getFile.mockResolvedValue({ text: "csv-content" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv-content"]) });
     });
 
     // -------------------------------------------------------------------------
@@ -289,7 +295,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 10,
             rowCount: 2,
         };
@@ -347,7 +353,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 20,
             rowCount: 3,
         };
@@ -391,7 +397,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 30,
             rowCount: 1,
         };
@@ -434,7 +440,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 40,
             rowCount: 0,
         };
@@ -519,7 +525,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "m.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 50,
             rowCount: 1,
         };
@@ -578,7 +584,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "m2.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 51,
             rowCount: 1,
         };
@@ -638,7 +644,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "fading.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 60,
             rowCount: 1,
         };
@@ -698,7 +704,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "recent.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 61,
             rowCount: 1,
         };
@@ -761,7 +767,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "sc.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 70,
             rowCount: 1,
         };
@@ -822,7 +828,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "fc.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 80,
             rowCount: 1,
         };
@@ -891,7 +897,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "rng.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 90,
             rowCount: 1,
         };
@@ -944,7 +950,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "rst.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 95,
             rowCount: 1,
         };
@@ -1158,7 +1164,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "w.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 100,
             rowCount: 5,
         };
@@ -1236,7 +1242,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "werr.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 110,
             rowCount: 2,
         };
@@ -1308,7 +1314,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "timeout.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 120,
             rowCount: 2,
         };
@@ -1375,7 +1381,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "noworker.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 130,
             rowCount: 1,
         };
@@ -1426,7 +1432,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "bad.csv",
-            text: "bad",
+            blob: new Blob(["bad"]),
             updatedAt: 140,
             rowCount: 0,
         };
@@ -1469,7 +1475,7 @@ describe("MessagesPage", () => {
         };
         DataCache.set("storage:file:messages", messagesFile);
         // The cache holds metadata; the large text is loaded on demand from storage.
-        Storage.getFile.mockResolvedValue({ text: "a".repeat(5 * 1024 * 1024 + 1) });
+        Storage.getFile.mockResolvedValue({ blob: new Blob([new Uint8Array(5 * 1024 * 1024 + 1)]) });
 
         MessagesPage.init();
         MessagesPage.onRouteChange({});
@@ -1501,7 +1507,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "empty.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 141,
             rowCount: 0,
         };
@@ -1542,7 +1548,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "plain.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 150,
             rowCount: 1,
         };
@@ -1582,7 +1588,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "outreach.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 170,
             rowCount: 1,
         };
@@ -1622,7 +1628,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skip.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 160,
             rowCount: 5,
         };
@@ -1663,7 +1669,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skipenter.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 161,
             rowCount: 3,
         };
@@ -1694,7 +1700,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skipfocus.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 162,
             rowCount: 3,
         };
@@ -1728,7 +1734,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skipmouse.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 163,
             rowCount: 3,
         };
@@ -1765,7 +1771,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "tip2.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 170,
             rowCount: 2,
         };
@@ -1829,7 +1835,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "tip3.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 171,
             rowCount: 1,
         };
@@ -1884,7 +1890,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "tip4.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 172,
             rowCount: 0,
         };
@@ -1939,7 +1945,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "reuse.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 180,
             rowCount: 1,
         };
@@ -2099,7 +2105,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "namekey.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 190,
             rowCount: 1,
         };
@@ -2168,14 +2174,14 @@ describe("MessagesPage", () => {
             {
                 type: "messages",
                 name: "fromdb.csv",
-                text: "csv-content",
+                blob: new Blob(["csv-content"]),
                 updatedAt: 200,
                 rowCount: 1,
             },
             {
                 type: "connections",
                 name: "Connections.csv",
-                text: "conn-content",
+                blob: new Blob(["conn-content"]),
                 updatedAt: 200,
                 rowCount: 2,
             },
@@ -2239,7 +2245,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "throw.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 210,
             rowCount: 1,
         };
@@ -2288,11 +2294,11 @@ describe("MessagesPage", () => {
         // Storage.getAllFiles, no need for a blanket mockReturnValue(null) override.
 
         Storage.getAllFiles.mockResolvedValue([
-            { type: "messages", name: "connerr.csv", text: "csv", updatedAt: 220, rowCount: 1 },
+            { type: "messages", name: "connerr.csv", blob: new Blob(["csv"]), updatedAt: 220, rowCount: 1 },
             {
                 type: "connections",
                 name: "Connections.csv",
-                text: "bad-conn",
+                blob: new Blob(["bad-conn"]),
                 updatedAt: 220,
                 rowCount: 0,
             },
@@ -2381,7 +2387,7 @@ describe("MessagesPage", () => {
         // Messages text loads, but the connections text record is missing.
         Storage.getFile.mockImplementation((type) =>
             Promise.resolve(
-                type === "messages" ? { type: "messages", text: "csv" } : { type: "connections" },
+                type === "messages" ? { type: "messages", blob: new Blob(["csv"]) } : { type: "connections" },
             ),
         );
 
@@ -2436,7 +2442,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "range.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 230,
             rowCount: 2,
         };
@@ -2486,7 +2492,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "link.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 240,
             rowCount: 1,
         };
@@ -2533,7 +2539,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "link.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 240,
             rowCount: 1,
         };
@@ -2607,14 +2613,14 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "hyd.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 250,
             rowCount: 1,
         };
         const connectionsFile = {
             type: "connections",
             name: "Connections.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 250,
             rowCount: 1,
         };
@@ -2673,7 +2679,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "noexp.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 260,
             rowCount: 0,
         };
@@ -2733,7 +2739,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "wrongid.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 270,
             rowCount: 1,
         };
@@ -2781,7 +2787,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "multi.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 280,
             rowCount: 2,
         };
@@ -2831,7 +2837,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "silentsort.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 290,
             rowCount: 1,
         };
@@ -2902,7 +2908,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "fadingsort.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 300,
             rowCount: 2,
         };
@@ -2977,7 +2983,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "allrange.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 310,
             rowCount: 1,
         };
@@ -3058,7 +3064,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "nullkey.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 320,
             rowCount: 1,
         };
@@ -3367,7 +3373,7 @@ describe("MessagesPage", () => {
         DataCache.set("storage:file:messages", {
             type: "messages",
             name: "m.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 1,
             rowCount: 1,
         });
@@ -3385,7 +3391,7 @@ describe("MessagesPage", () => {
             "storage:file:messages": {
                 type: "messages",
                 name: "m.csv",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 updatedAt: 1,
                 rowCount: 1,
             },
@@ -3406,14 +3412,14 @@ describe("MessagesPage", () => {
             "storage:file:messages": {
                 type: "messages",
                 name: "m.csv",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 updatedAt: 1,
                 rowCount: 1,
             },
             "storage:file:connections": {
                 type: "connections",
                 name: "c.csv",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 updatedAt: 2,
                 rowCount: 1,
             },
@@ -3440,7 +3446,7 @@ describe("MessagesPage", () => {
 
     it("skips a stored messages file whose type is invalid", async () => {
         await bootMainThread({
-            "storage:file:messages": { type: "bogus", text: "csv", name: "x" },
+            "storage:file:messages": { type: "bogus", blob: new Blob(["csv"]), name: "x" },
         });
         Storage.getAllFiles.mockResolvedValue([]);
 
@@ -3457,7 +3463,7 @@ describe("MessagesPage", () => {
         await bootMainThread({
             "storage:file:messages": {
                 type: "connections",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 name: "x",
                 updatedAt: 1,
                 rowCount: 1,

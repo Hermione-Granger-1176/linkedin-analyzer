@@ -191,6 +191,24 @@ describe("loadMessagesState", () => {
         await pending;
     });
 
+    it("reads stored upload Blobs on the main thread", async () => {
+        harness.uninstall();
+
+        const state = await loadMessagesState(new Blob([MESSAGES_CSV]), new Blob([CONNECTIONS_CSV]));
+
+        expect(state.messageState.rowTimestamps).toHaveLength(3);
+        expect(state.connectionState.list).toHaveLength(2);
+    });
+
+    it("returns nothing on the main thread when a stored upload cannot be read", async () => {
+        harness.uninstall();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        expect(await loadMessagesState(new Blob([MESSAGES_CSV]), "")).toBeNull();
+    });
+
     it("builds the state on the main thread when the platform has no worker", async () => {
         // The bug this module exists to fix: borrowing the Messages screen's
         // fallback answered with cleaned rows and left the state to its caller,

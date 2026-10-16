@@ -21,9 +21,11 @@
 
 import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { buildGrowthTimeline, computeStats, normalizeConnectionRows } from "../connections/view.js";
+import { readCsvSourcesOrNull } from "../upload/read.js";
 
 import {
     CANCELLED,
@@ -64,12 +66,12 @@ export function terminateConnectionsWorker() {
  * Runs in a worker when one is available and falls back to the main thread for
  * small exports. A large export without a worker returns null, so the PDF omits
  * the dashboard.
- * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
+ * @param {Blob|string|null} connectionsCsv - Stored connections upload, CSV text, or nothing
  * @param {{isCancelled?: () => boolean}} [options] - The run's cancellation check
  * @returns {Promise<ConnectionsData|null>} Dashboard data, or null when there is none
  */
 export async function loadConnectionsData(connectionsCsv, options = {}) {
-    const text = typeof connectionsCsv === "string" ? connectionsCsv : "";
+    const text = toCsvSource(connectionsCsv);
     if (!text) {
         return null;
     }
@@ -98,15 +100,19 @@ export async function loadConnectionsData(connectionsCsv, options = {}) {
         return outcome;
     }
 
-    if (text.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
+    if (csvSourceSize(text) > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
         return null;
     }
-    return buildDataOnMainThread(text);
+    const texts = await readCsvSourcesOrNull(text);
+    if (!texts || isCancelled()) {
+        return null;
+    }
+    return buildDataOnMainThread(texts[0]);
 }
 
 /**
  * Ask the worker for the cleaned rows and the aggregates over them.
- * @param {string} connectionsCsv - Raw connections CSV text
+ * @param {Blob|string} connectionsCsv - Stored connections upload, or CSV text
  * @returns {Promise<ConnectionsData|null|typeof CANCELLED|typeof FAILED>} Data, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */
 function requestDataFromWorker(connectionsCsv) {

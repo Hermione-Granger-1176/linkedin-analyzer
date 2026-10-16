@@ -13,10 +13,12 @@
 
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { MessagesAnalytics } from "../messages/analytics.js";
 import { hydrateConnectionState, hydrateMessageState } from "../messages/hydrate.js";
+import { readCsvSourcesOrNull } from "../upload/read.js";
 
 import {
     CANCELLED,
@@ -54,14 +56,14 @@ export function terminateMessagesWorker() {
  * Runs in a worker when one is available and falls back to the main thread for
  * small exports. A large export without a worker returns null, so the PDF omits
  * the dashboard.
- * @param {string} messagesCsv - Raw messages CSV text
- * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
+ * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
+ * @param {Blob|string|null} connectionsCsv - Stored connections upload, CSV text, or nothing
  * @param {{isCancelled?: () => boolean}} [options] - The run's cancellation check
  * @returns {Promise<MessagesState|null>} Hydrated state, or null when there is none
  */
 export async function loadMessagesState(messagesCsv, connectionsCsv, options = {}) {
-    const text = typeof messagesCsv === "string" ? messagesCsv : "";
-    const contacts = typeof connectionsCsv === "string" ? connectionsCsv : "";
+    const text = toCsvSource(messagesCsv);
+    const contacts = toCsvSource(connectionsCsv);
     if (!text) {
         return null;
     }
@@ -90,16 +92,23 @@ export async function loadMessagesState(messagesCsv, connectionsCsv, options = {
         return outcome;
     }
 
-    if (text.length + contacts.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
+    if (
+        csvSourceSize(text) + csvSourceSize(contacts) > MAIN_THREAD_FALLBACK_MAX_CHARS ||
+        isCancelled()
+    ) {
         return null;
     }
-    return buildStateOnMainThread(text, contacts);
+    const texts = await readCsvSourcesOrNull(text, contacts);
+    if (!texts || isCancelled()) {
+        return null;
+    }
+    return buildStateOnMainThread(texts[0], texts[1]);
 }
 
 /**
  * Ask the worker for the parsed message and connection state.
- * @param {string} messagesCsv - Raw messages CSV text
- * @param {string} connectionsCsv - Raw connections CSV text
+ * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
+ * @param {Blob|string} connectionsCsv - Stored connections upload, CSV text, or an empty string
  * @returns {Promise<MessagesState|null|typeof CANCELLED|typeof FAILED>} State, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */
 function requestStateFromWorker(messagesCsv, connectionsCsv) {

@@ -1,7 +1,40 @@
 /* IndexedDB storage with an in-memory fallback. */
 
-const FILE_SCHEMA_VERSION = 2;
+const FILE_SCHEMA_VERSION = 3;
 const ANALYTICS_SCHEMA_VERSION = 2;
+
+/**
+ * Wrap CSV text from a record stored before version 3 as a File, so every
+ * reader receives the same shape whichever version wrote the record.
+ * @param {string} text - Stored CSV text
+ * @param {string} name - Stored file name
+ * @returns {Blob}
+ */
+function textToBlob(text, name) {
+    const options = { type: "text/csv" };
+    /* v8 ignore next 3 */
+    if (typeof File !== "function") {
+        return new Blob([text], options);
+    }
+    return new File([text], name || "file.csv", options);
+}
+
+/**
+ * Pick the stored file contents: the original Blob, or legacy text wrapped as one.
+ * @param {unknown} blob - Stored Blob, if any
+ * @param {unknown} text - Legacy stored text, if any
+ * @param {string} name - Stored file name
+ * @returns {Blob|null}
+ */
+function resolveStoredBlob(blob, text, name) {
+    if (typeof Blob !== "undefined" && blob instanceof Blob) {
+        return blob;
+    }
+    if (typeof text === "string" && text) {
+        return textToBlob(text, name);
+    }
+    return null;
+}
 
 function normalizeStoredFile(record) {
     if (!record || typeof record !== "object") {
@@ -11,10 +44,12 @@ function normalizeStoredFile(record) {
     if (schemaVersion > FILE_SCHEMA_VERSION) {
         return null;
     }
+    const blob = resolveStoredBlob(record.blob, record.text, record.name);
     return {
         type: record.type,
         name: record.name,
-        text: record.text,
+        blob,
+        size: blob ? blob.size : 0,
         rowCount: Number(record.rowCount || 0),
         updatedAt: Number(record.updatedAt || 0),
         schemaVersion: FILE_SCHEMA_VERSION,
@@ -22,8 +57,8 @@ function normalizeStoredFile(record) {
 }
 
 /**
- * Normalize a stored file record to metadata only (no CSV text). Used by the
- * metadata reads so large exports are not materialized when listing files.
+ * Normalize a stored file record to metadata only (no file contents). Used by
+ * the metadata reads so large exports are not loaded when listing files.
  * @param {object|null} record - Raw stored record
  * @returns {object|null}
  */
@@ -35,6 +70,7 @@ function normalizeStoredFileMetadata(record) {
     return {
         type: normalized.type,
         name: normalized.name,
+        size: Number(record.size || normalized.size || 0),
         rowCount: normalized.rowCount,
         updatedAt: normalized.updatedAt,
         schemaVersion: normalized.schemaVersion,
@@ -55,11 +91,20 @@ function normalizeStoredAnalytics(record) {
     return record;
 }
 
+/**
+ * Build the record for an uploaded file. Callers pass the original upload as
+ * `blob`; `text` is still accepted and stored as a Blob.
+ * @param {string} type - File type key
+ * @param {{name: string, blob?: Blob, text?: string, rowCount?: number}} data - File data
+ * @returns {object}
+ */
 function buildFilePayload(type, data) {
+    const blob = resolveStoredBlob(data.blob, data.text, data.name);
     return {
         type,
         name: data.name,
-        text: data.text,
+        blob,
+        size: blob ? blob.size : 0,
         rowCount: data.rowCount || 0,
         updatedAt: Date.now(),
         schemaVersion: FILE_SCHEMA_VERSION,
@@ -88,9 +133,12 @@ export const Storage = (() => {
     "use strict";
 
     const DB_NAME = "linkedin-analyzer";
-    const DB_VERSION = 3;
+    const DB_VERSION = 4;
     const FILE_STORE = "files";
+    // Version 3 stored decoded text here. Version 4 stores the original upload
+    // in FILE_BLOB_STORE and reads this store only for records written before.
     const FILE_TEXT_STORE = "fileTexts";
+    const FILE_BLOB_STORE = "fileBlobs";
     const ANALYTICS_STORE = "analytics";
 
     /**
@@ -250,6 +298,11 @@ export const Storage = (() => {
                     db.createObjectStore(FILE_TEXT_STORE, { keyPath: "type" });
                     migrateInlineTextToTextStore(target.transaction);
                 }
+                // Existing text records stay where they are and are read as
+                // Blobs; the next upload of each type replaces its text record.
+                if (!db.objectStoreNames.contains(FILE_BLOB_STORE)) {
+                    db.createObjectStore(FILE_BLOB_STORE, { keyPath: "type" });
+                }
             };
             request.onerror = () => reject(request.error);
             /* v8 ignore next */
@@ -317,9 +370,10 @@ export const Storage = (() => {
     }
 
     /**
-     * Save an uploaded CSV file record.
+     * Save an uploaded CSV file record. The original upload is stored as a
+     * Blob, which browsers keep on disk rather than in memory.
      * @param {string} type - File type key
-     * @param {{name: string, text: string, rowCount: number}} data - File data to persist
+     * @param {{name: string, blob?: Blob, text?: string, rowCount: number}} data - File data to persist
      * @returns {Promise<void>}
      */
     function saveFile(type, data) {
@@ -328,10 +382,14 @@ export const Storage = (() => {
             (db) =>
                 /** @type {Promise<void>} */ (
                     new Promise((resolve, reject) => {
-                        const { text, ...metadata } = buildFilePayload(type, data);
-                        const tx = db.transaction([FILE_STORE, FILE_TEXT_STORE], "readwrite");
+                        const { blob, ...metadata } = buildFilePayload(type, data);
+                        const tx = db.transaction(
+                            [FILE_STORE, FILE_BLOB_STORE, FILE_TEXT_STORE],
+                            "readwrite",
+                        );
                         tx.objectStore(FILE_STORE).put(metadata);
-                        tx.objectStore(FILE_TEXT_STORE).put({ type, text });
+                        tx.objectStore(FILE_BLOB_STORE).put({ type, blob });
+                        tx.objectStore(FILE_TEXT_STORE).delete(type);
                         const rejectFailure = () =>
                             reject(idbFailure(tx.error, "IndexedDB transaction failed"));
                         tx.oncomplete = () => resolve();
@@ -343,7 +401,7 @@ export const Storage = (() => {
     }
 
     /**
-     * Retrieve a single file record by type.
+     * Retrieve a single file record by type, with its contents as `blob`.
      * @param {string} type - File type key
      * @returns {Promise<object|null>} The stored file record, or null if not found
      */
@@ -352,8 +410,12 @@ export const Storage = (() => {
             () => memory.getFile(type),
             (db) =>
                 new Promise((resolve, reject) => {
-                    const tx = db.transaction([FILE_STORE, FILE_TEXT_STORE], "readonly");
+                    const tx = db.transaction(
+                        [FILE_STORE, FILE_BLOB_STORE, FILE_TEXT_STORE],
+                        "readonly",
+                    );
                     const metaRequest = tx.objectStore(FILE_STORE).get(type);
+                    const blobRequest = tx.objectStore(FILE_BLOB_STORE).get(type);
                     const textRequest = tx.objectStore(FILE_TEXT_STORE).get(type);
                     tx.oncomplete = () => {
                         const metadata = metaRequest.result || null;
@@ -361,14 +423,21 @@ export const Storage = (() => {
                             resolve(null);
                             return;
                         }
-                        // Prefer the split text store; fall back to any inline text
-                        // on a record not yet migrated to v3.
+                        // Prefer the stored Blob; fall back to a version 3 text
+                        // record, then to inline text on a record older than that.
+                        const blobRecord = blobRequest.result || null;
                         const textRecord = textRequest.result || null;
                         const text =
                             textRecord && typeof textRecord.text === "string"
                                 ? textRecord.text
                                 : metadata.text;
-                        resolve(normalizeStoredFile({ ...metadata, text }));
+                        resolve(
+                            normalizeStoredFile({
+                                ...metadata,
+                                blob: blobRecord ? blobRecord.blob : null,
+                                text,
+                            }),
+                        );
                     };
                     // tx.error is null on explicit aborts/quota, so wrap it in a
                     // descriptive Error (matching the other transaction paths) so
@@ -483,10 +552,11 @@ export const Storage = (() => {
                 /** @type {Promise<void>} */ (
                     new Promise((resolve, reject) => {
                         const tx = db.transaction(
-                            [FILE_STORE, FILE_TEXT_STORE, ANALYTICS_STORE],
+                            [FILE_STORE, FILE_BLOB_STORE, FILE_TEXT_STORE, ANALYTICS_STORE],
                             "readwrite",
                         );
                         tx.objectStore(FILE_STORE).clear();
+                        tx.objectStore(FILE_BLOB_STORE).clear();
                         tx.objectStore(FILE_TEXT_STORE).clear();
                         tx.objectStore(ANALYTICS_STORE).clear();
                         const rejectFailure = () =>

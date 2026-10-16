@@ -4,6 +4,40 @@ import { FILE_TYPES } from "../../shared/constants.js";
 
 import { WIRE_METRIC_NAMES } from "./metrics.js";
 
+/**
+ * A stack frame reduced to its safe source location.
+ * @typedef {object} ReducedFrame
+ * @property {string} filename - Same-origin app script path
+ * @property {number} [lineno] - Line number
+ * @property {number} [colno] - Column number
+ * @property {boolean} [in_app] - Whether the frame is app code
+ */
+
+/**
+ * @typedef {object} ReducedException
+ * @property {string} type - Built-in error name
+ * @property {string} value - Fixed diagnostic ID, never the original message
+ * @property {{frames: ReducedFrame[]}} [stacktrace] - Safe frames
+ */
+
+/** @typedef {{type: "sourcemap", code_file: string, debug_id: string}} ReducedDebugImage */
+
+/**
+ * The fixed-schema event that replaces every SDK event before transport.
+ * @typedef {object} ReducedEvent
+ * @property {import("@sentry/browser").SeverityLevel} level - Event level
+ * @property {string} platform - Always "javascript"
+ * @property {string} environment - Build mode
+ * @property {string} [release] - Release tag
+ * @property {string} [event_id] - SDK event ID
+ * @property {number} [timestamp] - SDK event timestamp
+ * @property {string} [message] - Fixed event message
+ * @property {{values: ReducedException[]}} [exception] - Reduced exception
+ * @property {Record<string, string>} [tags] - Allowlisted tags
+ * @property {Record<string, number>} [extra] - Allowlisted numeric metrics
+ * @property {{images: ReducedDebugImage[]}} [debug_meta] - Sourcemap debug IDs
+ */
+
 let sentryReady = false;
 const TELEMETRY_CONSENT_STORAGE_KEY = "linkedin-analyzer:telemetry-consent";
 const NOISY_EVENT_PATTERNS = [
@@ -107,6 +141,7 @@ const DIAGNOSTIC_TAG_VALUES = Object.freeze({
 });
 // Effects tiers from web/src/platform/device/capabilities.js, sent as one tag
 // on the session-metrics event.
+/** @type {ReadonlySet<unknown>} */
 const EFFECTS_TIER_VALUES = new Set(["lite", "standard", "rich"]);
 let effectsTier = "";
 // Allowlisted values for the processing-unfinished event. They match the
@@ -146,6 +181,7 @@ const MAX_DEBUG_IMAGES = 20;
 // Buffered metric datapoints for the current page lifecycle. Each entry holds the
 // latest numeric value and how many times the metric was recorded. The buffer is
 // flushed as one fixed-schema event on visibility loss.
+/** @type {Map<string, {value: number, count: number}>} */
 let metricBuffer = new Map();
 
 /**
@@ -164,15 +200,33 @@ function resolveRelease() {
 /**
  * Check whether a value is a non-array object.
  * @param {unknown} value
- * @returns {value is Record<string, any>}
+ * @returns {value is Record<string, unknown>}
  */
 function isRecord(value) {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
+ * Check whether a value is an integer.
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+function isInteger(value) {
+    return Number.isInteger(value);
+}
+
+/**
+ * Check whether a value is an allowlisted effects tier.
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+function isEffectsTier(value) {
+    return EFFECTS_TIER_VALUES.has(value);
+}
+
+/**
  * Check whether an event should be dropped as known browser noise.
- * @param {object} event
+ * @param {unknown} event
  * @returns {boolean}
  */
 function isNoisyEvent(event) {
@@ -261,9 +315,10 @@ function normalizeScriptPath(filename, appBasePath) {
 /**
  * Reduce arbitrary context to fixed diagnostic tags.
  * @param {unknown} context
- * @returns {object}
+ * @returns {Record<string, string>}
  */
 function reduceDiagnosticTags(context) {
+    /** @type {Record<string, string>} */
     const tags = {};
     if (!isRecord(context)) {
         return tags;
@@ -280,13 +335,14 @@ function reduceDiagnosticTags(context) {
 
 /**
  * Build the fixed metadata shared by reduced events.
- * @param {object} event
+ * @param {Record<string, unknown>} event
  * @param {string} environment
  * @param {string|undefined} release
- * @param {string} level
- * @returns {object}
+ * @param {import("@sentry/browser").SeverityLevel} level
+ * @returns {ReducedEvent}
  */
 function reduceBaseEvent(event, environment, release, level) {
+    /** @type {ReducedEvent} */
     const reduced = {
         level,
         platform: "javascript",
@@ -308,7 +364,7 @@ function reduceBaseEvent(event, environment, release, level) {
  * Reduce one stack frame to its safe source location.
  * @param {unknown} frame
  * @param {string} appBasePath
- * @returns {object|null}
+ * @returns {ReducedFrame|null}
  */
 function reduceStackFrame(frame, appBasePath) {
     if (!isRecord(frame)) {
@@ -319,11 +375,12 @@ function reduceStackFrame(frame, appBasePath) {
         return null;
     }
 
+    /** @type {ReducedFrame} */
     const reduced = { filename };
-    if (Number.isInteger(frame.lineno) && frame.lineno >= 0) {
+    if (isInteger(frame.lineno) && frame.lineno >= 0) {
         reduced.lineno = frame.lineno;
     }
-    if (Number.isInteger(frame.colno) && frame.colno >= 0) {
+    if (isInteger(frame.colno) && frame.colno >= 0) {
         reduced.colno = frame.colno;
     }
     if (typeof frame.in_app === "boolean") {
@@ -336,13 +393,14 @@ function reduceStackFrame(frame, appBasePath) {
  * Reduce sourcemap debug metadata to safe script paths and UUIDs.
  * @param {unknown} debugMeta
  * @param {string} appBasePath
- * @returns {object|undefined}
+ * @returns {{images: ReducedDebugImage[]}|undefined}
  */
 function reduceDebugMeta(debugMeta, appBasePath) {
     if (!isRecord(debugMeta) || !Array.isArray(debugMeta.images)) {
         return undefined;
     }
 
+    /** @type {ReducedDebugImage[]} */
     const images = [];
     for (const image of debugMeta.images) {
         if (
@@ -381,11 +439,11 @@ function normalizeExceptionType(type) {
 
 /**
  * Reduce an error event to fixed diagnostics and safe source locations.
- * @param {object} event
+ * @param {Record<string, unknown>} event
  * @param {string} environment
  * @param {string|undefined} release
  * @param {string} appBasePath
- * @returns {object|null}
+ * @returns {ReducedEvent|null}
  */
 function reduceErrorEvent(event, environment, release, appBasePath) {
     if (!isRecord(event.exception) || !Array.isArray(event.exception.values)) {
@@ -399,6 +457,7 @@ function reduceErrorEvent(event, environment, release, appBasePath) {
     const tags = reduceDiagnosticTags(event.tags);
     const diagnosticId =
         tags.module && tags.operation ? `${tags.module}.${tags.operation}` : "captured-error";
+    /** @type {ReducedException} */
     const reducedException = {
         type: normalizeExceptionType(originalException.type),
         value: diagnosticId,
@@ -407,6 +466,7 @@ function reduceErrorEvent(event, environment, release, appBasePath) {
         isRecord(originalException.stacktrace) && Array.isArray(originalException.stacktrace.frames)
             ? originalException.stacktrace.frames
             : [];
+    /** @type {ReducedFrame[]} */
     const frames = [];
     for (const frame of originalFrames) {
         const reducedFrame = reduceStackFrame(frame, appBasePath);
@@ -436,10 +496,10 @@ function reduceErrorEvent(event, environment, release, appBasePath) {
 
 /**
  * Reduce a buffered session metric event to known numeric fields.
- * @param {object} event
+ * @param {Record<string, unknown>} event
  * @param {string} environment
  * @param {string|undefined} release
- * @returns {object|null}
+ * @returns {ReducedEvent|null}
  */
 function reduceMetricEvent(event, environment, release) {
     if (
@@ -451,6 +511,7 @@ function reduceMetricEvent(event, environment, release) {
         return null;
     }
 
+    /** @type {Record<string, number>} */
     const extra = {};
     for (const name of WIRE_METRIC_NAMES) {
         const metricKey = `metric:${name}`;
@@ -461,7 +522,7 @@ function reduceMetricEvent(event, environment, release) {
         }
         extra[metricKey] = value;
         const count = event.extra[countKey];
-        if (Number.isInteger(count) && count > 0) {
+        if (isInteger(count) && count > 0) {
             extra[countKey] = count;
         }
     }
@@ -471,9 +532,11 @@ function reduceMetricEvent(event, environment, release) {
 
     const reduced = reduceBaseEvent(event, environment, release, "info");
     reduced.message = "session-metrics";
-    reduced.tags = { "telemetry.type": "session-metrics" };
-    if (EFFECTS_TIER_VALUES.has(event.tags.effects)) {
-        reduced.tags.effects = event.tags.effects;
+    /** @type {Record<string, string>} */
+    const tags = { "telemetry.type": "session-metrics" };
+    reduced.tags = tags;
+    if (isEffectsTier(event.tags.effects)) {
+        tags.effects = event.tags.effects;
     }
     reduced.extra = extra;
     return reduced;
@@ -502,10 +565,10 @@ function reduceUnfinishedRunFields(fields) {
 
 /**
  * Reduce a processing-unfinished event to its fixed allowlisted tags.
- * @param {object} event
+ * @param {Record<string, unknown>} event
  * @param {string} environment
  * @param {string|undefined} release
- * @returns {object|null}
+ * @returns {ReducedEvent|null}
  */
 function reduceUnfinishedRunEvent(event, environment, release) {
     if (!isRecord(event.tags) || event.tags["telemetry.type"] !== "processing-unfinished") {
@@ -533,6 +596,15 @@ function clearHintAttachments(hint) {
     } catch {
         // Ignore malformed SDK hints. The event reducer still drops event fields.
     }
+}
+
+/**
+ * Type a reduced event as the SDK event it replaces in `beforeSend`.
+ * @param {ReducedEvent|null} reduced - Reduced event, or null to drop it
+ * @returns {import("@sentry/browser").ErrorEvent|null}
+ */
+function toSentryEvent(reduced) {
+    return /** @type {import("@sentry/browser").ErrorEvent|null} */ (reduced);
 }
 
 /** Initialize Sentry when DSN is configured and telemetry consent is granted. */
@@ -568,12 +640,12 @@ export function initSentry() {
                 return null;
             }
             if (event.message === "session-metrics") {
-                return reduceMetricEvent(event, environment, release);
+                return toSentryEvent(reduceMetricEvent(event, environment, release));
             }
             if (event.message === "processing-unfinished") {
-                return reduceUnfinishedRunEvent(event, environment, release);
+                return toSentryEvent(reduceUnfinishedRunEvent(event, environment, release));
             }
-            return reduceErrorEvent(event, environment, release, appBasePath);
+            return toSentryEvent(reduceErrorEvent(event, environment, release, appBasePath));
         },
         beforeBreadcrumb: () => null,
     });
@@ -615,6 +687,10 @@ function hasTelemetryConsent() {
     }
 }
 
+/**
+ * Store or revoke telemetry consent.
+ * @param {boolean} granted - Whether the user granted consent
+ */
 export function setTelemetryConsent(granted) {
     try {
         if (granted) {

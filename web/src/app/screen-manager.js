@@ -3,13 +3,50 @@
 import { captureError } from "../platform/observability/sentry.js";
 import { LoadingOverlay } from "../shared/ui/loading-overlay.js";
 
+/** @typedef {import("./router.js").RouteParams} RouteParams */
+
+/**
+ * Route transition passed to controller lifecycle hooks.
+ * @typedef {{from: string|null, to: string}} ScreenTransition
+ */
+
+/**
+ * A screen's controller: the lifecycle hooks the manager calls.
+ * @typedef {object} ScreenController
+ * @property {() => void} [init] - Called once, before the first route change
+ * @property {(params: RouteParams, transition: ScreenTransition) => void} [onRouteChange] - Called
+ * on every activation
+ * @property {(transition: ScreenTransition) => void} [onRouteLeave] - Called when leaving
+ */
+
+/**
+ * Route configuration accepted by `ScreenManager.register`.
+ * @typedef {object} ScreenRouteConfig
+ * @property {string} screenId - Screen element ID
+ * @property {ScreenController} [controller] - Controller bundled with the app
+ * @property {() => Promise<ScreenController>} [load] - Lazy controller import
+ */
+
+/**
+ * A registered screen route.
+ * @typedef {object} ScreenRoute
+ * @property {string} screenId - Screen element ID
+ * @property {ScreenController|null} controller - Loaded controller
+ * @property {(() => Promise<ScreenController>)|null} load - Lazy controller import
+ * @property {Promise<ScreenController|null>|null} loading - In-flight import
+ * @property {RouteParams} params - Latest route params
+ * @property {boolean} initialized - Whether `init` has run
+ */
+
 export const ScreenManager = (() => {
     "use strict";
 
     /* Keep in sync with --screen-transition in styles/foundations/variables.css. */
     const TRANSITION_DURATION_MS = 50;
 
+    /** @type {Map<string, ScreenRoute>} */
     const routes = new Map();
+    /** @type {string|null} */
     let currentRouteName = null;
     let transitionToken = 0;
 
@@ -18,7 +55,7 @@ export const ScreenManager = (() => {
      * `load` function that imports it the first time the route opens, so the
      * first page load does not wait on every screen's code.
      * @param {string} routeName - Route name
-     * @param {{screenId: string, controller?: object, load?: () => Promise<object>}} config - Route config
+     * @param {ScreenRouteConfig} config - Route config
      */
     function register(routeName, config) {
         if (!routeName || !config || !config.screenId) {
@@ -40,7 +77,7 @@ export const ScreenManager = (() => {
      * retry or the next visit tries again, which is what recovers from a chunk
      * that went missing in a deploy.
      * @param {string} routeName - Route name
-     * @returns {Promise<object|null>} The controller, or null when it cannot be loaded
+     * @returns {Promise<ScreenController|null>} The controller, or null when it cannot be loaded
      */
     function loadController(routeName) {
         const route = routes.get(routeName);
@@ -78,7 +115,8 @@ export const ScreenManager = (() => {
      */
     async function activateWhenLoaded(routeName, previousName) {
         const source = `route:${routeName}`;
-        const route = routes.get(routeName);
+        // Only activate() calls this, for a route it found registered.
+        const route = /** @type {ScreenRoute} */ (routes.get(routeName));
         const activation = ++route.activation;
         clearLoadError(route);
         LoadingOverlay.show(source, { title: "Loading", message: "Opening this screen." });
@@ -145,8 +183,8 @@ export const ScreenManager = (() => {
 
     /**
      * Initialize a route's controller once, then tell it about the route.
-     * @param {object} route - Registered route
-     * @param {object} params - Route query params
+     * @param {ScreenRoute} route - Registered route
+     * @param {RouteParams} params - Route query params
      * @param {string|null} from - Previous route name
      * @param {string} to - Active route name
      */
@@ -160,7 +198,7 @@ export const ScreenManager = (() => {
     /**
      * Activate a route screen and trigger its lifecycle hooks.
      * @param {string} routeName - Route name
-     * @param {object} params - Route query params
+     * @param {RouteParams} params - Route query params
      */
     function activate(routeName, params) {
         const nextRoute = routes.get(routeName);
@@ -220,7 +258,7 @@ export const ScreenManager = (() => {
 
     /**
      * Ensure a route controller init is called only once.
-     * @param {{controller: object|null, load?: Function|null, initialized: boolean}} route - Route config
+     * @param {ScreenRoute} route - Registered route
      */
     function ensureControllerInitialized(route) {
         if (route.initialized || (!route.controller && route.load)) {
@@ -311,6 +349,7 @@ export const ScreenManager = (() => {
     }
 
     /** Human-readable screen names for the route announcer. */
+    /** @type {Readonly<Record<string, string>>} */
     const ROUTE_LABELS = Object.freeze({
         home: "Home",
         clean: "Clean",

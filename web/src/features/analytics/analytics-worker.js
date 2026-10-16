@@ -303,7 +303,7 @@ async function readAndProcessUpload(file, jobId, fileName, epoch) {
  * Process an uploaded CSV file: read, parse, clean, recompute analytics, and
  * reply. The page posts the File so the read happens here, off the main
  * thread, and stores that File itself, so the reply carries no text.
- * @param {{file?: File|null, csvText?: string, fileName: string, jobId?: string|null, totalSize?: number}} payload - File and name
+ * @param {import("../../app/worker-contracts.js").AddFilePayload} payload - File and name
  * @returns {Promise<void>}
  */
 async function handleAddFile(payload) {
@@ -321,7 +321,9 @@ async function handleAddFile(payload) {
     if (file) {
         let result;
         try {
-            result = await readAndProcessUpload(file, jobId, fileName, epoch);
+            // The upload page posts the File it was handed; the contract
+            // accepts any Blob, and the name only ever labels an error.
+            result = await readAndProcessUpload(/** @type {File} */ (file), jobId, fileName, epoch);
         } catch (error) {
             // A failure in a read a clear has since abandoned is nobody's to see.
             if (epoch !== requestEpoch) {
@@ -495,7 +497,7 @@ function handleInitBase(payload) {
 
 /**
  * Build a filtered analytics view and post it back, using cache when available.
- * @param {number} requestId - Caller-assigned request identifier for deduplication
+ * @param {import("../../app/worker-contracts.js").RequestId} requestId - Caller-assigned request identifier for deduplication
  * @param {object} filters - Filter parameters from the UI
  */
 function handleView(requestId, filters) {
@@ -610,19 +612,26 @@ function handleMessage(event) {
         handleClear();
         return undefined;
     }
-    /* v8 ignore next 5 */
-    const handlers = {
-        addFile: () => handleAddFile(message.payload),
-        restoreFiles: () => handleRestoreFiles(message.payload),
-        initBase: () => handleInitBase(message.payload),
-        view: () => handleView(message.requestId, message.filters),
-    };
-    const handler = handlers[message.type];
-    /* v8 ignore next 3 */
-    if (!handler) {
-        return undefined;
+    // Each case reads its own payload so the request type narrows it. Only a
+    // view request carries an id; a failure in the others reports id zero.
+    switch (message.type) {
+        case "addFile": {
+            const { payload } = message;
+            return enqueueRequest(() => handleAddFile(payload), 0);
+        }
+        case "restoreFiles": {
+            const { payload } = message;
+            return enqueueRequest(() => handleRestoreFiles(payload), 0);
+        }
+        case "initBase": {
+            const { payload } = message;
+            return enqueueRequest(() => handleInitBase(payload), 0);
+        }
+        default: {
+            const { requestId, filters } = message;
+            return enqueueRequest(() => handleView(requestId, filters), requestId);
+        }
     }
-    return enqueueRequest(handler, message.requestId);
 }
 
 self.addEventListener("message", handleMessage);

@@ -23,6 +23,30 @@ export const STALE_MS = 3 * HEARTBEAT_MS;
 const OWNER_REPLY_MS = 300;
 const MB = 1024 * 1024;
 
+/**
+ * The localStorage marker a processing run leaves until it finishes.
+ * @typedef {object} RunMarker
+ * @property {string} tabId - Owning tab ID
+ * @property {number} startedAt - Run start time (ms)
+ * @property {number} heartbeatAt - Latest heartbeat time (ms)
+ * @property {string} sizeBucket - Combined upload size bucket
+ * @property {string} mode - "single" or "parallel"
+ * @property {number} [leftAt] - When the page was hidden mid-run (ms)
+ */
+
+/**
+ * What is reported about a run that did not finish.
+ * @typedef {{ sizeBucket: string, mode: string }} UnfinishedRun
+ */
+
+/**
+ * @typedef {object} RunTrackerApi
+ * @property {(run: { totalBytes: number, fileCount: number }) => void} start - Start a run
+ * @property {() => void} finish - Stop tracking the current run
+ * @property {(onUnfinished: (run: UnfinishedRun) => void) => Promise<void>} checkPrevious - Report
+ * runs from earlier visits that did not finish
+ */
+
 const SIZE_BUCKETS = Object.freeze([
     { id: "lt-10mb", max: 10 * MB },
     { id: "10-30mb", max: 30 * MB },
@@ -61,7 +85,7 @@ export function memoryBucket(deviceMemory) {
  * Read a JSON marker, or null when it is missing or malformed.
  * @param {Storage} storage - localStorage
  * @param {string} key - Marker key
- * @returns {{ tabId: string, startedAt: number, heartbeatAt: number, sizeBucket: string, mode: string, leftAt?: number }|null}
+ * @returns {RunMarker|null}
  */
 function readMarker(storage, key) {
     try {
@@ -91,7 +115,7 @@ function readMarker(storage, key) {
  * @param {() => number} deps.now - Clock
  * @param {() => string} deps.randomId - Unique ID source
  * @param {LockManager|null} [deps.locks] - Web Locks, which keep two tabs from reporting one run
- * @returns {{ start: (run: { totalBytes: number, fileCount: number }) => void, finish: () => void, checkPrevious: (onUnfinished: (run: { sizeBucket: string, mode: string }) => void) => Promise<void> }}
+ * @returns {RunTrackerApi}
  */
 export function createRunTracker({
     localStorage,
@@ -112,9 +136,15 @@ export function createRunTracker({
     let active = null;
     // Lifecycle listeners and the heartbeat exist only while a run is active.
     const current = () => /** @type {ActiveRun} */ (active);
-    let heartbeatTimer = null;
+    /** @type {ReturnType<typeof setInterval>|undefined} */
+    let heartbeatTimer;
+    /** @type {BroadcastChannel|null} */
     let channel = null;
 
+    /**
+     * @param {string} key - Marker key
+     * @param {Partial<RunMarker>} marker - Marker to store
+     */
     const write = (key, marker) => {
         try {
             markers.setItem(key, JSON.stringify(marker));
@@ -122,6 +152,7 @@ export function createRunTracker({
             // Storage full or blocked: the run simply goes untracked.
         }
     };
+    /** @param {string} key - Marker key */
     const remove = (key) => {
         try {
             markers.removeItem(key);
@@ -158,11 +189,12 @@ export function createRunTracker({
     const getChannel = () => {
         if (!channel && createChannel) {
             try {
-                channel = createChannel(CHANNEL_NAME);
-                channel.addEventListener("message", (event) => {
+                const created = createChannel(CHANNEL_NAME);
+                channel = created;
+                created.addEventListener("message", (event) => {
                     const data = event.data || {};
                     if (data.type === "who-owns" && activeKey && data.key === activeKey) {
-                        channel.postMessage({ type: "owns", key: data.key });
+                        created.postMessage({ type: "owns", key: data.key });
                     }
                 });
             } catch {
@@ -183,6 +215,7 @@ export function createRunTracker({
         }
         return new Promise((resolve) => {
             // A tab never hears its own posts, so ask on a second channel object.
+            /** @type {BroadcastChannel} */
             let asker;
             try {
                 asker = createChannel(CHANNEL_NAME);
@@ -190,7 +223,7 @@ export function createRunTracker({
                 resolve(false);
                 return;
             }
-            const settle = (owned) => {
+            const settle = (/** @type {boolean} */ owned) => {
                 asker.close();
                 resolve(owned);
             };
@@ -276,7 +309,7 @@ export function createRunTracker({
             return;
         }
         clearInterval(heartbeatTimer);
-        heartbeatTimer = null;
+        heartbeatTimer = undefined;
         remove(activeKey);
         activeKey = "";
         active = null;
@@ -290,7 +323,7 @@ export function createRunTracker({
      * A run with a recent heartbeat and no answering owner is checked again
      * once it would turn stale, so a crash followed by a quick reopen still
      * reports.
-     * @param {(run: { sizeBucket: string, mode: string }) => void} onUnfinished - Called once per unfinished run
+     * @param {(run: UnfinishedRun) => void} onUnfinished - Called once per unfinished run
      * @returns {Promise<void>}
      */
     async function checkPrevious(onUnfinished) {
@@ -305,6 +338,12 @@ export function createRunTracker({
         await Promise.all(keys.map((key) => checkMarker(key, onUnfinished)));
     }
 
+    /**
+     * Check one leftover marker, reporting it once it is stale and unowned.
+     * @param {string} key - Marker key
+     * @param {(run: UnfinishedRun) => void} onUnfinished - Called if the run did not finish
+     * @returns {Promise<void>}
+     */
     async function checkMarker(key, onUnfinished) {
         const seen = readMarker(markers, key);
         if (!seen || seen.leftAt) {

@@ -10,9 +10,11 @@
 /** Space kept between a scrolled-to target and the viewport edge. */
 const STEP_SCROLL_MARGIN = 56;
 
+/** @typedef {import("./steps.js").TutorialStep} TutorialStep */
+
 /**
  * Collect primary and fallback step targets.
- * @param {object} step - Step config
+ * @param {TutorialStep} step - Step config
  * @returns {(string|Element)[]}
  */
 function collectTargetCandidates(step) {
@@ -31,7 +33,7 @@ function collectTargetCandidates(step) {
         step.fallbackEl,
     ];
 
-    return fields.flat().filter(Boolean);
+    return /** @type {(string|Element)[]} */ (fields.flat().filter(Boolean));
 }
 
 /**
@@ -80,7 +82,7 @@ export function isElementVisible(element) {
 
 /**
  * Resolve a step target from selector/element.
- * @param {object} step - Step config
+ * @param {TutorialStep} step - Step config
  * @returns {Element|null}
  */
 export function resolveStepTarget(step) {
@@ -101,7 +103,7 @@ export function resolveStepTarget(step) {
 
 /**
  * Check whether a step defines any target selector/element.
- * @param {object} step - Step config
+ * @param {TutorialStep} step - Step config
  * @returns {boolean}
  */
 export function hasStepTarget(step) {

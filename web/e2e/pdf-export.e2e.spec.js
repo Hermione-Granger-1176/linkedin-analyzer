@@ -161,7 +161,7 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
         probe.className = "theme-light";
         document.body.appendChild(probe);
         const styles = getComputedStyle(probe);
-        const read = (token) => styles.getPropertyValue(token).trim();
+        const read = (/** @type {string} */ token) => styles.getPropertyValue(token).trim();
         const values = {
             bgPrimary: read("--bg-primary"),
             textPrimary: read("--text-primary"),

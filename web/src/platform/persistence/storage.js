@@ -4,6 +4,69 @@ const FILE_SCHEMA_VERSION = 3;
 const ANALYTICS_SCHEMA_VERSION = 2;
 
 /**
+ * A stored upload with its contents, as `Storage.getFile` returns it.
+ * @typedef {object} StoredFile
+ * @property {string} type - File type key
+ * @property {string} name - Uploaded file name
+ * @property {Blob|null} blob - File contents
+ * @property {number} size - Content size in bytes
+ * @property {number} rowCount - Processed row count
+ * @property {number} updatedAt - Last update timestamp (ms)
+ * @property {number} schemaVersion - Record schema version
+ */
+
+/**
+ * A stored upload without its contents, as `Storage.getAllFiles` lists it.
+ * @typedef {Omit<StoredFile, "blob">} StoredFileMetadata
+ */
+
+/**
+ * File data accepted by `Storage.saveFile`.
+ * @typedef {object} StoredFileInput
+ * @property {string} name - Uploaded file name
+ * @property {Blob} [blob] - Original upload
+ * @property {string} [text] - CSV text, stored as a Blob
+ * @property {number} [rowCount] - Processed row count
+ */
+
+/**
+ * A file record as read back from a store, written by any schema version.
+ * @typedef {object} RawStoredFileRecord
+ * @property {string} type - File type key
+ * @property {string} name - Uploaded file name
+ * @property {unknown} [blob] - Stored Blob, or its bytes where IndexedDB refused the Blob (version 4)
+ * @property {unknown} [text] - Legacy CSV text (before version 4)
+ * @property {number} [size] - Content size in bytes
+ * @property {number} [rowCount] - Processed row count
+ * @property {number} [updatedAt] - Last update timestamp (ms)
+ * @property {number} [schemaVersion] - Record schema version
+ */
+
+/** @typedef {Record<string, unknown>} StoredAnalytics - Stored analytics or outreach data */
+
+/**
+ * The analytics-store record wrapping analytics or outreach data.
+ * @typedef {object} AnalyticsRecord
+ * @property {"base"|"outreach"} id - Record key
+ * @property {number} updatedAt - Last update timestamp (ms)
+ * @property {number} schemaVersion - Record schema version
+ * @property {object} data - Stored analytics or outreach data
+ */
+
+/**
+ * The async operations shared by the IndexedDB and in-memory stores.
+ * @typedef {object} StorageOps
+ * @property {(type: string, data: StoredFileInput) => Promise<void>} saveFile - Save a file
+ * @property {(type: string) => Promise<StoredFile|null>} getFile - Read one file
+ * @property {() => Promise<StoredFileMetadata[]>} getAllFiles - List file metadata
+ * @property {(base: object) => Promise<void>} saveAnalytics - Save analytics
+ * @property {() => Promise<StoredAnalytics|null>} getAnalytics - Read analytics
+ * @property {(outreach: object) => Promise<void>} saveOutreach - Save outreach summary
+ * @property {() => Promise<StoredAnalytics|null>} getOutreach - Read outreach summary
+ * @property {() => Promise<void>} clearAll - Clear everything
+ */
+
+/**
  * Wrap stored CSV contents as a File: text from a record stored before version
  * 3, or the bytes a browser that refuses Blobs in IndexedDB stored instead. Every
  * reader receives the same shape whichever path wrote the record.
@@ -40,6 +103,21 @@ function resolveStoredBlob(blob, text, name) {
     return null;
 }
 
+/**
+ * Keep the records that normalized; a filter predicate that narrows out null.
+ * @template T
+ * @param {T|null} value - Normalized record, or null
+ * @returns {value is T}
+ */
+function isPresent(value) {
+    return Boolean(value);
+}
+
+/**
+ * Normalize a stored file record to the current schema, with its contents.
+ * @param {RawStoredFileRecord|null} record - Raw stored record
+ * @returns {StoredFile|null}
+ */
 function normalizeStoredFile(record) {
     if (!record || typeof record !== "object") {
         return null;
@@ -63,8 +141,8 @@ function normalizeStoredFile(record) {
 /**
  * Normalize a stored file record to metadata only (no file contents). Used by
  * the metadata reads so large exports are not loaded when listing files.
- * @param {object|null} record - Raw stored record
- * @returns {object|null}
+ * @param {RawStoredFileRecord|null} record - Raw stored record
+ * @returns {StoredFileMetadata|null}
  */
 function normalizeStoredFileMetadata(record) {
     const normalized = normalizeStoredFile(record);
@@ -74,13 +152,19 @@ function normalizeStoredFileMetadata(record) {
     return {
         type: normalized.type,
         name: normalized.name,
-        size: Number(record.size || normalized.size || 0),
+        size: Number(/** @type {RawStoredFileRecord} */ (record).size || normalized.size || 0),
         rowCount: normalized.rowCount,
         updatedAt: normalized.updatedAt,
         schemaVersion: normalized.schemaVersion,
     };
 }
 
+/**
+ * Unwrap stored analytics or outreach data, accepting records written before
+ * the data was wrapped.
+ * @param {AnalyticsRecord|StoredAnalytics|null} record - Raw stored record
+ * @returns {StoredAnalytics|null}
+ */
 function normalizeStoredAnalytics(record) {
     if (!record || typeof record !== "object") {
         return null;
@@ -90,7 +174,7 @@ function normalizeStoredAnalytics(record) {
         return null;
     }
     if (Object.prototype.hasOwnProperty.call(record, "data")) {
-        return record.data;
+        return /** @type {StoredAnalytics} */ (record.data);
     }
     return record;
 }
@@ -99,8 +183,8 @@ function normalizeStoredAnalytics(record) {
  * Build the record for an uploaded file. Callers pass the original upload as
  * `blob`; `text` is still accepted and stored as a Blob.
  * @param {string} type - File type key
- * @param {{name: string, blob?: Blob, text?: string, rowCount?: number}} data - File data
- * @returns {object}
+ * @param {StoredFileInput} data - File data
+ * @returns {StoredFile}
  */
 function buildFilePayload(type, data) {
     const blob = resolveStoredBlob(data.blob, data.text, data.name);
@@ -115,6 +199,11 @@ function buildFilePayload(type, data) {
     };
 }
 
+/**
+ * Wrap analytics data in its store record.
+ * @param {object} base - Analytics aggregate base
+ * @returns {AnalyticsRecord}
+ */
 function buildAnalyticsPayload(base) {
     return {
         id: "base",
@@ -124,6 +213,11 @@ function buildAnalyticsPayload(base) {
     };
 }
 
+/**
+ * Wrap the outreach summary in its store record.
+ * @param {object} outreach - Outreach summary
+ * @returns {AnalyticsRecord}
+ */
 function buildOutreachPayload(outreach) {
     return {
         id: "outreach",
@@ -223,11 +317,14 @@ export const Storage = (() => {
     /**
      * Build the in-memory store used when IndexedDB is unavailable at load time
      * or when opening the database later fails.
-     * @returns {object} An object exposing the same async ops as the IDB store
+     * @returns {StorageOps} An object exposing the same async ops as the IDB store
      */
     function createMemoryStore() {
+        /** @type {Map<string, StoredFile>} */
         const memFiles = new Map();
+        /** @type {AnalyticsRecord|null} */
         let memAnalytics = null;
+        /** @type {AnalyticsRecord|null} */
         let memOutreach = null;
         return {
             saveFile: (type, data) => {
@@ -237,7 +334,7 @@ export const Storage = (() => {
             getFile: (type) => Promise.resolve(normalizeStoredFile(memFiles.get(type) || null)),
             getAllFiles: () =>
                 Promise.resolve(
-                    [...memFiles.values()].map(normalizeStoredFileMetadata).filter(Boolean),
+                    [...memFiles.values()].map(normalizeStoredFileMetadata).filter(isPresent),
                 ),
             saveAnalytics: (base) => {
                 memAnalytics = buildAnalyticsPayload(base);
@@ -273,7 +370,9 @@ export const Storage = (() => {
     // available; it flips to false the first time `openDB()` fails (private mode,
     // corruption) so every later op transparently uses the in-memory store.
     let persistent = idbAvailable;
+    /** @type {Promise<IDBDatabase>|null} */
     let dbPromise = null;
+    /** @type {Array<(error: unknown) => void>} */
     const persistenceLostListeners = [];
 
     /**
@@ -407,9 +506,10 @@ export const Storage = (() => {
     /**
      * Run a storage operation, preferring IndexedDB but falling back to the
      * in-memory store (degrading permanently) when the database cannot be opened.
-     * @param {() => Promise<*>} memoryOp - The in-memory implementation
-     * @param {(db: IDBDatabase) => Promise<*>} idbOp - The IndexedDB implementation
-     * @returns {Promise<*>}
+     * @template T
+     * @param {() => Promise<T>} memoryOp - The in-memory implementation
+     * @param {(db: IDBDatabase) => Promise<T>} idbOp - The IndexedDB implementation
+     * @returns {Promise<T>}
      */
     async function runOp(memoryOp, idbOp) {
         if (!persistent) {
@@ -452,7 +552,7 @@ export const Storage = (() => {
      * Save an uploaded CSV file record. The original upload is stored as a
      * Blob, which browsers keep on disk rather than in memory.
      * @param {string} type - File type key
-     * @param {{name: string, blob?: Blob, text?: string, rowCount: number}} data - File data to persist
+     * @param {StoredFileInput & {rowCount: number}} data - File data to persist
      * @returns {Promise<void>}
      */
     function saveFile(type, data) {
@@ -526,7 +626,7 @@ export const Storage = (() => {
     /**
      * Retrieve a single file record by type, with its contents as `blob`.
      * @param {string} type - File type key
-     * @returns {Promise<object|null>} The stored file record, or null if not found
+     * @returns {Promise<StoredFile|null>} The stored file record, or null if not found
      */
     function getFile(type) {
         return runOp(
@@ -575,7 +675,7 @@ export const Storage = (() => {
 
     /**
      * Retrieve metadata records (no CSV text) for all stored files.
-     * @returns {Promise<object[]>} Array of stored file metadata records
+     * @returns {Promise<StoredFileMetadata[]>} Array of stored file metadata records
      */
     function getAllFiles() {
         return runOp(
@@ -589,7 +689,7 @@ export const Storage = (() => {
                         resolve(
                             (request.result || [])
                                 .map(normalizeStoredFileMetadata)
-                                .filter(Boolean),
+                                .filter(isPresent),
                         );
                     request.onerror = () => reject(request.error);
                 }),
@@ -613,7 +713,7 @@ export const Storage = (() => {
 
     /**
      * Retrieve stored analytics aggregates.
-     * @returns {Promise<object|null>} The analytics data, or null if not stored
+     * @returns {Promise<StoredAnalytics|null>} The analytics data, or null if not stored
      */
     function getAnalytics() {
         return runOp(
@@ -648,7 +748,7 @@ export const Storage = (() => {
 
     /**
      * Retrieve the stored outreach-funnel summary.
-     * @returns {Promise<object|null>} The outreach summary, or null if not stored
+     * @returns {Promise<StoredAnalytics|null>} The outreach summary, or null if not stored
      */
     function getOutreach() {
         return runOp(

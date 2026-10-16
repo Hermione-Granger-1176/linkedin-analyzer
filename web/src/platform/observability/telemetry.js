@@ -32,6 +32,7 @@ export function initTelemetry() {
     }
     telemetryInitialized = true;
 
+    /** @param {import("web-vitals").MetricType} metric - Reported web vital */
     const reportWebVital = (metric) => {
         if (!metric || typeof metric !== "object") {
             return;

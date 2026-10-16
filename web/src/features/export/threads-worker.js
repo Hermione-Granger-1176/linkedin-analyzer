@@ -21,6 +21,7 @@ const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
 // The id of the request being served, so a runtime failure is answered under an
 // id the main thread is actually waiting on rather than a placeholder it drops.
+/** @type {import("../../app/worker-contracts.js").RequestId} */
 let activeRequestId = 0;
 
 /**

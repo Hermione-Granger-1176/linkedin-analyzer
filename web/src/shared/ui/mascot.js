@@ -151,7 +151,7 @@ export function initMascot() {
     // upload flow entirely: the sweep starts after the clearing is already done,
     // and a listener that threw would be caught and reported by the notifier
     // rather than left to break the clear.
-    DataCache.subscribe((event) => {
+    DataCache.subscribe((/** @type {{type?: unknown}} */ event) => {
         if (event.type === STORAGE_CLEARED) {
             celebrateClear();
         }

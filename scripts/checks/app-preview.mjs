@@ -71,10 +71,11 @@ export function routeReady(timeout) {
  * Run a child process to completion, rejecting on a nonzero exit.
  * @param {string} command - Executable.
  * @param {string[]} args - Arguments.
+ * @param {NodeJS.ProcessEnv} [env] - Environment, defaulting to this process's.
  */
-export function run(command, args) {
+export function run(command, args, env = process.env) {
     return new Promise((resolve, reject) => {
-        const child = spawn(command, args, { cwd: REPO, stdio: "inherit" });
+        const child = spawn(command, args, { cwd: REPO, env, stdio: "inherit" });
         child.on("error", reject);
         child.on("exit", (code, signal) => {
             if (code === 0) {
@@ -87,9 +88,20 @@ export function run(command, args) {
     });
 }
 
-/** Build the production bundle. */
-export function buildApp() {
-    return run(NPM, ["run", "build"]);
+/**
+ * Build the bundle. Production by default; with measurementLimits, a
+ * "measurement" build that raises the upload limits (web/src/shared/limits.js)
+ * so exports above the public limits can be timed.
+ * @param {{measurementLimits?: boolean}} [options] - Build options.
+ */
+export function buildApp({ measurementLimits = false } = {}) {
+    if (!measurementLimits) {
+        return run(NPM, ["run", "build"]);
+    }
+    return run(NPM, ["run", "build", "--", "--mode", "measurement"], {
+        ...process.env,
+        VITE_MEASUREMENT_LIMITS: "1",
+    });
 }
 
 /**

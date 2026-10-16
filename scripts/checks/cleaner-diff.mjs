@@ -47,7 +47,19 @@ const FILES = {
     messages: "messages.csv",
     connections: "Connections.csv",
 };
+// Newest layout first; a ref that lacks any module falls through to the next.
 const MODULE_LAYOUTS = [
+    {
+        entry: "features/cleaning/cleaner.js",
+        modules: [
+            "features/cleaning/cleaner.js",
+            "features/cleaning/configs.js",
+            "features/cleaning/csv-parser.js",
+            "features/cleaning/field-cleaners.js",
+            "shared/constants.js",
+            "shared/limits.js",
+        ],
+    },
     {
         entry: "features/cleaning/cleaner.js",
         modules: [

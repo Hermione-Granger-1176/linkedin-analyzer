@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_CSV_CHARS } from "../../../src/shared/constants.js";
+import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
 import { createCanvas, mockMatchMedia, setupDom } from "../../helpers/dom.js";
 
 // The reader path now reads raw bytes via FileReader.readAsArrayBuffer, so mock

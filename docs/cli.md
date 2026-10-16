@@ -62,7 +62,7 @@ Put global options before the command name.
 | `--log-level`       | `INFO`          | Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.                                |
 | `--log-format`      | `text`          | Accepts `text` or `json`. JSON writes one object per line.                                 |
 | `--encoding`        | auto-detect     | Read CSV data with the specified encoding instead of the UTF-8 then Windows-1252 fallback. |
-| `--max-input-bytes` | `104857600`     | Reject an input file above this byte count. `0` disables the limit.                        |
+| `--max-input-bytes` | `134217728`     | Reject an input file above this byte count. `0` disables the limit.                        |
 | `--max-rows`        | `1000000`       | Reject a CSV above this parsed row count. `0` disables the limit.                          |
 
 Examples:

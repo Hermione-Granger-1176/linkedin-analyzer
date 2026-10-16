@@ -144,15 +144,15 @@ make gen-large-export size_mb=30 dir=/tmp/export-30mb
 
 The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comments.csv` under the system temp directory by default and refuses to write inside the repository. The same size always produces the same bytes. The data has one self account, a few thousand contacts with stable profile URLs (including different people who share a name), conversation IDs tied to participants, multi-year dates, and message bodies with commas, quotes, line breaks, emoji, and non-Latin scripts.
 
-`make bench-browser` times the real browser flow. It builds the production bundle, serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
+`make bench-browser` times the real browser flow. It builds the bundle in `measurement` mode, which raises the upload limits to 128 MiB per file, 128 Mi characters, and 1,000,000 rows (`web/src/shared/limits.js`; a production build always ignores this), serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
 
 ```bash
 make bench-browser size_mb=55
-make bench-browser size_mb=90 cpu=6 gpu=0 mobile=1 budget_mb=300
+make bench-browser size_mb=100 cpu=6 gpu=0 mobile=1 budget_mb=300
 make bench-browser input_dir=data/input runs=5
 ```
 
-`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `messages.csv` takes 80% of the generated size, and the bench stops before launching a browser when any file is over the app's per-file upload limit. Runs use reduced motion, so the optional timeline animation cannot end a filter timing early. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
+`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `messages.csv` takes 80% of the generated size, and the bench stops before launching a browser when any file is over the measurement build's per-file limit. Runs use reduced motion, so the optional timeline animation cannot end a filter timing early. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
 
 CPU throttling slows only the page's main thread. Chromium rejects it on worker targets, and a measured worker loop ran at the same speed at rates 1 and 4, so throttled timings understate slow-device time for work done in workers.
 
@@ -181,6 +181,17 @@ What the baselines show:
 - Throttled runs report higher peaks. The likely cause is that slower runs let the 200 ms sampler catch more short-lived allocations; this was not measured separately.
 - CPU throttling reaches only the main thread, so the throttled timings are a lower bound for a slow device.
 - Disabling the GPU changes nothing measurable, because no screen uses WebGL today.
+
+At 100 MB, measured with the `measurement` build's higher limits before step 4b of the large-file pipeline, on the same machine. `cpu=1` is 3 runs; `cpu=4` and `cpu=6` are one run each:
+
+| Size   | Options | Analytics ready     | Messages ready      | Cached filter    | Peak heap         |
+| ------ | ------- | ------------------- | ------------------- | ---------------- | ----------------- |
+| 100 MB | `cpu=1` | 7.62 s (7.20-10.67) | 8.05 s (7.65-11.14) | 174 ms (163-184) | 934 MB (919-1101) |
+| 100 MB | `cpu=4` | 10.68 s             | 11.35 s             | 206 ms           | 945 MB            |
+| 100 MB | `cpu=6` | 13.43 s             | 14.31 s             | 280 ms           | 833 MB            |
+
+- At 100 MB the workers hold about 800 MB of the peak and the page about 150 MB, roughly three times the 300 MB budget. Heap grows faster than linearly between 55 and 100 MB.
+- The Python CLI peaks at 1.44 GB RSS on a 107 MiB `messages.csv` from a 128 MiB synthetic export (`make audit-memory-python`), 399 MB on its 10.7 MiB `Connections.csv`, and under 200 MB on the shares and comments files.
 
 ## Run documentation and repository checks
 

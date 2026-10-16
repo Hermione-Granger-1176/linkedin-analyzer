@@ -6,7 +6,7 @@
  * LinkedInCleaner facade in cleaner.js to turn file text into rows.
  */
 
-import { MAX_CSV_CHARS } from "../../shared/constants.js";
+import { MAX_CSV_CHARS, MAX_CSV_ROWS } from "../../shared/limits.js";
 
 import { isMissing } from "./field-cleaners.js";
 
@@ -29,7 +29,7 @@ const CSV_PARSE_STATE = Object.freeze({
 
 const CSV_LIMITS = Object.freeze({
     maxChars: MAX_CSV_CHARS,
-    maxRows: 500000,
+    maxRows: MAX_CSV_ROWS,
     maxColumns: 256,
     maxFieldChars: 200000,
 });

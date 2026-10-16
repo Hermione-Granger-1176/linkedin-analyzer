@@ -2,8 +2,11 @@
  * Time the real browser flow on a large export, with simulated slow devices
  * and a combined page-plus-worker heap budget.
  *
- * Builds the production bundle, serves it from a private preview server, and
- * for each run opens a fresh Chromium, uploads the export, and records:
+ * Builds the bundle in "measurement" mode, which raises the upload limits
+ * (128 MiB per file, 128 Mi characters, 1,000,000 rows; see
+ * web/src/shared/limits.js) so exports above the public limits can be timed.
+ * It serves the bundle from a private preview server, and for each run opens
+ * a fresh Chromium, uploads the export, and records:
  *   - time from file drop to the Analytics screen showing data,
  *   - time from file drop to the Messages screen showing data (opened after
  *     Analytics, so it includes the Analytics time),
@@ -23,7 +26,7 @@
  * graphics, or native memory, and sampling can miss short peaks.
  *
  * Usage (prefer the Makefile):
- *   make bench-browser size_mb=90
+ *   make bench-browser size_mb=100
  *   make bench-browser size_mb=55 cpu=4 gpu=0 mobile=1 budget_mb=300
  *   make bench-browser input_dir=/private/export runs=5
  *
@@ -38,7 +41,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium, devices } from "@playwright/test";
 
-import { MAX_FILE_BYTES } from "../../web/src/features/upload/read.js";
+import { MEASUREMENT_LIMITS } from "../../web/src/shared/limits.js";
 import { generateLargeExport } from "../fixtures/gen-large-export.mjs";
 import {
     EXPORT_FILES,
@@ -352,13 +355,13 @@ const seconds = (ms) => (Number.isFinite(ms) ? (ms / 1000).toFixed(2) : "n/a");
 const megabytes = (bytes) => (bytes / MB).toFixed(1);
 
 /**
- * List export files the app would refuse for size, so a run fails before the
+ * List export files the measurement build would refuse for size, so a run fails before the
  * browser starts instead of timing out on an upload error.
  * @param {string} inputDir - Folder holding the export files.
  * @param {number} [limit] - Per-file byte limit.
  * @returns {string[]} "name=size" for each file over the limit.
  */
-export function oversizedInputs(inputDir, limit = MAX_FILE_BYTES) {
+export function oversizedInputs(inputDir, limit = MEASUREMENT_LIMITS.maxFileBytes) {
     return Object.values(EXPORT_FILES)
         .map((name) => [name, statSync(join(inputDir, name)).size])
         .filter(([, size]) => size > limit)
@@ -450,12 +453,13 @@ async function main() {
     if (oversized.length > 0) {
         console.error(
             `RESULT   FAILED oversized-inputs=${oversized.length} (${oversized.join(", ")}). ` +
-                `Each file must be at most ${megabytes(MAX_FILE_BYTES)}MB; pass a smaller size_mb.`,
+                `Each file must be at most ${megabytes(MEASUREMENT_LIMITS.maxFileBytes)}MB; ` +
+                "pass a smaller size_mb.",
         );
         return 1;
     }
 
-    await buildApp();
+    await buildApp({ measurementLimits: true });
     const preview = startPreview(PORT);
     try {
         await waitForServer(BASE_URL, preview);

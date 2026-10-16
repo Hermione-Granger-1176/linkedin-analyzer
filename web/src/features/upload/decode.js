@@ -7,7 +7,7 @@
  * imports them back and they are unit-tested directly in web/tests/features/upload/decode.test.js.
  */
 
-import { MAX_CSV_CHARS } from "../../shared/constants.js";
+import { MAX_CSV_CHARS } from "../../shared/limits.js";
 
 /**
  * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and only

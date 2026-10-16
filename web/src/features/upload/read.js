@@ -7,10 +7,9 @@
  * so the page owns orchestration and this module owns only how bytes are read.
  */
 
-import { concatChunks, decodeBytes } from "./decode.js";
+import { MAX_FILE_BYTES } from "../../shared/limits.js";
 
-/** Hard ceiling on a single uploaded file, enforced before and during reads. */
-export const MAX_FILE_BYTES = 80 * 1024 * 1024;
+import { concatChunks, decodeBytes } from "./decode.js";
 
 const FILE_READ_TIMEOUT_MS = 30000;
 const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;

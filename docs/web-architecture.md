@@ -8,13 +8,15 @@ The app deploys as static assets. A hash router keeps the route after a reload w
 
 The registered routes are `home`, `clean`, `analytics`, `connections`, `messages`, and `insights`. The four data views share the `range` parameter. The router remembers shared parameters when the user changes screens, and it sorts query keys when it builds a hash.
 
+The upload screen ships in the main bundle because most visits land on it. Every other screen registers a loader instead of a controller, and its code is fetched the first time its route opens: the screen manager shows the loading overlay, waits for the import, then initializes the controller with the route's latest parameters. A failed import is reported and tried again on the next visit. Once an upload makes Analytics available, `web/src/app/route-preload.js` fetches its code while the browser is idle, except on the lite effects tier with Save-Data on.
+
 [ADR-002](adr/002-no-framework-hash-routed-spa.md) records the choice to use a small hand-written router instead of a UI framework and history-based routing.
 
 ## How files move through the app
 
 1. `web/src/features/upload/` validates the uploaded `File` objects and posts each one to the analytics worker. Posting a `File` clones a reference to its bytes, not the bytes, so the page never holds the file text while it processes. The worker streams the bytes with `read.js`, reports bytes read as progress, and decodes them as strict UTF-8, starting over as WHATWG Windows-1252 if the bytes are not valid UTF-8.
 2. `web/src/features/cleaning/` identifies the file type from the first 64K characters, then parses and cleans each row as its chunk arrives, so the worker never builds the full row and record arrays. The limits apply as running counts. If streaming cannot finish, for example on a parse error, the worker runs the whole-text cleaner instead, so results and error messages match. The same module creates workbooks.
-3. Feature workers parse or aggregate data for Analytics, Connections, Messages, and export dashboards.
+3. Feature workers parse or aggregate data for Analytics, Connections, Messages, the Clean screen, and export dashboards.
 4. `web/src/platform/persistence/` stores each original upload as a `Blob`, with computed aggregates, when IndexedDB works. Screens and exports pass the stored `Blob` to their workers, which read it off the main thread.
 5. Screens read aggregates and render charts, lists, and insight cards in the browser.
 6. Export modules create Excel, PNG, or PDF downloads in the browser.
@@ -28,6 +30,8 @@ Long CSV parses and analytics calculations run in Web Workers so the main thread
 The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. A multi-file upload therefore processes its files one after another, so only one file's parse state is alive at a time. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. The worker replies with the cleaned result only; the page stores the `File` it already holds.
 
 The Connections and Messages screens keep their own workers and request counters. The Messages worker keeps one event per participant per message as typed-array columns, a contact ID and a timestamp, instead of one object each, and transfers those buffers to the page rather than copying them. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable.
+
+The Clean screen sends its preview, Excel, and cleaned CSV builds to `cleaning-worker.js` through `clean-client.js`, one request at a time. The worker keeps the last file it cleaned, keyed by type and upload time, so a download right after the preview does not parse the file again. The page receives five preview rows or a finished `Blob`, never the cleaned rows. Where Workers are unavailable, the same job runs on the main thread.
 
 The message export has a separate `threads-worker.js` because the Messages screen intentionally drops message bodies from its in-memory aggregates. The worker reads the stored message file only when the user opts in to message contents for a PDF.
 

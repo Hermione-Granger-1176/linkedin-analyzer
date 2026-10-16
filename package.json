@@ -51,11 +51,15 @@
   "size-limit": [
     {
       "path": "web/dist/assets/index-*.js",
-      "limit": "500 kB"
+      "limit": "48 kB"
     },
     {
       "path": "web/dist/assets/index-*.css",
       "limit": "50 kB"
+    },
+    {
+      "path": "web/dist/assets/screen-*.js",
+      "limit": "21 kB"
     },
     {
       "path": "web/dist/assets/analytics-worker-*.js",

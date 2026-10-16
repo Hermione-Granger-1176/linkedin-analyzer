@@ -1,7 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScreenManager } from "../../src/app/screen-manager.js";
+import { captureError } from "../../src/platform/observability/sentry.js";
 import { LoadingOverlay } from "../../src/shared/ui/loading-overlay.js";
+
+vi.mock("../../src/platform/observability/sentry.js", () => ({ captureError: vi.fn() }));
+
+/**
+ * A loader that resolves only when the test says so.
+ * @returns {{load: import("vitest").Mock, resolve: (value: unknown) => void, reject: (error: Error) => void}}
+ */
+function deferredLoader() {
+    let resolve;
+    let reject;
+    const load = vi.fn(
+        () =>
+            new Promise((res, rej) => {
+                resolve = res;
+                reject = rej;
+            })
+    );
+    return { load, resolve: (value) => resolve(value), reject: (error) => reject(error) };
+}
 
 describe("ScreenManager", () => {
     beforeEach(() => {
@@ -268,5 +288,94 @@ describe("ScreenManager", () => {
         const controller = { init: vi.fn(), onRouteChange: vi.fn(), onRouteLeave: vi.fn() };
         ScreenManager.register("home", { screenId: "screen-home", controller });
         expect(() => ScreenManager.activate("home", {})).not.toThrow();
+    });
+
+    describe("lazy routes", () => {
+        beforeEach(() => {
+            vi.spyOn(LoadingOverlay, "show").mockImplementation(() => {});
+            vi.spyOn(LoadingOverlay, "hide").mockImplementation(() => {});
+            vi.mocked(captureError).mockClear();
+        });
+
+        it("shows the screen at once and initializes the controller once it loads", async () => {
+            const controller = { init: vi.fn(), onRouteChange: vi.fn() };
+            const loader = deferredLoader();
+            ScreenManager.register("lazy-a", { screenId: "screen-about", load: loader.load });
+
+            ScreenManager.activate("lazy-a", { range: "3m" });
+            expect(document.getElementById("screen-about").classList.contains("active")).toBe(true);
+            expect(ScreenManager.getCurrentRouteName()).toBe("lazy-a");
+            expect(LoadingOverlay.show).toHaveBeenCalledWith("route:lazy-a", expect.any(Object));
+            // A route change while the code loads is the one the controller sees.
+            ScreenManager.activate("lazy-a", { range: "6m" });
+            expect(loader.load).toHaveBeenCalledTimes(1);
+
+            loader.resolve(controller);
+            await vi.waitFor(() => expect(controller.init).toHaveBeenCalledTimes(1));
+            expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-a");
+            expect(controller.onRouteChange).toHaveBeenLastCalledWith(
+                { range: "6m" },
+                { from: "lazy-a", to: "lazy-a" }
+            );
+
+            // Later visits run synchronously on the loaded controller.
+            ScreenManager.activate("home", {});
+            ScreenManager.activate("lazy-a", {});
+            expect(controller.init).toHaveBeenCalledTimes(1);
+            expect(loader.load).toHaveBeenCalledTimes(1);
+        });
+
+        it("leaves a controller uninitialized when the user moves on before it loads", async () => {
+            const controller = { init: vi.fn(), onRouteChange: vi.fn() };
+            const loader = deferredLoader();
+            ScreenManager.register("lazy-b", { screenId: "screen-about", load: loader.load });
+
+            ScreenManager.activate("lazy-b", {});
+            ScreenManager.activate("home", {});
+            loader.resolve(controller);
+            await vi.waitFor(() => expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-b"));
+            expect(controller.init).not.toHaveBeenCalled();
+
+            ScreenManager.activate("lazy-b", { x: "1" });
+            expect(controller.init).toHaveBeenCalledTimes(1);
+            expect(controller.onRouteChange).toHaveBeenCalledWith({ x: "1" }, { from: "home", to: "lazy-b" });
+        });
+
+        it("reports a failed load and tries again on the next visit", async () => {
+            const controller = { init: vi.fn() };
+            const loader = deferredLoader();
+            ScreenManager.register("lazy-c", { screenId: "screen-about", load: loader.load });
+
+            ScreenManager.activate("lazy-c", {});
+            loader.reject(new Error("chunk missing"));
+            await vi.waitFor(() => expect(captureError).toHaveBeenCalledTimes(1));
+            expect(captureError).toHaveBeenCalledWith(new Error("Screen code could not be loaded."), {
+                module: "screen-manager",
+                operation: "route-load",
+                route: "lazy-c"
+            });
+            expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-c");
+
+            ScreenManager.activate("lazy-c", {});
+            expect(loader.load).toHaveBeenCalledTimes(2);
+            loader.resolve(controller);
+            await vi.waitFor(() => expect(controller.init).toHaveBeenCalledTimes(1));
+        });
+
+        it("treats a loader that yields nothing as a route without a controller", async () => {
+            ScreenManager.register("lazy-d", { screenId: "screen-about", load: () => Promise.resolve(undefined) });
+            await expect(ScreenManager.loadController("lazy-d")).resolves.toBeNull();
+            expect(() => ScreenManager.activate("lazy-d", {})).not.toThrow();
+        });
+
+        it("preloads a controller without initializing it", async () => {
+            const controller = { init: vi.fn() };
+            ScreenManager.register("lazy-e", { screenId: "screen-about", load: () => Promise.resolve(controller) });
+            await expect(ScreenManager.loadController("lazy-e")).resolves.toBe(controller);
+            expect(controller.init).not.toHaveBeenCalled();
+            await expect(ScreenManager.loadController("missing")).resolves.toBeNull();
+            ScreenManager.register("eager", { screenId: "screen-home", controller });
+            await expect(ScreenManager.loadController("eager")).resolves.toBe(controller);
+        });
     });
 });

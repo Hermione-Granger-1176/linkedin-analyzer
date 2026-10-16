@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
     CSV_OPTIONS_COMMENTS,
     CSV_OPTIONS_DEFAULT,
+    createCsvRowParser,
     isRowEmpty,
     parseCsvRows,
 } from "../../../src/features/cleaning/csv-parser.js";
@@ -132,5 +133,138 @@ describe("isRowEmpty", () => {
 
     it("treats a row with any present cell as non-empty", () => {
         expect(isRowEmpty(["", "value"])).toBe(false);
+    });
+});
+
+/**
+ * Feed chunks through the incremental parser and collect what it emits.
+ * @param {string[]} chunks - Text chunks in order
+ * @param {{delimiter: string, quote: string, escape: string|null}} [options] - Parser options
+ */
+function parseChunks(chunks, options = CSV_OPTIONS_DEFAULT) {
+    const rows = [];
+    const parser = createCsvRowParser(options, (row) => rows.push(row));
+    for (const chunk of chunks) {
+        parser.push(chunk);
+    }
+    return { rows, error: parser.finish() };
+}
+
+describe("createCsvRowParser across chunk boundaries", () => {
+    const cases = [
+        ["default", CSV_OPTIONS_DEFAULT, 'a,"b\r\nc",d\r\n"x""y",z\n\n,\nlast\r'],
+        ["default with emoji", CSV_OPTIONS_DEFAULT, 'name,note\n"😀 hi","a""😀"\r\n😀,b\n'],
+        ["comments", CSV_OPTIONS_COMMENTS, `${String.raw`a,"q\"u\😀o",\,b`}\r\nc,d`],
+    ];
+
+    it.each(cases)(
+        "matches the whole-text parse at every split point (%s)",
+        (_name, options, text) => {
+            const whole = parseCsvRows(text, options);
+            expect(whole.error).toBeNull();
+            for (let split = 1; split < text.length; split += 1) {
+                expect(parseChunks([text.slice(0, split), text.slice(split)], options)).toEqual(
+                    whole,
+                );
+            }
+            expect(parseChunks([...text.split("")], options)).toEqual(whole);
+        },
+    );
+
+    it.each([
+        ["a quoted newline", ['"a\n', 'b",c'], [["a\nb", "c"]]],
+        ["a doubled quote split between its quotes", ['"a"', '"b"'], [['a"b']]],
+        ["a closing quote at the chunk end", ['"a"', ",b"], [["a", "b"]]],
+        ["a CRLF inside quotes", ['"a\r', '\nb"'], [["a\nb"]]],
+        ["a bare CR inside quotes", ['"a\r', 'b"'], [["a\rb"]]],
+        ["a CRLF row ending", ["a\r", "\nb"], [["a"], ["b"]]],
+        ["a bare CR row ending", ["a\r", "b"], [["a"], ["b"]]],
+        ["a surrogate pair in plain text", ["a\ud83d", "\ude00b"], [["a😀b"]]],
+    ])("joins %s", (_name, chunks, expected) => {
+        expect(parseChunks(chunks)).toEqual({ rows: expected, error: null });
+    });
+
+    it.each([
+        ["an escape at the chunk end", ['"a\\', '"b"'], [['a"b']]],
+        ["an escaped surrogate pair split after its high half", ["\\\ud83d", "\ude00"], [["😀"]]],
+    ])("joins %s (comments options)", (_name, chunks, expected) => {
+        expect(parseChunks(chunks, CSV_OPTIONS_COMMENTS)).toEqual({ rows: expected, error: null });
+    });
+});
+
+describe("createCsvRowParser row emission", () => {
+    it("emits held empty rows once a non-empty row follows and drops trailing ones", () => {
+        expect(parseChunks(["a\n\n", ",\nb\n", "\n,\n"])).toEqual({
+            rows: [["a"], [""], ["", ""], ["b"]],
+            error: null,
+        });
+    });
+
+    it("emits complete rows before finish", () => {
+        const rows = [];
+        const parser = createCsvRowParser(CSV_OPTIONS_DEFAULT, (row) => rows.push(row));
+        expect(parser.push("a,b\nc")).toBeNull();
+        expect(rows).toEqual([["a", "b"]]);
+        expect(parser.finish()).toBeNull();
+        expect(rows).toEqual([["a", "b"], ["c"]]);
+    });
+
+    it("keeps the rows and reports an unmatched quote at finish", () => {
+        expect(parseChunks(["a\n", '"b'])).toEqual({
+            rows: [["a"], ["b"]],
+            error: "CSV parsing error: unmatched quote",
+        });
+    });
+
+    it("reports a trailing escape at finish", () => {
+        expect(parseChunks(["a\\"], CSV_OPTIONS_COMMENTS).error).toBe(
+            "CSV parsing error: trailing escape character.",
+        );
+    });
+});
+
+describe("createCsvRowParser errors and lifecycle", () => {
+    it("enforces the character limit as a running count", () => {
+        const parser = createCsvRowParser(CSV_OPTIONS_DEFAULT, () => {});
+        expect(parser.push("a")).toBeNull();
+        // A length-bearing object trips the guard before any concatenation.
+        expect(
+            parser.push(/** @type {string} */ (/** @type {unknown} */ ({ length: MAX_CSV_CHARS }))),
+        ).toMatch(/parser limit/);
+        expect(parser.finish()).toMatch(/parser limit/);
+    });
+
+    it("ignores chunks after an error and after finish", () => {
+        const rows = [];
+        const parser = createCsvRowParser(CSV_OPTIONS_DEFAULT, (row) => rows.push(row));
+        const tooLong = `"${"x".repeat(200001)}`;
+        expect(parser.push(tooLong)).toMatch(/too large/);
+        expect(parser.push("a\n")).toMatch(/too large/);
+        expect(rows).toEqual([]);
+
+        const done = createCsvRowParser(CSV_OPTIONS_DEFAULT, (row) => rows.push(row));
+        expect(done.push("")).toBeNull();
+        expect(done.finish()).toBeNull();
+        expect(done.push("late\n")).toBeNull();
+        expect(done.finish()).toBeNull();
+        expect(rows).toEqual([]);
+    });
+});
+
+describe("createCsvRowParser row limit", () => {
+    it("counts every row, empty ones included, toward the row limit", async () => {
+        vi.resetModules();
+        vi.doMock("../../../src/shared/limits.js", async (importOriginal) => ({
+            ...(await importOriginal()),
+            MAX_CSV_ROWS: 2,
+        }));
+        const limited = await import("../../../src/features/cleaning/csv-parser.js");
+        expect(limited.parseCsvRows("a\nb").error).toBeNull();
+        expect(limited.parseCsvRows("a\n\nb")).toEqual({
+            rows: [],
+            error: "CSV parsing error: row limit exceeded for this file.",
+        });
+        vi.doUnmock("../../../src/shared/limits.js");
+        vi.resetModules();
     });
 });

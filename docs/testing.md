@@ -135,6 +135,15 @@ make explore
 
 Use these commands to investigate performance or memory. Do not commit private exports or generated reports.
 
+Without a private export, generate a synthetic one and point the checks at it with `input_dir=path`:
+
+```bash
+make gen-large-export size_mb=100
+make gen-large-export size_mb=30 dir=/tmp/export-30mb
+```
+
+The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comments.csv` under the system temp directory by default and refuses to write inside the repository. The same size always produces the same bytes. The data has one self account, a few thousand contacts with stable profile URLs (including different people who share a name), conversation IDs tied to participants, multi-year dates, and message bodies with commas, quotes, line breaks, emoji, and non-Latin scripts.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

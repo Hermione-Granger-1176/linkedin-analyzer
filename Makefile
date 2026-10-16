@@ -459,13 +459,16 @@ fix-deps: ## Refresh locks and reinstall local environments
 
 # ─── Utilities @util ────────────────────────────────────────────────────────────────
 
-.PHONY: run-cli gen-parity-corpus status clean-venv clean help help-json
+.PHONY: run-cli gen-parity-corpus gen-large-export status clean-venv clean help help-json
 
 run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connections|all ...")
 	$(VENV)/bin/linkedin-analyzer $(args)
 
 gen-parity-corpus: ## Regenerate the synthetic cross-runtime parity corpus fixtures
 	$(NODE) scripts/fixtures/gen-parity-corpus.mjs
+
+gen-large-export: ## Write a synthetic export outside the repo (make gen-large-export size_mb=100 [dir=path])
+	$(NODE) scripts/fixtures/gen-large-export.mjs --size-mb "$(or $(size_mb),100)" $(if $(dir),--dir "$(dir)")
 
 # Runs on the system interpreter, not the venv one, because the first thing it
 # has to be able to report is that the venv is missing.

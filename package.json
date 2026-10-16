@@ -74,6 +74,10 @@
       "limit": "10 kB"
     },
     {
+      "path": "web/dist/assets/cleaning-worker-*.js",
+      "limit": "26 kB"
+    },
+    {
       "path": "web/dist/assets/jspdf*.js",
       "limit": "140 kB"
     }

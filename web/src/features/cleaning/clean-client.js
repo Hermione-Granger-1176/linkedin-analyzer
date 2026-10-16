@@ -1,0 +1,146 @@
+/**
+ * Page-side client for the Clean screen's worker.
+ *
+ * One request is in flight at a time: a new one settles the previous as a
+ * failure, and the screen ignores replies for a selection it has moved past.
+ * Where Workers are unavailable the same job runs on the main thread.
+ */
+
+import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
+import { captureError } from "../../platform/observability/sentry.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
+
+import { runCleanJob } from "./clean-job.js";
+
+// Fixed text: a failure inside the worker can carry a row of the user's file.
+const CLEAN_FAILURE = "Unable to parse file.";
+
+/** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}} CleanReply */
+
+/** @type {Worker|null} */
+let worker = null;
+let requestCount = 0;
+/** @type {{id: number, resolve: (reply: CleanReply) => void, timeoutId: number}|null} */
+let pending = null;
+
+/**
+ * Build a failed reply.
+ * @param {string} [error] - Failure text
+ * @returns {CleanReply}
+ */
+function failure(error = CLEAN_FAILURE) {
+    return { success: false, error, rowCount: 0, previewRows: [], blob: null };
+}
+
+/**
+ * Settle the request in flight, if any.
+ * @param {CleanReply} reply - Outcome to settle it with
+ */
+function settle(reply) {
+    if (!pending) {
+        return;
+    }
+    const { resolve, timeoutId } = pending;
+    pending = null;
+    window.clearTimeout(timeoutId);
+    resolve(reply);
+}
+
+/** Terminate the worker and fail whatever it was answering. */
+function terminateCleanWorker() {
+    if (worker) {
+        worker.terminate();
+        worker = null;
+    }
+    settle(failure());
+}
+
+/**
+ * Read one worker message into the reply for the request in flight.
+ * @param {MessageEvent} event - Worker message event
+ */
+function onMessage(event) {
+    const parsed = parseCleaningWorkerMessage(event.data);
+    if (!parsed.valid || !pending || parsed.value.requestId !== pending.id) {
+        return;
+    }
+    settle(parsed.value.payload);
+}
+
+/** A worker that fell over cannot answer; start a fresh one next time. */
+function onError() {
+    captureError(new Error("Cleaning worker failed."), {
+        module: "clean",
+        operation: "worker-error",
+    });
+    terminateCleanWorker();
+}
+
+/**
+ * Create the worker on first use, or leave it null where Workers are missing.
+ * @returns {Worker|null}
+ */
+function getWorker() {
+    if (worker || typeof Worker === "undefined") {
+        return worker;
+    }
+    try {
+        worker = new Worker(new URL("./cleaning-worker.js", import.meta.url), { type: "module" });
+        worker.addEventListener("message", onMessage);
+        worker.addEventListener("error", onError);
+    } catch {
+        worker = null;
+        captureError(new Error("Cleaning worker could not start."), {
+            module: "clean",
+            operation: "worker-init",
+        });
+    }
+    return worker;
+}
+
+/**
+ * Run the job on the main thread, reporting a fixed error if it throws.
+ * @param {object} payload - Request payload
+ * @returns {Promise<CleanReply>}
+ */
+async function runOnMainThread(payload) {
+    try {
+        return await runCleanJob(payload);
+    } catch {
+        captureError(new Error(CLEAN_FAILURE), { module: "clean", operation: "main-thread-clean" });
+        return failure();
+    }
+}
+
+/**
+ * Ask for one output of a stored upload: the preview, an Excel workbook, or a
+ * cleaned CSV.
+ * @param {{fileType: string, output: "preview"|"xlsx"|"csv", source: Blob|string, key: string}} payload - Request payload
+ * @returns {Promise<CleanReply>}
+ */
+export function requestClean(payload) {
+    const active = getWorker();
+    if (!active) {
+        return runOnMainThread(payload);
+    }
+    settle(failure());
+    const id = ++requestCount;
+    return new Promise((resolve) => {
+        // A workbook takes longer than a clean, so a download gets twice the budget.
+        const budget =
+            computeWorkerTimeout(payload.source) * (payload.output === "preview" ? 1 : 2);
+        const timeoutId = window.setTimeout(() => {
+            captureError(new Error("Cleaning worker timed out."), {
+                module: "clean",
+                operation: "worker-timeout",
+            });
+            terminateCleanWorker();
+        }, budget);
+        pending = { id, resolve, timeoutId };
+        try {
+            active.postMessage({ type: "clean", requestId: id, payload });
+        } catch {
+            terminateCleanWorker();
+        }
+    });
+}

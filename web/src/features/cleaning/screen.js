@@ -8,16 +8,16 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPE_LABELS, FILE_TYPES } from "../../shared/constants.js";
 import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 import { celebrateDownload } from "../../shared/ui/mascot.js";
-import { readCsvSource } from "../upload/read.js";
 
+import { requestClean } from "./clean-client.js";
+import { PREVIEW_ROW_LIMIT } from "./clean-job.js";
 import { LinkedInCleaner } from "./cleaner.js";
-import { buildCleanedCsvBlob, cleanedCsvName } from "./csv-export.js";
+import { cleanedCsvName } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
 export const CleanPage = (() => {
     "use strict";
 
-    const PREVIEW_ROW_LIMIT = 5;
     const PREVIEW_CELL_LIMIT = 50;
     const CLEAN_HINT_BY_CATEGORY = Object.freeze({
         all: () => "All files loaded. Choose one to clean and export.",
@@ -72,6 +72,9 @@ export const CleanPage = (() => {
     };
 
     let initialized = false;
+    // Counts preview requests, so a reply for a selection the user has moved
+    // past is dropped rather than drawn.
+    let previewRequest = 0;
 
     function formatRows(count) {
         return `${count} ${count === 1 ? "row" : "rows"}`;
@@ -261,25 +264,18 @@ export const CleanPage = (() => {
         const fileUpdatedAt = file.updatedAt || 0;
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
-            let text;
-            let sourceSize;
+            const token = ++previewRequest;
+            let stored;
             try {
                 // The cached record is metadata only; load the stored upload on
-                // demand and decode it the way the upload did.
-                const stored = await Storage.getFile(type);
+                // demand. The worker reads and cleans it off the main thread.
+                stored = await Storage.getFile(type);
                 if (!stored || !stored.blob) {
                     // Metadata says the file exists but its contents are gone
                     // (cleared in another tab or degraded persistence); report a
                     // load failure rather than parsing an empty payload into a
                     // misleading parse error.
                     throw new Error("Stored file record is missing.");
-                }
-                text = await readCsvSource(stored.blob);
-                sourceSize = stored.blob.size;
-                // The selection may have changed while the load was in flight;
-                // abandon this stale render so the newer one wins.
-                if (getSelectedType() !== type) {
-                    return;
                 }
             } catch (error) {
                 // An abandoned load must not replace the newer selection's preview.
@@ -289,31 +285,52 @@ export const CleanPage = (() => {
                 handleParseError(error, "Unable to load file.", type, file.name || null);
                 return;
             }
-            try {
-                const processed = LinkedInCleaner.process(text, type);
-                if (!processed.success) {
-                    const message = processed.error || "Unable to parse file.";
-                    handleParseError(new Error(message), message, type, file.name || null);
-                    return;
-                }
-                cache[type] = {
-                    updatedAt: fileUpdatedAt,
-                    sourceSize,
-                    result: processed,
-                };
-            } catch (error) {
-                handleParseError(error, "Unable to parse file.", type, file.name || null);
+            if (token !== previewRequest || getSelectedType() !== type) {
                 return;
             }
+            const reply = await requestClean({
+                fileType: type,
+                output: "preview",
+                source: stored.blob,
+                key: fileKey(type, fileUpdatedAt),
+            });
+            // The selection may have changed while the clean was in flight;
+            // abandon this stale render so the newer one wins.
+            if (token !== previewRequest || getSelectedType() !== type) {
+                return;
+            }
+            if (!reply.success) {
+                /* v8 ignore next */
+                const message = reply.error || "Unable to parse file.";
+                handleParseError(new Error(message), message, type, file.name || null);
+                return;
+            }
+            cache[type] = {
+                updatedAt: fileUpdatedAt,
+                sourceSize: stored.blob.size,
+                rowCount: reply.rowCount,
+                previewRows: reply.previewRows,
+            };
         }
 
-        showPreview(cache[type].result, type);
+        showPreview(cache[type], type);
         showDownload();
     }
 
     /**
-     * Populate the preview table with cleaned data.
-     * @param {object} result - The processed result from LinkedInCleaner.
+     * Name a stored upload, so the worker can tell whether the rows it holds
+     * came from it.
+     * @param {string} type - File type
+     * @param {number} updatedAt - Upload timestamp
+     * @returns {string}
+     */
+    function fileKey(type, updatedAt) {
+        return `${type}:${updatedAt}`;
+    }
+
+    /**
+     * Populate the preview table with the worker's preview rows.
+     * @param {{rowCount: number, previewRows: string[][]}} result - Preview from the worker
      * @param {string} fileType - Selected cleaner file type.
      */
     function showPreview(result, fileType) {
@@ -341,13 +358,12 @@ export const CleanPage = (() => {
         const tbody = /** @type {HTMLElement} */ (
             elements.cleanPreviewTable.querySelector("tbody")
         );
-        const previewRows = result.cleanedData.slice(0, PREVIEW_ROW_LIMIT);
         const bodyFragment = document.createDocumentFragment();
-        previewRows.forEach((row) => {
+        result.previewRows.forEach((row) => {
             const previewRow = document.createElement("tr");
-            headers.forEach((header) => {
+            headers.forEach((_, index) => {
                 /* v8 ignore next */
-                const value = row[header] || "";
+                const value = row[index] || "";
                 const cell = document.createElement("td");
                 cell.title = value;
                 cell.textContent = truncate(value, PREVIEW_CELL_LIMIT);
@@ -387,14 +403,14 @@ export const CleanPage = (() => {
     }
 
     /**
-     * Return the cleaned result for the selected file, or report that there is
+     * Return the previewed file for the selected type, or report that there is
      * nothing to download.
      * @returns {{type: string, cached: object}|null}
      */
     function getDownloadable() {
         const type = getSelectedType();
         const cached = cache[type];
-        if (!cached || !cached.result) {
+        if (!cached) {
             showError("No data to download.");
             captureError(new Error("No data to download from clean page."), {
                 module: "clean",
@@ -404,6 +420,31 @@ export const CleanPage = (() => {
             return null;
         }
         return { type, cached };
+    }
+
+    /**
+     * Build one download in the worker from the stored upload.
+     * @param {string} type - File type
+     * @param {object} cached - Previewed file
+     * @param {"xlsx"|"csv"} output - What to build
+     * @returns {Promise<{success: boolean, error: string|null, blob: Blob|null}>}
+     */
+    async function buildDownload(type, cached, output) {
+        let stored;
+        try {
+            stored = await Storage.getFile(type);
+        } catch {
+            stored = null;
+        }
+        if (!stored || !stored.blob) {
+            return { success: false, error: "Stored file record is missing.", blob: null };
+        }
+        return requestClean({
+            fileType: type,
+            output,
+            source: stored.blob,
+            key: fileKey(type, cached.updatedAt),
+        });
     }
 
     /**
@@ -425,39 +466,40 @@ export const CleanPage = (() => {
             return;
         }
         hideError();
-        const downloadResult = await ExcelGenerator.generateAndDownload(
-            cached.result.cleanedData,
-            type,
-        );
-        if (!downloadResult.success) {
-            captureError(new Error(downloadResult.error || "Excel generation failed."), {
+        const reply = await buildDownload(type, cached, "xlsx");
+        if (!reply.success || !reply.blob) {
+            captureError(new Error("Excel generation failed."), {
                 module: "clean",
                 operation: "excel-generate",
                 fileType: type,
             });
-            showError(`Error generating Excel: ${downloadResult.error}`);
+            showError(`Error generating Excel: ${reply.error || "Try again."}`);
             return;
         }
+        ExcelGenerator.download(reply.blob, LinkedInCleaner.configs[type].outputName);
         celebrateDownload();
     }
 
     /**
      * Download the cleaned rows as CSV, built in parts so large files fit.
      */
-    function handleCsvDownload() {
+    async function handleCsvDownload() {
         const downloadable = getDownloadable();
         if (!downloadable) {
             return;
         }
         const { type, cached } = downloadable;
-        try {
-            const blob = buildCleanedCsvBlob(cached.result.cleanedData, type);
-            ExcelGenerator.download(blob, cleanedCsvName(type));
-        } catch (error) {
-            captureError(error, { module: "clean", operation: "csv-generate", fileType: type });
+        const reply = await buildDownload(type, cached, "csv");
+        if (!reply.success || !reply.blob) {
+            captureError(new Error("CSV generation failed."), {
+                module: "clean",
+                operation: "csv-generate",
+                fileType: type,
+            });
             showError("Error generating CSV. Try again.");
             return;
         }
+        ExcelGenerator.download(reply.blob, cleanedCsvName(type));
         hideError();
         celebrateDownload();
     }

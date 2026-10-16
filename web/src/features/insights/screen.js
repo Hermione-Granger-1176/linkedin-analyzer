@@ -514,7 +514,7 @@ export const InsightsPage = (() => {
         // failure clears it again so a later entry can retry.
         state.outreachLoaded = true;
         try {
-            state.outreach = await Storage.getOutreach();
+            state.outreach = /** @type {typeof state.outreach} */ (await Storage.getOutreach());
         } catch (error) {
             state.outreachLoaded = false;
             captureError(error, { module: "insights-ui", operation: "load-outreach" });

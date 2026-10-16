@@ -4,6 +4,7 @@ const zlib = require("zlib");
 // stream, deflated because the export asks for compression.
 const STREAM_START = /stream\r?\n/g;
 const PDF_STRING = /\((?:\\[\s\S]|[^\\()])*\)/g;
+/** @type {Readonly<Record<string, string>>} */
 const ESCAPES = Object.freeze({ n: "\n", r: "\r", t: "\t", b: "\b", f: "\f" });
 
 /**

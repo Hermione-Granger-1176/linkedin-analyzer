@@ -9,7 +9,9 @@ import {
 import { watchForJank } from "../../platform/device/jank.js";
 import { setTelemetryEffectsTier } from "../../platform/observability/sentry.js";
 
+/** @type {Readonly<Record<string, string>>} */
 const OVERRIDE_CYCLE = Object.freeze({ auto: "lite", lite: "full", full: "auto" });
+/** @type {Readonly<Record<string, string>>} */
 const OVERRIDE_LABELS = Object.freeze({ auto: "Auto", lite: "Lite", full: "Full" });
 
 export const Effects = (() => {

@@ -46,7 +46,7 @@ const ARROW_VARIANTS = Object.freeze([
 
 /**
  * Pick an arrow variant for the current step.
- * @param {object} step - Step config
+ * @param {import("./steps.js").TutorialStep} step - Step config
  * @param {string} routeName - Active route name
  * @param {number} currentIndex - Current step index
  * @returns {ArrowVariant}

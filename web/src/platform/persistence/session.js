@@ -5,6 +5,8 @@ import { SESSION_CLEANUP_PROMISE_KEY } from "../../shared/constants.js";
 import { DataCache } from "./data-cache.js";
 import { Storage } from "./storage.js";
 
+/** @typedef {import("../../shared/constants.js").SessionCleanupWindow} SessionCleanupWindow */
+
 export const Session = (() => {
     "use strict";
 
@@ -118,7 +120,9 @@ export const Session = (() => {
      * @returns {Promise<void>}
      */
     async function waitForCleanup() {
-        const cleanupPromise = window[SESSION_CLEANUP_PROMISE_KEY];
+        const cleanupPromise = /** @type {SessionCleanupWindow} */ (window)[
+            SESSION_CLEANUP_PROMISE_KEY
+        ];
         if (!cleanupPromise || typeof cleanupPromise.then !== "function") {
             return;
         }

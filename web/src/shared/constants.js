@@ -3,6 +3,11 @@
 /** Window property key coordinating async session cleanup across modules. */
 export const SESSION_CLEANUP_PROMISE_KEY = "__linkedinAnalyzerSessionCleanupPromise";
 
+/**
+ * The window, carrying the in-flight session cleanup under its coordination key.
+ * @typedef {Window & {[SESSION_CLEANUP_PROMISE_KEY]?: Promise<boolean>}} SessionCleanupWindow
+ */
+
 /** DataCache key the Insights screen publishes its on-screen snapshot under, for the PDF export to reuse. */
 export const INSIGHTS_EXPORT_CACHE_KEY = "insights:exportSnapshot";
 

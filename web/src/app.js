@@ -119,7 +119,9 @@ function init() {
 
     /** Run session cleanup without blocking initial render. */
     function runSessionCleanup() {
-        window[SESSION_CLEANUP_PROMISE_KEY] = Session.cleanIfStale()
+        /** @type {import("./shared/constants.js").SessionCleanupWindow} */ (window)[
+            SESSION_CLEANUP_PROMISE_KEY
+        ] = Session.cleanIfStale()
             /* v8 ignore next */
             .catch((error) => {
                 captureError(error, {

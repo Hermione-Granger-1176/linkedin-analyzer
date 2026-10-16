@@ -3,6 +3,15 @@
 export const LoadingOverlay = (() => {
     "use strict";
 
+    /** @typedef {{title: string, message: string}} OverlayText */
+    /**
+     * @typedef {object} OverlayElements
+     * @property {HTMLElement} overlay - Overlay root
+     * @property {HTMLElement|null} title - Title element
+     * @property {HTMLElement|null} message - Message element
+     */
+
+    /** @type {Readonly<Record<string, OverlayText>>} */
     const DEFAULT_MESSAGES = Object.freeze({
         analytics: {
             title: "Loading analytics",
@@ -23,6 +32,7 @@ export const LoadingOverlay = (() => {
     });
 
     const activeSources = new Map();
+    /** @type {OverlayElements|null} */
     let overlayElements = null;
 
     /**
@@ -129,7 +139,7 @@ export const LoadingOverlay = (() => {
 
     /**
      * Resolve overlay elements.
-     * @returns {{overlay: HTMLElement, title: HTMLElement|null, message: HTMLElement|null}|null}
+     * @returns {OverlayElements|null}
      */
     function ensureElements() {
         if (overlayElements) {

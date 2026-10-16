@@ -144,6 +144,11 @@ function csvLine(fields) {
     return `${fields.map(csvField).join(",")}\n`;
 }
 
+/**
+ * Zero-pad a date part to two digits.
+ * @param {number} value - Date part.
+ * @returns {string}
+ */
 const pad = (value) => String(value).padStart(2, "0");
 
 /**
@@ -152,7 +157,13 @@ const pad = (value) => String(value).padStart(2, "0");
  * @returns {{ name: string, first: string, last: string, url: string }[]}
  */
 function buildContacts(random) {
+    /**
+     * @template T
+     * @param {readonly T[]} list - Choices.
+     * @returns {T}
+     */
     const pick = (list) => list[Math.floor(random() * list.length)];
+    /** @type {{ name: string, first: string, last: string, url: string }[]} */
     const contacts = [];
     for (let index = 0; index < CONTACT_COUNT; index += 1) {
         const previous = contacts[index - 1];
@@ -222,6 +233,11 @@ export function generateLargeExport({ sizeMb, dir }) {
     mkdirSync(outDir, { recursive: true });
 
     const random = mulberry32(Math.round(sizeMb * 1000));
+    /**
+     * @template T
+     * @param {readonly T[]} list - Choices.
+     * @returns {T}
+     */
     const pick = (list) => list[Math.floor(random() * list.length)];
     const contacts = buildContacts(random);
     // A skewed pick, so a few contacts get most of the messages, as in real life.
@@ -235,10 +251,18 @@ export function generateLargeExport({ sizeMb, dir }) {
             `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`
         );
     };
+    /**
+     * @param {readonly string[]} parts - Phrases to join.
+     * @returns {string}
+     */
     const body = (parts) => {
         const count = 1 + Math.floor(random() * 3);
         return Array.from({ length: count }, () => pick(parts)).join(" ");
     };
+    /**
+     * @param {keyof typeof FILE_SHARES} file - Output file name.
+     * @returns {number}
+     */
     const target = (file) => Math.round(sizeMb * MB * FILE_SHARES[file]);
     /** @type {Record<string, { bytes: number, rows: number }>} */
     const results = {};

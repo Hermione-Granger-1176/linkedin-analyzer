@@ -40,6 +40,8 @@ import {
     resolveStepTarget,
 } from "./targets.js";
 
+/** @typedef {import("./steps.js").TutorialStep} TutorialStep */
+
 export const Tutorial = (() => {
     "use strict";
 
@@ -53,7 +55,7 @@ export const Tutorial = (() => {
     const POINTER_BASE_ANGLE_DEG = -45;
     const POINTER_ICON_HALF = 46;
 
-    /** @type {{initialized: boolean, active: boolean, routeName: string, steps: object[], renderableIndices: number[], currentIndex: number, retryCount: number, token: number, autoTimer: number, retryTimer: number, highlightedTarget: HTMLElement | null, highlightedStyle: {position: string, zIndex: string} | null, previousFocus: HTMLElement | null, miniTipsRoute: string, miniTipTimer: number, miniTipRetryTimer: number, miniTipRetryCount: number, miniTipEntries: Array<{node: HTMLElement, tip: object, routeName: string, tipId: string, placement: string | undefined, target: Element | null}>}} */
+    /** @type {{initialized: boolean, active: boolean, routeName: string, steps: TutorialStep[], renderableIndices: number[], currentIndex: number, retryCount: number, token: number, autoTimer: number, retryTimer: number, highlightedTarget: HTMLElement | null, highlightedStyle: {position: string, zIndex: string} | null, previousFocus: HTMLElement | null, miniTipsRoute: string, miniTipTimer: number, miniTipRetryTimer: number, miniTipRetryCount: number, miniTipEntries: Array<{node: HTMLElement, tip: TutorialStep, routeName: string, tipId: string, placement: string | undefined, target: Element | null}>}} */
     const state = {
         initialized: false,
         active: false,
@@ -470,7 +472,7 @@ export const Tutorial = (() => {
 
     /**
      * Read the active step config.
-     * @returns {object}
+     * @returns {TutorialStep}
      */
     function getCurrentStep() {
         return state.steps[state.currentIndex] || {};
@@ -696,6 +698,7 @@ export const Tutorial = (() => {
      * @returns {number[]}
      */
     function computeRenderableIndices() {
+        /** @type {number[]} */
         const indices = [];
         state.steps.forEach((step, index) => {
             if (!hasStepTarget(step) || resolveStepTarget(step)) {
@@ -708,7 +711,7 @@ export const Tutorial = (() => {
     /**
      * Position spotlight, popover, and pointer.
      * @param {Element|null} target - Highlight target
-     * @param {object} step - Step config
+     * @param {TutorialStep} step - Step config
      */
     function updateGeometry(target, step) {
         // init() mounts the spotlight and popover with the shell. Keep this guard for incomplete DOM setup.
@@ -779,7 +782,7 @@ export const Tutorial = (() => {
      * @param {{left: number, top: number}} popPosition - Popover position
      * @param {DOMRect} popRect - Popover dimensions
      * @param {string} placement - Final placement
-     * @param {object} step - Step config
+     * @param {TutorialStep} step - Step config
      */
     function updatePointer(targetRect, popPosition, popRect, placement, step) {
         // init() mounts the pointer SVG with the shell. Keep this guard for incomplete DOM setup.
@@ -990,7 +993,7 @@ export const Tutorial = (() => {
      * Build a mini-tip element.
      * @param {string} routeName - Route name
      * @param {string} tipId - Tip id
-     * @param {object} tip - Tip config
+     * @param {TutorialStep} tip - Tip config
      * @returns {HTMLElement}
      */
     function buildMiniTipNode(routeName, tipId, tip) {
@@ -1029,7 +1032,7 @@ export const Tutorial = (() => {
 
     /**
      * Resolve mini-tip target.
-     * @param {object} tip - Tip config
+     * @param {TutorialStep} tip - Tip config
      * @returns {Element|null}
      */
     function resolveMiniTipTarget(tip) {
@@ -1188,7 +1191,7 @@ export const Tutorial = (() => {
     /**
      * Read route tutorial steps from the imported TutorialSteps config.
      * @param {string} routeName - Route name
-     * @returns {object[]}
+     * @returns {TutorialStep[]}
      */
     function getRouteSteps(routeName) {
         return getRouteConfigItems(TutorialSteps, routeName);
@@ -1197,7 +1200,7 @@ export const Tutorial = (() => {
     /**
      * Read route mini-tip callouts from the imported TutorialMiniTips config.
      * @param {string} routeName - Route name
-     * @returns {object[]}
+     * @returns {TutorialStep[]}
      */
     function getRouteMiniTips(routeName) {
         return getRouteConfigItems(TutorialMiniTips, routeName);
@@ -1205,9 +1208,9 @@ export const Tutorial = (() => {
 
     /**
      * Read route-scoped items from a tutorial config object.
-     * @param {object[]|{[key: string]: object[]}|undefined} config - Route config source
+     * @param {TutorialStep[]|{[key: string]: TutorialStep[]}|undefined} config - Config source
      * @param {string} routeName - Route name
-     * @returns {object[]}
+     * @returns {TutorialStep[]}
      */
     function getRouteConfigItems(config, routeName) {
         /* v8 ignore next 3 */

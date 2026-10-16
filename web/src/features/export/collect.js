@@ -259,7 +259,10 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
                         return;
                     }
                     /* v8 ignore next */
-                    const payload = message.payload || {};
+                    const payload =
+                        /** @type {{insights?: {insights?: object[], tip?: object|null}, view?: {networkGrowth?: object}|null}} */ (
+                            message.payload || {}
+                        );
                     const insights = payload.insights || {};
                     finish({
                         insights: insights.insights || [],

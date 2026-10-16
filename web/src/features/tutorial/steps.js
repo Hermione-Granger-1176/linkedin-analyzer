@@ -1,5 +1,35 @@
 /* Tutorial steps by route */
 
+/** @typedef {string|Element} TutorialTargetRef - A CSS selector or an element */
+
+/**
+ * One tutorial step or mini-tip callout. Text and targets are read from the
+ * first of their alias fields that is set, so hand-written configs may use
+ * either name.
+ * @typedef {object} TutorialStep
+ * @property {string} [id] - Stable step ID
+ * @property {string} [key] - Mini-tip ID alias
+ * @property {string} [route] - Route the step belongs to
+ * @property {string} [title] - Heading text
+ * @property {string} [heading] - Heading text alias
+ * @property {string} [body] - Body text
+ * @property {string} [text] - Body text alias
+ * @property {string} [content] - Body text alias
+ * @property {string} [description] - Body text alias
+ * @property {string} [message] - Mini-tip body text alias
+ * @property {TutorialTargetRef|TutorialTargetRef[]} [target] - Primary target
+ * @property {TutorialTargetRef|TutorialTargetRef[]} [selector] - Primary target alias
+ * @property {TutorialTargetRef|TutorialTargetRef[]} [el] - Primary target alias
+ * @property {TutorialTargetRef|TutorialTargetRef[]} [fallbackTarget] - Fallback target
+ * @property {TutorialTargetRef|TutorialTargetRef[]} [fallbackSelector] - Fallback alias
+ * @property {TutorialTargetRef|TutorialTargetRef[]} [fallbackEl] - Fallback alias
+ * @property {string} [placement] - Preferred popover placement
+ * @property {string} [arrowStyle] - Named pointer arrow variant
+ * @property {boolean} [allowSkip] - False hides Skip
+ * @property {boolean} [allowBack] - False hides Back
+ * @property {boolean} [allowNext] - False hides Next
+ */
+
 /**
  * Build the Save as PDF step for a route.
  *
@@ -9,7 +39,7 @@
  * changes, and the fallback each route falls back to when the button is not
  * rendered yet.
  * @param {{route: string, title: string, body: string, fallbackTarget: string}} config - Route-specific wording and fallback
- * @returns {object} Tutorial step
+ * @returns {TutorialStep} Tutorial step
  */
 function createPdfExportStep(config) {
     return {

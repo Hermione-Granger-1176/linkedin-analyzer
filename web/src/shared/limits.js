@@ -42,3 +42,10 @@ export const MAX_CSV_CHARS = LIMITS.maxCsvChars;
 
 /** Maximum CSV rows the parser accepts. */
 export const MAX_CSV_ROWS = LIMITS.maxCsvRows;
+
+/**
+ * Largest file the Clean screen turns into an Excel workbook. The workbook is
+ * built whole in memory at about 25 bytes of heap per byte of file, so larger
+ * files download as cleaned CSV instead.
+ */
+export const EXCEL_EXPORT_MAX_BYTES = 10 * MIB;

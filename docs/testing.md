@@ -233,6 +233,19 @@ Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
 - Cleaned message rows are the largest structure, about 1.65 bytes of heap per byte of `messages.csv`. They live only inside the messages worker, so they set its peak, not the page's.
 - The connection state is now the largest thing the page keeps.
 
+### Export memory
+
+`make bench-browser export=excel` adds one cleaned `messages.csv` Excel download from the Clean screen after Messages is ready; `export=pdf` adds a PDF export with message bodies and `export=pdf-summary` one without. The run reports the export time and the combined peak while it runs, which includes every worker still alive. Measured on 2026-10-16 after step 4d, one run each at `cpu=1`:
+
+| Export      | 10 MB export   | 30 MB export   | 100 MB export    |
+| ----------- | -------------- | -------------- | ---------------- |
+| Excel       | 2.62 s, 191 MB | 7.64 s, 610 MB | 29.22 s, 1281 MB |
+| PDF, bodies | 2.47 s, 162 MB | 5.75 s, 458 MB | 18.08 s, 1114 MB |
+| PDF summary | not measured   | not measured   | 15.00 s, 1927 MB |
+
+- The Excel workbook costs about 25 MB of heap per MB of `messages.csv`, almost all on the page, so it would pass the 300 MB budget only up to about 12 MB. The Clean screen now builds workbooks only for files up to 10 MiB, says why for larger ones, and offers a cleaned CSV that it writes in 2,000-row parts into a `Blob`, so no single string holds the whole file.
+- Both PDF exports go over the budget at 100 MB, with or without message bodies. Most of the peak is the stored text read back from IndexedDB and the analysis workers that are still alive, not the bodies, so the PDF limit waits for step 4e, which stops storing and passing decoded text.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

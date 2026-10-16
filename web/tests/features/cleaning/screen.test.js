@@ -23,7 +23,12 @@ vi.mock("../../../src/platform/persistence/data-cache.js", () => {
 });
 
 vi.mock("../../../src/features/cleaning/excel.js", () => ({
-    ExcelGenerator: { generateAndDownload: vi.fn() },
+    ExcelGenerator: { download: vi.fn(), generateAndDownload: vi.fn() },
+}));
+
+vi.mock("../../../src/features/cleaning/csv-export.js", () => ({
+    buildCleanedCsvBlob: vi.fn(() => new Blob(["csv"])),
+    cleanedCsvName: vi.fn((type) => `${type}.csv`),
 }));
 
 vi.mock("../../../src/platform/persistence/session.js", () => ({
@@ -43,6 +48,7 @@ vi.mock("../../../src/shared/ui/mascot.js", () => ({
 }));
 
 let CleanPage;
+let CsvExport;
 let DataCache;
 let ExcelGenerator;
 let LinkedInCleaner;
@@ -66,6 +72,7 @@ describe("CleanPage", () => {
             </section>
             <section id="cleanDownloadSection" hidden></section>
             <button id="cleanDownloadBtn"></button>
+            <button id="cleanCsvBtn"></button>
             <div id="cleanErrorMessage" hidden><span id="cleanErrorText"></span></div>
             <label><input type="radio" name="cleanFileType" value="shares" checked /></label>
             <label><input type="radio" name="cleanFileType" value="comments" /></label>
@@ -75,6 +82,7 @@ describe("CleanPage", () => {
 
         vi.resetModules();
         ({ CleanPage } = await import("../../../src/features/cleaning/screen.js"));
+        CsvExport = await import("../../../src/features/cleaning/csv-export.js");
         ({ DataCache } = await import("../../../src/platform/persistence/data-cache.js"));
         ({ ExcelGenerator } = await import("../../../src/features/cleaning/excel.js"));
         ({ LinkedInCleaner } = await import("../../../src/features/cleaning/cleaner.js"));
@@ -89,6 +97,8 @@ describe("CleanPage", () => {
         LinkedInCleaner.process.mockReset();
         ExcelGenerator.generateAndDownload.mockReset();
         ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
+        ExcelGenerator.download.mockReset();
+        CsvExport.buildCleanedCsvBlob.mockClear();
         captureError.mockReset();
         celebrateDownload.mockReset();
     });
@@ -196,6 +206,81 @@ describe("CleanPage", () => {
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
         expect(document.getElementById("cleanErrorText").textContent).toContain("Failed");
         expect(celebrateDownload).not.toHaveBeenCalled();
+    });
+
+    it("refuses an Excel file over the export limit and points to CSV", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 3 }]);
+        Storage.getFile.mockResolvedValue({ text: "x".repeat(10 * 1024 * 1024 + 1) });
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanDownloadBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(ExcelGenerator.generateAndDownload).not.toHaveBeenCalled();
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "over 10 MB, too large to build an Excel file",
+        );
+        expect(captureError).not.toHaveBeenCalled();
+    });
+
+    it("downloads the cleaned rows as CSV and celebrates", async () => {
+        const cleanedData = [{ Title: "Hello", Link: "https://example.com" }];
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 4 }]);
+        LinkedInCleaner.process.mockReturnValue({ success: true, rowCount: 1, cleanedData });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanCsvBtn").click();
+
+        expect(CsvExport.buildCleanedCsvBlob).toHaveBeenCalledWith(cleanedData, "shares");
+        expect(ExcelGenerator.download).toHaveBeenCalledWith(expect.any(Blob), "shares.csv");
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+        expect(celebrateDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports CSV generation errors", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 5 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
+        });
+        CsvExport.buildCleanedCsvBlob.mockImplementationOnce(() => {
+            throw new Error("boom");
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanCsvBtn").click();
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Error generating CSV",
+        );
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "clean",
+            operation: "csv-generate",
+            fileType: "shares",
+        });
+        expect(celebrateDownload).not.toHaveBeenCalled();
+    });
+
+    it("shows an error when a CSV download is attempted with no cached data", async () => {
+        Storage.getAllFiles.mockResolvedValue([]);
+
+        await CleanPage.init();
+        document.getElementById("cleanCsvBtn").click();
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "No data to download",
+        );
+        expect(CsvExport.buildCleanedCsvBlob).not.toHaveBeenCalled();
     });
 
     it("shows an error when download is attempted with no cached data", async () => {

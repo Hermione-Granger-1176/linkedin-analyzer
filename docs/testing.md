@@ -193,6 +193,14 @@ At 100 MB, measured with the `measurement` build's higher limits before step 4b 
 - At 100 MB the workers hold about 800 MB of the peak and the page about 150 MB, roughly three times the 300 MB budget. Heap grows faster than linearly between 55 and 100 MB.
 - The Python CLI peaks at 1.44 GB RSS on a 107 MiB `messages.csv` from a 128 MiB synthetic export (`make audit-memory-python`), 399 MB on its 10.7 MiB `Connections.csv`, and under 200 MB on the shares and comments files.
 
+After step 4b (the analytics worker reads the uploaded `File` itself), 3 runs at `cpu=1` on the same machine and export:
+
+| Size   | Options | Analytics ready    | Messages ready     | Cached filter    | Peak heap          |
+| ------ | ------- | ------------------ | ------------------ | ---------------- | ------------------ |
+| 100 MB | `cpu=1` | 7.09 s (7.09-7.24) | 7.54 s (7.53-7.72) | 179 ms (144-188) | 1000 MB (997-1001) |
+
+- The workers now hold about 670 MB and the page about 330 MB. The page still receives the decoded text back from the worker for storage, so the total peak did not fall; step 4e removes that copy.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

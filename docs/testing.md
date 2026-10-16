@@ -130,6 +130,7 @@ make bench
 make bench-decode
 make audit-memory-python
 make audit-memory-browser local_libs=1
+make audit-state
 make explore
 ```
 
@@ -208,6 +209,29 @@ After step 4c (the analytics worker parses and cleans each chunk as it streams),
 | 100 MB | `cpu=1` | 6.34 s (6.15-7.04) | 6.79 s (6.59-7.44) | 155 ms (155-185) | 1177 MB (1174-1181) |
 
 - Analytics is about 0.75 s faster, but the workers now peak near 845 MB. Cleaned cells are slices of the decoded chunks, so the chunks stay alive, and the worker still joins them into one more full string to return to the page. Step 4e stops returning the text, which removes that copy.
+
+### Retained analysis state
+
+`make audit-state` forces garbage collection around each step and reports how many bytes of heap and array-buffer memory each structure keeps alive. It loads the web modules in `measurement` mode, so a 100 MB export passes the raised limits. Cleaned rows are transient: a worker holds them only while it builds state. The page keeps the message and connection state, and the analytics worker keeps its analytics state for filter changes. Field rows show what dropping that field frees, in table order.
+
+Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
+
+| Structure                    | 10 MB   | 55 MB   | 100 MB   | 100 MB before 4d |
+| ---------------------------- | ------- | ------- | -------- | ---------------- |
+| Cleaned message rows         | 14.0 MB | 76.9 MB | 138.7 MB | 138.6 MB         |
+| Cleaned connection rows      | 2.5 MB  | 13.4 MB | 24.8 MB  | 24.8 MB          |
+| Cleaned share rows           | 1.3 MB  | 6.8 MB  | 11.1 MB  | 11.1 MB          |
+| Cleaned comment rows         | 0.7 MB  | 3.7 MB  | 5.8 MB   | 5.8 MB           |
+| Page message and connections | 6.7 MB  | 23.6 MB | 39.0 MB  | 104.9 MB         |
+| Connection state             | 3.2 MB  | 17.2 MB | 31.1 MB  | 31.1 MB          |
+| Message events               | 0.8 MB  | 2.6 MB  | 4.4 MB   | 64.8 MB          |
+| Message row timestamps       | 0.3 MB  | 1.5 MB  | 2.7 MB   | 8.1 MB           |
+| Message contacts             | 1.2 MB  | 1.2 MB  | 1.2 MB   | 1.2 MB           |
+| Analytics state              | 3.4 MB  | 10.3 MB | 17.7 MB  | 17.7 MB          |
+
+- Storing message events as typed-array columns cut the page's message state at 100 MB from 105 MB to 39 MB. Events went from one object per message to an `Int32Array` of contact IDs and a `Float64Array` of timestamps, which the worker transfers instead of copying.
+- Cleaned message rows are the largest structure, about 1.65 bytes of heap per byte of `messages.csv`. They live only inside the messages worker, so they set its peak, not the page's.
+- The connection state is now the largest thing the page keeps.
 
 ## Run documentation and repository checks
 

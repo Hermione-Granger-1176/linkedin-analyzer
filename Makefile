@@ -345,7 +345,7 @@ web-e2e-container: test-e2e-container ## Alias for test-e2e-container
 # cross-runtime row dumps use a private temporary directory and are always removed.
 # See docs/development.md (Local checks and benchmarks).
 
-.PHONY: cleaner-diff xrt-diff bench bench-decode audit-memory-python audit-memory-browser bench-browser explore
+.PHONY: cleaner-diff xrt-diff bench bench-decode audit-memory-python audit-memory-browser audit-state bench-browser explore
 
 cleaner-diff: ## Compare web cleaner behavior across refs (make cleaner-diff [args="oldRef newRef"] [strict=1] [input_dir=path])
 	$(NODE) scripts/checks/cleaner-diff.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") $(args)
@@ -369,6 +369,9 @@ audit-memory-python: ## Measure per-cleaner peak RSS on your export (make audit-
 
 audit-memory-browser: ## Measure browser JS heap on your export in Chromium (make audit-memory-browser local_libs=1 [strict=1] [input_dir=path])
 	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/heap-audit.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
+
+audit-state: ## Measure retained bytes of each analysis structure on your export (make audit-state [strict=1] [input_dir=path])
+	$(NODE) --expose-gc scripts/checks/state-audit.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
 
 bench-browser: ## Time upload to Analytics and Messages in Chromium with a heap budget (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [budget_mb=N] [local_libs=1])
 	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)")

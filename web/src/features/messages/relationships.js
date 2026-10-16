@@ -11,20 +11,23 @@ import { MS_PER_DAY } from "./format.js";
  */
 export function getTopContactsInRange(messageState, rangeStart) {
     const rangeCounts = new Map();
+    const { contactKeys, contactIds, timestamps } = messageState.events;
 
-    for (const event of messageState.events) {
-        if (rangeStart && event.timestamp < rangeStart) {
+    for (let index = 0; index < timestamps.length; index += 1) {
+        const timestamp = timestamps[index];
+        if (rangeStart && timestamp < rangeStart) {
             continue;
         }
-        const existing = rangeCounts.get(event.contactKey);
+        const contactKey = contactKeys[contactIds[index]];
+        const existing = rangeCounts.get(contactKey);
         if (existing) {
             existing.count += 1;
-            existing.lastTimestamp = Math.max(existing.lastTimestamp, event.timestamp);
+            existing.lastTimestamp = Math.max(existing.lastTimestamp, timestamp);
             continue;
         }
-        rangeCounts.set(event.contactKey, {
+        rangeCounts.set(contactKey, {
             count: 1,
-            lastTimestamp: event.timestamp,
+            lastTimestamp: timestamp,
         });
     }
 

@@ -47,8 +47,8 @@ export const MessagesPage = (() => {
     /**
      * @typedef {object} MessageState
      * @property {Map<string, MessageContact>} contacts
-     * @property {Array<{contactKey: string, timestamp: number}>} events
-     * @property {number[]} rowTimestamps
+     * @property {{contactKeys: string[], contactIds: Int32Array, timestamps: Float64Array}} events
+     * @property {Float64Array} rowTimestamps
      * @property {number} skippedRows
      * @property {Set<string>} talkedNameKeys
      * @property {Set<string>} talkedUrlKeys
@@ -341,7 +341,7 @@ export const MessagesPage = (() => {
             } else {
                 state.messageState = buildMessageState(messagesData);
             }
-            if (!state.messageState.events.length) {
+            if (!state.messageState.events.timestamps.length) {
                 clearComputedState();
                 state.loadedSignature = signature;
                 setEmptyState(

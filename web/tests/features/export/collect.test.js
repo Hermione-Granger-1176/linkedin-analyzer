@@ -23,6 +23,7 @@ import { captureError } from "../../../src/platform/observability/sentry.js";
 import { DataCache } from "../../../src/platform/persistence/data-cache.js";
 import { Storage } from "../../../src/platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../../src/shared/constants.js";
+import { compactEvents } from "../../helpers/message-events.js";
 import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
@@ -242,11 +243,11 @@ function messagesState(withConnections) {
                     lastTimestamp: LAST_MESSAGE_MS,
                 },
             ],
-            events: [
+            events: compactEvents([
                 { contactKey: ADA_KEY, timestamp: LAST_MESSAGE_MS },
                 { contactKey: ADA_KEY, timestamp: LAST_MESSAGE_MS - DAY_MS },
-            ],
-            rowTimestamps: [LAST_MESSAGE_MS, LAST_MESSAGE_MS - DAY_MS],
+            ]),
+            rowTimestamps: Float64Array.of(LAST_MESSAGE_MS, LAST_MESSAGE_MS - DAY_MS),
             talkedNameKeys: ["ada lovelace"],
             talkedUrlKeys: [ADA_URL],
             latestTimestamp: LAST_MESSAGE_MS,
@@ -306,11 +307,13 @@ function crowdedMessagesState() {
     return {
         messageState: hydrateMessageState({
             contacts,
-            events: contacts.map((contact) => ({
-                contactKey: contact.key,
-                timestamp: LAST_MESSAGE_MS,
-            })),
-            rowTimestamps: contacts.map(() => LAST_MESSAGE_MS),
+            events: compactEvents(
+                contacts.map((contact) => ({
+                    contactKey: contact.key,
+                    timestamp: LAST_MESSAGE_MS,
+                })),
+            ),
+            rowTimestamps: Float64Array.from(contacts, () => LAST_MESSAGE_MS),
             talkedNameKeys: contacts.map((contact) => contact.name.toLowerCase()),
             talkedUrlKeys: contacts.map((contact) => contact.url),
             latestTimestamp: LAST_MESSAGE_MS,
@@ -1290,8 +1293,8 @@ describe("collectExportData", () => {
         loadMessagesState.mockResolvedValue({
             messageState: hydrateMessageState({
                 contacts: [],
-                events: [],
-                rowTimestamps: [],
+                events: compactEvents([]),
+                rowTimestamps: Float64Array.of(),
                 latestTimestamp: LAST_MESSAGE_MS,
             }),
             connectionState: null,
@@ -1308,7 +1311,11 @@ describe("collectExportData", () => {
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
         loadConnectionsData.mockResolvedValue(connectionsData(connectionsCsv()));
         loadMessagesState.mockResolvedValue({
-            messageState: hydrateMessageState({ contacts: [], events: [], rowTimestamps: [] }),
+            messageState: hydrateMessageState({
+                contacts: [],
+                events: compactEvents([]),
+                rowTimestamps: Float64Array.of(),
+            }),
             connectionState: null,
         });
 
@@ -1340,8 +1347,8 @@ describe("collectExportData", () => {
                         lastTimestamp: LAST_MESSAGE_MS,
                     },
                 ],
-                events: [{ contactKey: ADA_KEY, timestamp: LAST_MESSAGE_MS }],
-                rowTimestamps: [LAST_MESSAGE_MS],
+                events: compactEvents([{ contactKey: ADA_KEY, timestamp: LAST_MESSAGE_MS }]),
+                rowTimestamps: Float64Array.of(LAST_MESSAGE_MS),
                 latestTimestamp: LAST_MESSAGE_MS,
             }),
             connectionState: null,

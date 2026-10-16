@@ -7,6 +7,7 @@ import {
 } from "../../../src/features/export/messages-transport.js";
 import { MessagesAnalytics } from "../../../src/features/messages/analytics.js";
 import { captureError } from "../../../src/platform/observability/sentry.js";
+import { compactEvents } from "../../helpers/message-events.js";
 import { createWorkerHarness } from "../../helpers/mock-worker.js";
 import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
@@ -47,8 +48,8 @@ const WORKER_MESSAGE_STATE = Object.freeze({
             lastTimestamp: 1735725600000,
         },
     ],
-    events: [{ contactKey: `url:${ADA_URL}`, timestamp: 1735725600000 }],
-    rowTimestamps: [1735725600000],
+    events: compactEvents([{ contactKey: `url:${ADA_URL}`, timestamp: 1735725600000 }]),
+    rowTimestamps: Float64Array.of(1735725600000),
     skippedRows: 1,
     talkedNameKeys: ["ada lovelace"],
     talkedUrlKeys: [ADA_URL],

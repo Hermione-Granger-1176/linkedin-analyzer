@@ -591,7 +591,7 @@ function listTitle(label, total) {
  *
  * Empty when nothing was sent or received in the window: a year of zeroes drawn
  * as a flat line is the empty axes the layout engine drops a chart to avoid.
- * @param {number[]} rowTimestamps - Timestamp of every message the parse kept
+ * @param {Float64Array} rowTimestamps - Timestamp of every message the parse kept
  * @param {MonthWindow} monthWindow - Months the dashboard covers
  * @returns {Array<{key: string, label: string, value: number}>} Points, oldest first
  */

@@ -76,6 +76,20 @@ function serializeMessageState(state) {
 }
 
 /**
+ * List the typed-array buffers in a processed payload, so posting it moves
+ * them to the page instead of copying them.
+ * @param {{messageState?: object|null}} payload - Processed payload
+ * @returns {ArrayBuffer[]}
+ */
+function transferablesOf(payload) {
+    if (!payload.messageState) {
+        return [];
+    }
+    const { events, rowTimestamps } = payload.messageState;
+    return [events.contactIds.buffer, events.timestamps.buffer, rowTimestamps.buffer];
+}
+
+/**
  * Serialize connection state for structured clone.
  * @param {object} state - Connection state with Maps
  * @returns {object}
@@ -148,7 +162,7 @@ function extractWorkerRejection(event) {
     return event.reason;
 }
 
-/* v8 ignore next 16 */
+/* v8 ignore next 19 */
 if (typeof self !== "undefined") {
     self.addEventListener("message", (event) => {
         const rawMessage = event.data || {};
@@ -165,11 +179,14 @@ if (typeof self !== "undefined") {
         const message = parsed.value;
         try {
             const payload = processPayload(message.payload);
-            self.postMessage({
-                type: "processed",
-                requestId: message.requestId,
-                payload,
-            });
+            self.postMessage(
+                {
+                    type: "processed",
+                    requestId: message.requestId,
+                    payload,
+                },
+                transferablesOf(payload),
+            );
         } catch (error) {
             postProcessedError(message.requestId, error);
         }
@@ -184,4 +201,4 @@ if (typeof self !== "undefined") {
     });
 }
 
-export { processPayload };
+export { processPayload, transferablesOf };

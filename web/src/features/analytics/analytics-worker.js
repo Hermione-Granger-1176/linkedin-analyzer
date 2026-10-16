@@ -2,6 +2,7 @@
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { readFileAsText } from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -14,6 +15,18 @@ const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
 const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments", "connections"]);
 const WORKER_REQUEST_TYPES = new Set(["addFile", "restoreFiles", "initBase", "view", "clear"]);
+// Reading the file fills this share of the progress bar, after the first 5%.
+const READ_PROGRESS_START = 0.05;
+const READ_PROGRESS_SPAN = 0.3;
+// Post a read progress update only when it moves the bar at least this much.
+const READ_PROGRESS_STEP = 0.01;
+
+// Requests run one at a time in arrival order, because reading a file is
+// asynchronous. Clear runs at once instead: it aborts the read in flight and
+// bumps the epoch so requests queued before it are skipped.
+let requestQueue = Promise.resolve();
+let requestEpoch = 0;
+let activeRead = null;
 
 /**
  * Normalize raw filter values into a safe, complete filter object.
@@ -122,7 +135,7 @@ function hydrateAnalytics(base) {
  * analytics engine, which never interpolate row/cell content) so the value that
  * `analytics-ui` forwards to Sentry can never carry user data. `worker-contracts`
  * also length-caps it on receipt.
- * @param {number} requestId - ID of the originating request
+ * @param {number|string} requestId - ID of the originating request
  * @param {string} message - Human-readable error description
  */
 function postError(requestId, message) {
@@ -164,21 +177,81 @@ function cacheView(key, payload) {
 }
 
 /**
- * Process an uploaded CSV file: parse, clean, recompute analytics, and reply.
- * @param {{csvText: string, fileName: string, jobId?: string, totalSize?: number}} payload - File content and name
+ * Read an uploaded file in the worker, reporting bytes read as progress.
+ * Resolves null when a clear cancels the read.
+ * @param {File} file - Uploaded file
+ * @param {string|null} jobId - Upload job ID
+ * @param {string} fileName - Uploaded file name
+ * @returns {Promise<{text: string, usedFallback: boolean}|null>}
  */
-function handleAddFile(payload) {
-    const { csvText = "", fileName = "", jobId = null } = payload || {};
+async function readUpload(file, jobId, fileName) {
+    const controller = new AbortController();
+    activeRead = controller;
+    let lastPercent = READ_PROGRESS_START;
+    const onProgress = (bytesRead, totalBytes) => {
+        const fraction = totalBytes > 0 ? Math.min(bytesRead / totalBytes, 1) : 1;
+        const percent = READ_PROGRESS_START + READ_PROGRESS_SPAN * fraction;
+        if (percent - lastPercent < READ_PROGRESS_STEP && fraction < 1) {
+            return;
+        }
+        lastPercent = percent;
+        self.postMessage({
+            type: "progress",
+            payload: { jobId, fileName, percent, bytesRead, totalBytes },
+        });
+    };
+    try {
+        return await readFileAsText(file, { signal: controller.signal, onProgress });
+    } catch (error) {
+        if (controller.signal.aborted) {
+            return null;
+        }
+        throw error;
+    } finally {
+        if (activeRead === controller) {
+            activeRead = null;
+        }
+    }
+}
+
+/**
+ * Process an uploaded CSV file: read, parse, clean, recompute analytics, and
+ * reply. The page posts the File so the read happens here, off the main
+ * thread; the decoded text goes back with the result for the page to store.
+ * @param {{file?: File|null, csvText?: string, fileName: string, jobId?: string|null, totalSize?: number}} payload - File and name
+ * @returns {Promise<void>}
+ */
+async function handleAddFile(payload) {
+    const { file = null, fileName = "", jobId = null } = payload || {};
+    let { csvText = "" } = payload || {};
+    let usedFallback = false;
 
     self.postMessage({
         type: "progress",
-        payload: { jobId, fileName, percent: 0.05 },
+        payload: { jobId, fileName, percent: READ_PROGRESS_START },
     });
 
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: 0.12 },
-    });
+    if (file) {
+        let read;
+        try {
+            read = await readUpload(file, jobId, fileName);
+        } catch (error) {
+            self.postMessage({
+                type: "fileProcessed",
+                payload: {
+                    error: toErrorMessage(error) || "Error reading file. Please try again.",
+                    jobId,
+                    fileName,
+                },
+            });
+            return;
+        }
+        if (!read) {
+            return;
+        }
+        csvText = read.text;
+        usedFallback = read.usedFallback;
+    }
 
     const processed = LinkedInCleaner.process(csvText, "auto");
     if (!processed.success) {
@@ -234,6 +307,8 @@ function handleAddFile(payload) {
             rowCount: processed.rowCount,
             analyticsBase,
             hasData: hasAnalyticsData(),
+            csvText,
+            usedFallback,
         },
     });
 }
@@ -376,39 +451,78 @@ function handleClear() {
     self.postMessage({ type: "cleared" });
 }
 
-self.addEventListener("message", (event) => {
+/**
+ * Cancel the read in flight and skip every request queued before now.
+ */
+function cancelPendingRequests() {
+    requestEpoch += 1;
+    if (activeRead) {
+        activeRead.abort();
+    }
+}
+
+/**
+ * Run a request after the ones before it, unless a clear arrives first.
+ * @param {() => unknown} run - Request handler
+ * @param {number|string} requestId - ID reported with a failure
+ * @returns {Promise<void>}
+ */
+function enqueueRequest(run, requestId) {
+    const epoch = requestEpoch;
+    requestQueue = requestQueue.then(async () => {
+        if (epoch !== requestEpoch) {
+            return;
+        }
+        try {
+            await run();
+        } catch (error) {
+            postError(requestId || 0, toErrorMessage(error));
+        }
+    });
+    return requestQueue;
+}
+
+/**
+ * Dispatch one raw worker message.
+ * @param {MessageEvent} event - Worker message event
+ * @returns {Promise<void>|undefined}
+ */
+function handleMessage(event) {
     const rawMessage = event.data || {};
     const type = rawMessage && typeof rawMessage.type === "string" ? rawMessage.type : "";
     if (!WORKER_REQUEST_TYPES.has(type)) {
-        return;
+        return undefined;
     }
 
     const parsed = parseAnalyticsWorkerRequest(rawMessage);
     /* v8 ignore next 4 */
     if (!parsed.valid) {
         postError(0, parsed.error || "Invalid analytics worker message.");
-        return;
+        return undefined;
     }
 
     const message = parsed.value;
-    /* v8 ignore next 6 */
+    if (message.type === "clear") {
+        cancelPendingRequests();
+        handleClear();
+        return undefined;
+    }
+    /* v8 ignore next 5 */
     const handlers = {
         addFile: () => handleAddFile(message.payload),
         restoreFiles: () => handleRestoreFiles(message.payload),
         initBase: () => handleInitBase(message.payload),
         view: () => handleView(message.requestId, message.filters),
-        clear: () => handleClear(),
     };
     const handler = handlers[message.type];
-    /* v8 ignore next */
-    if (handler) {
-        try {
-            handler();
-        } catch (error) {
-            postError(message.requestId || 0, toErrorMessage(error));
-        }
+    /* v8 ignore next 3 */
+    if (!handler) {
+        return undefined;
     }
-});
+    return enqueueRequest(handler, message.requestId);
+}
+
+self.addEventListener("message", handleMessage);
 
 self.addEventListener("error", (event) => {
     /* v8 ignore next */

@@ -388,14 +388,14 @@ describe("handleAddFile", () => {
         handleClear();
     });
 
-    it("posts progress then fileProcessed message for a valid shares file", () => {
+    it("posts progress then fileProcessed message for a valid shares file", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("shares");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "header\nrow1", fileName: "shares.csv" });
+        await handleAddFile({ csvText: "header\nrow1", fileName: "shares.csv" });
 
         const progressMsgs = messages.filter((m) => m.type === "progress");
         expect(progressMsgs.length).toBeGreaterThanOrEqual(2);
@@ -407,14 +407,14 @@ describe("handleAddFile", () => {
         expect(processed.payload.hasData).toBe(true);
     });
 
-    it("posts progress then fileProcessed message for a valid comments file", () => {
+    it("posts progress then fileProcessed message for a valid comments file", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("comments");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "header\nrow1", fileName: "comments.csv" });
+        await handleAddFile({ csvText: "header\nrow1", fileName: "comments.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
@@ -422,27 +422,27 @@ describe("handleAddFile", () => {
         expect(processed.payload.hasData).toBe(true);
     });
 
-    it("posts fileProcessed with error when LinkedInCleaner fails", () => {
+    it("posts fileProcessed with error when LinkedInCleaner fails", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         LinkedInCleaner.process.mockReturnValue({ success: false, error: "Bad format" });
 
-        handleAddFile({ csvText: "garbage", fileName: "bad.csv" });
+        await handleAddFile({ csvText: "garbage", fileName: "bad.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
         expect(processed.payload.error).toBeTruthy();
     });
 
-    it("recomputes analytics and posts a base for a connections file", () => {
+    it("recomputes analytics and posts a base for a connections file", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("connections");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "header\nrow1", fileName: "connections.csv" });
+        await handleAddFile({ csvText: "header\nrow1", fileName: "connections.csv" });
 
         expect(AnalyticsEngine.compute).toHaveBeenCalled();
         const processed = messages.find((m) => m.type === "fileProcessed");
@@ -450,7 +450,7 @@ describe("handleAddFile", () => {
         expect(processed.payload.analyticsBase).not.toBeNull();
     });
 
-    it("posts fileProcessed with error for unknown fileType", () => {
+    it("posts fileProcessed with error for unknown fileType", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -461,7 +461,7 @@ describe("handleAddFile", () => {
             rowCount: 0
         });
 
-        handleAddFile({ csvText: "something", fileName: "messages.csv" });
+        await handleAddFile({ csvText: "something", fileName: "messages.csv" });
 
         // analyticsBase should be null since fileType is not shares/comments
         const processed = messages.find((m) => m.type === "fileProcessed");
@@ -469,20 +469,106 @@ describe("handleAddFile", () => {
         expect(processed.payload.analyticsBase).toBeNull();
     });
 
-    it("passes jobId through to progress and fileProcessed messages", () => {
+    it("passes jobId through to progress and fileProcessed messages", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("shares");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "data", fileName: "shares.csv", jobId: "job-123" });
+        await handleAddFile({ csvText: "data", fileName: "shares.csv", jobId: "job-123" });
 
         messages.forEach((m) => {
             if (m.payload && "jobId" in m.payload) {
                 expect(m.payload.jobId).toBe("job-123");
             }
         });
+    });
+});
+
+describe("handleAddFile with an uploaded File", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        makePostMessageCapture();
+        handleClear();
+    });
+
+    it("reads the File, reports bytes read, and returns the decoded text", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+
+        const file = new File(["col\nval"], "Shares.csv");
+        await handleAddFile({ file, fileName: "Shares.csv", jobId: "job-1" });
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("col\nval", "auto");
+        const readProgress = messages.find((m) => m.type === "progress" && m.payload.bytesRead);
+        expect(readProgress.payload).toMatchObject({ bytesRead: 7, totalBytes: 7, percent: 0.35 });
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ csvText: "col\nval", usedFallback: false });
+    });
+
+    it("reports a windows-1252 fallback", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+
+        await handleAddFile({ file: new File([new Uint8Array([0xe9])], "a.csv"), fileName: "a.csv" });
+
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ csvText: "é", usedFallback: true });
+    });
+
+    it("skips progress updates too small to move the bar", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+        const chunks = [new Uint8Array(1), new Uint8Array(1), new Uint8Array(998)];
+        let index = 0;
+        const file = {
+            name: "Shares.csv",
+            size: 6 * 1024 * 1024,
+            stream: () => ({
+                getReader: () => ({
+                    read: () =>
+                        Promise.resolve(
+                            index < chunks.length
+                                ? { done: false, value: chunks[index++] }
+                                : { done: true, value: undefined },
+                        ),
+                    cancel: () => Promise.resolve(),
+                }),
+            }),
+        };
+
+        await handleAddFile({ file, fileName: "Shares.csv" });
+
+        // Only reads that move the bar a full step are posted: none of these do.
+        expect(messages.filter((m) => m.type === "progress" && m.payload.bytesRead)).toEqual([]);
+    });
+
+    it("posts fileProcessed with the read error", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        const file = {
+            name: "Shares.csv",
+            size: 6 * 1024 * 1024,
+            stream: () => ({
+                getReader: () => ({
+                    read: () => Promise.reject(new Error("disk gone")),
+                    cancel: () => Promise.resolve(),
+                }),
+            }),
+        };
+
+        await handleAddFile({ file, fileName: "Shares.csv", jobId: "job-2" });
+
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toEqual({ error: "disk gone", jobId: "job-2", fileName: "Shares.csv" });
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
     });
 });
 
@@ -653,10 +739,65 @@ describe("message event dispatcher", () => {
         LC.process.mockReturnValue({ success: false, error: "bad" });
         AE.compute.mockReturnValue(makeAnalytics());
 
-        handlers.message({ data: { type: "addFile", payload: { csvText: "x", fileName: "f.csv" } } });
+        await handlers.message({ data: { type: "addFile", payload: { csvText: "x", fileName: "f.csv" } } });
 
         const processed = posted.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
+    });
+
+    it("cancels the read in flight and skips queued requests on clear", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockClear();
+
+        const file = new File(["col\nval"], "Shares.csv");
+        const inFlight = handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+        const queued = handlers.message({ data: { type: "restoreFiles", payload: { sharesCsv: "a" } } });
+        // Let the first request start its read before clearing.
+        await Promise.resolve();
+        await Promise.resolve();
+        handlers.message({ data: { type: "clear" } });
+        await inFlight;
+        await queued;
+
+        const types = posted.map((m) => m.type);
+        expect(types).toContain("cleared");
+        expect(types).not.toContain("fileProcessed");
+        expect(types).not.toContain("restored");
+        expect(LC.process).not.toHaveBeenCalled();
+
+        // Requests after the clear run as normal.
+        await handlers.message({ data: { type: "initBase", payload: null } });
+        expect(posted.at(-1).type).toBe("init");
+    });
+
+    it("runs requests one at a time in arrival order", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockReturnValue({ success: false, error: "bad" });
+
+        const file = new File(["col\nval"], "Shares.csv");
+        handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+        await handlers.message({ data: { type: "initBase", payload: null } });
+
+        const types = posted.map((m) => m.type).filter((type) => type !== "progress");
+        expect(types).toEqual(["fileProcessed", "init"]);
     });
 
     it("ignores unknown message types without throwing", async () => {
@@ -707,7 +848,7 @@ describe("message event dispatcher", () => {
             throw new Error("add-file-failed");
         });
 
-        handlers.message({
+        await handlers.message({
             data: {
                 type: "addFile",
                 payload: {

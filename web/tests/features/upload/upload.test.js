@@ -1958,172 +1958,6 @@ describe("UploadPage", () => {
 
     // --- FileReader error branch ---------------------------------------------
 
-    it("shows error hint and completes job when FileReader errors", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    if (this.onerror) {
-                        this.onerror(new Error("read error"));
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["bad"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-        expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("errors instead of treating a non-ArrayBuffer read result as empty", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    // A successful onload but with a non-ArrayBuffer result must
-                    // report an error, not a silently empty file.
-                    this.result = null;
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("errors when the read result is a truthy non-buffer value", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    // A truthy result without a numeric byteLength (e.g. a stray
-                    // string) must also be rejected, not coerced to empty bytes.
-                    this.result = "not-a-buffer";
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("errors with a clear message when TextDecoder is unavailable", async () => {
-        const originalFileReader = globalThis.FileReader;
-        const originalTextDecoder = globalThis.TextDecoder;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    this.result = encodeBuf("col\nval");
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-        // Simulate a browser without TextDecoder support.
-        globalThis.TextDecoder = undefined;
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("text-decoding support");
-
-        globalThis.TextDecoder = originalTextDecoder;
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("falls back when streaming file read rejects with a non-error value", async () => {
-        const originalReadableStream = globalThis.ReadableStream;
-        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["bad"], "Messages.csv", { type: "text/csv" });
-        Object.defineProperty(file, "size", { value: 6 * 1024 * 1024 });
-        Object.defineProperty(file, "stream", {
-            value: () => ({
-                getReader: () => ({
-                    read: () => ({ then: (_resolve, reject) => reject("read failed") }),
-                    cancel: () => Promise.resolve(),
-                }),
-            }),
-        });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-
-        globalThis.ReadableStream = originalReadableStream;
-    });
-
     // --- oversize file warning -----------------------------------------------
 
     it("warns about large files (>25MB) but still processes them", async () => {
@@ -2751,24 +2585,7 @@ describe("UploadPage", () => {
 
     // --- encoding fallback (UTF-8 -> windows-1252) ---------------------------
 
-    it("falls back to windows-1252 when the read is not valid UTF-8", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    // 0xE9 is an invalid UTF-8 lead byte, so the strict UTF-8
-                    // decode fails and the bytes fall back to windows-1252 ("é").
-                    this.result = new Uint8Array([0xe9]).buffer;
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
+    it("posts the File to the worker and shows the fallback hint the worker reports", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -2778,98 +2595,24 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
+        // The page hands over the File itself; the worker reads and decodes it.
         const addFileCall = workerInstance.postMessage.mock.calls.find(
             (call) => call[0].type === "addFile",
         );
-        expect(addFileCall[0].payload.csvText).toBe("é");
+        expect(addFileCall[0].payload.file).toBe(file);
+        expect(addFileCall[0].payload).not.toHaveProperty("csvText");
 
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
-                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
-            },
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(document.getElementById("uploadHint").textContent).toContain(
-            "decoded with a Windows-1252 fallback",
-        );
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    /**
-     * Build a streaming File-like object whose stream yields the given byte chunks.
-     */
-    function makeStreamFile(name, chunks) {
-        let index = 0;
-        return {
-            name,
-            size: 6 * 1024 * 1024,
-            stream() {
-                return {
-                    getReader() {
-                        return {
-                            read() {
-                                if (index < chunks.length) {
-                                    return Promise.resolve({ done: false, value: chunks[index++] });
-                                }
-                                return Promise.resolve({ done: true, value: undefined });
-                            },
-                            cancel() {
-                                return Promise.resolve();
-                            },
-                        };
-                    },
-                };
-            },
-        };
-    }
-
-    it("streams large UTF-8 files without triggering the encoding fallback", async () => {
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = makeStreamFile("Messages.csv", [new Uint8Array([99, 111, 108, 10, 118, 97, 108])]);
-        const event = new Event("drop");
-        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-        document.getElementById("multiDropZone").dispatchEvent(event);
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const addFileCall = workerInstance.postMessage.mock.calls.find(
-            (call) => call[0].type === "addFile",
-        );
-        expect(addFileCall[0].payload.csvText).toBe("col\nval");
-
-        await workerInstance.listeners.message[0]({
-            data: {
-                type: "fileProcessed",
-                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
-            },
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(document.getElementById("uploadHint").textContent).toContain("File loaded successfully");
-    });
-
-    it("streams large non-UTF-8 files and falls back to windows-1252", async () => {
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        // 0xE9 is an invalid UTF-8 lead byte but decodes to "é" under windows-1252.
-        const file = makeStreamFile("Messages.csv", [new Uint8Array([0xe9])]);
-        const event = new Event("drop");
-        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-        document.getElementById("multiDropZone").dispatchEvent(event);
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const addFileCall = workerInstance.postMessage.mock.calls.find(
-            (call) => call[0].type === "addFile",
-        );
-        expect(addFileCall[0].payload.csvText).toBe("é");
-
-        await workerInstance.listeners.message[0]({
-            data: {
-                type: "fileProcessed",
-                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+                payload: {
+                    fileType: "messages",
+                    fileName: "Messages.csv",
+                    rowCount: 1,
+                    jobId: null,
+                    csvText: "é",
+                    usedFallback: true,
+                },
             },
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2878,23 +2621,23 @@ describe("UploadPage", () => {
         );
     });
 
-    it("rejects a streamed file whose decoded length exceeds the character limit", async () => {
+    it("completes the job with an error hint when posting the File fails", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
+        workerInstance.postMessage.mockImplementation((message) => {
+            if (message.type === "addFile") {
+                throw new Error("DataCloneError");
+            }
+        });
 
-        // One byte over the character limit: bytes (NUL) decode 1:1 to characters,
-        // so the post-decode check (not the byte count) is what trips.
-        const oversized = new Uint8Array(MAX_CSV_CHARS + 1);
-        const file = makeStreamFile("Messages.csv", [oversized]);
-        const event = new Event("drop");
-        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-        document.getElementById("multiDropZone").dispatchEvent(event);
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("text limit");
+        expect(document.getElementById("uploadHint").textContent).toContain("DataCloneError");
+        expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
     });
 
     // --- consumePendingFile by fileName (lines 564-568) ----------------------
@@ -4351,111 +4094,4 @@ describe("UploadPage", () => {
         }
     });
 
-    // --- read watchdog timeouts ----------------------------------------------
-
-    it("rejects a FileReader read that exceeds the timeout", async () => {
-        vi.useFakeTimers();
-        const originalFileReader = globalThis.FileReader;
-        let aborted = false;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                // Never resolves, so only the 30s watchdog can settle the read.
-                readAsArrayBuffer() {},
-                abort() {
-                    aborted = true;
-                },
-            };
-        };
-
-        try {
-            UploadPage.init();
-            await vi.advanceTimersByTimeAsync(0);
-
-            const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
-            const input = document.getElementById("multiFileInput");
-            Object.defineProperty(input, "files", { value: [file], configurable: true });
-            input.dispatchEvent(new Event("change"));
-            await vi.advanceTimersByTimeAsync(0);
-
-            // Fire the file-read watchdog (FILE_READ_TIMEOUT_MS = 30000).
-            await vi.advanceTimersByTimeAsync(30000);
-            await vi.advanceTimersByTimeAsync(0);
-
-            expect(aborted).toBe(true);
-            expect(document.getElementById("uploadHint").textContent).toMatch(/timed out/i);
-        } finally {
-            globalThis.FileReader = originalFileReader;
-            vi.useRealTimers();
-        }
-    });
-
-    it("aborts a streamed read that times out mid-stream", async () => {
-        vi.useFakeTimers();
-        const originalReadableStream = globalThis.ReadableStream;
-        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
-
-        let cancelled = false;
-        let reads = 0;
-        const file = {
-            name: "Messages.csv",
-            size: 6 * 1024 * 1024,
-            stream() {
-                return {
-                    getReader() {
-                        return {
-                            read() {
-                                reads += 1;
-                                if (reads === 1) {
-                                    return Promise.resolve({
-                                        done: false,
-                                        value: new Uint8Array([99]),
-                                    });
-                                }
-                                // The next chunk only arrives after the watchdog has
-                                // already fired, so the loop observes timedOut.
-                                return new Promise((resolve) => {
-                                    setTimeout(
-                                        () =>
-                                            resolve({ done: false, value: new Uint8Array([100]) }),
-                                        40000,
-                                    );
-                                });
-                            },
-                            cancel() {
-                                cancelled = true;
-                                return Promise.resolve();
-                            },
-                        };
-                    },
-                };
-            },
-        };
-
-        try {
-            UploadPage.init();
-            await vi.advanceTimersByTimeAsync(0);
-
-            const event = new Event("drop");
-            Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-            document.getElementById("multiDropZone").dispatchEvent(event);
-            await vi.advanceTimersByTimeAsync(0);
-
-            // Fire the stream watchdog, then release the gated second read.
-            await vi.advanceTimersByTimeAsync(30000);
-            await vi.advanceTimersByTimeAsync(11000);
-            await vi.advanceTimersByTimeAsync(0);
-
-            expect(cancelled).toBe(true);
-            expect(document.getElementById("uploadHint").textContent).toMatch(/timed out/i);
-            expect(
-                workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-            ).toBe(false);
-        } finally {
-            globalThis.ReadableStream = originalReadableStream;
-            vi.useRealTimers();
-        }
-    });
 });

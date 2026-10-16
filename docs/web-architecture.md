@@ -47,6 +47,8 @@ Python implements the CLI cleaner under `src/linkedin_analyzer/`. JavaScript imp
 
 `web/src/platform/observability/telemetry.js` records only allowlisted numeric web-vitals and performance measurements. It buffers the latest value and a count, then sends a numeric `session-metrics` event when the page becomes hidden.
 
+`web/src/platform/observability/run-tracker.js` notices processing runs that did not finish. A tab the browser kills cannot report as it dies, so the upload page writes a `localStorage` marker when processing starts, refreshes its heartbeat every 5 seconds, and removes it when every job settles. `pagehide` records that the page was left, so a reload or a normal close is not reported. At startup, the app removes left markers silently, asks other open tabs over a `BroadcastChannel` whether one owns a remaining run, and rechecks a run with a recent heartbeat once it would be stale. Only a run with no owner and a stale heartbeat shows the notice and, with consent, sends one `processing-unfinished` event. The signal counts runs that did not finish, not crashes: read it as a trend across size buckets.
+
 `api/csp-report.mjs` is separate from consent because a browser needs a valid CSP reporting endpoint even when diagnostics forwarding is off. It accepts legacy and Reporting API shapes, keeps only bounded violation metadata, removes URL queries and fragments, and forwards reports only when `CSP_REPORT_URI` or `SENTRY_DSN` is configured. [ADR-004](adr/004-opt-in-telemetry-with-pii-scrubbing.md) records the data reduction rules.
 
 ## How the PDF export is split

@@ -11,8 +11,10 @@ import { InsightsPage } from "./features/insights/screen.js";
 import { MessagesPage } from "./features/messages/screen.js";
 import { Tutorial } from "./features/tutorial/tutorial.js";
 import { UploadPage } from "./features/upload/upload.js";
+import { RunTracker, memoryBucket } from "./platform/observability/run-tracker.js";
 import {
     captureError,
+    captureProcessingUnfinished,
     disableTelemetry,
     initSentry,
     setTelemetryConsent,
@@ -99,6 +101,7 @@ function init() {
     registerRoutes();
     bindRouteLinks();
     initConsentControls(hasTelemetryConsent);
+    checkUnfinishedRuns();
 
     runSessionCleanup();
 
@@ -121,6 +124,28 @@ function init() {
                 });
                 return false;
             });
+    }
+
+    /**
+     * Tell the user when an earlier processing run did not finish, and report
+     * it with consent. The wording never claims a crash or a too-large file.
+     */
+    function checkUnfinishedRuns() {
+        const banner = document.getElementById("unfinishedRunBanner");
+        const dismissButton = document.getElementById("unfinishedRunDismissBtn");
+        if (dismissButton && banner) {
+            dismissButton.addEventListener("click", () => {
+                banner.hidden = true;
+            });
+        }
+        const deviceMemory = /** @type {Navigator & { deviceMemory?: number }} */ (navigator)
+            .deviceMemory;
+        RunTracker.checkPrevious((run) => {
+            if (banner) {
+                banner.hidden = false;
+            }
+            captureProcessingUnfinished({ ...run, memoryBucket: memoryBucket(deviceMemory) });
+        });
     }
 
     /**

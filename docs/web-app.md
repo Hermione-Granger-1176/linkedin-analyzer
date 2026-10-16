@@ -106,6 +106,10 @@ A session has a 24-hour inactivity limit. On startup, the app clears stored uplo
 
 The app stores the theme preference, tutorial completion, and mini-tip state in `localStorage`. Those values do not contain CSV contents.
 
+While an upload is processing, the app also keeps a small marker in `localStorage` so the next visit can tell whether the run finished. The marker holds a random run ID, the tab ID, start and heartbeat times, the combined file size rounded to a bucket such as "30 to 60 MB", and whether one file or several were processed. It holds no file names and no contents, and the app removes it when the run ends.
+
+If a run did not finish, the next visit shows a notice: the last processing run did not finish, and if that keeps happening on the device, upload fewer files at once or use the Python CLI on a computer. A browser that runs out of memory can stop a tab without warning, which is the usual cause on phones. A reload, a navigation, or a normal tab close during processing does not trigger the notice, and neither does a run still going in another tab.
+
 The production service worker caches the app shell, scripts, styles, fonts, and images. It uses a network-first strategy for navigation, stale-while-revalidate for scripts and styles, and cache-first for fonts and images. A new build is picked up on the next navigation.
 
 ## Understand diagnostics
@@ -115,7 +119,7 @@ Diagnostics are disabled until both conditions hold:
 1. The build contains `VITE_SENTRY_DSN`.
 2. You select the diagnostics consent control.
 
-You can revoke consent from the footer. After consent, the app may send reduced error events and numeric performance measurements. It does not attach CSV text, file names, message bodies, contact names, URLs, DOM text, or arbitrary exception values.
+You can revoke consent from the footer. After consent, the app may send reduced error events, numeric performance measurements, and one `processing-unfinished` event when a processing run did not finish. That event carries only the size bucket, the device memory bucket where the browser exposes it, and whether one file or several were processed. It does not attach CSV text, file names, message bodies, contact names, URLs, DOM text, or arbitrary exception values.
 
 CSP violation reports use the same-origin `/api/csp-report` endpoint when the deployment provides it. The endpoint accepts only POST requests, limits the body to 64 KiB, keeps a bounded set of violation metadata, strips URL queries and fragments, and returns `204` when forwarding is disabled. Configure server-side forwarding with `CSP_REPORT_URI` or `SENTRY_DSN`. These variables must not be exposed to the client.
 

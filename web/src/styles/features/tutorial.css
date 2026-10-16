@@ -219,6 +219,16 @@
     transform-origin: center;
 }
 
+/* The lite effects tier drops the shadow filter and the marching dashes. */
+:root[data-effects="lite"] .tutorial-pointer {
+    filter: none;
+}
+
+:root[data-effects="lite"] .tutorial-pointer-path-main,
+:root[data-effects="lite"] .tutorial-pointer-path-echo {
+    animation: none;
+}
+
 .tutorial-pointer-path-main {
     fill: none;
     stroke: color-mix(in srgb, var(--text-primary) 88%, var(--accent-blue));

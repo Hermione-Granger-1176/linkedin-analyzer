@@ -12,5 +12,6 @@ These records preserve the reasoning behind choices that affect the repository's
 - [ADR-006: hatch-vcs tag-driven versioning and CI-gated trusted publishing](006-hatch-vcs-versioning-and-gated-publishing.md)
 - [ADR-007: npm override for the unpatched brace-expansion 2.x line](007-brace-expansion-override-for-unpatched-2x-line.md)
 - [ADR-008: jsPDF for the Save as PDF export](008-jspdf-for-the-save-as-pdf-export.md)
+- [ADR-009: Device tiers for effects](009-device-tiers-for-effects.md)
 
 When adding a record, use the next number, keep the file name descriptive, and link it from this page. Use the existing sections for context, decision, consequences, and validation when they apply.

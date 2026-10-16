@@ -176,6 +176,55 @@ button {
     display: block;
 }
 
+/* Place the visual effects toggle under the theme toggle. */
+.effects-toggle {
+    position: fixed;
+    top: calc(var(--space-lg) + var(--corner-btn-size) + var(--space-sm));
+    right: var(--space-lg);
+    width: var(--corner-btn-size);
+    height: var(--corner-btn-size);
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 0;
+    z-index: 200;
+    box-shadow: var(--shadow-sm);
+    transition:
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast);
+}
+
+.effects-toggle:hover {
+    transform: scale(1.06);
+    box-shadow: var(--shadow-md);
+}
+
+.effects-toggle .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.effects-toggle[data-override="full"] .icon path {
+    fill: currentColor;
+}
+
+.effects-toggle[data-override="lite"] .icon {
+    opacity: 0.55;
+}
+
+.effects-toggle-label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
 /* Place the Save as PDF button to the left of the theme toggle. */
 .pdf-export-btn {
     position: fixed;

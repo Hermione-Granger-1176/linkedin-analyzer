@@ -568,6 +568,37 @@ describe("sentry", () => {
         });
     });
 
+    it("tags session metrics with an allowlisted effects tier", async () => {
+        const { api, sentry, options } = await enableSentry();
+
+        api.setTelemetryEffectsTier("rich");
+        api.captureMetric("web-vital:LCP", 1200);
+        api.flushMetrics();
+        expect(sentry.captureMessage).toHaveBeenLastCalledWith("session-metrics", {
+            level: "info",
+            tags: { "telemetry.type": "session-metrics", effects: "rich" },
+            extra: { "metric:web-vital:LCP": 1200 },
+        });
+
+        api.setTelemetryEffectsTier(PRIVATE_MARKER);
+        api.captureMetric("web-vital:LCP", 1300);
+        api.flushMetrics();
+        expect(sentry.captureMessage).toHaveBeenLastCalledWith("session-metrics", {
+            level: "info",
+            tags: { "telemetry.type": "session-metrics" },
+            extra: { "metric:web-vital:LCP": 1300 },
+        });
+
+        const reduce = (effects) =>
+            options.beforeSend({
+                message: "session-metrics",
+                tags: { "telemetry.type": "session-metrics", effects },
+                extra: { "metric:web-vital:CLS": 0.1 },
+            }).tags;
+        expect(reduce("lite")).toEqual({ "telemetry.type": "session-metrics", effects: "lite" });
+        expect(reduce(PRIVATE_MARKER)).toEqual({ "telemetry.type": "session-metrics" });
+    });
+
     it("reduces crafted session metrics to allowlisted numeric fields", async () => {
         const { options } = await enableSentry({ environment: "production", release: "release-safe" });
         const event = {

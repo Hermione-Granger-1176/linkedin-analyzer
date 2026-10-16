@@ -26,6 +26,7 @@ import { SESSION_CLEANUP_PROMISE_KEY } from "./shared/constants.js";
 import { DomEvents } from "./shared/dom-events.js";
 import { initAlive } from "./shared/ui/alive.js";
 import { initDecorations } from "./shared/ui/decorations.js";
+import { Effects } from "./shared/ui/effects.js";
 import { initMascot } from "./shared/ui/mascot.js";
 import { NavMenu } from "./shared/ui/nav-menu.js";
 import { Theme } from "./shared/ui/theme.js";
@@ -89,6 +90,8 @@ function init() {
         initTelemetry();
     }
     initRuntime();
+    // Before the decoration layer starts, so it reads the tier it will run in.
+    Effects.init();
     initMascot();
     initAlive();
     Theme.init();

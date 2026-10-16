@@ -1,5 +1,6 @@
 /* Upload page logic */
 
+import { preloadRouteWhenIdle } from "../../app/route-preload.js";
 import { AppRouter } from "../../app/router.js";
 import {
     parseAnalyticsWorkerMessage,
@@ -834,6 +835,10 @@ export const UploadPage = (() => {
         const hasAnalyticsFiles = Boolean(fileMap.shares || fileMap.comments);
         if (elements.openAnalyticsBtn) {
             elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
+        }
+        if (hasAnalyticsFiles && analyticsReady) {
+            // Analytics is where the button leads, so fetch it before the click.
+            preloadRouteWhenIdle("analytics");
         }
         setHint(getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady), false);
     }

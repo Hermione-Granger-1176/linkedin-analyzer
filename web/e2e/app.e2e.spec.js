@@ -150,6 +150,35 @@ test("upload shares+comments and render insights", async ({ page }) => {
     await runAxeScan(page);
 });
 
+test("deep links open every screen after a reload", async ({ page }) => {
+    test.setTimeout(90000);
+    await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV, MESSAGES_CSV, CONNECTIONS_CSV]);
+    for (const id of ["sharesStatus", "commentsStatus", "messagesStatus", "connectionsStatus"]) {
+        await waitForLoadedStatus(page, id);
+    }
+
+    // Each screen other than upload is fetched when its route first opens, so
+    // a cold load straight onto the route has to bring its code in first.
+    const routes = [
+        ["clean", "tbody tr", "#screen-clean [data-testid=clean-preview-table]"],
+        ["analytics?range=3m", "", "#screen-analytics [data-testid=analytics-grid]"],
+        ["connections?range=3m", "", "#connectionsGrid"],
+        ["messages?range=3m", "", "#topContactsList li"],
+        ["insights?range=3m", "", "#insightsGrid .insight-card h3"],
+    ];
+    for (const [hash, child, selector] of routes) {
+        await page.goto(`/#${hash}`);
+        await page.reload();
+        const name = hash.split("?")[0];
+        await expect(page.locator(`#screen-${name}`)).toHaveClass(/\bactive\b/);
+        const target = page.locator(selector).first();
+        await expect(child ? target.locator(child).first() : target).toBeVisible({
+            timeout: 20000,
+        });
+        await expect(page).toHaveURL(new RegExp(`#${hash.replace("?", "\\?")}`));
+    }
+});
+
 test("mobile hamburger menu opens, navigates, and closes", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto("/#home");

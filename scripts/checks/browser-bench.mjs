@@ -39,7 +39,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { chromium, devices } from "@playwright/test";
+import { chromium, devices, expect } from "@playwright/test";
 
 import { MEASUREMENT_LIMITS } from "../../web/src/shared/limits.js";
 import { generateLargeExport } from "../fixtures/gen-large-export.mjs";
@@ -65,6 +65,7 @@ const SAMPLE_INTERVAL_MS = 200;
 const FILTER_SETTLE_TIMEOUT_MS = 10000;
 const MOBILE_DEVICE = "Pixel 7";
 const MB = 1024 * 1024;
+const EXPORT_KINDS = ["none", "excel", "pdf", "pdf-summary"];
 
 /**
  * Parse CLI arguments.
@@ -79,6 +80,7 @@ export function parseArgs(argv) {
         gpu: true,
         mobile: false,
         budgetMb: 0,
+        exportKind: "none",
     };
     const number = (value, name, min) => {
         const parsed = Number(value);
@@ -108,6 +110,11 @@ export function parseArgs(argv) {
             options.mobile = value === "1";
         } else if (argument === "--budget-mb") {
             options.budgetMb = number(value, "budget_mb", 0);
+        } else if (argument === "--export") {
+            if (!EXPORT_KINDS.includes(value)) {
+                throw new Error(`invalid export: ${value}`);
+            }
+            options.exportKind = value;
         } else {
             throw new Error(`invalid option: ${argument}`);
         }
@@ -218,6 +225,13 @@ async function startHeapSampler(client) {
     const timer = setInterval(sample, SAMPLE_INTERVAL_MS);
     return {
         sample,
+        /** Return the peaks so far and start a fresh phase from zero. */
+        async takePeak() {
+            await sample();
+            const taken = { ...peak };
+            Object.assign(peak, { combined: 0, page: 0, workers: 0 });
+            return taken;
+        },
         stop() {
             stopped = true;
             clearInterval(timer);
@@ -292,6 +306,36 @@ async function timeCachedFilterChange(page) {
 }
 
 /**
+ * Run one export the way a user does and wait for its download to start.
+ * Excel exports the cleaned messages file from the Clean screen; PDF exports
+ * the report with message bodies included, and pdf-summary without them.
+ * @param {import("@playwright/test").Page} page - App page with the export loaded.
+ * @param {"excel"|"pdf"|"pdf-summary"} kind - Export to run.
+ */
+async function runExport(page, kind) {
+    const download = page.waitForEvent("download", { timeout: STEP_TIMEOUT_MS });
+    if (kind === "excel") {
+        await openRoute(page, "clean", STEP_TIMEOUT_MS);
+        await page
+            .locator('input[name="cleanFileType"][value="messages"]')
+            .check({ force: true, timeout: STEP_TIMEOUT_MS });
+        await page.locator("#cleanPreviewSection").waitFor({ timeout: STEP_TIMEOUT_MS });
+        await page.getByTestId("clean-download-btn").click({ timeout: STEP_TIMEOUT_MS });
+    } else {
+        const trigger = page.locator("#pdfExportBtn");
+        await expect(trigger).toHaveAttribute("aria-disabled", "false", {
+            timeout: STEP_TIMEOUT_MS,
+        });
+        await trigger.click();
+        if (kind === "pdf") {
+            await page.locator("#pdfExportIncludeMessages").check();
+        }
+        await page.locator("#pdfExportConfirmBtn").click();
+    }
+    await download;
+}
+
+/**
  * One measured run in a fresh browser.
  * @param {ReturnType<typeof parseArgs>} options - Parsed options.
  * @param {string} inputDir - Export directory.
@@ -303,10 +347,13 @@ async function measureRun(options, inputDir) {
         messagesMs: Number.NaN,
         filterMs: Number.NaN,
         peak: { combined: 0, page: 0, workers: 0 },
+        exportMs: Number.NaN,
+        exportPeak: { combined: 0, page: 0, workers: 0 },
         crashed: false,
         error: "",
     };
     let sampler = null;
+    let phase = "analysis";
     try {
         // Reduced motion turns off the optional timeline animation, which
         // finishes after the grid is back to full opacity and would end the
@@ -340,11 +387,20 @@ async function measureRun(options, inputDir) {
         await ready.analytics(page);
         result.filterMs = await timeCachedFilterChange(page);
         await sampler.sample();
+        if (options.exportKind !== "none") {
+            result.peak = await sampler.takePeak();
+            phase = "export";
+            const started = performance.now();
+            await runExport(page, options.exportKind);
+            result.exportMs = performance.now() - started;
+            await sampler.sample();
+        }
     } catch (error) {
         result.error = result.crashed ? "tab crashed" : error.message.split("\n")[0];
     } finally {
         if (sampler) {
-            Object.assign(result, sampler.stop());
+            const { peak } = sampler.stop();
+            result[phase === "export" ? "exportPeak" : "peak"] = peak;
         }
         await browser.close();
     }
@@ -382,6 +438,11 @@ function report(runs, options) {
                 `filter=${Number.isFinite(result.filterMs) ? result.filterMs.toFixed(0) : "n/a"}ms ` +
                 `peak=${megabytes(result.peak.combined)}MB ` +
                 `(page ${megabytes(result.peak.page)}MB, workers ${megabytes(result.peak.workers)}MB) ` +
+                (options.exportKind === "none"
+                    ? ""
+                    : `${options.exportKind}=${seconds(result.exportMs)}s ` +
+                      `export-peak=${megabytes(result.exportPeak.combined)}MB ` +
+                      `(page ${megabytes(result.exportPeak.page)}MB) `) +
                 `crashed=${result.crashed ? "yes" : "no"}` +
                 (result.error ? ` error="${result.error}"` : ""),
         );
@@ -400,14 +461,22 @@ function report(runs, options) {
     const inMilliseconds = (value) => `${value.toFixed(0)}ms`;
     const inMegabytes = (value) => `${megabytes(value)}MB`;
     const pick = (list, key) => list.map((result) => result[key]);
-    const peaks = runs.map((result) => result.peak.combined);
+    const peaks = runs.map((result) => Math.max(result.peak.combined, result.exportPeak.combined));
     line("analytics", pick(finished, "analyticsMs"), inSeconds);
     line("messages", pick(finished, "messagesMs"), inSeconds);
     line("filter", pick(finished, "filterMs"), inMilliseconds);
     line("peak-heap", peaks, inMegabytes);
+    if (options.exportKind !== "none") {
+        line(options.exportKind, pick(finished, "exportMs"), inSeconds);
+        line(
+            "export-peak",
+            runs.map((result) => result.exportPeak.combined),
+            inMegabytes,
+        );
+    }
     console.log(
         `SETUP    runs=${runs.length} cpu=${options.cpu} gpu=${options.gpu ? 1 : 0} ` +
-            `mobile=${options.mobile ? 1 : 0} budget_mb=${options.budgetMb || "none"}` +
+            `mobile=${options.mobile ? 1 : 0} export=${options.exportKind} budget_mb=${options.budgetMb || "none"}` +
             (options.cpu > 1 ? " (cpu throttles the page main thread only)" : ""),
     );
     const worstPeak = Math.max(...peaks);

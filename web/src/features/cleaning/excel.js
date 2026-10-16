@@ -290,6 +290,7 @@ export const ExcelGenerator = (() => {
     }
 
     return {
+        download,
         generate,
         generateAndDownload,
         generateFromSpec,

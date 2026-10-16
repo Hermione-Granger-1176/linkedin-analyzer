@@ -44,7 +44,7 @@ Analytics, Connections, Messages, and Insights share a `range` query parameter. 
 
 ## Clean files
 
-Open **Clean** to create an Excel workbook for each uploaded file type. The browser cleaner uses the same columns, row rules, field rules, and formula protection as the Python cleaner. The browser creates the workbook locally and starts a download.
+Open **Clean** to create an Excel workbook for each uploaded file type. The browser cleaner uses the same columns, row rules, field rules, and formula protection as the Python cleaner. The browser creates the workbook locally and starts a download. **Download Clean CSV** saves the same cleaned rows as a UTF-8 CSV file, which Excel also opens. A file over 10 MiB downloads only as CSV, because the browser builds a whole workbook in memory and a larger one can exhaust a phone's memory.
 
 Use the [data formats reference](data-formats.md) when you need to check a required column or explain why a row disappeared.
 
@@ -134,6 +134,8 @@ The browser enforces these independent limits:
 | Parsed rows per file      | 500,000 |
 | Columns per row           | 256     |
 | Characters per field      | 200,000 |
+
+The Clean screen builds Excel workbooks only for files up to 10 MiB and offers the cleaned CSV for larger files.
 
 A file above 25 MiB also receives a large-file warning before processing. The warning does not reject the file when it remains under the hard limits.
 

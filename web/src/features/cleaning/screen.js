@@ -6,9 +6,11 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPE_LABELS, FILE_TYPES } from "../../shared/constants.js";
+import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 import { celebrateDownload } from "../../shared/ui/mascot.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
+import { buildCleanedCsvBlob, cleanedCsvName } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
 export const CleanPage = (() => {
@@ -46,6 +48,7 @@ export const CleanPage = (() => {
         cleanDownloadBtn: /** @type {HTMLElement} */ (
             document.getElementById("cleanDownloadBtn")
         ),
+        cleanCsvBtn: /** @type {HTMLElement} */ (document.getElementById("cleanCsvBtn")),
         cleanErrorMessage: /** @type {HTMLElement} */ (
             document.getElementById("cleanErrorMessage")
         ),
@@ -119,6 +122,9 @@ export const CleanPage = (() => {
         });
         elements.cleanDownloadBtn.addEventListener("click", () => {
             handleDownload();
+        });
+        elements.cleanCsvBtn.addEventListener("click", () => {
+            handleCsvDownload();
         });
     }
 
@@ -284,6 +290,7 @@ export const CleanPage = (() => {
                 }
                 cache[type] = {
                     updatedAt: fileUpdatedAt,
+                    sourceSize: text.length,
                     result: processed,
                 };
             } catch (error) {
@@ -372,9 +379,11 @@ export const CleanPage = (() => {
     }
 
     /**
-     * Generate and trigger download of the cleaned Excel file.
+     * Return the cleaned result for the selected file, or report that there is
+     * nothing to download.
+     * @returns {{type: string, cached: object}|null}
      */
-    async function handleDownload() {
+    function getDownloadable() {
         const type = getSelectedType();
         const cached = cache[type];
         if (!cached || !cached.result) {
@@ -384,8 +393,30 @@ export const CleanPage = (() => {
                 operation: "download-without-cache",
                 fileType: type,
             });
+            return null;
+        }
+        return { type, cached };
+    }
+
+    /**
+     * Generate and trigger download of the cleaned Excel file. Files over the
+     * Excel limit are refused with a pointer to the CSV download.
+     */
+    async function handleDownload() {
+        const downloadable = getDownloadable();
+        if (!downloadable) {
             return;
         }
+        const { type, cached } = downloadable;
+        if (cached.sourceSize > EXCEL_EXPORT_MAX_BYTES) {
+            const limitMb = Math.round(EXCEL_EXPORT_MAX_BYTES / (1024 * 1024));
+            showError(
+                `This file is over ${limitMb} MB, too large to build an Excel file in the browser. ` +
+                    "Download it as CSV instead; Excel opens CSV files too.",
+            );
+            return;
+        }
+        hideError();
         const downloadResult = await ExcelGenerator.generateAndDownload(
             cached.result.cleanedData,
             type,
@@ -399,6 +430,27 @@ export const CleanPage = (() => {
             showError(`Error generating Excel: ${downloadResult.error}`);
             return;
         }
+        celebrateDownload();
+    }
+
+    /**
+     * Download the cleaned rows as CSV, built in parts so large files fit.
+     */
+    function handleCsvDownload() {
+        const downloadable = getDownloadable();
+        if (!downloadable) {
+            return;
+        }
+        const { type, cached } = downloadable;
+        try {
+            const blob = buildCleanedCsvBlob(cached.result.cleanedData, type);
+            ExcelGenerator.download(blob, cleanedCsvName(type));
+        } catch (error) {
+            captureError(error, { module: "clean", operation: "csv-generate", fileType: type });
+            showError("Error generating CSV. Try again.");
+            return;
+        }
+        hideError();
         celebrateDownload();
     }
 

@@ -74,6 +74,25 @@ test("download cleaned excel from clean screen", async ({ page }) => {
     expect(download.suggestedFilename().toLowerCase()).toContain("shares");
 });
 
+test("download cleaned csv from clean screen", async ({ page }) => {
+    await uploadFiles(page, [SHARES_CSV]);
+    await waitForLoadedStatus(page, "sharesStatus");
+
+    await page.locator('#screen-home a.hub-card[data-route="clean"]').click();
+    await expect(page).toHaveURL(/#clean/);
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByTestId("clean-csv-btn").click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("Shares.csv");
+    const stream = await download.createReadStream();
+    let text = "";
+    for await (const chunk of stream) {
+        text += chunk.toString("utf8");
+    }
+    expect(text.replace(/^\uFEFF/, "").split("\r\n")[0]).toMatch(/^Date,/);
+});
+
 test("upload shares+comments and render analytics", async ({ page }) => {
     await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV]);
     await waitForLoadedStatus(page, "sharesStatus");

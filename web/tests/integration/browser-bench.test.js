@@ -22,6 +22,7 @@ describe("browser-bench", () => {
             gpu: true,
             mobile: false,
             budgetMb: 0,
+            exportKind: "none",
         });
     });
 
@@ -41,6 +42,8 @@ describe("browser-bench", () => {
             "1",
             "--budget-mb",
             "300",
+            "--export",
+            "pdf",
         ]);
         expect(options).toEqual({
             inputDir: "/export",
@@ -50,6 +53,7 @@ describe("browser-bench", () => {
             gpu: false,
             mobile: true,
             budgetMb: 300,
+            exportKind: "pdf",
         });
     });
 
@@ -58,6 +62,7 @@ describe("browser-bench", () => {
         expect(() => parseArgs(["--runs"])).toThrow(/missing value/);
         expect(() => parseArgs(["--runs", "0"])).toThrow(/invalid runs/);
         expect(() => parseArgs(["--cpu", "fast"])).toThrow(/invalid cpu/);
+        expect(() => parseArgs(["--export", "csv"])).toThrow(/invalid export/);
     });
 
     it("summarizes odd and even sample counts as median and range", () => {

@@ -375,8 +375,8 @@ audit-memory-browser: ## Measure browser JS heap on your export in Chromium (mak
 audit-state: ## Measure retained bytes of each analysis structure on your export (make audit-state [strict=1] [input_dir=path])
 	$(NODE) --expose-gc scripts/checks/state-audit.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
 
-bench-browser: ## Time upload to Analytics and Messages in Chromium with a heap budget (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [budget_mb=N] [local_libs=1])
-	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)")
+bench-browser: ## Time upload to Analytics and Messages in Chromium with a heap budget (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [export=excel|pdf|pdf-summary] [budget_mb=N] [local_libs=1])
+	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)") $(if $(export),--export "$(export)")
 
 explore: ## Print ad-hoc statistics over your export
 	$(VENV_PYTHON) scripts/checks/li_explore.py

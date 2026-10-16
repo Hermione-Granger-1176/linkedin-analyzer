@@ -255,9 +255,24 @@ Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
 | PDF, bodies | 2.47 s, 162 MB | 5.75 s, 458 MB | 18.08 s, 1114 MB | 19.26 s, 648 MB |
 | PDF summary | not measured   | not measured   | 15.00 s, 1927 MB | 12.94 s, 599 MB |
 
-- The Excel workbook costs about 25 MB of heap per MB of `messages.csv`, almost all on the page, so it would pass the 300 MB budget only up to about 12 MB. The Clean screen now builds workbooks only for files up to 10 MiB, says why for larger ones, and offers a cleaned CSV that it writes in 2,000-row parts into a `Blob`, so no single string holds the whole file.
+- The Excel workbook costs about 25 MB of heap per MB of `messages.csv`, which the page held when this was measured and the cleaning worker holds since step 5, so it would pass the 300 MB budget only up to about 12 MB. The Clean screen now builds workbooks only for files up to 10 MiB, says why for larger ones, and offers a cleaned CSV that it writes in 2,000-row parts into a `Blob`, so no single string holds the whole file.
 - Before step 4e both PDF exports went over the budget at 100 MB, with or without message bodies. Most of the peak was the stored text read back from IndexedDB and the analysis workers still alive, not the bodies.
 - After step 4e the PDF export adds about 60 MB with message bodies and about 10 MB without them over the 589 MB analysis peak, and the page holds about 80 MB during the export. The export is no longer what sets the peak, so it gets no size limit of its own; the analysis workers are what must shrink.
+
+### Clean screen main-thread time
+
+The Clean screen builds its preview, Excel workbook, and cleaned CSV in a worker since step 5. Measured on 2026-10-16 with a one-off Playwright script on the 55 MB synthetic export at a CPU throttle of 4: each row selects a file type on the Clean screen, then downloads the workbook and the CSV, and reports the longest main-thread task the browser recorded.
+
+| File type   | Longest task before | Longest task after | Excel before | Excel after |
+| ----------- | ------------------- | ------------------ | ------------ | ----------- |
+| Shares      | 2,597 ms            | 58 ms              | 3.6 s        | 1.5 s       |
+| Comments    | 1,431 ms            | 0 ms               | 2.3 s        | 1.3 s       |
+| Connections | 7,225 ms            | 0 ms               | 8.7 s        | 3.0 s       |
+| Messages    | 2,827 ms            | 0 ms               | refused      | refused     |
+
+- The longest task before was the workbook build for every type but Messages, whose file is over the Excel limit; its longest task was the cleaned CSV.
+- The 58 ms task after is the first visit to the Clean screen, which loads that screen's code. No task reached the 50 ms long-task threshold after that.
+- Downloads are faster because the worker reuses the rows it cleaned for the preview instead of parsing the file again.
 
 ## Run documentation and repository checks
 

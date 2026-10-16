@@ -6,6 +6,7 @@ import {
     parseStoredUploadFile,
     toStoredFileMetadata,
 } from "../../app/worker-contracts.js";
+import { RunTracker } from "../../platform/observability/run-tracker.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
@@ -453,6 +454,7 @@ export const UploadPage = (() => {
         }
         const incomingBytes = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
         warnIfStorageLow(incomingBytes);
+        RunTracker.start({ totalBytes: incomingBytes, fileCount: acceptedFiles.length });
 
         if (activeJobs.size === 0) {
             UploadProgress.show(() => activeJobs.size > 0);
@@ -1102,6 +1104,7 @@ export const UploadPage = (() => {
     function checkJobs() {
         if (activeJobs.size === 0) {
             UploadProgress.hide();
+            RunTracker.finish();
         }
     }
 
@@ -1113,6 +1116,7 @@ export const UploadPage = (() => {
         clearAllJobTimeouts();
         activeJobs.clear();
         UploadProgress.hide();
+        RunTracker.finish();
     }
 
     /**

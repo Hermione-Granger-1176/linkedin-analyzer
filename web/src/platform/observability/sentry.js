@@ -105,6 +105,13 @@ const DIAGNOSTIC_TAG_VALUES = Object.freeze({
     expectedType: new Set(["connections", "messages"]),
     exportType: new Set(["fading-conversations", "silent-connections", "top-contacts"]),
 });
+// Allowlisted values for the processing-unfinished event. They match the
+// buckets in run-tracker.js; anything else is dropped before transport.
+const UNFINISHED_RUN_VALUES = Object.freeze({
+    sizeBucket: new Set(["lt-10mb", "10-30mb", "30-60mb", "60-100mb", "gte-100mb"]),
+    memoryBucket: new Set(["unknown", "le-2gb", "4gb", "ge-8gb"]),
+    mode: new Set(["single", "parallel"]),
+});
 const ERROR_TYPES = new Set([
     "AggregateError",
     "DOMException",
@@ -466,6 +473,48 @@ function reduceMetricEvent(event, environment, release) {
 }
 
 /**
+ * Reduce allowlisted processing-unfinished fields, or null when any is invalid.
+ * @param {unknown} fields
+ * @returns {Record<string, string>|null}
+ */
+function reduceUnfinishedRunFields(fields) {
+    if (!isRecord(fields)) {
+        return null;
+    }
+    /** @type {Record<string, string>} */
+    const reduced = {};
+    for (const [key, allowedValues] of Object.entries(UNFINISHED_RUN_VALUES)) {
+        const value = fields[key];
+        if (typeof value !== "string" || !allowedValues.has(value)) {
+            return null;
+        }
+        reduced[key] = value;
+    }
+    return reduced;
+}
+
+/**
+ * Reduce a processing-unfinished event to its fixed allowlisted tags.
+ * @param {object} event
+ * @param {string} environment
+ * @param {string|undefined} release
+ * @returns {object|null}
+ */
+function reduceUnfinishedRunEvent(event, environment, release) {
+    if (!isRecord(event.tags) || event.tags["telemetry.type"] !== "processing-unfinished") {
+        return null;
+    }
+    const fields = reduceUnfinishedRunFields(event.tags);
+    if (!fields) {
+        return null;
+    }
+    const reduced = reduceBaseEvent(event, environment, release, "info");
+    reduced.message = "processing-unfinished";
+    reduced.tags = { "telemetry.type": "processing-unfinished", ...fields };
+    return reduced;
+}
+
+/**
  * Clear SDK attachments before event transport.
  * @param {unknown} hint
  */
@@ -513,6 +562,9 @@ export function initSentry() {
             }
             if (event.message === "session-metrics") {
                 return reduceMetricEvent(event, environment, release);
+            }
+            if (event.message === "processing-unfinished") {
+                return reduceUnfinishedRunEvent(event, environment, release);
             }
             return reduceErrorEvent(event, environment, release, appBasePath);
         },
@@ -656,6 +708,35 @@ export function flushMetrics() {
             level: "info",
             tags: { "telemetry.type": "session-metrics" },
             extra,
+        });
+    } catch {
+        // Ignore Sentry failures.
+    }
+}
+
+/**
+ * Send one processing-unfinished event with allowlisted buckets only. With
+ * consent granted, a test sink on window records the reduced fields, so e2e
+ * tests can check the event without a build-time DSN.
+ * @param {{ sizeBucket: string, memoryBucket: string, mode: string }} fields
+ */
+export function captureProcessingUnfinished(fields) {
+    const reduced = reduceUnfinishedRunFields(fields);
+    if (!reduced || !hasTelemetryConsent()) {
+        return;
+    }
+    const sink = /** @type {Window & { __LINKEDIN_ANALYZER_TELEMETRY_SINK__?: unknown }} */ (window)
+        .__LINKEDIN_ANALYZER_TELEMETRY_SINK__;
+    if (Array.isArray(sink)) {
+        sink.push({ message: "processing-unfinished", ...reduced });
+    }
+    if (!sentryReady) {
+        return;
+    }
+    try {
+        Sentry.captureMessage("processing-unfinished", {
+            level: "info",
+            tags: { "telemetry.type": "processing-unfinished", ...reduced },
         });
     } catch {
         // Ignore Sentry failures.

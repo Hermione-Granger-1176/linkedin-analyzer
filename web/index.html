@@ -2886,6 +2886,24 @@
         </div>
 
         <div
+            class="status-banner"
+            id="unfinishedRunBanner"
+            data-testid="unfinished-run-banner"
+            hidden
+            aria-live="polite"
+        >
+            <p>
+                The last processing run in this browser did not finish. If that keeps happening on
+                this device, upload fewer files at once or use the Python CLI on a computer.
+            </p>
+            <div class="action-buttons">
+                <button class="ghost-btn" id="unfinishedRunDismissBtn" type="button">
+                    Dismiss
+                </button>
+            </div>
+        </div>
+
+        <div
             class="progress-overlay"
             id="contentLoadingOverlay"
             data-testid="content-loading-overlay"

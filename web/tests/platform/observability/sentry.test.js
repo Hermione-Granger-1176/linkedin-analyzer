@@ -622,6 +622,107 @@ describe("sentry", () => {
         ).toBeNull();
     });
 
+    it("sends one processing-unfinished event with allowlisted buckets only", async () => {
+        const { api, sentry } = await enableSentry();
+        const fields = { sizeBucket: "60-100mb", memoryBucket: "4gb", mode: "parallel" };
+
+        api.captureProcessingUnfinished(fields);
+        api.captureProcessingUnfinished({ ...fields, sizeBucket: PRIVATE_MARKER });
+        api.captureProcessingUnfinished({ ...fields, mode: undefined });
+        api.captureProcessingUnfinished(null);
+
+        expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
+        expect(sentry.captureMessage).toHaveBeenCalledWith("processing-unfinished", {
+            level: "info",
+            tags: { "telemetry.type": "processing-unfinished", ...fields },
+        });
+    });
+
+    it("records processing-unfinished to the test sink only with consent", async () => {
+        const api = await import("../../../src/platform/observability/sentry.js");
+        const sentry = await import("@sentry/browser");
+        const fields = { sizeBucket: "lt-10mb", memoryBucket: "unknown", mode: "single" };
+        window.__LINKEDIN_ANALYZER_TELEMETRY_SINK__ = [];
+        try {
+            api.captureProcessingUnfinished(fields);
+            expect(window.__LINKEDIN_ANALYZER_TELEMETRY_SINK__).toEqual([]);
+
+            api.setTelemetryConsent(true);
+            api.captureProcessingUnfinished(fields);
+            expect(window.__LINKEDIN_ANALYZER_TELEMETRY_SINK__).toEqual([
+                { message: "processing-unfinished", ...fields },
+            ]);
+            // Without a DSN, Sentry never starts, so nothing is sent.
+            expect(sentry.captureMessage).not.toHaveBeenCalled();
+        } finally {
+            delete window.__LINKEDIN_ANALYZER_TELEMETRY_SINK__;
+        }
+    });
+
+    it("ignores Sentry failures when sending processing-unfinished", async () => {
+        const { api, sentry } = await enableSentry();
+        sentry.captureMessage.mockImplementationOnce(() => {
+            throw new Error("transport down");
+        });
+        expect(() =>
+            api.captureProcessingUnfinished({
+                sizeBucket: "lt-10mb",
+                memoryBucket: "unknown",
+                mode: "single",
+            }),
+        ).not.toThrow();
+    });
+
+    it("reduces crafted processing-unfinished events to allowlisted tags", async () => {
+        const { options } = await enableSentry({ environment: "production", release: "release-safe" });
+        const event = {
+            event_id: VALID_EVENT_ID,
+            timestamp: 7,
+            message: "processing-unfinished",
+            tags: {
+                "telemetry.type": "processing-unfinished",
+                sizeBucket: "gte-100mb",
+                memoryBucket: "le-2gb",
+                mode: "single",
+                private: PRIVATE_MARKER,
+            },
+            extra: { private: PRIVATE_MARKER },
+            request: { url: `https://example.com/?q=${PRIVATE_MARKER}` },
+        };
+
+        const reduced = options.beforeSend(event);
+        expect(JSON.stringify(reduced)).not.toContain(PRIVATE_MARKER);
+        expect(reduced).toEqual({
+            level: "info",
+            platform: "javascript",
+            environment: "production",
+            release: "release-safe",
+            event_id: VALID_EVENT_ID,
+            timestamp: 7,
+            message: "processing-unfinished",
+            tags: {
+                "telemetry.type": "processing-unfinished",
+                sizeBucket: "gte-100mb",
+                memoryBucket: "le-2gb",
+                mode: "single",
+            },
+        });
+
+        expect(options.beforeSend({ message: "processing-unfinished" })).toBeNull();
+        expect(
+            options.beforeSend({
+                message: "processing-unfinished",
+                tags: { "telemetry.type": "session-metrics" },
+            }),
+        ).toBeNull();
+        expect(
+            options.beforeSend({
+                message: "processing-unfinished",
+                tags: { ...event.tags, mode: PRIVATE_MARKER },
+            }),
+        ).toBeNull();
+    });
+
     it("flushes metrics on hidden and pagehide lifecycle events", async () => {
         const { api, sentry } = await enableSentry();
 

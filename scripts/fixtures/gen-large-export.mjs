@@ -240,6 +240,7 @@ export function generateLargeExport({ sizeMb, dir }) {
         return Array.from({ length: count }, () => pick(parts)).join(" ");
     };
     const target = (file) => Math.round(sizeMb * MB * FILE_SHARES[file]);
+    /** @type {Record<string, { bytes: number, rows: number }>} */
     const results = {};
 
     results["messages.csv"] = writeUntil(

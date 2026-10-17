@@ -13,7 +13,7 @@ import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-toolti
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { prefersReducedMotion } from "../../shared/ui/motion.js";
-import { markActiveRange } from "../../shared/ui/time-range.js";
+import { createRangeFilter } from "../../shared/ui/time-range.js";
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 
@@ -174,6 +174,8 @@ export const AnalyticsPage = (() => {
     let initialized = false;
     let needsBaseReload = true;
     let isApplyingRouteParams = false;
+    /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
+    let rangeFilter = null;
 
     /** @type {Worker|null} */
     let worker = null;
@@ -300,17 +302,20 @@ export const AnalyticsPage = (() => {
 
     /** Attach event listeners for filters, charts, theme, and visibility. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((button) => {
-            button.addEventListener("click", () => handleTimeRangeChange(button));
+        // No route option: this screen writes its other filters into the route
+        // beside the range, so it syncs the whole set itself.
+        rangeFilter = createRangeFilter({
+            ranges: RANGE_VALUES,
+            fallback: FILTER_DEFAULTS.timeRange,
+            buttons: elements.timeRangeButtons,
+            select: elements.timeRangeSelect,
+            resetButton: elements.resetFiltersBtn,
+            onChange: (range) => {
+                state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+                syncRouteFromFilters();
+                scheduleViewRequest(true);
+            },
         });
-
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
-        }
-
-        if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener("click", resetFilters);
-        }
         if (elements.activeFiltersList) {
             elements.activeFiltersList.addEventListener("click", handleFilterChipClick);
         }
@@ -819,56 +824,6 @@ export const AnalyticsPage = (() => {
     }
 
     /**
-     * Handle click on a time range button.
-     * @param {HTMLElement} button - The clicked time range button element.
-     */
-    function handleTimeRangeChange(button) {
-        const range = button.getAttribute("data-range");
-        /* v8 ignore next 3 */
-        if (!range) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Apply the range chosen from the compact select, ignoring unknown values. */
-    function handleTimeRangeSelect() {
-        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        if (!RANGE_VALUES.has(range)) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Reset all filters to defaults and request a fresh view. */
-    function resetFilters() {
-        state.filters = { ...FILTER_DEFAULTS };
-        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
-        syncRouteFromFilters();
-        scheduleViewRequest(true);
-    }
-
-    /**
-     * Apply a new time range, reset other filters, and request view.
-     * @param {string} range - The time range identifier (e.g. '12m', '6m').
-     */
-    function applyTimeRange(range) {
-        const nextRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
-        setActiveTimeRange(nextRange);
-        syncRouteFromFilters();
-        scheduleViewRequest(true);
-    }
-
-    /**
-     * Update the active class on time range buttons.
-     * @param {string} range - The active time range identifier.
-     */
-    function setActiveTimeRange(range) {
-        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
-    }
-
-    /**
      * Handle click on an active filter chip to remove it.
      * @param {Event} event - The click event.
      */
@@ -1119,7 +1074,9 @@ export const AnalyticsPage = (() => {
         const previousKey = getFilterKey(state.filters);
         isApplyingRouteParams = true;
         state.filters = { ...nextFilters };
-        setActiveTimeRange(state.filters.timeRange);
+        /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (rangeFilter).show(
+            state.filters.timeRange,
+        );
         renderActiveFilters();
         isApplyingRouteParams = false;
         return previousKey !== getFilterKey(state.filters);

@@ -223,6 +223,63 @@ function invalid(error) {
 }
 
 /**
+ * A worker request parse result. A rejected request still carries the id it
+ * arrived with, so the worker answers under the id the page is waiting on.
+ * @template T
+ * @typedef {({valid: true, value: T} | {valid: false, error: string}) & {requestId: RequestId}} RequestParseResult
+ */
+
+/**
+ * Read the id a raw worker request arrived with.
+ * @param {unknown} message - Raw request
+ * @returns {RequestId}
+ */
+function requestIdOf(message) {
+    return isPlainObject(message) ? normalizeRequestId(message.requestId) : 0;
+}
+
+/**
+ * Build a rejected worker request result under its id.
+ * @param {RequestId} requestId - Id the request arrived with
+ * @param {string} error - Validation error
+ * @returns {{valid: false, error: string, requestId: RequestId}}
+ */
+function rejected(requestId, error) {
+    return { ...invalid(error), requestId };
+}
+
+/**
+ * Build an accepted worker request result under its id.
+ * @template {{requestId: RequestId}} T
+ * @param {T} value - Normalized request
+ * @returns {{valid: true, value: T, requestId: RequestId}}
+ */
+function accepted(value) {
+    return { ...valid(value), requestId: value.requestId };
+}
+
+/**
+ * Read one CSV source field of a request payload: a stored upload Blob or CSV
+ * text within the size ceiling. An optional field may be absent.
+ * @param {PlainObject} payload - Request payload
+ * @param {string} field - Field name, which also names it in the error
+ * @param {boolean} required - Whether the field must be present
+ * @returns {{source: CsvSource, error: string|null}} Source "" when absent
+ */
+function readCsvField(payload, field, required) {
+    const parsed = parseCsvSource(payload[field]);
+    if (required && !parsed.source) {
+        return { source: "", error: `Missing ${field} payload` };
+    }
+    // When present it must respect the same size ceiling as every other CSV
+    // payload rather than being silently truncated.
+    if (parsed.tooLarge) {
+        return { source: "", error: `${field} payload exceeds allowed size` };
+    }
+    return { source: parsed.source, error: null };
+}
+
+/**
  * Check whether a value is a plain object.
  * @param {unknown} value - Candidate value
  * @returns {value is PlainObject}
@@ -531,23 +588,21 @@ export function parseAnalyticsWorkerMessage(message) {
 /**
  * Parse connections worker request envelope.
  * @param {unknown} message - Raw request
- * @returns {ParseResult<ConnectionsWorkerRequest>}
+ * @returns {RequestParseResult<ConnectionsWorkerRequest>}
  */
 export function parseConnectionsWorkerRequest(message) {
+    const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "process") {
-        return invalid("Invalid connections worker request envelope");
+        return rejected(requestId, "Invalid connections worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const connections = parseCsvSource(payload.connectionsCsv);
-    if (!connections.source) {
-        return invalid("Missing connectionsCsv payload");
+    const connections = readCsvField(payload, "connectionsCsv", true);
+    if (connections.error) {
+        return rejected(requestId, connections.error);
     }
-    if (connections.tooLarge) {
-        return invalid("connectionsCsv payload exceeds allowed size");
-    }
-    return valid({
+    return accepted({
         type: "process",
-        requestId: normalizeRequestId(message.requestId),
+        requestId,
         payload: { connectionsCsv: connections.source },
     });
 }
@@ -595,29 +650,23 @@ export function parseConnectionsWorkerMessage(message) {
 /**
  * Parse messages worker request envelope.
  * @param {unknown} message - Raw request
- * @returns {ParseResult<MessagesWorkerRequest>}
+ * @returns {RequestParseResult<MessagesWorkerRequest>}
  */
 export function parseMessagesWorkerRequest(message) {
+    const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "process") {
-        return invalid("Invalid messages worker request envelope");
+        return rejected(requestId, "Invalid messages worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const messages = parseCsvSource(payload.messagesCsv);
-    if (!messages.source) {
-        return invalid("Missing messagesCsv payload");
+    const messages = readCsvField(payload, "messagesCsv", true);
+    const connections = readCsvField(payload, "connectionsCsv", false);
+    const error = messages.error || connections.error;
+    if (error) {
+        return rejected(requestId, error);
     }
-    if (messages.tooLarge) {
-        return invalid("messagesCsv payload exceeds allowed size");
-    }
-    // connectionsCsv is optional, but when present it must respect the same size
-    // ceiling as every other CSV payload rather than being silently truncated.
-    const connections = parseCsvSource(payload.connectionsCsv);
-    if (connections.tooLarge) {
-        return invalid("connectionsCsv payload exceeds allowed size");
-    }
-    return valid({
+    return accepted({
         type: "process",
-        requestId: normalizeRequestId(message.requestId),
+        requestId,
         payload: {
             messagesCsv: messages.source,
             connectionsCsv: connections.source,
@@ -644,38 +693,25 @@ export function parseMessagesWorkerMessage(message) {
 /**
  * Parse threads worker request envelope.
  * @param {unknown} message - Raw request
- * @returns {{valid: true, value: ThreadsWorkerRequest}
- * | {valid: false, error: string, requestId: RequestId}}
+ * @returns {RequestParseResult<ThreadsWorkerRequest>}
  */
 export function parseThreadsWorkerRequest(message) {
-    // A rejected request is still answered under the id it arrived with. The
-    // transport settles a failure envelope whatever id it carries, so this is
-    // not what keeps it off the watchdog; it keeps the reply attributable in
-    // diagnostics, and correct if that policy ever tightens.
-    const requestId = normalizeRequestId(isPlainObject(message) ? message.requestId : 0);
-    const rejected = (/** @type {string} */ error) => ({ ...invalid(error), requestId });
-
+    const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "threads") {
-        return rejected("Invalid threads worker request envelope");
+        return rejected(requestId, "Invalid threads worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const messages = parseCsvSource(payload.messagesCsv);
-    if (!messages.source) {
-        return rejected("Missing messagesCsv payload");
-    }
-    if (messages.tooLarge) {
-        return rejected("messagesCsv payload exceeds allowed size");
-    }
+    const messages = readCsvField(payload, "messagesCsv", true);
     // The connections file the worker derives its self-detection tiebreak keys
-    // from. Optional, as it is on the messages worker's own request, but when
-    // present it must respect the same size ceiling as every other CSV payload
-    // rather than being silently truncated: half a connections file names half
-    // the people in it, and the tiebreak would then be wrong rather than absent.
-    const connections = parseCsvSource(payload.connectionsCsv);
-    if (connections.tooLarge) {
-        return rejected("connectionsCsv payload exceeds allowed size");
+    // from. Optional, as it is on the messages worker's own request. Half a
+    // connections file names half the people in it, and the tiebreak would then
+    // be wrong rather than absent, so an oversized one is refused, not truncated.
+    const connections = readCsvField(payload, "connectionsCsv", false);
+    const error = messages.error || connections.error;
+    if (error) {
+        return rejected(requestId, error);
     }
-    return valid({
+    return accepted({
         type: "threads",
         requestId,
         payload: {
@@ -739,43 +775,39 @@ function isCleanOutput(value) {
  * names the stored upload, so the worker can reuse the rows it cleaned for
  * the preview when the download asks for the same file.
  * @param {unknown} message - Raw request
- * @returns {({valid: true, value: CleaningWorkerRequest}
- * | {valid: false, error: string}) & {requestId: RequestId}}
+ * @returns {RequestParseResult<CleaningWorkerRequest>}
  */
 export function parseCleaningWorkerRequest(message) {
-    const requestId = isPlainObject(message) ? normalizeRequestId(message.requestId) : 0;
+    const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "clean") {
-        return { ...invalid("Invalid cleaning worker request envelope"), requestId };
+        return rejected(requestId, "Invalid cleaning worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
     const fileType = normalizeString(payload.fileType, 32);
     if (!FILE_TYPES.has(fileType)) {
-        return { ...invalid("Invalid cleaning file type"), requestId };
+        return rejected(requestId, "Invalid cleaning file type");
     }
     const output = payload.output;
     if (!isCleanOutput(output)) {
-        return { ...invalid("Invalid cleaning output"), requestId };
+        return rejected(requestId, "Invalid cleaning output");
     }
     const file = parseCsvSource(payload.source);
     if (!file.source) {
-        return { ...invalid("Missing cleaning source payload"), requestId };
+        return rejected(requestId, "Missing cleaning source payload");
     }
     if (file.tooLarge) {
-        return { ...invalid("Cleaning source payload exceeds allowed size"), requestId };
+        return rejected(requestId, "Cleaning source payload exceeds allowed size");
     }
-    return {
-        ...valid({
-            type: "clean",
-            requestId,
-            payload: {
-                fileType,
-                output,
-                source: file.source,
-                key: normalizeString(payload.key, LIMITS.maxJobIdChars),
-            },
-        }),
+    return accepted({
+        type: "clean",
         requestId,
-    };
+        payload: {
+            fileType,
+            output,
+            source: file.source,
+            key: normalizeString(payload.key, LIMITS.maxJobIdChars),
+        },
+    });
 }
 
 /**

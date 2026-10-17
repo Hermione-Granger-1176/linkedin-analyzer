@@ -133,14 +133,20 @@ describe("run-tracker", () => {
         tracker.finish();
     });
 
-    it("refreshes the active run instead of starting a second one", () => {
+    it("adds a joining upload to the active run instead of starting a second one", () => {
         const tracker = makeTracker();
-        tracker.start({ totalBytes: MB, fileCount: 1 });
-        tracker.start({ totalBytes: 40 * MB, fileCount: 2 });
+        tracker.start({ totalBytes: 25 * MB, fileCount: 1 });
+        tracker.start({ totalBytes: 10 * MB, fileCount: 1 });
 
         const marker = readOnlyMarker();
         expect(marker.sizeBucket).toBe("30-60mb");
         expect(marker.mode).toBe("parallel");
+        tracker.finish();
+
+        // A small file joining a large run keeps the large run's bucket.
+        tracker.start({ totalBytes: 80 * MB, fileCount: 1 });
+        tracker.start({ totalBytes: MB, fileCount: 1 });
+        expect(readOnlyMarker().sizeBucket).toBe("60-100mb");
         tracker.finish();
     });
 
@@ -186,6 +192,33 @@ describe("run-tracker", () => {
         expect(readOnlyMarker().leftAt).toBeDefined();
         window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
         expect(readOnlyMarker().leftAt).toBeUndefined();
+        tracker.finish();
+    });
+
+    it("treats a frozen tab as left and writes its marker back when it resumes", async () => {
+        const tracker = makeTracker();
+        tracker.start({ totalBytes: MB, fileCount: 1 });
+        window.dispatchEvent(new Event("freeze"));
+        expect(readOnlyMarker().leftAt).toBe(Date.now());
+
+        // Another tab sweeps the marker while this one cannot answer.
+        const onUnfinished = vi.fn();
+        await makeTracker().checkPrevious(onUnfinished);
+        expect(onUnfinished).not.toHaveBeenCalled();
+        expect(markerKeys()).toEqual([]);
+
+        window.dispatchEvent(new Event("resume"));
+        expect(readOnlyMarker().leftAt).toBeUndefined();
+        tracker.finish();
+    });
+
+    it("writes a swept marker back on the next heartbeat", () => {
+        const tracker = makeTracker();
+        tracker.start({ totalBytes: MB, fileCount: 1 });
+        window.localStorage.clear();
+
+        vi.advanceTimersByTime(HEARTBEAT_MS);
+        expect(readOnlyMarker().heartbeatAt).toBe(Date.now());
         tracker.finish();
     });
 

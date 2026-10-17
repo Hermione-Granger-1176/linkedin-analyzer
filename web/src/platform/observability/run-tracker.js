@@ -75,12 +75,19 @@ function readMarker(storage, key) {
 }
 
 /**
+ * @typedef {object} ActiveRun
+ * @property {Record<string, unknown>} marker - Marker as stored
+ * @property {number} totalBytes - Bytes of every upload in the run so far
+ * @property {number} fileCount - Files in the run so far
+ */
+
+/**
  * Create a run tracker. Every browser API is injected so tests can drive it.
  * @param {object} deps
  * @param {Storage|null} deps.localStorage - Marker storage; null disables tracking
  * @param {Storage|null} deps.sessionStorage - Per-tab ID storage
  * @param {((name: string) => BroadcastChannel)|null} deps.createChannel - BroadcastChannel factory
- * @param {Window|null} deps.target - Where pagehide and pageshow fire
+ * @param {Window|null} deps.target - Where page lifecycle events fire
  * @param {() => number} deps.now - Clock
  * @param {() => string} deps.randomId - Unique ID source
  * @returns {{ start: (run: { totalBytes: number, fileCount: number }) => void, finish: () => void, checkPrevious: (onUnfinished: (run: { sizeBucket: string, mode: string }) => void) => Promise<void> }}
@@ -99,6 +106,10 @@ export function createRunTracker({
     const markers = localStorage;
     let tabId = "";
     let activeKey = "";
+    /** @type {ActiveRun|null} */
+    let active = null;
+    // Lifecycle listeners and the heartbeat exist only while a run is active.
+    const current = () => /** @type {ActiveRun} */ (active);
     let heartbeatTimer = null;
     let channel = null;
 
@@ -116,16 +127,11 @@ export function createRunTracker({
             // Ignore blocked storage.
         }
     };
-    const update = (changes) => {
-        const marker = activeKey ? readMarker(markers, activeKey) : null;
-        if (marker) {
-            const next = { ...marker, ...changes };
-            Object.keys(changes).forEach((key) => {
-                if (changes[key] === undefined) {
-                    delete next[key];
-                }
-            });
-            write(activeKey, next);
+    // The marker lives in memory and every write stores all of it, so a marker
+    // another tab removed while this one was hidden or frozen comes back.
+    const save = () => {
+        if (active) {
+            write(activeKey, active.marker);
         }
     };
 
@@ -198,39 +204,65 @@ export function createRunTracker({
         });
     };
 
-    const onPageHide = () => update({ leftAt: now() });
-    // A page restored from the back/forward cache is still running its run.
+    const onPageHide = () => {
+        current().marker.leftAt = now();
+        save();
+    };
+    // A page restored from the back/forward cache, or a frozen tab that
+    // resumes, is still running its run.
+    /** @param {Event & { persisted?: boolean }} event */
     const onPageShow = (event) => {
-        if (event && event.persisted) {
-            update({ leftAt: undefined, heartbeatAt: now() });
+        if (event.type === "resume" || event.persisted) {
+            delete current().marker.leftAt;
+            current().marker.heartbeatAt = now();
+            save();
         }
     };
+    /** @type {Array<[string, (event: Event) => void]>} */
+    const lifecycleEvents = [
+        ["pagehide", onPageHide],
+        // A frozen tab cannot answer an ownership check, so it counts as left.
+        ["freeze", onPageHide],
+        ["pageshow", onPageShow],
+        ["resume", onPageShow],
+    ];
 
     /**
-     * Start tracking a processing run, or refresh the current one when another
+     * Start tracking a processing run, or add to the current one when another
      * upload joins it before it finishes.
-     * @param {{ totalBytes: number, fileCount: number }} run - Combined size and file count
+     * @param {{ totalBytes: number, fileCount: number }} run - Size and file count of this upload
      */
     function start({ totalBytes, fileCount }) {
-        const mode = fileCount > 1 ? "parallel" : "single";
-        if (activeKey) {
-            update({ sizeBucket: sizeBucket(totalBytes), mode, heartbeatAt: now() });
+        if (active) {
+            active.totalBytes += totalBytes;
+            active.fileCount += fileCount;
+            active.marker.sizeBucket = sizeBucket(active.totalBytes);
+            active.marker.mode = active.fileCount > 1 ? "parallel" : "single";
+            active.marker.heartbeatAt = now();
+            save();
             return;
         }
         activeKey = `${MARKER_PREFIX}${randomId()}`;
         const startedAt = now();
-        write(activeKey, {
-            tabId: getTabId(),
-            startedAt,
-            heartbeatAt: startedAt,
-            sizeBucket: sizeBucket(totalBytes),
-            mode,
-        });
+        active = {
+            totalBytes,
+            fileCount,
+            marker: {
+                tabId: getTabId(),
+                startedAt,
+                heartbeatAt: startedAt,
+                sizeBucket: sizeBucket(totalBytes),
+                mode: fileCount > 1 ? "parallel" : "single",
+            },
+        };
+        save();
         getChannel();
-        heartbeatTimer = setInterval(() => update({ heartbeatAt: now() }), HEARTBEAT_MS);
+        heartbeatTimer = setInterval(() => {
+            current().marker.heartbeatAt = now();
+            save();
+        }, HEARTBEAT_MS);
         if (target) {
-            target.addEventListener("pagehide", onPageHide);
-            target.addEventListener("pageshow", onPageShow);
+            lifecycleEvents.forEach(([type, listener]) => target.addEventListener(type, listener));
         }
     }
 
@@ -243,9 +275,9 @@ export function createRunTracker({
         heartbeatTimer = null;
         remove(activeKey);
         activeKey = "";
+        active = null;
         if (target) {
-            target.removeEventListener("pagehide", onPageHide);
-            target.removeEventListener("pageshow", onPageShow);
+            lifecycleEvents.forEach(([type, listener]) => target.removeEventListener(type, listener));
         }
     }
 

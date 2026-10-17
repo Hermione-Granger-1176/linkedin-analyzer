@@ -216,6 +216,48 @@ describe("getFadingConversations", () => {
         expect(getFadingConversations(messages, connections)).toEqual([]);
     });
 
+    it("does not match a connection by name when its profile url differs", () => {
+        const contacts = new Map([
+            ["a", { name: "Ada Lovelace", url: "u/other", lastTimestamp: 1_000 * DAY - 40 * DAY }],
+        ]);
+        const messages = messageState({ contacts });
+        const connections = connectionState({
+            byName: new Map([[nameKeyFor("Ada Lovelace"), { url: "u/ada", company: "Acme" }]]),
+        });
+        expect(getFadingConversations(messages, connections)).toEqual([]);
+    });
+
+    it("lists a connection once, judged by its most recent conversation", () => {
+        const ada = { url: "u/ada", company: "Acme" };
+        const connections = connectionState({
+            byUrl: new Map([["u/ada", ada]]),
+            byName: new Map([[nameKeyFor("Ada Lovelace"), ada]]),
+        });
+        const older = { name: "Ada Lovelace", url: "", lastTimestamp: 1_000 * DAY - 90 * DAY };
+        const newer = { name: "Ada Lovelace", url: "u/ada", lastTimestamp: 1_000 * DAY - 40 * DAY };
+        const recent = { name: "Ada Lovelace", url: "u/ada", lastTimestamp: 1_000 * DAY - 5 * DAY };
+
+        const both = messageState({
+            contacts: new Map([
+                ["a", newer],
+                ["b", older],
+            ]),
+        });
+        expect(getFadingConversations(both, connections)).toEqual([
+            expect.objectContaining({ url: "u/ada", daysSince: 40 }),
+        ]);
+
+        // A recent conversation keeps the connection off the list, whatever
+        // older contacts also match it.
+        const withRecent = messageState({
+            contacts: new Map([
+                ["a", older],
+                ["b", recent],
+            ]),
+        });
+        expect(getFadingConversations(withRecent, connections)).toEqual([]);
+    });
+
     it("sorts by most-recent contact, then by name", () => {
         const sharedTs = 1_000 * DAY - 60 * DAY;
         const contacts = new Map([

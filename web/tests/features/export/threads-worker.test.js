@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { processPayload } from "../../../src/features/export/threads-worker.js";
 import { PII_MARKER, piiError } from "../../helpers/pii-sentinel.js";
+import { storedUpload } from "../../helpers/stored-upload.js";
 
 const MESSAGES_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
@@ -153,6 +154,42 @@ describe("threads worker", () => {
         });
 
         expect(directions(result)).toEqual(["sent", "received"]);
+    });
+
+    it("streams a stored messages upload to the same threads as its text", async () => {
+        const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
+        const fromText = await processPayload({ messagesCsv: MESSAGES_CSV });
+        parseCSV.mockClear();
+
+        const streamed = await processPayload({ messagesCsv: storedUpload(MESSAGES_CSV) });
+
+        expect(streamed).toEqual(fromText);
+        // The stream builds the rows itself; no whole-text parse runs.
+        expect(parseCSV).not.toHaveBeenCalled();
+    });
+
+    it("restarts a stored messages upload that is not UTF-8 as windows-1252", async () => {
+        // 0xE9 alone is invalid UTF-8 and "é" in windows-1252.
+        const bytes = Uint8Array.from(
+            MESSAGES_CSV.replace("Hello Bob", "Caf\u0000").split(""),
+            (char) => (char === "\u0000" ? 0xe9 : char.charCodeAt(0)),
+        );
+
+        const result = await processPayload({ messagesCsv: storedUpload(bytes) });
+
+        expect(result.success).toBe(true);
+        expect(result.threads[0].messages.map((entry) => entry.body)).toContain("Café");
+    });
+
+    it("parses a stored upload whole when it streams as another file type", async () => {
+        const shares =
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2025-01-01,x,y,,,PUBLIC";
+
+        const result = await processPayload({ messagesCsv: storedUpload(shares) });
+
+        expect(result.success).toBe(false);
+        expect(result.threads).toEqual([]);
+        expect(result.error).toContain("missing required Messages columns");
     });
 
     it("keeps the thread selection when the connections file cannot be read", async () => {

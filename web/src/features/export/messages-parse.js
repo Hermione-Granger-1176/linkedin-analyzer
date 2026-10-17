@@ -64,6 +64,22 @@ function messageBodyText(value) {
 }
 
 /**
+ * Build one export row from a parsed record, or null when the row lacks a
+ * required value. The drop rule is the spreadsheet cleaner's, so the export
+ * sees the same messages the workbook would have.
+ * @param {Record<string, unknown>} raw - Parsed record keyed by CSV column name
+ * @returns {MessageRow|null} Export row
+ */
+export function toExportRow(raw) {
+    /** @type {MessageRow} */
+    const row = {};
+    for (const column of COLUMNS) {
+        row[column.name] = column.read(raw[column.name]);
+    }
+    return CONFIG.requiredColumns.every((name) => !isMissing(row[name])) ? row : null;
+}
+
+/**
  * Parse a messages CSV for the PDF export, preserving message bodies verbatim.
  * @param {string} csvText - Raw messages CSV text
  * @returns {{success: boolean, rows: MessageRow[], error: string|null}} Parsed rows
@@ -86,14 +102,8 @@ export function parseMessagesForExport(csvText) {
     /** @type {MessageRow[]} */
     const rows = [];
     for (const raw of parsed.data) {
-        /** @type {MessageRow} */
-        const row = {};
-        for (const column of COLUMNS) {
-            row[column.name] = column.read(raw[column.name]);
-        }
-        // Same row-level drop rule the spreadsheet cleaner applies, so the export
-        // sees the same messages the workbook would have.
-        if (CONFIG.requiredColumns.every((name) => !isMissing(row[name]))) {
+        const row = toExportRow(raw);
+        if (row) {
             rows.push(row);
         }
     }

@@ -88,7 +88,7 @@ test("keeps a large upload as a Blob that survives a reload", async ({ page }) =
     await page.goto("/#messages");
     await expect(page.locator("#messagesLayout")).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
     await expect(page.locator("#messagesEmpty")).toBeHidden();
-    await expect(page.locator("#topContactsList li").first()).toBeVisible({
+    await expect(page.locator("#topContactsList li:not(.skeleton-row)").first()).toBeVisible({
         timeout: LOAD_TIMEOUT_MS,
     });
 });

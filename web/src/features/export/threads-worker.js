@@ -11,10 +11,17 @@
  */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
-import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
+import { toCsvSource } from "../../shared/csv-source.js";
+import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import {
+    canStreamFileText,
+    readCsvSource,
+    readOptionalCsvSource,
+    streamFileText,
+} from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
-import { parseMessagesForExport } from "./messages-parse.js";
+import { parseMessagesForExport, toExportRow } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
 
 const RUNTIME_FAILURE = "Threads worker runtime failure.";
@@ -48,17 +55,56 @@ function contactKeysFrom(connectionsCsv) {
 }
 
 /**
+ * Parse the messages source into export rows. A stored upload streams through
+ * the parser, so neither its whole text nor a second copy of every record is
+ * held. When the stream cannot finish as a messages file, the source is read
+ * whole and parsed that way instead, so failures and their messages match.
+ * @param {unknown} source - Stored messages Blob or CSV text
+ * @returns {Promise<{success: boolean, rows: import("./messages-parse.js").MessageRow[], error: string|null}>}
+ */
+async function parseMessagesSource(source) {
+    const value = toCsvSource(source);
+    if (typeof value !== "string" && canStreamFileText(/** @type {File} */ (value))) {
+        /** @type {import("./messages-parse.js").MessageRow[]} */
+        let rows = [];
+        /** @param {Record<string, unknown>} record */
+        const onRecord = (record) => {
+            const row = toExportRow(record);
+            if (row) {
+                rows.push(row);
+            }
+        };
+        let processor = LinkedInCleaner.createStreamProcessor(onRecord);
+        await streamFileText(/** @type {File} */ (value), {
+            onText: (text) => {
+                processor.push(text);
+            },
+            onRestart: () => {
+                rows = [];
+                processor = LinkedInCleaner.createStreamProcessor(onRecord);
+            },
+        });
+        const streamed = processor.finish();
+        if (streamed && streamed.fileType === "messages") {
+            return { success: true, rows, error: null };
+        }
+        rows = [];
+    }
+    return parseMessagesForExport(await readCsvSource(source));
+}
+
+/**
  * Parse the messages CSV and pick the recent threads for the export. Each
- * file arrives as the stored upload Blob, read here, or as CSV text.
+ * file arrives as the stored upload Blob, read or streamed here, or as CSV
+ * text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string, people?: number, messagesPerPerson?: number}} payload - Raw payload
  * @returns {Promise<{success: boolean, threads: import("./threads.js").SelectedThread[], error: string|null}>}
  */
 async function processPayload(payload) {
-    const messagesCsv = await readCsvSource(payload.messagesCsv);
+    const result = await parseMessagesSource(payload.messagesCsv);
     // A Connections file that will not read costs the tiebreak, as one that
     // will not parse does.
     const { text: connectionsCsv } = await readOptionalCsvSource(payload.connectionsCsv);
-    const result = parseMessagesForExport(messagesCsv);
     if (!result.success) {
         return {
             success: false,

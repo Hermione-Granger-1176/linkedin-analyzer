@@ -1,6 +1,6 @@
-import { Blob as NodeBlob } from "node:buffer";
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { storedUpload } from "../../helpers/stored-upload.js";
 
 vi.mock("../../../src/features/cleaning/excel.js", () => ({
     ExcelGenerator: { generate: vi.fn(async () => new Blob(["xlsx"])) },
@@ -14,19 +14,6 @@ const SHARES_CSV = [
             `"2025-01-0${index + 1} 10:00:00 UTC","https://www.linkedin.com/feed/update/urn:li:activity:${index}","Post ${index}","","","PUBLIC"`,
     ),
 ].join("\n");
-
-/**
- * A stored upload that streams like a browser's, since jsdom's Blob has no
- * stream().
- * @param {BlobPart} content - File content
- * @returns {Blob}
- */
-function storedUpload(content) {
-    const blob = new Blob([content]);
-    const bytes = new NodeBlob([content]);
-    Object.defineProperty(blob, "stream", { value: () => bytes.stream() });
-    return blob;
-}
 
 let runCleanJob;
 let resetCleanJob;

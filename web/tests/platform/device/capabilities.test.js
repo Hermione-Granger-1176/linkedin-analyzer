@@ -294,6 +294,21 @@ describe("shared device profile", () => {
         expect(getContext).toHaveBeenCalledTimes(2);
     });
 
+    it("keeps the new choice for this page when storage refuses the write", async () => {
+        window.localStorage.setItem("linkedin-analyzer-effects", "lite");
+        const capabilities = await import("../../../src/platform/device/capabilities.js");
+        capabilities.getDeviceProfile();
+        const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+            throw new Error("QuotaExceededError");
+        });
+        try {
+            expect(capabilities.setEffectsOverride("full").override).toBe("full");
+            expect(capabilities.getDeviceProfile().override).toBe("full");
+        } finally {
+            setItem.mockRestore();
+        }
+    });
+
     it("downgrades on jank only under auto", async () => {
         const capabilities = await import("../../../src/platform/device/capabilities.js");
         expect(capabilities.getDeviceProfile().tier).toBe("standard");

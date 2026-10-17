@@ -223,22 +223,27 @@ let cachedProfile = null;
  */
 export function getDeviceProfile() {
     if (!cachedProfile) {
-        cachedProfile = buildDeviceProfile(
-            {
-                navigator: typeof navigator === "undefined" ? undefined : navigator,
-                matchMedia:
-                    typeof window.matchMedia === "function"
-                        ? (query) => window.matchMedia(query)
-                        : undefined,
-                createCanvas: () =>
-                    typeof OffscreenCanvas === "function"
-                        ? new OffscreenCanvas(1, 1)
-                        : document.createElement("canvas"),
-            },
-            readEffectsOverride(safeLocalStorage()),
-        );
+        cachedProfile = buildDeviceProfile(browserEnv(), readEffectsOverride(safeLocalStorage()));
     }
     return cachedProfile;
+}
+
+/**
+ * The browser APIs buildDeviceProfile reads.
+ * @returns {Parameters<typeof buildDeviceProfile>[0]}
+ */
+function browserEnv() {
+    return {
+        navigator: typeof navigator === "undefined" ? undefined : navigator,
+        matchMedia:
+            typeof window.matchMedia === "function"
+                ? (query) => window.matchMedia(query)
+                : undefined,
+        createCanvas: () =>
+            typeof OffscreenCanvas === "function"
+                ? new OffscreenCanvas(1, 1)
+                : document.createElement("canvas"),
+    };
 }
 
 /**
@@ -253,8 +258,10 @@ export function setEffectsOverride(override) {
     writeEffectsOverride(safeLocalStorage(), choice);
     const previous = getDeviceProfile();
     if (choice !== "lite" && previous.signals.acceleratedWebgl === null) {
-        cachedProfile = null;
-        return getDeviceProfile();
+        // Build from the choice in hand, not from storage, which may have
+        // refused the write.
+        cachedProfile = buildDeviceProfile(browserEnv(), choice);
+        return cachedProfile;
     }
     const autoTier = pickTier(previous.signals);
     cachedProfile = {

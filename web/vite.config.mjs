@@ -1,4 +1,5 @@
 import { sentryVitePlugin } from "@sentry/vite-plugin";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
@@ -16,8 +17,18 @@ export default defineConfig({
         emptyOutDir: true,
         target: "es2022",
         sourcemap: sentryUploadEnabled ? "hidden" : false,
+        rolldownOptions: {
+            output: {
+                // Every Svelte screen shares one runtime chunk, so the runtime is
+                // downloaded once and has its own size budget.
+                codeSplitting: {
+                    groups: [{ name: "svelte", test: /node_modules[\\/]svelte[\\/]/ }],
+                },
+            },
+        },
     },
     plugins: [
+        svelte(),
         VitePWA({
             strategies: "injectManifest",
             srcDir: "src",

@@ -47,7 +47,7 @@ web/
 │   │   ├── cleaning/            # Bounded CSV parser and Excel cleaner
 │   │   ├── connections/         # Network aggregation and Connections screen
 │   │   ├── export/              # Excel lists, chart downloads, and PDF export
-│   │   ├── insights/             # Rule-based insight screen
+│   │   ├── insights/             # Rule-based insight screen and its Svelte card grid
 │   │   ├── messages/             # Message parsing and relationship screen
 │   │   ├── tutorial/             # Guided tutorials and mini-tips
 │   │   └── upload/               # File reading, decoding, upload state, and progress

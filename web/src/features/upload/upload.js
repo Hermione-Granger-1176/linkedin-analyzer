@@ -454,7 +454,6 @@ export const UploadPage = (() => {
         }
         const incomingBytes = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
         warnIfStorageLow(incomingBytes);
-        RunTracker.start({ totalBytes: incomingBytes, fileCount: acceptedFiles.length });
 
         if (activeJobs.size === 0) {
             UploadProgress.show(() => activeJobs.size > 0);
@@ -471,6 +470,10 @@ export const UploadPage = (() => {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
         }
+        // Start or join the tracked run only now, in the same task that adds
+        // the jobs: earlier jobs finishing during the priming await would
+        // otherwise finish the run these files just joined.
+        RunTracker.start({ totalBytes: incomingBytes, fileCount: acceptedFiles.length });
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);

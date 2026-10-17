@@ -90,6 +90,7 @@ function readMarker(storage, key) {
  * @param {Window|null} deps.target - Where page lifecycle events fire
  * @param {() => number} deps.now - Clock
  * @param {() => string} deps.randomId - Unique ID source
+ * @param {LockManager|null} [deps.locks] - Web Locks, which keep two tabs from reporting one run
  * @returns {{ start: (run: { totalBytes: number, fileCount: number }) => void, finish: () => void, checkPrevious: (onUnfinished: (run: { sizeBucket: string, mode: string }) => void) => Promise<void> }}
  */
 export function createRunTracker({
@@ -99,6 +100,7 @@ export function createRunTracker({
     target,
     now,
     randomId,
+    locks = null,
 }) {
     if (!localStorage) {
         return { start() {}, finish() {}, checkPrevious: async () => {} };
@@ -222,6 +224,8 @@ export function createRunTracker({
     const lifecycleEvents = [
         ["pagehide", onPageHide],
         // A frozen tab cannot answer an ownership check, so it counts as left.
+    // freeze and resume fire on the document without bubbling, so the
+    // listeners use capture to hear them from the window.
         ["freeze", onPageHide],
         ["pageshow", onPageShow],
         ["resume", onPageShow],
@@ -262,7 +266,7 @@ export function createRunTracker({
             save();
         }, HEARTBEAT_MS);
         if (target) {
-            lifecycleEvents.forEach(([type, listener]) => target.addEventListener(type, listener));
+            lifecycleEvents.forEach(([type, listener]) => target.addEventListener(type, listener, true));
         }
     }
 
@@ -277,7 +281,7 @@ export function createRunTracker({
         activeKey = "";
         active = null;
         if (target) {
-            lifecycleEvents.forEach(([type, listener]) => target.removeEventListener(type, listener));
+            lifecycleEvents.forEach(([type, listener]) => target.removeEventListener(type, listener, true));
         }
     }
 
@@ -302,12 +306,18 @@ export function createRunTracker({
     }
 
     async function checkMarker(key, onUnfinished) {
-        const marker = readMarker(markers, key);
-        if (!marker || marker.leftAt) {
+        const seen = readMarker(markers, key);
+        if (!seen || seen.leftAt) {
             remove(key);
             return;
         }
         if (await ownedElsewhere(key)) {
+            return;
+        }
+        // The owner may have finished or left while the question was out.
+        const marker = readMarker(markers, key);
+        if (!marker || marker.leftAt) {
+            remove(key);
             return;
         }
         const age = now() - marker.heartbeatAt;
@@ -320,8 +330,39 @@ export function createRunTracker({
             }, STALE_MS - age);
             return;
         }
-        remove(key);
-        onUnfinished({ sizeBucket: marker.sizeBucket, mode: marker.mode });
+        await exclusively(key, () => {
+            // Another tab may have reported and removed it, or the run moved on.
+            const latest = readMarker(markers, key);
+            if (!latest || latest.leftAt || latest.heartbeatAt !== marker.heartbeatAt) {
+                return;
+            }
+            remove(key);
+            onUnfinished({ sizeBucket: latest.sizeBucket, mode: latest.mode });
+        });
+    }
+
+    /**
+     * Run the final check and report for one marker in one tab at a time, so
+     * two tabs that open together cannot both report it. Without Web Locks the
+     * report runs unguarded.
+     * @param {string} key - Marker key
+     * @param {() => void} report - Final check and report
+     * @returns {Promise<void>}
+     */
+    async function exclusively(key, report) {
+        if (!locks) {
+            report();
+            return;
+        }
+        try {
+            await locks.request(`${key}:report`, { ifAvailable: true }, (lock) => {
+                if (lock) {
+                    report();
+                }
+            });
+        } catch {
+            report();
+        }
     }
 
     return { start, finish, checkPrevious };
@@ -348,4 +389,5 @@ export const RunTracker = createRunTracker({
     target: typeof window === "undefined" ? null : window,
     now: () => Date.now(),
     randomId: () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    locks: typeof navigator !== "undefined" && navigator.locks ? navigator.locks : null,
 });

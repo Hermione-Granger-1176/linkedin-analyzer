@@ -198,7 +198,7 @@ describe("run-tracker", () => {
     it("treats a frozen tab as left and writes its marker back when it resumes", async () => {
         const tracker = makeTracker();
         tracker.start({ totalBytes: MB, fileCount: 1 });
-        window.dispatchEvent(new Event("freeze"));
+        document.dispatchEvent(new Event("freeze"));
         expect(readOnlyMarker().leftAt).toBe(Date.now());
 
         // Another tab sweeps the marker while this one cannot answer.
@@ -207,7 +207,7 @@ describe("run-tracker", () => {
         expect(onUnfinished).not.toHaveBeenCalled();
         expect(markerKeys()).toEqual([]);
 
-        window.dispatchEvent(new Event("resume"));
+        document.dispatchEvent(new Event("resume"));
         expect(readOnlyMarker().leftAt).toBeUndefined();
         tracker.finish();
     });
@@ -233,6 +233,61 @@ describe("run-tracker", () => {
         expect(onUnfinished).toHaveBeenCalledTimes(1);
         expect(onUnfinished).toHaveBeenCalledWith({ sizeBucket: "60-100mb", mode: "single" });
         expect(markerKeys()).toEqual([]);
+    });
+
+    it("does not report a run that was left while the owner check was out", async () => {
+        writeCrashedMarker(Date.now() - STALE_MS);
+
+        const onUnfinished = vi.fn();
+        const check = makeTracker().checkPrevious(onUnfinished);
+        writeCrashedMarker(Date.now() - STALE_MS, { leftAt: Date.now() });
+        await vi.advanceTimersByTimeAsync(1000);
+        await check;
+
+        expect(onUnfinished).not.toHaveBeenCalled();
+        expect(markerKeys()).toEqual([]);
+    });
+
+    it("reports a run once when two tabs check it together", async () => {
+        writeCrashedMarker(Date.now() - STALE_MS);
+        const held = new Set();
+        const locks = {
+            request: async (name, _options, callback) => {
+                if (held.has(name)) {
+                    return callback(null);
+                }
+                held.add(name);
+                try {
+                    return callback({ name });
+                } finally {
+                    await Promise.resolve();
+                    held.delete(name);
+                }
+            },
+        };
+
+        const onUnfinished = vi.fn();
+        const checks = [
+            makeTracker({ locks }).checkPrevious(onUnfinished),
+            makeTracker({ locks }).checkPrevious(onUnfinished),
+        ];
+        await vi.advanceTimersByTimeAsync(1000);
+        await Promise.all(checks);
+
+        expect(onUnfinished).toHaveBeenCalledTimes(1);
+        expect(markerKeys()).toEqual([]);
+    });
+
+    it("still reports when Web Locks refuse the request", async () => {
+        writeCrashedMarker(Date.now() - STALE_MS);
+        const locks = { request: () => Promise.reject(new Error("SecurityError")) };
+
+        const onUnfinished = vi.fn();
+        const check = makeTracker({ locks }).checkPrevious(onUnfinished);
+        await vi.advanceTimersByTimeAsync(1000);
+        await check;
+
+        expect(onUnfinished).toHaveBeenCalledTimes(1);
     });
 
     it("leaves a run alone while another open tab owns it", async () => {

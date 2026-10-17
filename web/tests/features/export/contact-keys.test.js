@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
-import { collectContactKeys } from "../../../src/features/export/contact-keys.js";
+import {
+    collectContactKeys,
+    collectContactKeysFromSource,
+} from "../../../src/features/export/contact-keys.js";
+import { storedUpload } from "../../helpers/stored-upload.js";
 
 const ADA_URL = "https://www.linkedin.com/in/ada";
 const HEADER = "First Name,Last Name,URL,Email Address,Company,Position,Connected On";
@@ -61,5 +65,37 @@ describe("collectContactKeys", () => {
         );
 
         expect(keys).toEqual(["ada lovelace", ADA_URL]);
+    });
+});
+
+describe("collectContactKeysFromSource", () => {
+    const rows = [`Ada,Lovelace,${ADA_URL},,Engines,Mathematician,`, "Bob,Smith,,,Acme,Engineer,"];
+
+    it("streams a stored upload to the same keys as the text", async () => {
+        const csv = connectionsCsv(rows);
+        const parse = vi.spyOn(LinkedInCleaner, "parseCSV");
+
+        expect(await collectContactKeysFromSource(storedUpload(csv))).toEqual(
+            collectContactKeys(csv),
+        );
+        // Only the comparison above parses the text; the stream builds no rows.
+        expect(parse).toHaveBeenCalledOnce();
+        parse.mockRestore();
+    });
+
+    it("drops the first attempt's keys when the stream restarts as windows-1252", async () => {
+        const csv = connectionsCsv(["Zo\u00eb,Smith,,,Acme,Engineer,"]);
+        const bytes = Uint8Array.from(csv, (char) => char.charCodeAt(0));
+        expect(await collectContactKeysFromSource(storedUpload(bytes))).toEqual(["zo\u00eb smith"]);
+    });
+
+    it("reads a stored upload whole when it does not stream as connections", async () => {
+        expect(
+            await collectContactKeysFromSource(storedUpload("not,a,connections,export")),
+        ).toEqual([]);
+    });
+
+    it("collects from CSV text", async () => {
+        expect(await collectContactKeysFromSource(connectionsCsv(rows))).toContain("bob smith");
     });
 });

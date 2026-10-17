@@ -726,6 +726,30 @@ describe("handleRestoreFiles", () => {
         expect(messages.find((m) => m.type === "restored").payload.hasData).toBe(true);
     });
 
+    it("treats a stored Blob the browser cannot read as absent", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        LinkedInCleaner.process.mockImplementation((csv, type) => ({
+            success: true,
+            fileType: type,
+            cleanedData: [{ Date: "2025-01-02 09:00" }],
+            rowCount: 1
+        }));
+        const read = vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(() => {
+            throw new Error("NotReadableError");
+        });
+
+        try {
+            await handleRestoreFiles({ sharesCsv: new Blob(["lost"]), commentsCsv: "comments" });
+        } finally {
+            read.mockRestore();
+        }
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledTimes(1);
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("comments", "comments");
+        expect(messages.find((m) => m.type === "restored").payload.hasData).toBe(true);
+    });
+
     it("posts restored with hasData=false when payload is empty", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
@@ -867,6 +891,32 @@ describe("message event dispatcher", () => {
         // Requests after the clear run as normal.
         await handlers.message({ data: { type: "initBase", payload: null } });
         expect(posted.at(-1).type).toBe("init");
+    });
+
+    it("drops a restore whose stored files were still being read when clear arrived", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockClear();
+
+        const restoring = handlers.message({
+            data: { type: "restoreFiles", payload: { sharesCsv: new Blob(["col\nval"]) } }
+        });
+        await Promise.resolve();
+        handlers.message({ data: { type: "clear" } });
+        await restoring;
+
+        const types = posted.map((m) => m.type);
+        expect(types).toContain("cleared");
+        expect(types).not.toContain("restored");
+        expect(LC.process).not.toHaveBeenCalled();
     });
 
     it("runs requests one at a time in arrival order", async () => {

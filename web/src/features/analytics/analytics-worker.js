@@ -387,11 +387,19 @@ async function handleAddFile(payload) {
 async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
+    const epoch = requestEpoch;
+    // A stored Blob the browser can no longer read counts as absent, like a
+    // file that fails to parse, so it cannot fail the other types' restore.
+    const readOrSkip = (source) => readCsvSource(source).catch(() => "");
     const sourceCsvByType = {
-        shares: await readCsvSource(sharesCsv),
-        comments: await readCsvSource(commentsCsv),
-        connections: await readCsvSource(connectionsCsv),
+        shares: await readOrSkip(sharesCsv),
+        comments: await readOrSkip(commentsCsv),
+        connections: await readOrSkip(connectionsCsv),
     };
+    // Clear arrived while the stored files were read: keep what it cleared gone.
+    if (epoch !== requestEpoch) {
+        return;
+    }
     const assignSourceByType = {
         shares: (cleanedData) => {
             sharesData = cleanedData;

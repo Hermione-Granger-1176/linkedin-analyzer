@@ -82,6 +82,10 @@ const MARKUP = `
     </div>
 `;
 
+// Each test imports the real PDF runtime afresh, which can take longer than
+// waitFor's one-second default when the whole suite runs in parallel.
+const SETTLE = { timeout: 5000 };
+
 let docStub = null;
 let PdfExport;
 let collectExportData;
@@ -260,7 +264,7 @@ async function setup(configure) {
     document.body.innerHTML = MARKUP;
     PdfExport.init();
     // init() resolves availability asynchronously.
-    await vi.waitFor(() => expect(hasExportableData).toHaveBeenCalled());
+    await vi.waitFor(() => expect(hasExportableData).toHaveBeenCalled(), SETTLE);
     await Promise.resolve();
 }
 
@@ -505,7 +509,10 @@ describe("PdfExport", () => {
         expect(ui().backdrop.hidden).toBe(true);
 
         settle(true);
-        await vi.waitFor(() => expect(ui().trigger.getAttribute("aria-disabled")).toBe("false"));
+        await vi.waitFor(
+            () => expect(ui().trigger.getAttribute("aria-disabled")).toBe("false"),
+            SETTLE,
+        );
         expect(ui().trigger.getAttribute("aria-label")).toBe("Save your insights as a PDF");
         expect(ui().hint.textContent).toBe("");
     });
@@ -536,7 +543,10 @@ describe("PdfExport", () => {
 
         // The newer check answers first and enables the button.
         settleSecond(true);
-        await vi.waitFor(() => expect(ui().trigger.getAttribute("aria-disabled")).toBe("false"));
+        await vi.waitFor(
+            () => expect(ui().trigger.getAttribute("aria-disabled")).toBe("false"),
+            SETTLE,
+        );
 
         // The older read, against storage as it was before the upload, must not
         // now disable it again for the rest of the session.
@@ -555,7 +565,7 @@ describe("PdfExport", () => {
         expect(hasExportableData).not.toHaveBeenCalled();
 
         listener({ type: "analyticsChanged" });
-        await vi.waitFor(() => expect(hasExportableData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(hasExportableData).toHaveBeenCalledTimes(1), SETTLE);
     });
 
     it("keeps the trigger disabled when the availability check fails", async () => {
@@ -574,7 +584,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
 
         expect(LoadingOverlay.show).toHaveBeenCalledWith("pdf-export", expect.any(Object));
         expect(jsPDF).toHaveBeenCalledWith({ unit: "mm", format: "a4", compress: true });
@@ -615,7 +625,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(celebrateStaple).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(celebrateStaple).toHaveBeenCalledTimes(1), SETTLE);
         // After the dialog is down, so the moment plays over the page rather
         // than behind the modal that started it.
         expect(ui().backdrop.hidden).toBe(true);
@@ -630,7 +640,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         expect(celebrateStaple).not.toHaveBeenCalled();
     });
@@ -645,7 +655,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
         ui().cancel.click();
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
         await runPendingTasks();
@@ -662,7 +672,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(downloadName).not.toBeNull());
+        await vi.waitFor(() => expect(downloadName).not.toBeNull(), SETTLE);
 
         expect(downloadName).toBe("linkedin-insights-2026-07-31.pdf");
         vi.useRealTimers();
@@ -675,13 +685,15 @@ describe("PdfExport", () => {
         ui().checkbox.checked = true;
         ui().confirm.click();
 
-        await vi.waitFor(() =>
-            expect(collectExportData).toHaveBeenCalledWith({
-                includeNames: true,
-                includeMessages: true,
-                generatedAt: expect.any(Date),
-                isCancelled: expect.any(Function),
-            }),
+        await vi.waitFor(
+            () =>
+                expect(collectExportData).toHaveBeenCalledWith({
+                    includeNames: true,
+                    includeMessages: true,
+                    generatedAt: expect.any(Date),
+                    isCancelled: expect.any(Function),
+                }),
+            SETTLE,
         );
     });
 
@@ -691,10 +703,12 @@ describe("PdfExport", () => {
         ui().namesCheckbox.checked = true;
         ui().confirm.click();
 
-        await vi.waitFor(() =>
-            expect(collectExportData).toHaveBeenCalledWith(
-                expect.objectContaining({ includeNames: true, includeMessages: false }),
-            ),
+        await vi.waitFor(
+            () =>
+                expect(collectExportData).toHaveBeenCalledWith(
+                    expect.objectContaining({ includeNames: true, includeMessages: false }),
+                ),
+            SETTLE,
         );
     });
 
@@ -702,7 +716,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().confirm.disabled).toBe(true));
+        await vi.waitFor(() => expect(ui().confirm.disabled).toBe(true), SETTLE);
         expect(ui().namesCheckbox.disabled).toBe(true);
         expect(ui().checkbox.disabled).toBe(true);
     });
@@ -712,7 +726,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         expect(ui().error.textContent).toBe(MESSAGES_TOO_LARGE_FOR_CONTENTS);
         expect(ui().error.textContent).toContain("Include message contents");
@@ -727,7 +741,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         expect(ui().error.textContent).toBe(
             "Something went wrong while building the PDF. Please try again.",
@@ -748,7 +762,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         const [reported, context] = captureError.mock.calls[0];
         expectFixedError(reported, thrown);
@@ -767,7 +781,7 @@ describe("PdfExport", () => {
         ui().trigger.click();
         ui().confirm.click();
 
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         const [reported, context] = captureError.mock.calls[0];
         expectFixedError(reported, thrown);
@@ -787,11 +801,11 @@ describe("PdfExport", () => {
         collectExportData.mockRejectedValueOnce(new Error("worker gone"));
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
 
         expect(ui().error.textContent).toBe("");
     });
@@ -807,7 +821,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
 
         expect(ui().confirm.textContent).toBe("Generating…");
         expect(ui().confirm.disabled).toBe(true);
@@ -820,7 +834,7 @@ describe("PdfExport", () => {
         expect(collectExportData).toHaveBeenCalledTimes(1);
 
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
     });
 
     it("keeps Tab inside the dialog while an export is running", async () => {
@@ -834,7 +848,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
 
         // Cancel is the only control left enabled, so it is both the first and
         // the last stop in the trap, and it holds focus.
@@ -850,7 +864,7 @@ describe("PdfExport", () => {
         expect(document.activeElement).toBe(ui().cancel);
 
         release({ ...DOCUMENT_MODEL, generatedAt: new Date(2026, 6, 31) });
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
         expect(ui().dialog.getAttribute("aria-busy")).toBe("false");
         expect(ui().status.textContent).toBe("");
     });
@@ -860,7 +874,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
 
         ui().cancel.click();
 
@@ -892,7 +906,7 @@ describe("PdfExport", () => {
         ui().trigger.focus();
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
 
         // Cancel is the one control still enabled while generating, so a dialog
         // that refused to close would be one a keyboard user could not leave.
@@ -923,7 +937,7 @@ describe("PdfExport", () => {
         // lands before the dynamic import resolves.
         ui().confirm.click();
         press("Escape");
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
         await Promise.resolve();
         await Promise.resolve();
 
@@ -961,7 +975,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(chunk.loads).toBe(1));
+        await vi.waitFor(() => expect(chunk.loads).toBe(1), SETTLE);
 
         // The chunk is still on the wire, so there is no worker to end: pulling
         // it down to call four terminators that have nothing to terminate would
@@ -996,7 +1010,7 @@ describe("PdfExport", () => {
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
         expect(runtimeChunk.loads).toBe(1);
 
         // Put a chunk that never arrives in front of the next fetch: the second
@@ -1005,7 +1019,7 @@ describe("PdfExport", () => {
         const stalled = interceptRuntimeChunk(new Promise(() => {}));
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(renderPdfDocument).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() => expect(renderPdfDocument).toHaveBeenCalledTimes(2), SETTLE);
 
         expect(stalled.loads).toBe(0);
     });
@@ -1020,9 +1034,9 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(chunk.loads).toBe(1));
+        await vi.waitFor(() => expect(chunk.loads).toBe(1), SETTLE);
         failChunk(new Error("chunk never arrived"));
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         // The same failure the rest of the path reports: a fixed message in the
         // dialog, a fixed error in telemetry, and a dialog left usable rather
@@ -1045,7 +1059,7 @@ describe("PdfExport", () => {
         const retry = interceptRuntimeChunk();
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
 
         expect(retry.loads).toBe(1);
         expect(renderPdfDocument).toHaveBeenCalledTimes(1);
@@ -1061,7 +1075,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(registerPdfFonts).toHaveBeenCalled());
+        await vi.waitFor(() => expect(registerPdfFonts).toHaveBeenCalled(), SETTLE);
 
         press("Escape");
         settleFonts({ body: "helvetica", accent: "helvetica" });
@@ -1082,7 +1096,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
 
         press("Escape");
         fail(new Error("worker gone"));
@@ -1105,12 +1119,12 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
         press("Escape");
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
 
         expect(renderPdfDocument).toHaveBeenCalledTimes(1);
 
@@ -1127,7 +1141,7 @@ describe("PdfExport", () => {
 
         ui().trigger.click();
         ui().confirm.click();
-        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""), SETTLE);
 
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:pdf");
         expect(document.querySelector("a[download]")).toBeNull();

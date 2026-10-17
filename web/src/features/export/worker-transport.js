@@ -10,6 +10,9 @@
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
+import { csvSourceSize } from "../../shared/csv-source.js";
+import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
+import { readCsvSourcesOrNull } from "../upload/read.js";
 
 /**
  * Outcome of a request the caller explicitly cancelled.
@@ -296,4 +299,66 @@ export function createWorkerTransport(config) {
     };
 
     return { terminate, request };
+}
+
+/**
+ * @template R, E
+ * @typedef {object} LoadOptions
+ * @property {Array<Blob|string>} sources - The files the load reads, the required one first; "" for an absent optional one
+ * @property {(() => boolean)|undefined} [isCancelled] - The run's cancellation check
+ * * @property {() => RequestOptions<any, R|null|typeof FAILED>} request - The worker request for these sources
+ * @property {(...texts: string[]) => R|E} mainThread - The same work on the UI thread, over the sources read as text
+ * @property {E} empty - The answer when there is nothing to draw
+ */
+
+/**
+ * Run one export load: the worker first, then the UI thread for a small export
+ * the worker mechanism could not answer.
+ *
+ * The three export transports used to carry this sequence each. Every early
+ * return lands on `empty`, so the PDF omits the section rather than failing.
+ * @template R, E
+ * @param {WorkerTransport} transport - The transport owning the worker
+ * @param {LoadOptions<R, E>} options - What to load and how
+ * @returns {Promise<R|E>} The loaded data, or `empty`
+ */
+export async function loadWithFallback(transport, options) {
+    const { sources, request, mainThread, empty } = options;
+    const isCancelled =
+        typeof options.isCancelled === "function" ? options.isCancelled : () => false;
+    // The caller reached here through several storage reads, any of which the
+    // user may have cancelled across. Creating the worker now would post the
+    // whole CSV to it on behalf of a run whose answer nobody will read.
+    if (!sources[0] || isCancelled()) {
+        return empty;
+    }
+
+    const outcome = await transport.request(request());
+    if (outcome === CANCELLED) {
+        // Falling back here would redo on the UI thread precisely the work the
+        // user asked to stop. Whoever cancelled owns the worker: either it is
+        // already terminated, or a newer request is still using it.
+        return empty;
+    }
+    // Every remaining outcome is final, so the worker has nothing left to do.
+    transport.terminate();
+    if (outcome === FAILED) {
+        return empty;
+    }
+    if (outcome !== null) {
+        return outcome;
+    }
+
+    // Every file counts toward the ceiling, because the fallback parses every
+    // file: a small messages export beside a large connections one is not a
+    // small job.
+    const size = sources.reduce((total, source) => total + csvSourceSize(source), 0);
+    if (size > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
+        return empty;
+    }
+    const texts = await readCsvSourcesOrNull(...sources);
+    if (!texts || isCancelled()) {
+        return empty;
+    }
+    return mainThread(...texts);
 }

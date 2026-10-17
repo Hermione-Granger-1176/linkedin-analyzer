@@ -21,18 +21,15 @@
 
 import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
-import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
-import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
+import { toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { buildGrowthTimeline, computeStats, normalizeConnectionRows } from "../connections/view.js";
-import { readCsvSourcesOrNull } from "../upload/read.js";
 
 import {
-    CANCELLED,
     createWorkerTransport,
-    FAILED,
     failureOutcome,
+    loadWithFallback,
     PENDING,
 } from "./worker-transport.js";
 
@@ -80,53 +77,24 @@ export function terminateConnectionsWorker() {
  * @param {{isCancelled?: () => boolean}} [options] - The run's cancellation check
  * @returns {Promise<ConnectionsData|null>} Dashboard data, or null when there is none
  */
-export async function loadConnectionsData(connectionsCsv, options = {}) {
+export function loadConnectionsData(connectionsCsv, options = {}) {
     const text = toCsvSource(connectionsCsv);
-    if (!text) {
-        return null;
-    }
-    const isCancelled =
-        typeof options.isCancelled === "function" ? options.isCancelled : () => false;
-    // The caller reached here through several storage reads, any of which the
-    // user may have cancelled across. Creating the worker now would post the
-    // whole CSV to it on behalf of a run whose answer nobody will read.
-    if (isCancelled()) {
-        return null;
-    }
-
-    const outcome = await requestDataFromWorker(text);
-    if (outcome === CANCELLED) {
-        // Falling back here would redo on the UI thread precisely the work the
-        // user asked to stop. Whoever cancelled owns the worker: either it is
-        // already terminated, or a newer request is still using it.
-        return null;
-    }
-    // Every remaining outcome is final, so the worker has nothing left to do.
-    terminateConnectionsWorker();
-    if (outcome === FAILED) {
-        return null;
-    }
-    if (outcome !== null) {
-        return outcome;
-    }
-
-    if (csvSourceSize(text) > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
-        return null;
-    }
-    const texts = await readCsvSourcesOrNull(text);
-    if (!texts || isCancelled()) {
-        return null;
-    }
-    return buildDataOnMainThread(texts[0]);
+    return loadWithFallback(transport, {
+        sources: [text],
+        isCancelled: options.isCancelled,
+        request: () => connectionsRequest(text),
+        mainThread: buildDataOnMainThread,
+        empty: null,
+    });
 }
 
 /**
- * Ask the worker for the cleaned rows and the aggregates over them.
+ * The worker request for the cleaned rows and the aggregates over them.
  * @param {Blob|string} connectionsCsv - Stored connections upload, or CSV text
- * @returns {Promise<ConnectionsData|null|typeof CANCELLED|typeof FAILED>} Data, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
+ * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.js").ConnectionsWorkerMessage, ConnectionsData|null|typeof import("./worker-transport.js").FAILED>}
  */
-function requestDataFromWorker(connectionsCsv) {
-    return transport.request({
+function connectionsRequest(connectionsCsv) {
+    return {
         envelope: { type: "process", payload: { connectionsCsv } },
         parse: parseConnectionsWorkerMessage,
         interpret: interpretReply,
@@ -135,14 +103,14 @@ function requestDataFromWorker(connectionsCsv) {
         // large connections export this transport exists for and send the parse
         // the worker was still doing to the UI thread instead.
         timeoutMs: computeWorkerTimeout(connectionsCsv),
-    });
+    };
 }
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
  * @param {import("../../app/worker-contracts.js").ConnectionsWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
- * @returns {ConnectionsData|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
+ * @returns {ConnectionsData|null|typeof import("./worker-transport.js").FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
 function interpretReply(message, context) {
     if (message.type === "error") {

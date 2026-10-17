@@ -1,3 +1,5 @@
+import { Blob as NodeBlob } from "node:buffer";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../src/features/cleaning/excel.js", () => ({
@@ -12,6 +14,19 @@ const SHARES_CSV = [
             `"2025-01-0${index + 1} 10:00:00 UTC","https://www.linkedin.com/feed/update/urn:li:activity:${index}","Post ${index}","","","PUBLIC"`,
     ),
 ].join("\n");
+
+/**
+ * A stored upload that streams like a browser's, since jsdom's Blob has no
+ * stream().
+ * @param {BlobPart} content - File content
+ * @returns {Blob}
+ */
+function storedUpload(content) {
+    const blob = new Blob([content]);
+    const bytes = new NodeBlob([content]);
+    Object.defineProperty(blob, "stream", { value: () => bytes.stream() });
+    return blob;
+}
 
 let runCleanJob;
 let resetCleanJob;
@@ -47,23 +62,69 @@ describe("clean job", () => {
     });
 
     it("reuses the rows it cleaned for the same stored upload", async () => {
-        const process = vi.spyOn(LinkedInCleaner, "process");
-        const payload = { fileType: "shares", source: new Blob([SHARES_CSV]), key: "shares:2" };
+        const stream = vi.spyOn(LinkedInCleaner, "createStreamProcessor");
+        const payload = { fileType: "shares", source: storedUpload(SHARES_CSV), key: "shares:2" };
 
         await runCleanJob({ ...payload, output: "preview" });
         const csv = await runCleanJob({ ...payload, output: "csv" });
 
-        expect(process).toHaveBeenCalledTimes(1);
+        expect(stream).toHaveBeenCalledTimes(1);
         expect(csv.blob.type).toBe("text/csv;charset=utf-8");
         expect(await csv.blob.text()).toContain("Post 6");
 
         await runCleanJob({ ...payload, key: "shares:3", output: "preview" });
-        expect(process).toHaveBeenCalledTimes(2);
+        expect(stream).toHaveBeenCalledTimes(2);
 
         // Clearing stored data drops the held rows, so the next request cleans again.
         resetCleanJob();
         await runCleanJob({ ...payload, key: "shares:3", output: "csv" });
-        expect(process).toHaveBeenCalledTimes(3);
+        expect(stream).toHaveBeenCalledTimes(3);
+    });
+
+    it("streams a stored upload and matches the whole-text clean", async () => {
+        const process = vi.spyOn(LinkedInCleaner, "process");
+        const fromText = await runCleanJob({
+            fileType: "shares",
+            output: "preview",
+            source: SHARES_CSV,
+            key: "shares:text",
+        });
+        expect(process).toHaveBeenCalledTimes(1);
+
+        const fromBlob = await runCleanJob({
+            fileType: "shares",
+            output: "preview",
+            source: storedUpload(SHARES_CSV),
+            key: "shares:blob",
+        });
+        expect(process).toHaveBeenCalledTimes(1);
+        expect(fromBlob).toEqual(fromText);
+    });
+
+    it("restarts a stored upload that is not UTF-8 as windows-1252", async () => {
+        // 0xE9 alone is invalid UTF-8 and "é" in windows-1252.
+        const bytes = Uint8Array.from(
+            SHARES_CSV.replace("Post 0", "Caf\u0000").split(""),
+            (char) => (char === "\u0000" ? 0xe9 : char.charCodeAt(0)),
+        );
+        const reply = await runCleanJob({
+            fileType: "shares",
+            output: "preview",
+            source: storedUpload(bytes),
+            key: "shares:1252",
+        });
+        expect(reply.success).toBe(true);
+        expect(reply.previewRows[0]).toContain("Café");
+    });
+
+    it.each([
+        ["streams as another type", storedUpload(SHARES_CSV)],
+        ["cannot stream", new Blob([SHARES_CSV])],
+    ])("cleans a stored upload whole when it %s", async (_, source) => {
+        const process = vi.spyOn(LinkedInCleaner, "process");
+        const fileType = source.stream ? "comments" : "shares";
+        await runCleanJob({ fileType, output: "preview", source, key: `whole:${fileType}` });
+        expect(process).toHaveBeenCalledWith(SHARES_CSV, fileType);
     });
 
     it("builds an Excel workbook within the size limit and refuses one over it", async () => {

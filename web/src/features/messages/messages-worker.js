@@ -1,8 +1,8 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
+import { toCsvSource } from "../../shared/csv-source.js";
+import { processCsvSource } from "../cleaning/process-source.js";
 
 import { MessagesAnalytics } from "./analytics.js";
 
@@ -57,19 +57,14 @@ const CONNECTIONS_READ_ERROR = "Unable to read Connections.csv.";
 
 /**
  * Parse messages and connections payload. Each file arrives as the stored
- * upload Blob, read here off the main thread, or as CSV text.
+ * upload Blob, streamed through the cleaner here off the main thread, or as
+ * CSV text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Raw payload
  * @returns {Promise<MessagesProcessedPayload>}
  */
 async function processPayload(payload) {
-    const messagesCsv = await readCsvSource(payload.messagesCsv);
-    // Connections is optional: a file that will not read degrades like one that
-    // will not parse, so the messages still load.
-    const connections = await readOptionalCsvSource(payload.connectionsCsv);
-    const connectionsCsv = connections.text;
-
     const messagesResult = /** @type {CleanedRows<MessageRow>} */ (
-        LinkedInCleaner.process(messagesCsv, "messages")
+        await processCsvSource(payload.messagesCsv, "messages")
     );
     if (!messagesResult.success) {
         return {
@@ -82,13 +77,23 @@ async function processPayload(payload) {
     /** @type {ConnectionRow[]} */
     let connectionsData = [];
     /** @type {string|null} */
-    let connectionError = connections.failed ? CONNECTIONS_READ_ERROR : null;
+    let connectionError = null;
 
-    if (connectionsCsv) {
-        const connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
-            LinkedInCleaner.process(connectionsCsv, "connections")
-        );
-        if (connectionsResult.success) {
+    if (toCsvSource(payload.connectionsCsv)) {
+        /** @type {CleanedRows<ConnectionRow>|null} */
+        let connectionsResult = null;
+        try {
+            connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
+                await processCsvSource(payload.connectionsCsv, "connections")
+            );
+        } catch {
+            connectionsResult = null;
+        }
+        if (!connectionsResult) {
+            // Connections is optional: a file that will not read degrades like
+            // one that will not parse, so the messages still load.
+            connectionError = CONNECTIONS_READ_ERROR;
+        } else if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {
             /* v8 ignore next */

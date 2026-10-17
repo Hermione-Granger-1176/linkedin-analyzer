@@ -13,7 +13,7 @@
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { copyString, createStringPool } from "../cleaning/string-pool.js";
+import { copyString, createValueCache } from "../cleaning/string-pool.js";
 import { canStreamFileText, readCsvSource, streamFileText } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
@@ -101,11 +101,11 @@ async function streamRowsWithoutBodies(file) {
     /** @type {number[]} */
     let records = [];
     let recordNumber = 0;
-    let keep = createStringPool();
+    let cache = createValueCache();
     const finished = await streamRecords(
         file,
         (record) => {
-            const row = toExportRow(record, { withBody: false, keep });
+            const row = toExportRow(record, { withBody: false, cache });
             if (row) {
                 rows.push(row);
                 records.push(recordNumber);
@@ -116,7 +116,7 @@ async function streamRowsWithoutBodies(file) {
             rows = [];
             records = [];
             recordNumber = 0;
-            keep = createStringPool();
+            cache = createValueCache();
         },
     );
     return finished ? { rows, records } : null;

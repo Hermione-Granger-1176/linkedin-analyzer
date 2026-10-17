@@ -833,6 +833,35 @@ describe("LinkedInCleaner.createStreamProcessor", () => {
         expect(streamProcess(text, 4096)).toBeNull();
     });
 
+    it("hands a short row to onRecord with its missing cells empty", () => {
+        const records = [];
+        const processor = LinkedInCleaner.createStreamProcessor((record) => records.push(record));
+        processor.push(
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2025-01-01,x,y",
+        );
+        expect(processor.finish()?.fileType).toBe("shares");
+        expect(records).toEqual([
+            Object.assign(Object.create(null), {
+                Date: "2025-01-01",
+                ShareLink: "x",
+                ShareCommentary: "y",
+                SharedUrl: "",
+                MediaUrl: "",
+                Visibility: "",
+            }),
+        ]);
+    });
+
+    it("shares one cleaned copy of a value repeated across rows", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const row = (index) => `2025-01-01 10:00:00 UTC,https://example.test/${index},hi,,,PUBLIC\n`;
+        const result = streamProcess(header + row(1) + row(2), 7);
+        expect(result.cleanedData.map((cleaned) => cleaned.Visibility)).toEqual([
+            "PUBLIC",
+            "PUBLIC",
+        ]);
+    });
+
     it("gives up when a later chunk breaks a parser limit", () => {
         const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
         const processor = LinkedInCleaner.createStreamProcessor();

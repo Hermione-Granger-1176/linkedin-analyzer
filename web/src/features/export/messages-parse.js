@@ -69,26 +69,27 @@ function messageBodyText(value) {
  * sees the same messages the workbook would have.
  *
  * With `withBody` false the body still decides whether the row is kept, but
- * the row carries an empty `CONTENT`, and `keep` sees every other value with
- * its column name first, so a caller can hold many rows without their bodies.
+ * the row carries an empty `CONTENT`, so a caller can hold many rows without
+ * their bodies. A value cache cleans every other repeated value once.
  * @param {Record<string, unknown>} raw - Parsed record keyed by CSV column name
- * @param {{withBody?: boolean, keep?: (value: string, column: string) => string}} [options] - Body and value handling
+ * @param {{withBody?: boolean, cache?: import("../cleaning/string-pool.js").ValueCache|null}} [options] - Body and value handling
  * @returns {MessageRow|null} Export row
  */
-export function toExportRow(raw, { withBody = true, keep = (value) => value } = {}) {
+export function toExportRow(raw, { withBody = true, cache = null } = {}) {
     /** @type {MessageRow} */
     const row = {};
     for (const column of COLUMNS) {
-        row[column.name] = column.read(raw[column.name]);
+        const value = raw[column.name];
+        row[column.name] =
+            cache && column.name !== BODY_COLUMN
+                ? cache(column.name, value, column.read)
+                : column.read(value);
     }
     if (!CONFIG.requiredColumns.every((name) => !isMissing(row[name]))) {
         return null;
     }
     if (!withBody) {
-        for (const column of COLUMNS) {
-            row[column.name] =
-                column.name === BODY_COLUMN ? "" : keep(row[column.name], column.name);
-        }
+        row[BODY_COLUMN] = "";
     }
     return row;
 }

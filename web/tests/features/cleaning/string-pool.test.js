@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { copyString, createStringPool } from "../../../src/features/cleaning/string-pool.js";
+import { copyString, createValueCache } from "../../../src/features/cleaning/string-pool.js";
+
+/** @param {unknown} value */
+const upper = (value) => String(value).toUpperCase();
 
 describe("copyString", () => {
     it.each(["", "a", "a value longer than thirteen characters"])(
@@ -11,53 +14,59 @@ describe("copyString", () => {
     );
 });
 
-describe("createStringPool", () => {
-    it("returns equal values and the same copy for a repeat in one column", () => {
-        const keep = createStringPool();
-        const first = keep("https://linkedin.com/in/ada", "URL");
+describe("createValueCache", () => {
+    it("cleans a repeated value once per column and shares the result", () => {
+        const cache = createValueCache();
+        const clean = vi.fn(upper);
 
-        expect(first).toBe("https://linkedin.com/in/ada");
-        expect(keep("https://linkedin.com/in/ada", "URL")).toBe(first);
+        const first = cache("FROM", "ada", clean);
+        const second = cache("FROM", "ada", clean);
+
+        expect(first).toBe("ADA");
+        expect(second).toBe(first);
+        expect(clean).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps sharing in a column that repeats past its sample", () => {
-        const map = vi.spyOn(Map.prototype, "get");
-        const keep = createStringPool();
+    it("keeps each column's values apart", () => {
+        const cache = createValueCache();
+        const clean = vi.fn(upper);
+
+        cache("FROM", "ada", clean);
+        cache("TO", "ada", clean);
+
+        expect(clean).toHaveBeenCalledTimes(2);
+    });
+
+    it("cleans a value that is not a string without caching it", () => {
+        const cache = createValueCache();
+        const clean = vi.fn(() => "");
+
+        cache("FROM", undefined, clean);
+        cache("FROM", undefined, clean);
+
+        expect(clean).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps caching in a column that repeats past its sample", () => {
+        const cache = createValueCache();
+        const clean = vi.fn(upper);
         for (let index = 0; index < 5000; index += 1) {
-            keep(`person-${index % 10}`, "FROM");
+            cache("FROM", `person-${index % 10}`, clean);
         }
-        map.mockClear();
 
-        expect(keep("person-3", "FROM")).toBe("person-3");
-        // One lookup for the column state and one in its pool.
-        expect(map).toHaveBeenCalledTimes(2);
-        map.mockRestore();
+        expect(clean).toHaveBeenCalledTimes(10);
     });
 
-    it("stops sharing a column whose sample was nearly all distinct", () => {
-        const keep = createStringPool();
+    it("stops caching a column whose sample was nearly all distinct", () => {
+        const cache = createValueCache();
+        const clean = vi.fn(upper);
         for (let index = 0; index < 4096; index += 1) {
-            keep(`2025-01-01 10:00:${index}`, "DATE");
+            cache("DATE", `2025-01-01 10:00:${index}`, clean);
         }
-        const map = vi.spyOn(Map.prototype, "get");
+        clean.mockClear();
 
-        expect(keep("2025-01-01 10:00:1", "DATE")).toBe("2025-01-01 10:00:1");
-        // Only the column state is looked up; the pool is gone.
-        expect(map).toHaveBeenCalledTimes(1);
-        map.mockRestore();
-    });
-
-    it("decides for each column on its own", () => {
-        const keep = createStringPool();
-        for (let index = 0; index < 4096; index += 1) {
-            keep(`unique-${index}`, "DATE");
-            keep("INBOX", "FOLDER");
-        }
-        const map = vi.spyOn(Map.prototype, "get");
-
-        keep("INBOX", "FOLDER");
-
-        expect(map).toHaveBeenCalledTimes(2);
-        map.mockRestore();
+        expect(cache("DATE", "2025-01-01 10:00:1", clean)).toBe("2025-01-01 10:00:1");
+        expect(cache("DATE", "2025-01-01 10:00:1", clean)).toBe("2025-01-01 10:00:1");
+        expect(clean).toHaveBeenCalledTimes(2);
     });
 });

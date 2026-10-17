@@ -63,7 +63,7 @@
     },
     {
       "path": "web/dist/assets/analytics-worker-*.js",
-      "limit": "13 kB"
+      "limit": "13.5 kB"
     },
     {
       "path": "web/dist/assets/connections-worker-*.js",

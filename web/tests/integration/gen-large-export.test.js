@@ -72,6 +72,9 @@ describe("gen-large-export", () => {
         expect(() => generateLargeExport({ sizeMb: 1, dir: resolve("web/tests") })).toThrow(
             /inside the repository/,
         );
+        expect(() => generateLargeExport({ sizeMb: 1, dir: resolve("..cache") })).toThrow(
+            /inside the repository/,
+        );
         expect(() => generateLargeExport({ sizeMb: 0, dir })).toThrow(/positive/);
     });
 

@@ -138,7 +138,7 @@ async function startHeapSampler(client) {
         new Promise((resolve) => {
             nextId += 1;
             const id = nextId;
-            pending.set(id, resolve);
+            pending.set(id, { sessionId, resolve });
             client
                 .send("Target.sendMessageToTarget", {
                     sessionId,
@@ -158,13 +158,20 @@ async function startHeapSampler(client) {
     });
     client.on("Target.detachedFromTarget", (event) => {
         workers.delete(event.sessionId);
+        // A worker that ends before it answers never will, so settle its requests.
+        for (const [id, request] of pending) {
+            if (request.sessionId === event.sessionId) {
+                pending.delete(id);
+                request.resolve({ error: "detached" });
+            }
+        }
     });
     client.on("Target.receivedMessageFromTarget", (event) => {
         const message = JSON.parse(event.message);
-        const resolve = pending.get(message.id);
-        if (resolve) {
+        const request = pending.get(message.id);
+        if (request) {
             pending.delete(message.id);
-            resolve(message);
+            request.resolve(message);
         }
     });
     await client.send("Target.setAutoAttach", {
@@ -212,8 +219,9 @@ async function startHeapSampler(client) {
 /**
  * Time one cached filter change on Analytics: switch the range away and back,
  * and time the switch back, which the analytics cache serves. A change counts
- * as done when the total settles, or after two animation frames when the total
- * does not change between the two ranges.
+ * as done when the total settles. When the switch away leaves the total as it
+ * was, both ranges show the same total, so the switch back counts as done
+ * after two animation frames instead of waiting for a change that never comes.
  * @param {import("@playwright/test").Page} page - App page on Analytics.
  */
 async function timeCachedFilterChange(page) {
@@ -235,32 +243,32 @@ async function timeCachedFilterChange(page) {
             new Promise((resolve) => {
                 requestAnimationFrame(() => requestAnimationFrame(resolve));
             });
-        const change = async (range) => {
+        const change = async (range, expectChange) => {
             const before = total.textContent;
             const started = performance.now();
             const settled = new Promise((resolve) => {
                 const observer = new MutationObserver(() => {
                     if (total.textContent !== before) {
                         observer.disconnect();
-                        resolve();
+                        resolve(true);
                     }
                 });
                 observer.observe(total, { childList: true, characterData: true, subtree: true });
                 setTimeout(() => {
                     observer.disconnect();
-                    resolve();
+                    resolve(false);
                 }, settleTimeout);
             });
             apply(range);
-            await Promise.race([settled, frames().then(() => settled)]);
+            const changed = expectChange ? await settled : false;
             await frames();
-            return performance.now() - started;
+            return { ms: performance.now() - started, changed };
         };
         const active = document.querySelector("#analyticsTimeRangeButtons .active");
         const original = active ? active.dataset.range : "12m";
         const other = original === "all" ? "12m" : "all";
-        await change(other);
-        return change(original);
+        const away = await change(other, true);
+        return (await change(original, away.changed)).ms;
     }, FILTER_SETTLE_TIMEOUT_MS);
 }
 

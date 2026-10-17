@@ -29,7 +29,7 @@ Tiers and thresholds:
 Rules every feature follows:
 
 - `lite` is complete. Every number, chart, list, export, and control works in it. Higher tiers add motion and decoration, never information or function.
-- The tier never changes processing. Heavy work stays in workers on every tier. Processing decisions read the raw signals (`deviceMemory` above all), never the tier, so an override, Save-Data, or reduced motion cannot change how many files process at once.
+- The tier never changes processing. Heavy work stays in workers on every tier. Nothing in the processing path reads the tier, so an override, Save-Data, or reduced motion cannot change how files are handled. The raw signals stay in the profile so a future processing decision can read them directly.
 - `prefers-reduced-motion: reduce` always wins over the tier.
 - The visitor can override the automatic choice with **Auto**, **Lite**, or **Full**, stored in `localStorage` as `linkedin-analyzer-effects`. **Full** means the most the device can do: `rich` with accelerated WebGL, `standard` without it.
 - The WebGL probe runs only when its answer can change the tier, so the **Lite** override never creates a WebGL context.

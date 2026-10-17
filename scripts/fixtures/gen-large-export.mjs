@@ -27,7 +27,7 @@
  */
 import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
@@ -216,7 +216,9 @@ export function generateLargeExport({ sizeMb, dir }) {
     }
     const outDir = resolve(dir);
     const fromRepo = relative(REPO, outDir);
-    if (!fromRepo.startsWith("..") && !isAbsolute(fromRepo)) {
+    // A folder inside the repository may itself start with "..", such as "..cache".
+    const outside = fromRepo === ".." || fromRepo.startsWith(`..${sep}`) || isAbsolute(fromRepo);
+    if (!outside) {
         throw new Error(`refusing to write inside the repository: ${outDir}`);
     }
     mkdirSync(outDir, { recursive: true });

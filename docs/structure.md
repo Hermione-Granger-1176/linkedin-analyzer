@@ -51,7 +51,7 @@ web/
 │   │   ├── messages/             # Message parsing and relationship screen
 │   │   ├── tutorial/             # Guided tutorials and mini-tips
 │   │   └── upload/               # File reading, decoding, upload state, and progress
-│   ├── platform/                # Persistence and observability services
+│   ├── platform/                # Device, persistence, and observability services
 │   ├── shared/                  # Reused constants, events, workers, and UI
 │   ├── styles/                  # Foundation, feature, component, and responsive CSS
 │   ├── app.js                   # Application composition and route registration
@@ -106,7 +106,7 @@ The browser suite follows the same ownership structure under `web/tests/`. Playw
 scripts/
 ├── checks/                      # Private export comparisons, benchmarks, and memory checks
 ├── ci/                          # Coverage, audits, job gating, pins, and watchdogs
-├── fixtures/                    # Deterministic parity corpus generator
+├── fixtures/                    # Parity corpus and synthetic large export generators
 ├── gh/                          # Tested pull request, issue, and CI helpers
 ├── lib/                         # Shared Git and workspace helpers
 ├── lint/                        # Documentation, Makefile, EditorConfig, and workflow checks

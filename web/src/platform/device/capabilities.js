@@ -2,10 +2,9 @@
  * What the current device offers, and the effects tier the app picks from it.
  *
  * The tier controls decoration only: motion, filters, and future canvas or
- * WebGL scenes. It never decides how files are processed. Processing reads the
- * raw signals (deviceMemory above all), never the tier, so an effects
- * override, Save-Data, or reduced motion cannot change how many files process
- * at once.
+ * WebGL scenes. It never decides how files are processed: nothing in the
+ * processing path reads the tier, so an effects override, Save-Data, or
+ * reduced motion cannot change how files are handled.
  *
  * A missing API reads as unknown, never as low: Safari and Firefox do not
  * expose deviceMemory, and that must not push them into the lite tier.

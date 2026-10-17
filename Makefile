@@ -341,9 +341,11 @@ web-e2e-container: test-e2e-container ## Alias for test-e2e-container
 
 # ─── Checks @checks ──────────────────────────────────────────────────────────────────
 # Local-only tools that run against your private export in data/input (never
-# committed). They skip cleanly when it is absent unless strict=1 is set. Any
-# cross-runtime row dumps use a private temporary directory and are always removed.
-# See docs/development.md (Local checks and benchmarks).
+# committed). They skip cleanly when it is absent unless strict=1 is set, except
+# bench-browser, which generates a synthetic export with size_mb=N and otherwise
+# fails when its inputs are missing. Any cross-runtime row dumps use a private
+# temporary directory and are always removed.
+# See docs/testing.md (Run local checks and benchmarks).
 
 .PHONY: cleaner-diff xrt-diff bench bench-decode audit-memory-python audit-memory-browser bench-browser explore
 

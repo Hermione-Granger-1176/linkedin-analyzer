@@ -14,6 +14,7 @@
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
+import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { MessagesAnalytics } from "../messages/analytics.js";
@@ -25,7 +26,6 @@ import {
     createWorkerTransport,
     FAILED,
     failureOutcome,
-    MAIN_THREAD_FALLBACK_MAX_CHARS,
     PENDING,
 } from "./worker-transport.js";
 

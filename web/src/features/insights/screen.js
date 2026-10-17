@@ -8,6 +8,7 @@ import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+import { formatReplyRate, formatSentRatio } from "../messages/format.js";
 
 import { buildInsightReaction } from "./reactions.js";
 
@@ -562,25 +563,6 @@ export const InsightsPage = (() => {
         }
         valueEl.textContent = value;
         card.hidden = false;
-    }
-
-    /**
-     * Format an outreach reply rate as a percentage, or "N/A" when there were no
-     * self-initiated conversations to measure.
-     * @param {number|null} replyRate - Fraction in [0, 1] or null
-     * @returns {string}
-     */
-    function formatReplyRate(replyRate) {
-        return replyRate === null ? "N/A" : `${Math.round(replyRate * 100)}%`;
-    }
-
-    /**
-     * Format a sent-to-received ratio, or "N/A" when nothing was received.
-     * @param {number|null} ratio - Sent/received ratio or null
-     * @returns {string}
-     */
-    function formatSentRatio(ratio) {
-        return ratio === null ? "N/A" : `${ratio.toFixed(1)} : 1`;
     }
 
     /**

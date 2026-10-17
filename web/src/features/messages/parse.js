@@ -10,13 +10,10 @@
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
+import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { readCsvSource } from "../upload/read.js";
-
-// Above this combined CSV size, re-parsing on the UI thread would freeze the
-// page, so the main-thread fallback is skipped in favor of an empty state.
-const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
 /** @typedef {import("./messages-worker.js").MessagesProcessedPayload} MessagesProcessedPayload */
 /** @typedef {import("./analytics.js").MessageRow} MessageRow */

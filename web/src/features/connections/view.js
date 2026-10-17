@@ -7,8 +7,12 @@
  * are both measured from now, not from the newest connection in the file.
  */
 
-import { MONTH_LABELS } from "../analytics/constants.js";
-import { parseLocalDate } from "../analytics/dates.js";
+import {
+    enumerateMonths,
+    monthKeyToLabel,
+    parseLocalDate,
+    toMonthKey,
+} from "../analytics/dates.js";
 
 /** @typedef {import("../../shared/ui/charts.js").TimelinePoint} TimelinePoint */
 /** @typedef {import("../../shared/ui/charts.js").TopicPoint} TopicPoint */
@@ -111,32 +115,6 @@ export function parseConnectedOnTimestamp(dateStr) {
     return parsed ? parsed.getTime() : 0;
 }
 
-/**
- * Build a YYYY-MM key from a Date, used as the bucket identifier in the
- * growth timeline so months are naturally sortable.
- *
- * @param {Date} date - Date to convert
- * @returns {string} e.g. "2024-01"
- */
-export function toMonthKey(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    return `${y}-${m}`;
-}
-
-/**
- * Build a human-readable label from a YYYY-MM key, since chart axes
- * should show "Jan 2024" rather than "2024-01".
- *
- * @param {string} key - e.g. "2024-01"
- * @returns {string} e.g. "Jan 2024"
- */
-export function monthKeyToLabel(key) {
-    const [yearStr, monthStr] = key.split("-");
-    const monthIndex = Number(monthStr) - 1;
-    return `${MONTH_LABELS[monthIndex]} ${yearStr}`;
-}
-
 /* -- Growth timeline --------------------------------------------------------- */
 
 /**
@@ -166,24 +144,11 @@ export function buildGrowthTimeline(rows) {
 
     /* Fill gaps between earliest and latest month */
     const sortedKeys = Array.from(buckets.keys()).sort();
-    const firstKey = sortedKeys[0];
-    const lastKey = sortedKeys[sortedKeys.length - 1];
-
-    const [startYear, startMonth] = firstKey.split("-").map(Number);
-    const [endYear, endMonth] = lastKey.split("-").map(Number);
-    const monthSpan = (endYear - startYear) * 12 + (endMonth - startMonth);
-
-    return Array.from({ length: monthSpan + 1 }, (_, offset) => {
-        const absoluteMonth = startMonth - 1 + offset;
-        const year = startYear + Math.floor(absoluteMonth / 12);
-        const month = (absoluteMonth % 12) + 1;
-        const key = `${year}-${String(month).padStart(2, "0")}`;
-        return {
-            key,
-            label: monthKeyToLabel(key),
-            value: buckets.get(key) || 0,
-        };
-    });
+    return enumerateMonths(sortedKeys[0], sortedKeys[sortedKeys.length - 1]).map((key) => ({
+        key,
+        label: monthKeyToLabel(key),
+        value: buckets.get(key) || 0,
+    }));
 }
 
 /* -- Summary stats ----------------------------------------------------------- */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { monthKeyToLabel, toMonthKey } from "../../../src/features/analytics/dates.js";
 import {
     aggregateField,
     buildConnectionsView,
@@ -8,11 +9,9 @@ import {
     filterRowsByRange,
     findTopValue,
     formatNetworkAge,
-    monthKeyToLabel,
     normalizeConnectionRows,
     parseConnectedOnTimestamp,
     parseConnectionDate,
-    toMonthKey
 } from "../../../src/features/connections/view.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

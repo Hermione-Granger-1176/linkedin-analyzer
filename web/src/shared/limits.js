@@ -66,6 +66,13 @@ export const MAIN_THREAD_MAX_FILE_BYTES = 80 * MIB;
 export const THREADS_EXPORT_MAX_BYTES = 60 * MIB;
 
 /**
+ * Above this many characters, cleaning on the UI thread could freeze the page,
+ * so a failed worker read falls back to an empty state instead. One limit for
+ * every main-thread fallback, because they all block the same thread.
+ */
+export const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * MIB;
+
+/**
  * Largest file the Clean screen turns into an Excel workbook. The workbook is
  * built whole in memory at about 25 bytes of heap per byte of file, so larger
  * files download as cleaned CSV instead.

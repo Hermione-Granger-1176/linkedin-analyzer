@@ -18,10 +18,12 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { THREADS_EXPORT_MAX_BYTES } from "../../shared/limits.js";
-import { enumerateMonths } from "../analytics/dates.js";
-import { buildConnectionsView, monthKeyToLabel, toMonthKey } from "../connections/view.js";
+import { enumerateMonths, monthKeyToLabel, toMonthKey } from "../analytics/dates.js";
+import { buildConnectionsView } from "../connections/view.js";
 import {
     DEFAULT_TIME_RANGE,
+    formatReplyRate,
+    formatSentRatio,
     formatShortDate,
     getRangeStart,
 } from "../messages/format.js";
@@ -188,24 +190,6 @@ function messageWindow(rangeStart, latestTimestamp) {
         startKey: toMonthKey(new Date(rangeStart)),
         endKey: toMonthKey(new Date(latestTimestamp)),
     };
-}
-
-/**
- * Format an outreach reply rate, matching the Insights screen.
- * @param {number|null|undefined} replyRate - Fraction in [0, 1]
- * @returns {string} Percentage text, or "N/A"
- */
-function formatReplyRate(replyRate) {
-    return typeof replyRate === "number" ? `${Math.round(replyRate * 100)}%` : "N/A";
-}
-
-/**
- * Format a sent-to-received ratio, matching the Insights screen.
- * @param {number|null|undefined} ratio - Sent over received
- * @returns {string} Ratio text, or "N/A"
- */
-function formatSentRatio(ratio) {
-    return typeof ratio === "number" ? `${ratio.toFixed(1)} : 1` : "N/A";
 }
 
 /**

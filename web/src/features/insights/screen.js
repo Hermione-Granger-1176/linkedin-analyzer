@@ -8,7 +8,7 @@ import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
-import { markActiveRange } from "../../shared/ui/time-range.js";
+import { createRangeFilter } from "../../shared/ui/time-range.js";
 import { formatReplyRate, formatSentRatio } from "../messages/format.js";
 
 import { buildInsightReaction } from "./reactions.js";
@@ -110,7 +110,7 @@ export const InsightsPage = (() => {
         shareType: "all",
     });
 
-    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const RANGE_KEYS = Object.freeze(["1m", "3m", "6m", "12m", "all"]);
     /** @type {Set<unknown>} */
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
     // Guard against a worker that constructs but never responds (chunk load
@@ -144,7 +144,8 @@ export const InsightsPage = (() => {
     let pendingViewId = 0;
     let initialized = false;
     let needsBaseReload = true;
-    let isApplyingRouteParams = false;
+    /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
+    let rangeFilter = null;
 
     /** Initialize insights page dependencies. */
     function init() {
@@ -184,8 +185,12 @@ export const InsightsPage = (() => {
         // onRouteLeave clears the latch so the next entry reloads.
         loadOutreach();
 
-        const range = parseRangeParam(params && params.range);
-        applyRangeFromRoute(range);
+        const filter = /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (
+            rangeFilter
+        );
+        const range = filter.parse(params && params.range);
+        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+        filter.show(range);
 
         if (needsBaseReload || !state.analyticsReady) {
             loadBase();
@@ -247,20 +252,18 @@ export const InsightsPage = (() => {
 
     /** Attach event listeners for time range buttons and reset. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((button) => {
-            button.addEventListener("click", () => handleTimeRangeChange(button));
-            button.setAttribute(
-                "aria-pressed",
-                button.classList.contains("active") ? "true" : "false",
-            );
+        rangeFilter = createRangeFilter({
+            ranges: RANGE_KEYS,
+            fallback: FILTER_DEFAULTS.timeRange,
+            buttons: elements.timeRangeButtons,
+            select: elements.timeRangeSelect,
+            resetButton: elements.resetFiltersBtn,
+            route: { router: AppRouter, name: "insights" },
+            onChange: (range) => {
+                state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+                requestView();
+            },
         });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
-        }
-        /* v8 ignore next */
-        if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener("click", resetFilters);
-        }
     }
 
     /**
@@ -641,56 +644,6 @@ export const InsightsPage = (() => {
         });
     }
 
-    /**
-     * Handle click on a time range button.
-     * @param {HTMLElement} button - The clicked time range button.
-     */
-    function handleTimeRangeChange(button) {
-        const range = button.getAttribute("data-range");
-        /* v8 ignore next 3 */
-        if (!range) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Apply the range chosen from the compact select, ignoring unknown values. */
-    function handleTimeRangeSelect() {
-        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        if (!RANGE_VALUES.has(range)) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Reset all filters to defaults and request a fresh view. */
-    function resetFilters() {
-        state.filters = { ...FILTER_DEFAULTS };
-        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
-        syncRouteRange();
-        requestView();
-    }
-
-    /**
-     * Apply a new time range and request view.
-     * @param {string} range - The time range key to apply.
-     */
-    function applyTimeRange(range) {
-        const nextRange = parseRangeParam(range);
-        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
-        setActiveTimeRange(nextRange);
-        syncRouteRange();
-        requestView();
-    }
-
-    /**
-     * Update the active class on time range buttons.
-     * @param {string} range - The active time range key.
-     */
-    function setActiveTimeRange(range) {
-        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
-    }
-
     /** Toggle empty state vs insights grid based on data availability. */
     function updateVisibility() {
         if (!state.hasData) {
@@ -769,40 +722,6 @@ export const InsightsPage = (() => {
     function hideEmptyState() {
         elements.insightsEmpty.hidden = true;
         elements.insightsGrid.hidden = false;
-    }
-
-    /**
-     * Parse route range query value.
-     * @param {string} value - Raw route value
-     * @returns {string}
-     */
-    function parseRangeParam(value) {
-        const range = String(value || "").toLowerCase();
-        return RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-    }
-
-    /**
-     * Apply route-provided range without rewriting route.
-     * @param {string} range - Normalized range
-     */
-    function applyRangeFromRoute(range) {
-        isApplyingRouteParams = true;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
-        setActiveTimeRange(range);
-        isApplyingRouteParams = false;
-    }
-
-    /** Sync current range filter into route query params. */
-    function syncRouteRange() {
-        /* v8 ignore next 3 */
-        if (isApplyingRouteParams) {
-            return;
-        }
-        const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== "insights") {
-            return;
-        }
-        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
     }
 
     /**

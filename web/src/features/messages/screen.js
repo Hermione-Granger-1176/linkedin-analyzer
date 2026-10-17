@@ -8,7 +8,7 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
-import { markActiveRange } from "../../shared/ui/time-range.js";
+import { createRangeFilter } from "../../shared/ui/time-range.js";
 import { ExcelGenerator } from "../cleaning/excel.js";
 
 import { MessagesAnalytics } from "./analytics.js";
@@ -17,7 +17,7 @@ import {
     DEFAULT_TIME_RANGE,
     formatShortDate,
     getRangeStart,
-    parseRangeParam,
+    RANGE_KEYS,
 } from "./format.js";
 import { hydrateConnectionState, hydrateMessageState } from "./hydrate.js";
 import { createMessageItem, renderEmptyList, SKELETON_ITEM } from "./list-dom.js";
@@ -103,7 +103,8 @@ export const MessagesPage = (() => {
     };
 
     let initialized = false;
-    let isApplyingRouteParams = false;
+    /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
+    let rangeFilter = null;
 
     /** Initialize messages page. */
     function init() {
@@ -130,8 +131,12 @@ export const MessagesPage = (() => {
             return;
         }
 
-        const nextRange = parseRangeParam(params && params.range, FILTER_DEFAULTS.timeRange);
-        applyRangeFromRoute(nextRange);
+        const filter = /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (
+            rangeFilter
+        );
+        const nextRange = filter.parse(params && params.range);
+        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
+        filter.show(nextRange);
         loadData();
     }
 
@@ -142,20 +147,18 @@ export const MessagesPage = (() => {
 
     /** Attach event listeners for filters. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((btn) => {
-            const button = /** @type {HTMLElement} */ (btn);
-            button.addEventListener("click", () => handleTimeRangeChange(button));
-            button.setAttribute(
-                "aria-pressed",
-                button.classList.contains("active") ? "true" : "false",
-            );
+        rangeFilter = createRangeFilter({
+            ranges: RANGE_KEYS,
+            fallback: FILTER_DEFAULTS.timeRange,
+            buttons: elements.timeRangeButtons,
+            select: elements.timeRangeSelect,
+            resetButton: elements.resetFiltersBtn,
+            route: { router: AppRouter, name: "messages" },
+            onChange: (range) => {
+                state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+                renderView();
+            },
         });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
-        }
-        if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener("click", resetFilters);
-        }
         if (elements.topContactsExportBtn) {
             elements.topContactsExportBtn.addEventListener("click", exportTopContacts);
         }
@@ -477,86 +480,6 @@ export const MessagesPage = (() => {
             "messages:build-connections:end",
         );
         return result;
-    }
-
-    /**
-     * Handle click on a time range button.
-     * @param {HTMLElement} button - Clicked time range button
-     */
-    function handleTimeRangeChange(button) {
-        const range = button.getAttribute("data-range");
-        if (!range) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Apply the range chosen from the compact select, ignoring unknown values. */
-    function handleTimeRangeSelect() {
-        // Bound only inside the `if (elements.timeRangeSelect)` guard in init, so
-        // the element is always present here; assert non-null for the type checker.
-        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        // parseRangeParam echoes a valid range normalized to lowercase and returns
-        // the fallback otherwise; the empty sentinel is never a valid range, so it
-        // flags unknown values. Apply the parsed value so odd casing still enters
-        // state and the router as the normalized range.
-        const parsed = parseRangeParam(range, "");
-        if (parsed === "") {
-            return;
-        }
-        applyTimeRange(parsed);
-    }
-
-    /** Reset filters to defaults. */
-    function resetFilters() {
-        state.filters = { ...FILTER_DEFAULTS };
-        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
-        syncRouteRange();
-        renderView();
-    }
-
-    /**
-     * Apply new time range and render.
-     * @param {string} range - Time range key
-     */
-    function applyTimeRange(range) {
-        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
-        setActiveTimeRange(range);
-        syncRouteRange();
-        renderView();
-    }
-
-    /**
-     * Update active class on time range buttons.
-     * @param {string} range - Active time range
-     */
-    function setActiveTimeRange(range) {
-        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
-    }
-
-    /**
-     * Apply route-provided range without rewriting route.
-     * @param {string} range - Normalized range
-     */
-    function applyRangeFromRoute(range) {
-        isApplyingRouteParams = true;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
-        setActiveTimeRange(range);
-        isApplyingRouteParams = false;
-    }
-
-    /** Sync current range filter into route query params. */
-    function syncRouteRange() {
-        // Route application does not re-enter this function. Keep the guard for a future caller.
-        /* v8 ignore next 3 */
-        if (isApplyingRouteParams) {
-            return;
-        }
-        const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== "messages") {
-            return;
-        }
-        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
     }
 
     /** Render the whole messages view. */

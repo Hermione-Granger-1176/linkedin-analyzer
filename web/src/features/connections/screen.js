@@ -14,7 +14,7 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-tooltip.js";
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
-import { markActiveRange } from "../../shared/ui/time-range.js";
+import { createRangeFilter } from "../../shared/ui/time-range.js";
 
 import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
 
@@ -58,7 +58,6 @@ export const ConnectionsPage = (() => {
         timeRange: "12m",
     });
 
-    const RANGE_VALUES = new Set(RANGE_KEYS);
     /** @type {Set<string|undefined>} */
     const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
     const WORKER_TIMEOUT_MS = 30000;
@@ -85,7 +84,8 @@ export const ConnectionsPage = (() => {
     /** @type {HTMLCanvasElement[]} */
     let chartCanvases = [];
     let initialized = false;
-    let isApplyingRouteParams = false;
+    /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
+    let rangeFilter = null;
 
     /** @type {Worker|null} */
     let worker = null;
@@ -132,8 +132,13 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        const nextRange = parseRangeParam(params && params.range);
-        const changed = applyRangeFromRoute(nextRange);
+        const filter = /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (
+            rangeFilter
+        );
+        const nextRange = filter.parse(params && params.range);
+        const changed = nextRange !== state.filters.timeRange;
+        state.filters.timeRange = nextRange;
+        filter.show(nextRange);
 
         if (!state.dataReady) {
             loadData();
@@ -182,22 +187,18 @@ export const ConnectionsPage = (() => {
 
     /** Attach event listeners for filters and chart interactions. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((button) => {
-            button.addEventListener("click", () => handleTimeRangeChange(button));
-            button.setAttribute(
-                "aria-pressed",
-                button.classList.contains("active") ? "true" : "false",
-            );
+        rangeFilter = createRangeFilter({
+            ranges: RANGE_KEYS,
+            fallback: FILTER_DEFAULTS.timeRange,
+            buttons: elements.timeRangeButtons,
+            select: elements.timeRangeSelect,
+            resetButton: elements.resetFiltersBtn,
+            route: { router: AppRouter, name: "connections" },
+            onChange: (range) => {
+                state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+                applyFiltersAndRender();
+            },
         });
-
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
-        }
-
-        /* v8 ignore next 3 */
-        if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener("click", resetFilters);
-        }
 
         window.addEventListener("beforeunload", terminateWorker);
         window.addEventListener("pagehide", terminateWorker);
@@ -657,96 +658,6 @@ export const ConnectionsPage = (() => {
             return;
         }
         hideEmptyState();
-    }
-
-    /**
-     * Handle click on a time range button.
-     * @param {HTMLElement} button - The clicked time range button element
-     */
-    function handleTimeRangeChange(button) {
-        const range = button.getAttribute("data-range");
-        /* v8 ignore next 3 */
-        if (!range) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Apply the range chosen from the compact select, ignoring unknown values. */
-    function handleTimeRangeSelect() {
-        // Bound only when the select exists.
-        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        if (!RANGE_VALUES.has(range)) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Reset filters to defaults and re-render. */
-    function resetFilters() {
-        state.filters = { ...FILTER_DEFAULTS };
-        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
-        syncRouteRange();
-        applyFiltersAndRender();
-    }
-
-    /**
-     * Apply a new time range and re-render.
-     * @param {string} range - Time range key
-     */
-    function applyTimeRange(range) {
-        const nextRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
-        setActiveTimeRange(nextRange);
-        syncRouteRange();
-        applyFiltersAndRender();
-    }
-
-    /**
-     * Update the active class on time range buttons.
-     * @param {string} range - The active time range identifier
-     */
-    function setActiveTimeRange(range) {
-        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
-    }
-
-    /**
-     * Parse a route range query value into a valid range key.
-     * @param {string} value - Raw route value
-     * @returns {string} Validated range key
-     */
-    function parseRangeParam(value) {
-        const range = String(value || "").toLowerCase();
-        return RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-    }
-
-    /**
-     * Apply range from route params without triggering route sync.
-     * @param {string} range - Validated range key
-     * @returns {boolean} Whether the range changed
-     */
-    function applyRangeFromRoute(range) {
-        const previous = state.filters.timeRange;
-        isApplyingRouteParams = true;
-        state.filters.timeRange = range;
-        setActiveTimeRange(range);
-        isApplyingRouteParams = false;
-        return previous !== range;
-    }
-
-    /** Sync active time range into route query parameters. */
-    function syncRouteRange() {
-        /* v8 ignore next 3 */
-        if (isApplyingRouteParams) {
-            return;
-        }
-
-        const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== "connections") {
-            return;
-        }
-
-        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
     }
 
     /**

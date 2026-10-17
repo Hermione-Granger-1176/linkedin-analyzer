@@ -25,7 +25,7 @@ import {
     isMissing,
     removeIllegalChars,
 } from "./field-cleaners.js";
-import { createStringPool } from "./string-pool.js";
+import { createColumnCache } from "./string-pool.js";
 
 /** @typedef {import("./configs.js").FileType} FileType */
 /** @typedef {import("./configs.js").CleanerConfig} CleanerConfig */
@@ -79,7 +79,7 @@ import { createStringPool } from "./string-pool.js";
  * One column's cleaning step.
  * @typedef {object} CleaningStep
  * @property {string} name - Column name
- * @property {import("./field-cleaners.js").Cleaner} clean - Cell cleaner
+ * @property {import("./string-pool.js").CellCleaner} clean - Cleans and escapes one cell
  */
 
 /** @typedef {(row: CsvRecord) => CleanedRow|null} RowCleaner */
@@ -95,10 +95,20 @@ const CLEANING_PLANS = Object.freeze(
     Object.fromEntries(
         FILE_TYPES.map((fileType) => [
             fileType,
-            CONFIGS[fileType].columns.map((column) => ({
-                name: column.name,
-                clean: (column.cleaner && CLEANERS[column.cleaner]) || cleanValue,
-            })),
+            CONFIGS[fileType].columns.map((column) => {
+                const clean = (column.cleaner && CLEANERS[column.cleaner]) || cleanValue;
+                return {
+                    name: column.name,
+                    // Strip XML-illegal control characters before formula-escaping so a
+                    // cell like "\u0001=SUM(...)" is both export-safe and still detected
+                    // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
+                    /**
+                     * @param {unknown} value - Raw cell value
+                     * @returns {string} Cleaned, escaped value
+                     */
+                    clean: (value) => escapeFormula(removeIllegalChars(clean(value))),
+                };
+            }),
         ]),
     ),
 );
@@ -443,13 +453,12 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Build a function that cleans one parsed row for a file type.
+     * Build the check that decides whether a cleaned row is kept.
      * @param {FileType} fileType - Supported file type
-     * @returns {RowCleaner} Cleans a row, returning null when the row is dropped
+     * @returns {(row: CleanedRow) => boolean}
      */
-    function createRowCleaner(fileType) {
+    function createRowFilter(fileType) {
         const config = CONFIGS[fileType];
-        const cleaningPlan = CLEANING_PLANS[fileType];
         const requiredRowColumns = Array.isArray(config.requiredRowColumns)
             ? config.requiredRowColumns
             : config.requiredColumns;
@@ -457,24 +466,59 @@ export const LinkedInCleaner = (() => {
             ? config.dropIfAllMissing
             : [];
 
+        return (row) =>
+            hasRequiredRowValues(row, requiredRowColumns) &&
+            (!dropIfAllMissing.length || hasAnyRowValue(row, dropIfAllMissing));
+    }
+
+    /**
+     * Build a function that cleans one parsed row for a file type.
+     * @param {FileType} fileType - Supported file type
+     * @returns {RowCleaner} Cleans a row, returning null when the row is dropped
+     */
+    function createRowCleaner(fileType) {
+        const cleaningPlan = CLEANING_PLANS[fileType];
+        const keepRow = createRowFilter(fileType);
+
         return (row) => {
             /** @type {CleanedRow} */
             const cleanedRow = {};
             for (const column of cleaningPlan) {
-                const cleanedValue = column.clean(row[column.name]);
-                // Strip XML-illegal control characters before formula-escaping so a
-                // cell like "\u0001=SUM(...)" is both export-safe and still detected
-                // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
-                cleanedRow[column.name] = escapeFormula(removeIllegalChars(cleanedValue));
+                cleanedRow[column.name] = column.clean(row[column.name]);
             }
+            return keepRow(cleanedRow) ? cleanedRow : null;
+        };
+    }
 
-            if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
-                return null;
+    /**
+     * Build a function that cleans one row of cells straight from the parser,
+     * reading each column by its header position, as `createRowCleaner` would
+     * read the record built from the same cells. Each repeated raw value is
+     * cleaned once and its result shared, and no kept value holds on to the
+     * decoded text.
+     * @param {FileType} fileType - Supported file type
+     * @param {readonly string[]} headers - Normalized header row
+     * @returns {(cells: string[]) => CleanedRow|null} Cleans a row, returning null when the row is dropped
+     */
+    function createCellRowCleaner(fileType, headers) {
+        const steps = CLEANING_PLANS[fileType].map((column) => ({
+            name: column.name,
+            clean: column.clean,
+            index: headers.indexOf(column.name),
+            cache: createColumnCache(),
+        }));
+        const keepRow = createRowFilter(fileType);
+
+        return (cells) => {
+            /** @type {CleanedRow} */
+            const cleanedRow = {};
+            for (const step of steps) {
+                // A record holds "" for a short row and nothing for a column the
+                // header lacks; the cells give the same values.
+                const value = step.index < 0 ? undefined : (cells[step.index] ?? "");
+                cleanedRow[step.name] = step.cache(value, step.clean);
             }
-            if (dropIfAllMissing.length && !hasAnyRowValue(cleanedRow, dropIfAllMissing)) {
-                return null;
-            }
-            return cleanedRow;
+            return keepRow(cleanedRow) ? cleanedRow : null;
         };
     }
 
@@ -706,17 +750,14 @@ export const LinkedInCleaner = (() => {
         let rowIndex = 0;
         /** @type {string[]|null} */
         let headers = null;
-        /** @type {RowCleaner|null} */
-        let cleanRow = null;
+        /** @type {((cells: string[]) => CleanedRow|null)|null} */
+        let cleanCells = null;
         /** @type {CleanedRow[]} */
         const cleanedData = [];
-        // Repeated values in the kept rows are stored once, and none of them
-        // holds on to the decoded text.
-        const keep = createStringPool();
 
         // Mirrors parseCSV(): skip rows, read and check the header, then build
         // and clean one record per non-empty data row.
-        // onRow only runs once startParsing() has set fileType and cleanRow.
+        // onRow only runs once startParsing() has set fileType; the header row sets cleanCells.
         /** @param {string[]} row */
         const onRow = (row) => {
             if (failed) {
@@ -740,6 +781,10 @@ export const LinkedInCleaner = (() => {
                     return;
                 }
                 headers = normalized;
+                cleanCells = createCellRowCleaner(
+                    /** @type {FileType} */ (fileType),
+                    normalized,
+                );
                 return;
             }
             if (isRowEmpty(row)) {
@@ -749,22 +794,21 @@ export const LinkedInCleaner = (() => {
                 failed = true;
                 return;
             }
-            // Null-prototype object, as in parseCSV().
-            /** @type {CsvRecord} */
-            const record = Object.create(null);
-            for (let c = 0; c < headers.length; c += 1) {
-                const value = row[c];
-                record[headers[c]] = value !== undefined ? value : "";
-            }
             if (onRecord) {
+                // Null-prototype object, as in parseCSV().
+                /** @type {CsvRecord} */
+                const record = Object.create(null);
+                for (let c = 0; c < headers.length; c += 1) {
+                    const value = row[c];
+                    record[headers[c]] = value !== undefined ? value : "";
+                }
                 onRecord(record);
                 return;
             }
-            const cleanedRow = /** @type {RowCleaner} */ (cleanRow)(record);
+            const cleanedRow = /** @type {(cells: string[]) => CleanedRow|null} */ (cleanCells)(
+                row,
+            );
             if (cleanedRow) {
-                for (const name of Object.keys(cleanedRow)) {
-                    cleanedRow[name] = keep(cleanedRow[name], name);
-                }
                 cleanedData.push(cleanedRow);
             }
         };
@@ -779,7 +823,6 @@ export const LinkedInCleaner = (() => {
             skipRows = Number.isInteger(config.skipRows)
                 ? /** @type {number} */ (config.skipRows)
                 : 0;
-            cleanRow = createRowCleaner(fileType);
             const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
             parser = createCsvRowParser(csvOptions, onRow);
             if (parser.push(prefix)) {

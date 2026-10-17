@@ -235,17 +235,20 @@ After the Clean, Messages, and PDF thread workers stream the stored file through
 - 128 MB goes over the budget, mostly in the Messages worker, which needs every row to detect the self account and so cannot clean while it streams. The public limits stayed at 80 MiB until that worker shrank, below.
 - Only Chromium is measured here; WebKit runs the end-to-end tests in CI but has no heap sampler.
 
-After the streaming cleaner stores each repeated cell value once (`web/src/features/cleaning/string-pool.js`), measured on 2026-10-17 on the same machine, with a no-pooling run taken alongside for a fair time comparison:
+After the streaming cleaner stores each repeated cell value once (`web/src/features/cleaning/string-pool.js`), measured on 2026-10-17 on the same machine. The first pooling row looked each value up after cleaning it; the second looks the raw value up first, cleans straight from the parser's cells, and takes a fast path for standard dates. Each pooling row was measured alongside a no-pooling run, since the machine's speed drifted during the day:
 
-| Size   | Options    | Analytics ready | Messages ready | Peak heap |
-| ------ | ---------- | --------------- | -------------- | --------- |
-| 100 MB | no pooling | 5.58 s          | 12.51 s        | 189 MB    |
-| 100 MB | pooling    | 6.06 s          | 13.19 s        | 149 MB    |
-| 128 MB | pooling    | 6.78 s          | 14.96 s        | 198 MB    |
+| Size   | Options                 | Analytics ready | Messages ready | Peak heap |
+| ------ | ----------------------- | --------------- | -------------- | --------- |
+| 100 MB | no pooling              | 5.58 s          | 12.51 s        | 189 MB    |
+| 100 MB | pooling after cleaning  | 6.06 s          | 13.19 s        | 149 MB    |
+| 100 MB | no pooling (`d82c5cf`)  | 4.47 s          | 10.33 s        | 239 MB    |
+| 100 MB | pooling before cleaning | 4.14 s          | 9.06 s         | 124 MB    |
 
-- Most of the cleaned rows' memory is the cell strings, and names, profile URLs, conversation ids and folders repeat on row after row. Sharing them cuts the rows a worker keeps for a 58 MiB `messages.csv` from 213 MB to 53 MB.
-- Each column samples its first 4,096 values and stops sharing when nearly all were distinct, as dates and message bodies are, which keeps the extra time to about half a second at 100 MB.
-- A 128 MB export now fits the 300 MB budget for analysis, so the public limits rose to 128 MiB per file, 128 Mi characters, and 1,000,000 rows.
+- Most of the cleaned rows' memory is the cell strings, and names, profile URLs, conversation ids and folders repeat on row after row. Sharing them cuts the rows a worker keeps for a 58 MiB `messages.csv` from 212 MB to 47 MB.
+- Each column samples its first 4,096 values and stops caching when nearly all were distinct, as dates and message bodies are.
+- Looking values up after cleaning cost about 10%. Looking the raw value up first skips cleaning every repeat, and with the date fast path and no intermediate record object per row, the clean of that file in Node fell from about 2.2 s to 1.9 s.
+- The date fast path does two time zone lookups instead of six and gave the same output as the general path on about 10 million inputs across 13 time zones, including historical offsets with seconds, which it hands back to the general path.
+- A 128 MB export fits the 300 MB budget for analysis (198 MB with pooling after cleaning), so the public limits rose to 128 MiB per file, 128 Mi characters, and 1,000,000 rows.
 
 ### Retained analysis state
 

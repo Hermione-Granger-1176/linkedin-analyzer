@@ -135,13 +135,13 @@ describe("toExportRow", () => {
         expect(exportRowBody(RAW)).toBe("  hi there ");
     });
 
-    it("leaves the body out and passes every other cleaned value through keep", () => {
+    it("leaves the body out and cleans every other value through the cache", () => {
         const seen = [];
         const row = toExportRow(RAW, {
             withBody: false,
-            keep: (value, column) => {
+            cache: (column, value, clean) => {
                 seen.push(column);
-                return value.toUpperCase();
+                return clean(value).toUpperCase();
             },
         });
 

@@ -237,6 +237,83 @@ function dateMatchesComponents(utcDate, year, month, day, hour, minute, second) 
     );
 }
 
+/** Character code of "0". */
+const ZERO = 48;
+
+/**
+ * Read a run of ASCII digits as a number, or -1 when any character is not one.
+ * @param {string} text - Text to read
+ * @param {number} start - Index of the first digit
+ * @param {number} length - Number of digits
+ * @returns {number}
+ */
+function readDigits(text, start, length) {
+    let number = 0;
+    for (let index = start; index < start + length; index += 1) {
+        const digit = text.charCodeAt(index) - ZERO;
+        if (digit < 0 || digit > 9) {
+            return -1;
+        }
+        number = number * 10 + digit;
+    }
+    return number;
+}
+
+/**
+ * Two-digit form of a number below 100.
+ * @param {number} number - Number to format
+ * @returns {string}
+ */
+function pad2(number) {
+    return number < 10 ? `0${number}` : String(number);
+}
+
+/**
+ * Fast path for the form LinkedIn actually writes, "YYYY-MM-DD HH:MM:SS" with
+ * an optional " UTC", nothing around it. It gives exactly what `cleanDate`
+ * gives for that form, with two time zone lookups instead of six and no
+ * splitting. Anything else returns null and takes the general path.
+ * @param {string} value - Raw date value
+ * @returns {string|null}
+ */
+function cleanStandardDate(value) {
+    if (value.length !== 19 && !(value.length === 23 && value.endsWith(" UTC"))) {
+        return null;
+    }
+    if (
+        value.charCodeAt(4) !== 45 ||
+        value.charCodeAt(7) !== 45 ||
+        value.charCodeAt(10) !== 32 ||
+        value.charCodeAt(13) !== 58 ||
+        value.charCodeAt(16) !== 58
+    ) {
+        return null;
+    }
+    const year = readDigits(value, 0, 4);
+    const month = readDigits(value, 5, 2);
+    const day = readDigits(value, 8, 2);
+    const hour = readDigits(value, 11, 2);
+    const minute = readDigits(value, 14, 2);
+    const second = readDigits(value, 17, 2);
+    if (year < 0 || !isValidDateRange(month, day, hour, minute, second)) {
+        return null;
+    }
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+    if (!dateMatchesComponents(utcDate, year, month, day, hour, minute, second)) {
+        return null;
+    }
+    // Local fields are the UTC fields of the instant moved by its own offset.
+    // getTimezoneOffset() drops the seconds of an old local-mean-time offset;
+    // the true offset is then under a minute away, so matching seconds proves
+    // the two are the same, and a mismatch takes the general path.
+    const offsetMs = Math.round(utcDate.getTimezoneOffset() * 60000);
+    const local = new Date(utcDate.getTime() - offsetMs);
+    if (local.getUTCSeconds() !== utcDate.getSeconds()) {
+        return null;
+    }
+    return `${local.getUTCFullYear()}-${pad2(local.getUTCMonth() + 1)}-${pad2(local.getUTCDate())} ${pad2(local.getUTCHours())}:${pad2(local.getUTCMinutes())}:${pad2(local.getUTCSeconds())}`;
+}
+
 /**
  * Convert UTC date from LinkedIn export to local timezone.
  * LinkedIn exports dates in UTC format: "YYYY-MM-DD HH:MM:SS"
@@ -246,6 +323,12 @@ function dateMatchesComponents(utcDate, year, month, day, hour, minute, second) 
  * @returns {string} Date string in local timezone (YYYY-MM-DD HH:MM:SS)
  */
 function cleanDate(value) {
+    if (typeof value === "string") {
+        const fast = cleanStandardDate(value);
+        if (fast !== null) {
+            return fast;
+        }
+    }
     if (isMissing(value)) {
         return "";
     }

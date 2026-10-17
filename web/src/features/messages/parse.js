@@ -138,6 +138,12 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
                 return;
             }
             finishRequest();
+            // The page keeps the state it was sent, and an idle worker can hold
+            // the parse's garbage for minutes, so let it go unless a newer
+            // request is already on its way to the same worker.
+            if (requestId === parseWorkerRequestId) {
+                terminateWorker();
+            }
             resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
         };
 

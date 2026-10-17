@@ -130,7 +130,7 @@ test("upload messages+connections and render relationship insights", async ({ pa
 
     await expect(page.locator("#messagesLayout")).toBeVisible();
     await expect(page.locator("#messagesEmpty")).toBeHidden();
-    await expect(page.locator("#topContactsList li").first()).toBeVisible();
+    await expect(page.locator("#topContactsList li:not(.skeleton-row)").first()).toBeVisible();
 });
 
 test("upload shares+comments and render insights", async ({ page }) => {
@@ -163,7 +163,7 @@ test("deep links open every screen after a reload", async ({ page }) => {
         ["clean", "tbody tr", "#screen-clean [data-testid=clean-preview-table]"],
         ["analytics?range=3m", "", "#screen-analytics [data-testid=analytics-grid]"],
         ["connections?range=3m", "", "#connectionsGrid"],
-        ["messages?range=3m", "", "#topContactsList li"],
+        ["messages?range=3m", "", "#topContactsList li:not(.skeleton-row)"],
         ["insights?range=3m", "", "#insightsGrid .insight-card h3"],
     ];
     for (const [hash, child, selector] of routes) {
@@ -321,6 +321,6 @@ test("core data screens have no critical accessibility violations", async ({ pag
     await expect(page).toHaveURL(/#messages/);
     await expect(page.locator("#messagesLayout")).toBeVisible();
     await expect(page.locator("#messagesEmpty")).toBeHidden();
-    await expect(page.locator("#topContactsList li").first()).toBeVisible();
+    await expect(page.locator("#topContactsList li:not(.skeleton-row)").first()).toBeVisible();
     await runAxeScan(page);
 });

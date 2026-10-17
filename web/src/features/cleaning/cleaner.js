@@ -686,9 +686,15 @@ export const LinkedInCleaner = (() => {
      * would for a successful file. On any error or ambiguity it returns null,
      * and the caller runs process() on the full text, so failures and their
      * messages stay identical.
+     *
+     * With onRecord, each parsed record goes to it uncleaned, as parseCSV()
+     * would have produced it, and the result carries no cleaned rows. A caller
+     * that needs values the spreadsheet cleaner would change reads them this
+     * way.
+     * @param {((record: CsvRecord) => void)|null} [onRecord] - Receives each parsed record instead of cleaning it
      * @returns {StreamProcessor}
      */
-    function createStreamProcessor() {
+    function createStreamProcessor(onRecord = null) {
         let prefix = "";
         /** @type {FileType|null} */
         let fileType = null;
@@ -745,6 +751,10 @@ export const LinkedInCleaner = (() => {
             for (let c = 0; c < headers.length; c += 1) {
                 const value = row[c];
                 record[headers[c]] = value !== undefined ? value : "";
+            }
+            if (onRecord) {
+                onRecord(record);
+                return;
             }
             const cleanedRow = /** @type {RowCleaner} */ (cleanRow)(record);
             if (cleanedRow) {

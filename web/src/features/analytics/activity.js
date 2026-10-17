@@ -23,161 +23,26 @@ import { extractTopics } from "./text.js";
 /** @typedef {import("../../shared/ui/charts.js").TimelinePoint} TimelinePoint */
 /** @typedef {import("../../shared/ui/charts.js").TopicPoint} TopicPoint */
 
-/** @typedef {{posts: number, comments: number, total: number}} ActivityTotals - Activity counts */
-
-/**
- * One month of activity as compute() serializes it.
- * @typedef {object} MonthBucket
- * @property {number} posts - Posts in the month
- * @property {number} comments - Comments in the month
- * @property {number} total - Posts plus comments
- * @property {Record<string, number>} topics - Topic token counts
- * @property {number[]} days - Activity per weekday, Monday first (7 entries)
- * @property {number[]} hours - Activity per hour of day (24 entries)
- * @property {number[][]} heatmap - Activity per weekday and hour (7 x 24)
- * @property {ContentMix} shareTypes - Post counts per share type
- * @property {string[]} activeDays - "YYYY-MM-DD" keys with any activity
- */
-
-/**
- * A month bucket after the worker hydrates it, with its active days as a Set.
- * @typedef {Omit<MonthBucket, "activeDays"> & {activeDays: Set<string>}} HydratedMonthBucket
- */
-
-/** @typedef {MonthBucket|HydratedMonthBucket} AnyMonthBucket - Serialized or hydrated bucket */
-
-/**
- * One day of activity in the day index.
- * @typedef {object} DayBucket
- * @property {number} posts - Posts that day
- * @property {number} comments - Comments that day
- * @property {number} total - Posts plus comments
- * @property {ContentMix} shareTypes - Post counts per share type
- */
-
-/**
- * Lifetime posting-versus-network-growth comparison.
- * @typedef {object} NetworkGrowth
- * @property {number} correlation - Pearson correlation, rounded to two places
- * @property {number} multiplier - Busiest-month average over quiet-month average
- * @property {number} topAvg - Average new connections in the busiest posting months
- * @property {number} quietAvg - Average new connections in quiet months
- * @property {number} months - Overlapping months compared
- */
-
-/**
- * The analytics base compute() produces: the aggregate the worker posts and storage keeps.
- * @typedef {object} AnalyticsBase
- * @property {Record<string, MonthBucket>} months - Month buckets keyed "YYYY-MM"
- * @property {Record<string, DayBucket>} dayIndex - Day buckets keyed "YYYY-MM-DD"
- * @property {string[]} activeDays - "YYYY-MM-DD" keys with any activity
- * @property {number|null} latestTimestamp - Latest activity (ms), or null when none
- * @property {number|null} earliestTimestamp - Earliest activity (ms), or null when none
- * @property {NetworkGrowth|null} networkGrowth - Network-growth comparison, when meaningful
- * @property {ActivityTotals} totals - Lifetime activity counts
- */
-
-/**
- * The analytics base after the worker hydrates it from storage.
- * @typedef {Omit<AnalyticsBase, "months"|"activeDays"> & {
- * months: Record<string, HydratedMonthBucket>, activeDays: Set<string>}} HydratedAnalytics
- */
-
-/**
- * Filters as the UI sends them, before the worker normalizes them.
- * @typedef {object} AnalyticsFilterInput
- * @property {string} [timeRange] - Time range key
- * @property {string} [topic] - Topic token, or "all"
- * @property {string|null} [monthFocus] - Single "YYYY-MM" month to show
- * @property {unknown} [day] - Weekday index, Monday first
- * @property {unknown} [hour] - Hour of day
- * @property {string} [shareType] - Share type key ("text", "links", "media"), or "all"
- */
-
-/**
- * Normalized filters buildView() applies.
- * @typedef {object} AnalyticsFilters
- * @property {string} timeRange - Time range key, e.g. "1m", "12m", or "all"
- * @property {string} topic - Topic token, or "all"
- * @property {string|null} monthFocus - Single "YYYY-MM" month to show, or null
- * @property {number|null} day - Weekday index, Monday first, or null
- * @property {number|null} hour - Hour of day, or null
- * @property {string} shareType - Share type key ("text", "links", "media"), or "all"
- */
-
-/**
- * Activity trend between the older and recent halves of the timeline.
- * @typedef {object} ActivityTrend
- * @property {number} percent - Percent change from the older half
- * @property {"up"|"down"|"flat"} direction - Trend direction
- * @property {number} currentCount - Activity in the recent half
- * @property {number} previousCount - Activity in the older half
- */
-
-/** @typedef {{from: string, to: string}} TopicShift - Dominant topic change */
-
-/**
- * Comment-to-post ratio shift between the older and recent halves.
- * @typedef {object} RatioTrend
- * @property {"more-engaging"|"more-posting"} direction - Direction of the shift
- * @property {number} recentRatio - Recent comment-to-post ratio
- * @property {number} priorRatio - Older comment-to-post ratio
- */
-
-/**
- * The filtered view buildView() produces.
- * @typedef {object} AnalyticsView
- * @property {TimelinePoint[]} timeline - Monthly or weekly activity points
- * @property {number} timelineMax - Largest unfiltered bucket value, at least 1
- * @property {number[][]} heatmap - Activity per weekday and hour (7 x 24)
- * @property {TopicPoint[]} topics - Top topics, most frequent first
- * @property {ContentMix} contentMix - Post counts per share type
- * @property {{current: number, longest: number}} streaks - Activity streaks in days
- * @property {{hour: number, count: number}} peakHour - Busiest hour of day
- * @property {{dayIndex: number, count: number}} peakDay - Busiest weekday
- * @property {ActivityTrend|null} trend - Activity trend, or null with too little data
- * @property {TopicShift|null} [topicShift] - Dominant topic change, when one shows
- * @property {RatioTrend|null} [ratioTrend] - Engagement style change, when one shows
- * @property {NetworkGrowth|null} [networkGrowth] - Lifetime network-growth comparison
- * @property {ActivityTotals} totals - Filtered activity counts
- */
-
-/**
- * One narrative insight card.
- * @typedef {object} Insight
- * @property {string} id - Stable insight ID
- * @property {string} title - Card title
- * @property {string} body - Card text
- * @property {string} icon - Icon name
- * @property {string} accent - Accent class name
- */
-
-/** @typedef {{insights: Insight[], tip: string|null}} InsightsResult - Cards and closing tip */
-
-/**
- * The view payload the analytics worker posts: the view with its cache key, and its insights.
- * @typedef {{view: AnalyticsView & {key: string}, insights: InsightsResult}} AnalyticsViewPayload
- */
-
-/**
- * A month bucket while compute() fills it.
- * @typedef {object} WorkingMonthBucket
- * @property {number} posts - Posts in the month
- * @property {number} comments - Comments in the month
- * @property {number} total - Posts plus comments
- * @property {Map<string, number>} topics - Topic token counts
- * @property {number[]} days - Activity per weekday
- * @property {number[]} hours - Activity per hour of day
- * @property {number[][]} heatmap - Activity per weekday and hour
- * @property {ContentMix} shareTypes - Post counts per share type
- * @property {Set<string>} activeDays - Active "YYYY-MM-DD" keys
- */
-
-/**
- * One included month's filtered counts, for the topic-shift and engagement-style cards.
- * @typedef {{key: string, posts: number, comments: number, topics: Record<string, number>}} MonthlyStat
- */
-/** @typedef {{topicRatio: number, hourRatio: number}} MonthMeta - Per-month filter ratios */
+/** @typedef {import("./model.ts").ActivityTotals} ActivityTotals */
+/** @typedef {import("./model.ts").MonthBucket} MonthBucket */
+/** @typedef {import("./model.ts").HydratedMonthBucket} HydratedMonthBucket */
+/** @typedef {import("./model.ts").AnyMonthBucket} AnyMonthBucket */
+/** @typedef {import("./model.ts").DayBucket} DayBucket */
+/** @typedef {import("./model.ts").NetworkGrowth} NetworkGrowth */
+/** @typedef {import("./model.ts").AnalyticsBase} AnalyticsBase */
+/** @typedef {import("./model.ts").HydratedAnalytics} HydratedAnalytics */
+/** @typedef {import("./model.ts").AnalyticsFilterInput} AnalyticsFilterInput */
+/** @typedef {import("./model.ts").AnalyticsFilters} AnalyticsFilters */
+/** @typedef {import("./model.ts").ActivityTrend} ActivityTrend */
+/** @typedef {import("./model.ts").TopicShift} TopicShift */
+/** @typedef {import("./model.ts").RatioTrend} RatioTrend */
+/** @typedef {import("./model.ts").AnalyticsView} AnalyticsView */
+/** @typedef {import("./model.ts").Insight} Insight */
+/** @typedef {import("./model.ts").InsightsResult} InsightsResult */
+/** @typedef {import("./model.ts").AnalyticsViewPayload} AnalyticsViewPayload */
+/** @typedef {import("./model.ts").WorkingMonthBucket} WorkingMonthBucket */
+/** @typedef {import("./model.ts").MonthlyStat} MonthlyStat */
+/** @typedef {import("./model.ts").MonthMeta} MonthMeta */
 
 export const AnalyticsEngine = (() => {
     "use strict";

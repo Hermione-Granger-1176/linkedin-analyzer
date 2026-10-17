@@ -13,6 +13,7 @@ import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-toolti
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { prefersReducedMotion } from "../../shared/ui/motion.js";
+import { markActiveRange } from "../../shared/ui/time-range.js";
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 
@@ -864,14 +865,7 @@ export const AnalyticsPage = (() => {
      * @param {string} range - The active time range identifier.
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach((btn) => {
-            const isActive = btn.getAttribute("data-range") === range;
-            btn.classList.toggle("active", isActive);
-            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.value = range;
-        }
+        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
     }
 
     /**

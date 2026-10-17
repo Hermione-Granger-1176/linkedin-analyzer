@@ -8,6 +8,7 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+import { markActiveRange } from "../../shared/ui/time-range.js";
 import { ExcelGenerator } from "../cleaning/excel.js";
 
 import { MessagesAnalytics } from "./analytics.js";
@@ -530,14 +531,7 @@ export const MessagesPage = (() => {
      * @param {string} range - Active time range
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach((button) => {
-            const isActive = button.getAttribute("data-range") === range;
-            button.classList.toggle("active", isActive);
-            button.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.value = range;
-        }
+        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
     }
 
     /**

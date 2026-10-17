@@ -85,6 +85,12 @@ export const UploadPage = (() => {
     const pendingFiles = new Map();
     const activeJobs = new Set();
     const jobTimeouts = new Map();
+    // Saves still writing a processed upload. Clear waits for them so a save
+    // that began before it cannot write the upload back afterwards.
+    const pendingSaves = new Set();
+    // Bumped by Clear, so a save that began before it skips its analytics,
+    // cache and status continuations.
+    let clearGeneration = 0;
     let initialized = false;
     let lastPrimedSignature = null;
     let restorePromise = null;
@@ -258,6 +264,8 @@ export const UploadPage = (() => {
         if (clearAllBtn) {
             clearAllBtn.addEventListener("click", async () => {
                 try {
+                    clearGeneration += 1;
+                    await Promise.allSettled(pendingSaves);
                     await Storage.clearAll();
                     clearPrimeSchedule();
                     pendingPrimePayload = null;
@@ -615,14 +623,21 @@ export const UploadPage = (() => {
             return;
         }
 
+        const generation = clearGeneration;
+        const save = persistProcessedFile(
+            fileType,
+            fileName,
+            pending.file,
+            rowCount,
+            payload.analyticsBase,
+            generation,
+        );
+        pendingSaves.add(save);
         try {
-            await persistProcessedFile(
-                fileType,
-                fileName,
-                pending.file,
-                rowCount,
-                payload.analyticsBase,
-            );
+            await save;
+            if (generation !== clearGeneration) {
+                return;
+            }
             await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);
 
             const files = await getStoredFilesSnapshot();
@@ -654,6 +669,7 @@ export const UploadPage = (() => {
                 setHint("Error saving file data. Please try again.", true);
             }
         } finally {
+            pendingSaves.delete(save);
             completeJob(jobId, fileName);
         }
     }
@@ -682,11 +698,19 @@ export const UploadPage = (() => {
      * @param {Blob} blob - The uploaded File
      * @param {number} rowCount - Processed row count
      * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @param {number} generation - Clear generation the upload was processed under
      * @returns {Promise<void>}
      */
-    async function persistProcessedFile(fileType, fileName, blob, rowCount, analyticsBase) {
+    async function persistProcessedFile(
+        fileType,
+        fileName,
+        blob,
+        rowCount,
+        analyticsBase,
+        generation,
+    ) {
         await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
-        if (!analyticsBase) {
+        if (!analyticsBase || generation !== clearGeneration) {
             return;
         }
         await Storage.saveAnalytics(analyticsBase);
@@ -802,6 +826,12 @@ export const UploadPage = (() => {
         pendingFiles.delete(resolvedJobId);
         clearJobTimeout(resolvedJobId);
         activeJobs.delete(resolvedJobId);
+        // The worker takes jobs one at a time, so a job still waiting on it has
+        // spent its watchdog behind this one. Restart those so each is timed
+        // from when it can start; the job now running still stops a stall.
+        pendingFiles.forEach((entry, waitingJobId) => {
+            scheduleJobTimeout(waitingJobId, entry.fileName);
+        });
         checkJobs();
     }
 

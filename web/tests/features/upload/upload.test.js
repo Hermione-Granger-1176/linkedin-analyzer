@@ -446,6 +446,107 @@ describe("UploadPage", () => {
         expect(hint.classList.contains("is-error")).toBe(true);
     });
 
+    it("waits for a save in flight before Clear, and skips its follow-up work", async () => {
+        let finishSave;
+        Storage.saveFile.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishSave = resolve;
+                }),
+        );
+        vi.spyOn(Date, "now").mockReturnValue(1234);
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const processed = workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "shares",
+                    fileName: "Shares.csv",
+                    rowCount: 2,
+                    jobId: "Shares.csv:1234:6b851eb851eb85",
+                    analyticsBase: { months: { "2024-01": {} } },
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(Storage.saveFile).toHaveBeenCalled();
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // Clearing now would let the pending save write the upload back after it.
+        expect(Storage.clearAll).not.toHaveBeenCalled();
+
+        finishSave();
+        await processed;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(Storage.clearAll).toHaveBeenCalled();
+        expect(Storage.saveAnalytics).not.toHaveBeenCalled();
+        expect(DataCache.notify).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "filesChanged" }),
+        );
+
+        Date.now.mockRestore();
+        Math.random.mockRestore();
+    });
+
+    it("times a queued upload from when the job ahead of it finishes", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+        try {
+            UploadPage.init();
+            await vi.runAllTimersAsync();
+
+            const first = new File(["csv"], "Shares.csv", { type: "text/csv" });
+            const second = new File(["csv"], "Comments.csv", { type: "text/csv" });
+            const input = document.getElementById("multiFileInput");
+            Object.defineProperty(input, "files", { value: [first, second] });
+            input.dispatchEvent(new Event("change"));
+            await vi.advanceTimersByTimeAsync(0);
+
+            const firstJob = workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .find(
+                    (message) =>
+                        message.type === "addFile" && message.payload.fileName === "Shares.csv",
+                );
+
+            await vi.advanceTimersByTimeAsync(30000);
+            await workerInstance.listeners.message[0]({
+                data: {
+                    type: "fileProcessed",
+                    payload: {
+                        fileType: "shares",
+                        fileName: "Shares.csv",
+                        rowCount: 2,
+                        jobId: firstJob.payload.jobId,
+                    },
+                },
+            });
+
+            // Past the second job's original deadline, but inside a fresh one.
+            await vi.advanceTimersByTimeAsync(30000);
+            const hint = document.getElementById("uploadHint");
+            expect(hint.textContent).not.toContain("Processing took too long");
+
+            await vi.advanceTimersByTimeAsync(16000);
+            expect(hint.textContent).toContain("Processing took too long for Comments.csv");
+        } finally {
+            Math.random.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+
     it("skips files above hard upload limit", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));

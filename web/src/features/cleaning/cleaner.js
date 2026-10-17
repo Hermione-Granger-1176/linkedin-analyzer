@@ -369,28 +369,54 @@ export const LinkedInCleaner = (() => {
      * of the text. Returns the first supported type (in FILE_TYPES order) whose
      * required columns are present, or null when no prefix match is found.
      *
-     * A truncated tail can only corrupt the prefix's last row, never the header
-     * at the top, so a positive match is reliable; a null result falls back to
-     * full multi-type detection in the caller, which keeps behavior identical.
-     * Uses a throwaway parse cache so truncated parses never poison the caller's
-     * full-parse cache.
+     * Only the header row is read, so a truncated tail cannot affect the match
+     * and a positive match is reliable; a null result falls back to full
+     * multi-type detection in the caller, which keeps behavior identical.
      * @param {string} csvText - Raw CSV text
      * @returns {FileType|null} Detected file type, or null if unknown from the prefix
      */
     function detectTypeFromPrefix(csvText) {
         const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
-        /** @type {Map<string, ParsedCsv>} */
-        const prefixCache = new Map();
         for (const type of FILE_TYPES) {
-            const parsed = parseCSV(prefix, type, prefixCache);
-            if (parsed.error) {
-                continue;
-            }
-            if (validateColumns(parsed.headers, type).valid) {
+            const headers = readPrefixHeader(prefix, type);
+            if (headers && validateColumns(headers, type).valid) {
                 return type;
             }
         }
         return null;
+    }
+
+    /**
+     * Read one type's header row from a prefix, the row parseCSV() would use.
+     * The prefix is never finished, so a quoted field cut off at its end is
+     * left open instead of failing the whole prefix with an unmatched quote.
+     * @param {string} prefix - Start of the CSV text
+     * @param {FileType} type - Supported file type
+     * @returns {string[]|null} Normalized headers, or null when none can be used
+     */
+    function readPrefixHeader(prefix, type) {
+        const config = CONFIGS[type];
+        const skipRows = Number.isInteger(config.skipRows)
+            ? /** @type {number} */ (config.skipRows)
+            : 0;
+        const csvOptions = type === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+        /** @type {string[]|null} */
+        let headerRow = null;
+        let rowIndex = 0;
+        const parser = createCsvRowParser(csvOptions, (row) => {
+            if (rowIndex === skipRows) {
+                headerRow = row;
+            }
+            rowIndex += 1;
+        });
+        if (parser.push(prefix) || !headerRow) {
+            return null;
+        }
+        const headers = normalizeHeaders(headerRow);
+        if (headers.every((header) => header === "") || findDuplicateHeaders(headers).length) {
+            return null;
+        }
+        return headers;
     }
 
     /**

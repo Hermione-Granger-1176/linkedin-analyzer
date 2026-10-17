@@ -65,6 +65,24 @@ export function getRangeStart(range, latestTimestamp) {
 }
 
 /**
+ * Format an outreach reply rate as a percentage.
+ * @param {number|null|undefined} replyRate - Fraction in [0, 1], or null when nothing was measured
+ * @returns {string} Percentage text, or "N/A"
+ */
+export function formatReplyRate(replyRate) {
+    return typeof replyRate === "number" ? `${Math.round(replyRate * 100)}%` : "N/A";
+}
+
+/**
+ * Format a sent-to-received ratio.
+ * @param {number|null|undefined} ratio - Sent over received, or null when nothing was received
+ * @returns {string} Ratio text, or "N/A"
+ */
+export function formatSentRatio(ratio) {
+    return typeof ratio === "number" ? `${ratio.toFixed(1)} : 1` : "N/A";
+}
+
+/**
  * Format timestamp as human-readable date.
  * @param {number} timestamp - Timestamp in milliseconds
  * @returns {string}

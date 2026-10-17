@@ -158,7 +158,7 @@ CPU throttling slows only the page's main thread. Chromium rejects it on worker 
 
 ### Large-export baselines
 
-Measured on 2026-10-16 at commit `aeaaa15`, before any large-file pipeline work, on a 4-core Intel Xeon at 2.10 GHz with 15 GB RAM, Chromium 141.0.7390.37 headless, and Node 24.15.0. Each row is 3 runs of `make bench-browser size_mb=N runs=3` with the listed options, on the synthetic export from `make gen-large-export`. Values are medians with the range in parentheses. Messages time is from file drop and includes opening Analytics first. Peak heap is the combined sampled JavaScript heap of the page and its workers. No run crashed or failed to finish.
+Measured on 2026-10-16 at commit `aeaaa15`, before any large-file pipeline work, on a 4-core Intel Xeon at 2.10 GHz with 15 GB RAM, Chromium 141.0.7390.37 headless, and Node 24.15.0. Each row is 3 runs of `make bench-browser size_mb=N runs=3` with the listed options, on the synthetic export from `make gen-large-export`. Values are medians with the range in parentheses. Messages time is from file drop and includes opening Analytics first. When these rows were recorded, the bench timed the cached filter change before opening Messages, so the Messages column also includes that change (a few hundred milliseconds at most); the bench now times the filter after Messages. Peak heap is the combined sampled JavaScript heap of the page and its workers. No run crashed or failed to finish.
 
 | Size  | Options | Analytics ready    | Messages ready       | Cached filter    | Peak heap        |
 | ----- | ------- | ------------------ | -------------------- | ---------------- | ---------------- |

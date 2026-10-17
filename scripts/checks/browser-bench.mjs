@@ -219,14 +219,15 @@ async function startHeapSampler(client) {
 /**
  * Time one cached filter change on Analytics: switch the range away and back,
  * and time the switch back, which the analytics cache serves. A change counts
- * as done when the total settles. When the switch away leaves the total as it
- * was, both ranges show the same total, so the switch back counts as done
- * after two animation frames instead of waiting for a change that never comes.
+ * as done when the screen has requested the new view and finished drawing it:
+ * the grid dims while a view is requested and drawn, and comes back to full
+ * opacity once the charts are drawn. This holds whether or not the total
+ * changes, and a change that does not finish in time fails the run.
  * @param {import("@playwright/test").Page} page - App page on Analytics.
  */
 async function timeCachedFilterChange(page) {
     return page.evaluate(async (settleTimeout) => {
-        const total = document.querySelector('[data-testid="analytics-total"]');
+        const grid = document.getElementById("analyticsGrid");
         const select = document.getElementById("analyticsTimeRangeSelect");
         const useSelect = select && select.offsetParent !== null;
         const apply = (range) => {
@@ -239,36 +240,35 @@ async function timeCachedFilterChange(page) {
                     .click();
             }
         };
-        const frames = () =>
-            new Promise((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(resolve));
-            });
-        const change = async (range, expectChange) => {
-            const before = total.textContent;
-            const started = performance.now();
-            const settled = new Promise((resolve) => {
+        const change = (range) =>
+            new Promise((resolve, reject) => {
+                const started = performance.now();
+                let loading = false;
                 const observer = new MutationObserver(() => {
-                    if (total.textContent !== before) {
+                    if (grid.style.opacity !== "1") {
+                        loading = true;
+                    } else if (loading) {
                         observer.disconnect();
-                        resolve(true);
+                        clearTimeout(timer);
+                        resolve(performance.now() - started);
                     }
                 });
-                observer.observe(total, { childList: true, characterData: true, subtree: true });
-                setTimeout(() => {
+                const timer = setTimeout(() => {
                     observer.disconnect();
-                    resolve(false);
+                    reject(new Error(`filter change to ${range} did not finish`));
                 }, settleTimeout);
+                observer.observe(grid, { attributes: true, attributeFilter: ["style"] });
+                apply(range);
             });
-            apply(range);
-            const changed = expectChange ? await settled : false;
-            await frames();
-            return { ms: performance.now() - started, changed };
-        };
+        // Start from an idle screen, so a draw already under way is not timed.
+        while (grid.style.opacity && grid.style.opacity !== "1") {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
         const active = document.querySelector("#analyticsTimeRangeButtons .active");
         const original = active ? active.dataset.range : "12m";
         const other = original === "all" ? "12m" : "all";
-        const away = await change(other, true);
-        return (await change(original, away.changed)).ms;
+        await change(other);
+        return change(original);
     }, FILTER_SETTLE_TIMEOUT_MS);
 }
 
@@ -310,10 +310,13 @@ async function measureRun(options, inputDir) {
         await openRoute(page, "analytics", STEP_TIMEOUT_MS);
         await ready.analytics(page);
         result.analyticsMs = performance.now() - dropped;
-        result.filterMs = await timeCachedFilterChange(page);
         await openRoute(page, "messages", STEP_TIMEOUT_MS);
         await ready.messages(page);
         result.messagesMs = performance.now() - dropped;
+        // The filter timing runs after Messages so it cannot add to that time.
+        await openRoute(page, "analytics", STEP_TIMEOUT_MS);
+        await ready.analytics(page);
+        result.filterMs = await timeCachedFilterChange(page);
         await sampler.sample();
     } catch (error) {
         result.error = result.crashed ? "tab crashed" : error.message.split("\n")[0];

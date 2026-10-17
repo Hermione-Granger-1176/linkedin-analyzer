@@ -468,7 +468,7 @@ export const UploadPage = (() => {
         if (oversizeFiles.length) {
             const warningMb = Math.round(LARGE_FILE_WARNING_BYTES / (1024 * 1024));
             setHint(
-                `Some files are large (${warningMb}MB+). Processing may take longer than usual.`,
+                `Some files are large (${warningMb}MB+). Processing can take up to a minute and may not finish on a phone with little memory.`,
                 false,
             );
         }

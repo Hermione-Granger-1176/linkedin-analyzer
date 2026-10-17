@@ -25,6 +25,7 @@ import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { celebrateStaple } from "../../shared/ui/mascot.js";
 
 import { hasExportableData } from "./availability.js";
+import { ExportRefusal } from "./refusal.js";
 
 const OVERLAY_SOURCE = "pdf-export";
 const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
@@ -510,10 +511,17 @@ export const PdfExport = (() => {
             setBusy(false);
             close();
             downloaded = true;
-        } catch {
+        } catch (error) {
             // A failure the user already walked away from is not worth reporting
             // or showing, and the dialog it would write into may be reopened.
             if (isCancelled()) {
+                return;
+            }
+            // A refusal is not a failure: its text is fixed and says what to
+            // change, so it is shown as is and not reported.
+            if (error instanceof ExportRefusal) {
+                setBusy(false);
+                showError(error.message);
                 return;
             }
             // The caught value is discarded on purpose: this catch surrounds CSV

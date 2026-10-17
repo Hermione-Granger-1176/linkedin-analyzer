@@ -44,6 +44,14 @@ export const MAX_CSV_CHARS = LIMITS.maxCsvChars;
 export const MAX_CSV_ROWS = LIMITS.maxCsvRows;
 
 /**
+ * Largest messages file the PDF export takes message contents from. Above it
+ * the bodies cannot be held alongside the analysis within the memory budget,
+ * so the export is refused with a reason and the rest can be exported without
+ * them.
+ */
+export const THREADS_EXPORT_MAX_BYTES = 60 * MIB;
+
+/**
  * Largest file the Clean screen turns into an Excel workbook. The workbook is
  * built whole in memory at about 25 bytes of heap per byte of file, so larger
  * files download as cleaned CSV instead.

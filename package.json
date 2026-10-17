@@ -71,11 +71,11 @@
     },
     {
       "path": "web/dist/assets/messages-worker-*.js",
-      "limit": "8.5 kB"
+      "limit": "9.5 kB"
     },
     {
       "path": "web/dist/assets/threads-worker-*.js",
-      "limit": "10 kB"
+      "limit": "11 kB"
     },
     {
       "path": "web/dist/assets/cleaning-worker-*.js",

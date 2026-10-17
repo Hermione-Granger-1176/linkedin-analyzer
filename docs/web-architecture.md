@@ -67,9 +67,9 @@ The export collects dashboard data from the feature workers and keeps names and 
 
 ## How the effects tier is chosen
 
-`web/src/platform/device/capabilities.js` reads CPU cores, `navigator.deviceMemory`, Save-Data, the coarse-pointer query, and accelerated WebGL once, picks the `lite`, `standard`, or `rich` tier, and caches the profile. `web/src/shared/ui/effects.js` applies the tier as `data-effects` on the root element, wires the **Auto**, **Lite**, and **Full** toggle, and, under **Auto**, drops one tier when `web/src/platform/device/jank.js` sees repeated long animation frames while no processing or screen load is running. Stylesheets gate expensive effects on `:root[data-effects="lite"]`.
+`web/src/platform/device/capabilities.js` reads CPU cores, `navigator.deviceMemory`, Save-Data, the coarse-pointer query, and accelerated WebGL once, picks the `lite`, `standard`, or `rich` tier, and caches the profile. `web/src/shared/ui/effects.js` applies the tier as `data-effects` on the root element and drops one tier when `web/src/platform/device/jank.js` sees repeated long animation frames while no processing or screen load is running. Stylesheets gate expensive effects on `:root[data-effects="lite"]`.
 
-The page ships marked `lite` and upgrades after the profile is known, because the CSP forbids the inline script that could set it before first paint. The WebGL probe is skipped under the **Lite** override. The tier controls decoration only: processing reads the raw signals, never the tier. [ADR-009](adr/009-device-tiers-for-effects.md) records the thresholds and rules.
+The page ships marked `lite` and upgrades after the profile is known, because the CSP forbids the inline script that could set it before first paint. There is no visitor setting: the device decides. The WebGL probe is skipped when the cheaper signals already pick `lite`. The tier controls decoration only: processing reads the raw signals, never the tier. [ADR-009](adr/009-device-tiers-for-effects.md) records the thresholds and rules.
 
 ## Keep delegated events safe
 

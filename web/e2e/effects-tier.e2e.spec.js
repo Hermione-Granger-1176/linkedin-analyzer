@@ -1,6 +1,5 @@
 const { expect, test } = require("@playwright/test");
 
-const OVERRIDE_KEY = "linkedin-analyzer-effects";
 // Keyframe keys that describe timing rather than an animated property.
 const KEYFRAME_META = new Set(["offset", "computedOffset", "easing", "composite"]);
 
@@ -23,7 +22,9 @@ test.beforeEach(async ({ page }) => {
  */
 async function openAndReadTier(page) {
     await page.goto("/#home");
-    await expect(page.getByTestId("effects-toggle")).toHaveAttribute("data-override", /.+/);
+    // The tier is applied before the router starts, so an active screen means
+    // the shipped `lite` default has already been replaced.
+    await expect(page.locator(".screen.active")).toHaveCount(1);
     return page.evaluate(() => document.documentElement.dataset.effects);
 }
 
@@ -108,7 +109,10 @@ test("without a GPU, gets no higher than the standard tier", async ({
     }
 });
 
-test("Save-Data gets the lite tier", async ({ page }) => {
+test("Save-Data gets the lite tier, creates no WebGL context, and animates only transform and opacity", async ({
+    page,
+}) => {
+    await countWebglRequests(page);
     await page.addInitScript(() => {
         Object.defineProperty(Navigator.prototype, "connection", {
             configurable: true,
@@ -116,18 +120,6 @@ test("Save-Data gets the lite tier", async ({ page }) => {
         });
     });
     expect(await openAndReadTier(page)).toBe("lite");
-});
-
-test("the Lite override creates no WebGL context and animates only transform and opacity", async ({
-    page,
-}) => {
-    await countWebglRequests(page);
-    await page.addInitScript((key) => {
-        localStorage.setItem(key, "lite");
-    }, OVERRIDE_KEY);
-
-    expect(await openAndReadTier(page)).toBe("lite");
-    await expect(page.getByTestId("effects-toggle")).toHaveAttribute("data-override", "lite");
 
     expect(await readWebglRequests(page)).toBe(0);
     // Wait for the decoration layer to start its animations before checking them.
@@ -136,36 +128,18 @@ test("the Lite override creates no WebGL context and animates only transform and
     expect(animated.filter((name) => !isCompositorOnly(name))).toEqual([]);
 });
 
-test("Auto probes WebGL once and the toggle cycles through every choice", async ({ page }) => {
+test("above lite, probes WebGL once and runs the heavier moves", async ({ page }) => {
     await countWebglRequests(page);
     const tier = await openAndReadTier(page);
+    test.skip(tier === "lite", "this runner's own signals already pick lite");
     // Above lite, the home screen runs repaint-heavy moves too, which is what
-    // makes the Lite check above meaningful.
-    if (tier !== "lite") {
-        await expect
-            .poll(async () =>
-                (await readAnimatedProperties(page)).some((name) => !isCompositorOnly(name)),
-            )
-            .toBe(true);
-    }
+    // makes the lite check above meaningful.
+    await expect
+        .poll(async () =>
+            (await readAnimatedProperties(page)).some((name) => !isCompositorOnly(name)),
+        )
+        .toBe(true);
     const probes = await readWebglRequests(page);
     expect(probes).toBeGreaterThan(0);
     expect(probes).toBeLessThanOrEqual(2);
-
-    const toggle = page.getByTestId("effects-toggle");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("data-override", "lite");
-    await expect(page.locator("html")).toHaveAttribute("data-effects", "lite");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("data-override", "full");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("data-override", "auto");
-    await expect(toggle).toHaveAccessibleName("Visual effects: Auto. Select to change.");
-
-    // The choice persists across a reload.
-    await toggle.click();
-    await page.reload();
-    await expect(page.getByTestId("effects-toggle")).toHaveAttribute("data-override", "lite");
-    // Changing the choice never probes WebGL again in this page.
-    expect(await readWebglRequests(page)).toBe(0);
 });

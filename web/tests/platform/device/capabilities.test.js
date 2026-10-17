@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-    EFFECTS_OVERRIDES,
     EFFECTS_TIERS,
     buildDeviceProfile,
     downgradeTier,
     pickTier,
     probeAcceleratedWebgl,
-    readEffectsOverride,
     readSignals,
-    resolveTier,
-    writeEffectsOverride,
 } from "../../../src/platform/device/capabilities.js";
 
 const UNKNOWN = Object.freeze({
@@ -146,57 +142,12 @@ describe("pickTier", () => {
     });
 });
 
-describe("resolveTier and downgradeTier", () => {
-    it("lets lite and full override the automatic tier", () => {
-        expect(resolveTier("rich", "lite", UNKNOWN)).toBe("lite");
-        expect(resolveTier("lite", "full", { ...UNKNOWN, acceleratedWebgl: true })).toBe("rich");
-        expect(resolveTier("lite", "full", { ...UNKNOWN, acceleratedWebgl: false })).toBe(
-            "standard",
-        );
-        expect(resolveTier("standard", "auto", UNKNOWN)).toBe("standard");
-    });
-
+describe("downgradeTier", () => {
     it("steps down one tier and stops at lite", () => {
         expect(downgradeTier("rich")).toBe("standard");
         expect(downgradeTier("standard")).toBe("lite");
         expect(downgradeTier("lite")).toBe("lite");
         expect(EFFECTS_TIERS).toEqual(["lite", "standard", "rich"]);
-        expect(EFFECTS_OVERRIDES).toEqual(["auto", "lite", "full"]);
-    });
-});
-
-describe("effects override storage", () => {
-    beforeEach(() => {
-        window.localStorage.clear();
-    });
-
-    it("stores lite and full, removes auto, and ignores unknown values", () => {
-        expect(readEffectsOverride(window.localStorage)).toBe("auto");
-        writeEffectsOverride(window.localStorage, "lite");
-        expect(readEffectsOverride(window.localStorage)).toBe("lite");
-        writeEffectsOverride(window.localStorage, "auto");
-        expect(window.localStorage.getItem("linkedin-analyzer-effects")).toBeNull();
-        window.localStorage.setItem("linkedin-analyzer-effects", "turbo");
-        expect(readEffectsOverride(window.localStorage)).toBe("auto");
-    });
-
-    it("tolerates missing or blocked storage", () => {
-        const blocked = {
-            getItem: () => {
-                throw new Error("blocked");
-            },
-            setItem: () => {
-                throw new Error("blocked");
-            },
-        };
-        expect(readEffectsOverride(null)).toBe("auto");
-        expect(readEffectsOverride(/** @type {Storage} */ (/** @type {unknown} */ (blocked)))).toBe(
-            "auto",
-        );
-        expect(() => writeEffectsOverride(null, "lite")).not.toThrow();
-        expect(() =>
-            writeEffectsOverride(/** @type {Storage} */ (/** @type {unknown} */ (blocked)), "lite"),
-        ).not.toThrow();
     });
 });
 
@@ -207,19 +158,25 @@ describe("buildDeviceProfile", () => {
         createCanvas: () => canvas,
     });
 
-    it("never probes WebGL under the lite override", () => {
-        const canvas = fakeCanvas({ webgl2: fakeContext() });
-        const profile = buildDeviceProfile(strongEnv(canvas), "lite");
-        expect(canvas.calls).toEqual([]);
-        expect(profile).toMatchObject({ tier: "lite", override: "lite" });
-        expect(profile.signals.acceleratedWebgl).toBeNull();
+    it("uses the tier the device signals pick", () => {
+        const rich = buildDeviceProfile(strongEnv(fakeCanvas({ webgl2: fakeContext() })));
+        expect(rich).toMatchObject({ tier: "rich", autoTier: "rich" });
+        const standard = buildDeviceProfile(strongEnv(fakeCanvas({})));
+        expect(standard).toMatchObject({ tier: "standard", autoTier: "standard" });
     });
 
-    it("probes WebGL for auto and full", () => {
-        const auto = buildDeviceProfile(strongEnv(fakeCanvas({ webgl2: fakeContext() })), "auto");
-        expect(auto).toMatchObject({ tier: "rich", autoTier: "rich", override: "auto" });
-        const full = buildDeviceProfile(strongEnv(fakeCanvas({})), "full");
-        expect(full).toMatchObject({ tier: "standard", autoTier: "standard", override: "full" });
+    it("skips the WebGL probe when the cheap signals already pick lite", () => {
+        const createCanvas = vi.fn(() => fakeCanvas({ webgl2: fakeContext() }));
+        const profile = buildDeviceProfile({
+            navigator: /** @type {Navigator} */ (
+                /** @type {unknown} */ ({ hardwareConcurrency: 2 })
+            ),
+            matchMedia: undefined,
+            createCanvas,
+        });
+        expect(profile.tier).toBe("lite");
+        expect(profile.signals.acceleratedWebgl).toBeNull();
+        expect(createCanvas).not.toHaveBeenCalled();
     });
 });
 
@@ -228,7 +185,6 @@ describe("shared device profile", () => {
 
     beforeEach(() => {
         vi.resetModules();
-        window.localStorage.clear();
         getContext = vi.fn(() => null);
         vi.stubGlobal("OffscreenCanvas", undefined);
         vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(getContext);
@@ -247,7 +203,6 @@ describe("shared device profile", () => {
         expect(first.signals.coarsePointer).toBe(true);
         expect(capabilities.getDeviceProfile()).toBe(first);
         expect(getContext).toHaveBeenCalledTimes(2);
-        expect(first.override).toBe("auto");
 
         capabilities.applyEffectsTier("standard");
         expect(document.documentElement.dataset.effects).toBe("standard");
@@ -269,55 +224,16 @@ describe("shared device profile", () => {
         expect(getContext).not.toHaveBeenCalled();
     });
 
-    it("starts lite without probing when the stored override is lite", async () => {
-        window.localStorage.setItem("linkedin-analyzer-effects", "lite");
-        const capabilities = await import("../../../src/platform/device/capabilities.js");
-        expect(capabilities.getDeviceProfile().tier).toBe("lite");
-        expect(getContext).not.toHaveBeenCalled();
-    });
-
-    it("changes the override, probing WebGL only when it was skipped and is now needed", async () => {
-        window.localStorage.setItem("linkedin-analyzer-effects", "lite");
-        const capabilities = await import("../../../src/platform/device/capabilities.js");
-        capabilities.getDeviceProfile();
-
-        const full = capabilities.setEffectsOverride("full");
-        expect(full.override).toBe("full");
-        expect(window.localStorage.getItem("linkedin-analyzer-effects")).toBe("full");
-        expect(getContext).toHaveBeenCalledTimes(2);
-
-        const lite = capabilities.setEffectsOverride("lite");
-        expect(lite.tier).toBe("lite");
-        const auto = capabilities.setEffectsOverride("bogus");
-        expect(auto.override).toBe("auto");
-        // The earlier probe is reused rather than repeated.
-        expect(getContext).toHaveBeenCalledTimes(2);
-    });
-
-    it("downgrades on jank only under auto", async () => {
+    it("downgrades one tier per jank and stops at lite", async () => {
         const capabilities = await import("../../../src/platform/device/capabilities.js");
         expect(capabilities.getDeviceProfile().tier).toBe("standard");
         expect(capabilities.downgradeForJank().tier).toBe("lite");
-
-        capabilities.setEffectsOverride("full");
-        expect(capabilities.downgradeForJank().tier).toBe("standard");
+        expect(capabilities.downgradeForJank().tier).toBe("lite");
     });
 
-    it("works without matchMedia or localStorage", async () => {
+    it("works without matchMedia", async () => {
         vi.stubGlobal("matchMedia", undefined);
-        const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
-        Object.defineProperty(window, "localStorage", {
-            configurable: true,
-            get: () => {
-                throw new Error("blocked");
-            },
-        });
-        try {
-            const capabilities = await import("../../../src/platform/device/capabilities.js");
-            expect(capabilities.safeLocalStorage()).toBeNull();
-            expect(capabilities.getDeviceProfile().override).toBe("auto");
-        } finally {
-            Object.defineProperty(window, "localStorage", descriptor);
-        }
+        const capabilities = await import("../../../src/platform/device/capabilities.js");
+        expect(capabilities.getDeviceProfile().signals.coarsePointer).toBe(false);
     });
 });

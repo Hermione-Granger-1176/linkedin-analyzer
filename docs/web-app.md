@@ -44,7 +44,7 @@ Analytics, Connections, Messages, and Insights share a `range` query parameter. 
 
 ## Clean files
 
-Open **Clean** to create an Excel workbook for each uploaded file type. The browser cleaner uses the same columns, row rules, field rules, and formula protection as the Python cleaner. The browser creates the workbook locally and starts a download.
+Open **Clean** to create an Excel workbook for each uploaded file type. The browser cleaner uses the same columns, row rules, field rules, and formula protection as the Python cleaner. The browser creates the workbook locally and starts a download. **Download Clean CSV** saves the same cleaned rows as a UTF-8 CSV file, which Excel also opens. A file over 10 MiB downloads only as CSV, because the browser builds a whole workbook in memory and a larger one can exhaust a phone's memory.
 
 Use the [data formats reference](data-formats.md) when you need to check a required column or explain why a row disappeared.
 
@@ -100,7 +100,7 @@ Message contents remain in the file you download. The browser does not upload or
 
 ## Understand where the app keeps data
 
-The app keeps uploaded CSV text and computed analytics in browser storage when IndexedDB is available. That storage lets the app restore uploads after a reload. If IndexedDB is unavailable or fails, the app uses memory and the data does not survive a reload.
+The app keeps your uploaded CSV files and computed analytics in browser storage when IndexedDB is available. That storage lets the app restore uploads after a reload. If IndexedDB is unavailable or fails, the app uses memory and the data does not survive a reload.
 
 A session has a 24-hour inactivity limit. On startup, the app clears stored uploads and analytics when the last activity is older than that limit. Select **Clear data** to remove the stored files and analytics immediately. Clear data before you leave a shared or public computer.
 
@@ -135,9 +135,11 @@ The browser enforces these independent limits:
 | Columns per row           | 256     |
 | Characters per field      | 200,000 |
 
+The Clean screen builds Excel workbooks only for files up to 10 MiB and offers the cleaned CSV (for example `Shares_cleaned.csv`) for larger files.
+
 A file above 25 MiB also receives a large-file warning before processing. The warning does not reject the file when it remains under the hard limits.
 
-The CLI uses a 100 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
+The CLI uses a 128 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
 
 ## Choose visual effects
 

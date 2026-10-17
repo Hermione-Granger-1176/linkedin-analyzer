@@ -21,7 +21,7 @@ export function createJobId(file) {
  * @param {Map<string, object>} pendingFiles - Pending uploads by job ID
  * @param {string|null} jobId - Worker job ID
  * @param {string} fileName - Original file name
- * @returns {{text: string, fileName: string, usedFallback?: boolean}|null}
+ * @returns {{fileName: string, file: File}|null}
  */
 export function consumePendingFile(pendingFiles, jobId, fileName) {
     if (jobId && pendingFiles.has(jobId)) {

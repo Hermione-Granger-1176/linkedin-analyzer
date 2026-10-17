@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Raise the minimum supported Python version to 3.12 and verify Python 3.12, 3.13, and 3.14 in the compatibility matrix.
+- Raise the default `--max-input-bytes` limit from 100 MiB to 128 MiB.
 
 ## [0.6.0] - 2026-07-03
 

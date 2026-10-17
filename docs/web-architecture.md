@@ -12,10 +12,10 @@ The registered routes are `home`, `clean`, `analytics`, `connections`, `messages
 
 ## How files move through the app
 
-1. `web/src/features/upload/` reads uploaded `File` objects as bytes and decodes them as UTF-8 or WHATWG Windows-1252.
-2. `web/src/features/cleaning/` identifies the file type from its header, parses bounded CSV rows, cleans fields, and creates workbooks.
+1. `web/src/features/upload/` validates the uploaded `File` objects and posts each one to the analytics worker. Posting a `File` clones a reference to its bytes, not the bytes, so the page never holds the file text while it processes. The worker streams the bytes with `read.js`, reports bytes read as progress, and decodes them as strict UTF-8, starting over as WHATWG Windows-1252 if the bytes are not valid UTF-8.
+2. `web/src/features/cleaning/` identifies the file type from the first 64K characters, then parses and cleans each row as its chunk arrives, so the worker never builds the full row and record arrays. The limits apply as running counts. If streaming cannot finish, for example on a parse error, the worker runs the whole-text cleaner instead, so results and error messages match. The same module creates workbooks.
 3. Feature workers parse or aggregate data for Analytics, Connections, Messages, and export dashboards.
-4. `web/src/platform/persistence/` stores raw file text and computed aggregates when IndexedDB works.
+4. `web/src/platform/persistence/` stores each original upload as a `Blob`, with computed aggregates, when IndexedDB works. Screens and exports pass the stored `Blob` to their workers, which read it off the main thread. The Clean screen's preview and the small-file fallbacks used without a worker still decode on the main thread.
 5. Screens read aggregates and render charts, lists, and insight cards in the browser.
 6. Export modules create Excel, PNG, or PDF downloads in the browser.
 
@@ -25,7 +25,9 @@ No application endpoint receives the uploaded file contents. The only server-sid
 
 Long CSV parses and analytics calculations run in Web Workers so the main thread can continue handling input, navigation, and cancellation. `web/src/app/worker-contracts.js` defines shared request and response shapes for worker messages.
 
-The Connections and Messages screens keep their own workers and request counters. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable.
+The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. A multi-file upload therefore processes its files one after another, so only one file's parse state is alive at a time. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. A restore that was still reading stored files when Clear arrived discards what it read. The worker replies with the cleaned result only; the page stores the `File` it already holds.
+
+The Connections and Messages screens keep their own workers and request counters. The Messages worker keeps one event per participant per message as typed-array columns, a contact ID and a timestamp, instead of one object each, and transfers those buffers to the page rather than copying them. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable.
 
 The message export has a separate `threads-worker.js` because the Messages screen intentionally drops message bodies from its in-memory aggregates. The worker reads the stored message file only when the user opts in to message contents for a PDF.
 
@@ -37,7 +39,7 @@ Python implements the CLI cleaner under `src/linkedin_analyzer/`. JavaScript imp
 
 ## How persistence degrades
 
-`web/src/platform/persistence/storage.js` selects IndexedDB when it is available. It stores file metadata and text separately, stores analytics aggregates, and reports when persistence is lost. The module keeps an in-memory implementation for browsers that reject IndexedDB operations.
+`web/src/platform/persistence/storage.js` selects IndexedDB when it is available. It stores file metadata and the original upload `Blob` separately, stores analytics aggregates, and reports when persistence is lost. Text records written before database version 4 are still read, wrapped as a `File`, until the next upload of that type replaces them. The module keeps an in-memory implementation for browsers that reject IndexedDB operations; it holds the uploaded `File` reference. [ADR-010](adr/010-stream-uploads-and-store-original-files.md) records the move from stored text to stored files.
 
 `web/src/platform/persistence/session.js` records last activity in `localStorage`. A startup sweep removes stale files and analytics after 24 hours without activity. Screens wait for the sweep before they restore stored data. [ADR-003](adr/003-indexeddb-storage-with-session-ttl.md) records the privacy and reliability trade-off.
 

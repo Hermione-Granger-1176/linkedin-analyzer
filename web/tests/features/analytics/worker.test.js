@@ -23,7 +23,9 @@ vi.mock("../../../src/features/analytics/activity.js", () => ({
 
 vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     LinkedInCleaner: {
-        process: vi.fn()
+        process: vi.fn(),
+        // By default the streaming processor gives up, so process() runs on the full text.
+        createStreamProcessor: vi.fn(() => ({ push: vi.fn(), finish: vi.fn(() => null) }))
     }
 }));
 
@@ -388,14 +390,14 @@ describe("handleAddFile", () => {
         handleClear();
     });
 
-    it("posts progress then fileProcessed message for a valid shares file", () => {
+    it("posts progress then fileProcessed message for a valid shares file", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("shares");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "header\nrow1", fileName: "shares.csv" });
+        await handleAddFile({ csvText: "header\nrow1", fileName: "shares.csv" });
 
         const progressMsgs = messages.filter((m) => m.type === "progress");
         expect(progressMsgs.length).toBeGreaterThanOrEqual(2);
@@ -407,14 +409,14 @@ describe("handleAddFile", () => {
         expect(processed.payload.hasData).toBe(true);
     });
 
-    it("posts progress then fileProcessed message for a valid comments file", () => {
+    it("posts progress then fileProcessed message for a valid comments file", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("comments");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "header\nrow1", fileName: "comments.csv" });
+        await handleAddFile({ csvText: "header\nrow1", fileName: "comments.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
@@ -422,27 +424,27 @@ describe("handleAddFile", () => {
         expect(processed.payload.hasData).toBe(true);
     });
 
-    it("posts fileProcessed with error when LinkedInCleaner fails", () => {
+    it("posts fileProcessed with error when LinkedInCleaner fails", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         LinkedInCleaner.process.mockReturnValue({ success: false, error: "Bad format" });
 
-        handleAddFile({ csvText: "garbage", fileName: "bad.csv" });
+        await handleAddFile({ csvText: "garbage", fileName: "bad.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
         expect(processed.payload.error).toBeTruthy();
     });
 
-    it("recomputes analytics and posts a base for a connections file", () => {
+    it("recomputes analytics and posts a base for a connections file", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("connections");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "header\nrow1", fileName: "connections.csv" });
+        await handleAddFile({ csvText: "header\nrow1", fileName: "connections.csv" });
 
         expect(AnalyticsEngine.compute).toHaveBeenCalled();
         const processed = messages.find((m) => m.type === "fileProcessed");
@@ -450,7 +452,7 @@ describe("handleAddFile", () => {
         expect(processed.payload.analyticsBase).not.toBeNull();
     });
 
-    it("posts fileProcessed with error for unknown fileType", () => {
+    it("posts fileProcessed with error for unknown fileType", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -461,7 +463,7 @@ describe("handleAddFile", () => {
             rowCount: 0
         });
 
-        handleAddFile({ csvText: "something", fileName: "messages.csv" });
+        await handleAddFile({ csvText: "something", fileName: "messages.csv" });
 
         // analyticsBase should be null since fileType is not shares/comments
         const processed = messages.find((m) => m.type === "fileProcessed");
@@ -469,20 +471,178 @@ describe("handleAddFile", () => {
         expect(processed.payload.analyticsBase).toBeNull();
     });
 
-    it("passes jobId through to progress and fileProcessed messages", () => {
+    it("passes jobId through to progress and fileProcessed messages", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         mockCleanerSuccess("shares");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleAddFile({ csvText: "data", fileName: "shares.csv", jobId: "job-123" });
+        await handleAddFile({ csvText: "data", fileName: "shares.csv", jobId: "job-123" });
 
         messages.forEach((m) => {
             if (m.payload && "jobId" in m.payload) {
                 expect(m.payload.jobId).toBe("job-123");
             }
         });
+    });
+});
+
+describe("handleAddFile with an uploaded File", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        makePostMessageCapture();
+        handleClear();
+    });
+
+    it("reads the File, reports bytes read, and replies without the text", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+
+        const file = new File(["col\nval"], "Shares.csv");
+        await handleAddFile({ file, fileName: "Shares.csv", jobId: "job-1" });
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("col\nval", "auto");
+        const readProgress = messages.find((m) => m.type === "progress" && m.payload.bytesRead);
+        expect(readProgress.payload).toMatchObject({ bytesRead: 7, totalBytes: 7, percent: 0.35 });
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ usedFallback: false });
+        expect(processed.payload).not.toHaveProperty("csvText");
+    });
+
+    it("reports a windows-1252 fallback", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+
+        await handleAddFile({ file: new File([new Uint8Array([0xe9])], "a.csv"), fileName: "a.csv" });
+
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ usedFallback: true });
+    });
+
+    it("skips progress updates too small to move the bar", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+        const chunks = [new Uint8Array(1), new Uint8Array(1), new Uint8Array(998)];
+        let index = 0;
+        const file = {
+            name: "Shares.csv",
+            size: 6 * 1024 * 1024,
+            stream: () => ({
+                getReader: () => ({
+                    read: () =>
+                        Promise.resolve(
+                            index < chunks.length
+                                ? { done: false, value: chunks[index++] }
+                                : { done: true, value: undefined },
+                        ),
+                    cancel: () => Promise.resolve(),
+                }),
+            }),
+        };
+
+        await handleAddFile({ file, fileName: "Shares.csv" });
+
+        // Only reads that move the bar a full step are posted: none of these do.
+        expect(messages.filter((m) => m.type === "progress" && m.payload.bytesRead)).toEqual([]);
+    });
+
+    it("posts fileProcessed with the read error", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        const file = {
+            name: "Shares.csv",
+            size: 6 * 1024 * 1024,
+            stream: () => ({
+                getReader: () => ({
+                    read: () => Promise.reject(new Error("disk gone")),
+                    cancel: () => Promise.resolve(),
+                }),
+            }),
+        };
+
+        await handleAddFile({ file, fileName: "Shares.csv", jobId: "job-2" });
+
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toEqual({ error: "disk gone", jobId: "job-2", fileName: "Shares.csv" });
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+    });
+
+    /** Build a streamable File-like object from byte chunks. */
+    function makeStreamFile(chunks) {
+        return {
+            name: "Shares.csv",
+            size: chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0),
+            stream: () => {
+                let index = 0;
+                return {
+                    getReader: () => ({
+                        read: () =>
+                            Promise.resolve(
+                                index < chunks.length
+                                    ? { done: false, value: chunks[index++] }
+                                    : { done: true, value: undefined }
+                            ),
+                        cancel: () => Promise.resolve()
+                    })
+                };
+            }
+        };
+    }
+
+    it("uses the streaming processor's result without re-processing the text", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+        const processor = {
+            push: vi.fn(),
+            finish: vi.fn(() => ({
+                success: true,
+                fileType: "shares",
+                cleanedData: [{ Date: "2025-01-02 05:00" }],
+                rowCount: 1
+            }))
+        };
+        LinkedInCleaner.createStreamProcessor.mockReturnValueOnce(processor);
+        const encoder = new TextEncoder();
+
+        await handleAddFile({
+            file: makeStreamFile([encoder.encode("Date\n"), encoder.encode("2025")]),
+            fileName: "Shares.csv"
+        });
+
+        expect(processor.push.mock.calls).toEqual([["Date\n"], ["2025"]]);
+        expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ rowCount: 1, usedFallback: false });
+    });
+
+    it("restarts the processor and re-reads the whole File when the stream is not UTF-8", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        mockCleanerSuccess("shares");
+        AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
+        const first = { push: vi.fn(), finish: vi.fn(() => null) };
+        const second = { push: vi.fn(), finish: vi.fn(() => null) };
+        LinkedInCleaner.createStreamProcessor.mockReturnValueOnce(first).mockReturnValueOnce(second);
+
+        // A processor that cannot finish leaves the text to a whole-file read.
+        const file = new File([new Uint8Array([99, 0xe9])], "Shares.csv");
+        file.stream = makeStreamFile([new Uint8Array([99]), new Uint8Array([0xe9])]).stream;
+
+        await handleAddFile({ file, fileName: "Shares.csv" });
+
+        expect(first.push.mock.calls).toEqual([["c"]]);
+        expect(second.push.mock.calls).toEqual([["c"], ["é"]]);
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("cé", "auto");
+        const processed = messages.find((m) => m.type === "fileProcessed");
+        expect(processed.payload).toMatchObject({ usedFallback: true });
     });
 });
 
@@ -496,7 +656,7 @@ describe("handleRestoreFiles", () => {
         makePostMessageCapture();
     });
 
-    it("posts restored with hasData=true when shares CSV parses successfully", () => {
+    it("posts restored with hasData=true when shares CSV parses successfully", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -508,14 +668,14 @@ describe("handleRestoreFiles", () => {
         });
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleRestoreFiles({ sharesCsv: "shares-csv-text", commentsCsv: "" });
+        await handleRestoreFiles({ sharesCsv: "shares-csv-text", commentsCsv: "" });
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
         expect(restored.payload.hasData).toBe(true);
     });
 
-    it("restores connections csv into the analytics source set", () => {
+    it("restores connections csv into the analytics source set", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -530,38 +690,78 @@ describe("handleRestoreFiles", () => {
         });
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        handleRestoreFiles({ sharesCsv: "s", commentsCsv: "", connectionsCsv: "c" });
+        await handleRestoreFiles({ sharesCsv: "s", commentsCsv: "", connectionsCsv: "c" });
 
         expect(LinkedInCleaner.process).toHaveBeenCalledWith("c", "connections");
         const restored = messages.find((m) => m.type === "restored");
         expect(restored.payload.hasData).toBe(true);
     });
 
-    it("posts restored with hasData=false when both CSVs fail to parse", () => {
+    it("posts restored with hasData=false when both CSVs fail to parse", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
         LinkedInCleaner.process.mockReturnValue({ success: false, error: "Bad CSV" });
 
-        handleRestoreFiles({ sharesCsv: "bad", commentsCsv: "also-bad" });
+        await handleRestoreFiles({ sharesCsv: "bad", commentsCsv: "also-bad" });
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
         expect(restored.payload.hasData).toBe(false);
     });
 
-    it("posts restored with hasData=false when payload is empty", () => {
+    it("reads stored upload Blobs", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        LinkedInCleaner.process.mockImplementation((csv, type) => ({
+            success: true,
+            fileType: type,
+            cleanedData: [{ Date: "2025-01-02 09:00" }],
+            rowCount: 1
+        }));
+
+        await handleRestoreFiles({ sharesCsv: new Blob(["shares"]), commentsCsv: "" });
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("shares", "shares");
+        expect(messages.find((m) => m.type === "restored").payload.hasData).toBe(true);
+    });
+
+    it("treats a stored Blob the browser cannot read as absent", async () => {
+        const messages = [];
+        globalThis.self.postMessage = vi.fn((m) => messages.push(m));
+        LinkedInCleaner.process.mockImplementation((csv, type) => ({
+            success: true,
+            fileType: type,
+            cleanedData: [{ Date: "2025-01-02 09:00" }],
+            rowCount: 1
+        }));
+        const read = vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(() => {
+            throw new Error("NotReadableError");
+        });
+
+        try {
+            await handleRestoreFiles({ sharesCsv: new Blob(["lost"]), commentsCsv: "comments" });
+        } finally {
+            read.mockRestore();
+        }
+
+        expect(LinkedInCleaner.process).toHaveBeenCalledTimes(1);
+        expect(LinkedInCleaner.process).toHaveBeenCalledWith("comments", "comments");
+        expect(messages.find((m) => m.type === "restored").payload.hasData).toBe(true);
+    });
+
+    it("posts restored with hasData=false when payload is empty", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
-        handleRestoreFiles({});
+        await handleRestoreFiles({});
 
         const restored = messages.find((m) => m.type === "restored");
         expect(restored).toBeDefined();
         expect(restored.payload.hasData).toBe(false);
     });
 
-    it("seeds both shares and comments without recomputing analytics", () => {
+    it("seeds both shares and comments without recomputing analytics", async () => {
         const messages = [];
         globalThis.self.postMessage = vi.fn((m) => messages.push(m));
 
@@ -572,7 +772,7 @@ describe("handleRestoreFiles", () => {
             rowCount: 1
         }));
 
-        handleRestoreFiles({ sharesCsv: "shares", commentsCsv: "comments" });
+        await handleRestoreFiles({ sharesCsv: "shares", commentsCsv: "comments" });
 
         // restoreFiles only seeds the source datasets; the analytics aggregate is
         // (re)built and persisted by handleAddFile, so a compute here would be
@@ -653,10 +853,174 @@ describe("message event dispatcher", () => {
         LC.process.mockReturnValue({ success: false, error: "bad" });
         AE.compute.mockReturnValue(makeAnalytics());
 
-        handlers.message({ data: { type: "addFile", payload: { csvText: "x", fileName: "f.csv" } } });
+        await handlers.message({ data: { type: "addFile", payload: { csvText: "x", fileName: "f.csv" } } });
 
         const processed = posted.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
+    });
+
+    it("cancels the read in flight and skips queued requests on clear", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockClear();
+
+        const file = new File(["col\nval"], "Shares.csv");
+        const inFlight = handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+        const queued = handlers.message({ data: { type: "restoreFiles", payload: { sharesCsv: "a" } } });
+        // Let the first request start its read before clearing.
+        await Promise.resolve();
+        await Promise.resolve();
+        handlers.message({ data: { type: "clear" } });
+        await inFlight;
+        await queued;
+
+        const types = posted.map((m) => m.type);
+        expect(types).toContain("cleared");
+        expect(types).not.toContain("fileProcessed");
+        expect(types).not.toContain("restored");
+        expect(LC.process).not.toHaveBeenCalled();
+
+        // Requests after the clear run as normal.
+        await handlers.message({ data: { type: "initBase", payload: null } });
+        expect(posted.at(-1).type).toBe("init");
+    });
+
+    it("drops a restore whose stored files were still being read when clear arrived", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockClear();
+
+        const restoring = handlers.message({
+            data: { type: "restoreFiles", payload: { sharesCsv: new Blob(["col\nval"]) } }
+        });
+        await Promise.resolve();
+        handlers.message({ data: { type: "clear" } });
+        await restoring;
+
+        const types = posted.map((m) => m.type);
+        expect(types).toContain("cleared");
+        expect(types).not.toContain("restored");
+        expect(LC.process).not.toHaveBeenCalled();
+    });
+
+    it("drops a read that a clear lands on just as it finishes", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockClear();
+
+        const bytes = new TextEncoder().encode("col\nval");
+        let index = 0;
+        // A real File, so the request passes the contract, streaming the chunks below.
+        const file = new File([bytes], "Shares.csv");
+        Object.assign(file, {
+            stream: () => ({
+                getReader: () => ({
+                    read: () => {
+                        if (index === 0) {
+                            index += 1;
+                            return Promise.resolve({ done: false, value: bytes });
+                        }
+                        // The clear arrives while the last read is settling with done.
+                        handlers.message({ data: { type: "clear" } });
+                        return Promise.resolve({ done: true, value: undefined });
+                    },
+                    cancel: () => Promise.resolve()
+                })
+            })
+        });
+
+        await handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+
+        const types = posted.map((m) => m.type);
+        expect(types).toContain("cleared");
+        expect(types).not.toContain("fileProcessed");
+        expect(LC.process).not.toHaveBeenCalled();
+    });
+
+    it("runs a request sent after clear without waiting on the stale read", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+
+        let failRead = () => {};
+        const file = new File(["col\nval"], "Shares.csv");
+        Object.assign(file, {
+            stream: () => ({
+                getReader: () => ({
+                    // A stalled read that a cancel does not settle.
+                    read: () =>
+                        new Promise((_resolve, reject) => {
+                            failRead = reject;
+                        }),
+                    cancel: () => Promise.resolve()
+                })
+            })
+        });
+
+        const stale = handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+        await Promise.resolve();
+        await Promise.resolve();
+        handlers.message({ data: { type: "clear" } });
+
+        // The read is still pending, and the next request runs anyway.
+        await handlers.message({ data: { type: "initBase", payload: null } });
+        expect(posted.at(-1).type).toBe("init");
+
+        // When the stale read finally fails, nothing is reported for it.
+        failRead(new Error("disk gone"));
+        await stale;
+        expect(posted.map((m) => m.type)).not.toContain("fileProcessed");
+    });
+
+    it("runs requests one at a time in arrival order", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockReturnValue({ success: false, error: "bad" });
+
+        const file = new File(["col\nval"], "Shares.csv");
+        handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+        await handlers.message({ data: { type: "initBase", payload: null } });
+
+        const types = posted.map((m) => m.type).filter((type) => type !== "progress");
+        expect(types).toEqual(["fileProcessed", "init"]);
     });
 
     it("ignores unknown message types without throwing", async () => {
@@ -707,7 +1071,7 @@ describe("message event dispatcher", () => {
             throw new Error("add-file-failed");
         });
 
-        handlers.message({
+        await handlers.message({
             data: {
                 type: "addFile",
                 payload: {

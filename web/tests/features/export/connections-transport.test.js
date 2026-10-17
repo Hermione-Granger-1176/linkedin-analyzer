@@ -130,6 +130,23 @@ describe("loadConnectionsData", () => {
         expect(data.rows).toHaveLength(1);
     });
 
+    it("reads a stored upload Blob on the main thread", async () => {
+        harness.uninstall();
+
+        const data = await loadConnectionsData(new Blob([CONNECTIONS_CSV]));
+
+        expect(data.rows).toHaveLength(2);
+    });
+
+    it("returns nothing on the main thread when the stored upload cannot be read", async () => {
+        harness.uninstall();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        expect(await loadConnectionsData(new Blob([CONNECTIONS_CSV]))).toBeNull();
+    });
+
     it("builds the data on the main thread when the platform has no worker", async () => {
         harness.uninstall();
 

@@ -6,9 +6,12 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPE_LABELS, FILE_TYPES } from "../../shared/constants.js";
+import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 import { celebrateDownload } from "../../shared/ui/mascot.js";
+import { readCsvSource } from "../upload/read.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
+import { buildCleanedCsvBlob, cleanedCsvName } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
 export const CleanPage = (() => {
@@ -46,6 +49,7 @@ export const CleanPage = (() => {
         cleanDownloadBtn: /** @type {HTMLElement} */ (
             document.getElementById("cleanDownloadBtn")
         ),
+        cleanCsvBtn: /** @type {HTMLElement} */ (document.getElementById("cleanCsvBtn")),
         cleanErrorMessage: /** @type {HTMLElement} */ (
             document.getElementById("cleanErrorMessage")
         ),
@@ -119,6 +123,9 @@ export const CleanPage = (() => {
         });
         elements.cleanDownloadBtn.addEventListener("click", () => {
             handleDownload();
+        });
+        elements.cleanCsvBtn.addEventListener("click", () => {
+            handleCsvDownload();
         });
     }
 
@@ -255,23 +262,30 @@ export const CleanPage = (() => {
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
             let text;
+            let sourceSize;
             try {
-                // The cached record is metadata only; load the CSV text on demand.
+                // The cached record is metadata only; load the stored upload on
+                // demand and decode it the way the upload did.
                 const stored = await Storage.getFile(type);
-                // The selection may have changed while the text load was in
-                // flight; abandon this stale render so the newer one wins.
-                if (getSelectedType() !== type) {
-                    return;
-                }
-                if (!stored || !stored.text) {
-                    // Metadata says the file exists but its text record is gone
+                if (!stored || !stored.blob) {
+                    // Metadata says the file exists but its contents are gone
                     // (cleared in another tab or degraded persistence); report a
                     // load failure rather than parsing an empty payload into a
                     // misleading parse error.
-                    throw new Error("Stored file text record is missing.");
+                    throw new Error("Stored file record is missing.");
                 }
-                text = stored.text;
+                text = await readCsvSource(stored.blob);
+                sourceSize = stored.blob.size;
+                // The selection may have changed while the load was in flight;
+                // abandon this stale render so the newer one wins.
+                if (getSelectedType() !== type) {
+                    return;
+                }
             } catch (error) {
+                // An abandoned load must not replace the newer selection's preview.
+                if (getSelectedType() !== type) {
+                    return;
+                }
                 handleParseError(error, "Unable to load file.", type, file.name || null);
                 return;
             }
@@ -284,6 +298,7 @@ export const CleanPage = (() => {
                 }
                 cache[type] = {
                     updatedAt: fileUpdatedAt,
+                    sourceSize,
                     result: processed,
                 };
             } catch (error) {
@@ -372,9 +387,11 @@ export const CleanPage = (() => {
     }
 
     /**
-     * Generate and trigger download of the cleaned Excel file.
+     * Return the cleaned result for the selected file, or report that there is
+     * nothing to download.
+     * @returns {{type: string, cached: object}|null}
      */
-    async function handleDownload() {
+    function getDownloadable() {
         const type = getSelectedType();
         const cached = cache[type];
         if (!cached || !cached.result) {
@@ -384,8 +401,30 @@ export const CleanPage = (() => {
                 operation: "download-without-cache",
                 fileType: type,
             });
+            return null;
+        }
+        return { type, cached };
+    }
+
+    /**
+     * Generate and trigger download of the cleaned Excel file. Files over the
+     * Excel limit are refused with a pointer to the CSV download.
+     */
+    async function handleDownload() {
+        const downloadable = getDownloadable();
+        if (!downloadable) {
             return;
         }
+        const { type, cached } = downloadable;
+        if (cached.sourceSize > EXCEL_EXPORT_MAX_BYTES) {
+            const limitMb = Math.round(EXCEL_EXPORT_MAX_BYTES / (1024 * 1024));
+            showError(
+                `This file is over ${limitMb} MB, too large to build an Excel file in the browser. ` +
+                    "Download it as CSV instead; Excel opens CSV files too.",
+            );
+            return;
+        }
+        hideError();
         const downloadResult = await ExcelGenerator.generateAndDownload(
             cached.result.cleanedData,
             type,
@@ -399,6 +438,27 @@ export const CleanPage = (() => {
             showError(`Error generating Excel: ${downloadResult.error}`);
             return;
         }
+        celebrateDownload();
+    }
+
+    /**
+     * Download the cleaned rows as CSV, built in parts so large files fit.
+     */
+    function handleCsvDownload() {
+        const downloadable = getDownloadable();
+        if (!downloadable) {
+            return;
+        }
+        const { type, cached } = downloadable;
+        try {
+            const blob = buildCleanedCsvBlob(cached.result.cleanedData, type);
+            ExcelGenerator.download(blob, cleanedCsvName(type));
+        } catch (error) {
+            captureError(error, { module: "clean", operation: "csv-generate", fileType: type });
+            showError("Error generating CSV. Try again.");
+            return;
+        }
+        hideError();
         celebrateDownload();
     }
 

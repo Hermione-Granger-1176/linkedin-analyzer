@@ -47,8 +47,8 @@ export const MessagesPage = (() => {
     /**
      * @typedef {object} MessageState
      * @property {Map<string, MessageContact>} contacts
-     * @property {Array<{contactKey: string, timestamp: number}>} events
-     * @property {number[]} rowTimestamps
+     * @property {{contactKeys: string[], contactIds: Int32Array, timestamps: Float64Array}} events
+     * @property {Float64Array} rowTimestamps
      * @property {number} skippedRows
      * @property {Set<string>} talkedNameKeys
      * @property {Set<string>} talkedUrlKeys
@@ -290,29 +290,28 @@ export const MessagesPage = (() => {
 
             await nextFrame();
 
-            // Load the CSV text on demand (caches hold metadata only) so the large
-            // messages export isn't retained in memory between visits.
+            // Load the stored uploads on demand (caches hold metadata only). The
+            // worker reads each Blob, so the page never holds the file text.
             const [messagesStored, connectionsStored] = await Promise.all([
                 Storage.getFile("messages"),
                 connectionsFile ? Storage.getFile("connections") : Promise.resolve(null),
             ]);
-            const messagesText = messagesStored && messagesStored.text ? messagesStored.text : "";
-            if (!messagesText) {
-                // The metadata says messages.csv exists but its text record is
+            const messagesBlob = messagesStored ? messagesStored.blob : null;
+            if (!messagesBlob) {
+                // The metadata says messages.csv exists but its contents are
                 // gone (cleared in another tab or degraded persistence). Treat
                 // the missing payload as a load failure so the UI enters the
                 // storage-error path instead of a misleading "parsing error".
-                throw new Error("Stored messages text record is missing.");
+                throw new Error("Stored messages file record is missing.");
             }
-            const connectionsText =
-                connectionsStored && connectionsStored.text ? connectionsStored.text : "";
+            const connectionsBlob = connectionsStored ? connectionsStored.blob : null;
             // Connections is optional, but if its metadata is present while the
-            // text record is missing, flag it as a load error rather than
+            // file record is missing, flag it as a load error rather than
             // silently dropping the connections insights.
-            const connectionsTextMissing = Boolean(connectionsFile) && !connectionsText;
+            const connectionsFileMissing = Boolean(connectionsFile) && !connectionsBlob;
 
             markPerformance("messages:worker-parse:start");
-            const processed = await processFiles(messagesText, connectionsText);
+            const processed = await processFiles(messagesBlob, connectionsBlob);
             markPerformance("messages:worker-parse:end");
             measurePerformance(
                 "messages:worker-parse",
@@ -341,7 +340,7 @@ export const MessagesPage = (() => {
             } else {
                 state.messageState = buildMessageState(messagesData);
             }
-            if (!state.messageState.events.length) {
+            if (!state.messageState.events.timestamps.length) {
                 clearComputedState();
                 state.loadedSignature = signature;
                 setEmptyState(
@@ -362,7 +361,7 @@ export const MessagesPage = (() => {
             }
             state.connectionLoadError =
                 processed.connectionError ||
-                (connectionsTextMissing
+                (connectionsFileMissing
                     ? "Unable to load Connections.csv. Re-upload the file and try again."
                     : null);
 

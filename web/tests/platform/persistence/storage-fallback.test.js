@@ -33,7 +33,8 @@ describe("Storage fallback when IndexedDB is unavailable", () => {
         const { Storage } = await import("../../../src/platform/persistence/storage.js");
         await Storage.saveFile("shares", { name: "test.csv", text: "a,b", rowCount: 2 });
         const file = await Storage.getFile("shares");
-        expect(file).toMatchObject({ type: "shares", name: "test.csv", text: "a,b", rowCount: 2 });
+        expect(file).toMatchObject({ type: "shares", name: "test.csv", rowCount: 2, size: 3 });
+        expect(await file.blob.text()).toBe("a,b");
         const all = await Storage.getAllFiles();
         expect(all).toHaveLength(1);
     });
@@ -59,7 +60,14 @@ describe("Storage fallback when IndexedDB is unavailable", () => {
         await Storage.saveFile("shares", { name: "test.csv", text: "a,b" });
         const file = await Storage.getFile("shares");
         expect(file.rowCount).toBe(0);
-        expect(file.schemaVersion).toBe(2);
+        expect(file.schemaVersion).toBe(3);
+    });
+
+    it("holds the uploaded File itself in memory mode", async () => {
+        const { Storage } = await import("../../../src/platform/persistence/storage.js");
+        const upload = new File(["a,b"], "test.csv", { type: "text/csv" });
+        await Storage.saveFile("shares", { name: "test.csv", blob: upload, rowCount: 1 });
+        expect((await Storage.getFile("shares")).blob).toBe(upload);
     });
 
     it("returns raw analytics payload shape in memory mode", async () => {

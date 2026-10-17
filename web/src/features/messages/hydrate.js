@@ -16,10 +16,19 @@
  */
 
 /**
+ * Message events stored as columns, one entry per participant per message.
+ * contactIds[i] indexes contactKeys; timestamps[i] is the message time.
+ * @typedef {object} MessageEvents
+ * @property {string[]} contactKeys
+ * @property {Int32Array} contactIds
+ * @property {Float64Array} timestamps
+ */
+
+/**
  * @typedef {object} MessageState
  * @property {Map<string, MessageContact>} contacts
- * @property {Array<{contactKey: string, timestamp: number}>} events
- * @property {number[]} rowTimestamps
+ * @property {MessageEvents} events
+ * @property {Float64Array} rowTimestamps
  * @property {number} skippedRows
  * @property {Set<string>} talkedNameKeys
  * @property {Set<string>} talkedUrlKeys
@@ -48,8 +57,11 @@ export function hydrateMessageState(payload) {
 
     return {
         contacts,
-        events: Array.isArray(safePayload.events) ? safePayload.events : [],
-        rowTimestamps: Array.isArray(safePayload.rowTimestamps) ? safePayload.rowTimestamps : [],
+        events: hydrateEvents(safePayload.events),
+        rowTimestamps:
+            safePayload.rowTimestamps instanceof Float64Array
+                ? safePayload.rowTimestamps
+                : new Float64Array(0),
         skippedRows: Number.isFinite(safePayload.skippedRows) ? safePayload.skippedRows : 0,
         talkedNameKeys: new Set(
             Array.isArray(safePayload.talkedNameKeys) ? safePayload.talkedNameKeys : [],
@@ -62,6 +74,29 @@ export function hydrateMessageState(payload) {
             : 0,
         outreach: safePayload.outreach || null,
     };
+}
+
+/**
+ * Accept the worker's event columns, or empty columns when they are malformed.
+ * @param {unknown} events - Worker events payload
+ * @returns {MessageEvents}
+ */
+function hydrateEvents(events) {
+    const candidate = /** @type {Partial<MessageEvents>|null} */ (events);
+    if (
+        candidate &&
+        Array.isArray(candidate.contactKeys) &&
+        candidate.contactIds instanceof Int32Array &&
+        candidate.timestamps instanceof Float64Array &&
+        candidate.contactIds.length === candidate.timestamps.length
+    ) {
+        return {
+            contactKeys: candidate.contactKeys,
+            contactIds: candidate.contactIds,
+            timestamps: candidate.timestamps,
+        };
+    }
+    return { contactKeys: [], contactIds: new Int32Array(0), timestamps: new Float64Array(0) };
 }
 
 /**

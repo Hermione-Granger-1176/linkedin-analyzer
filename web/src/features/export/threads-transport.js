@@ -12,7 +12,9 @@
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
+import { readCsvSourcesOrNull, readOptionalCsvSource } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
@@ -47,14 +49,14 @@ export function terminateThreadsWorker() {
  * Runs in a worker when one is available and falls back to the main thread for
  * small exports; a large export with no worker yields an empty list so the PDF
  * omits the section.
- * @param {string} messagesCsv - Raw messages CSV text
- * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
+ * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
+ * @param {Blob|string|null} connectionsCsv - Stored connections upload, CSV text, or nothing
  * @param {{people?: number, messagesPerPerson?: number, isCancelled?: () => boolean}} [options] - Selection limits and the run's cancellation check
  * @returns {Promise<object[]>} Selected threads, newest conversation first
  */
 export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {}) {
-    const text = typeof messagesCsv === "string" ? messagesCsv : "";
-    const contacts = typeof connectionsCsv === "string" ? connectionsCsv : "";
+    const text = toCsvSource(messagesCsv);
+    const contacts = toCsvSource(connectionsCsv);
     if (!text) {
         return [];
     }
@@ -91,16 +93,25 @@ export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {
     // was already happening. It is the only path that parses them now, so a
     // small messages file beside a large connections one would clear a ceiling
     // that no longer measured the work.
-    if (text.length + contacts.length > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
+    if (
+        csvSourceSize(text) + csvSourceSize(contacts) > MAIN_THREAD_FALLBACK_MAX_CHARS ||
+        isCancelled()
+    ) {
         return [];
     }
-    return selectThreadsOnMainThread(text, contacts, options);
+    // Connections is optional, so only an unreadable messages file stops this.
+    const texts = await readCsvSourcesOrNull(text);
+    const connections = await readOptionalCsvSource(contacts);
+    if (!texts || isCancelled()) {
+        return [];
+    }
+    return selectThreadsOnMainThread(texts[0], connections.text, options);
 }
 
 /**
  * Ask the worker for the thread selection.
- * @param {string} messagesCsv - Raw messages CSV text
- * @param {string} connectionsCsv - Raw connections CSV text
+ * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
+ * @param {Blob|string} connectionsCsv - Stored connections upload, CSV text, or an empty string
  * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
  * @returns {Promise<object[]|null|typeof CANCELLED|typeof FAILED>} Threads, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
  */

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
     parseAnalyticsWorkerMessage,
@@ -11,11 +11,18 @@ import {
     parseThreadsWorkerMessage,
     parseThreadsWorkerRequest,
 } from "../../src/app/worker-contracts.js";
-import { MAX_CSV_CHARS } from "../../src/shared/constants.js";
+import { MAX_CSV_CHARS } from "../../src/shared/limits.js";
 
-// Oversized payload (MAX_CSV_CHARS + 1 chars, ~63M characters) used by the
-// size-limit assertions. Generated lazily and memoized so it is allocated once,
-// and only when one of those tests actually runs.
+// A small character limit keeps the size-limit assertions from allocating a
+// string as large as the real one.
+vi.mock("../../src/shared/limits.js", async (importOriginal) => ({
+    ...(await importOriginal()),
+    MAX_CSV_CHARS: 1024,
+    MAX_FILE_BYTES: 2048,
+}));
+
+// Oversized payload (MAX_CSV_CHARS + 1 chars) used by the size-limit
+// assertions. Generated lazily and memoized so it is allocated once.
 let cachedOversizeCsv;
 const getOversizeCsv = () => {
     if (cachedOversizeCsv === undefined) {
@@ -56,14 +63,80 @@ describe("worker contracts", () => {
         expect(parsed.value.payload.fileName.length).toBeLessThan(5000);
     });
 
-    it("rejects analytics addFile request without csvText", () => {
+    it("rejects analytics addFile request without a file or csvText", () => {
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",
-            payload: { fileName: "Shares.csv" },
+            payload: { fileName: "Shares.csv", file: { size: 3 } },
         });
 
         expect(parsed.valid).toBe(false);
-        expect(parsed.error).toContain("csvText");
+        expect(parsed.error).toContain("Missing file");
+    });
+
+    it("accepts an uploaded File in addFile and bounds its size", () => {
+        const file = new File(["col\nval"], "Shares.csv");
+        const parsed = parseAnalyticsWorkerRequest({
+            type: "addFile",
+            payload: { file, csvText: "ignored", fileName: "Shares.csv", jobId: "job-1" },
+        });
+        expect(parsed.valid).toBe(true);
+        expect(parsed.value.payload).toMatchObject({ file, csvText: "", jobId: "job-1" });
+
+        const oversized = parseAnalyticsWorkerRequest({
+            type: "addFile",
+            payload: { file: new File([new Uint8Array(2049)], "Big.csv"), fileName: "Big.csv" },
+        });
+        expect(oversized.valid).toBe(false);
+        expect(oversized.error).toContain("File payload exceeds");
+    });
+
+    it("accepts stored upload Blobs as worker CSV sources and bounds their size", () => {
+        const blob = new Blob(["col\nval"]);
+        const big = new Blob([new Uint8Array(2049)]);
+        const restore = parseAnalyticsWorkerRequest({
+            type: "restoreFiles",
+            payload: { sharesCsv: blob, commentsCsv: new Blob([]), connectionsCsv: "a,b" },
+        });
+        expect(restore.valid).toBe(true);
+        expect(restore.value.payload).toEqual({
+            sharesCsv: blob,
+            commentsCsv: "",
+            connectionsCsv: "a,b",
+        });
+        expect(
+            parseAnalyticsWorkerRequest({ type: "restoreFiles", payload: { sharesCsv: big } })
+                .valid,
+        ).toBe(false);
+
+        const messages = parseMessagesWorkerRequest({
+            type: "process",
+            payload: { messagesCsv: blob, connectionsCsv: blob },
+        });
+        expect(messages.value.payload).toEqual({ messagesCsv: blob, connectionsCsv: blob });
+        expect(
+            parseMessagesWorkerRequest({ type: "process", payload: { messagesCsv: big } }).valid,
+        ).toBe(false);
+
+        expect(
+            parseConnectionsWorkerRequest({ type: "process", payload: { connectionsCsv: blob } })
+                .value.payload.connectionsCsv,
+        ).toBe(blob);
+        expect(
+            parseConnectionsWorkerRequest({ type: "process", payload: { connectionsCsv: big } })
+                .valid,
+        ).toBe(false);
+
+        const threads = parseThreadsWorkerRequest({
+            type: "threads",
+            payload: { messagesCsv: blob, connectionsCsv: big },
+        });
+        expect(threads.valid).toBe(false);
+    });
+
+    it("keeps a stored upload Blob on a stored file record", () => {
+        const blob = new Blob(["col\nval"]);
+        const parsed = parseStoredUploadFile({ type: "shares", name: "Shares.csv", blob });
+        expect(parsed.value.blob).toBe(blob);
     });
 
     it("rejects unknown analytics request type", () => {
@@ -159,11 +232,15 @@ describe("worker contracts", () => {
                 jobId: "job-2",
                 fileName: "Shares.csv",
                 percent: 4,
+                bytesRead: 512,
+                totalBytes: "1024",
             },
         });
 
         expect(parsed.valid).toBe(true);
         expect(parsed.value.payload.percent).toBe(1);
+        expect(parsed.value.payload.bytesRead).toBe(512);
+        expect(parsed.value.payload.totalBytes).toBe(0);
     });
 
     it("normalizes analytics fileProcessed payload", () => {
@@ -174,12 +251,16 @@ describe("worker contracts", () => {
                 fileName: "Shares.csv",
                 rowCount: 5,
                 analyticsBase: { months: { "2025-01": {} } },
+                csvText: "col\nval",
+                usedFallback: 1,
             },
         });
 
         expect(parsed.valid).toBe(true);
         expect(parsed.value.payload.fileType).toBe("shares");
         expect(parsed.value.payload.rowCount).toBe(5);
+        expect(parsed.value.payload).not.toHaveProperty("csvText");
+        expect(parsed.value.payload.usedFallback).toBe(true);
     });
 
     it("normalizes analytics error payload fallback message", () => {
@@ -465,14 +546,14 @@ describe("worker contracts", () => {
         const parsed = parseStoredUploadFile({
             type: "comments",
             name: 10,
-            text: null,
+            blob: "not a blob",
             rowCount: Number.POSITIVE_INFINITY,
             updatedAt: -99,
         });
 
         expect(parsed.valid).toBe(true);
         expect(parsed.value.name).toBe("");
-        expect(parsed.value.text).toBe("");
+        expect(parsed.value.blob).toBe(null);
         expect(parsed.value.rowCount).toBe(0);
         expect(parsed.value.updatedAt).toBe(0);
     });

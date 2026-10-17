@@ -13,7 +13,7 @@ A `File` is a reference to bytes the browser already holds. Posting it to a work
 - The page posts the uploaded `File` to the analytics worker, which streams and decodes it with `web/src/features/upload/read.js` and cleans rows as each chunk arrives. The worker no longer returns the text.
 - `web/src/platform/persistence/storage.js` stores the original `File` as a `Blob` in a `fileBlobs` object store (database version 4), next to the metadata record in `files`. Saving a type removes its old `fileTexts` record.
 - `getFile` returns a `blob`. Text records written by version 3 (`fileTexts`, or text inline in `files`) are read and wrapped as a `File`, so an upload from before the change still works inside the 24-hour session window. The next upload of that type replaces it.
-- Worker requests for Messages, Connections, Insights, and the PDF export carry a CSV source: the stored `Blob`, or text from a caller that already holds it. Workers decode a `Blob` with `readCsvSource`, so the page never holds the file text. Size checks use bytes for a `Blob` and characters for text.
+- Worker requests for Messages, Connections, Insights, and the PDF export carry a CSV source: the stored `Blob`, or text from a caller that already holds it. Workers decode a `Blob` with `readCsvSource`, so these requests do not put the file text on the page. Two paths still decode on the main thread: the Clean screen's preview, and the main-thread fallbacks, which run only for small files when no worker is available. Size checks use bytes for a `Blob` and characters for text.
 - The in-memory fallback storage holds the `File` reference itself.
 
 ### What changes in ADR-003

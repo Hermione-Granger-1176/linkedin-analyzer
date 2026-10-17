@@ -15,7 +15,7 @@ The registered routes are `home`, `clean`, `analytics`, `connections`, `messages
 1. `web/src/features/upload/` validates the uploaded `File` objects and posts each one to the analytics worker. Posting a `File` clones a reference to its bytes, not the bytes, so the page never holds the file text while it processes. The worker streams the bytes with `read.js`, reports bytes read as progress, and decodes them as strict UTF-8, starting over as WHATWG Windows-1252 if the bytes are not valid UTF-8.
 2. `web/src/features/cleaning/` identifies the file type from the first 64K characters, then parses and cleans each row as its chunk arrives, so the worker never builds the full row and record arrays. The limits apply as running counts. If streaming cannot finish, for example on a parse error, the worker runs the whole-text cleaner instead, so results and error messages match. The same module creates workbooks.
 3. Feature workers parse or aggregate data for Analytics, Connections, Messages, and export dashboards.
-4. `web/src/platform/persistence/` stores each original upload as a `Blob`, with computed aggregates, when IndexedDB works. Screens and exports pass the stored `Blob` to their workers, which read it off the main thread.
+4. `web/src/platform/persistence/` stores each original upload as a `Blob`, with computed aggregates, when IndexedDB works. Screens and exports pass the stored `Blob` to their workers, which read it off the main thread. The Clean screen's preview and the small-file fallbacks used without a worker still decode on the main thread.
 5. Screens read aggregates and render charts, lists, and insight cards in the browser.
 6. Export modules create Excel, PNG, or PDF downloads in the browser.
 

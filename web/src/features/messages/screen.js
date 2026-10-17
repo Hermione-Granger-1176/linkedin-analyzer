@@ -308,7 +308,7 @@ export const MessagesPage = (() => {
             // Connections is optional, but if its metadata is present while the
             // file record is missing, flag it as a load error rather than
             // silently dropping the connections insights.
-            const connectionsTextMissing = Boolean(connectionsFile) && !connectionsBlob;
+            const connectionsFileMissing = Boolean(connectionsFile) && !connectionsBlob;
 
             markPerformance("messages:worker-parse:start");
             const processed = await processFiles(messagesBlob, connectionsBlob);
@@ -361,7 +361,7 @@ export const MessagesPage = (() => {
             }
             state.connectionLoadError =
                 processed.connectionError ||
-                (connectionsTextMissing
+                (connectionsFileMissing
                     ? "Unable to load Connections.csv. Re-upload the file and try again."
                     : null);
 

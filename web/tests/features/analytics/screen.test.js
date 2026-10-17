@@ -67,6 +67,9 @@ describe("AnalyticsPage", () => {
             this.listeners[type] = this.listeners[type] || [];
             this.listeners[type].push(callback);
         }
+        removeEventListener(type, callback) {
+            this.listeners[type] = (this.listeners[type] || []).filter((item) => item !== callback);
+        }
         terminate() {}
     }
 

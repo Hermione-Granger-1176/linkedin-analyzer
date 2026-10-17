@@ -14,6 +14,7 @@ import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { prefersReducedMotion } from "../../shared/ui/motion.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 
@@ -177,8 +178,21 @@ export const AnalyticsPage = (() => {
     /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
     let rangeFilter = null;
 
-    /** @type {Worker|null} */
-    let worker = null;
+    const workers = createWorkerHandle({
+        create: () =>
+            new Worker(new URL("./analytics-worker.js", import.meta.url), {
+                type: "module",
+            }),
+        onMessage: handleWorkerMessage,
+        onError: handleWorkerError,
+        onStartError: (error) => {
+            captureError(error, {
+                module: "analytics-ui",
+                operation: "init-worker",
+            });
+            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
+        },
+    });
     let requestId = 0;
     /** @type {import("../../app/worker-contracts.js").RequestId} */
     let pendingViewId = 0;
@@ -190,8 +204,6 @@ export const AnalyticsPage = (() => {
     /** @type {AnalyticsScreenView|null} */
     let pendingRender = null;
 
-    /** @type {number|null} */
-    let workerTimeoutId = null;
     let renderRetryCount = 0;
     const MAX_RENDER_RETRIES = 5;
     /** @type {ResizeObserver|null} */
@@ -218,7 +230,7 @@ export const AnalyticsPage = (() => {
 
         initialized = true;
         bindEvents();
-        initWorker();
+        workers.ensure();
 
         DataCache.subscribe(handleCacheChange);
     }
@@ -320,8 +332,8 @@ export const AnalyticsPage = (() => {
             elements.activeFiltersList.addEventListener("click", handleFilterChipClick);
         }
 
-        window.addEventListener("beforeunload", terminateWorker);
-        window.addEventListener("pagehide", terminateWorker);
+        window.addEventListener("beforeunload", workers.terminate);
+        window.addEventListener("pagehide", workers.terminate);
 
         document.addEventListener("themechange", () => {
             if (state.currentView) {
@@ -341,48 +353,6 @@ export const AnalyticsPage = (() => {
             canvas.addEventListener("click", handleChartClick);
             canvas.setAttribute("tabindex", "0");
         });
-    }
-
-    /** Create the analytics Web Worker. */
-    function initWorker() {
-        if (typeof Worker === "undefined" || worker) {
-            return;
-        }
-
-        try {
-            worker = new Worker(new URL("./analytics-worker.js", import.meta.url), {
-                type: "module",
-            });
-            worker.addEventListener("message", handleWorkerMessage);
-            worker.addEventListener("error", handleWorkerError);
-            worker.addEventListener("messageerror", handleWorkerError);
-        } catch (error) {
-            worker = null;
-            captureError(error, {
-                module: "analytics-ui",
-                operation: "init-worker",
-            });
-            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
-        }
-    }
-
-    /** Terminate the analytics Web Worker to free resources. */
-    function terminateWorker() {
-        clearWorkerTimeout();
-        if (!worker) {
-            return;
-        }
-        worker.terminate();
-        worker = null;
-    }
-
-    /** Clear any in-flight worker watchdog timeout. */
-    function clearWorkerTimeout() {
-        if (!workerTimeoutId) {
-            return;
-        }
-        window.clearTimeout(workerTimeoutId);
-        workerTimeoutId = null;
     }
 
     /**
@@ -407,7 +377,7 @@ export const AnalyticsPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            initWorker();
+            const worker = workers.ensure();
             if (!worker) {
                 setEmptyState(
                     "Analytics not supported",
@@ -439,15 +409,13 @@ export const AnalyticsPage = (() => {
                 type: "initBase",
                 payload: analyticsBase,
             });
-            clearWorkerTimeout();
-            workerTimeoutId = window.setTimeout(() => {
-                workerTimeoutId = null;
+            workers.watch(WORKER_TIMEOUT_MS, () => {
                 setEmptyState(
                     "Worker timeout",
                     "Analytics worker did not respond in time. Try refreshing the page.",
                 );
-                terminateWorker();
-            }, WORKER_TIMEOUT_MS);
+                workers.terminate();
+            });
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
@@ -482,7 +450,7 @@ export const AnalyticsPage = (() => {
 
         switch (message.type) {
             case "init":
-                clearWorkerTimeout();
+                workers.unwatch();
                 state.analyticsReady = true;
                 state.hasData = Boolean(message.payload && message.payload.hasData);
                 updateVisibility();
@@ -497,7 +465,7 @@ export const AnalyticsPage = (() => {
                 applyWorkerViewPayload(/** @type {AnalyticsViewPayload} */ (message.payload || {}));
                 return;
             case "error":
-                clearWorkerTimeout();
+                workers.unwatch();
                 captureError(
                     new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
                     {
@@ -563,8 +531,8 @@ export const AnalyticsPage = (() => {
         // Tear down the broken worker: this clears the in-flight loadBase watchdog
         // (so it cannot fire ~30s later and overwrite the screen) and nulls the
         // reference so a subsequent loadBase recreates a fresh worker instead of
-        // posting to a dead one (initWorker early-returns while `worker` is set).
-        terminateWorker();
+        // posting to a dead one (the handle reuses a worker while one is set).
+        workers.terminate();
         setEmptyState("Analytics worker error", "Refresh the page and try again.");
     }
 
@@ -607,6 +575,7 @@ export const AnalyticsPage = (() => {
      * @param {boolean} force - Whether to send even if the filter key hasn't changed.
      */
     function requestView(force) {
+        const worker = workers.current();
         if (!worker || !state.analyticsReady || !state.hasData) {
             return;
         }

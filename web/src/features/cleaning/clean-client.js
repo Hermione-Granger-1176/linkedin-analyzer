@@ -9,6 +9,7 @@
 import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { MAIN_THREAD_MAX_FILE_BYTES } from "../../shared/limits.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { runCleanJob } from "./clean-job.js";
@@ -21,11 +22,21 @@ const MAIN_THREAD_TOO_LARGE =
 /** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}} CleanReply */
 
-/** @type {Worker|null} */
-let worker = null;
 let requestCount = 0;
-/** @type {{id: number, resolve: (reply: CleanReply) => void, timeoutId: number}|null} */
+/** @type {{id: number, resolve: (reply: CleanReply) => void}|null} */
 let pending = null;
+
+const workers = createWorkerHandle({
+    create: () => new Worker(new URL("./cleaning-worker.js", import.meta.url), { type: "module" }),
+    onMessage,
+    onError,
+    onStartError: () => {
+        captureError(new Error("Cleaning worker could not start."), {
+            module: "clean",
+            operation: "worker-init",
+        });
+    },
+});
 
 /**
  * Build a failed reply.
@@ -44,18 +55,15 @@ function settle(reply) {
     if (!pending) {
         return;
     }
-    const { resolve, timeoutId } = pending;
+    const { resolve } = pending;
     pending = null;
-    window.clearTimeout(timeoutId);
+    workers.unwatch();
     resolve(reply);
 }
 
 /** Terminate the worker and fail whatever it was answering. */
 function terminateCleanWorker() {
-    if (worker) {
-        worker.terminate();
-        worker = null;
-    }
+    workers.terminate();
     settle(failure());
 }
 
@@ -78,28 +86,6 @@ function onError() {
         operation: "worker-error",
     });
     terminateCleanWorker();
-}
-
-/**
- * Create the worker on first use, or leave it null where Workers are missing.
- * @returns {Worker|null}
- */
-function getWorker() {
-    if (worker || typeof Worker === "undefined") {
-        return worker;
-    }
-    try {
-        worker = new Worker(new URL("./cleaning-worker.js", import.meta.url), { type: "module" });
-        worker.addEventListener("message", onMessage);
-        worker.addEventListener("error", onError);
-    } catch {
-        worker = null;
-        captureError(new Error("Cleaning worker could not start."), {
-            module: "clean",
-            operation: "worker-init",
-        });
-    }
-    return worker;
 }
 
 /**
@@ -129,7 +115,7 @@ async function runOnMainThread(payload) {
  * @returns {Promise<CleanReply>}
  */
 export function requestClean(payload) {
-    const active = getWorker();
+    const active = workers.ensure();
     if (!active) {
         return runOnMainThread(payload);
     }
@@ -139,14 +125,14 @@ export function requestClean(payload) {
         // A workbook takes longer than a clean, so a download gets twice the budget.
         const budget =
             computeWorkerTimeout(payload.source) * (payload.output === "preview" ? 1 : 2);
-        const timeoutId = window.setTimeout(() => {
+        pending = { id, resolve };
+        workers.watch(budget, () => {
             captureError(new Error("Cleaning worker timed out."), {
                 module: "clean",
                 operation: "worker-timeout",
             });
             terminateCleanWorker();
-        }, budget);
-        pending = { id, resolve, timeoutId };
+        });
         try {
             active.postMessage({ type: "clean", requestId: id, payload });
         } catch {

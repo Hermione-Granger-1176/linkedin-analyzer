@@ -20,7 +20,7 @@ import { readCsvSourcesOrNull } from "../upload/read.js";
  * Distinct from the null "the worker could not answer" outcome, because the
  * main-thread fallback must not re-run the very work that was cancelled.
  */
-export const CANCELLED = Symbol("export-request-cancelled");
+const CANCELLED = Symbol("export-request-cancelled");
 
 /**
  * Outcome of a request the worker answered with a definite failure.

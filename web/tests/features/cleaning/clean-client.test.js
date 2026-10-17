@@ -40,12 +40,22 @@ class FakeWorker {
         this.listeners[type] = listener;
     }
 
+    removeEventListener(type, listener) {
+        if (this.listeners[type] === listener) {
+            delete this.listeners[type];
+        }
+    }
+
     postMessage(message) {
         this.posted.push(message);
     }
 
     emit(type, data) {
-        this.listeners[type]({ data });
+        // A detached listener hears nothing, as on a terminated worker.
+        const listener = this.listeners[type];
+        if (listener) {
+            listener({ data });
+        }
     }
 
     reply(requestId, payload = OK) {

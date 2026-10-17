@@ -15,6 +15,7 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPES } from "../../shared/constants.js";
 import { MAX_FILE_BYTES } from "../../shared/limits.js";
 import { toErrorMessage } from "../../shared/worker-errors.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
@@ -91,8 +92,24 @@ export const UploadPage = (() => {
         return `${count} ${count === 1 ? "row" : "rows"}`;
     }
 
-    /** @type {Worker|null} */
-    let worker = null;
+    const workers = createWorkerHandle({
+        create: () =>
+            new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
+                type: "module",
+            }),
+        onMessage: handleWorkerMessage,
+        onError: handleWorkerError,
+        onStartError: (error) => {
+            captureError(error, {
+                module: "upload",
+                operation: "init-worker",
+            });
+            setHint(
+                "This page must be opened from a local server (not file://). Start a server and reload.",
+                true,
+            );
+        },
+    });
     /** @type {Map<string, import("./jobs.js").PendingUpload>} */
     const pendingFiles = new Map();
     /** @type {Set<string>} */
@@ -140,7 +157,7 @@ export const UploadPage = (() => {
             setHint("Browser storage stopped working. Uploads won't persist across sessions.", false);
         });
 
-        initWorker();
+        workers.ensure();
         bindEvents();
         requestPersistentStorage();
         restoreState();
@@ -185,28 +202,16 @@ export const UploadPage = (() => {
         restoreState();
     }
 
-    /** Remove listeners from and terminate the current worker, if any. */
-    function teardownWorker() {
-        if (worker) {
-            worker.removeEventListener("message", handleWorkerMessage);
-            worker.removeEventListener("error", handleWorkerError);
-            worker.removeEventListener("messageerror", handleWorkerError);
-            worker.terminate();
-            worker = null;
-        }
-    }
-
     /** Tear down the current worker and spin up a fresh one so later uploads recover. */
     function restartWorker() {
-        teardownWorker();
+        workers.terminate();
         // A fresh worker has no in-memory primed state, so clear the prime tracking
         // (otherwise an unchanged signature would skip re-priming and leave analytics stale).
         clearPrimeSchedule();
         pendingPrimePayload = null;
         lastPrimedSignature = null;
-        initWorker();
         // Re-prime the new worker from cached files so analytics stay accurate after a crash.
-        if (!worker) {
+        if (!workers.ensure()) {
             return;
         }
         const cachedFiles = /** @type {StoredFileMetadata[]|undefined} */ (
@@ -214,31 +219,6 @@ export const UploadPage = (() => {
         );
         if (cachedFiles) {
             scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "idle" });
-        }
-    }
-
-    /** Create the analytics Web Worker. */
-    function initWorker() {
-        if (typeof Worker === "undefined") {
-            return;
-        }
-        try {
-            worker = new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
-                type: "module",
-            });
-            worker.addEventListener("message", handleWorkerMessage);
-            worker.addEventListener("error", handleWorkerError);
-            worker.addEventListener("messageerror", handleWorkerError);
-        } catch (error) {
-            worker = null;
-            captureError(error, {
-                module: "upload",
-                operation: "init-worker",
-            });
-            setHint(
-                "This page must be opened from a local server (not file://). Start a server and reload.",
-                true,
-            );
         }
     }
 
@@ -284,6 +264,7 @@ export const UploadPage = (() => {
                     await Storage.clearAll();
                     clearPrimeSchedule();
                     pendingPrimePayload = null;
+                    const worker = workers.current();
                     if (worker) {
                         worker.postMessage({ type: "clear" });
                     }
@@ -464,7 +445,7 @@ export const UploadPage = (() => {
                 false,
             );
         }
-        if (!worker) {
+        if (!workers.current()) {
             setHint("Workers are unavailable. Open this page from a local server.", true);
             return;
         }
@@ -498,7 +479,7 @@ export const UploadPage = (() => {
             try {
                 // Checked above. A restart during the prime await can null it,
                 // and the throw lands in the catch below, as before.
-                /** @type {Worker} */ (worker).postMessage({
+                /** @type {Worker} */ (workers.current()).postMessage({
                     type: "addFile",
                     payload: {
                         file,
@@ -821,7 +802,7 @@ export const UploadPage = (() => {
             (time) => now - time < WORKER_RESTART_WINDOW_MS,
         );
         if (workerRestartTimes.length >= MAX_WORKER_RESTARTS) {
-            teardownWorker();
+            workers.terminate();
             setHint("Analytics worker keeps failing. Please reload the page to retry.", true);
             return;
         }
@@ -1007,7 +988,7 @@ export const UploadPage = (() => {
         // Upload flows normally create the worker before priming. Keep the guard
         // for a worker teardown race.
         /* v8 ignore next 3 */
-        if (!worker) {
+        if (!workers.current()) {
             return undefined;
         }
 
@@ -1072,7 +1053,7 @@ export const UploadPage = (() => {
         // Both guards fire only on a torn-down worker or a payload cleared by a
         // racing restart between scheduling and firing, neither staged in units.
         /* v8 ignore next 3 */
-        if (!worker || !pendingPrimePayload) {
+        if (!workers.current() || !pendingPrimePayload) {
             return Promise.resolve();
         }
         const { signature } = pendingPrimePayload;
@@ -1101,7 +1082,7 @@ export const UploadPage = (() => {
         // Entry guard for a worker torn down before the chained post runs; the
         // caller only reaches here with a live worker in unit flows.
         /* v8 ignore next 3 */
-        if (!worker) {
+        if (!workers.current()) {
             return;
         }
         let sharesCsv = null;
@@ -1125,6 +1106,7 @@ export const UploadPage = (() => {
         }
 
         // Async storage reads can outlive worker teardown. Recheck before posting.
+        const worker = workers.current();
         /* v8 ignore next 3 */
         if (!worker) {
             return;

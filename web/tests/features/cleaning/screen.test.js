@@ -32,9 +32,12 @@ vi.mock("../../../src/features/cleaning/csv-export.js", () => ({
 }));
 
 // The stored upload is decoded by the real reader elsewhere; the parser is
-// mocked here, so any readable upload decodes to the same placeholder text.
+// mocked here, so any readable upload decodes whole to the same placeholder
+// text rather than streaming.
 vi.mock("../../../src/features/upload/read.js", () => ({
+    canStreamFileText: vi.fn(() => false),
     readCsvSource: vi.fn(async () => "csv"),
+    streamFileText: vi.fn(),
 }));
 
 vi.mock("../../../src/platform/persistence/session.js", () => ({

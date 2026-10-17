@@ -1,8 +1,8 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { readCsvSource } from "../upload/read.js";
+import { toCsvSource } from "../../shared/csv-source.js";
+import { processCsvSource } from "../cleaning/process-source.js";
 
 import { MessagesAnalytics } from "./analytics.js";
 
@@ -55,16 +55,14 @@ import { MessagesAnalytics } from "./analytics.js";
 
 /**
  * Parse messages and connections payload. Each file arrives as the stored
- * upload Blob, read here off the main thread, or as CSV text.
+ * upload Blob, streamed through the cleaner here off the main thread, or as
+ * CSV text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Raw payload
  * @returns {Promise<MessagesProcessedPayload>}
  */
 async function processPayload(payload) {
-    const messagesCsv = await readCsvSource(payload.messagesCsv);
-    const connectionsCsv = await readCsvSource(payload.connectionsCsv);
-
     const messagesResult = /** @type {CleanedRows<MessageRow>} */ (
-        LinkedInCleaner.process(messagesCsv, "messages")
+        await processCsvSource(payload.messagesCsv, "messages")
     );
     if (!messagesResult.success) {
         return {
@@ -79,9 +77,9 @@ async function processPayload(payload) {
     /** @type {string|null} */
     let connectionError = null;
 
-    if (connectionsCsv) {
+    if (toCsvSource(payload.connectionsCsv)) {
         const connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
-            LinkedInCleaner.process(connectionsCsv, "connections")
+            await processCsvSource(payload.connectionsCsv, "connections")
         );
         if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;

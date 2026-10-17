@@ -916,6 +916,22 @@ describe("ConnectionsPage", () => {
         ).toContain("timeout");
     });
 
+    it("scales the worker watchdog with the file size", async () => {
+        Storage.getFile.mockResolvedValue({ blob: new Blob([new Uint8Array(3 * 1024 * 1024)]) });
+        DataCache.get.mockReturnValue(null);
+        const spy = vi.spyOn(window, "setTimeout");
+        try {
+            ConnectionsPage.init();
+            await ConnectionsPage.onRouteChange({ range: "all" });
+            await new Promise((resolve) => globalThis.queueMicrotask(() => resolve(undefined)));
+            await Promise.resolve();
+
+            expect(spy.mock.calls.map((call) => call[1])).toContain(45000);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
     it("ignores a worker message event that carries no data", async () => {
         await primeWorker({ range: "all" });
         expect(() => workerInstance.listeners.message[0]({})).not.toThrow();

@@ -15,6 +15,7 @@ import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-toolti
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
 
@@ -60,7 +61,6 @@ export const ConnectionsPage = (() => {
 
     /** @type {Set<string|undefined>} */
     const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
-    const WORKER_TIMEOUT_MS = 30000;
 
     /**
      * @type {{filters: {timeRange: string}, dataReady: boolean, hasData: boolean,
@@ -323,6 +323,8 @@ export const ConnectionsPage = (() => {
             const id = ++requestId;
             pendingRequestId = id;
             clearWorkerTimeout();
+            // Scaled to the file like every other raw-CSV parse: a fixed 30
+            // seconds cut a large export off while the worker was still on it.
             workerTimeoutId = window.setTimeout(() => {
                 // A response clears this timeout. Keep the check for a stale callback.
                 /* v8 ignore next 3 */
@@ -336,7 +338,7 @@ export const ConnectionsPage = (() => {
                 );
                 showConnectionsLoading(false);
                 terminateWorker();
-            }, WORKER_TIMEOUT_MS);
+            }, computeWorkerTimeout(file.blob));
             markPerformance("connections:worker-parse:start");
             worker.postMessage({
                 type: "process",

@@ -63,6 +63,20 @@ describe("Effects", () => {
         expect(document.documentElement.dataset.effects).toBe("lite");
     });
 
+    it("forgets the retired override and survives blocked storage", async () => {
+        window.localStorage.setItem("linkedin-analyzer-effects", "lite");
+        const Effects = await loadEffects();
+        Effects.init();
+        expect(window.localStorage.getItem("linkedin-analyzer-effects")).toBeNull();
+
+        vi.resetModules();
+        vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+            throw new Error("blocked");
+        });
+        const Blocked = await loadEffects();
+        expect(() => Blocked.init()).not.toThrow();
+    });
+
     it("works without the overlays or PerformanceObserver", async () => {
         vi.stubGlobal("PerformanceObserver", undefined);
         try {

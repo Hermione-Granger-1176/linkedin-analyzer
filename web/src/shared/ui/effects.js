@@ -13,6 +13,18 @@ export const Effects = (() => {
 
     let initialized = false;
 
+    // Where the removed Auto, Lite, and Full button stored its choice.
+    const RETIRED_OVERRIDE_KEY = "linkedin-analyzer-effects";
+
+    /** Drop the retired button's stored choice; nothing reads it any more. */
+    function forgetRetiredOverride() {
+        try {
+            window.localStorage.removeItem(RETIRED_OVERRIDE_KEY);
+        } catch {
+            // Storage can be blocked; the stale value is harmless either way.
+        }
+    }
+
     /**
      * True while processing or a screen load is expected to block the page, so
      * its long frames are not blamed on decoration.
@@ -43,6 +55,7 @@ export const Effects = (() => {
             return;
         }
         initialized = true;
+        forgetRetiredOverride();
 
         apply(getDeviceProfile());
 

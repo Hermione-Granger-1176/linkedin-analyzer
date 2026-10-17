@@ -31,7 +31,7 @@ Rules every feature follows:
 - `lite` is complete. Every number, chart, list, export, and control works in it. Higher tiers add motion and decoration, never information or function.
 - The tier never changes processing. Heavy work stays in workers on every tier. Processing decisions read the raw signals (`deviceMemory` above all), never the tier, so Save-Data, a jank downgrade, or reduced motion cannot change how many files process at once.
 - `prefers-reduced-motion: reduce` always wins over the tier.
-- There is no visitor override. An earlier **Auto**, **Lite**, and **Full** toggle was removed: the device signals and the jank downgrade decide, and a stored `linkedin-analyzer-effects` value from that toggle is ignored.
+- There is no visitor override. An earlier **Auto**, **Lite**, and **Full** toggle was removed: the device signals and the jank downgrade decide, and a stored `linkedin-analyzer-effects` value from that toggle is removed on load.
 - The WebGL probe runs only when its answer can change the tier, so a device the cheaper signals put on `lite` never creates a WebGL context.
 - Under **Auto**, repeated long animation frames while the page is otherwise idle drop the session one tier. The app never upgrades automatically and never downgrades an explicit choice.
 - The page ships marked `lite` and upgrades once the profile is known. The CSP forbids inline scripts and module scripts run after first paint, so starting low is how the page avoids painting heavy effects on a device that cannot carry them.

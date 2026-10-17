@@ -135,7 +135,7 @@ The browser enforces these independent limits:
 | Columns per row           | 256     |
 | Characters per field      | 200,000 |
 
-The Clean screen builds Excel workbooks only for files up to 10 MiB and offers the cleaned CSV for larger files.
+The Clean screen builds Excel workbooks only for files up to 10 MiB and offers the cleaned CSV (for example `Shares_cleaned.csv`) for larger files.
 
 A file above 25 MiB also receives a large-file warning before processing. The warning does not reject the file when it remains under the hard limits.
 

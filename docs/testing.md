@@ -183,6 +183,8 @@ What the baselines show:
 - CPU throttling reaches only the main thread, so the throttled timings are a lower bound for a slow device.
 - Disabling the GPU changes nothing measurable, because no screen uses WebGL today.
 
+The measurements below follow the large-file pipeline in steps: 4a moved the upload limits to one module (the baseline), 4b let the analytics worker read the uploaded `File`, 4c parsed and cleaned each chunk as it streams, 4d stored message events as typed-array columns and bounded the exports, and 4e stored uploads as `Blob` records that workers read themselves.
+
 At 100 MB, measured with the `measurement` build's higher limits before step 4b of the large-file pipeline, on the same machine. `cpu=1` is 3 runs; `cpu=4` and `cpu=6` are one run each:
 
 | Size   | Options | Analytics ready     | Messages ready      | Cached filter    | Peak heap         |

@@ -44,12 +44,13 @@ export function buildCleanedCsvBlob(data, fileType) {
 }
 
 /**
- * Download file name for a cleaned CSV, matching the workbook name.
+ * Download file name for a cleaned CSV. The suffix keeps it apart from the
+ * LinkedIn export it came from, which has the same base name.
  * @param {string} fileType - Cleaner file type
  * @returns {string}
  */
 export function cleanedCsvName(fileType) {
-    return getConfig(fileType).outputName.replace(/\.xlsx$/, ".csv");
+    return getConfig(fileType).outputName.replace(/\.xlsx$/, "_cleaned.csv");
 }
 
 function getConfig(fileType) {

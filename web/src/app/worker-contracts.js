@@ -556,10 +556,10 @@ export function parseStoredUploadFile(file) {
 }
 
 /**
- * Strip the CSV text from a stored file record, keeping only the metadata the
- * in-memory caches need (status, counts, dataset signatures). The full text
- * stays in IndexedDB and is loaded on demand so large exports aren't retained
- * in memory across the whole session.
+ * Strip the stored upload from a file record, keeping only the metadata the
+ * in-memory caches need (status, counts, dataset signatures). The upload stays
+ * in IndexedDB as a Blob that workers read on demand, so large exports aren't
+ * retained in memory across the whole session.
  * @param {object} file - Stored file record
  * @returns {{type: string, name: string, rowCount: number, updatedAt: number}}
  */

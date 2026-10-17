@@ -54,7 +54,7 @@ describe("csv-export", () => {
     });
 
     it("names the CSV after the workbook and rejects unknown types", () => {
-        expect(cleanedCsvName("messages")).toBe("Messages.csv");
+        expect(cleanedCsvName("messages")).toBe("Messages_cleaned.csv");
         expect(() => cleanedCsvName("bogus")).toThrow(/Unknown file type/);
     });
 });

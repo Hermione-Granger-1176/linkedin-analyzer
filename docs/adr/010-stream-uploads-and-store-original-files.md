@@ -1,6 +1,6 @@
 # ADR-010: Stream uploads and store original files
 
-**Date:** 2026-10-16 **Status:** Proposed **Deciders:** Aditya Kumar Darak
+**Date:** 2026-10-16 **Status:** Accepted **Deciders:** Aditya Kumar Darak
 
 ## Context
 

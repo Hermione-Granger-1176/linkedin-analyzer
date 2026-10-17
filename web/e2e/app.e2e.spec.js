@@ -84,7 +84,7 @@ test("download cleaned csv from clean screen", async ({ page }) => {
     const downloadPromise = page.waitForEvent("download");
     await page.getByTestId("clean-csv-btn").click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe("Shares.csv");
+    expect(download.suggestedFilename()).toBe("Shares_cleaned.csv");
     const stream = await download.createReadStream();
     let text = "";
     for await (const chunk of stream) {

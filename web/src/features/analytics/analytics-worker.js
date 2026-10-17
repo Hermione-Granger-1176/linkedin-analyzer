@@ -2,8 +2,8 @@
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { streamCleanFile } from "../cleaning/process-source.js";
-import { canStreamFileText, readCsvSource, readFileAsText } from "../upload/read.js";
+import { processCsvSource, streamCleanFile } from "../cleaning/process-source.js";
+import { canStreamFileText, readFileAsText } from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -453,55 +453,49 @@ async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
     const epoch = requestEpoch;
-    // A stored Blob the browser can no longer read counts as absent, like a
-    // file that fails to parse, so it cannot fail the other types' restore.
-    const readOrSkip = (/** @type {unknown} */ source) => readCsvSource(source).catch(() => "");
-    const sourceCsvByType = {
-        shares: await readOrSkip(sharesCsv),
-        comments: await readOrSkip(commentsCsv),
-        connections: await readOrSkip(connectionsCsv),
-    };
-    // Clear arrived while the stored files were read: keep what it cleared gone.
-    if (epoch !== requestEpoch) {
-        return;
+    // Each source streams through the cleaner in turn, so no file is held as
+    // one string and only one is being read at a time. A Clear aborts the read
+    // in flight.
+    const sourceByType = { shares: sharesCsv, comments: commentsCsv, connections: connectionsCsv };
+    /** @type {Partial<Record<AnalyticsSourceType, CleanedRow[]>>} */
+    const cleanedByType = {};
+    const controller = new AbortController();
+    activeRead = controller;
+    try {
+        for (const type of ANALYTICS_SOURCE_TYPES) {
+            const source = sourceByType[type];
+            if (!source) {
+                continue;
+            }
+            /** @type {import("../cleaning/cleaner.js").ProcessResult|null} */
+            let parsed = null;
+            try {
+                parsed = await processCsvSource(source, type, { signal: controller.signal });
+            } catch {
+                // A stored Blob the browser can no longer read counts as absent,
+                // like a file that fails to parse, so it cannot fail the other
+                // types' restore.
+                parsed = null;
+            }
+            // Clear arrived while the stored files were read: keep what it cleared gone.
+            if (epoch !== requestEpoch) {
+                return;
+            }
+            if (parsed && parsed.success) {
+                cleanedByType[type] = parsed.cleanedData;
+            }
+        }
+    } finally {
+        if (activeRead === controller) {
+            activeRead = null;
+        }
     }
-    /** @type {Record<AnalyticsSourceType, (cleanedData: CleanedRow[]) => void>} */
-    const assignSourceByType = {
-        shares: (cleanedData) => {
-            sharesData = cleanedData;
-        },
-        comments: (cleanedData) => {
-            commentsData = cleanedData;
-        },
-        connections: (cleanedData) => {
-            connectionsData = cleanedData;
-        },
-    };
 
-    sharesData = null;
-    commentsData = null;
-    connectionsData = null;
-
-    // Whether a posting source (shares/comments) loaded with rows. Tracked here
-    // rather than read back off the module fields afterwards because those are
-    // assigned through the indirection above, which control-flow analysis cannot
-    // follow.
-    let hasPostingSource = false;
-    ANALYTICS_SOURCE_TYPES.forEach((type) => {
-        const csvText = sourceCsvByType[type];
-        if (!csvText) {
-            return;
-        }
-
-        const parsed = LinkedInCleaner.process(csvText, type);
-        if (!parsed.success) {
-            return;
-        }
-        assignSourceByType[type](parsed.cleanedData);
-        if ((type === "shares" || type === "comments") && parsed.cleanedData.length > 0) {
-            hasPostingSource = true;
-        }
-    });
+    sharesData = cleanedByType.shares || null;
+    commentsData = cleanedByType.comments || null;
+    connectionsData = cleanedByType.connections || null;
+    // Whether a posting source (shares/comments) loaded with rows.
+    const hasPostingSource = Boolean(sharesData?.length || commentsData?.length);
 
     // restoreFiles only seeds the worker's source datasets so a subsequent
     // addFile recomputes analytics from the full set. The aggregate the dashboard

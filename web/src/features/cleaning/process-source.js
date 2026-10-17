@@ -50,15 +50,20 @@ export async function streamCleanFile(file, options = {}) {
  * Clean a stored upload or CSV text as one file type.
  * @param {unknown} source - Stored upload Blob or CSV text
  * @param {string} fileType - File type to clean as
- * @returns {Promise<ProcessResult>}
+ * @param {{signal?: AbortSignal}} [options] - Stops the read when aborted
+ * @returns {Promise<ProcessResult>} Rejects when the read fails or is aborted
  */
-export async function processCsvSource(source, fileType) {
+export async function processCsvSource(source, fileType, { signal } = {}) {
     const value = toCsvSource(source);
     if (typeof value !== "string" && canStreamFileText(/** @type {File} */ (value))) {
-        const { processed } = await streamCleanFile(/** @type {File} */ (value));
+        const { processed } = await streamCleanFile(/** @type {File} */ (value), { signal });
+        signal?.throwIfAborted();
         if (processed && processed.fileType === fileType) {
             return processed;
         }
     }
-    return LinkedInCleaner.process(await readCsvSource(source), fileType);
+    const text = await readCsvSource(source);
+    // An abort during a whole read lands here; skip the clean it no longer needs.
+    signal?.throwIfAborted();
+    return LinkedInCleaner.process(text, fileType);
 }

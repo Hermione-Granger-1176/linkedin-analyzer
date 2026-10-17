@@ -2,113 +2,19 @@
 
 import { parseLocalDate, parseLocalDateTime } from "../analytics/dates.js";
 
-/**
- * One cleaned messages.csv row, keyed by column name (FROM, TO, DATE, ...).
- * @typedef {Record<string, string>} MessageRow
- */
-
-/**
- * One cleaned Connections.csv row, keyed by column name (First Name, URL, ...).
- * @typedef {Record<string, string>} ConnectionRow
- */
-
-/**
- * Normalized URLs and names identified as the export owner.
- * @typedef {object} SelfContext
- * @property {Set<string>} selfUrls - Normalized self profile URLs
- * @property {Set<string>} selfNames - Normalized self names
- */
-
-/**
- * A message participant after sanitizing: a display name and normalized URL.
- * @typedef {object} Participant
- * @property {string} name - Display name ("Unknown" when only a URL is known)
- * @property {string} url - Normalized profile URL, or "" when absent
- */
-
-/**
- * Aggregated message totals for one contact.
- * @typedef {object} MessageContact
- * @property {string} key - Contact key ("url:..." or "name:...")
- * @property {string} name - Display name
- * @property {string} url - Normalized profile URL, or ""
- * @property {number} count - Messages involving this contact
- * @property {number} lastTimestamp - Latest message timestamp (ms)
- */
-
-/**
- * Message events stored as columns, one entry per participant per message.
- * contactIds[i] indexes contactKeys; timestamps[i] is the message time.
- * @typedef {object} MessageEvents
- * @property {string[]} contactKeys - Contact key for each contact ID
- * @property {Int32Array<ArrayBuffer>} contactIds - Contact ID of each event
- * @property {Float64Array<ArrayBuffer>} timestamps - Timestamp (ms) of each event
- */
-
-/**
- * Outreach-funnel summary: who starts conversations and how often they are answered.
- * @typedef {object} OutreachSummary
- * @property {number} totalConversations - Distinct conversations
- * @property {number} selfInitiated - Conversations started by self
- * @property {number} othersInitiated - Conversations started by someone else
- * @property {number} selfInitiatedReplied - Self-started conversations that got a reply
- * @property {number|null} replyRate - selfInitiatedReplied / selfInitiated, or null
- * @property {number} unansweredContacts - Contacts messaged who never replied
- * @property {number} sent - Messages sent by self
- * @property {number} received - Messages received from real correspondents
- * @property {number|null} sentReceivedRatio - sent / received, or null
- */
-
-/**
- * Message analytics state built from cleaned rows.
- * @typedef {object} MessageState
- * @property {Map<string, MessageContact>} contacts - Contacts by contact key
- * @property {MessageEvents} events - Per-participant event columns
- * @property {Float64Array<ArrayBuffer>} rowTimestamps - Timestamp (ms) of each counted row
- * @property {number} skippedRows - Rows without a date or a participant
- * @property {Set<string>} talkedNameKeys - Normalized names of everyone messaged
- * @property {Set<string>} talkedUrlKeys - Normalized URLs of everyone messaged
- * @property {number} latestTimestamp - Latest counted message timestamp (ms)
- * @property {OutreachSummary|null} outreach - Outreach summary, when available
- */
-
-/**
- * One connection, normalized for lookups.
- * @typedef {object} Connection
- * @property {string} name - Full name, or the URL when the name is blank
- * @property {string} nameKey - Normalized full name
- * @property {string} url - Normalized profile URL, or ""
- * @property {string} company - Company
- * @property {string} position - Position
- * @property {number|null} connectedOnTimestamp - Connection date (ms), or null
- */
-
-/**
- * Connection list plus URL and name indexes (first entry wins).
- * @typedef {object} ConnectionState
- * @property {Connection[]} list - All connections, in file order
- * @property {Map<string, Connection>} byUrl - Connections by normalized URL
- * @property {Map<string, Connection>} byName - Connections by normalized name
- */
-
-/**
- * Per-conversation outreach aggregate.
- * @typedef {object} ConversationAggregate
- * @property {number} firstTimestamp - Earliest message timestamp (ms)
- * @property {boolean} startedBySelf - Whether the earliest message was sent by self
- * @property {boolean} gotReply - Whether a real correspondent ever sent a message
- */
-
-/**
- * Participation counts for a self-detection candidate key.
- * @typedef {object} ParticipantStats
- * @property {number} totalCount - Appearances on either side
- * @property {number} senderCount - Appearances as sender
- * @property {number} recipientCount - Appearances as recipient
- * @property {Set<string>} conversations - Conversations the key appears in
- */
-
-/** @typedef {"senderCount"|"recipientCount"} RoleCountField - Per-role counter in ParticipantStats */
+/** @typedef {import("./model.ts").MessageRow} MessageRow */
+/** @typedef {import("./model.ts").ConnectionRow} ConnectionRow */
+/** @typedef {import("./model.ts").SelfContext} SelfContext */
+/** @typedef {import("./model.ts").Participant} Participant */
+/** @typedef {import("./model.ts").MessageContact} MessageContact */
+/** @typedef {import("./model.ts").MessageEvents} MessageEvents */
+/** @typedef {import("./model.ts").OutreachSummary} OutreachSummary */
+/** @typedef {import("./model.ts").MessageState} MessageState */
+/** @typedef {import("./model.ts").Connection} Connection */
+/** @typedef {import("./model.ts").ConnectionState} ConnectionState */
+/** @typedef {import("./model.ts").ConversationAggregate} ConversationAggregate */
+/** @typedef {import("./model.ts").ParticipantStats} ParticipantStats */
+/** @typedef {import("./model.ts").RoleCountField} RoleCountField */
 
 export const MessagesAnalytics = (() => {
     "use strict";

@@ -580,6 +580,30 @@ describe("CleanPage", () => {
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
     });
 
+    it("drops a stale load failure instead of replacing the newer selection", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+            { type: "comments", updatedAt: 20, rowCount: 1, name: "Comments.csv" },
+        ]);
+        let rejectLoad;
+        Storage.getFile.mockReturnValue(
+            new Promise((_resolve, reject) => {
+                rejectLoad = reject;
+            }),
+        );
+
+        await CleanPage.init();
+
+        document.querySelector('input[value="shares"]').checked = false;
+        document.querySelector('input[value="comments"]').checked = true;
+
+        rejectLoad(new Error("read failed"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+        expect(captureError).not.toHaveBeenCalled();
+    });
+
     it("defaults a missing updatedAt to 0 when caching the parse", async () => {
         // No updatedAt on the metadata exercises the `file.updatedAt || 0` fallback.
         Storage.getAllFiles.mockResolvedValue([{ type: "shares", text: "csv" }]);

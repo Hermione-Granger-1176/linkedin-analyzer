@@ -27,8 +27,9 @@ const READ_PROGRESS_SPAN = 0.3;
 const READ_PROGRESS_STEP = 0.01;
 
 // Requests run one at a time in arrival order, because reading a file is
-// asynchronous. Clear runs at once instead: it aborts the read in flight and
-// bumps the epoch so requests queued before it are skipped.
+// asynchronous. Clear runs at once instead: it aborts the read in flight, bumps
+// the epoch so requests from before it drop their results, and starts a fresh
+// queue so a request after it never waits on a stale read.
 let requestQueue = Promise.resolve();
 let requestEpoch = 0;
 let activeRead = null;
@@ -183,14 +184,19 @@ function cacheView(key, payload) {
 
 /**
  * Run a read of an uploaded file, reporting bytes read as progress.
- * Resolves null when a clear cancels the read.
+ * Resolves null when a clear cancels the read or arrived since the request began.
  * @template T
  * @param {(options: {signal: AbortSignal, onProgress: (bytesRead: number, totalBytes: number) => void}) => Promise<T>} read - The read to run
  * @param {string|null} jobId - Upload job ID
  * @param {string} fileName - Uploaded file name
+ * @param {number} epoch - Request epoch the read belongs to
  * @returns {Promise<T|null>}
  */
-async function readUpload(read, jobId, fileName) {
+async function readUpload(read, jobId, fileName, epoch) {
+    // A stale request must not start a read, or it would take over activeRead.
+    if (epoch !== requestEpoch) {
+        return null;
+    }
     const controller = new AbortController();
     activeRead = controller;
     let lastPercent = READ_PROGRESS_START;
@@ -209,7 +215,7 @@ async function readUpload(read, jobId, fileName) {
     try {
         const result = await read({ signal: controller.signal, onProgress });
         // A Clear during the last read can let it finish with done; drop it.
-        return controller.signal.aborted ? null : result;
+        return controller.signal.aborted || epoch !== requestEpoch ? null : result;
     } catch (error) {
         if (controller.signal.aborted) {
             return null;
@@ -235,11 +241,17 @@ async function readUpload(read, jobId, fileName) {
  * @param {File} file - Uploaded file
  * @param {string|null} jobId - Upload job ID
  * @param {string} fileName - Uploaded file name
+ * @param {number} epoch - Request epoch the upload belongs to
  * @returns {Promise<{usedFallback: boolean, processed: object}|null>}
  */
-async function readAndProcessUpload(file, jobId, fileName) {
+async function readAndProcessUpload(file, jobId, fileName, epoch) {
     if (!canStreamFileText(file)) {
-        const read = await readUpload((options) => readFileAsText(file, options), jobId, fileName);
+        const read = await readUpload(
+            (options) => readFileAsText(file, options),
+            jobId,
+            fileName,
+            epoch,
+        );
         if (!read) {
             return null;
         }
@@ -263,6 +275,7 @@ async function readAndProcessUpload(file, jobId, fileName) {
             }),
         jobId,
         fileName,
+        epoch,
     );
     if (!read) {
         return null;
@@ -271,7 +284,12 @@ async function readAndProcessUpload(file, jobId, fileName) {
     if (streamed) {
         return { usedFallback: read.usedFallback, processed: streamed };
     }
-    const whole = await readUpload((options) => readFileAsText(file, options), jobId, fileName);
+    const whole = await readUpload(
+        (options) => readFileAsText(file, options),
+        jobId,
+        fileName,
+        epoch,
+    );
     if (!whole) {
         return null;
     }
@@ -293,6 +311,7 @@ async function handleAddFile(payload) {
     const { csvText = "" } = payload || {};
     let usedFallback = false;
     let processed;
+    const epoch = requestEpoch;
 
     self.postMessage({
         type: "progress",
@@ -302,8 +321,12 @@ async function handleAddFile(payload) {
     if (file) {
         let result;
         try {
-            result = await readAndProcessUpload(file, jobId, fileName);
+            result = await readAndProcessUpload(file, jobId, fileName, epoch);
         } catch (error) {
+            // A failure in a read a clear has since abandoned is nobody's to see.
+            if (epoch !== requestEpoch) {
+                return;
+            }
             self.postMessage({
                 type: "fileProcessed",
                 payload: {
@@ -533,6 +556,9 @@ function handleClear() {
  */
 function cancelPendingRequests() {
     requestEpoch += 1;
+    // Stale reads may still be settling; they drop their results by epoch,
+    // so nothing after the clear has to wait for them.
+    requestQueue = Promise.resolve();
     if (activeRead) {
         activeRead.abort();
     }

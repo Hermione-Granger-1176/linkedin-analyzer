@@ -282,6 +282,10 @@ export const CleanPage = (() => {
                     return;
                 }
             } catch (error) {
+                // An abandoned load must not replace the newer selection's preview.
+                if (getSelectedType() !== type) {
+                    return;
+                }
                 handleParseError(error, "Unable to load file.", type, file.name || null);
                 return;
             }

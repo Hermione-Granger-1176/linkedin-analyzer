@@ -961,6 +961,47 @@ describe("message event dispatcher", () => {
         expect(LC.process).not.toHaveBeenCalled();
     });
 
+    it("runs a request sent after clear without waiting on the stale read", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+
+        let failRead = () => {};
+        const file = new File(["col\nval"], "Shares.csv");
+        Object.assign(file, {
+            stream: () => ({
+                getReader: () => ({
+                    // A stalled read that a cancel does not settle.
+                    read: () =>
+                        new Promise((_resolve, reject) => {
+                            failRead = reject;
+                        }),
+                    cancel: () => Promise.resolve()
+                })
+            })
+        });
+
+        const stale = handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+        await Promise.resolve();
+        await Promise.resolve();
+        handlers.message({ data: { type: "clear" } });
+
+        // The read is still pending, and the next request runs anyway.
+        await handlers.message({ data: { type: "initBase", payload: null } });
+        expect(posted.at(-1).type).toBe("init");
+
+        // When the stale read finally fails, nothing is reported for it.
+        failRead(new Error("disk gone"));
+        await stale;
+        expect(posted.map((m) => m.type)).not.toContain("fileProcessed");
+    });
+
     it("runs requests one at a time in arrival order", async () => {
         const posted = [];
         const handlers = {};

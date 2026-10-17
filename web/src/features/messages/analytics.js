@@ -118,20 +118,22 @@ export const MessagesAnalytics = (() => {
                 // No direct hit: the same person may already be stored under their
                 // name (no URL yet) or under a URL (seen with one before). Reconcile
                 // via the name index so their message counts merge into one entry.
+                // A stored contact with a different URL is a different person who
+                // shares the name, so it is never merged.
                 if (!existing && mergeNameKey) {
                     const mappedKey = nameToKey.get(mergeNameKey);
-                    if (mappedKey && mappedKey !== contactKey && contacts.has(mappedKey)) {
-                        existing = contacts.get(mappedKey);
-                        if (contact.url) {
-                            // Promote a name-only entry to the stronger URL key so
-                            // later URL-bearing rows find it directly.
-                            contacts.delete(mappedKey);
-                            existing.key = contactKey;
-                            contacts.set(contactKey, existing);
-                            keyRemap.set(mappedKey, contactKey);
-                        } else {
-                            contactKey = mappedKey;
-                        }
+                    const mapped = mappedKey ? contacts.get(mappedKey) : undefined;
+                    if (mapped && !contact.url) {
+                        existing = mapped;
+                        contactKey = mapped.key;
+                    } else if (mapped && !mapped.url) {
+                        // Promote a name-only entry to the stronger URL key so
+                        // later URL-bearing rows find it directly.
+                        existing = mapped;
+                        contacts.delete(mapped.key);
+                        keyRemap.set(mapped.key, contactKey);
+                        existing.key = contactKey;
+                        contacts.set(contactKey, existing);
                     }
                 }
 
@@ -189,15 +191,8 @@ export const MessagesAnalytics = (() => {
         // Repoint events pushed under a name: key that was later promoted to a
         // url: key, so range-based aggregation joins them to the merged contact.
         if (keyRemap.size) {
-            const resolveKey = (key) => {
-                let resolved = key;
-                while (keyRemap.has(resolved)) {
-                    resolved = keyRemap.get(resolved);
-                }
-                return resolved;
-            };
             events.forEach((event) => {
-                event.contactKey = resolveKey(event.contactKey);
+                event.contactKey = resolveRemappedKey(keyRemap, event.contactKey);
             });
         }
 
@@ -827,6 +822,27 @@ export const MessagesAnalytics = (() => {
     }
 
     /**
+     * Follow a chain of key remaps to its final key. A repeated key stops the
+     * walk, so a cyclic map cannot loop forever.
+     * @param {Map<string, string>} keyRemap - Old key to new key
+     * @param {string} key - Key to resolve
+     * @returns {string}
+     */
+    function resolveRemappedKey(keyRemap, key) {
+        const visited = new Set([key]);
+        let resolved = key;
+        while (keyRemap.has(resolved)) {
+            const next = /** @type {string} */ (keyRemap.get(resolved));
+            if (visited.has(next)) {
+                break;
+            }
+            visited.add(next);
+            resolved = next;
+        }
+        return resolved;
+    }
+
+    /**
      * Trim any value into a string.
      * @param {unknown} value - Raw value
      * @returns {string}
@@ -851,6 +867,9 @@ export const MessagesAnalytics = (() => {
         // breaks coverage ties by insertion order, which the export must not.
         isSelfContact,
         extractParticipantsFromRow,
-        buildContactKey
+        buildContactKey,
+        // Exposed for tests: buildMessageState no longer produces a cyclic
+        // remap, so the cycle guard is only reachable directly.
+        resolveRemappedKey
     };
 })();

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { MessagesAnalytics } from "../../../src/features/messages/analytics.js";
 
 describe("MessagesAnalytics", () => {
@@ -119,6 +120,54 @@ describe("MessagesAnalytics", () => {
         const eventKeys = new Set(state.events.map((event) => event.contactKey));
         expect(eventKeys.size).toBe(1);
         expect([...eventKeys][0]).toBe(contact.key);
+    });
+
+    it("keeps two same-name contacts with different profile URLs apart", () => {
+        // Messaging John Smith A, then John Smith B, then A again used to merge
+        // the two people and leave a cyclic key remap that hung the worker.
+        const csv = [
+            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+            'c-a,Me Self,John Smith,2025-01-01 10:00:00 UTC,"hi",INBOX,https://www.linkedin.com/in/me,https://www.linkedin.com/in/john-smith-a',
+            'c-a,John Smith,Me Self,2025-01-01 11:00:00 UTC,"yo",INBOX,https://www.linkedin.com/in/john-smith-a,https://www.linkedin.com/in/me',
+            'c-b,Me Self,John Smith,2025-01-02 10:00:00 UTC,"hi",INBOX,https://www.linkedin.com/in/me,https://www.linkedin.com/in/john-smith-b',
+            'c-b,John Smith,Me Self,2025-01-02 11:00:00 UTC,"yo",INBOX,https://www.linkedin.com/in/john-smith-b,https://www.linkedin.com/in/me',
+            'c-a,Me Self,John Smith,2025-01-03 10:00:00 UTC,"hi",INBOX,https://www.linkedin.com/in/me,https://www.linkedin.com/in/john-smith-a'
+        ].join("\n");
+        const { cleanedData } = LinkedInCleaner.process(csv, "messages");
+
+        const state = MessagesAnalytics.buildMessageState(cleanedData);
+
+        const contacts = [...state.contacts.values()];
+        const byUrl = new Map(contacts.map((contact) => [contact.url, contact]));
+        expect(state.contacts.size).toBe(2);
+        const contactA = byUrl.get("https://www.linkedin.com/in/john-smith-a");
+        const contactB = byUrl.get("https://www.linkedin.com/in/john-smith-b");
+        expect(contactA.count).toBe(3);
+        expect(contactB.count).toBe(2);
+        const eventCounts = new Map();
+        state.events.forEach((event) => {
+            eventCounts.set(event.contactKey, (eventCounts.get(event.contactKey) || 0) + 1);
+        });
+        expect(eventCounts.get(contactA.key)).toBe(3);
+        expect(eventCounts.get(contactB.key)).toBe(2);
+    });
+
+    it("resolveRemappedKey follows a remap chain to its end", () => {
+        const keyRemap = new Map([
+            ["a", "b"],
+            ["b", "c"]
+        ]);
+        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "a")).toBe("c");
+        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "z")).toBe("z");
+    });
+
+    it("resolveRemappedKey stops on a cyclic remap instead of looping", () => {
+        const keyRemap = new Map([
+            ["a", "b"],
+            ["b", "a"]
+        ]);
+        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "a")).toBe("b");
+        expect(MessagesAnalytics.resolveRemappedKey(keyRemap, "b")).toBe("a");
     });
 
     it("buildMessageState computes the outreach funnel", () => {

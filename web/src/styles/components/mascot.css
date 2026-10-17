@@ -1268,6 +1268,12 @@
     animation: none;
 }
 
+/* Lite is filter-free: drop Pip's turbulence wobble, which re-rasterizes the
+   whole drawing as it moves. CSS outranks the SVG filter attribute. */
+:root[data-effects="lite"] [filter="url(#pipWobble)"] {
+    filter: none;
+}
+
 .pip-trail {
     fill: none;
     stroke: var(--text-secondary);

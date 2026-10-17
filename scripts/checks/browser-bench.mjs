@@ -267,7 +267,11 @@ async function timeCachedFilterChange(page) {
                 apply(range);
             });
         // Start from an idle screen, so a draw already under way is not timed.
+        const idleBy = performance.now() + settleTimeout;
         while (grid.style.opacity && grid.style.opacity !== "1") {
+            if (performance.now() > idleBy) {
+                throw new Error("the Analytics view did not settle before the filter change");
+            }
             await new Promise((resolve) => requestAnimationFrame(resolve));
         }
         const active = document.querySelector("#analyticsTimeRangeButtons .active");
@@ -295,10 +299,13 @@ async function measureRun(options, inputDir) {
     };
     let sampler = null;
     try {
-        const context = await newMeasurementContext(
-            browser,
-            options.mobile ? devices[MOBILE_DEVICE] : {},
-        );
+        // Reduced motion turns off the optional timeline animation, which
+        // finishes after the grid is back to full opacity and would end the
+        // filter timing early.
+        const context = await newMeasurementContext(browser, {
+            ...(options.mobile ? devices[MOBILE_DEVICE] : {}),
+            reducedMotion: "reduce",
+        });
         const page = await context.newPage();
         page.on("crash", () => {
             result.crashed = true;

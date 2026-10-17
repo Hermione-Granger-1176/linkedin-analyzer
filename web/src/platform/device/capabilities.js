@@ -184,8 +184,26 @@ export function writeEffectsOverride(storage, override) {
 }
 
 /**
+ * Whether the WebGL answer can change the tier: always under Full, and under
+ * Auto only when the cheap signals leave Rich possible.
+ * @param {DeviceSignals} signals - Signals read without the probe
+ * @param {string} override - auto, lite, or full
+ * @returns {boolean}
+ */
+function probeCanMatter(signals, override) {
+    if (override === "full") {
+        return true;
+    }
+    if (override === "lite") {
+        return false;
+    }
+    return pickTier({ ...signals, acceleratedWebgl: true }) === "rich";
+}
+
+/**
  * Build a device profile. The WebGL probe runs only when the answer can change
- * the tier, so the Lite override never creates a WebGL context.
+ * the tier, so Lite, and an Auto device that cannot reach Rich, never create a
+ * WebGL context.
  * @param {object} env - Browser APIs, injected for tests
  * @param {Navigator|undefined} env.navigator - navigator
  * @param {((query: string) => { matches: boolean })|undefined} env.matchMedia - window.matchMedia
@@ -194,10 +212,10 @@ export function writeEffectsOverride(storage, override) {
  * @returns {DeviceProfile}
  */
 export function buildDeviceProfile(env, override) {
-    const signals = readSignals({
-        ...env,
-        createCanvas: override === "lite" ? null : env.createCanvas,
-    });
+    const cheap = readSignals({ ...env, createCanvas: null });
+    const signals = probeCanMatter(cheap, override)
+        ? { ...cheap, acceleratedWebgl: readSignals(env).acceleratedWebgl }
+        : cheap;
     const autoTier = pickTier(signals);
     return { tier: resolveTier(autoTier, override, signals), autoTier, override, signals };
 }

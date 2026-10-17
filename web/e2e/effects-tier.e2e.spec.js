@@ -132,10 +132,25 @@ test("the Lite override creates no WebGL context and animates only transform and
     await expect.poll(async () => (await readAnimatedProperties(page)).length).toBeGreaterThan(0);
     const animated = await readAnimatedProperties(page);
     expect(animated.filter((name) => !isCompositorOnly(name))).toEqual([]);
+    // Lite is filter-free, including the SVG filter attribute on Pip.
+    const filtered = await page.evaluate(() =>
+        [...document.querySelectorAll("[filter]")]
+            .map((element) => getComputedStyle(element).filter)
+            .filter((value) => value !== "none"),
+    );
+    expect(filtered).toEqual([]);
 });
 
 test("Auto probes WebGL once and the toggle cycles through every choice", async ({ page }) => {
     await countWebglRequests(page);
+    // Auto probes only when the device could reach rich, so do not depend on
+    // the runner's core count.
+    await page.addInitScript(() => {
+        Object.defineProperty(Navigator.prototype, "hardwareConcurrency", {
+            configurable: true,
+            get: () => 8,
+        });
+    });
     const tier = await openAndReadTier(page);
     // Above lite, the home screen runs repaint-heavy moves too, which is what
     // makes the Lite check above meaningful.

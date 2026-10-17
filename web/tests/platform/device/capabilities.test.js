@@ -221,6 +221,32 @@ describe("buildDeviceProfile", () => {
         const full = buildDeviceProfile(strongEnv(fakeCanvas({})), "full");
         expect(full).toMatchObject({ tier: "standard", autoTier: "standard", override: "full" });
     });
+
+    it("skips the probe under auto when the cheap signals rule out rich", () => {
+        const weakEnv = (navigator, canvas) => ({
+            navigator: /** @type {Navigator} */ (/** @type {unknown} */ (navigator)),
+            matchMedia: () => ({ matches: false }),
+            createCanvas: () => canvas,
+        });
+        for (const navigator of [
+            { hardwareConcurrency: 8, connection: { saveData: true } },
+            { hardwareConcurrency: 8, deviceMemory: 2 },
+            { hardwareConcurrency: 2 },
+            { hardwareConcurrency: 4 },
+            { hardwareConcurrency: 8, deviceMemory: 4 },
+        ]) {
+            const canvas = fakeCanvas({ webgl2: fakeContext() });
+            const profile = buildDeviceProfile(weakEnv(navigator, canvas), "auto");
+            expect(canvas.calls, JSON.stringify(navigator)).toEqual([]);
+            expect(profile.signals.acceleratedWebgl).toBeNull();
+            expect(profile.tier).not.toBe("rich");
+        }
+        const canvas = fakeCanvas({ webgl2: fakeContext() });
+        expect(buildDeviceProfile(weakEnv({ hardwareConcurrency: 2 }, canvas), "full").tier).toBe(
+            "rich",
+        );
+        expect(canvas.calls).not.toEqual([]);
+    });
 });
 
 describe("shared device profile", () => {
@@ -232,6 +258,8 @@ describe("shared device profile", () => {
         getContext = vi.fn(() => null);
         vi.stubGlobal("OffscreenCanvas", undefined);
         vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(getContext);
+        // Enough cores that Auto could reach rich, so it probes WebGL.
+        vi.spyOn(Navigator.prototype, "hardwareConcurrency", "get").mockReturnValue(8);
     });
 
     afterEach(() => {

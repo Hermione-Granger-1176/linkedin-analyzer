@@ -32,7 +32,7 @@ Rules every feature follows:
 - The tier never changes processing. Heavy work stays in workers on every tier. Nothing in the processing path reads the tier, so an override, Save-Data, or reduced motion cannot change how files are handled. The raw signals stay in the profile so a future processing decision can read them directly.
 - `prefers-reduced-motion: reduce` always wins over the tier.
 - The visitor can override the automatic choice with **Auto**, **Lite**, or **Full**, stored in `localStorage` as `linkedin-analyzer-effects`. **Full** means the most the device can do: `rich` with accelerated WebGL, `standard` without it.
-- The WebGL probe runs only when its answer can change the tier, so the **Lite** override never creates a WebGL context.
+- The WebGL probe runs only when its answer can change the tier: under **Full**, and under **Auto** when the cheap signals leave Rich possible. The **Lite** override, and an Auto device that cannot reach Rich, never create a WebGL context.
 - Under **Auto**, repeated long animation frames while the page is otherwise idle drop the session one tier. The app never upgrades automatically and never downgrades an explicit choice.
 - The page ships marked `lite` and upgrades once the profile is known. The CSP forbids inline scripts and module scripts run after first paint, so starting low is how the page avoids painting heavy effects on a device that cannot carry them.
 - Stylesheets gate expensive effects on the root attribute, for example `:root[data-effects="lite"] .pip-trail { animation: none; }`.
@@ -48,4 +48,4 @@ Rules every feature follows:
 ## Validation
 
 - `web/tests/platform/device/capabilities.test.js` covers every branch of the tier mapping, including every signal missing, and that the override and Save-Data leave the processing signals unchanged.
-- `web/e2e/effects-tier.e2e.spec.js` checks that a Chromium run with `--disable-gpu` gets no higher than `standard`, that Save-Data gets `lite`, and that the **Lite** override creates no WebGL context and runs no animation other than `transform` or `opacity`.
+- `web/e2e/effects-tier.e2e.spec.js` checks that a Chromium run with `--disable-gpu` gets no higher than `standard`, that Save-Data gets `lite`, and that the **Lite** override creates no WebGL context and runs no animation other than `transform` or `opacity` and no CSS or SVG filter.

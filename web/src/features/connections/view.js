@@ -90,6 +90,14 @@ export const RANGE_KEYS = Object.freeze([...Object.keys(RANGE_DAYS), "all"]);
 
 const TOP_N = 10;
 
+// Distinct "Connected On" values number about one per day of the network's
+// life, while a file holds tens of thousands of rows, and each row's date is
+// read by the timeline, the stats and the row normalization. Parse each value
+// once; the cap only guards against a file of nonsense values.
+const DATE_CACHE_LIMIT = 100000;
+/** @type {Map<string, number|null>} */
+const connectedOnTimes = new Map();
+
 /* -- Date helpers ------------------------------------------------------------ */
 
 /**
@@ -102,7 +110,31 @@ const TOP_N = 10;
  * @returns {Date|null} Local-midnight Date, or null if unparseable
  */
 export function parseConnectionDate(dateStr) {
-    return parseLocalDate(dateStr);
+    const time = connectedOnTime(dateStr);
+    return time === null ? null : new Date(time);
+}
+
+/**
+ * Local-midnight epoch milliseconds of a cleaned "Connected On" value, parsed
+ * once per distinct value.
+ * @param {unknown} value - ISO-style date string (YYYY-MM-DD)
+ * @returns {number|null} Epoch milliseconds, or null if unparseable
+ */
+function connectedOnTime(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+    let time = connectedOnTimes.get(value);
+    if (time === undefined) {
+        const parsed = parseLocalDate(value);
+        time = parsed ? parsed.getTime() : null;
+        /* v8 ignore next 3 */
+        if (connectedOnTimes.size >= DATE_CACHE_LIMIT) {
+            connectedOnTimes.clear();
+        }
+        connectedOnTimes.set(value, time);
+    }
+    return time;
 }
 
 /**
@@ -111,8 +143,7 @@ export function parseConnectionDate(dateStr) {
  * @returns {number} Epoch milliseconds, or 0 if unparseable
  */
 export function parseConnectedOnTimestamp(dateStr) {
-    const parsed = parseLocalDate(dateStr);
-    return parsed ? parsed.getTime() : 0;
+    return connectedOnTime(dateStr) ?? 0;
 }
 
 /* -- Growth timeline --------------------------------------------------------- */
@@ -130,11 +161,11 @@ export function buildGrowthTimeline(rows) {
     const buckets = new Map();
 
     for (const row of rows) {
-        const date = parseConnectionDate(row["Connected On"]);
-        if (!date) {
+        const time = connectedOnTime(row["Connected On"]);
+        if (time === null) {
             continue;
         }
-        const key = toMonthKey(date);
+        const key = toMonthKey(new Date(time));
         buckets.set(key, (buckets.get(key) || 0) + 1);
     }
 
@@ -167,11 +198,8 @@ export function computeStats(rows) {
     const now = Date.now();
 
     const earliestMs = rows.reduce((earliest, row) => {
-        const date = parseConnectionDate(row["Connected On"]);
-        if (!date) {
-            return earliest;
-        }
-        return Math.min(earliest, date.getTime());
+        const time = connectedOnTime(row["Connected On"]);
+        return time === null ? earliest : Math.min(earliest, time);
     }, Infinity);
 
     /* Network age in whole months from earliest connection to now */

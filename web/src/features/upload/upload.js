@@ -78,6 +78,8 @@ export const UploadPage = (() => {
     ]);
 
     const JOB_TIMEOUT_MS = 45000;
+    // The file types the analytics worker keeps and primes from storage.
+    const ANALYTICS_SOURCE_TYPES = new Set(["shares", "comments", "connections"]);
     const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024;
 
     /**
@@ -667,8 +669,11 @@ export const UploadPage = (() => {
                     : "File loaded successfully.",
                 false,
             );
-            if (fileType === "shares" || fileType === "comments") {
-                scheduleAnalyticsWorkerPrime(fileMap, { priority: "immediate" });
+            if (ANALYTICS_SOURCE_TYPES.has(fileType)) {
+                // The worker that processed this file already holds it along
+                // with the rest of the stored set, so record that set as primed
+                // instead of having the worker read and parse it all again.
+                lastPrimedSignature = getPrimeSignature(fileMap);
             }
         } catch (error) {
             captureError(error, {
@@ -982,6 +987,29 @@ export const UploadPage = (() => {
     }
 
     /**
+     * Identify the stored analytics inputs by presence, update time, and row
+     * count, so an unchanged set is not primed twice.
+     * @param {UploadFileMap} fileMap - Stored files map
+     * @returns {string|null} Signature, or null when no analytics input is stored
+     */
+    function getPrimeSignature(fileMap) {
+        const sharesFile = fileMap.shares || null;
+        const commentsFile = fileMap.comments || null;
+        const connectionsFile = fileMap.connections || null;
+        if (!sharesFile && !commentsFile && !connectionsFile) {
+            return null;
+        }
+        /**
+         * @param {import("./state.js").StoredUploadFile|null} file - Stored file, or null
+         * @returns {string} The file's stamp, or "-" when it is missing
+         */
+        const stamp = (file) => (file ? `${file.updatedAt || 0}:${file.rowCount || 0}` : "-");
+        // Connections feeds the network-growth correlation, so a connections-only
+        // change must still invalidate the signature and force a re-prime.
+        return `${stamp(sharesFile)}|${stamp(commentsFile)}|${stamp(connectionsFile)}`;
+    }
+
+    /**
      * Seed worker with existing shares/comments datasets for accurate recompute.
      * Decides whether to prime from file metadata (presence + a row/updatedAt
      * signature); the CSV text itself is loaded from storage only when the prime
@@ -1000,31 +1028,17 @@ export const UploadPage = (() => {
             return undefined;
         }
 
-        const sharesFile = fileMap.shares || null;
-        const commentsFile = fileMap.comments || null;
-        const connectionsFile = fileMap.connections || null;
+        const signature = getPrimeSignature(fileMap);
         // Connections alone are worth priming: the worker retains the dataset so
         // the first later shares/comments upload picks up the already-stored
         // connections for the network-growth correlation without a re-upload.
-        if (!sharesFile && !commentsFile && !connectionsFile) {
+        if (!signature) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
             clearPrimeSchedule();
             return undefined;
         }
 
-        const sharesStamp = sharesFile
-            ? `${sharesFile.updatedAt || 0}:${sharesFile.rowCount || 0}`
-            : "-";
-        const commentsStamp = commentsFile
-            ? `${commentsFile.updatedAt || 0}:${commentsFile.rowCount || 0}`
-            : "-";
-        // Connections feeds the network-growth correlation, so a connections-only
-        // change must still invalidate the signature and force a re-prime.
-        const connectionsStamp = connectionsFile
-            ? `${connectionsFile.updatedAt || 0}:${connectionsFile.rowCount || 0}`
-            : "-";
-        const signature = `${sharesStamp}|${commentsStamp}|${connectionsStamp}`;
         if (signature === lastPrimedSignature) {
             pendingPrimePayload = null;
             clearPrimeSchedule();

@@ -13,7 +13,7 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPES } from "../../shared/constants.js";
-import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../../shared/limits.js";
+import { MAX_FILE_BYTES } from "../../shared/limits.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
@@ -469,15 +469,6 @@ export const UploadPage = (() => {
             const warningMb = Math.round(LARGE_FILE_WARNING_BYTES / (1024 * 1024));
             setHint(
                 `Some files are large (${warningMb}MB+). Processing can take up to a minute and may not finish on a phone with little memory.`,
-                false,
-            );
-        }
-
-        const decodedLimitFiles = acceptedFiles.filter((file) => file.size > MAX_CSV_CHARS);
-        if (decodedLimitFiles.length) {
-            const maxTextMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-            setHint(
-                `Some files are larger than the ${maxTextMb}MB text limit and may be rejected after decoding.`,
                 false,
             );
         }

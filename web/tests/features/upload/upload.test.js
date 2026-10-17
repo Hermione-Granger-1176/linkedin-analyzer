@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
+import { MAX_FILE_BYTES } from "../../../src/shared/limits.js";
 import { createCanvas, mockMatchMedia, setupDom } from "../../helpers/dom.js";
 
 // The reader path now reads raw bytes via FileReader.readAsArrayBuffer, so mock
@@ -452,7 +452,7 @@ describe("UploadPage", () => {
 
         const oversized = new File(["col\nvalue"], "TooLarge.csv", { type: "text/csv" });
         Object.defineProperty(oversized, "size", {
-            value: 81 * 1024 * 1024,
+            value: MAX_FILE_BYTES + 1,
             configurable: true,
         });
 
@@ -463,7 +463,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         const hint = document.getElementById("uploadHint");
-        expect(hint.textContent).toContain("exceed 80MB");
+        expect(hint.textContent).toContain("exceed 128MB");
         expect(hint.classList.contains("is-error")).toBe(true);
     });
 
@@ -2031,72 +2031,6 @@ describe("UploadPage", () => {
 
         expect(document.getElementById("uploadHint").textContent).toContain("25MB+");
         expect(document.getElementById("uploadHint").textContent).toContain("up to a minute");
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("warns when accepted files may exceed the decoded text limit", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: encodeBuf("col\nval"),
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const bigFile = new File(["col\nval"], "Huge.csv", { type: "text/csv" });
-        Object.defineProperty(bigFile, "size", { value: MAX_CSV_CHARS + 1 });
-        Object.defineProperty(bigFile, "stream", { value: undefined, configurable: true });
-
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [bigFile] });
-        input.dispatchEvent(new Event("change"));
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(document.getElementById("uploadHint").textContent).toContain("60MB text limit");
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("does not show the decoded text-limit warning at the limit", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: encodeBuf("col\nval"),
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const bigFile = new File(["col\nval"], "AtLimit.csv", { type: "text/csv" });
-        Object.defineProperty(bigFile, "size", { value: MAX_CSV_CHARS });
-        Object.defineProperty(bigFile, "stream", { value: undefined, configurable: true });
-
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [bigFile] });
-        input.dispatchEvent(new Event("change"));
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(document.getElementById("uploadHint").textContent).not.toContain("text limit");
 
         globalThis.FileReader = originalFileReader;
     });

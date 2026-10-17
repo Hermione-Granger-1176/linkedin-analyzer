@@ -81,7 +81,7 @@ If the deployed build still fails, capture its blocked URL separately. The devel
 
 ## A CSV is rejected
 
-Check the file size and the required header names in [data formats](data-formats.md). The browser rejects files above 80 MiB, decoded text above 60 MiB, rows above 500,000, columns above 256, and fields above 200,000 characters.
+Check the file size and the required header names in [data formats](data-formats.md). The browser rejects files above 128 MiB, decoded text above 128 Mi characters, rows above 1,000,000, columns above 256, and fields above 200,000 characters.
 
 The CLI rejects files above 128 MiB or rows above 1,000,000 by default. Pass `--max-input-bytes`, `--max-rows`, or their environment variables when you have a reason to change the limits.
 

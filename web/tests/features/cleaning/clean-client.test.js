@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MAIN_THREAD_MAX_FILE_BYTES } from "../../../src/shared/limits.js";
+
 const mocks = vi.hoisted(() => ({
     runCleanJob: vi.fn(),
     captureError: vi.fn(),
@@ -78,6 +80,20 @@ describe("clean client", () => {
         const { requestClean } = await loadClient();
         await expect(requestClean(PAYLOAD)).resolves.toEqual(OK);
         expect(mocks.runCleanJob).toHaveBeenCalledWith(PAYLOAD);
+    });
+
+    it.each([
+        // A stand-in reporting the size keeps the test from allocating a Blob.
+        ["a Blob", { size: MAIN_THREAD_MAX_FILE_BYTES + 1 }],
+        // repeat() builds a rope, so this long string stays cheap.
+        ["text", "x".repeat(MAIN_THREAD_MAX_FILE_BYTES + 1)],
+    ])("refuses %s above the main-thread limit without running the job", async (_, source) => {
+        vi.stubGlobal("Worker", undefined);
+        const { requestClean } = await loadClient();
+        const reply = await requestClean({ ...PAYLOAD, source });
+        expect(reply).toMatchObject({ success: false, rowCount: 0, blob: null });
+        expect(reply.error).toContain("too large to clean without background workers");
+        expect(mocks.runCleanJob).not.toHaveBeenCalled();
     });
 
     it("reports a fixed error when the main-thread job throws", async () => {

@@ -222,6 +222,19 @@ After step 4e (uploads are stored as `Blob` records and every worker reads the s
 - The workers still peak near 585 MB, about twice the provisional 300 MB budget, so the public limits stay where they are. The rest is the decoded text and cleaned rows inside the parsing workers.
 - Analytics is about 5% slower than the step 4a baseline at 100 MB and 1.6 s slower than after step 4c, because the Messages screen's worker now reads the stored file itself rather than receiving text.
 
+After the Clean, Messages, and PDF thread workers stream the stored file through the cleaner and the Messages worker exits once it answers, measured on 2026-10-17 on the same machine. Earlier rows timed "Messages ready" against the skeleton rows shown while the screen loads, so their Messages times and peaks were taken too early; these rows wait for real contact rows. The `cpu=1` rows are 3 runs; the 128 MB rows are one run each:
+
+| Size   | Options          | Analytics ready | Messages ready | Peak heap |
+| ------ | ---------------- | --------------- | -------------- | --------- |
+| 55 MB  | `cpu=1`          | 3.41 s          | 7.30 s         | 177 MB    |
+| 100 MB | `cpu=1`          | 4.58 s          | 10.58 s        | 199 MB    |
+| 100 MB | `cpu=6 mobile=1` | 6.10 s          | 15.0 s         | 238 MB    |
+| 128 MB | `cpu=1`          | 5.90 s          | 15.68 s        | 353 MB    |
+
+- 100 MB now peaks at 199 MB, a third of the 589 MB after step 4e and inside the 300 MB budget.
+- 128 MB goes over the budget, mostly in the Messages worker, which needs every row to detect the self account and so cannot clean while it streams. The public limits stay at 80 MiB until that worker shrinks.
+- Only Chromium is measured here; WebKit runs the end-to-end tests in CI but has no heap sampler.
+
 ### Retained analysis state
 
 `make audit-state` forces garbage collection around each step and reports how many bytes of heap and array-buffer memory each structure keeps alive. It loads the web modules in `measurement` mode, so a 100 MB export passes the raised limits. Cleaned rows are transient: a worker holds them only while it builds state. The page keeps the message and connection state, and the analytics worker keeps its analytics state for filter changes. Field rows show what dropping that field frees, in table order.
@@ -258,6 +271,7 @@ Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
 - The Excel workbook costs about 25 MB of heap per MB of `messages.csv`, which the page held when this was measured and the Clean screen's worker holds now, so it would pass the 300 MB budget only up to about 12 MB. The Clean screen now builds workbooks only for files up to 10 MiB, says why for larger ones, and offers a cleaned CSV that it writes in 2,000-row parts into a `Blob`, so no single string holds the whole file.
 - Before step 4e both PDF exports went over the budget at 100 MB, with or without message bodies. Most of the peak was the stored text read back from IndexedDB and the analysis workers still alive, not the bodies.
 - After step 4e the PDF export adds about 60 MB with message bodies and about 10 MB without them over the 589 MB analysis peak, and the page holds about 80 MB during the export. The export is no longer what sets the peak, so it gets no size limit of its own; the analysis workers are what must shrink.
+- After the streaming work, a 100 MB export with an 80 MiB `messages.csv` peaked at 367 MB with message bodies, because the bodies are held alongside the analysis. The PDF export now refuses message contents for a `messages.csv` above 60 MiB and says to untick them; a 73 MB export with a 58.4 MiB `messages.csv` peaks at 220 MB and finishes in 9.6 s. Without bodies the 100 MB export peaks at 276 MB (median, 313 MB worst run), and at 128 MB it reaches 397 MB.
 
 ### Clean screen main-thread time
 

@@ -16,6 +16,8 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
+import { csvSourceSize } from "../../shared/csv-source.js";
+import { THREADS_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 import { enumerateMonths } from "../analytics/dates.js";
 import { buildConnectionsView, monthKeyToLabel, toMonthKey } from "../connections/view.js";
 import {
@@ -34,6 +36,7 @@ import { loadConnectionsData } from "./connections-transport.js";
 import { sanitizeModel } from "./drawable-text.js";
 import { readDrawableCoverage } from "./fonts.js";
 import { loadMessagesState } from "./messages-transport.js";
+import { ExportRefusal, MESSAGES_TOO_LARGE_FOR_CONTENTS } from "./refusal.js";
 import { loadRecentThreads } from "./threads-transport.js";
 
 const WORKER_TIMEOUT_MS = 30000;
@@ -918,6 +921,12 @@ export async function collectExportData(options = {}) {
     // the slow way and an odd thing to do alongside a promise to keep only one
     // copy of it in memory.
     const files = await readExportFiles(isCancelled);
+    // Refused before any worker starts: message contents from a file this
+    // large cannot be held within the memory budget, and finding out after
+    // the dashboards were built would waste the wait.
+    if (options.includeMessages && csvSourceSize(files.messagesCsv) > THREADS_EXPORT_MAX_BYTES) {
+        throw new ExportRefusal(MESSAGES_TOO_LARGE_FOR_CONTENTS);
+    }
     const messages = await collectMessagesDashboard(
         files,
         Boolean(options.includeNames),

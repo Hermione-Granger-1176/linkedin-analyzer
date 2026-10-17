@@ -306,11 +306,25 @@ async function timeCachedFilterChange(page) {
 }
 
 /**
+ * Settle on whichever comes first: the download, or the app refusing the
+ * export with a visible reason.
+ * @param {Promise<unknown>} download - Pending download event.
+ * @param {Promise<unknown>} refusal - Resolves once the refusal is visible.
+ * @returns {Promise<boolean>} Whether the app refused the export.
+ */
+function downloadOrRefusal(download, refusal) {
+    // The losing side of the race must not surface as an unhandled rejection.
+    download.catch(() => {});
+    refusal.catch(() => {});
+    return Promise.race([download.then(() => false), refusal.then(() => true)]);
+}
+
+/**
  * Run one export the way a user does and wait for its download to start.
  * Excel exports the cleaned messages file from the Clean screen; PDF exports
  * the report with message bodies included, and pdf-summary without them.
- * The Clean screen refuses a workbook for a file over its Excel limit, so an
- * Excel export settles on whichever comes first: the download or that error.
+ * Either can be refused for a file too large to build it from, so each
+ * settles on the download or on that refusal, whichever comes first.
  * @param {import("@playwright/test").Page} page - App page with the export loaded.
  * @param {"excel"|"pdf"|"pdf-summary"} kind - Export to run.
  * @returns {Promise<boolean>} Whether the app refused the export.
@@ -318,8 +332,6 @@ async function timeCachedFilterChange(page) {
 async function runExport(page, kind) {
     const download = page.waitForEvent("download", { timeout: STEP_TIMEOUT_MS });
     if (kind === "excel") {
-        // The losing side of the race must not surface as an unhandled rejection.
-        download.catch(() => {});
         await openRoute(page, "clean", STEP_TIMEOUT_MS);
         await page
             .locator('input[name="cleanFileType"][value="messages"]')
@@ -330,12 +342,10 @@ async function runExport(page, kind) {
             timeout: STEP_TIMEOUT_MS,
         });
         await page.getByTestId("clean-download-btn").click({ timeout: STEP_TIMEOUT_MS });
-        const refused = page
+        const refusal = page
             .locator("#cleanErrorMessage")
-            .waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS })
-            .then(() => true);
-        refused.catch(() => {});
-        return Promise.race([download.then(() => false), refused]);
+            .waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+        return downloadOrRefusal(download, refusal);
     }
     const trigger = page.locator("#pdfExportBtn");
     await expect(trigger).toHaveAttribute("aria-disabled", "false", {
@@ -346,8 +356,12 @@ async function runExport(page, kind) {
         await page.locator("#pdfExportIncludeMessages").check();
     }
     await page.locator("#pdfExportConfirmBtn").click();
-    await download;
-    return false;
+    // A refusal names the option to untick; any other error is a failed run,
+    // which the download wait reports when it times out.
+    const refusal = expect(page.locator("#pdfExportDialogError")).toHaveText(/Untick/, {
+        timeout: STEP_TIMEOUT_MS,
+    });
+    return downloadOrRefusal(download, refusal);
 }
 
 /**

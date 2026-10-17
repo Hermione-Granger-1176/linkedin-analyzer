@@ -97,6 +97,8 @@ let captureError;
 let celebrateStaple;
 let DataCache;
 let LoadingOverlay;
+let ExportRefusal;
+let MESSAGES_TOO_LARGE_FOR_CONTENTS;
 /** @type {{loads: number}|null} */
 let runtimeChunk = null;
 let activeChunk = null;
@@ -131,6 +133,9 @@ async function loadModules() {
     ({ DataCache } = await import("../../../src/platform/persistence/data-cache.js"));
     ({ LoadingOverlay } = await import("../../../src/shared/ui/loading-overlay.js"));
     ({ celebrateStaple } = await import("../../../src/shared/ui/mascot.js"));
+    ({ ExportRefusal, MESSAGES_TOO_LARGE_FOR_CONTENTS } = await import(
+        "../../../src/features/export/refusal.js"
+    ));
     ({ PdfExport } = await import("../../../src/features/export/pdf.js"));
 }
 
@@ -700,6 +705,21 @@ describe("PdfExport", () => {
         await vi.waitFor(() => expect(ui().confirm.disabled).toBe(true));
         expect(ui().namesCheckbox.disabled).toBe(true);
         expect(ui().checkbox.disabled).toBe(true);
+    });
+
+    it("shows a refusal's own reason and does not report it", async () => {
+        collectExportData.mockRejectedValue(new ExportRefusal(MESSAGES_TOO_LARGE_FOR_CONTENTS));
+        ui().trigger.click();
+        ui().confirm.click();
+
+        await vi.waitFor(() => expect(ui().error.textContent).not.toBe(""));
+
+        expect(ui().error.textContent).toBe(MESSAGES_TOO_LARGE_FOR_CONTENTS);
+        expect(ui().error.textContent).toContain("Include message contents");
+        expect(ui().backdrop.hidden).toBe(false);
+        expect(ui().confirm.disabled).toBe(false);
+        expect(LoadingOverlay.hide).toHaveBeenCalledWith("pdf-export");
+        expect(captureError).not.toHaveBeenCalled();
     });
 
     it("surfaces a failure in the dialog and hides the overlay", async () => {

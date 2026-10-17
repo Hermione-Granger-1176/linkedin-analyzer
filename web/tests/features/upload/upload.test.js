@@ -2373,6 +2373,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(document.getElementById("uploadHint").textContent).toContain("25MB+");
+        expect(document.getElementById("uploadHint").textContent).toContain("up to a minute");
 
         globalThis.FileReader = originalFileReader;
     });

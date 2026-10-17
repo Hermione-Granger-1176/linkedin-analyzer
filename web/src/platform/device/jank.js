@@ -18,9 +18,13 @@ export const JANK_WINDOW_MS = 5000;
  * @param {typeof PerformanceObserver|undefined} options.Observer - PerformanceObserver
  * @param {() => boolean} options.isBusy - True while processing or rendering is expected to block
  * @param {() => void} options.onJank - Called once when the page janks while idle
+ * @param {() => number[]} [options.busyMarks] - performance.now() times at which
+ * the page became or stopped being busy. Entries arrive after their frame, so a
+ * render that starts and ends its busy state within one long frame reads idle by
+ * delivery time; a mark inside the frame's span exposes it.
  * @returns {() => void} Stops watching
  */
-export function watchForJank({ Observer, isBusy, onJank }) {
+export function watchForJank({ Observer, isBusy, onJank, busyMarks = () => [] }) {
     if (typeof Observer !== "function") {
         return () => {};
     }
@@ -40,7 +44,8 @@ export function watchForJank({ Observer, isBusy, onJank }) {
             return;
         }
         for (const entry of list.getEntries()) {
-            if (isBusy()) {
+            const end = entry.startTime + (entry.duration || 0);
+            if (isBusy() || busyMarks().some((mark) => mark >= entry.startTime && mark <= end)) {
                 frames = [];
                 continue;
             }

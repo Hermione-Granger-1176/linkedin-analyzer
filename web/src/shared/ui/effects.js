@@ -11,11 +11,40 @@ import { setTelemetryEffectsTier } from "../../platform/observability/sentry.js"
 
 const OVERRIDE_CYCLE = Object.freeze({ auto: "lite", lite: "full", full: "auto" });
 const OVERRIDE_LABELS = Object.freeze({ auto: "Auto", lite: "Lite", full: "Full" });
+// Busy marks kept for matching late long-frame entries; a few seconds' worth.
+const MAX_BUSY_MARKS = 32;
 
 export const Effects = (() => {
     "use strict";
 
     let initialized = false;
+    /** @type {number[]} */
+    const busyMarks = [];
+
+    /**
+     * Record when the overlays or a screen's loading state change, so a long
+     * frame that spans the change is not blamed on decoration.
+     */
+    function recordBusyMarks() {
+        if (typeof MutationObserver !== "function") {
+            return;
+        }
+        const observer = new MutationObserver(() => {
+            busyMarks.push(performance.now());
+            if (busyMarks.length > MAX_BUSY_MARKS) {
+                busyMarks.shift();
+            }
+        });
+        ["progressOverlay", "contentLoadingOverlay"].forEach((id) => {
+            const overlay = document.getElementById(id);
+            if (overlay) {
+                observer.observe(overlay, { attributes: true, attributeFilter: ["hidden"] });
+            }
+        });
+        document.querySelectorAll(".screen").forEach((screen) => {
+            observer.observe(screen, { attributes: true, attributeFilter: ["class"] });
+        });
+    }
 
     /**
      * True while processing or a screen load is expected to block the page, so
@@ -78,10 +107,14 @@ export const Effects = (() => {
             });
         }
 
+        recordBusyMarks();
         watchForJank({
             Observer: typeof PerformanceObserver === "undefined" ? undefined : PerformanceObserver,
-            isBusy,
+            // An explicit choice ignores jank, so it must not use up the
+            // one-shot watcher that Auto needs later.
+            isBusy: () => isBusy() || getDeviceProfile().override !== "auto",
             onJank: () => apply(downgradeForJank()),
+            busyMarks: () => busyMarks,
         });
     }
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -76,6 +76,21 @@ describe("gen-large-export", () => {
             /inside the repository/,
         );
         expect(() => generateLargeExport({ sizeMb: 0, dir })).toThrow(/positive/);
+    });
+
+    it("refuses a symbolic link into the repository and a linked output file", () => {
+        const link = join(root, "into-repo");
+        symlinkSync(resolve("web/tests"), link);
+        expect(() => generateLargeExport({ sizeMb: 1, dir: join(link, "new") })).toThrow(
+            /inside the repository/,
+        );
+
+        const linkedFile = join(root, "linked-file");
+        mkdirSync(linkedFile);
+        symlinkSync(join(root, "elsewhere.csv"), join(linkedFile, "messages.csv"));
+        expect(() => generateLargeExport({ sizeMb: 1, dir: linkedFile })).toThrow(
+            /symbolic link/,
+        );
     });
 
     it("parses CLI options with a temp-directory default", () => {

@@ -1,7 +1,16 @@
 // @vitest-environment node
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { parseArgs, summarize } from "../../../scripts/checks/browser-bench.mjs";
+import { EXPORT_FILES } from "../../../scripts/checks/app-preview.mjs";
+import {
+    oversizedInputs,
+    parseArgs,
+    summarize,
+} from "../../../scripts/checks/browser-bench.mjs";
 
 describe("browser-bench", () => {
     it("defaults to three unthrottled desktop runs with no budget", () => {
@@ -54,5 +63,22 @@ describe("browser-bench", () => {
     it("summarizes odd and even sample counts as median and range", () => {
         expect(summarize([3, 1, 2])).toEqual({ median: 2, min: 1, max: 3 });
         expect(summarize([4, 1, 3, 2])).toEqual({ median: 2.5, min: 1, max: 4 });
+    });
+
+    it("names the export files over the upload limit", () => {
+        const dir = mkdtempSync(join(tmpdir(), "browser-bench-test-"));
+        try {
+            Object.values(EXPORT_FILES).forEach((name, index) => {
+                writeFileSync(join(dir, name), "x".repeat(index * 10));
+            });
+            expect(oversizedInputs(dir, 15)).toEqual(
+                Object.values(EXPORT_FILES)
+                    .slice(2)
+                    .map((name) => expect.stringMatching(new RegExp(`^${name}=`))),
+            );
+            expect(oversizedInputs(dir)).toEqual([]);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
     });
 });

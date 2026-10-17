@@ -50,7 +50,9 @@ export function routeReady(timeout) {
         },
         messages: async (page) => {
             await expect(page.locator("#messagesLayout")).toBeVisible({ timeout });
-            await expect(page.locator("#topContactsList li").first()).toBeVisible({ timeout });
+            await expect(
+                page.locator("#topContactsList li:not(.skeleton-row)").first(),
+            ).toBeVisible({ timeout });
         },
         connections: async (page) => {
             await expect(page.locator("#connectionsGrid")).toBeVisible({ timeout });

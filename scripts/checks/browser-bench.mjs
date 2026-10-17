@@ -23,7 +23,7 @@
  * graphics, or native memory, and sampling can miss short peaks.
  *
  * Usage (prefer the Makefile):
- *   make bench-browser size_mb=100
+ *   make bench-browser size_mb=90
  *   make bench-browser size_mb=55 cpu=4 gpu=0 mobile=1 budget_mb=300
  *   make bench-browser input_dir=/private/export runs=5
  *
@@ -31,13 +31,14 @@
  * under the system temp directory first. Otherwise input_dir defaults to
  * data/input. Traces, screenshots, video, downloads, and telemetry stay off.
  */
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium, devices } from "@playwright/test";
 
+import { MAX_FILE_BYTES } from "../../web/src/features/upload/read.js";
 import { generateLargeExport } from "../fixtures/gen-large-export.mjs";
 import {
     EXPORT_FILES,
@@ -250,7 +251,12 @@ async function timeCachedFilterChange(page) {
                     } else if (loading) {
                         observer.disconnect();
                         clearTimeout(timer);
-                        resolve(performance.now() - started);
+                        // The grid hides when the draw fails, so do not time an error.
+                        if (grid.hidden || grid.offsetParent === null) {
+                            reject(new Error(`filter change to ${range} ended without the grid`));
+                        } else {
+                            resolve(performance.now() - started);
+                        }
                     }
                 });
                 const timer = setTimeout(() => {
@@ -333,6 +339,20 @@ const seconds = (ms) => (Number.isFinite(ms) ? (ms / 1000).toFixed(2) : "n/a");
 const megabytes = (bytes) => (bytes / MB).toFixed(1);
 
 /**
+ * List export files the app would refuse for size, so a run fails before the
+ * browser starts instead of timing out on an upload error.
+ * @param {string} inputDir - Folder holding the export files.
+ * @param {number} [limit] - Per-file byte limit.
+ * @returns {string[]} "name=size" for each file over the limit.
+ */
+export function oversizedInputs(inputDir, limit = MAX_FILE_BYTES) {
+    return Object.values(EXPORT_FILES)
+        .map((name) => [name, statSync(join(inputDir, name)).size])
+        .filter(([, size]) => size > limit)
+        .map(([name, size]) => `${name}=${megabytes(size)}MB`);
+}
+
+/**
  * Print per-run lines and the median and range summary.
  * @param {object[]} runs - Run results.
  * @param {ReturnType<typeof parseArgs>} options - Parsed options.
@@ -409,6 +429,15 @@ async function main() {
         console.error(
             `RESULT   FAILED missing-inputs=${missing.length} (missing: ${missing.join(", ")}). ` +
                 "Pass size_mb=N for a synthetic export or input_dir=path for your own.",
+        );
+        return 1;
+    }
+
+    const oversized = oversizedInputs(inputDir);
+    if (oversized.length > 0) {
+        console.error(
+            `RESULT   FAILED oversized-inputs=${oversized.length} (${oversized.join(", ")}). ` +
+                `Each file must be at most ${megabytes(MAX_FILE_BYTES)}MB; pass a smaller size_mb.`,
         );
         return 1;
     }

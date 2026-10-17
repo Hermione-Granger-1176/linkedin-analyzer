@@ -25,9 +25,17 @@
  *   make gen-large-export size_mb=100
  *   make gen-large-export size_mb=30 dir=/tmp/export-30mb
  */
-import { closeSync, mkdirSync, openSync, writeSync } from "node:fs";
+import {
+    closeSync,
+    existsSync,
+    lstatSync,
+    mkdirSync,
+    openSync,
+    realpathSync,
+    writeSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
@@ -179,6 +187,10 @@ function buildContacts(random) {
  * @returns {{ bytes: number, rows: number }}
  */
 function writeUntil(path, header, targetBytes, nextRow) {
+    // Opening a link would write through it to wherever it points.
+    if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) {
+        throw new Error(`refusing to overwrite a symbolic link: ${path}`);
+    }
     const fd = openSync(path, "w");
     try {
         let bytes = Buffer.byteLength(header);
@@ -206,6 +218,32 @@ function writeUntil(path, header, targetBytes, nextRow) {
 }
 
 /**
+ * Resolve symlinks in the nearest existing ancestor, so a link that points
+ * into the repository cannot pass the location check.
+ * @param {string} path - Absolute path that may not exist yet.
+ * @returns {string} The path with its existing part made canonical.
+ */
+function canonical(path) {
+    let head = path;
+    const tail = [];
+    while (!existsSync(head) && dirname(head) !== head) {
+        tail.unshift(basename(head));
+        head = dirname(head);
+    }
+    return join(realpathSync(head), ...tail);
+}
+
+/**
+ * @param {string} path - Canonical absolute path.
+ * @returns {boolean} True when the path lies outside the repository.
+ */
+function isOutsideRepo(path) {
+    const fromRepo = relative(realpathSync(REPO), path);
+    // A folder inside the repository may itself start with "..", such as "..cache".
+    return fromRepo === ".." || fromRepo.startsWith(`..${sep}`) || isAbsolute(fromRepo);
+}
+
+/**
  * Generate a full synthetic export.
  * @param {{ sizeMb: number, dir: string }} options - Total size in MiB and output directory.
  * @returns {Record<string, { bytes: number, rows: number }>} Bytes and rows per file.
@@ -215,10 +253,7 @@ export function generateLargeExport({ sizeMb, dir }) {
         throw new Error("size_mb must be a positive number");
     }
     const outDir = resolve(dir);
-    const fromRepo = relative(REPO, outDir);
-    // A folder inside the repository may itself start with "..", such as "..cache".
-    const outside = fromRepo === ".." || fromRepo.startsWith(`..${sep}`) || isAbsolute(fromRepo);
-    if (!outside) {
+    if (!isOutsideRepo(canonical(outDir))) {
         throw new Error(`refusing to write inside the repository: ${outDir}`);
     }
     mkdirSync(outDir, { recursive: true });

@@ -74,6 +74,26 @@ describe("watchForJank", () => {
         expect(onJank).not.toHaveBeenCalled();
     });
 
+    it("ignores long frames that span a busy mark reported after the work ended", () => {
+        const { FakeObserver, instances } = fakeObserverClass(["longtask"]);
+        const onJank = vi.fn();
+        const marks = [];
+        watchForJank({
+            Observer: FakeObserver,
+            isBusy: () => false,
+            onJank,
+            busyMarks: () => marks,
+        });
+
+        marks.push(0, 10, 20, 30, 40);
+        instances[0].emit([0, 10, 20, 30, 40]);
+        expect(onJank).not.toHaveBeenCalled();
+        instances[0].callback({
+            getEntries: () => [50, 60, 70, 80, 90].map((startTime) => ({ startTime, duration: 5 })),
+        });
+        expect(onJank).toHaveBeenCalledTimes(1);
+    });
+
     it("does nothing without a supported observer and can be stopped", () => {
         const onJank = vi.fn();
         expect(() =>

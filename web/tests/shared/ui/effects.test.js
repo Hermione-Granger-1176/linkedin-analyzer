@@ -91,8 +91,31 @@ describe("Effects", () => {
         expect(document.documentElement.dataset.effects).toBe("lite");
     });
 
-    it("works without the toggle, the overlays, or PerformanceObserver", async () => {
+    it("marks busy changes for late long frames and ignores jank under an explicit choice", async () => {
+        const toggle = mountToggle();
+        const Effects = await loadEffects();
+        Effects.init();
+        const { isBusy, busyMarks } = jankMocks.watchForJank.mock.calls[0][0];
+
+        expect(busyMarks()).toEqual([]);
+        for (let index = 0; index < 40; index += 1) {
+            document.getElementById("progressOverlay").hidden = index % 2 === 0;
+            await Promise.resolve();
+        }
+        document.querySelector(".screen").classList.add("is-loading");
+        await Promise.resolve();
+        expect(busyMarks()).toHaveLength(32);
+        document.querySelector(".screen").classList.remove("is-loading");
+        document.getElementById("progressOverlay").hidden = true;
+
+        expect(isBusy()).toBe(false);
+        toggle.click();
+        expect(isBusy()).toBe(true);
+    });
+
+    it("works without the toggle, the overlays, or the observers", async () => {
         vi.stubGlobal("PerformanceObserver", undefined);
+        vi.stubGlobal("MutationObserver", undefined);
         try {
             const Effects = await loadEffects();
             expect(() => Effects.init()).not.toThrow();

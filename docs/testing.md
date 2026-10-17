@@ -148,11 +148,11 @@ The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comme
 
 ```bash
 make bench-browser size_mb=55
-make bench-browser size_mb=100 cpu=6 gpu=0 mobile=1 budget_mb=300
+make bench-browser size_mb=90 cpu=6 gpu=0 mobile=1 budget_mb=300
 make bench-browser input_dir=data/input runs=5
 ```
 
-`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
+`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `messages.csv` takes 80% of the generated size, and the bench stops before launching a browser when any file is over the app's per-file upload limit. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
 
 CPU throttling slows only the page's main thread. Chromium rejects it on worker targets, and a measured worker loop ran at the same speed at rates 1 and 4, so throttled timings understate slow-device time for work done in workers.
 

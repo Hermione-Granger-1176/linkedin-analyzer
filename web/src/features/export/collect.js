@@ -11,7 +11,7 @@
  * document divides the way the site does.
  */
 
-import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.js";
+import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Storage } from "../../platform/persistence/storage.js";

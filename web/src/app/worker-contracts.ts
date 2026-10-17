@@ -18,252 +18,256 @@ const LIMITS = Object.freeze({
     maxThreadMessagesPerPerson: 5,
 });
 
-/**
- * Outcome of a contract parse: the normalized value, or why it was rejected.
- * @template T
- * @typedef {{valid: true, value: T} | {valid: false, error: string}} ParseResult
- */
+/** Outcome of a contract parse: the normalized value, or why it was rejected. */
+export type ParseResult<T> = { valid: true; value: T } | { valid: false; error: string };
 
-/** @typedef {number|string} RequestId - Correlates a worker reply with its request */
-/** @typedef {Blob|string} CsvSource - A stored upload Blob, or CSV text already read */
-/** @typedef {Record<string, unknown>} PlainObject - Opaque plain-object payload */
-/** @typedef {"preview"|"xlsx"|"csv"} CleanOutput - Output a cleaning request asks for */
+/** Correlates a worker reply with its request. */
+export type RequestId = number | string;
+/** A stored upload Blob, or CSV text already read. */
+type CsvSource = Blob | string;
+/** Opaque plain-object payload. */
+export type PlainObject = Record<string, unknown>;
+/** Output a cleaning request asks for. */
+type CleanOutput = "preview" | "xlsx" | "csv";
 
-/**
- * @typedef {object} AddFilePayload
- * @property {Blob|null} file - Uploaded file for the worker to read
- * @property {string} csvText - CSV text, when the caller already holds it
- * @property {string} fileName - Uploaded file name
- * @property {string|null} jobId - Upload job ID
- * @property {number} totalSize - Total bytes of the upload batch
- */
-
-/**
- * @typedef {object} RestoreFilesPayload
- * @property {CsvSource} sharesCsv - Stored shares source
- * @property {CsvSource} commentsCsv - Stored comments source
- * @property {CsvSource} connectionsCsv - Stored connections source
- */
-
-/**
- * Analytics worker request (main thread -> worker), discriminated on `type`.
- * @typedef {{type: "addFile", payload: AddFilePayload}
- * | {type: "restoreFiles", payload: RestoreFilesPayload}
- * | {type: "initBase", payload: PlainObject|null}
- * | {type: "view", requestId: RequestId, filters: PlainObject}
- * | {type: "clear"}} AnalyticsWorkerRequest
- */
-
-/**
- * @typedef {object} AnalyticsProgressPayload
- * @property {string|null} jobId - Upload job ID
- * @property {string} fileName - File being read
- * @property {number} percent - Progress fraction between 0 and 1
- * @property {number} bytesRead - Bytes read so far
- * @property {number} totalBytes - Total bytes to read
- */
-
-/**
- * @typedef {object} FileProcessedPayload
- * @property {string|null} fileType - Detected file type, or null when unrecognized
- * @property {string} fileName - Processed file name
- * @property {string|null} jobId - Upload job ID
- * @property {number} rowCount - Rows processed
- * @property {PlainObject|null} analyticsBase - Analytics aggregate base, if computed
- * @property {boolean} hasData - Whether analytics data is now available
- * @property {boolean} usedFallback - Whether the Windows-1252 decode fallback was used
- * @property {string|null} error - Processing error, if any
- */
-
-/**
- * @typedef {object} AnalyticsErrorPayload
- * @property {string} message - Bounded error description
- * @property {string|null} jobId - Upload job ID
- * @property {string} fileName - File the error concerns
- */
-
-/**
- * Analytics worker message (worker -> main thread), discriminated on `type`.
- * @typedef {{type: "restored", requestId: RequestId, payload: PlainObject}
- * | {type: "init", requestId: RequestId, payload: {hasData: boolean}}
- * | {type: "view", requestId: RequestId, payload: PlainObject}
- * | {type: "progress", requestId: RequestId, payload: AnalyticsProgressPayload}
- * | {type: "fileProcessed", requestId: RequestId, payload: FileProcessedPayload}
- * | {type: "error", requestId: RequestId, payload: AnalyticsErrorPayload}
- * | {type: "cleared", requestId: RequestId, payload: Record<string, never>}
- * } AnalyticsWorkerMessage
- */
-
-/**
- * @typedef {object} ConnectionsWorkerRequest
- * @property {"process"} type - Request type
- * @property {RequestId} requestId - Request correlation ID
- * @property {{connectionsCsv: CsvSource}} payload - Connections source
- */
-
-/**
- * @typedef {object} ConnectionsProcessedPayload
- * @property {boolean} success - Whether processing succeeded
- * @property {PlainObject|null} analytics - Connections analytics
- * @property {unknown[]} rows - Parsed connection rows
- * @property {string|null} error - Processing error, if any
- */
-
-/**
- * Connections worker message, discriminated on `type`.
- * @typedef {{type: "error", requestId: RequestId, payload: {message: string}}
- * | {type: "processed", requestId: RequestId, payload: ConnectionsProcessedPayload}
- * } ConnectionsWorkerMessage
- */
-
-/**
- * @typedef {object} MessagesWorkerRequest
- * @property {"process"} type - Request type
- * @property {RequestId} requestId - Request correlation ID
- * @property {{messagesCsv: CsvSource, connectionsCsv: CsvSource}} payload - CSV sources
- */
-
-/**
- * @typedef {object} MessagesWorkerMessage
- * @property {"processed"} type - Message type
- * @property {RequestId} requestId - Request correlation ID
- * @property {PlainObject|null} payload - Processed messages payload
- */
-
-/**
- * @typedef {object} ThreadsRequestPayload
- * @property {CsvSource} messagesCsv - Messages source
- * @property {CsvSource} connectionsCsv - Optional connections source ("" when absent)
- * @property {number} people - People to include
- * @property {number} messagesPerPerson - Messages per person to include
- */
-
-/**
- * @typedef {object} ThreadsWorkerRequest
- * @property {"threads"} type - Request type
- * @property {RequestId} requestId - Request correlation ID
- * @property {ThreadsRequestPayload} payload - Thread selection request
- */
-
-/**
- * @typedef {object} ThreadsWorkerMessage
- * @property {"threads"} type - Message type
- * @property {RequestId} requestId - Request correlation ID
- * @property {{success: boolean, threads: unknown[], error: string|null}} payload - Threads
- */
-
-/**
- * @typedef {object} CleaningRequestPayload
- * @property {string} fileType - File type to clean
- * @property {CleanOutput} output - Requested output
- * @property {CsvSource} source - File source
- * @property {string} key - Stored upload key
- */
-
-/**
- * @typedef {object} CleaningWorkerRequest
- * @property {"clean"} type - Request type
- * @property {RequestId} requestId - Request correlation ID
- * @property {CleaningRequestPayload} payload - Cleaning request
- */
-
-/**
- * @typedef {object} CleanedPayload
- * @property {boolean} success - Whether cleaning succeeded
- * @property {string|null} error - Cleaning error, if any
- * @property {number} rowCount - Cleaned row count
- * @property {string[][]} previewRows - Bounded preview cells
- * @property {Blob|null} blob - Download payload, if requested
- */
-
-/**
- * @typedef {object} CleaningWorkerMessage
- * @property {"cleaned"} type - Message type
- * @property {RequestId} requestId - Request correlation ID
- * @property {CleanedPayload} payload - Cleaning result
- */
-
-/**
- * @typedef {object} StoredUploadFile
- * @property {string} type - File type
- * @property {string} name - File name
- * @property {Blob|null} blob - File contents
- * @property {number} rowCount - Stored row count
- * @property {number} updatedAt - Last update timestamp (ms)
- */
-
-/**
- * @typedef {object} StoredFileMetadata
- * @property {string} type - File type
- * @property {string} name - File name
- * @property {number} rowCount - Stored row count
- * @property {number} updatedAt - Last update timestamp (ms)
- */
-
-/**
- * Build a successful contract parse result.
- * @template T
- * @param {T} value - Normalized value
- * @returns {{valid: true, value: T}}
- */
-function valid(value) {
-    return { valid: true, value };
+export interface AddFilePayload {
+    /** Uploaded file for the worker to read */
+    file: Blob | null;
+    /** CSV text, when the caller already holds it */
+    csvText: string;
+    /** Uploaded file name */
+    fileName: string;
+    /** Upload job ID */
+    jobId: string | null;
+    /** Total bytes of the upload batch */
+    totalSize: number;
 }
 
-/**
- * Build a failed contract parse result.
- * @param {string} error - Validation error
- * @returns {{valid: false, error: string}}
- */
-function invalid(error) {
-    return { valid: false, error };
+interface RestoreFilesPayload {
+    sharesCsv: CsvSource;
+    commentsCsv: CsvSource;
+    connectionsCsv: CsvSource;
+}
+
+/** Analytics worker request (main thread -> worker), discriminated on `type`. */
+export type AnalyticsWorkerRequest =
+    | { type: "addFile"; payload: AddFilePayload }
+    | { type: "restoreFiles"; payload: RestoreFilesPayload }
+    | { type: "initBase"; payload: PlainObject | null }
+    | { type: "view"; requestId: RequestId; filters: PlainObject }
+    | { type: "clear" };
+
+interface AnalyticsProgressPayload {
+    jobId: string | null;
+    /** File being read */
+    fileName: string;
+    /** Progress fraction between 0 and 1 */
+    percent: number;
+    bytesRead: number;
+    totalBytes: number;
+}
+
+export interface FileProcessedPayload {
+    /** Detected file type, or null when unrecognized */
+    fileType: string | null;
+    fileName: string;
+    jobId: string | null;
+    rowCount: number;
+    /** Analytics aggregate base, if computed */
+    analyticsBase: PlainObject | null;
+    /** Whether analytics data is now available */
+    hasData: boolean;
+    /** Whether the Windows-1252 decode fallback was used */
+    usedFallback: boolean;
+    error: string | null;
+}
+
+interface AnalyticsErrorPayload {
+    /** Bounded error description */
+    message: string;
+    jobId: string | null;
+    /** File the error concerns */
+    fileName: string;
+}
+
+/** Analytics worker message (worker -> main thread), discriminated on `type`. */
+export type AnalyticsWorkerMessage = { requestId: RequestId } & (
+    | { type: "restored"; payload: PlainObject }
+    | { type: "init"; payload: { hasData: boolean } }
+    | { type: "view"; payload: PlainObject }
+    | { type: "progress"; payload: AnalyticsProgressPayload }
+    | { type: "fileProcessed"; payload: FileProcessedPayload }
+    | { type: "error"; payload: AnalyticsErrorPayload }
+    | { type: "cleared"; payload: Record<string, never> }
+);
+
+export interface ConnectionsWorkerRequest {
+    type: "process";
+    requestId: RequestId;
+    payload: { connectionsCsv: CsvSource };
+}
+
+export interface ConnectionsProcessedPayload {
+    success: boolean;
+    analytics: PlainObject | null;
+    /** Parsed connection rows */
+    rows: unknown[];
+    error: string | null;
+}
+
+/** Connections worker message, discriminated on `type`. */
+export type ConnectionsWorkerMessage = { requestId: RequestId } & (
+    | { type: "error"; payload: { message: string } }
+    | { type: "processed"; payload: ConnectionsProcessedPayload }
+);
+
+export interface MessagesWorkerRequest {
+    type: "process";
+    requestId: RequestId;
+    payload: { messagesCsv: CsvSource; connectionsCsv: CsvSource };
+}
+
+export interface MessagesWorkerMessage {
+    type: "processed";
+    requestId: RequestId;
+    payload: PlainObject | null;
+}
+
+interface ThreadsRequestPayload {
+    messagesCsv: CsvSource;
+    /** Optional connections source ("" when absent) */
+    connectionsCsv: CsvSource;
+    /** People to include */
+    people: number;
+    /** Messages per person to include */
+    messagesPerPerson: number;
+}
+
+export interface ThreadsWorkerRequest {
+    type: "threads";
+    requestId: RequestId;
+    payload: ThreadsRequestPayload;
+}
+
+export interface ThreadsWorkerMessage {
+    type: "threads";
+    requestId: RequestId;
+    payload: { success: boolean; threads: unknown[]; error: string | null };
+}
+
+export interface CleaningRequestPayload {
+    /** File type to clean */
+    fileType: string;
+    output: CleanOutput;
+    source: CsvSource;
+    /** Stored upload key */
+    key: string;
+}
+
+export interface CleaningWorkerRequest {
+    type: "clean";
+    requestId: RequestId;
+    payload: CleaningRequestPayload;
+}
+
+export interface CleanedPayload {
+    success: boolean;
+    error: string | null;
+    rowCount: number;
+    /** Bounded preview cells */
+    previewRows: string[][];
+    /** Download payload, if requested */
+    blob: Blob | null;
+}
+
+export interface CleaningWorkerMessage {
+    type: "cleaned";
+    requestId: RequestId;
+    payload: CleanedPayload;
+}
+
+export interface StoredUploadFile {
+    type: string;
+    name: string;
+    blob: Blob | null;
+    rowCount: number;
+    /** Last update timestamp (ms) */
+    updatedAt: number;
+}
+
+export interface StoredFileMetadata {
+    type: string;
+    name: string;
+    rowCount: number;
+    /** Last update timestamp (ms) */
+    updatedAt: number;
 }
 
 /**
  * A worker request parse result. A rejected request still carries the id it
  * arrived with, so the worker answers under the id the page is waiting on.
- * @template T
- * @typedef {({valid: true, value: T} | {valid: false, error: string}) & {requestId: RequestId}} RequestParseResult
  */
+export type RequestParseResult<T> = ParseResult<T> & { requestId: RequestId };
+
+/**
+ * Build a successful contract parse result.
+ * @param value - Normalized value
+ */
+function valid<T>(value: T): { valid: true; value: T } {
+    return { valid: true, value };
+}
+
+/**
+ * Build a failed contract parse result.
+ * @param error - Validation error
+ */
+function invalid(error: string): { valid: false; error: string } {
+    return { valid: false, error };
+}
 
 /**
  * Read the id a raw worker request arrived with.
- * @param {unknown} message - Raw request
- * @returns {RequestId}
+ * @param message - Raw request
  */
-function requestIdOf(message) {
+function requestIdOf(message: unknown): RequestId {
     return isPlainObject(message) ? normalizeRequestId(message.requestId) : 0;
 }
 
 /**
  * Build a rejected worker request result under its id.
- * @param {RequestId} requestId - Id the request arrived with
- * @param {string} error - Validation error
- * @returns {{valid: false, error: string, requestId: RequestId}}
+ * @param requestId - Id the request arrived with
+ * @param error - Validation error
  */
-function rejected(requestId, error) {
+function rejected(
+    requestId: RequestId,
+    error: string,
+): { valid: false; error: string; requestId: RequestId } {
     return { ...invalid(error), requestId };
 }
 
 /**
  * Build an accepted worker request result under its id.
- * @template {{requestId: RequestId}} T
- * @param {T} value - Normalized request
- * @returns {{valid: true, value: T, requestId: RequestId}}
+ * @param value - Normalized request
  */
-function accepted(value) {
+function accepted<T extends { requestId: RequestId }>(
+    value: T,
+): { valid: true; value: T; requestId: RequestId } {
     return { ...valid(value), requestId: value.requestId };
 }
 
 /**
  * Read one CSV source field of a request payload: a stored upload Blob or CSV
  * text within the size ceiling. An optional field may be absent.
- * @param {PlainObject} payload - Request payload
- * @param {string} field - Field name, which also names it in the error
- * @param {boolean} required - Whether the field must be present
- * @returns {{source: CsvSource, error: string|null}} Source "" when absent
+ * @param payload - Request payload
+ * @param field - Field name, which also names it in the error
+ * @param required - Whether the field must be present
+ * @returns Source "" when absent
  */
-function readCsvField(payload, field, required) {
+function readCsvField(
+    payload: PlainObject,
+    field: string,
+    required: boolean,
+): { source: CsvSource; error: string | null } {
     const parsed = parseCsvSource(payload[field]);
     if (required && !parsed.source) {
         return { source: "", error: `Missing ${field} payload` };
@@ -278,10 +282,9 @@ function readCsvField(payload, field, required) {
 
 /**
  * Check whether a value is a plain object.
- * @param {unknown} value - Candidate value
- * @returns {value is PlainObject}
+ * @param value - Candidate value
  */
-function isPlainObject(value) {
+function isPlainObject(value: unknown): value is PlainObject {
     if (!value || typeof value !== "object") {
         return false;
     }
@@ -290,11 +293,10 @@ function isPlainObject(value) {
 
 /**
  * Normalize a string value to a bounded string.
- * @param {unknown} value - Raw value
- * @param {number} maxLength - Maximum allowed length
- * @returns {string}
+ * @param value - Raw value
+ * @param maxLength - Maximum allowed length
  */
-function normalizeString(value, maxLength) {
+function normalizeString(value: unknown, maxLength: number): string {
     if (typeof value !== "string") {
         return "";
     }
@@ -306,11 +308,10 @@ function normalizeString(value, maxLength) {
 
 /**
  * Normalize optional string value to bounded string or null.
- * @param {unknown} value - Raw value
- * @param {number} maxLength - Maximum allowed length
- * @returns {string|null}
+ * @param value - Raw value
+ * @param maxLength - Maximum allowed length
  */
-function normalizeOptionalString(value, maxLength) {
+function normalizeOptionalString(value: unknown, maxLength: number): string | null {
     if (typeof value !== "string") {
         return null;
     }
@@ -325,13 +326,12 @@ function normalizeOptionalString(value, maxLength) {
 
 /**
  * Normalize a number to a finite range.
- * @param {unknown} value - Raw value
- * @param {number} fallback - Fallback for invalid values
- * @param {number} min - Minimum bound
- * @param {number} max - Maximum bound
- * @returns {number}
+ * @param value - Raw value
+ * @param fallback - Fallback for invalid values
+ * @param min - Minimum bound
+ * @param max - Maximum bound
  */
-function normalizeNumber(value, fallback, min, max) {
+function normalizeNumber(value: unknown, fallback: number, min: number, max: number): number {
     if (typeof value !== "number" || !Number.isFinite(value)) {
         return fallback;
     }
@@ -346,10 +346,9 @@ function normalizeNumber(value, fallback, min, max) {
 
 /**
  * Normalize a request id.
- * @param {unknown} value - Raw request id
- * @returns {number|string}
+ * @param value - Raw request id
  */
-function normalizeRequestId(value) {
+function normalizeRequestId(value: unknown): number | string {
     if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
         return value;
     }
@@ -362,10 +361,9 @@ function normalizeRequestId(value) {
 /**
  * Check whether a value is a Blob (a File is one), without relying on a
  * same-realm instanceof where the global is missing.
- * @param {unknown} value - Candidate value
- * @returns {value is Blob}
+ * @param value - Candidate value
  */
-function isBlob(value) {
+function isBlob(value: unknown): value is Blob {
     return typeof Blob !== "undefined" && value instanceof Blob;
 }
 
@@ -373,10 +371,9 @@ function isBlob(value) {
  * Accept one CSV source for a worker: the stored upload as a Blob, which the
  * worker reads itself, or text from a caller that already holds it. An empty
  * Blob counts as missing, like empty text.
- * @param {unknown} value - Raw payload field
- * @returns {{source: CsvSource, tooLarge: boolean}}
+ * @param value - Raw payload field
  */
-function parseCsvSource(value) {
+function parseCsvSource(value: unknown): { source: CsvSource; tooLarge: boolean } {
     if (isBlob(value)) {
         return {
             source: value.size > 0 ? value : "",
@@ -390,10 +387,9 @@ function parseCsvSource(value) {
 /**
  * Parse upload worker addFile payload. The page posts the uploaded `file` so
  * the worker reads it; `csvText` remains for callers that already hold text.
- * @param {unknown} payload - Raw payload
- * @returns {ParseResult<AddFilePayload>}
+ * @param payload - Raw payload
  */
-function parseAddFilePayload(payload) {
+function parseAddFilePayload(payload: unknown): ParseResult<AddFilePayload> {
     if (!isPlainObject(payload)) {
         return invalid("Invalid addFile payload");
     }
@@ -429,10 +425,9 @@ function parseAddFilePayload(payload) {
 
 /**
  * Parse analytics worker restoreFiles payload.
- * @param {unknown} payload - Raw payload
- * @returns {ParseResult<RestoreFilesPayload>}
+ * @param payload - Raw payload
  */
-function parseRestoreFilesPayload(payload) {
+function parseRestoreFilesPayload(payload: unknown): ParseResult<RestoreFilesPayload> {
     if (!isPlainObject(payload)) {
         return invalid("Invalid restoreFiles payload");
     }
@@ -454,10 +449,9 @@ function parseRestoreFilesPayload(payload) {
 
 /**
  * Parse analytics worker inbound message (main thread -> worker).
- * @param {unknown} message - Raw message event data
- * @returns {ParseResult<AnalyticsWorkerRequest>}
+ * @param message - Raw message event data
  */
-export function parseAnalyticsWorkerRequest(message) {
+export function parseAnalyticsWorkerRequest(message: unknown): ParseResult<AnalyticsWorkerRequest> {
     if (!isPlainObject(message) || typeof message.type !== "string") {
         return invalid("Invalid analytics worker request envelope");
     }
@@ -497,10 +491,9 @@ export function parseAnalyticsWorkerRequest(message) {
 
 /**
  * Parse analytics worker outbound message (worker -> main thread).
- * @param {unknown} message - Raw message event data
- * @returns {ParseResult<AnalyticsWorkerMessage>}
+ * @param message - Raw message event data
  */
-export function parseAnalyticsWorkerMessage(message) {
+export function parseAnalyticsWorkerMessage(message: unknown): ParseResult<AnalyticsWorkerMessage> {
     if (!isPlainObject(message) || typeof message.type !== "string") {
         return invalid("Invalid analytics worker message envelope");
     }
@@ -584,10 +577,11 @@ export function parseAnalyticsWorkerMessage(message) {
 
 /**
  * Parse connections worker request envelope.
- * @param {unknown} message - Raw request
- * @returns {RequestParseResult<ConnectionsWorkerRequest>}
+ * @param message - Raw request
  */
-export function parseConnectionsWorkerRequest(message) {
+export function parseConnectionsWorkerRequest(
+    message: unknown,
+): RequestParseResult<ConnectionsWorkerRequest> {
     const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "process") {
         return rejected(requestId, "Invalid connections worker request envelope");
@@ -606,10 +600,11 @@ export function parseConnectionsWorkerRequest(message) {
 
 /**
  * Parse connections worker outbound message.
- * @param {unknown} message - Raw worker message
- * @returns {ParseResult<ConnectionsWorkerMessage>}
+ * @param message - Raw worker message
  */
-export function parseConnectionsWorkerMessage(message) {
+export function parseConnectionsWorkerMessage(
+    message: unknown,
+): ParseResult<ConnectionsWorkerMessage> {
     if (!isPlainObject(message) || typeof message.type !== "string") {
         return invalid("Invalid connections worker message envelope");
     }
@@ -646,10 +641,11 @@ export function parseConnectionsWorkerMessage(message) {
 
 /**
  * Parse messages worker request envelope.
- * @param {unknown} message - Raw request
- * @returns {RequestParseResult<MessagesWorkerRequest>}
+ * @param message - Raw request
  */
-export function parseMessagesWorkerRequest(message) {
+export function parseMessagesWorkerRequest(
+    message: unknown,
+): RequestParseResult<MessagesWorkerRequest> {
     const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "process") {
         return rejected(requestId, "Invalid messages worker request envelope");
@@ -673,10 +669,9 @@ export function parseMessagesWorkerRequest(message) {
 
 /**
  * Parse messages worker outbound message.
- * @param {unknown} message - Raw worker message
- * @returns {ParseResult<MessagesWorkerMessage>}
+ * @param message - Raw worker message
  */
-export function parseMessagesWorkerMessage(message) {
+export function parseMessagesWorkerMessage(message: unknown): ParseResult<MessagesWorkerMessage> {
     if (!isPlainObject(message) || message.type !== "processed") {
         return invalid("Invalid messages worker message envelope");
     }
@@ -689,10 +684,11 @@ export function parseMessagesWorkerMessage(message) {
 
 /**
  * Parse threads worker request envelope.
- * @param {unknown} message - Raw request
- * @returns {RequestParseResult<ThreadsWorkerRequest>}
+ * @param message - Raw request
  */
-export function parseThreadsWorkerRequest(message) {
+export function parseThreadsWorkerRequest(
+    message: unknown,
+): RequestParseResult<ThreadsWorkerRequest> {
     const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "threads") {
         return rejected(requestId, "Invalid threads worker request envelope");
@@ -735,10 +731,9 @@ export function parseThreadsWorkerRequest(message) {
  *
  * The thread payload carries the user's own message bodies verbatim, so it is
  * checked for shape only and never truncated or rewritten.
- * @param {unknown} message - Raw worker message
- * @returns {ParseResult<ThreadsWorkerMessage>}
+ * @param message - Raw worker message
  */
-export function parseThreadsWorkerMessage(message) {
+export function parseThreadsWorkerMessage(message: unknown): ParseResult<ThreadsWorkerMessage> {
     if (!isPlainObject(message) || message.type !== "threads") {
         return invalid("Invalid threads worker message envelope");
     }
@@ -754,15 +749,13 @@ export function parseThreadsWorkerMessage(message) {
     });
 }
 
-/** @type {ReadonlySet<unknown>} */
-const CLEAN_OUTPUTS = new Set(["preview", "xlsx", "csv"]);
+const CLEAN_OUTPUTS: ReadonlySet<unknown> = new Set(["preview", "xlsx", "csv"]);
 
 /**
  * Check whether a value names a supported cleaning output.
- * @param {unknown} value - Candidate output
- * @returns {value is CleanOutput}
+ * @param value - Candidate output
  */
-function isCleanOutput(value) {
+function isCleanOutput(value: unknown): value is CleanOutput {
     return CLEAN_OUTPUTS.has(value);
 }
 
@@ -771,10 +764,11 @@ function isCleanOutput(value) {
  * selected file: the preview, an Excel workbook, or a cleaned CSV. `key`
  * names the stored upload, so the worker can reuse the rows it cleaned for
  * the preview when the download asks for the same file.
- * @param {unknown} message - Raw request
- * @returns {RequestParseResult<CleaningWorkerRequest>}
+ * @param message - Raw request
  */
-export function parseCleaningWorkerRequest(message) {
+export function parseCleaningWorkerRequest(
+    message: unknown,
+): RequestParseResult<CleaningWorkerRequest> {
     const requestId = requestIdOf(message);
     if (!isPlainObject(message) || message.type !== "clean") {
         return rejected(requestId, "Invalid cleaning worker request envelope");
@@ -810,10 +804,9 @@ export function parseCleaningWorkerRequest(message) {
 /**
  * Parse cleaning worker outbound message. Preview cells are bounded strings;
  * a download carries its Blob.
- * @param {unknown} message - Raw worker message
- * @returns {ParseResult<CleaningWorkerMessage>}
+ * @param message - Raw worker message
  */
-export function parseCleaningWorkerMessage(message) {
+export function parseCleaningWorkerMessage(message: unknown): ParseResult<CleaningWorkerMessage> {
     if (!isPlainObject(message) || message.type !== "cleaned") {
         return invalid("Invalid cleaning worker message envelope");
     }
@@ -838,10 +831,9 @@ export function parseCleaningWorkerMessage(message) {
 
 /**
  * Parse a persisted upload record loaded from cache/storage.
- * @param {unknown} file - Raw file object
- * @returns {ParseResult<StoredUploadFile>}
+ * @param file - Raw file object
  */
-export function parseStoredUploadFile(file) {
+export function parseStoredUploadFile(file: unknown): ParseResult<StoredUploadFile> {
     if (!isPlainObject(file)) {
         return invalid("Invalid stored file payload");
     }
@@ -865,11 +857,11 @@ export function parseStoredUploadFile(file) {
  * in-memory caches need (status, counts, dataset signatures). The full text
  * stays in IndexedDB and is loaded on demand so large exports aren't retained
  * in memory across the whole session.
- * @param {{type: string, name: string, rowCount?: number, updatedAt?: number}} file - Stored
- * file record
- * @returns {StoredFileMetadata}
+ * @param file - Stored file record
  */
-export function toStoredFileMetadata(file) {
+export function toStoredFileMetadata(
+    file: Partial<StoredFileMetadata> & Pick<StoredFileMetadata, "type" | "name">,
+): StoredFileMetadata {
     return {
         type: file.type,
         name: file.name,

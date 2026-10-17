@@ -3,7 +3,7 @@
 import rough from "roughjs/bundled/rough.esm.js";
 
 import { AppRouter } from "../../app/router.js";
-import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.js";
+import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
@@ -194,7 +194,7 @@ export const AnalyticsPage = (() => {
         },
     });
     let requestId = 0;
-    /** @type {import("../../app/worker-contracts.js").RequestId} */
+    /** @type {import("../../app/worker-contracts.ts").RequestId} */
     let pendingViewId = 0;
     /** @type {string|null} */
     let lastRequestedKey = null;

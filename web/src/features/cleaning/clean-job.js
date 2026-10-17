@@ -20,8 +20,8 @@ import { processCsvSource } from "./process-source.js";
 export const PREVIEW_ROW_LIMIT = 5;
 
 /** @typedef {import("./cleaner.js").CleanedRow} CleanedRow */
-/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
-/** @typedef {import("../../app/worker-contracts.js").CleanedPayload} CleanedPayload */
+/** @typedef {import("../../app/worker-contracts.ts").CleaningRequestPayload} CleaningRequestPayload */
+/** @typedef {import("../../app/worker-contracts.ts").CleanedPayload} CleanedPayload */
 
 /**
  * Cleaned rows of the last file, kept for a later download of the same upload.

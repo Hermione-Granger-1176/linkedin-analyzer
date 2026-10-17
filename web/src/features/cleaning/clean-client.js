@@ -6,7 +6,7 @@
  * Where Workers are unavailable the same job runs on the main thread.
  */
 
-import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
+import { parseCleaningWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { MAIN_THREAD_MAX_FILE_BYTES } from "../../shared/limits.js";
 import { createWorkerHandle } from "../../shared/worker-handle.js";
@@ -19,7 +19,7 @@ const CLEAN_FAILURE = "Unable to parse file.";
 const MAIN_THREAD_TOO_LARGE =
     "This file is too large to clean without background workers. Open this page from a local server.";
 
-/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
+/** @typedef {import("../../app/worker-contracts.ts").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}} CleanReply */
 
 let requestCount = 0;

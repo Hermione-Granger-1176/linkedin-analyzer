@@ -80,7 +80,7 @@ export function formatShortDate(timestamp) {
     return SHORT_DATE_FORMATTER.format(new Date(timestamp));
 }
 
-/** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+/** @typedef {import("../../app/worker-contracts.ts").StoredFileMetadata} StoredFileMetadata */
 
 /**
  * Uploaded file fields that identify one version of an upload.

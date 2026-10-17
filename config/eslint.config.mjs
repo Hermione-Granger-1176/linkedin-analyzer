@@ -1,10 +1,11 @@
+import tsParser from "@typescript-eslint/parser";
 import globals from "globals";
 import importPlugin from "eslint-plugin-import-x";
 import jsdoc from "eslint-plugin-jsdoc";
 
 export default [
     {
-        files: ["web/src/**/*.js", "web/tests/**/*.js", "web/e2e/**/*.js"],
+        files: ["web/src/**/*.{js,ts}", "web/tests/**/*.js", "web/e2e/**/*.js"],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: "module",
@@ -69,7 +70,7 @@ export default [
                     alphabetize: { order: "asc", caseInsensitive: true },
                 },
             ],
-            "import-x/extensions": ["error", "ignorePackages", { js: "always" }],
+            "import-x/extensions": ["error", "ignorePackages", { js: "always", ts: "always" }],
             "jsdoc/check-alignment": "error",
             "jsdoc/check-indentation": "error",
             "jsdoc/check-param-names": "error",
@@ -117,6 +118,20 @@ export default [
             "jsdoc/require-returns": "error",
             "jsdoc/require-returns-type": "error",
             "jsdoc/valid-types": "error",
+        },
+    },
+    {
+        // TypeScript sources carry their types in the code, so JSDoc keeps the
+        // descriptions only, and the compiler, not no-undef, checks names.
+        files: ["web/src/**/*.ts"],
+        languageOptions: {
+            parser: tsParser,
+        },
+        rules: {
+            "no-undef": "off",
+            "jsdoc/require-param-type": "off",
+            "jsdoc/require-returns": "off",
+            "jsdoc/require-returns-type": "off",
         },
     },
     {

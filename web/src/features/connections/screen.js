@@ -5,7 +5,7 @@ import {
     parseConnectionsWorkerMessage,
     parseStoredUploadFile,
     toStoredFileMetadata,
-} from "../../app/worker-contracts.js";
+} from "../../app/worker-contracts.ts";
 import { markPerformance, measurePerformance } from "../../platform/observability/perf.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
@@ -21,10 +21,10 @@ import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
 
 /** @typedef {import("../../app/router.js").RouteParams} RouteParams */
-/** @typedef {import("../../app/worker-contracts.js").ConnectionsWorkerMessage} WorkerMessage */
+/** @typedef {import("../../app/worker-contracts.ts").ConnectionsWorkerMessage} WorkerMessage */
 /** @typedef {Extract<WorkerMessage, {type: "processed"}>} ProcessedMessage */
 /** @typedef {Extract<WorkerMessage, {type: "error"}>} ErrorMessage */
-/** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
+/** @typedef {import("../../app/worker-contracts.ts").StoredUploadFile} StoredUploadFile */
 /** @typedef {import("../../platform/persistence/storage.js").StoredFile} StoredFile */
 /** @typedef {import("./view.js").CleanedConnectionRow} CleanedConnectionRow */
 /** @typedef {import("./view.js").ConnectionRow} ConnectionRow */

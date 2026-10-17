@@ -7,7 +7,7 @@
  * bookkeeping are module-private so no other module can reassign them.
  */
 
-import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
+import { parseMessagesWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
@@ -27,7 +27,7 @@ import { readCsvSource } from "../upload/read.js";
 /**
  * Resolvers for the requests the worker has not answered yet, by request id.
  * More than one can be in flight: the screen re-parses when the files change.
- * @type {Map<import("../../app/worker-contracts.js").RequestId, (payload: MessagesProcessedPayload|null) => void>}
+ * @type {Map<import("../../app/worker-contracts.ts").RequestId, (payload: MessagesProcessedPayload|null) => void>}
  */
 const pendingRequests = new Map();
 let requestCount = 0;

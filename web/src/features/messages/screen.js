@@ -1,7 +1,7 @@
 /* Messages insights page logic */
 
 import { AppRouter } from "../../app/router.js";
-import { parseStoredUploadFile, toStoredFileMetadata } from "../../app/worker-contracts.js";
+import { parseStoredUploadFile, toStoredFileMetadata } from "../../app/worker-contracts.ts";
 import { markPerformance, measurePerformance, nextFrame } from "../../platform/observability/perf.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
@@ -44,8 +44,8 @@ export const MessagesPage = (() => {
     /** @typedef {import("./analytics.js").OutreachSummary} OutreachSummary */
     /** @typedef {import("./relationships.js").RangeContact} RangeContact */
     /** @typedef {import("./relationships.js").FadingConversation} FadingConversation */
-    /** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
-    /** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+    /** @typedef {import("../../app/worker-contracts.ts").StoredUploadFile} StoredUploadFile */
+    /** @typedef {import("../../app/worker-contracts.ts").StoredFileMetadata} StoredFileMetadata */
 
     /**
      * Computed page state cached per dataset signature.

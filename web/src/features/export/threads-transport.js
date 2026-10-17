@@ -10,7 +10,7 @@
  * here is what the threads section asks for and how it reads the reply.
  */
 
-import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
+import { parseThreadsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
@@ -71,7 +71,7 @@ export function loadRecentThreads(messagesCsv, connectionsCsv, options = {}) {
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string} connectionsCsv - Stored connections upload, CSV text, or an empty string
  * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
- * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.js").ThreadsWorkerMessage, SelectedThread[]|null|typeof import("./worker-transport.js").FAILED>}
+ * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.ts").ThreadsWorkerMessage, SelectedThread[]|null|typeof import("./worker-transport.js").FAILED>}
  */
 function threadsRequest(messagesCsv, connectionsCsv, options) {
     return {
@@ -104,7 +104,7 @@ function threadsRequest(messagesCsv, connectionsCsv, options) {
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
- * @param {import("../../app/worker-contracts.js").ThreadsWorkerMessage} message - Parsed worker message
+ * @param {import("../../app/worker-contracts.ts").ThreadsWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
  * @returns {SelectedThread[]|null|typeof import("./worker-transport.js").FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */

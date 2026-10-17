@@ -12,7 +12,7 @@ import {
     parseStoredUploadFile,
     parseThreadsWorkerMessage,
     parseThreadsWorkerRequest,
-} from "../../src/app/worker-contracts.js";
+} from "../../src/app/worker-contracts.ts";
 import { MAX_CSV_CHARS } from "../../src/shared/limits.js";
 
 // A small character limit keeps the size-limit assertions from allocating a

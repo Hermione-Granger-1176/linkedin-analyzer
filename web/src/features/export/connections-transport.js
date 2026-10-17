@@ -19,7 +19,7 @@
  * of everyone they know.
  */
 
-import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.js";
+import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
@@ -91,7 +91,7 @@ export function loadConnectionsData(connectionsCsv, options = {}) {
 /**
  * The worker request for the cleaned rows and the aggregates over them.
  * @param {Blob|string} connectionsCsv - Stored connections upload, or CSV text
- * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.js").ConnectionsWorkerMessage, ConnectionsData|null|typeof import("./worker-transport.js").FAILED>}
+ * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.ts").ConnectionsWorkerMessage, ConnectionsData|null|typeof import("./worker-transport.js").FAILED>}
  */
 function connectionsRequest(connectionsCsv) {
     return {
@@ -108,7 +108,7 @@ function connectionsRequest(connectionsCsv) {
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
- * @param {import("../../app/worker-contracts.js").ConnectionsWorkerMessage} message - Parsed worker message
+ * @param {import("../../app/worker-contracts.ts").ConnectionsWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
  * @returns {ConnectionsData|null|typeof import("./worker-transport.js").FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
@@ -158,7 +158,7 @@ function interpretReply(message, context) {
  * answer with one shape, and because the worker cannot do it: it sends the
  * cleaned rows on to the Connections screen, which filters them by a range this
  * export does not have.
- * @param {import("../../app/worker-contracts.js").ConnectionsProcessedPayload} payload - Successful worker payload
+ * @param {import("../../app/worker-contracts.ts").ConnectionsProcessedPayload} payload - Successful worker payload
  * @returns {ConnectionsData|null} Data, or null when the reply holds nothing to draw
  */
 function toConnectionsData(payload) {

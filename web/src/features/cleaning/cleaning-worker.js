@@ -1,6 +1,7 @@
 /* LinkedIn Analyzer - Clean screen worker: preview, Excel, and CSV builds */
 
 import { parseCleaningWorkerRequest } from "../../app/worker-contracts.js";
+import { serveWorker } from "../../shared/worker-entry.js";
 
 import { runCleanJob } from "./clean-job.js";
 
@@ -20,29 +21,17 @@ function postFailure(requestId, error) {
     });
 }
 
-/**
- * Answer one raw worker message.
- * @param {unknown} data - Raw message data
- * @returns {Promise<void>}
- */
-export async function handleMessage(data) {
-    const parsed = parseCleaningWorkerRequest(data);
-    if (!parsed.valid) {
-        postFailure(parsed.requestId, parsed.error || "Invalid worker request payload.");
-        return;
-    }
-    try {
+/** Answers one raw worker message; exported so tests can drive it. */
+export const handleMessage = serveWorker({
+    requestType: "clean",
+    parse: parseCleaningWorkerRequest,
+    handle: async (request) => {
         self.postMessage({
             type: "cleaned",
-            requestId: parsed.value.requestId,
-            payload: await runCleanJob(parsed.value.payload),
+            requestId: request.requestId,
+            payload: await runCleanJob(request.payload),
         });
-    } catch {
-        postFailure(parsed.value.requestId, RUNTIME_FAILURE);
-    }
-}
-
-/* v8 ignore next 3 */
-if (typeof self !== "undefined" && typeof window === "undefined") {
-    self.addEventListener("message", (event) => handleMessage(event.data));
-}
+    },
+    postFailure,
+    runtimeFailure: RUNTIME_FAILURE,
+});

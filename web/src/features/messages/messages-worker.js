@@ -2,11 +2,7 @@
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
 import { toCsvSource } from "../../shared/csv-source.js";
-import {
-    extractWorkerError,
-    extractWorkerRejection,
-    toErrorMessage,
-} from "../../shared/worker-errors.js";
+import { serveWorker } from "../../shared/worker-entry.js";
 import { processCsvSource } from "../cleaning/process-source.js";
 
 import { MessagesAnalytics } from "./analytics.js";
@@ -157,58 +153,26 @@ function serializeConnectionState(state) {
 }
 
 /**
- * Post a normalized processed error payload.
- * @param {number|string} requestId
- * @param {unknown} error
+ * Post a failed processed payload carrying fixed text.
+ * @param {import("../../app/worker-contracts.js").RequestId} requestId - Request id being answered
+ * @param {string} error - Fixed failure text
  */
 function postProcessedError(requestId, error) {
-    self.postMessage({
-        type: "processed",
-        requestId,
-        payload: {
-            success: false,
-            error: toErrorMessage(error, "Messages worker runtime failure."),
-        },
-    });
+    self.postMessage({ type: "processed", requestId, payload: { success: false, error } });
 }
 
-/* v8 ignore next 19 */
-if (typeof self !== "undefined") {
-    self.addEventListener("message", async (event) => {
-        const rawMessage = event.data || {};
-        if (!rawMessage || rawMessage.type !== "process") {
-            return;
-        }
-
-        const parsed = parseMessagesWorkerRequest(rawMessage);
-        if (!parsed.valid) {
-            postProcessedError(0, parsed.error || "Invalid worker request payload.");
-            return;
-        }
-
-        const message = parsed.value;
-        try {
-            const payload = await processPayload(message.payload);
-            self.postMessage(
-                {
-                    type: "processed",
-                    requestId: message.requestId,
-                    payload,
-                },
-                transferablesOf(payload),
-            );
-        } catch (error) {
-            postProcessedError(message.requestId, error);
-        }
-    });
-
-    self.addEventListener("error", (event) => {
-        postProcessedError(0, extractWorkerError(event));
-    });
-
-    self.addEventListener("unhandledrejection", (event) => {
-        postProcessedError(0, extractWorkerRejection(event));
-    });
-}
+serveWorker({
+    requestType: "process",
+    parse: parseMessagesWorkerRequest,
+    handle: async (request) => {
+        const payload = await processPayload(request.payload);
+        self.postMessage(
+            { type: "processed", requestId: request.requestId, payload },
+            transferablesOf(payload),
+        );
+    },
+    postFailure: postProcessedError,
+    runtimeFailure: "Messages worker runtime failure.",
+});
 
 export { processPayload, transferablesOf };

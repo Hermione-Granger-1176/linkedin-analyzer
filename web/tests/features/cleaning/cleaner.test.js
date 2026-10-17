@@ -682,6 +682,40 @@ describe("LinkedInCleaner", () => {
             expect(result.success).toBe(false);
             expect(result.error).toMatch(/too large/i);
         });
+
+        it("detects the type when a quoted field spans the end of the prefix", () => {
+            // Real comments often hold multi-line quoted text, so the 64KB cut
+            // regularly lands inside a quote. Only the header row matters.
+            const lines = ["Date,Link,Message"];
+            let length = lines[0].length;
+            for (let i = 0; length < 64 * 1024 - 300; i += 1) {
+                const line = `2025-01-01 10:00:00,https://linkedin.com/feed/${i},"Line one\nline two"`;
+                lines.push(line);
+                length += line.length + 1;
+            }
+            lines.push(`2025-01-02 10:00:00,https://linkedin.com/feed/x,"${"y".repeat(1000)}"`);
+            const csv = lines.join("\n");
+            const expected = LinkedInCleaner.process(csv, "auto");
+
+            expect(expected.fileType).toBe("comments");
+            expect(streamProcess(csv, 4096)).toEqual(expected);
+        });
+
+        it.each([
+            ["a header row longer than the prefix", `Date,Link,"${"M".repeat(64 * 1024)}"`],
+            ["duplicate headers", "Date,Link,Message,Message"],
+            ["a blank header row", ",,"],
+        ])("leaves %s to full detection", (_label, header) => {
+            const rows = Array.from(
+                { length: 1500 },
+                (_, i) => `2025-01-01 10:00:00,https://linkedin.com/feed/${i},Comment ${i}`,
+            );
+            const csv = [header, ...rows].join("\n");
+            expect(csv.length).toBeGreaterThan(64 * 1024);
+
+            expect(streamProcess(csv, 4096)).toBeNull();
+            expect(LinkedInCleaner.process(csv, "auto").success).toBe(false);
+        });
     });
 });
 

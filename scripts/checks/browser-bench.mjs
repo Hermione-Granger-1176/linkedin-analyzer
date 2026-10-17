@@ -319,7 +319,11 @@ async function runExport(page, kind) {
         await page
             .locator('input[name="cleanFileType"][value="messages"]')
             .check({ force: true, timeout: STEP_TIMEOUT_MS });
-        await page.locator("#cleanPreviewSection").waitFor({ timeout: STEP_TIMEOUT_MS });
+        // The section can still show the previous file type's preview, so wait
+        // for the Messages label before downloading.
+        await expect(page.locator("#cleanFileInfo")).toContainText("Messages -", {
+            timeout: STEP_TIMEOUT_MS,
+        });
         await page.getByTestId("clean-download-btn").click({ timeout: STEP_TIMEOUT_MS });
     } else {
         const trigger = page.locator("#pdfExportBtn");

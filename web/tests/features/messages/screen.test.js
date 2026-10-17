@@ -44,6 +44,7 @@ vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
 // a stand-in that answers on the next microtask keeps the tests' timing.
 vi.mock("../../../src/features/upload/read.js", () => ({
     readCsvSource: vi.fn(async (source) => (source ? "csv" : "")),
+    readOptionalCsvSource: vi.fn(async (source) => ({ text: source ? "csv" : "", failed: false })),
 }));
 
 vi.mock("../../../src/features/messages/analytics.js", () => ({

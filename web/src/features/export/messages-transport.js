@@ -18,7 +18,7 @@ import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { MessagesAnalytics } from "../messages/analytics.js";
 import { hydrateConnectionState, hydrateMessageState } from "../messages/hydrate.js";
-import { readCsvSourcesOrNull } from "../upload/read.js";
+import { readCsvSourcesOrNull, readOptionalCsvSource } from "../upload/read.js";
 
 import {
     CANCELLED,
@@ -98,11 +98,13 @@ export async function loadMessagesState(messagesCsv, connectionsCsv, options = {
     ) {
         return null;
     }
-    const texts = await readCsvSourcesOrNull(text, contacts);
+    // Connections is optional, so only an unreadable messages file stops this.
+    const texts = await readCsvSourcesOrNull(text);
+    const connections = await readOptionalCsvSource(contacts);
     if (!texts || isCancelled()) {
         return null;
     }
-    return buildStateOnMainThread(texts[0], texts[1]);
+    return buildStateOnMainThread(texts[0], connections.text);
 }
 
 /**

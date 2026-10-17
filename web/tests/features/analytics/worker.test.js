@@ -919,6 +919,48 @@ describe("message event dispatcher", () => {
         expect(LC.process).not.toHaveBeenCalled();
     });
 
+    it("drops a read that a clear lands on just as it finishes", async () => {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => { handlers[type] = fn; },
+            postMessage: vi.fn((m) => posted.push(m))
+        };
+
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        LC.process.mockClear();
+
+        const bytes = new TextEncoder().encode("col\nval");
+        let index = 0;
+        // A real File, so the request passes the contract, streaming the chunks below.
+        const file = new File([bytes], "Shares.csv");
+        Object.assign(file, {
+            stream: () => ({
+                getReader: () => ({
+                    read: () => {
+                        if (index === 0) {
+                            index += 1;
+                            return Promise.resolve({ done: false, value: bytes });
+                        }
+                        // The clear arrives while the last read is settling with done.
+                        handlers.message({ data: { type: "clear" } });
+                        return Promise.resolve({ done: true, value: undefined });
+                    },
+                    cancel: () => Promise.resolve()
+                })
+            })
+        });
+
+        await handlers.message({ data: { type: "addFile", payload: { file, fileName: "Shares.csv" } } });
+
+        const types = posted.map((m) => m.type);
+        expect(types).toContain("cleared");
+        expect(types).not.toContain("fileProcessed");
+        expect(LC.process).not.toHaveBeenCalled();
+    });
+
     it("runs requests one at a time in arrival order", async () => {
         const posted = [];
         const handlers = {};

@@ -207,7 +207,9 @@ async function readUpload(read, jobId, fileName) {
         });
     };
     try {
-        return await read({ signal: controller.signal, onProgress });
+        const result = await read({ signal: controller.signal, onProgress });
+        // A Clear during the last read can let it finish with done; drop it.
+        return controller.signal.aborted ? null : result;
     } catch (error) {
         if (controller.signal.aborted) {
             return null;

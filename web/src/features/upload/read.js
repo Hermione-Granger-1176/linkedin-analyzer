@@ -69,6 +69,20 @@ export async function readCsvSource(source) {
 }
 
 /**
+ * Read an optional CSV source, such as Connections. A file that cannot be read
+ * counts as absent, and `failed` tells the caller to warn about it.
+ * @param {Blob|string|null|undefined} source - Stored upload or CSV text
+ * @returns {Promise<{text: string, failed: boolean}>}
+ */
+export async function readOptionalCsvSource(source) {
+    try {
+        return { text: await readCsvSource(source), failed: false };
+    } catch {
+        return { text: "", failed: true };
+    }
+}
+
+/**
  * Read several CSV sources for a main-thread fallback parse, or resolve null
  * when any of them cannot be read.
  * @param {...(Blob|string)} sources - Stored uploads or CSV text
@@ -281,8 +295,10 @@ function readChunkWithTimeout(reader, file) {
     let timeoutId;
     const timeout = new Promise((_resolve, reject) => {
         timeoutId = globalThis.setTimeout(() => {
-            cancelReader(reader);
+            // Reject first: cancelling settles the pending read with done, which
+            // would otherwise win the race and pass a partial file as complete.
             reject(new Error(`Reading ${file.name} timed out.`));
+            cancelReader(reader);
         }, FILE_READ_TIMEOUT_MS);
     });
     return Promise.race([reader.read(), timeout]).finally(() => {

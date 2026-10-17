@@ -5,6 +5,7 @@ import {
     readCsvSource,
     readCsvSourcesOrNull,
     readFileAsText,
+    readOptionalCsvSource,
     streamFileText,
 } from "../../../src/features/upload/read.js";
 import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
@@ -91,6 +92,16 @@ describe("readCsvSource", () => {
             this.onerror();
         });
         expect(await readCsvSourcesOrNull("a", new Blob(["x"]))).toBeNull();
+    });
+
+    it("reads an optional source, or reports a failed read as absent text", async () => {
+        expect(await readOptionalCsvSource("a,b")).toEqual({ text: "a,b", failed: false });
+        expect(await readOptionalCsvSource(null)).toEqual({ text: "", failed: false });
+
+        stubFileReader(function read() {
+            this.onerror();
+        });
+        expect(await readOptionalCsvSource(new Blob(["x"]))).toEqual({ text: "", failed: true });
     });
 });
 
@@ -386,5 +397,32 @@ describe("streamFileText", () => {
         await vi.advanceTimersByTimeAsync(30001);
         await assertion;
         expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it("times out rather than ending early when cancelling settles the stalled read", async () => {
+        vi.useFakeTimers();
+        let settleRead = () => {};
+        const file = /** @type {File} */ (
+            /** @type {unknown} */ ({
+                name: "Messages.csv",
+                size: STREAM_SIZE,
+                stream: () => ({
+                    getReader: () => ({
+                        read: () =>
+                            new Promise((resolve) => {
+                                settleRead = resolve;
+                            }),
+                        // A real reader settles its pending read with done on cancel.
+                        cancel() {
+                            settleRead({ done: true, value: undefined });
+                            return Promise.resolve();
+                        },
+                    }),
+                }),
+            })
+        );
+        const assertion = expect(collect(file)).rejects.toThrow(/timed out/i);
+        await vi.advanceTimersByTimeAsync(30001);
+        await assertion;
     });
 });

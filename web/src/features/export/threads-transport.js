@@ -14,7 +14,7 @@ import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
-import { readCsvSourcesOrNull } from "../upload/read.js";
+import { readCsvSourcesOrNull, readOptionalCsvSource } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
@@ -99,11 +99,13 @@ export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {
     ) {
         return [];
     }
-    const texts = await readCsvSourcesOrNull(text, contacts);
+    // Connections is optional, so only an unreadable messages file stops this.
+    const texts = await readCsvSourcesOrNull(text);
+    const connections = await readOptionalCsvSource(contacts);
     if (!texts || isCancelled()) {
         return [];
     }
-    return selectThreadsOnMainThread(texts[0], texts[1], options);
+    return selectThreadsOnMainThread(texts[0], connections.text, options);
 }
 
 /**

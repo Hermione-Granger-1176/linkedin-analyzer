@@ -110,6 +110,26 @@ describe("messages worker", () => {
         expect(result.totalInputRows).toBe(1);
     });
 
+    it("processPayload keeps the messages when Connections.csv will not read", async () => {
+        const read = vi
+            .spyOn(FileReader.prototype, "readAsArrayBuffer")
+            .mockImplementation(function fail() {
+                this.onerror();
+            });
+        try {
+            const result = await processPayload({
+                messagesCsv: VALID_MESSAGES_CSV,
+                connectionsCsv: new Blob([VALID_CONNECTIONS_CSV]),
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.totalInputRows).toBe(1);
+            expect(result.connectionError).toBe("Unable to read Connections.csv.");
+        } finally {
+            read.mockRestore();
+        }
+    });
+
     it("worker listener posts processed result for process message type", async () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 

@@ -2,9 +2,11 @@
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { readCsvSource } from "../upload/read.js";
+import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
 
 import { MessagesAnalytics } from "./analytics.js";
+
+const CONNECTIONS_READ_ERROR = "Unable to read Connections.csv.";
 
 /**
  * Parse messages and connections payload. Each file arrives as the stored
@@ -14,7 +16,10 @@ import { MessagesAnalytics } from "./analytics.js";
  */
 async function processPayload(payload) {
     const messagesCsv = await readCsvSource(payload.messagesCsv);
-    const connectionsCsv = await readCsvSource(payload.connectionsCsv);
+    // Connections is optional: a file that will not read degrades like one that
+    // will not parse, so the messages still load.
+    const connections = await readOptionalCsvSource(payload.connectionsCsv);
+    const connectionsCsv = connections.text;
 
     const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
     if (!messagesResult.success) {
@@ -26,7 +31,7 @@ async function processPayload(payload) {
     }
 
     let connectionsData = [];
-    let connectionError = null;
+    let connectionError = connections.failed ? CONNECTIONS_READ_ERROR : null;
 
     if (connectionsCsv) {
         const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");

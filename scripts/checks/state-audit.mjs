@@ -33,55 +33,63 @@ const MESSAGE_FIELDS = [
     "outreach",
 ];
 
-const args = process.argv.slice(2);
-const strict = args.includes("--strict");
-const dirIndex = args.indexOf("--input-dir");
-const inputDir = resolve(REPO, dirIndex >= 0 ? args[dirIndex + 1] : "data/input");
-
-if (typeof globalThis.gc !== "function") {
-    console.error("state-audit needs node --expose-gc (run it through make audit-state).");
-    process.exit(2);
+/**
+ * Read the command-line options.
+ * @param {string[]} argv - Arguments after the script name
+ * @returns {{strict: boolean, inputDir: string}}
+ */
+export function parseArgs(argv) {
+    const dirIndex = argv.indexOf("--input-dir");
+    return {
+        strict: argv.includes("--strict"),
+        inputDir: resolve(REPO, dirIndex >= 0 ? argv[dirIndex + 1] : "data/input"),
+    };
 }
 
-const missing = FILES.filter((name) => !existsSync(join(inputDir, name)));
-if (missing.length > 0) {
-    console.log(`SKIP: missing ${missing.join(", ")} in ${inputDir}.`);
-    process.exit(strict ? 1 : 0);
+/**
+ * Name the export files the audit needs that are not in the input directory.
+ * @param {string} inputDir - Directory holding the export
+ * @returns {string[]}
+ */
+export function missingInputs(inputDir) {
+    return FILES.filter((name) => !existsSync(join(inputDir, name)));
 }
 
-function settle() {
+/**
+ * Format one report line.
+ * @param {string} label - What was measured
+ * @param {number} bytes - Bytes retained or freed
+ * @param {string} [note] - Trailing note
+ * @returns {string}
+ */
+export function formatLine(label, bytes, note = "") {
+    const size = `${(bytes / 1e6).toFixed(1)} MB`.padStart(10);
+    return `STATE  ${label.padEnd(30)} ${size}${note ? `  ${note}` : ""}`;
+}
+
+/**
+ * Heap plus array-buffer bytes in use after forcing garbage collection.
+ * @returns {number}
+ */
+function usedAfterGc() {
     for (let i = 0; i < 4; i += 1) {
         globalThis.gc();
     }
-}
-
-function used() {
-    settle();
     const memory = process.memoryUsage();
     return memory.heapUsed + memory.arrayBuffers;
 }
 
-function mb(bytes) {
-    return `${(bytes / 1e6).toFixed(1)} MB`.padStart(10);
-}
-
-function line(label, bytes, note = "") {
-    console.log(`STATE  ${label.padEnd(30)} ${mb(bytes)}${note ? `  ${note}` : ""}`);
-}
-
-process.env.VITE_MEASUREMENT_LIMITS = "1";
-const server = await createServer({
-    configFile: false,
-    root: REPO,
-    mode: "measurement",
-    logLevel: "error",
-    server: { middlewareMode: true, hmr: false },
-    appType: "custom",
-    optimizeDeps: { noDiscovery: true, include: [] },
-});
-
-try {
-    const load = (path) => server.ssrLoadModule(path);
+/**
+ * Measure what each analysis structure retains for the export in a directory.
+ * @param {object} options - Audit inputs
+ * @param {string} options.inputDir - Directory holding the export
+ * @param {(path: string) => Promise<any>} options.load - Loads a web module by its repository path
+ * @param {() => number} [options.used] - Bytes in use, measured after garbage collection
+ * @param {(line: string) => void} [options.log] - Receives each report line
+ * @returns {Promise<void>}
+ */
+export async function auditState({ inputDir, load, used = usedAfterGc, log = console.log }) {
+    const line = (label, bytes, note) => log(formatLine(label, bytes, note));
     const { decodeBytes } = await load("/web/src/features/upload/decode.js");
     const { LinkedInCleaner } = await load("/web/src/features/cleaning/cleaner.js");
     const { AnalyticsEngine } = await load("/web/src/features/analytics/activity.js");
@@ -147,6 +155,45 @@ try {
     held.comments = null;
     line("analytics state", used() - analyticsBase);
     held.analytics = null;
-} finally {
-    await server.close();
+}
+
+/**
+ * Run the audit from the command line.
+ * @param {string[]} argv - Arguments after the script name
+ * @param {{createViteServer?: typeof createServer}} [deps] - Overridable for tests
+ * @returns {Promise<number>} Exit code
+ */
+export async function main(argv, { createViteServer = createServer } = {}) {
+    const { strict, inputDir } = parseArgs(argv);
+    if (typeof globalThis.gc !== "function") {
+        console.error("state-audit needs node --expose-gc (run it through make audit-state).");
+        return 2;
+    }
+
+    const missing = missingInputs(inputDir);
+    if (missing.length > 0) {
+        console.log(`SKIP: missing ${missing.join(", ")} in ${inputDir}.`);
+        return strict ? 1 : 0;
+    }
+
+    process.env.VITE_MEASUREMENT_LIMITS = "1";
+    const server = await createViteServer({
+        configFile: false,
+        root: REPO,
+        mode: "measurement",
+        logLevel: "error",
+        server: { middlewareMode: true, hmr: false },
+        appType: "custom",
+        optimizeDeps: { noDiscovery: true, include: [] },
+    });
+    try {
+        await auditState({ inputDir, load: (path) => server.ssrLoadModule(path) });
+    } finally {
+        await server.close();
+    }
+    return 0;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    process.exitCode = await main(process.argv.slice(2));
 }

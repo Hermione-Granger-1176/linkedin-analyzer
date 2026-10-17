@@ -11,7 +11,7 @@
  */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
-import { readCsvSource } from "../upload/read.js";
+import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
@@ -47,20 +47,6 @@ function contactKeysFrom(connectionsCsv) {
 }
 
 /**
- * Read the connections source for the tiebreak keys. A file that will not
- * read costs the tiebreak, as one that will not parse does.
- * @param {unknown} connectionsCsv - Stored connections Blob or CSV text
- * @returns {Promise<string>}
- */
-async function readConnections(connectionsCsv) {
-    try {
-        return await readCsvSource(connectionsCsv);
-    } catch {
-        return "";
-    }
-}
-
-/**
  * Parse the messages CSV and pick the recent threads for the export. Each
  * file arrives as the stored upload Blob, read here, or as CSV text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string, people?: number, messagesPerPerson?: number}} payload - Raw payload
@@ -68,7 +54,9 @@ async function readConnections(connectionsCsv) {
  */
 async function processPayload(payload) {
     const messagesCsv = await readCsvSource(payload.messagesCsv);
-    const connectionsCsv = await readConnections(payload.connectionsCsv);
+    // A Connections file that will not read costs the tiebreak, as one that
+    // will not parse does.
+    const { text: connectionsCsv } = await readOptionalCsvSource(payload.connectionsCsv);
     const result = parseMessagesForExport(messagesCsv);
     if (!result.success) {
         return {

@@ -12,7 +12,7 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { readCsvSource } from "../upload/read.js";
+import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
 
 // Above this combined CSV size, re-parsing on the UI thread would freeze the
 // page, so the main-thread fallback is skipped in favor of an empty state.
@@ -87,10 +87,18 @@ export async function processFiles(messagesCsv, connectionsCsv) {
             error: "These files are too large to analyze without a background worker. Reload the page, or open it in a browser that supports Web Workers.",
         };
     }
-    return processFilesOnMainThread(
-        await readCsvSource(messagesCsv),
-        await readCsvSource(connectionsCsv),
-    );
+    let messagesText;
+    try {
+        messagesText = await readCsvSource(messagesCsv);
+    } catch {
+        return { success: false, error: "Unable to read messages.csv." };
+    }
+    const connections = await readOptionalCsvSource(connectionsCsv);
+    const result = processFilesOnMainThread(messagesText, connections.text);
+    if (result.success && connections.failed) {
+        result.connectionError = "Unable to read Connections.csv.";
+    }
+    return result;
 }
 
 /**

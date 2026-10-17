@@ -1,6 +1,6 @@
 /* Clean page logic */
 
-import { toStoredFileMetadata } from "../../app/worker-contracts.js";
+import { toStoredFileMetadata } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
@@ -15,7 +15,7 @@ import { LinkedInCleaner } from "./cleaner.js";
 import { cleanedCsvName } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
-/** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
+/** @typedef {import("../../app/worker-contracts.ts").CachedFileMetadata} CachedFileMetadata */
 
 /**
  * The previewed clean of one stored upload.

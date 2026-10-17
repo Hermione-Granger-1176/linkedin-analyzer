@@ -1,6 +1,6 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 
-import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
+import { parseMessagesWorkerRequest } from "../../app/worker-contracts.ts";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { serveWorker } from "../../shared/worker-entry.js";
 import { processCsvSource } from "../cleaning/process-source.js";
@@ -166,7 +166,7 @@ function serializeConnectionState(state) {
 
 /**
  * Post a failed processed payload carrying fixed text.
- * @param {import("../../app/worker-contracts.js").RequestId} requestId - Request id being answered
+ * @param {import("../../app/worker-contracts.ts").RequestId} requestId - Request id being answered
  * @param {string} error - Fixed failure text
  */
 function postProcessedError(requestId, error) {

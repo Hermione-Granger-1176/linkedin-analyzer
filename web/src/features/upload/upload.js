@@ -6,7 +6,7 @@ import {
     parseAnalyticsWorkerMessage,
     parseStoredUploadFile,
     toStoredFileMetadata,
-} from "../../app/worker-contracts.js";
+} from "../../app/worker-contracts.ts";
 import { RunTracker } from "../../platform/observability/run-tracker.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
@@ -29,9 +29,9 @@ import {
     hasAnalyticsMonths,
 } from "./state.js";
 
-/** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
-/** @typedef {import("../../app/worker-contracts.js").FileProcessedPayload} FileProcessedPayload */
-/** @typedef {import("../../app/worker-contracts.js").PlainObject} PlainObject */
+/** @typedef {import("../../app/worker-contracts.ts").CachedFileMetadata} CachedFileMetadata */
+/** @typedef {import("../../app/worker-contracts.ts").FileProcessedPayload} FileProcessedPayload */
+/** @typedef {import("../../app/worker-contracts.ts").PlainObject} PlainObject */
 /** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
 /** @typedef {import("./state.js").UploadFileMap} UploadFileMap */
 

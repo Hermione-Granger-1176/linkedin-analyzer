@@ -51,7 +51,7 @@ export const PENDING = Symbol("export-request-pending");
  * @template M, R
  * @typedef {object} RequestOptions
  * @property {{type: string, payload: object}} envelope - Message to post, which the transport stamps with the request id
- * @property {(data: unknown) => import("../../app/worker-contracts.js").ParseResult<M>} parse - Contract parser for replies
+ * @property {(data: unknown) => import("../../app/worker-contracts.ts").ParseResult<M>} parse - Contract parser for replies
  * @property {(message: M, context: ReplyContext) => R|typeof PENDING} interpret - Read one valid reply into an outcome, or PENDING to keep waiting
  * @property {number} timeoutMs - Watchdog budget for this request
  */
@@ -83,7 +83,7 @@ export const PENDING = Symbol("export-request-pending");
  * The request ends here either way rather than sitting out its watchdog: only
  * one request is ever in flight, and a worker that has reported it cannot
  * answer is not going to answer.
- * @param {{requestId: import("../../app/worker-contracts.js").RequestId}} message - Parsed reply reporting a failure
+ * @param {{requestId: import("../../app/worker-contracts.ts").RequestId}} message - Parsed reply reporting a failure
  * @param {ReplyContext} context - The request's id and error reporter
  * @returns {null|typeof FAILED} FAILED when the worker attributed the failure to this request, null otherwise
  */

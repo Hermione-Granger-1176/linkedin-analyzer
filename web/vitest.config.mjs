@@ -12,7 +12,7 @@ export default defineConfig({
             // reading a local run, text keeps the terminal output unchanged.
             reporter: ["text", "html", "json-summary"],
             all: true,
-            include: ["web/src/**/*.js", "api/**/*.mjs"],
+            include: ["web/src/**/*.{js,ts}", "api/**/*.mjs"],
             thresholds: {
                 statements: 99,
                 branches: 95,

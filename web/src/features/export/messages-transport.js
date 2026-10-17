@@ -11,7 +11,7 @@
  * parsing the user's messages can carry their text.
  */
 
-import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
+import { parseMessagesWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
@@ -82,7 +82,7 @@ export function loadMessagesState(messagesCsv, connectionsCsv, options = {}) {
  * The worker request for the parsed message and connection state.
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string} connectionsCsv - Stored connections upload, CSV text, or an empty string
- * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.js").MessagesWorkerMessage, MessagesState|null|typeof FAILED>}
+ * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.ts").MessagesWorkerMessage, MessagesState|null|typeof FAILED>}
  */
 function messagesRequest(messagesCsv, connectionsCsv) {
     return {
@@ -99,7 +99,7 @@ function messagesRequest(messagesCsv, connectionsCsv) {
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
- * @param {import("../../app/worker-contracts.js").MessagesWorkerMessage} message - Parsed worker message
+ * @param {import("../../app/worker-contracts.ts").MessagesWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
  * @returns {MessagesState|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
@@ -134,7 +134,7 @@ function interpretReply(message, context) {
 
 /**
  * Rehydrate the Maps and Sets the worker had to flatten to send.
- * @param {import("../../app/worker-contracts.js").PlainObject} payload - Successful worker payload
+ * @param {import("../../app/worker-contracts.ts").PlainObject} payload - Successful worker payload
  * @returns {MessagesState|typeof FAILED} Hydrated state, or FAILED when it holds no messages
  */
 function hydrateWorkerPayload(payload) {

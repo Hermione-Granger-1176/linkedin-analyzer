@@ -7,7 +7,7 @@
  * imports them back and they are unit-tested directly in web/tests/features/upload/state.test.js.
  */
 
-/** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
+/** @typedef {import("../../app/worker-contracts.ts").StoredUploadFile} StoredUploadFile */
 
 /** @typedef {import("../cleaning/configs.js").FileType} FileType */
 

@@ -7,7 +7,7 @@
  * bookkeeping are module-private so no other module can reassign them.
  */
 
-import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
+import { parseMessagesWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
@@ -32,7 +32,7 @@ import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
  * The worker answers in order, so a request's budget starts when the one ahead
  * of it is due, not when it was posted. Each deadline is therefore at least the
  * one before it, and the oldest request's is always the next to fall due.
- * @type {Map<import("../../app/worker-contracts.js").RequestId, {resolve: (payload: MessagesProcessedPayload|null) => void, deadline: number}>}
+ * @type {Map<import("../../app/worker-contracts.ts").RequestId, {resolve: (payload: MessagesProcessedPayload|null) => void, deadline: number}>}
  */
 const pendingRequests = new Map();
 let requestCount = 0;

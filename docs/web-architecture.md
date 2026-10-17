@@ -25,7 +25,7 @@ No application endpoint receives the uploaded file contents. The only server-sid
 
 ## Why workers have separate contracts
 
-Long CSV parses and analytics calculations run in Web Workers so the main thread can continue handling input, navigation, and cancellation. `web/src/app/worker-contracts.js` defines shared request and response shapes for worker messages.
+Long CSV parses and analytics calculations run in Web Workers so the main thread can continue handling input, navigation, and cancellation. `web/src/app/worker-contracts.ts` defines shared request and response shapes for worker messages as TypeScript types, alongside the runtime validators that check each message against them.
 
 The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. A multi-file upload therefore processes its files one after another, so only one file's parse state is alive at a time. The worker computes analytics once per batch, on the reply to its last file; when that file is rejected, or is not an analytics input and cannot be stored, the page still stores the analytics. It stores them only once every analytics input in the batch is saved; if one fails, the stored analytics stay as they were and the next upload primes the worker from storage again. The page times only the file the worker is running, so a small file queued behind a large one is not cut off while the large one uses its allowance. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. A restore that was still reading stored files when Clear arrived discards what it read. The worker replies with the cleaned result only; the page stores the `File` it already holds.
 

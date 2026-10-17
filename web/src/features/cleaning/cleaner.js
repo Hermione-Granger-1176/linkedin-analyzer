@@ -25,6 +25,7 @@ import {
     isMissing,
     removeIllegalChars,
 } from "./field-cleaners.js";
+import { createStringPool } from "./string-pool.js";
 
 /** @typedef {import("./configs.js").FileType} FileType */
 /** @typedef {import("./configs.js").CleanerConfig} CleanerConfig */
@@ -709,6 +710,9 @@ export const LinkedInCleaner = (() => {
         let cleanRow = null;
         /** @type {CleanedRow[]} */
         const cleanedData = [];
+        // Repeated values in the kept rows are stored once, and none of them
+        // holds on to the decoded text.
+        const keep = createStringPool();
 
         // Mirrors parseCSV(): skip rows, read and check the header, then build
         // and clean one record per non-empty data row.
@@ -758,6 +762,9 @@ export const LinkedInCleaner = (() => {
             }
             const cleanedRow = /** @type {RowCleaner} */ (cleanRow)(record);
             if (cleanedRow) {
+                for (const name of Object.keys(cleanedRow)) {
+                    cleanedRow[name] = keep(cleanedRow[name], name);
+                }
                 cleanedData.push(cleanedRow);
             }
         };

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMessagesForExport } from "../../../src/features/export/messages-parse.js";
+import {
+    exportRowBody,
+    parseMessagesForExport,
+    toExportRow,
+} from "../../../src/features/export/messages-parse.js";
 
 const HEADER =
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS";
@@ -111,5 +115,43 @@ describe("parseMessagesForExport", () => {
         // The specific message, not merely a truthy one: the sibling test above
         // pins its own, and a leaked echo of the input would still be truthy.
         expect(result.error).toBe("CSV file is empty or has no data rows");
+    });
+});
+
+describe("toExportRow", () => {
+    const RAW = {
+        "CONVERSATION ID": "c1",
+        FROM: " Sam Self ",
+        TO: "Ada",
+        DATE: "2025-01-01 10:00:00 UTC",
+        CONTENT: "  hi there ",
+        FOLDER: "INBOX",
+        "SENDER PROFILE URL": "https://linkedin.com/in/sam",
+        "RECIPIENT PROFILE URLS": "https://linkedin.com/in/ada",
+    };
+
+    it("keeps the body verbatim by default", () => {
+        expect(toExportRow(RAW)?.CONTENT).toBe("  hi there ");
+        expect(exportRowBody(RAW)).toBe("  hi there ");
+    });
+
+    it("leaves the body out and passes every other cleaned value through keep", () => {
+        const seen = [];
+        const row = toExportRow(RAW, {
+            withBody: false,
+            keep: (value, column) => {
+                seen.push(column);
+                return value.toUpperCase();
+            },
+        });
+
+        expect(row?.CONTENT).toBe("");
+        expect(row?.FROM).toBe("SAM SELF");
+        expect(seen).not.toContain("CONTENT");
+        expect(seen).toHaveLength(7);
+    });
+
+    it("still drops a row without a body when the body is left out", () => {
+        expect(toExportRow({ ...RAW, CONTENT: "" }, { withBody: false })).toBeNull();
     });
 });

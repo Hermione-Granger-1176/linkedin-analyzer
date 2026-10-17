@@ -235,6 +235,18 @@ After the Clean, Messages, and PDF thread workers stream the stored file through
 - 128 MB goes over the budget, mostly in the Messages worker, which needs every row to detect the self account and so cannot clean while it streams. The public limits stay at 80 MiB until that worker shrinks.
 - Only Chromium is measured here; WebKit runs the end-to-end tests in CI but has no heap sampler.
 
+After the streaming cleaner stores each repeated cell value once (`web/src/features/cleaning/string-pool.js`), measured on 2026-10-17 on the same machine, with a no-pooling run taken alongside for a fair time comparison:
+
+| Size   | Options    | Analytics ready | Messages ready | Peak heap |
+| ------ | ---------- | --------------- | -------------- | --------- |
+| 100 MB | no pooling | 5.58 s          | 12.51 s        | 189 MB    |
+| 100 MB | pooling    | 6.06 s          | 13.19 s        | 149 MB    |
+| 128 MB | pooling    | 6.78 s          | 14.96 s        | 198 MB    |
+
+- Most of the cleaned rows' memory is the cell strings, and names, profile URLs, conversation ids and folders repeat on row after row. Sharing them cuts the rows a worker keeps for a 58 MiB `messages.csv` from 213 MB to 53 MB.
+- Each column samples its first 4,096 values and stops sharing when nearly all were distinct, as dates and message bodies are, which keeps the extra time to about half a second at 100 MB.
+- A 128 MB export now fits the 300 MB budget for analysis.
+
 ### Retained analysis state
 
 `make audit-state` forces garbage collection around each step and reports how many bytes of heap and array-buffer memory each structure keeps alive. It loads the web modules in `measurement` mode, so a 100 MB export passes the raised limits. Cleaned rows are transient: a worker holds them only while it builds state. The page keeps the message and connection state, and the analytics worker keeps its analytics state for filter changes. Field rows show what dropping that field frees, in table order.
@@ -272,6 +284,7 @@ Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
 - Before step 4e both PDF exports went over the budget at 100 MB, with or without message bodies. Most of the peak was the stored text read back from IndexedDB and the analysis workers still alive, not the bodies.
 - After step 4e the PDF export adds about 60 MB with message bodies and about 10 MB without them over the 589 MB analysis peak, and the page holds about 80 MB during the export. The export is no longer what sets the peak, so it gets no size limit of its own; the analysis workers are what must shrink.
 - After the streaming work, a 100 MB export with an 80 MiB `messages.csv` peaked at 367 MB with message bodies, because the bodies are held alongside the analysis. The PDF export now refuses message contents for a `messages.csv` above 60 MiB and says to untick them; a 73 MB export with a 58.4 MiB `messages.csv` peaks at 220 MB and finishes in 9.6 s. Without bodies the 100 MB export peaks at 276 MB (median, 313 MB worst run), and at 128 MB it reaches 397 MB.
+- The thread worker then picks the threads from rows without bodies, sharing repeated values, and reads the file a second time for only the bodies it picked, so the output is unchanged. With the cleaner's pooling, the 73 MB export with bodies peaks at 213 MB, down from 333 MB on the same probe. Without bodies the 100 MB export peaks at 190 to 214 MB in 7 to 8 s, and the 128 MB export at 135 MB. With bodies the 100 MB export would peak at 268 to 303 MB and the 128 MB export at 329 MB, so the 60 MiB limit on message contents stays.
 
 ### Clean screen main-thread time
 

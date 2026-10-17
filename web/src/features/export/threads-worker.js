@@ -13,6 +13,7 @@
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { copyString, createStringPool } from "../cleaning/string-pool.js";
 import {
     canStreamFileText,
     readCsvSource,
@@ -21,8 +22,8 @@ import {
 } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
-import { parseMessagesForExport, toExportRow } from "./messages-parse.js";
-import { selectRecentThreads } from "./threads.js";
+import { exportRowBody, parseMessagesForExport, toExportRow } from "./messages-parse.js";
+import { selectRecentThreadRows, selectRecentThreads } from "./threads.js";
 
 const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
@@ -55,55 +56,145 @@ function contactKeysFrom(connectionsCsv) {
 }
 
 /**
- * Parse the messages source into export rows. A stored upload streams through
- * the parser, so neither its whole text nor a second copy of every record is
- * held. When the stream cannot finish as a messages file, the source is read
- * whole and parsed that way instead, so failures and their messages match.
- * @param {unknown} source - Stored messages Blob or CSV text
- * @returns {Promise<{success: boolean, rows: import("./messages-parse.js").MessageRow[], error: string|null}>}
+ * Stream a stored messages upload through the parser, handing each record to
+ * `onRecord`. When the stream restarts in another encoding, `onRestart` runs
+ * first so the caller can drop what the first attempt gathered.
+ * @param {File} file - Stored messages upload
+ * @param {(record: Record<string, unknown>) => void} onRecord - Receives each parsed record
+ * @param {() => void} onRestart - Runs before the records are sent again
+ * @returns {Promise<boolean>} Whether the stream finished as a messages file
  */
-async function parseMessagesSource(source) {
-    const value = toCsvSource(source);
-    if (typeof value !== "string" && canStreamFileText(/** @type {File} */ (value))) {
-        /** @type {import("./messages-parse.js").MessageRow[]} */
-        let rows = [];
-        /** @param {Record<string, unknown>} record */
-        const onRecord = (record) => {
-            const row = toExportRow(record);
+async function streamRecords(file, onRecord, onRestart) {
+    let processor = LinkedInCleaner.createStreamProcessor(onRecord);
+    await streamFileText(file, {
+        onText: (text) => {
+            processor.push(text);
+        },
+        onRestart: () => {
+            onRestart();
+            processor = LinkedInCleaner.createStreamProcessor(onRecord);
+        },
+    });
+    const streamed = processor.finish();
+    return Boolean(streamed && streamed.fileType === "messages");
+}
+
+/**
+ * First pass: every export row without its body, and the number of the record
+ * each row came from. Selection needs every row but none of the bodies, which
+ * are most of the file.
+ * @param {File} file - Stored messages upload
+ * @returns {Promise<{rows: import("./messages-parse.js").MessageRow[], records: number[]}|null>} Null when the stream cannot finish as a messages file
+ */
+async function streamRowsWithoutBodies(file) {
+    /** @type {import("./messages-parse.js").MessageRow[]} */
+    let rows = [];
+    /** @type {number[]} */
+    let records = [];
+    let recordNumber = 0;
+    let keep = createStringPool();
+    const finished = await streamRecords(
+        file,
+        (record) => {
+            const row = toExportRow(record, { withBody: false, keep });
             if (row) {
                 rows.push(row);
+                records.push(recordNumber);
             }
-        };
-        let processor = LinkedInCleaner.createStreamProcessor(onRecord);
-        await streamFileText(/** @type {File} */ (value), {
-            onText: (text) => {
-                processor.push(text);
-            },
-            onRestart: () => {
-                rows = [];
-                processor = LinkedInCleaner.createStreamProcessor(onRecord);
-            },
-        });
-        const streamed = processor.finish();
-        if (streamed && streamed.fileType === "messages") {
-            return { success: true, rows, error: null };
-        }
-        rows = [];
+            recordNumber += 1;
+        },
+        () => {
+            rows = [];
+            records = [];
+            recordNumber = 0;
+            keep = createStringPool();
+        },
+    );
+    return finished ? { rows, records } : null;
+}
+
+/**
+ * Second pass: read the file again and take the bodies of the selected
+ * messages only. The parse is the same, so record numbers match the first pass.
+ * @param {File} file - Stored messages upload
+ * @param {import("./threads.js").SelectedThreadRef[]} selected - Threads whose messages name their rows
+ * @param {number[]} records - Record number of each first-pass row
+ * @returns {Promise<import("./threads.js").SelectedThread[]>}
+ */
+async function fillBodies(file, selected, records) {
+    /** @type {Map<number, import("./threads.js").ThreadMessage>} */
+    const wanted = new Map();
+    const threads = selected.map((thread) => ({
+        ...thread,
+        messages: thread.messages.map(({ direction, timestamp, rowIndex }) => {
+            const message = { direction, timestamp, body: "" };
+            wanted.set(records[rowIndex], message);
+            return message;
+        }),
+    }));
+    let recordNumber = 0;
+    await streamRecords(
+        file,
+        (record) => {
+            const message = wanted.get(recordNumber);
+            recordNumber += 1;
+            if (message) {
+                message.body = copyString(exportRowBody(record));
+            }
+        },
+        () => {
+            recordNumber = 0;
+        },
+    );
+    return threads;
+}
+
+/**
+ * Pick the recent threads from a stored upload in two streaming passes, so
+ * neither the whole text nor every message body is held at once.
+ * @param {File} file - Stored messages upload
+ * @param {unknown} connectionsSource - Stored connections Blob or CSV text
+ * @param {{people?: number, messagesPerPerson?: number}} limits - Selection limits
+ * @returns {Promise<import("./threads.js").SelectedThread[]|null>} Null when the stream cannot finish as a messages file
+ */
+async function selectFromStream(file, connectionsSource, limits) {
+    const firstPass = await streamRowsWithoutBodies(file);
+    if (!firstPass) {
+        return null;
     }
-    return parseMessagesForExport(await readCsvSource(source));
+    // A Connections file that will not read costs the tiebreak, as one that
+    // will not parse does.
+    const { text: connectionsCsv } = await readOptionalCsvSource(connectionsSource);
+    const selected = selectRecentThreadRows(firstPass.rows, {
+        ...limits,
+        contactKeys: contactKeysFrom(connectionsCsv),
+    });
+    return fillBodies(file, selected, firstPass.records);
 }
 
 /**
  * Parse the messages CSV and pick the recent threads for the export. Each
  * file arrives as the stored upload Blob, read or streamed here, or as CSV
- * text.
+ * text. When a stored upload cannot be streamed as a messages file, it is
+ * read whole and parsed that way instead, so failures and their messages match.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string, people?: number, messagesPerPerson?: number}} payload - Raw payload
  * @returns {Promise<{success: boolean, threads: import("./threads.js").SelectedThread[], error: string|null}>}
  */
 async function processPayload(payload) {
-    const result = await parseMessagesSource(payload.messagesCsv);
-    // A Connections file that will not read costs the tiebreak, as one that
-    // will not parse does.
+    const limits = { people: payload.people, messagesPerPerson: payload.messagesPerPerson };
+    const value = toCsvSource(payload.messagesCsv);
+    if (typeof value !== "string" && canStreamFileText(/** @type {File} */ (value))) {
+        const threads = await selectFromStream(
+            /** @type {File} */ (value),
+            payload.connectionsCsv,
+            limits,
+        );
+        if (threads) {
+            return { success: true, threads, error: null };
+        }
+    }
+
+    const result = parseMessagesForExport(await readCsvSource(payload.messagesCsv));
     const { text: connectionsCsv } = await readOptionalCsvSource(payload.connectionsCsv);
     if (!result.success) {
         return {
@@ -117,8 +208,7 @@ async function processPayload(payload) {
     return {
         success: true,
         threads: selectRecentThreads(result.rows, {
-            people: payload.people,
-            messagesPerPerson: payload.messagesPerPerson,
+            ...limits,
             contactKeys: contactKeysFrom(connectionsCsv),
         }),
         error: null,

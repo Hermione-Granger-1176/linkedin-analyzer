@@ -56,6 +56,18 @@ const MODULE_LAYOUTS = [
             "features/cleaning/configs.js",
             "features/cleaning/csv-parser.js",
             "features/cleaning/field-cleaners.js",
+            "features/cleaning/string-pool.js",
+            "shared/constants.js",
+            "shared/limits.js",
+        ],
+    },
+    {
+        entry: "features/cleaning/cleaner.js",
+        modules: [
+            "features/cleaning/cleaner.js",
+            "features/cleaning/configs.js",
+            "features/cleaning/csv-parser.js",
+            "features/cleaning/field-cleaners.js",
             "shared/constants.js",
             "shared/limits.js",
         ],

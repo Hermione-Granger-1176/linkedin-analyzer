@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Storage } from "../../../src/platform/persistence/storage.js";
+import { probeBlobStorage, Storage } from "../../../src/platform/persistence/storage.js";
 
 describe("Storage", () => {
     it("reports isAvailable as true when IndexedDB exists", () => {
@@ -638,5 +638,114 @@ describe("Storage", () => {
             expect(fileRecord.text).toBeUndefined();
             expect(textRecord.text).toBe("legacy-csv-text");
         });
+    });
+});
+
+/**
+ * Build an IDBFactory stand-in whose probe database behaves as told.
+ * @param {{open?: (request: object) => void, put?: () => void, stored?: unknown, abort?: boolean, deleteThrows?: boolean}} behavior - Probe behavior
+ * @returns {{idb: IDBFactory, closed: () => number}}
+ */
+function fakeIdb(behavior) {
+    let closes = 0;
+    const db = {
+        close: () => {
+            closes += 1;
+        },
+        transaction: () => {
+            const tx = {};
+            const read = { result: behavior.stored };
+            setTimeout(() => (behavior.abort ? tx.onabort?.() : tx.oncomplete?.()), 0);
+            tx.objectStore = () => ({ put: behavior.put || (() => {}), get: () => read });
+            return tx;
+        },
+    };
+    const idb = {
+        open: () => {
+            const request = { result: db };
+            setTimeout(() => (behavior.open || ((r) => r.onsuccess()))(request), 0);
+            return request;
+        },
+        deleteDatabase: () => {
+            if (behavior.deleteThrows) {
+                throw new Error("blocked");
+            }
+        },
+    };
+    return { idb: /** @type {IDBFactory} */ (/** @type {unknown} */ (idb)), closed: () => closes };
+}
+
+describe("probeBlobStorage", () => {
+    it("reports support when a Blob stores and reads back", async () => {
+        expect(await probeBlobStorage()).toBe(true);
+        const { idb } = fakeIdb({ stored: new Blob(["probe"]), deleteThrows: true });
+        expect(await probeBlobStorage({ idb })).toBe(true);
+    });
+
+    it("reports no support when the probe cannot store or read a Blob", async () => {
+        const cases = [
+            { open: (request) => request.onerror() },
+            {
+                put: () => {
+                    throw new DOMException("refused", "UnknownError");
+                },
+            },
+            { abort: true },
+            { stored: "probe" },
+            { stored: new Blob(["other"]) },
+            {
+                stored: Object.assign(new Blob(["probe"]), {
+                    text: () => Promise.reject(new Error("gone")),
+                }),
+            },
+        ];
+        for (const behavior of cases) {
+            expect(await probeBlobStorage(fakeIdb(behavior))).toBe(false);
+        }
+        const throwing = {
+            open: () => {
+                throw new Error("no idb");
+            },
+            deleteDatabase: () => {},
+        };
+        expect(
+            await probeBlobStorage({
+                idb: /** @type {IDBFactory} */ (/** @type {unknown} */ (throwing)),
+            }),
+        ).toBe(false);
+    });
+
+    it("gives up on a probe that never answers and releases a late connection", async () => {
+        let late;
+        const { idb, closed } = fakeIdb({
+            open: (request) => {
+                late = request;
+            },
+        });
+        expect(await probeBlobStorage({ idb, timeoutMs: 5 })).toBe(false);
+        late.onsuccess();
+        expect(closed()).toBe(1);
+    });
+
+    it("stores bytes from the start when the session cannot store Blobs", async () => {
+        const put = IDBObjectStore.prototype.put;
+        const spy = vi
+            .spyOn(IDBObjectStore.prototype, "put")
+            .mockImplementation(function guarded(value, key) {
+                if (value instanceof Blob || (value && value.blob instanceof Blob)) {
+                    throw new DOMException("Error preparing Blob/File data", "UnknownError");
+                }
+                return put.call(this, value, key);
+            });
+        try {
+            vi.resetModules();
+            const { Storage: Fresh } = await import("../../../src/platform/persistence/storage.js");
+            await Fresh.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 });
+            // One attempt only: the probe already said Blobs will not store.
+            expect(spy.mock.calls.filter(([value]) => value && "blob" in value)).toHaveLength(1);
+            expect(await (await Fresh.getFile("shares")).blob.text()).toBe("a,b");
+        } finally {
+            spy.mockRestore();
+        }
     });
 });

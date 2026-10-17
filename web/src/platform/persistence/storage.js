@@ -133,6 +133,81 @@ function buildOutreachPayload(outreach) {
     };
 }
 
+const BLOB_PROBE_DB = "linkedin-analyzer-blob-probe";
+const BLOB_PROBE_TIMEOUT_MS = 2000;
+
+/**
+ * Check whether this browser can store a Blob in IndexedDB and read it back.
+ *
+ * WebKit can refuse a Blob in an ephemeral session, such as a Safari private
+ * window or a Playwright context, and some builds never answer such a write at
+ * all. A write that never answers would also hold up every later write to the
+ * same store, so the probe runs in its own throwaway database, gives up after
+ * a short timeout, and the app stores bytes for the session when it fails.
+ * @param {{idb?: IDBFactory, timeoutMs?: number}} [options] - Overridable for tests
+ * @returns {Promise<boolean>}
+ */
+export function probeBlobStorage({ idb = indexedDB, timeoutMs = BLOB_PROBE_TIMEOUT_MS } = {}) {
+    return new Promise((resolve) => {
+        let settled = false;
+        let db = null;
+        const finish = (supported) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            globalThis.clearTimeout(timer);
+            if (db) {
+                db.close();
+            }
+            try {
+                idb.deleteDatabase(BLOB_PROBE_DB);
+            } catch {
+                // The probe database is disposable; leaving it costs nothing.
+            }
+            resolve(supported);
+        };
+        const timer = globalThis.setTimeout(() => finish(false), timeoutMs);
+        try {
+            const request = idb.open(BLOB_PROBE_DB, 1);
+            request.onupgradeneeded = () => {
+                request.result.createObjectStore("probe");
+            };
+            request.onerror = () => finish(false);
+            request.onsuccess = () => {
+                if (settled) {
+                    // The probe already gave up; release the late connection.
+                    request.result.close();
+                    return;
+                }
+                db = request.result;
+                try {
+                    const tx = db.transaction("probe", "readwrite");
+                    const store = tx.objectStore("probe");
+                    store.put(new Blob(["probe"]), "probe");
+                    const read = store.get("probe");
+                    tx.onabort = () => finish(false);
+                    tx.oncomplete = () => {
+                        const stored = read.result;
+                        if (!(stored instanceof Blob)) {
+                            finish(false);
+                            return;
+                        }
+                        stored.text().then(
+                            (text) => finish(text === "probe"),
+                            () => finish(false),
+                        );
+                    };
+                } catch {
+                    finish(false);
+                }
+            };
+        } catch {
+            finish(false);
+        }
+    });
+}
+
 export const Storage = (() => {
     "use strict";
 
@@ -385,6 +460,10 @@ export const Storage = (() => {
             () => memory.saveFile(type, data),
             async (db) => {
                 const { blob, ...metadata } = buildFilePayload(type, data);
+                if (blob && !(await canStoreBlobs())) {
+                    await putFileRecord(db, metadata, await blob.arrayBuffer());
+                    return;
+                }
                 try {
                     await putFileRecord(db, metadata, blob);
                 } catch (error) {
@@ -397,6 +476,19 @@ export const Storage = (() => {
                 }
             },
         );
+    }
+
+    let blobSupport = null;
+
+    /**
+     * Whether this session can store Blobs in IndexedDB, probed once.
+     * @returns {Promise<boolean>}
+     */
+    function canStoreBlobs() {
+        if (!blobSupport) {
+            blobSupport = probeBlobStorage();
+        }
+        return blobSupport;
     }
 
     /**

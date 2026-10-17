@@ -18,13 +18,13 @@ export const JANK_WINDOW_MS = 5000;
  * @param {typeof PerformanceObserver|undefined} options.Observer - PerformanceObserver
  * @param {() => boolean} options.isBusy - True while processing or rendering is expected to block
  * @param {() => void} options.onJank - Called once when the page janks while idle
- * @param {() => number[]} [options.busyMarks] - performance.now() times at which
- * the page became or stopped being busy. Entries arrive after their frame, so a
- * render that starts and ends its busy state within one long frame reads idle by
- * delivery time; a mark inside the frame's span exposes it.
+ * @param {() => Array<{start: number, end: number}>} [options.busySpans] -
+ * performance.now() intervals during which the page was busy (end is Infinity
+ * while it still is). Entries arrive after their frame, often once the busy
+ * state is over, so a frame that overlaps any span is not counted.
  * @returns {() => void} Stops watching
  */
-export function watchForJank({ Observer, isBusy, onJank, busyMarks = () => [] }) {
+export function watchForJank({ Observer, isBusy, onJank, busySpans = () => [] }) {
     if (typeof Observer !== "function") {
         return () => {};
     }
@@ -45,7 +45,10 @@ export function watchForJank({ Observer, isBusy, onJank, busyMarks = () => [] })
         }
         for (const entry of list.getEntries()) {
             const end = entry.startTime + (entry.duration || 0);
-            if (isBusy() || busyMarks().some((mark) => mark >= entry.startTime && mark <= end)) {
+            const overlapsBusy = busySpans().some(
+                (span) => span.start <= end && span.end >= entry.startTime,
+            );
+            if (isBusy() || overlapsBusy) {
                 frames = [];
                 continue;
             }

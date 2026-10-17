@@ -11,28 +11,50 @@ import { setTelemetryEffectsTier } from "../../platform/observability/sentry.js"
 
 const OVERRIDE_CYCLE = Object.freeze({ auto: "lite", lite: "full", full: "auto" });
 const OVERRIDE_LABELS = Object.freeze({ auto: "Auto", lite: "Lite", full: "Full" });
-// Busy marks kept for matching late long-frame entries; a few seconds' worth.
-const MAX_BUSY_MARKS = 32;
+// Busy spans kept for matching late long-frame entries.
+const MAX_BUSY_SPANS = 16;
 
 export const Effects = (() => {
     "use strict";
 
     let initialized = false;
-    /** @type {number[]} */
-    const busyMarks = [];
+    /** @type {Array<{start: number, end: number}>} */
+    const busySpans = [];
 
     /**
-     * Record when the overlays or a screen's loading state change, so a long
-     * frame that spans the change is not blamed on decoration.
+     * Record when the page is busy, from the overlays and the screens' loading
+     * state, so a long frame reported after the work ended is not blamed on
+     * decoration. A busy state that starts and ends within one task leaves a
+     * zero-length span at the time the observer runs, inside that task.
      */
-    function recordBusyMarks() {
+    function recordBusySpans() {
         if (typeof MutationObserver !== "function") {
             return;
         }
+        const open = () => {
+            const last = busySpans[busySpans.length - 1];
+            return last && last.end === Infinity ? last : null;
+        };
+        const push = (span) => {
+            busySpans.push(span);
+            if (busySpans.length > MAX_BUSY_SPANS) {
+                busySpans.shift();
+            }
+        };
+        if (isBusy()) {
+            push({ start: performance.now(), end: Infinity });
+        }
         const observer = new MutationObserver(() => {
-            busyMarks.push(performance.now());
-            if (busyMarks.length > MAX_BUSY_MARKS) {
-                busyMarks.shift();
+            const now = performance.now();
+            const current = open();
+            if (isBusy()) {
+                if (!current) {
+                    push({ start: now, end: Infinity });
+                }
+            } else if (current) {
+                current.end = now;
+            } else {
+                push({ start: now, end: now });
             }
         });
         ["progressOverlay", "contentLoadingOverlay"].forEach((id) => {
@@ -107,14 +129,14 @@ export const Effects = (() => {
             });
         }
 
-        recordBusyMarks();
+        recordBusySpans();
         watchForJank({
             Observer: typeof PerformanceObserver === "undefined" ? undefined : PerformanceObserver,
             // An explicit choice ignores jank, so it must not use up the
             // one-shot watcher that Auto needs later.
             isBusy: () => isBusy() || getDeviceProfile().override !== "auto",
             onJank: () => apply(downgradeForJank()),
-            busyMarks: () => busyMarks,
+            busySpans: () => busySpans,
         });
     }
 

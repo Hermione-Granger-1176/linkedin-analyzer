@@ -144,9 +144,13 @@ test("the Lite override creates no WebGL context and animates only transform and
 test("Auto probes WebGL once and the toggle cycles through every choice", async ({ page }) => {
     await countWebglRequests(page);
     // Auto probes only when the device could reach rich, so do not depend on
-    // the runner's core count.
+    // the runner's cores or memory.
     await page.addInitScript(() => {
         Object.defineProperty(Navigator.prototype, "hardwareConcurrency", {
+            configurable: true,
+            get: () => 8,
+        });
+        Object.defineProperty(Navigator.prototype, "deviceMemory", {
             configurable: true,
             get: () => 8,
         });

@@ -91,22 +91,41 @@ describe("Effects", () => {
         expect(document.documentElement.dataset.effects).toBe("lite");
     });
 
-    it("marks busy changes for late long frames and ignores jank under an explicit choice", async () => {
+    it("records busy spans for late long frames and ignores jank under an explicit choice", async () => {
         const toggle = mountToggle();
+        document.getElementById("progressOverlay").hidden = false;
         const Effects = await loadEffects();
         Effects.init();
-        const { isBusy, busyMarks } = jankMocks.watchForJank.mock.calls[0][0];
+        const { isBusy, busySpans } = jankMocks.watchForJank.mock.calls[0][0];
+        const progress = document.getElementById("progressOverlay");
+        const screen = document.querySelector(".screen");
 
-        expect(busyMarks()).toEqual([]);
-        for (let index = 0; index < 40; index += 1) {
-            document.getElementById("progressOverlay").hidden = index % 2 === 0;
+        // Busy at start opens a span that closes when the work ends.
+        expect(busySpans()).toHaveLength(1);
+        expect(busySpans()[0].end).toBe(Infinity);
+        progress.hidden = true;
+        await Promise.resolve();
+        expect(busySpans()[0].end).toBeLessThan(Infinity);
+
+        // Busy again opens one span, however many changes keep it busy.
+        progress.hidden = false;
+        await Promise.resolve();
+        screen.classList.add("is-loading");
+        await Promise.resolve();
+        expect(busySpans()).toHaveLength(2);
+        progress.hidden = true;
+        screen.classList.remove("is-loading");
+        await Promise.resolve();
+
+        // A busy flash within one task leaves a zero-length span.
+        for (let index = 0; index < 20; index += 1) {
+            progress.hidden = false;
+            progress.hidden = true;
             await Promise.resolve();
         }
-        document.querySelector(".screen").classList.add("is-loading");
-        await Promise.resolve();
-        expect(busyMarks()).toHaveLength(32);
-        document.querySelector(".screen").classList.remove("is-loading");
-        document.getElementById("progressOverlay").hidden = true;
+        expect(busySpans()).toHaveLength(16);
+        const last = busySpans()[busySpans().length - 1];
+        expect(last.end).toBe(last.start);
 
         expect(isBusy()).toBe(false);
         toggle.click();

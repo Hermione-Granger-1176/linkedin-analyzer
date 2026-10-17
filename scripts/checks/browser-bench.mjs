@@ -182,29 +182,35 @@ async function startHeapSampler(client) {
     });
 
     const peak = { combined: 0, page: 0, workers: 0 };
-    let busy = false;
+    /** @type {Promise<void>|null} */
+    let inFlight = null;
     let stopped = false;
-    const sample = async () => {
-        if (busy || stopped) {
-            return;
+    const takeSample = async () => {
+        const pageHeap = await client.send("Runtime.getHeapUsage").catch(() => null);
+        const replies = await Promise.all(
+            [...workers].map((sessionId) => sendToWorker(sessionId, "Runtime.getHeapUsage")),
+        );
+        const pageUsed = pageHeap ? pageHeap.usedSize : 0;
+        const workersUsed = replies.reduce(
+            (sum, reply) => sum + (reply.result ? reply.result.usedSize : 0),
+            0,
+        );
+        peak.page = Math.max(peak.page, pageUsed);
+        peak.workers = Math.max(peak.workers, workersUsed);
+        peak.combined = Math.max(peak.combined, pageUsed + workersUsed);
+    };
+    // A caller that arrives mid-sample waits for that sample, so the final
+    // sample before shutdown is never skipped.
+    const sample = () => {
+        if (stopped) {
+            return Promise.resolve();
         }
-        busy = true;
-        try {
-            const pageHeap = await client.send("Runtime.getHeapUsage").catch(() => null);
-            const replies = await Promise.all(
-                [...workers].map((sessionId) => sendToWorker(sessionId, "Runtime.getHeapUsage")),
-            );
-            const pageUsed = pageHeap ? pageHeap.usedSize : 0;
-            const workersUsed = replies.reduce(
-                (sum, reply) => sum + (reply.result ? reply.result.usedSize : 0),
-                0,
-            );
-            peak.page = Math.max(peak.page, pageUsed);
-            peak.workers = Math.max(peak.workers, workersUsed);
-            peak.combined = Math.max(peak.combined, pageUsed + workersUsed);
-        } finally {
-            busy = false;
+        if (!inFlight) {
+            inFlight = takeSample().finally(() => {
+                inFlight = null;
+            });
         }
+        return inFlight;
     };
     const timer = setInterval(sample, SAMPLE_INTERVAL_MS);
     return {

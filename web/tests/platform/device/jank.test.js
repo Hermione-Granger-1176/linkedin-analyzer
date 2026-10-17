@@ -74,23 +74,29 @@ describe("watchForJank", () => {
         expect(onJank).not.toHaveBeenCalled();
     });
 
-    it("ignores long frames that span a busy mark reported after the work ended", () => {
+    it("ignores long frames inside or across busy spans reported after the work ended", () => {
         const { FakeObserver, instances } = fakeObserverClass(["longtask"]);
         const onJank = vi.fn();
-        const marks = [];
+        const spans = [{ start: 0, end: 1000 }];
         watchForJank({
             Observer: FakeObserver,
             isBusy: () => false,
             onJank,
-            busyMarks: () => marks,
+            busySpans: () => spans,
         });
+        const emit = (startTimes) =>
+            instances[0].callback({
+                getEntries: () => startTimes.map((startTime) => ({ startTime, duration: 100 })),
+            });
 
-        marks.push(0, 10, 20, 30, 40);
-        instances[0].emit([0, 10, 20, 30, 40]);
+        // A delayed batch wholly inside a finished busy interval.
+        emit([100, 250, 400, 550, 700]);
+        // A frame that starts before a span and runs into it.
+        spans.push({ start: 1500, end: 1500 });
+        emit([1450]);
         expect(onJank).not.toHaveBeenCalled();
-        instances[0].callback({
-            getEntries: () => [50, 60, 70, 80, 90].map((startTime) => ({ startTime, duration: 5 })),
-        });
+
+        emit([2000, 2100, 2200, 2300, 2400]);
         expect(onJank).toHaveBeenCalledTimes(1);
     });
 

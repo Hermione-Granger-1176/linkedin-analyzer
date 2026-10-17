@@ -1,8 +1,7 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
 import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { readCsvSource } from "../upload/read.js";
+import { processCsvSource } from "../cleaning/process-source.js";
 
 import { buildGrowthTimeline, computeStats } from "./view.js";
 
@@ -17,16 +16,19 @@ import { buildGrowthTimeline, computeStats } from "./view.js";
  * time-range filter and build company and position summaries without another
  * worker round-trip.
  *
- * @param {string} connectionsCsv - Raw CSV text from the Connections export
- * @returns {{success: boolean, analytics?: Readonly<ConnectionsAnalytics>,
- * rows?: CleanedConnectionRow[], error?: string}}
+ * A stored upload streams through the cleaner, so the whole file is never held
+ * as one string.
+ *
+ * @param {unknown} connectionsCsv - Stored upload Blob or raw CSV text from the Connections export
+ * @returns {Promise<{success: boolean, analytics?: Readonly<ConnectionsAnalytics>,
+ * rows?: CleanedConnectionRow[], error?: string}>}
  */
-function processConnections(connectionsCsv) {
-    if (!connectionsCsv || typeof connectionsCsv !== "string") {
+async function processConnections(connectionsCsv) {
+    if (!connectionsCsv) {
         return { success: false, error: "No connections CSV data provided." };
     }
 
-    const result = LinkedInCleaner.process(connectionsCsv, "connections");
+    const result = await processCsvSource(connectionsCsv, "connections");
     if (!result.success) {
         return { success: false, error: result.error || "Unable to parse Connections.csv." };
     }
@@ -123,7 +125,7 @@ if (typeof self !== "undefined") {
         const message = parsed.value;
         try {
             // The page sends the stored upload Blob; read it here, off the main thread.
-            const result = processConnections(await readCsvSource(message.payload.connectionsCsv));
+            const result = await processConnections(message.payload.connectionsCsv);
 
             self.postMessage({
                 type: "processed",

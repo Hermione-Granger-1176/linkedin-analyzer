@@ -2,8 +2,8 @@
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { streamCleanFile } from "../cleaning/process-source.js";
-import { canStreamFileText, readCsvSource, readFileAsText } from "../upload/read.js";
+import { processCsvSource, streamCleanFile } from "../cleaning/process-source.js";
+import { canStreamFileText, readFileAsText } from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -423,11 +423,9 @@ function takeAnalyticsBase(jobId, fileName) {
 async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
-    const sourceCsvByType = {
-        shares: await readCsvSource(sharesCsv),
-        comments: await readCsvSource(commentsCsv),
-        connections: await readCsvSource(connectionsCsv),
-    };
+    // Each source streams through the cleaner in turn, so no file is held as
+    // one string and only one is being read at a time.
+    const sourceByType = { shares: sharesCsv, comments: commentsCsv, connections: connectionsCsv };
     /** @type {Record<AnalyticsSourceType, (cleanedData: CleanedRow[]) => void>} */
     const assignSourceByType = {
         shares: (cleanedData) => {
@@ -450,21 +448,21 @@ async function handleRestoreFiles(payload) {
     // assigned through the indirection above, which control-flow analysis cannot
     // follow.
     let hasPostingSource = false;
-    ANALYTICS_SOURCE_TYPES.forEach((type) => {
-        const csvText = sourceCsvByType[type];
-        if (!csvText) {
-            return;
+    for (const type of ANALYTICS_SOURCE_TYPES) {
+        const source = sourceByType[type];
+        if (!source) {
+            continue;
         }
 
-        const parsed = LinkedInCleaner.process(csvText, type);
+        const parsed = await processCsvSource(source, type);
         if (!parsed.success) {
-            return;
+            continue;
         }
         assignSourceByType[type](parsed.cleanedData);
         if ((type === "shares" || type === "comments") && parsed.cleanedData.length > 0) {
             hasPostingSource = true;
         }
-    });
+    }
 
     // restoreFiles only seeds the worker's source datasets so a subsequent
     // addFile recomputes analytics from the full set. The aggregate the dashboard

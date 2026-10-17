@@ -477,14 +477,18 @@ export const LinkedInCleaner = (() => {
      * @returns {RowCleaner} Cleans a row, returning null when the row is dropped
      */
     function createRowCleaner(fileType) {
-        const cleaningPlan = CLEANING_PLANS[fileType];
+        const steps = CLEANING_PLANS[fileType].map((column) => ({
+            name: column.name,
+            clean: column.clean,
+            cache: createColumnCache(),
+        }));
         const keepRow = createRowFilter(fileType);
 
         return (row) => {
             /** @type {CleanedRow} */
             const cleanedRow = {};
-            for (const column of cleaningPlan) {
-                cleanedRow[column.name] = column.clean(row[column.name]);
+            for (const step of steps) {
+                cleanedRow[step.name] = step.cache(row[step.name], step.clean);
             }
             return keepRow(cleanedRow) ? cleanedRow : null;
         };
@@ -781,10 +785,7 @@ export const LinkedInCleaner = (() => {
                     return;
                 }
                 headers = normalized;
-                cleanCells = createCellRowCleaner(
-                    /** @type {FileType} */ (fileType),
-                    normalized,
-                );
+                cleanCells = createCellRowCleaner(/** @type {FileType} */ (fileType), normalized);
                 return;
             }
             if (isRowEmpty(row)) {

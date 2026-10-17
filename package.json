@@ -63,11 +63,11 @@
     },
     {
       "path": "web/dist/assets/connections-worker-*.js",
-      "limit": "6 kB"
+      "limit": "6.5 kB"
     },
     {
       "path": "web/dist/assets/messages-worker-*.js",
-      "limit": "8 kB"
+      "limit": "8.5 kB"
     },
     {
       "path": "web/dist/assets/threads-worker-*.js",

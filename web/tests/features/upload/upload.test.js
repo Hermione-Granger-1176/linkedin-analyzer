@@ -1128,6 +1128,41 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("does not make the worker re-read a file it just processed", async () => {
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const input = document.getElementById("multiFileInput");
+        const upload = async () => {
+            const file = new File(["col\nval"], "Shares.csv", { type: "text/csv" });
+            Object.defineProperty(input, "files", { value: [file], configurable: true });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+
+        await upload();
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", name: "Shares.csv", rowCount: 2, updatedAt: 500 },
+        ]);
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "shares",
+                    fileName: "Shares.csv",
+                    rowCount: 2,
+                    jobId: null,
+                    analyticsBase: { months: { "2023-05": { posts: 2 } } },
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // The next upload finds the stored set already primed.
+        await upload();
+
+        const types = workerInstance.postMessage.mock.calls.map((call) => call[0].type);
+        expect(types).toEqual(["addFile", "addFile"]);
+    });
+
     describe("analytics on a reply whose file is not stored", () => {
         const BASE = { months: { "2023-05": { posts: 2 } } };
 

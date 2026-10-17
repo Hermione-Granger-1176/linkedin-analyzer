@@ -1,6 +1,11 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
 import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.js";
+import {
+    extractWorkerError,
+    extractWorkerRejection,
+    toErrorMessage,
+} from "../../shared/worker-errors.js";
 import { processCsvSource } from "../cleaning/process-source.js";
 
 import { buildGrowthTimeline, computeStats } from "./view.js";
@@ -47,21 +52,6 @@ async function processConnections(connectionsCsv) {
 }
 
 /**
- * Convert unknown error values into a message string.
- * @param {unknown} error - Error value to normalize
- * @returns {string}
- */
-function toErrorMessage(error) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    if (typeof error === "string" && error) {
-        return error;
-    }
-    return "Connections worker runtime failure.";
-}
-
-/**
  * Post a normalized worker error payload.
  * @param {number|string} requestId - Worker request identifier
  * @param {unknown} error - Error value to normalize
@@ -71,40 +61,9 @@ function postWorkerError(requestId, error) {
         type: "error",
         requestId,
         payload: {
-            message: toErrorMessage(error),
+            message: toErrorMessage(error, "Connections worker runtime failure."),
         },
     });
-}
-
-/**
- * Extract an error-like value from a worker error event.
- * @param {unknown} event - Worker error event
- * @returns {unknown}
- */
-function extractWorkerError(event) {
-    /* v8 ignore next 3 */
-    if (!event || typeof event !== "object") {
-        return undefined;
-    }
-    if ("error" in event && event.error) {
-        return event.error;
-    }
-    if ("message" in event && event.message) {
-        return event.message;
-    }
-    return undefined;
-}
-
-/**
- * Extract rejection reason from a worker unhandledrejection event.
- * @param {unknown} event - Worker rejection event
- * @returns {unknown}
- */
-function extractWorkerRejection(event) {
-    if (!event || typeof event !== "object" || !("reason" in event)) {
-        return undefined;
-    }
-    return event.reason;
 }
 
 /* -- Worker message handler -------------------------------------------------- */

@@ -1,6 +1,11 @@
 /* LinkedIn Analyzer - Analytics Web Worker */
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
+import {
+    extractWorkerError,
+    extractWorkerRejection,
+    toErrorMessage,
+} from "../../shared/worker-errors.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { processCsvSource, streamCleanFile } from "../cleaning/process-source.js";
 import { canStreamFileText, readFileAsText } from "../upload/read.js";
@@ -17,6 +22,9 @@ import { AnalyticsEngine } from "./activity.js";
 /** @typedef {import("./activity.js").AnalyticsViewPayload} AnalyticsViewPayload */
 /** @typedef {import("./activity.js").HydratedAnalytics} HydratedAnalytics */
 /** @typedef {"shares"|"comments"|"connections"} AnalyticsSourceType */
+
+/** Posted when a failure carries no message of its own. */
+const RUNTIME_FAILURE = "Worker runtime failure.";
 
 /** @type {CleanedRow[]|null} */
 let sharesData = null;
@@ -173,23 +181,6 @@ function postError(requestId, message) {
 }
 
 /**
- * Convert unknown error values into a message string.
- * @param {unknown} error
- * @returns {string}
- */
-function toErrorMessage(error) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    /* v8 ignore next 3 */
-    if (typeof error === "string" && error) {
-        return error;
-    }
-    /* v8 ignore next */
-    return "Worker runtime failure.";
-}
-
-/**
  * Store a view payload in the LRU cache, trimming old entries when full.
  * @param {string} key - Cache key from getViewKey
  * @param {AnalyticsViewPayload} payload - The view and insights payload to cache
@@ -315,7 +306,7 @@ async function handleAddFile(payload) {
             self.postMessage({
                 type: "fileProcessed",
                 payload: {
-                    error: toErrorMessage(error) || "Error reading file. Please try again.",
+                    error: toErrorMessage(error, RUNTIME_FAILURE),
                     jobId,
                     fileName,
                     analyticsBase: takeAnalyticsBase(jobId, fileName),
@@ -585,7 +576,7 @@ function enqueueRequest(run, requestId) {
         try {
             await run();
         } catch (error) {
-            postError(requestId || 0, toErrorMessage(error));
+            postError(requestId || 0, toErrorMessage(error, RUNTIME_FAILURE));
         }
     });
     return requestQueue;
@@ -646,11 +637,11 @@ self.addEventListener("message", handleMessage);
 
 self.addEventListener("error", (event) => {
     /* v8 ignore next */
-    postError(0, toErrorMessage(event && event.error ? event.error : event && event.message));
+    postError(0, toErrorMessage(extractWorkerError(event), RUNTIME_FAILURE));
 });
 
 self.addEventListener("unhandledrejection", (event) => {
-    postError(0, toErrorMessage(event && event.reason));
+    postError(0, toErrorMessage(extractWorkerRejection(event), RUNTIME_FAILURE));
 });
 
 export {

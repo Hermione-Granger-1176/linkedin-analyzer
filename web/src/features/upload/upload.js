@@ -14,6 +14,7 @@ import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPES } from "../../shared/constants.js";
 import { MAX_FILE_BYTES } from "../../shared/limits.js";
+import { toErrorMessage } from "../../shared/worker-errors.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
@@ -88,15 +89,6 @@ export const UploadPage = (() => {
      */
     function formatRows(count) {
         return `${count} ${count === 1 ? "row" : "rows"}`;
-    }
-
-    /**
-     * @param {unknown} error - Caught value
-     * @param {string} fallback - Message when the error has none
-     * @returns {string}
-     */
-    function toErrorMessage(error, fallback) {
-        return error instanceof Error && error.message ? error.message : fallback;
     }
 
     /** @type {Worker|null} */

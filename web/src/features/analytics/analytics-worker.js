@@ -2,12 +2,8 @@
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import {
-    canStreamFileText,
-    readCsvSource,
-    readFileAsText,
-    streamFileText,
-} from "../upload/read.js";
+import { streamCleanFile } from "../cleaning/process-source.js";
+import { canStreamFileText, readCsvSource, readFileAsText } from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -273,27 +269,12 @@ async function readAndProcessUpload(file, jobId, fileName) {
         };
     }
 
-    let processor = LinkedInCleaner.createStreamProcessor();
-    const read = await readUpload(
-        (options) =>
-            streamFileText(file, {
-                ...options,
-                onText: (text) => {
-                    processor.push(text);
-                },
-                onRestart: () => {
-                    processor = LinkedInCleaner.createStreamProcessor();
-                },
-            }),
-        jobId,
-        fileName,
-    );
+    const read = await readUpload((options) => streamCleanFile(file, options), jobId, fileName);
     if (!read) {
         return null;
     }
-    const streamed = processor.finish();
-    if (streamed) {
-        return { usedFallback: read.usedFallback, processed: streamed };
+    if (read.processed) {
+        return { usedFallback: read.usedFallback, processed: read.processed };
     }
     const whole = await readUpload((options) => readFileAsText(file, options), jobId, fileName);
     if (!whole) {

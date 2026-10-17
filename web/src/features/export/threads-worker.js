@@ -12,9 +12,9 @@
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
 import { toCsvSource } from "../../shared/csv-source.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { streamCleanFile } from "../cleaning/process-source.js";
 import { copyString, createValueCache } from "../cleaning/string-pool.js";
-import { canStreamFileText, readCsvSource, streamFileText } from "../upload/read.js";
+import { canStreamFileText, readCsvSource } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { exportRowBody, parseMessagesForExport, toExportRow } from "./messages-parse.js";
@@ -74,18 +74,8 @@ async function readConnections(connectionsCsv) {
  * @returns {Promise<boolean>} Whether the stream finished as a messages file
  */
 async function streamRecords(file, onRecord, onRestart) {
-    let processor = LinkedInCleaner.createStreamProcessor(onRecord);
-    await streamFileText(file, {
-        onText: (text) => {
-            processor.push(text);
-        },
-        onRestart: () => {
-            onRestart();
-            processor = LinkedInCleaner.createStreamProcessor(onRecord);
-        },
-    });
-    const streamed = processor.finish();
-    return Boolean(streamed && streamed.fileType === "messages");
+    const { processed } = await streamCleanFile(file, { onRecord, onRestart });
+    return processed?.fileType === "messages";
 }
 
 /**

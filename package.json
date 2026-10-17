@@ -45,6 +45,7 @@
     "@sentry/browser": "^11.6.0",
     "jspdf": "^4.2.1",
     "roughjs": "^4.6.6",
+    "svelte": "5.57.1",
     "web-vitals": "^6.2.2",
     "write-excel-file": "^4.1.1"
   },
@@ -60,6 +61,10 @@
     {
       "path": "web/dist/assets/screen-*.js",
       "limit": "21 kB"
+    },
+    {
+      "path": "web/dist/assets/svelte-*.js",
+      "limit": "13 kB"
     },
     {
       "path": "web/dist/assets/analytics-worker-*.js",
@@ -94,6 +99,7 @@
     "@playwright/test": "^1.63.0",
     "@sentry/vite-plugin": "^5.4.1",
     "@size-limit/file": "^14.2.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@types/node": "^26.6.5",
     "@typescript-eslint/parser": "8.70.1",
     "@vitest/coverage-v8": "^5.0.3",

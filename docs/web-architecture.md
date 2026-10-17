@@ -1,6 +1,6 @@
 # Web architecture
 
-The web app is a static, vanilla JavaScript single-page app. `web/src/app.js` composes routes, screens, persistence, workers, observability, tutorials, and the PDF export. Feature code stays under `web/src/features/`; browser infrastructure stays under `web/src/platform/`.
+The web app is a static JavaScript single-page app. Screen controllers, workers, and storage are plain modules; screen views can be Svelte components. `web/src/app.js` composes routes, screens, persistence, workers, observability, tutorials, and the PDF export. Feature code stays under `web/src/features/`; browser infrastructure stays under `web/src/platform/`.
 
 ## Why the app uses a hash router
 
@@ -10,7 +10,11 @@ The registered routes are `home`, `clean`, `analytics`, `connections`, `messages
 
 The upload screen ships in the main bundle because most visits land on it. Every other screen registers a loader instead of a controller, and its code is fetched the first time its route opens: the screen manager shows the loading overlay, waits for the import, then initializes the controller with the route's latest parameters. A failed import is reported and tried again on the next visit. Once an upload makes Analytics available, `web/src/app/route-preload.js` fetches its code while the browser is idle, except on the lite effects tier with Save-Data on.
 
-[ADR-002](adr/002-no-framework-hash-routed-spa.md) records the choice to use a small hand-written router instead of a UI framework and history-based routing.
+[ADR-002](adr/002-no-framework-hash-routed-spa.md) records the choice to use a small hand-written router instead of history-based routing.
+
+## Where Svelte fits
+
+[ADR-011](adr/011-svelte-for-screen-views.md) lets a screen render parts of its view with Svelte 5 components. A component mounts into an element the screen's markup already has, and the controller calls the functions it exposes with results it already holds, such as a worker reply. The Insights card grid (`web/src/features/insights/InsightCards.svelte`) is the first. Components never read files, talk to workers, or hold raw datasets, and they set no inline styles, so the CSP stays as it is. The Svelte runtime is one shared chunk that loads with the first screen that needs it.
 
 ## How files move through the app
 

@@ -570,7 +570,12 @@ describe("handleAddFile with an uploaded File", () => {
         await handleAddFile({ file, fileName: "Shares.csv", jobId: "job-2" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
-        expect(processed.payload).toEqual({ error: "disk gone", jobId: "job-2", fileName: "Shares.csv" });
+        expect(processed.payload).toEqual({
+            error: "disk gone",
+            jobId: "job-2",
+            fileName: "Shares.csv",
+            analyticsBase: null,
+        });
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
     });
 
@@ -867,6 +872,106 @@ describe("message event dispatcher", () => {
         // Requests after the clear run as normal.
         await handlers.message({ data: { type: "initBase", payload: null } });
         expect(posted.at(-1).type).toBe("init");
+    });
+
+    /**
+     * Load a fresh worker module and return its message handler and posts.
+     * @returns {Promise<{handlers: Record<string, Function>, posted: object[], LC: object, AE: object}>}
+     */
+    async function loadWorker() {
+        const posted = [];
+        const handlers = {};
+        globalThis.self = {
+            addEventListener: (type, fn) => {
+                handlers[type] = fn;
+            },
+            postMessage: vi.fn((m) => posted.push(m)),
+        };
+        vi.resetModules();
+        await import("../../../src/features/analytics/analytics-worker.js");
+        const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
+        const { AnalyticsEngine: AE } = await import("../../../src/features/analytics/activity.js");
+        LC.process.mockReset();
+        AE.compute.mockReset();
+        AE.compute.mockReturnValue(makeAnalytics());
+        return { handlers, posted, LC, AE };
+    }
+
+    /**
+     * @param {string} fileType - Type the mocked cleaner reports
+     * @returns {object} A successful process() result
+     */
+    function cleaned(fileType) {
+        return {
+            success: true,
+            fileType,
+            cleanedData: [{ Date: "2025-01-02 05:00" }],
+            rowCount: 1,
+        };
+    }
+
+    /** @param {string} fileName */
+    function addFile(fileName) {
+        return { data: { type: "addFile", payload: { csvText: "x", fileName } } };
+    }
+
+    it("computes a batch's analytics once, on its last reply", async () => {
+        const { handlers, posted, LC, AE } = await loadWorker();
+        LC.process
+            .mockReturnValueOnce(cleaned("shares"))
+            .mockReturnValueOnce(cleaned("comments"))
+            .mockReturnValueOnce(cleaned("connections"));
+
+        handlers.message(addFile("Shares.csv"));
+        handlers.message(addFile("Comments.csv"));
+        await handlers.message(addFile("Connections.csv"));
+
+        expect(AE.compute).toHaveBeenCalledTimes(1);
+        const replies = posted.filter((m) => m.type === "fileProcessed");
+        expect(replies.map((m) => m.payload.analyticsBase === null)).toEqual([true, true, false]);
+    });
+
+    it("carries the batch's analytics on a rejected last reply", async () => {
+        const { handlers, posted, LC, AE } = await loadWorker();
+        LC.process
+            .mockReturnValueOnce(cleaned("shares"))
+            .mockReturnValueOnce({ success: false, error: "bad" });
+
+        handlers.message(addFile("Shares.csv"));
+        await handlers.message(addFile("other.csv"));
+
+        expect(AE.compute).toHaveBeenCalledTimes(1);
+        const last = posted.filter((m) => m.type === "fileProcessed").at(-1);
+        expect(last.payload.error).toBe("bad");
+        expect(last.payload.analyticsBase).not.toBeNull();
+    });
+
+    it("computes before a view that arrives between uploads of a batch", async () => {
+        const { handlers, posted, LC, AE } = await loadWorker();
+        LC.process.mockReturnValueOnce(cleaned("shares")).mockReturnValueOnce(cleaned("comments"));
+        AE.buildView.mockReturnValue(makeView());
+        AE.generateInsights.mockReturnValue(makeInsights());
+
+        handlers.message(addFile("Shares.csv"));
+        handlers.message({ data: { type: "view", requestId: 7, filters: {} } });
+        await handlers.message(addFile("Comments.csv"));
+
+        expect(posted.find((m) => m.type === "view").requestId).toBe(7);
+        expect(AE.compute).toHaveBeenCalledTimes(2);
+    });
+
+    it("forgets uploads skipped by a clear when deciding to compute", async () => {
+        const { handlers, posted, LC } = await loadWorker();
+        handlers.message(addFile("Shares.csv"));
+        handlers.message(addFile("Comments.csv"));
+        handlers.message({ data: { type: "clear" } });
+
+        LC.process.mockReturnValueOnce(cleaned("shares"));
+        await handlers.message(addFile("Shares.csv"));
+
+        const replies = posted.filter((m) => m.type === "fileProcessed");
+        expect(replies).toHaveLength(1);
+        expect(replies[0].payload.analyticsBase).not.toBeNull();
     });
 
     it("runs requests one at a time in arrival order", async () => {

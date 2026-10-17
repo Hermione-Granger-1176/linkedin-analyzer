@@ -636,11 +636,13 @@ export const UploadPage = (() => {
 
         if (!fileType) {
             setHint(payload.error || "File could not be processed.", true);
+            await persistAnalyticsOnly(payload.analyticsBase);
             completeJob(jobId, fileName);
             return;
         }
 
         if (!pending) {
+            await persistAnalyticsOnly(payload.analyticsBase);
             completeJob(jobId, fileName);
             return;
         }
@@ -720,6 +722,29 @@ export const UploadPage = (() => {
             return;
         }
         await Storage.saveAnalytics(analyticsBase);
+    }
+
+    /**
+     * Store analytics that arrived on a reply whose file is not stored. The
+     * worker computes a batch's analytics on its last reply, which can be a
+     * rejected file, so the files accepted before it still reach the dashboard.
+     * @param {PlainObject|null|undefined} analyticsBase - Analytics aggregate base
+     * @returns {Promise<void>}
+     */
+    async function persistAnalyticsOnly(analyticsBase) {
+        if (!analyticsBase) {
+            return;
+        }
+        try {
+            await Storage.saveAnalytics(analyticsBase);
+            DataCache.invalidate("insights:");
+            DataCache.set("storage:analyticsBase", analyticsBase);
+            DataCache.notify({ type: "analyticsChanged" });
+            const files = await getStoredFilesSnapshot();
+            updateStatus({ fileMap: getFileMap(files), analyticsReady: true });
+        } catch (error) {
+            captureError(error, { module: "upload", operation: "persist-analytics" });
+        }
     }
 
     /**

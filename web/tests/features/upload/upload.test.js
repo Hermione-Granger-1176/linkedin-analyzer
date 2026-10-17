@@ -828,6 +828,54 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    describe("analytics on a reply whose file is not stored", () => {
+        const BASE = { months: { "2023-05": { posts: 2 } } };
+
+        /** @param {object} payload - fileProcessed payload */
+        async function reply(payload) {
+            UploadPage.init();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            await workerInstance.listeners.message[0]({ data: { type: "fileProcessed", payload } });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        it("stores the batch's analytics from a rejected last file", async () => {
+            await reply({ fileType: null, fileName: "x.csv", error: "bad", analyticsBase: BASE });
+
+            expect(Storage.saveAnalytics).toHaveBeenCalledWith(BASE);
+            expect(DataCache.set).toHaveBeenCalledWith("storage:analyticsBase", BASE);
+            expect(DataCache.notify).toHaveBeenCalledWith({ type: "analyticsChanged" });
+            expect(Storage.saveFile).not.toHaveBeenCalled();
+        });
+
+        it("stores analytics from a reply for a job no longer pending", async () => {
+            await reply({
+                fileType: "shares",
+                fileName: "Shares.csv",
+                rowCount: 1,
+                analyticsBase: BASE,
+            });
+
+            expect(Storage.saveAnalytics).toHaveBeenCalledWith(BASE);
+            expect(Storage.saveFile).not.toHaveBeenCalled();
+        });
+
+        it("keeps going when storing those analytics fails", async () => {
+            Storage.saveAnalytics.mockRejectedValue(new Error("quota"));
+
+            await reply({ fileType: null, fileName: "x.csv", error: "bad", analyticsBase: BASE });
+
+            expect(document.getElementById("uploadHint").textContent).toContain("bad");
+            expect(DataCache.set).not.toHaveBeenCalledWith("storage:analyticsBase", BASE);
+        });
+
+        it("stores nothing when the reply carries no analytics", async () => {
+            await reply({ fileType: null, fileName: "x.csv", error: "bad", analyticsBase: null });
+
+            expect(Storage.saveAnalytics).not.toHaveBeenCalled();
+        });
+    });
+
     // --- Progress message handling -------------------------------------------
 
     it("updates progress bar on progress message from worker", async () => {

@@ -48,6 +48,12 @@ const READ_PROGRESS_STEP = 0.01;
 // bumps the epoch so requests queued before it are skipped.
 let requestQueue = Promise.resolve();
 let requestEpoch = 0;
+// addFile requests waiting behind the one running. A batch of uploads arrives
+// as several addFile requests at once, so analytics are computed once, by the
+// last of them, rather than after every file.
+let queuedAddFiles = 0;
+// True when the source datasets changed after analytics were last computed.
+let analyticsStale = false;
 /** @type {AbortController|null} */
 let activeRead = null;
 
@@ -99,6 +105,7 @@ function computeAnalytics() {
  */
 function resetAnalyticsState() {
     analytics = null;
+    analyticsStale = false;
     viewCache = new Map();
 }
 
@@ -330,6 +337,7 @@ async function handleAddFile(payload) {
                     error: toErrorMessage(error) || "Error reading file. Please try again.",
                     jobId,
                     fileName,
+                    analyticsBase: takeAnalyticsBase(jobId, fileName),
                 },
             });
             return;
@@ -345,7 +353,12 @@ async function handleAddFile(payload) {
     if (!processed.success) {
         self.postMessage({
             type: "fileProcessed",
-            payload: { error: processed.error || "Unable to process file.", jobId, fileName },
+            payload: {
+                error: processed.error || "Unable to process file.",
+                jobId,
+                fileName,
+                analyticsBase: takeAnalyticsBase(jobId, fileName),
+            },
         });
         return;
     }
@@ -357,7 +370,6 @@ async function handleAddFile(payload) {
 
     // A successful result always carries the type it was processed as.
     const fileType = /** @type {string} */ (processed.fileType);
-    let analyticsBase = null;
     /** @type {Record<string, () => void>} */
     const updateSourceByType = {
         shares: () => {
@@ -373,21 +385,9 @@ async function handleAddFile(payload) {
     const updateSource = updateSourceByType[fileType];
     if (updateSource) {
         updateSource();
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent: 0.55 },
-        });
-        computeAnalytics();
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent: 0.85 },
-        });
-        analyticsBase = serializeAnalytics(analytics);
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent: 0.95 },
-        });
+        analyticsStale = true;
     }
+    const analyticsBase = takeAnalyticsBase(jobId, fileName);
     self.postMessage({
         type: "fileProcessed",
         payload: {
@@ -400,6 +400,37 @@ async function handleAddFile(payload) {
             usedFallback,
         },
     });
+}
+
+/**
+ * Recompute analytics for a reply when the datasets changed and no other
+ * upload is queued, so a batch is computed once, at its end. Every addFile
+ * reply calls this, including a failed one, so the batch's last reply always
+ * carries the result even when that file is rejected or holds no analytics.
+ * @param {string|null} jobId - Upload job ID, for progress
+ * @param {string} fileName - Upload file name, for progress
+ * @returns {AnalyticsBase|HydratedAnalytics|null} Analytics to store, or null
+ */
+function takeAnalyticsBase(jobId, fileName) {
+    if (!analyticsStale || queuedAddFiles > 0) {
+        return null;
+    }
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.55 },
+    });
+    computeAnalytics();
+    analyticsStale = false;
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.85 },
+    });
+    const analyticsBase = serializeAnalytics(analytics);
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.95 },
+    });
+    return analyticsBase;
 }
 
 /**
@@ -492,6 +523,10 @@ function handleInitBase(payload) {
  * @param {PlainObject} filters - Filter parameters from the UI
  */
 function handleView(requestId, filters) {
+    if (analyticsStale) {
+        computeAnalytics();
+        analyticsStale = false;
+    }
     if (!analytics) {
         postError(requestId, "Analytics not ready.");
         return;
@@ -549,6 +584,8 @@ function handleClear() {
  */
 function cancelPendingRequests() {
     requestEpoch += 1;
+    // The queued addFile requests are skipped, so none of them will count down.
+    queuedAddFiles = 0;
     if (activeRead) {
         activeRead.abort();
     }
@@ -605,7 +642,11 @@ function handleMessage(event) {
     switch (message.type) {
         case "addFile": {
             const { payload } = message;
-            return enqueueRequest(() => handleAddFile(payload), 0);
+            queuedAddFiles += 1;
+            return enqueueRequest(() => {
+                queuedAddFiles -= 1;
+                return handleAddFile(payload);
+            }, 0);
         }
         case "restoreFiles": {
             const { payload } = message;

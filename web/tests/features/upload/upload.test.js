@@ -500,6 +500,93 @@ describe("UploadPage", () => {
         Math.random.mockRestore();
     });
 
+    it("drops a reply that lands while Clear waits on an earlier save", async () => {
+        let finishSave;
+        Storage.saveFile.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishSave = resolve;
+                }),
+        );
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const first = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const second = new File(["csv"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [first, second] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const jobIdFor = (name) =>
+            workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .find((message) => message.type === "addFile" && message.payload.fileName === name)
+                .payload.jobId;
+        const reply = (fileType, fileName) =>
+            workerInstance.listeners.message[0]({
+                data: {
+                    type: "fileProcessed",
+                    payload: { fileType, fileName, rowCount: 1, jobId: jobIdFor(fileName) },
+                },
+            });
+
+        const firstReply = reply("shares", "Shares.csv");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(workerInstance.postMessage).toHaveBeenCalledWith({ type: "clear" });
+
+        // The second file's reply arrives while Clear is still waiting.
+        await reply("comments", "Comments.csv");
+        expect(Storage.saveFile).toHaveBeenCalledTimes(1);
+
+        finishSave();
+        await firstReply;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(Storage.clearAll).toHaveBeenCalled();
+        expect(Storage.saveFile).toHaveBeenCalledTimes(1);
+
+        Math.random.mockRestore();
+    });
+
+    it("processes files dropped during Clear only after it finishes", async () => {
+        let finishClear;
+        Storage.clearAll.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishClear = resolve;
+                }),
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // A second click joins the Clear already running.
+        document.getElementById("clearAllBtn").click();
+        expect(Storage.clearAll).toHaveBeenCalledTimes(1);
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFilePosted = () =>
+            workerInstance.postMessage.mock.calls.some(([message]) => message.type === "addFile");
+        expect(addFilePosted()).toBe(false);
+
+        finishClear();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(addFilePosted()).toBe(true);
+    });
+
     it("times a queued upload from when the job ahead of it finishes", async () => {
         vi.useFakeTimers();
         vi.spyOn(Math, "random").mockReturnValue(0.42);

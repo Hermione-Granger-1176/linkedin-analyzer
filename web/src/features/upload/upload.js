@@ -91,6 +91,8 @@ export const UploadPage = (() => {
     // Bumped by Clear, so a save that began before it skips its analytics,
     // cache and status continuations.
     let clearGeneration = 0;
+    // The Clear in progress, so new uploads wait for it rather than racing it.
+    let clearInFlight = null;
     let initialized = false;
     let lastPrimedSignature = null;
     let restorePromise = null;
@@ -262,27 +264,11 @@ export const UploadPage = (() => {
         }
 
         if (clearAllBtn) {
-            clearAllBtn.addEventListener("click", async () => {
-                try {
-                    clearGeneration += 1;
-                    await Promise.allSettled(pendingSaves);
-                    await Storage.clearAll();
-                    clearPrimeSchedule();
-                    pendingPrimePayload = null;
-                    if (worker) {
-                        worker.postMessage({ type: "clear" });
-                    }
-                    DataCache.clear();
-                    DataCache.notify({ type: "storageCleared" });
-                    lastPrimedSignature = null;
-                    resetProcessingState();
-                    updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
-                } catch (error) {
-                    captureError(error, {
-                        module: "upload",
-                        operation: "clear-all",
+            clearAllBtn.addEventListener("click", () => {
+                if (!clearInFlight) {
+                    clearInFlight = clearAllData().finally(() => {
+                        clearInFlight = null;
                     });
-                    setHint("Unable to clear stored data. Please try again.", true);
                 }
             });
         }
@@ -463,6 +449,11 @@ export const UploadPage = (() => {
         const incomingBytes = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
         warnIfStorageLow(incomingBytes);
 
+        // Files dropped during a Clear are processed after it, so the wipe
+        // cannot take them with it.
+        if (clearInFlight) {
+            await clearInFlight;
+        }
         if (activeJobs.size === 0) {
             UploadProgress.show(() => activeJobs.size > 0);
         }
@@ -511,6 +502,39 @@ export const UploadPage = (() => {
                 setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
             }
         });
+    }
+
+    /**
+     * Wipe stored uploads and analytics.
+     *
+     * Everything that could still start a save is stopped first: the pending
+     * jobs are dropped, so a reply that lands meanwhile finds nothing to save,
+     * and the worker is cleared. Only then does Clear wait out the saves already
+     * writing, so none of them can write an upload back after the wipe.
+     * @returns {Promise<void>}
+     */
+    async function clearAllData() {
+        clearGeneration += 1;
+        resetProcessingState();
+        clearPrimeSchedule();
+        pendingPrimePayload = null;
+        lastPrimedSignature = null;
+        if (worker) {
+            worker.postMessage({ type: "clear" });
+        }
+        try {
+            await Promise.allSettled(pendingSaves);
+            await Storage.clearAll();
+            DataCache.clear();
+            DataCache.notify({ type: "storageCleared" });
+            updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
+        } catch (error) {
+            captureError(error, {
+                module: "upload",
+                operation: "clear-all",
+            });
+            setHint("Unable to clear stored data. Please try again.", true);
+        }
     }
 
     /**

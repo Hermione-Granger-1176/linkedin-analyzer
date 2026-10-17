@@ -57,7 +57,11 @@ function readStoredBlobSizes(page) {
                         db.close();
                         resolve(
                             Object.fromEntries(
-                                request.result.map((record) => [record.type, record.blob.size]),
+                                request.result.map((record) => [
+                                    record.type,
+                                    // WebKit stores the bytes in an ephemeral session.
+                                    record.blob.size ?? record.blob.byteLength,
+                                ]),
                             ),
                         );
                     };

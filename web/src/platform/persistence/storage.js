@@ -4,9 +4,10 @@ const FILE_SCHEMA_VERSION = 3;
 const ANALYTICS_SCHEMA_VERSION = 2;
 
 /**
- * Wrap CSV text from a record stored before version 3 as a File, so every
- * reader receives the same shape whichever version wrote the record.
- * @param {string} text - Stored CSV text
+ * Wrap stored CSV contents as a File: text from a record stored before version
+ * 3, or the bytes a browser that refuses Blobs in IndexedDB stored instead. Every
+ * reader receives the same shape whichever path wrote the record.
+ * @param {string|ArrayBuffer} text - Stored CSV text or bytes
  * @param {string} name - Stored file name
  * @returns {Blob}
  */
@@ -29,6 +30,9 @@ function textToBlob(text, name) {
 function resolveStoredBlob(blob, text, name) {
     if (typeof Blob !== "undefined" && blob instanceof Blob) {
         return blob;
+    }
+    if (blob instanceof ArrayBuffer) {
+        return textToBlob(blob, name);
     }
     if (typeof text === "string" && text) {
         return textToBlob(text, name);
@@ -379,25 +383,52 @@ export const Storage = (() => {
     function saveFile(type, data) {
         return runOp(
             () => memory.saveFile(type, data),
-            (db) =>
-                /** @type {Promise<void>} */ (
-                    new Promise((resolve, reject) => {
-                        const { blob, ...metadata } = buildFilePayload(type, data);
-                        const tx = db.transaction(
-                            [FILE_STORE, FILE_BLOB_STORE, FILE_TEXT_STORE],
-                            "readwrite",
-                        );
-                        tx.objectStore(FILE_STORE).put(metadata);
-                        tx.objectStore(FILE_BLOB_STORE).put({ type, blob });
-                        tx.objectStore(FILE_TEXT_STORE).delete(type);
-                        const rejectFailure = () =>
-                            reject(idbFailure(tx.error, "IndexedDB transaction failed"));
-                        tx.oncomplete = () => resolve();
-                        tx.onerror = rejectFailure;
-                        tx.onabort = rejectFailure;
-                    })
-                ),
+            async (db) => {
+                const { blob, ...metadata } = buildFilePayload(type, data);
+                try {
+                    await putFileRecord(db, metadata, blob);
+                } catch (error) {
+                    // WebKit refuses Blobs in IndexedDB in an ephemeral session,
+                    // such as a Safari private window, so store the bytes instead.
+                    if (!blob) {
+                        throw error;
+                    }
+                    await putFileRecord(db, metadata, await blob.arrayBuffer());
+                }
+            },
         );
+    }
+
+    /**
+     * Write a file's metadata and contents in one transaction.
+     * @param {IDBDatabase} db - The shared database connection
+     * @param {{type: string}} metadata - File metadata
+     * @param {Blob|ArrayBuffer|null} contents - The upload, or its bytes
+     * @returns {Promise<void>}
+     */
+    function putFileRecord(db, metadata, contents) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([FILE_STORE, FILE_BLOB_STORE, FILE_TEXT_STORE], "readwrite");
+            const rejectFailure = () =>
+                reject(idbFailure(tx.error, "IndexedDB transaction failed"));
+            tx.oncomplete = () => resolve();
+            tx.onerror = rejectFailure;
+            tx.onabort = rejectFailure;
+            try {
+                tx.objectStore(FILE_STORE).put(metadata);
+                tx.objectStore(FILE_BLOB_STORE).put({ type: metadata.type, blob: contents });
+                tx.objectStore(FILE_TEXT_STORE).delete(metadata.type);
+            } catch (error) {
+                // A put that throws leaves the transaction open; abort it so
+                // the metadata is not committed without its contents.
+                try {
+                    tx.abort();
+                } catch {
+                    // Already finished; the rejection below still reports it.
+                }
+                reject(error);
+            }
+        });
     }
 
     /**

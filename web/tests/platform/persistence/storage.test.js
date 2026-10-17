@@ -19,6 +19,45 @@ describe("Storage", () => {
         expect(files.length).toBe(1);
     });
 
+    it("stores the bytes when the browser refuses a Blob, and reads them back as a File", async () => {
+        const put = IDBObjectStore.prototype.put;
+        const spy = vi
+            .spyOn(IDBObjectStore.prototype, "put")
+            .mockImplementation(function guarded(value, key) {
+                // WebKit's ephemeral sessions reject Blobs in IndexedDB.
+                if (value && value.blob instanceof Blob) {
+                    throw new DOMException("Error preparing Blob/File data", "UnknownError");
+                }
+                return put.call(this, value, key);
+            });
+        try {
+            await Storage.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 });
+        } finally {
+            spy.mockRestore();
+        }
+        const file = await Storage.getFile("shares");
+        expect(file.blob).toBeInstanceOf(Blob);
+        expect(file.blob.name).toBe("Shares.csv");
+        expect(await file.blob.text()).toBe("a,b");
+        expect(file.rowCount).toBe(2);
+    });
+
+    it("rejects a save that fails with no Blob to fall back from, or fails again as bytes", async () => {
+        const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+            throw new DOMException("Quota exceeded", "QuotaExceededError");
+        });
+        try {
+            await expect(
+                Storage.saveFile("shares", { name: "Shares.csv", rowCount: 0 }),
+            ).rejects.toThrow("Quota exceeded");
+            await expect(
+                Storage.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 }),
+            ).rejects.toThrow("Quota exceeded");
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
     it("saves and retrieves analytics", async () => {
         await Storage.saveAnalytics({ months: { "2024-01": { total: 1 } } });
         const analytics = await Storage.getAnalytics();

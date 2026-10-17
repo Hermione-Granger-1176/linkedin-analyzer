@@ -8,6 +8,7 @@ import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+import { markActiveRange } from "../../shared/ui/time-range.js";
 import { formatReplyRate, formatSentRatio } from "../messages/format.js";
 
 import { buildInsightReaction } from "./reactions.js";
@@ -687,14 +688,7 @@ export const InsightsPage = (() => {
      * @param {string} range - The active time range key.
      */
     function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach((btn) => {
-            const isActive = btn.getAttribute("data-range") === range;
-            btn.classList.toggle("active", isActive);
-            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.value = range;
-        }
+        markActiveRange(elements.timeRangeButtons, elements.timeRangeSelect, range);
     }
 
     /** Toggle empty state vs insights grid based on data availability. */

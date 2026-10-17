@@ -14,9 +14,9 @@ import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { streamCleanFile } from "../cleaning/process-source.js";
 import { copyString, createValueCache } from "../cleaning/string-pool.js";
-import { canStreamFileText, readCsvSource, readOptionalCsvSource } from "../upload/read.js";
+import { canStreamFileText, readCsvSource } from "../upload/read.js";
 
-import { collectContactKeys } from "./contact-keys.js";
+import { collectContactKeysFromSource } from "./contact-keys.js";
 import { exportRowBody, parseMessagesForExport, toExportRow } from "./messages-parse.js";
 import { selectRecentThreadRows, selectRecentThreads } from "./threads.js";
 
@@ -35,16 +35,17 @@ let activeRequestId = 0;
  * thousands of rows: parsing it there held that thread long enough that the
  * Escape key which cancels an export could not reach its own handler.
  *
- * A tiebreak is a nicety, so a file that will not parse costs a direction chip
- * on a one-conversation export rather than the thread selection. Nothing about
- * the failure is described, here or anywhere else in this worker, because the
- * value that caused it came from the user's own connections.
- * @param {string} connectionsCsv - Raw connections CSV text, empty when there is none
- * @returns {string[]} Normalized keys, empty when there are none to be had
+ * A tiebreak is a nicety, so a file that will not read or parse costs a
+ * direction chip on a one-conversation export rather than the thread
+ * selection. Nothing about the failure is described, here or anywhere else in
+ * this worker, because the value that caused it came from the user's own
+ * connections.
+ * @param {unknown} connectionsSource - Stored connections Blob or CSV text
+ * @returns {Promise<string[]>} Normalized keys, empty when there are none to be had
  */
-function contactKeysFrom(connectionsCsv) {
+async function contactKeysFrom(connectionsSource) {
     try {
-        return collectContactKeys(connectionsCsv);
+        return await collectContactKeysFromSource(connectionsSource);
     } catch {
         return [];
     }
@@ -147,12 +148,9 @@ async function selectFromStream(file, connectionsSource, limits) {
     if (!firstPass) {
         return null;
     }
-    // A Connections file that will not read costs the tiebreak, as one that
-    // will not parse does.
-    const { text: connectionsCsv } = await readOptionalCsvSource(connectionsSource);
     const selected = selectRecentThreadRows(firstPass.rows, {
         ...limits,
-        contactKeys: contactKeysFrom(connectionsCsv),
+        contactKeys: await contactKeysFrom(connectionsSource),
     });
     return fillBodies(file, selected, firstPass.records);
 }
@@ -180,7 +178,6 @@ async function processPayload(payload) {
     }
 
     const result = parseMessagesForExport(await readCsvSource(payload.messagesCsv));
-    const { text: connectionsCsv } = await readOptionalCsvSource(payload.connectionsCsv);
     if (!result.success) {
         return {
             success: false,
@@ -194,7 +191,7 @@ async function processPayload(payload) {
         success: true,
         threads: selectRecentThreads(result.rows, {
             ...limits,
-            contactKeys: contactKeysFrom(connectionsCsv),
+            contactKeys: await contactKeysFrom(payload.connectionsCsv),
         }),
         error: null,
     };

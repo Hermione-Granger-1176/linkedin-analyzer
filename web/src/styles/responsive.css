@@ -42,11 +42,6 @@
         right: calc(var(--space-md) + var(--corner-btn-size) + var(--space-sm));
     }
 
-    .effects-toggle {
-        top: calc(var(--space-md) + var(--corner-btn-size) + var(--space-sm));
-        right: var(--space-md);
-    }
-
     .filters-bar {
         flex-direction: column;
         align-items: flex-start;

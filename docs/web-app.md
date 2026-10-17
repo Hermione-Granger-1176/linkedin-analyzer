@@ -149,7 +149,7 @@ The CLI uses a 128 MiB input limit and 1,000,000 row limit by default. See [CLI 
 
 The app picks how much animation and decoration to show from what the device offers: CPU cores, memory where the browser reports it, the data-saver setting, and whether hardware-accelerated WebGL works. A low-end phone, an old PC, or a browser with data saver on gets the **Lite** tier: still drawings and simple moves, no blur or filters. Every number, chart, list, export, and control works the same in every tier.
 
-The round button under the theme toggle cycles through **Auto**, **Lite**, and **Full**. **Auto** uses the device's tier, and steps down for the rest of the session if animation makes the page stutter while idle. **Lite** turns decoration down on any device. **Full** shows the most the device can do. The choice is stored in this browser. Your system's reduced-motion setting always wins, and the setting never changes how files are processed.
+There is no setting to change. If animation makes the page stutter while it is idle, the app steps down one tier for the rest of the session. Your system's reduced-motion setting always wins, and the tier never changes how files are processed.
 
 ## Use tutorials and themes
 

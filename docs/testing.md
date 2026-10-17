@@ -145,7 +145,7 @@ make gen-large-export size_mb=30 dir=/tmp/export-30mb
 
 The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comments.csv` under the system temp directory by default and refuses to write inside the repository. The same size always produces the same bytes. The data has one self account, a few thousand contacts with stable profile URLs (including different people who share a name), conversation IDs tied to participants, multi-year dates, and message bodies with commas, quotes, line breaks, emoji, and non-Latin scripts.
 
-`make bench-browser` times the real browser flow. It builds the bundle in `measurement` mode, which raises the upload limits to 128 MiB per file, 128 Mi characters, and 1,000,000 rows (`web/src/shared/limits.js`; a production build always ignores this), serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
+`make bench-browser` times the real browser flow. It builds the bundle in `measurement` mode, whose upload limits (`web/src/shared/limits.js`; a production build always ignores them) match the public 128 MiB per file, 128 Mi characters, and 1,000,000 rows today and can be raised there to measure beyond them first, serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
 
 ```bash
 make bench-browser size_mb=55
@@ -232,7 +232,7 @@ After the Clean, Messages, and PDF thread workers stream the stored file through
 | 128 MB | `cpu=1`          | 5.90 s          | 15.68 s        | 353 MB    |
 
 - 100 MB now peaks at 199 MB, a third of the 589 MB after step 4e and inside the 300 MB budget.
-- 128 MB goes over the budget, mostly in the Messages worker, which needs every row to detect the self account and so cannot clean while it streams. The public limits stay at 80 MiB until that worker shrinks.
+- 128 MB goes over the budget, mostly in the Messages worker, which needs every row to detect the self account and so cannot clean while it streams. The public limits stayed at 80 MiB until that worker shrank, below.
 - Only Chromium is measured here; WebKit runs the end-to-end tests in CI but has no heap sampler.
 
 After the streaming cleaner stores each repeated cell value once (`web/src/features/cleaning/string-pool.js`), measured on 2026-10-17 on the same machine, with a no-pooling run taken alongside for a fair time comparison:
@@ -245,7 +245,7 @@ After the streaming cleaner stores each repeated cell value once (`web/src/featu
 
 - Most of the cleaned rows' memory is the cell strings, and names, profile URLs, conversation ids and folders repeat on row after row. Sharing them cuts the rows a worker keeps for a 58 MiB `messages.csv` from 213 MB to 53 MB.
 - Each column samples its first 4,096 values and stops sharing when nearly all were distinct, as dates and message bodies are, which keeps the extra time to about half a second at 100 MB.
-- A 128 MB export now fits the 300 MB budget for analysis.
+- A 128 MB export now fits the 300 MB budget for analysis, so the public limits rose to 128 MiB per file, 128 Mi characters, and 1,000,000 rows.
 
 ### Retained analysis state
 

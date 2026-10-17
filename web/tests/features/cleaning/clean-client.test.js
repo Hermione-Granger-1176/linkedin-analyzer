@@ -43,13 +43,23 @@ class FakeWorker {
         this.listeners[type] = listener;
     }
 
+    removeEventListener(type, listener) {
+        if (this.listeners[type] === listener) {
+            delete this.listeners[type];
+        }
+    }
+
     postMessage(message) {
         this.posted.push(message);
     }
 
     emit(type, data) {
+        // A detached listener hears nothing, as on a terminated worker.
+        const listener = this.listeners[type];
         const event = { data, preventDefault: vi.fn() };
-        this.listeners[type](event);
+        if (listener) {
+            listener(event);
+        }
         return event;
     }
 

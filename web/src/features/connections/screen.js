@@ -15,6 +15,7 @@ import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-toolti
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
@@ -87,12 +88,22 @@ export const ConnectionsPage = (() => {
     /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
     let rangeFilter = null;
 
-    /** @type {Worker|null} */
-    let worker = null;
+    const workers = createWorkerHandle({
+        create: () =>
+            new Worker(new URL("./connections-worker.js", import.meta.url), {
+                type: "module",
+            }),
+        onMessage: handleWorkerMessage,
+        onError: handleWorkerError,
+        onStartError: (error) => {
+            captureError(error, {
+                module: "connections-ui",
+                operation: "init-worker",
+            });
+        },
+    });
     let requestId = 0;
     let pendingRequestId = 0;
-    /** @type {number|null} */
-    let workerTimeoutId = null;
 
     /** Initialize connections page: bind events, worker, and cache subscription. */
     function init() {
@@ -114,7 +125,7 @@ export const ConnectionsPage = (() => {
 
         initialized = true;
         bindEvents();
-        initWorker();
+        workers.ensure();
 
         DataCache.subscribe(handleCacheChange);
     }
@@ -200,8 +211,8 @@ export const ConnectionsPage = (() => {
             },
         });
 
-        window.addEventListener("beforeunload", terminateWorker);
-        window.addEventListener("pagehide", terminateWorker);
+        window.addEventListener("beforeunload", workers.terminate);
+        window.addEventListener("pagehide", workers.terminate);
 
         document.addEventListener("themechange", () => {
             if (state.currentView) {
@@ -220,47 +231,6 @@ export const ConnectionsPage = (() => {
             canvas.addEventListener("mouseleave", hideTooltip);
             canvas.setAttribute("tabindex", "0");
         });
-    }
-
-    /** Create the connections Web Worker. */
-    function initWorker() {
-        if (typeof Worker === "undefined" || worker) {
-            return;
-        }
-
-        try {
-            worker = new Worker(new URL("./connections-worker.js", import.meta.url), {
-                type: "module",
-            });
-            worker.addEventListener("message", handleWorkerMessage);
-            worker.addEventListener("error", handleWorkerError);
-            worker.addEventListener("messageerror", handleWorkerError);
-        } catch (error) {
-            worker = null;
-            captureError(error, {
-                module: "connections-ui",
-                operation: "init-worker",
-            });
-        }
-    }
-
-    /** Terminate the connections Web Worker to free resources. */
-    function terminateWorker() {
-        if (!worker) {
-            return;
-        }
-        worker.terminate();
-        worker = null;
-        clearWorkerTimeout();
-    }
-
-    /** Clear any in-flight worker watchdog timeout. */
-    function clearWorkerTimeout() {
-        if (!workerTimeoutId) {
-            return;
-        }
-        window.clearTimeout(workerTimeoutId);
-        workerTimeoutId = null;
     }
 
     /**
@@ -293,7 +263,7 @@ export const ConnectionsPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            initWorker();
+            const worker = workers.ensure();
 
             const file = await loadConnectionsFile();
             markPerformance("connections:idb-read:end");
@@ -322,10 +292,9 @@ export const ConnectionsPage = (() => {
 
             const id = ++requestId;
             pendingRequestId = id;
-            clearWorkerTimeout();
             // Scaled to the file like every other raw-CSV parse: a fixed 30
             // seconds cut a large export off while the worker was still on it.
-            workerTimeoutId = window.setTimeout(() => {
+            workers.watch(computeWorkerTimeout(file.blob), () => {
                 // A response clears this timeout. Keep the check for a stale callback.
                 /* v8 ignore next 3 */
                 if (pendingRequestId !== id) {
@@ -337,8 +306,8 @@ export const ConnectionsPage = (() => {
                     "Parsing took too long. Please retry the upload.",
                 );
                 showConnectionsLoading(false);
-                terminateWorker();
-            }, computeWorkerTimeout(file.blob));
+                workers.terminate();
+            });
             markPerformance("connections:worker-parse:start");
             worker.postMessage({
                 type: "process",
@@ -351,7 +320,7 @@ export const ConnectionsPage = (() => {
                 module: "connections-ui",
                 operation: "load-data",
             });
-            clearWorkerTimeout();
+            workers.unwatch();
             setEmptyState(
                 "Storage error",
                 "Unable to load saved data. Try clearing browser data and re-uploading.",
@@ -461,7 +430,7 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        clearWorkerTimeout();
+        workers.unwatch();
         markPerformance("connections:worker-parse:end");
         measurePerformance(
             "connections:worker-parse",
@@ -522,7 +491,7 @@ export const ConnectionsPage = (() => {
      * @param {ErrorMessage} message - Worker error message
      */
     function handleWorkerErrorPayload(message) {
-        clearWorkerTimeout();
+        workers.unwatch();
         // The contract parser returns a message. Keep the fallback for malformed worker data.
         /* v8 ignore next 4 */
         const text =
@@ -543,7 +512,7 @@ export const ConnectionsPage = (() => {
      * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
     function handleWorkerError(event) {
-        clearWorkerTimeout();
+        workers.unwatch();
         captureError(
             event && "error" in event && event.error
                 ? event.error
@@ -557,7 +526,7 @@ export const ConnectionsPage = (() => {
                 operation: "worker-error-event",
             },
         );
-        terminateWorker();
+        workers.terminate();
         setEmptyState("Worker error", "Refresh the page and try again.");
         showConnectionsLoading(false);
     }

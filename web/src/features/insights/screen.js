@@ -9,6 +9,7 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { formatReplyRate, formatSentRatio } from "../messages/format.js";
 
 import { buildInsightReaction } from "./reactions.js";
@@ -135,10 +136,21 @@ export const InsightsPage = (() => {
     // Assigned by init() before any handler that reads it can run.
     /** @type {InsightsElements} */
     let elements;
-    /** @type {Worker|null} */
-    let worker = null;
-    /** @type {number|null} */
-    let workerTimeoutId = null;
+    const workers = createWorkerHandle({
+        create: () =>
+            new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
+                type: "module",
+            }),
+        onMessage: handleWorkerMessage,
+        onError: handleWorkerError,
+        onStartError: (error) => {
+            captureError(error, {
+                module: "insights-ui",
+                operation: "init-worker",
+            });
+            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
+        },
+    });
     let requestId = 0;
     /** @type {import("../../app/worker-contracts.js").RequestId} */
     let pendingViewId = 0;
@@ -161,7 +173,7 @@ export const InsightsPage = (() => {
 
         initialized = true;
         bindEvents();
-        initWorker();
+        workers.ensure();
 
         DataCache.subscribe(handleCacheChange);
     }
@@ -210,7 +222,7 @@ export const InsightsPage = (() => {
         showInsightsLoading(false);
         // Drop any in-flight worker watchdog so it cannot fire after navigation
         // and overwrite a now-hidden screen with a timeout message.
-        clearWorkerTimeout();
+        workers.unwatch();
         // Allow the next entry to reload outreach (e.g. after the user uploads
         // Messages from another screen).
         state.outreachLoaded = false;
@@ -283,49 +295,6 @@ export const InsightsPage = (() => {
         state.currentViewRange = null;
     }
 
-    /** Create the analytics Web Worker. */
-    function initWorker() {
-        if (typeof Worker === "undefined" || worker) {
-            return;
-        }
-
-        try {
-            worker = new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
-                type: "module",
-            });
-            worker.addEventListener("message", handleWorkerMessage);
-            worker.addEventListener("error", handleWorkerError);
-            worker.addEventListener("messageerror", handleWorkerError);
-        } catch (error) {
-            worker = null;
-            captureError(error, {
-                module: "insights-ui",
-                operation: "init-worker",
-            });
-            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
-        }
-    }
-
-    /** Clear any in-flight worker watchdog timeout. */
-    function clearWorkerTimeout() {
-        if (!workerTimeoutId) {
-            return;
-        }
-        window.clearTimeout(workerTimeoutId);
-        workerTimeoutId = null;
-    }
-
-    /** Terminate the analytics Web Worker and clear its watchdog. */
-    function terminateWorker() {
-        clearWorkerTimeout();
-        /* v8 ignore next 3 */
-        if (!worker) {
-            return;
-        }
-        worker.terminate();
-        worker = null;
-    }
-
     /** Load analytics base from IndexedDB and send to worker. */
     async function loadBase() {
         showInsightsLoading(true);
@@ -333,7 +302,7 @@ export const InsightsPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            initWorker();
+            const worker = workers.ensure();
             /* v8 ignore next 5 */
             if (!worker) {
                 setEmptyState(
@@ -367,16 +336,14 @@ export const InsightsPage = (() => {
                 type: "initBase",
                 payload: analyticsBase,
             });
-            clearWorkerTimeout();
-            workerTimeoutId = window.setTimeout(() => {
-                workerTimeoutId = null;
+            workers.watch(WORKER_TIMEOUT_MS, () => {
                 setEmptyState(
                     "Insights timeout",
                     "Insights worker did not respond in time. Try refreshing the page.",
                 );
-                terminateWorker();
+                workers.terminate();
                 showInsightsLoading(false);
-            }, WORKER_TIMEOUT_MS);
+            });
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
@@ -408,7 +375,7 @@ export const InsightsPage = (() => {
 
         const message = parsed.value;
         // The worker responded, so the loadBase watchdog is no longer needed.
-        clearWorkerTimeout();
+        workers.unwatch();
 
         switch (message.type) {
             case "init":
@@ -623,13 +590,14 @@ export const InsightsPage = (() => {
         // Tear down the broken worker (clears the watchdog and nulls the
         // reference) so a later loadBase recreates a fresh worker rather than
         // posting to a dead one, and the stale watchdog cannot fire afterward.
-        terminateWorker();
+        workers.terminate();
         setEmptyState("Insights worker error", "Refresh the page and try again.");
         showInsightsLoading(false);
     }
 
     /** Send a view request to the worker with current filters. */
     function requestView() {
+        const worker = workers.current();
         if (!worker || !state.analyticsReady || !state.hasData) {
             return;
         }

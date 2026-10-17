@@ -135,6 +135,53 @@ make explore
 
 Use these commands to investigate performance or memory. Do not commit private exports or generated reports.
 
+Without a private export, generate a synthetic one and point the checks at it with `input_dir=path`:
+
+```bash
+make gen-large-export size_mb=100
+make gen-large-export size_mb=30 dir=/tmp/export-30mb
+```
+
+The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comments.csv` under the system temp directory by default and refuses to write inside the repository. The same size always produces the same bytes. The data has one self account, a few thousand contacts with stable profile URLs (including different people who share a name), conversation IDs tied to participants, multi-year dates, and message bodies with commas, quotes, line breaks, emoji, and non-Latin scripts.
+
+`make bench-browser` times the real browser flow. It builds the production bundle, serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
+
+```bash
+make bench-browser size_mb=55
+make bench-browser size_mb=90 cpu=6 gpu=0 mobile=1 budget_mb=300
+make bench-browser input_dir=data/input runs=5
+```
+
+`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `messages.csv` takes 80% of the generated size, and the bench stops before launching a browser when any file is over the app's per-file upload limit. Runs use reduced motion, so the optional timeline animation cannot end a filter timing early. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
+
+CPU throttling slows only the page's main thread. Chromium rejects it on worker targets, and a measured worker loop ran at the same speed at rates 1 and 4, so throttled timings understate slow-device time for work done in workers.
+
+### Large-export baselines
+
+Measured on 2026-10-16 at commit `aeaaa15`, before any large-file pipeline work, on a 4-core Intel Xeon at 2.10 GHz with 15 GB RAM, Chromium 141.0.7390.37 headless, and Node 24.15.0. Each row is 3 runs of `make bench-browser size_mb=N runs=3` with the listed options, on the synthetic export from `make gen-large-export`. Values are medians with the range in parentheses. Messages time is from file drop and includes opening Analytics first. When these rows were recorded, the bench timed the cached filter change before opening Messages, so the Messages column also includes that change (a few hundred milliseconds at most); the bench now times the filter after Messages. Peak heap is the combined sampled JavaScript heap of the page and its workers. No run crashed or failed to finish.
+
+| Size  | Options | Analytics ready    | Messages ready       | Cached filter    | Peak heap        |
+| ----- | ------- | ------------------ | -------------------- | ---------------- | ---------------- |
+| 10 MB | `cpu=1` | 1.59 s (1.31-1.79) | 2.00 s (1.72-2.21)   | 176 ms (170-179) | 73 MB (69-90)    |
+| 10 MB | `cpu=4` | 2.22 s (1.96-2.23) | 2.87 s (2.47-2.91)   | 168 ms (167-281) | 78 MB (70-88)    |
+| 10 MB | `cpu=6` | 3.07 s (3.00-3.18) | 4.05 s (3.80-4.26)   | 262 ms (231-410) | 83 MB (79-96)    |
+| 10 MB | `gpu=0` | 1.69 s (1.13-1.70) | 2.09 s (1.58-2.11)   | 178 ms (140-193) | 81 MB (70-100)   |
+| 30 MB | `cpu=1` | 2.43 s (2.40-2.69) | 2.84 s (2.81-3.16)   | 186 ms (173-208) | 204 MB (196-204) |
+| 30 MB | `cpu=4` | 3.48 s (3.28-3.51) | 4.19 s (3.92-4.27)   | 209 ms (190-274) | 247 MB (227-257) |
+| 30 MB | `cpu=6` | 4.89 s (4.79-5.29) | 5.83 s (5.64-6.22)   | 306 ms (287-323) | 247 MB (203-251) |
+| 30 MB | `gpu=0` | 2.57 s (2.46-2.64) | 2.98 s (2.91-3.24)   | 224 ms (162-292) | 204 MB (186-213) |
+| 55 MB | `cpu=1` | 3.48 s (3.30-3.74) | 3.85 s (3.72-4.21)   | 181 ms (157-207) | 359 MB (355-359) |
+| 55 MB | `cpu=4` | 5.77 s (5.57-5.78) | 6.43 s (6.30-6.55)   | 224 ms (193-241) | 475 MB (464-618) |
+| 55 MB | `cpu=6` | 9.38 s (7.44-9.39) | 10.38 s (8.26-10.42) | 267 ms (254-282) | 436 MB (418-440) |
+| 55 MB | `gpu=0` | 3.49 s (3.44-3.59) | 3.90 s (3.84-3.94)   | 152 ms (94-204)  | 359 MB (349-397) |
+
+What the baselines show:
+
+- Peak heap grows about 6.4 MB per MB of export between 10 and 55 MB, and a 55 MB export already peaks near 360 MB, over the provisional 300 MB budget. Reducing whole-file copies and retained analysis state matters more than speed.
+- Throttled runs report higher peaks. The likely cause is that slower runs let the 200 ms sampler catch more short-lived allocations; this was not measured separately.
+- CPU throttling reaches only the main thread, so the throttled timings are a lower bound for a slow device.
+- Disabling the GPU changes nothing measurable, because no screen uses WebGL today.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

@@ -341,11 +341,13 @@ web-e2e-container: test-e2e-container ## Alias for test-e2e-container
 
 # ─── Checks @checks ──────────────────────────────────────────────────────────────────
 # Local-only tools that run against your private export in data/input (never
-# committed). They skip cleanly when it is absent unless strict=1 is set. Any
-# cross-runtime row dumps use a private temporary directory and are always removed.
-# See docs/development.md (Local checks and benchmarks).
+# committed). They skip cleanly when it is absent unless strict=1 is set, except
+# bench-browser, which generates a synthetic export with size_mb=N and otherwise
+# fails when its inputs are missing. Any cross-runtime row dumps use a private
+# temporary directory and are always removed.
+# See docs/testing.md (Run local checks and benchmarks).
 
-.PHONY: cleaner-diff xrt-diff bench bench-decode audit-memory-python audit-memory-browser explore
+.PHONY: cleaner-diff xrt-diff bench bench-decode audit-memory-python audit-memory-browser bench-browser explore
 
 cleaner-diff: ## Compare web cleaner behavior across refs (make cleaner-diff [args="oldRef newRef"] [strict=1] [input_dir=path])
 	$(NODE) scripts/checks/cleaner-diff.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") $(args)
@@ -369,6 +371,9 @@ audit-memory-python: ## Measure per-cleaner peak RSS on your export (make audit-
 
 audit-memory-browser: ## Measure browser JS heap on your export in Chromium (make audit-memory-browser local_libs=1 [strict=1] [input_dir=path])
 	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/heap-audit.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")
+
+bench-browser: ## Time upload to Analytics and Messages in Chromium with a heap budget (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [budget_mb=N] [local_libs=1])
+	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)")
 
 explore: ## Print ad-hoc statistics over your export
 	$(VENV_PYTHON) scripts/checks/li_explore.py
@@ -459,13 +464,16 @@ fix-deps: ## Refresh locks and reinstall local environments
 
 # ─── Utilities @util ────────────────────────────────────────────────────────────────
 
-.PHONY: run-cli gen-parity-corpus status clean-venv clean help help-json
+.PHONY: run-cli gen-parity-corpus gen-large-export status clean-venv clean help help-json
 
 run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connections|all ...")
 	$(VENV)/bin/linkedin-analyzer $(args)
 
 gen-parity-corpus: ## Regenerate the synthetic cross-runtime parity corpus fixtures
 	$(NODE) scripts/fixtures/gen-parity-corpus.mjs
+
+gen-large-export: ## Write a synthetic export outside the repo (make gen-large-export size_mb=100 [dir=path])
+	$(NODE) scripts/fixtures/gen-large-export.mjs --size-mb "$(or $(size_mb),100)" $(if $(dir),--dir "$(dir)")
 
 # Runs on the system interpreter, not the venv one, because the first thing it
 # has to be able to report is that the venv is missing.

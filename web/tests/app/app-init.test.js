@@ -48,6 +48,7 @@ vi.mock("../../src/platform/observability/sentry.js", () => ({
     disableTelemetry: vi.fn(),
     initSentry: vi.fn(),
     setTelemetryConsent: vi.fn(),
+    setTelemetryEffectsTier: vi.fn(),
     telemetryConsentGranted: vi.fn(() => false),
 }));
 vi.mock("../../src/platform/persistence/session.js", () => ({

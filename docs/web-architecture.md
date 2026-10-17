@@ -47,6 +47,8 @@ Python implements the CLI cleaner under `src/linkedin_analyzer/`. JavaScript imp
 
 `web/src/platform/observability/telemetry.js` records only allowlisted numeric web-vitals and performance measurements. It buffers the latest value and a count, then sends a numeric `session-metrics` event when the page becomes hidden.
 
+`web/src/platform/observability/run-tracker.js` notices processing runs that did not finish. A tab the browser kills cannot report as it dies, so the upload page writes a `localStorage` marker when processing starts, refreshes its heartbeat every 5 seconds, and removes it when every job settles. `pagehide` records that the page was left, so a reload or a normal close is not reported. `freeze` counts as left too, because a frozen tab cannot answer another tab's ownership check; a tab that comes back from the back/forward cache or resumes writes its whole marker again, in case another tab removed it meanwhile. At startup, the app removes left markers silently, asks other open tabs over a `BroadcastChannel` whether one owns a remaining run, and rechecks a run with a recent heartbeat once it would be stale. Only a run with no owner and a stale heartbeat shows the notice and, with consent, sends one `processing-unfinished` event. The signal counts runs that did not finish, not crashes: read it as a trend across size buckets.
+
 `api/csp-report.mjs` is separate from consent because a browser needs a valid CSP reporting endpoint even when diagnostics forwarding is off. It accepts legacy and Reporting API shapes, keeps only bounded violation metadata, removes URL queries and fragments, and forwards reports only when `CSP_REPORT_URI` or `SENTRY_DSN` is configured. [ADR-004](adr/004-opt-in-telemetry-with-pii-scrubbing.md) records the data reduction rules.
 
 ## How the PDF export is split
@@ -56,6 +58,12 @@ Python implements the CLI cleaner under `src/linkedin_analyzer/`. JavaScript imp
 `pdf-document.js` lays out measured blocks on A4 pages. `pdf-charts.js` redraws charts as PDF vectors instead of copying canvas pixels. The exporter reads the light theme tokens from CSS and loads TrueType fonts only when a user starts an export. Font fallback replaces unsupported characters with `?` so missing text is visible.
 
 The export collects dashboard data from the feature workers and keeps names and message bodies behind independent confirmation choices. [ADR-008](adr/008-jspdf-for-the-save-as-pdf-export.md) records the dependency and export design.
+
+## How the effects tier is chosen
+
+`web/src/platform/device/capabilities.js` reads CPU cores, `navigator.deviceMemory`, Save-Data, the coarse-pointer query, and accelerated WebGL once, picks the `lite`, `standard`, or `rich` tier, and caches the profile. `web/src/shared/ui/effects.js` applies the tier as `data-effects` on the root element, wires the **Auto**, **Lite**, and **Full** toggle, and, under **Auto**, drops one tier when `web/src/platform/device/jank.js` sees repeated long animation frames while no processing or screen load is running. Stylesheets gate expensive effects on `:root[data-effects="lite"]`.
+
+The page ships marked `lite` and upgrades after the profile is known, because the CSP forbids the inline script that could set it before first paint. The WebGL probe is skipped under the **Lite** override and whenever the cheap signals already rule out the rich tier. The tier controls decoration only: nothing in the processing path reads it. [ADR-009](adr/009-device-tiers-for-effects.md) records the thresholds and rules.
 
 ## Keep delegated events safe
 

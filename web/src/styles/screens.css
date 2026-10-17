@@ -25,6 +25,11 @@
     pointer-events: none;
 }
 
+/* The lite effects tier dims a loading screen without blurring it. */
+:root[data-effects="lite"] .screen.is-loading .screen-inner {
+    filter: none;
+}
+
 @keyframes screen-in {
     from {
         opacity: 0;

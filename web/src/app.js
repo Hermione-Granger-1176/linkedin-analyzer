@@ -11,8 +11,10 @@ import { InsightsPage } from "./features/insights/screen.js";
 import { MessagesPage } from "./features/messages/screen.js";
 import { Tutorial } from "./features/tutorial/tutorial.js";
 import { UploadPage } from "./features/upload/upload.js";
+import { RunTracker, memoryBucket } from "./platform/observability/run-tracker.js";
 import {
     captureError,
+    captureProcessingUnfinished,
     disableTelemetry,
     initSentry,
     setTelemetryConsent,
@@ -24,6 +26,7 @@ import { SESSION_CLEANUP_PROMISE_KEY } from "./shared/constants.js";
 import { DomEvents } from "./shared/dom-events.js";
 import { initAlive } from "./shared/ui/alive.js";
 import { initDecorations } from "./shared/ui/decorations.js";
+import { Effects } from "./shared/ui/effects.js";
 import { initMascot } from "./shared/ui/mascot.js";
 import { NavMenu } from "./shared/ui/nav-menu.js";
 import { Theme } from "./shared/ui/theme.js";
@@ -87,6 +90,8 @@ function init() {
         initTelemetry();
     }
     initRuntime();
+    // Before the decoration layer starts, so it reads the tier it will run in.
+    Effects.init();
     initMascot();
     initAlive();
     Theme.init();
@@ -99,6 +104,7 @@ function init() {
     registerRoutes();
     bindRouteLinks();
     initConsentControls(hasTelemetryConsent);
+    checkUnfinishedRuns();
 
     runSessionCleanup();
 
@@ -121,6 +127,28 @@ function init() {
                 });
                 return false;
             });
+    }
+
+    /**
+     * Tell the user when an earlier processing run did not finish, and report
+     * it with consent. The wording never claims a crash or a too-large file.
+     */
+    function checkUnfinishedRuns() {
+        const banner = document.getElementById("unfinishedRunBanner");
+        const dismissButton = document.getElementById("unfinishedRunDismissBtn");
+        if (dismissButton && banner) {
+            dismissButton.addEventListener("click", () => {
+                banner.hidden = true;
+            });
+        }
+        const deviceMemory = /** @type {Navigator & { deviceMemory?: number }} */ (navigator)
+            .deviceMemory;
+        RunTracker.checkPrevious((run) => {
+            if (banner) {
+                banner.hidden = false;
+            }
+            captureProcessingUnfinished({ ...run, memoryBucket: memoryBucket(deviceMemory) });
+        });
     }
 
     /**

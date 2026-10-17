@@ -6,6 +6,7 @@ import {
     parseStoredUploadFile,
     toStoredFileMetadata,
 } from "../../app/worker-contracts.js";
+import { RunTracker } from "../../platform/observability/run-tracker.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
@@ -469,6 +470,10 @@ export const UploadPage = (() => {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
         }
+        // Start or join the tracked run only now, in the same task that adds
+        // the jobs: earlier jobs finishing during the priming await would
+        // otherwise finish the run these files just joined.
+        RunTracker.start({ totalBytes: incomingBytes, fileCount: acceptedFiles.length });
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
@@ -1102,6 +1107,7 @@ export const UploadPage = (() => {
     function checkJobs() {
         if (activeJobs.size === 0) {
             UploadProgress.hide();
+            RunTracker.finish();
         }
     }
 
@@ -1113,6 +1119,7 @@ export const UploadPage = (() => {
         clearAllJobTimeouts();
         activeJobs.clear();
         UploadProgress.hide();
+        RunTracker.finish();
     }
 
     /**

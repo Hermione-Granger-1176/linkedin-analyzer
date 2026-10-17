@@ -1294,6 +1294,47 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
+    it("joins the tracked run only after priming, in the task that adds the jobs", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+        const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
+        Storage.getAllFiles.mockResolvedValue(cachedFiles);
+        Storage.getFile.mockResolvedValue({ type: "shares", text: "shares-head\nr1", rowCount: 1 });
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+        const { RunTracker } = await import("../../../src/platform/observability/run-tracker.js");
+        const order = [];
+        const start = vi.spyOn(RunTracker, "start").mockImplementation(() => order.push("start"));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        workerInstance.postMessage.mockImplementation((message) => order.push(message.type));
+
+        const file = new File(["col\nval"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Earlier jobs finishing while the prime awaits storage must not finish
+        // a run these files already joined, so the join comes after the prime.
+        expect(order.indexOf("start")).toBeGreaterThan(order.indexOf("restoreFiles"));
+        expect(order.indexOf("restoreFiles")).toBeGreaterThanOrEqual(0);
+
+        start.mockRestore();
+        globalThis.FileReader = originalFileReader;
+    });
+
     it("primes stored connections text alongside shares so the worker can correlate growth", async () => {
         const originalFileReader = globalThis.FileReader;
         globalThis.FileReader = function FileReader() {

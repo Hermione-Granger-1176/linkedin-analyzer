@@ -94,6 +94,12 @@ linkedin-analyzer --encoding iso-8859-1 shares
 
 The CLI and browser try UTF-8 first and then use WHATWG Windows-1252 when no explicit encoding is set. An explicit encoding disables that fallback.
 
+## The app says the last processing run did not finish
+
+The notice appears when an earlier upload started processing and never finished or failed with an error. A browser that runs out of memory can stop a tab without warning, which is most common on phones with large exports. A browser crash or a forced quit looks the same.
+
+Upload fewer files at once, close other tabs, or use the Python CLI on a computer, which has higher limits. If the notice keeps appearing for the same export on a computer, reproduce it with `make bench-browser input_dir=path` and report the result.
+
 ## A cleaner reports missing columns
 
 Inspect the header row and compare it with the required columns in [data formats](data-formats.md). The cleaner trims header whitespace and removes a leading byte-order mark, but it does not rename arbitrary columns.

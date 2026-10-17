@@ -219,6 +219,11 @@
     transform-origin: center;
 }
 
+/* The lite effects tier drops the shadow filter and the marching dashes. */
+:root[data-effects="lite"] .tutorial-pointer {
+    filter: none;
+}
+
 .tutorial-pointer-path-main {
     fill: none;
     stroke: color-mix(in srgb, var(--text-primary) 88%, var(--accent-blue));
@@ -256,6 +261,12 @@
 
 .tutorial-pointer[data-arrow-style="solid"] .tutorial-pointer-path-main,
 .tutorial-pointer[data-arrow-style="solid"] .tutorial-pointer-path-echo {
+    animation: none;
+}
+
+/* Outranks the dashed-arrow animation above, whatever the arrow style. */
+:root[data-effects="lite"] .tutorial-pointer .tutorial-pointer-path-main,
+:root[data-effects="lite"] .tutorial-pointer .tutorial-pointer-path-echo {
     animation: none;
 }
 

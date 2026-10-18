@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["web/index.html", "api/**/*.mjs", "scripts/**/*.{js,mjs}"],
   "project": [
-    "web/src/**/*.{js,ts}",
+    "web/src/**/*.{js,ts,svelte}",
     "api/**/*.mjs",
     "config/**/*.{js,mjs}",
     "scripts/**/*.{js,mjs}"

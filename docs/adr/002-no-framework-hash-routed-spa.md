@@ -1,6 +1,6 @@
 # ADR-002: No-framework hash-routed SPA
 
-**Date:** 2026-07-03 **Status:** Accepted **Deciders:** Aditya Kumar Darak
+**Date:** 2026-07-03 **Status:** Superseded in part by [ADR-011](011-svelte-for-screen-views.md) (screen views may use Svelte; hash routing stands) **Deciders:** Aditya Kumar Darak
 
 ## Context
 

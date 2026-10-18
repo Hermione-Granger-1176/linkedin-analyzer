@@ -9,7 +9,8 @@
  *
  * Some columns almost never repeat, such as dates and message bodies, and
  * looking every one of them up costs time and saves nothing. So each column
- * samples its first values and stops caching when nearly all were new.
+ * checks every window of values and stops caching once a window is nearly all
+ * new, which also catches a column that repeats at first and not after.
  *
  * A cached value is stored as a copy. A value sliced out of a decoded chunk
  * can keep that whole chunk alive, and one cached slice per distinct value
@@ -17,10 +18,10 @@
  * as they are: copying them measured slower and larger.
  */
 
-/** Values a column sees before it decides whether caching pays. */
+/** Values in each window a column checks to decide whether caching pays. */
 const SAMPLE_SIZE = 4096;
 
-/** A column whose sample was at least this share distinct values stops caching. */
+/** A column whose window was at least this share new values stops caching. */
 const MAX_DISTINCT_SHARE = 0.9;
 
 /**
@@ -55,6 +56,7 @@ export function copyString(value) {
  */
 export function createColumnCache() {
     let seen = 0;
+    let added = 0;
     /** @type {Map<string, string>|null} */
     let cleaned = new Map();
     return (value, clean) => {
@@ -65,10 +67,15 @@ export function createColumnCache() {
         if (kept === undefined) {
             kept = copyString(clean(value));
             cleaned.set(copyString(value), kept);
+            added += 1;
         }
         seen += 1;
-        if (seen === SAMPLE_SIZE && cleaned.size >= SAMPLE_SIZE * MAX_DISTINCT_SHARE) {
-            cleaned = null;
+        if (seen === SAMPLE_SIZE) {
+            if (added >= SAMPLE_SIZE * MAX_DISTINCT_SHARE) {
+                cleaned = null;
+            }
+            seen = 0;
+            added = 0;
         }
         return kept;
     };

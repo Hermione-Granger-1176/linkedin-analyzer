@@ -69,4 +69,20 @@ describe("createValueCache", () => {
         expect(cache("DATE", "2025-01-01 10:00:1", clean)).toBe("2025-01-01 10:00:1");
         expect(clean).toHaveBeenCalledTimes(2);
     });
+
+    it("stops caching a column that repeats at first and then turns distinct", () => {
+        const cache = createValueCache();
+        const clean = vi.fn(upper);
+        for (let index = 0; index < 4096; index += 1) {
+            cache("CONTENT", "Thanks!", clean);
+        }
+        for (let index = 0; index < 4096; index += 1) {
+            cache("CONTENT", `a long, distinct message body ${index}`, clean);
+        }
+        clean.mockClear();
+
+        cache("CONTENT", "Thanks!", clean);
+        cache("CONTENT", "Thanks!", clean);
+        expect(clean).toHaveBeenCalledTimes(2);
+    });
 });

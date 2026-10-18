@@ -245,7 +245,7 @@ After the streaming cleaner stores each repeated cell value once (`web/src/featu
 | 100 MB | pooling before cleaning | 4.14 s          | 9.06 s         | 124 MB    |
 
 - Most of the cleaned rows' memory is the cell strings, and names, profile URLs, conversation ids and folders repeat on row after row. Sharing them cuts the rows a worker keeps for a 58 MiB `messages.csv` from 212 MB to 47 MB.
-- Each column samples its first 4,096 values and stops caching when nearly all were distinct, as dates and message bodies are.
+- Each column checks every window of 4,096 values and stops caching once a window is nearly all distinct, as dates and message bodies are.
 - Looking values up after cleaning cost about 10%. Looking the raw value up first skips cleaning every repeat, and with the date fast path and no intermediate record object per row, the clean of that file in Node fell from about 2.2 s to 1.9 s.
 - The date fast path does two time zone lookups instead of six and gave the same output as the general path on about 10 million inputs across 13 time zones, including historical offsets with seconds, which it hands back to the general path.
 - A 128 MB export fits the 300 MB budget for analysis (198 MB with pooling after cleaning), so the public limits rose to 128 MiB per file, 128 Mi characters, and 1,000,000 rows.

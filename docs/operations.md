@@ -174,13 +174,15 @@ Use the Make wrappers for Actions operations:
 
 ```bash
 make ci-runs
-make ci-jobs run=123456
-make ci-failures run=123456
+make ci-jobs
+make ci-failures
 make ci-watch
 make ci-cancel run=123456
-make ci-rerun run=123456 failed=1
+make ci-rerun failed=1
 make ci-dispatch workflow=web-smoke.yml ref=main
 ```
+
+`make ci-jobs`, `make ci-failures`, `make ci-watch`, and `make ci-rerun` act on the current branch's latest run. Pass `run=ID` to target another run. `make ci-cancel` always needs `run=ID` so it cannot cancel the wrong run. `make ci-watch` exits non-zero when the run fails.
 
 Use `make ci-caches` to inspect cache sizes. Prefer a cache ID when you run `make ci-cache-delete cache=1234`; a cache key can exist on more than one ref.
 

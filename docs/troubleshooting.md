@@ -159,14 +159,14 @@ Inspect the latest run and failed steps through the Make wrappers:
 
 ```bash
 make ci-runs
-make ci-jobs run=123456
-make ci-failures run=123456
+make ci-jobs
+make ci-failures
 ```
 
-Use `make ci-cancel run=123456` before retrying a run that is still in progress. Re-run only failed jobs with:
+These act on the current branch's latest run. Add `run=ID` from `make ci-runs` to inspect another one. Use `make ci-cancel run=123456` before retrying a run that is still in progress. Re-run only the failed jobs of the latest run with:
 
 ```bash
-make ci-rerun run=123456 failed=1
+make ci-rerun failed=1
 ```
 
 If a required job skipped unexpectedly, inspect the changed-area decision and the `CI result` output. Run `make ci-changed-areas base=SHA head=SHA` locally when the area classification looks wrong.

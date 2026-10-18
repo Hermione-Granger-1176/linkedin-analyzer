@@ -17,9 +17,6 @@ if TYPE_CHECKING:
 _COPILOT_LOGIN = "copilot-pull-request-reviewer"
 _PENDING_STATES = {"EXPECTED", "PENDING"}
 _SUCCESSFUL_CHECK_OUTCOMES = {"NEUTRAL", "SKIPPED", "SUCCESS"}
-# The latest artifacts PR exposed 31 status entries, including the conditional
-# jobs reported as skipped. Keep that completeness floor project-specific while
-# allowing callers to override it when the workflow adds or removes checks.
 # A floor on how many checks must exist before a rollup can settle, not a
 # prediction of the total. It used to be a fixed count matching a full CI run,
 # which meant any PR whose plan skipped work produced fewer checks than the
@@ -40,6 +37,48 @@ _COMMENT_COUNT_PATTERN = re.compile(
     r"\bgenerated (?:(no(?: new)?)|(\d+)) comments?\b",
     re.IGNORECASE,
 )
+# Copilot's v2 overview drops that sentence. It opens with a verdict heading such as
+# "### 🟢 Approval recommended" and folds its detail into collapsible sections. Two
+# layouts are in use:
+#
+# - Earlier: a "## Copilot review overview" heading above the verdict, a
+#   "**Findings:** None" line when clean, sections headed "<Label> (N)", and open
+#   findings linked as "(#discussion_r<id>)".
+# - Current: no "##" heading, a "**No open issues**" line when clean, sections headed
+#   "N <label>" such as "1 open issue", full thread URLs ending in
+#   "#discussion_r<id>", and an uncounted "What changed in this PR" section.
+#
+# A review with findings has an open section that links each finding still open,
+# including ones from earlier rounds, to its thread. The "discussion_r<id>" anchor
+# also ends the thread's URL.
+#
+# The clean line alone is not clean. A review can describe a finding in a
+# "Previously missed (N)" section without opening a thread, so a clean review needs
+# the approval verdict and no counted section other than the resolved list.
+_V2_OVERVIEW_MARKER = "<!-- ccr-overview-v2 -->"
+_V2_APPROVAL_VERDICT = "Approval recommended"
+_V2_CLEAN_SECTIONS = frozenset({"resolved since last review"})
+# The verdict is the first heading of the overview, so a "###" further down is not one.
+_V2_VERDICT_PATTERN = re.compile(
+    re.escape(_V2_OVERVIEW_MARKER)
+    + r"\s*(?:^## Copilot review overview\s*)?^### (?:\W+\s)?(.+?)\s*$",
+    re.MULTILINE,
+)
+_V2_CLEAN_PATTERN = re.compile(
+    r"^(?:\*\*Findings:\*\* None|\*\*No open issues\*\*\W*)\s*$", re.MULTILINE
+)
+_V2_SECTION_PATTERN = re.compile(r"<summary><strong>(.+?)</strong></summary>")
+_V2_SUFFIX_COUNT_PATTERN = re.compile(r"^(.+?) \(\d+\)$")
+_V2_PREFIX_COUNT_PATTERN = re.compile(r"^\d+ (.+)$")
+_V2_OPEN_HEADING_PATTERN = re.compile(
+    r"<summary><strong>(?:Open \((\d+)\)|(\d+) open issues?)</strong></summary>"
+)
+# Open items are plain list lines, so the section must close before any other
+# <details> opens. Otherwise an unclosed section would borrow a later block's close.
+_V2_OPEN_SECTION_PATTERN = re.compile(
+    _V2_OPEN_HEADING_PATTERN.pattern + r"((?:(?!<details).)*?)</details>", re.DOTALL
+)
+_DISCUSSION_LINK_PATTERN = re.compile(r"#(discussion_r\d+)\)")
 
 
 @dataclass(frozen=True)
@@ -53,15 +92,40 @@ class CopilotReview:
     state: str = ""
 
     @property
+    def is_v2_overview(self) -> bool:
+        """Return whether the review uses Copilot's v2 overview format."""
+        return _V2_OVERVIEW_MARKER in self.body
+
+    @property
+    def verdict(self) -> str:
+        """Return a v2 overview's verdict heading without its emoji, or an empty string."""
+        match = _V2_VERDICT_PATTERN.search(self.body)
+        return "" if match is None else match.group(1)
+
+    @property
+    def open_discussions(self) -> frozenset[str]:
+        """Return the thread anchors linked from a v2 overview's open section."""
+        return frozenset(_open_discussion_links(self.body))
+
+    @property
     def is_explicitly_clean(self) -> bool:
         """Return whether the review reports nothing to address.
 
         Copilot review state is not evidence of a clean review. The review
         wording must say "generated no comments" on a first review or
-        "generated no new comments" on a re-review. A numeric "generated 0
-        comments" deliberately does not count, so unexpected wording fails
-        closed.
+        "generated no new comments" on a re-review. A v2 overview must
+        recommend approval, have a "**Findings:** None" or "**No open issues**"
+        line, and have no counted section other than the resolved list. A numeric
+        "generated 0 comments" deliberately does not count, so unexpected
+        wording fails closed.
         """
+        if self.is_v2_overview:
+            sections = _v2_counted_sections(self.body)
+            return (
+                self.verdict == _V2_APPROVAL_VERDICT
+                and _V2_CLEAN_PATTERN.search(self.body) is not None
+                and sections <= _V2_CLEAN_SECTIONS
+            )
         match = _COMMENT_COUNT_PATTERN.search(self.body)
         return match is not None and match.group(1) is not None
 
@@ -101,8 +165,39 @@ def _parse_timestamp(value: str, context: str) -> datetime:
     return parsed
 
 
+def _v2_counted_sections(body: str) -> set[str]:
+    """Return a v2 overview's counted section labels, lowercased and without counts.
+
+    "Resolved since last review (1)" and "1 resolved since last review" both
+    become "resolved since last review". A heading without a count, such as
+    "What changed in this PR", describes the change rather than findings.
+    """
+    labels: set[str] = set()
+    for heading in _V2_SECTION_PATTERN.findall(body):
+        match = _V2_SUFFIX_COUNT_PATTERN.match(heading) or _V2_PREFIX_COUNT_PATTERN.match(heading)
+        if match is not None:
+            labels.add(match.group(1).lower())
+    return labels
+
+
+def _open_discussion_links(body: str) -> list[str]:
+    """Return the thread anchors linked from a v2 open section, in order."""
+    section = _V2_OPEN_SECTION_PATTERN.search(body)
+    return [] if section is None else _DISCUSSION_LINK_PATTERN.findall(section.group(3))
+
+
 def _generated_comment_count(body: str) -> int | None:
     """Return the comment count from a Copilot overview, when recognized."""
+    if _V2_OVERVIEW_MARKER in body:
+        heading = _V2_OPEN_HEADING_PATTERN.search(body)
+        if heading is None:
+            return 0 if _V2_CLEAN_PATTERN.search(body) is not None else None
+        # Each open finding must link its thread, or the watcher cannot tell when
+        # every thread has arrived. A count without matching links, or a section
+        # that never closes, fails closed.
+        count = int(heading.group(1) or heading.group(2))
+        complete = _V2_OPEN_SECTION_PATTERN.search(body) is not None
+        return count if complete and len(set(_open_discussion_links(body))) == count else None
     match = _COMMENT_COUNT_PATTERN.search(body)
     if match is None:
         return None
@@ -165,7 +260,7 @@ def _review_payload(pr: int, *, run_fn: RunFunction | None = None) -> dict[str, 
 
 
 def watch_baseline(pr: int, *, run_fn: RunFunction | None = None) -> WatchBaseline:
-    """Capture existing Copilot reviews and threads before an explicit request.
+    """Capture existing Copilot reviews and every review thread before a request.
 
     Resolved threads are captured alongside open ones so that later polls only
     wait on threads the requested review actually created.
@@ -295,6 +390,9 @@ def _review_summary(review: CopilotReview | None, *, requested: bool) -> str:
         return "unrecognized Copilot overview"
     if review.is_explicitly_clean:
         return "generated no comments"
+    if review.is_v2_overview and review.generated_comment_count == 0:
+        verdict = (review.verdict or "no verdict").lower()
+        return f"{verdict} with no open threads; read the overview with `make pr-comments`"
     return f"generated {review.generated_comment_count} comment(s)"
 
 
@@ -395,23 +493,28 @@ def watch_pr(
         )
         if ready_for_threads:
             all_threads = pr_review.list_threads(pr, include_resolved=True, run_fn=run_fn)
-            review_count = (
-                status.fresh_review.generated_comment_count
-                if status.fresh_review is not None
-                else 0
-            )
-            fresh_thread_count = sum(
-                thread.thread_id not in baseline.thread_ids for thread in all_threads
-            )
-            waiting_for_threads = review_count is not None and review_count > fresh_thread_count
+            review = status.fresh_review
+            if (
+                review is not None
+                and review.is_v2_overview
+                and review.generated_comment_count is not None
+            ):
+                # A v2 overview links the threads it lists, so wait for exactly those.
+                # Their state, author, and age do not matter.
+                anchors = {thread.url.rpartition("#")[2] for thread in all_threads}
+                waiting_for_threads = not review.open_discussions <= anchors
+            else:
+                review_count = review.generated_comment_count if review is not None else 0
+                fresh_thread_count = sum(
+                    thread.thread_id not in baseline.thread_ids for thread in all_threads
+                )
+                waiting_for_threads = review_count is not None and review_count > fresh_thread_count
             if not waiting_for_threads:
-                if (
-                    status.fresh_review is not None
-                    and status.fresh_review.generated_comment_count is None
-                ):
+                if review is not None and review.generated_comment_count is None:
                     raise GhError(
                         "The fresh Copilot review overview could not be classified; "
-                        "inspect `make pr-review-comments` before merging."
+                        "read it with `make pr-comments` and inspect "
+                        "`make pr-review-comments` before merging."
                     )
                 threads = [thread for thread in all_threads if thread.state == "open"]
                 return _watch_report(

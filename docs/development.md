@@ -290,6 +290,10 @@ make pr-review-comments
 make pr-address thread=PRRT_... < response.md
 ```
 
+PR review watching observes the Copilot review that starts automatically when a pull request opens, and waits for settled checks. It does not request a second review by default. After pushing a correction, run `make pr-watch request=1` so it waits for a fresh review rather than settling on the previous one, or `make pr-watch checks_only=1` to observe CI only. `make pr-copilot-review` requests a review on its own. The watcher reads both Copilot review formats. A review in the newer overview format that recommends anything other than approval is not merge ready even with no open threads, and the report points to `make pr-comments` to read it.
+
+`make ci-jobs`, `make ci-failures`, `make ci-watch`, and `make ci-rerun` act on the current branch's latest run unless `run=ID` is given. `make ci-watch` exits non-zero when the run fails.
+
 The Make wrappers keep paths and prose out of shell source text. That is why the input convention is part of the repository interface.
 
 ## Understand CI path gating

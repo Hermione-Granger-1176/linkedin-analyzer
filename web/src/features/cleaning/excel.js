@@ -4,6 +4,7 @@
  */
 
 import { FILE_TYPE_LABELS } from "../../shared/constants.js";
+import { downloadBlob } from "../../shared/ui/download.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
 
@@ -371,7 +372,7 @@ export const ExcelGenerator = (() => {
      */
     function downloadFromSpec(spec, filename) {
         return toDownloadResult(async () => {
-            download(await generateFromSpec(spec), filename);
+            downloadBlob(await generateFromSpec(spec), filename);
         });
     }
 
@@ -411,22 +412,6 @@ export const ExcelGenerator = (() => {
     }
 
     /**
-     * Save a Blob through a temporary download link.
-     * @param {Blob} blob - File content
-     * @param {string} filename - Download file name
-     */
-    function download(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-
-    /**
      * Build and download the workbook for cleaned rows of one file type.
      * @param {import("./cleaner.js").CleanedRow[]} data - Cleaned rows
      * @param {string} fileType - Cleaner file type
@@ -436,12 +421,12 @@ export const ExcelGenerator = (() => {
     function generateAndDownload(data, fileType, customFilename = null) {
         return toDownloadResult(async () => {
             const blob = await generate(data, fileType);
-            download(blob, customFilename || getConfig(fileType).outputName);
+            downloadBlob(blob, customFilename || getConfig(fileType).outputName);
         });
     }
 
     return {
-        download,
+        download: downloadBlob,
         generate,
         generateAndDownload,
         generateFromSpec,

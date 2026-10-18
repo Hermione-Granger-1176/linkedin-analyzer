@@ -4,6 +4,8 @@ import rough from "roughjs/bundled/rough.esm.js";
 
 import { DAY_LABELS } from "../../features/analytics/constants.js";
 
+import { downloadBlob } from "./download.js";
+
 /**
  * One timeline bucket: a month, or a week in the short ranges.
  * @typedef {object} TimelinePoint
@@ -625,6 +627,21 @@ export const SketchCharts = (() => {
     }
 
     /**
+     * Shorten a label with an ellipsis until it fits the given width.
+     * @param {CanvasRenderingContext2D} ctx - Context carrying the label font.
+     * @param {string} text - Label to fit.
+     * @param {number} maxWidth - Available width in pixels.
+     * @returns {string} The label, cut short when it does not fit.
+     */
+    function truncateToWidth(ctx, text, maxWidth) {
+        let label = text;
+        while (label.length > 1 && ctx.measureText(label).width > maxWidth) {
+            label = label.slice(0, -1);
+        }
+        return label === text ? label : `${label}\u2026`;
+    }
+
+    /**
      * Draw horizontal bar chart of topic counts.
      * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
      * @param {TopicPoint[]} data - Array of topic objects with topic and count properties.
@@ -674,14 +691,7 @@ export const SketchCharts = (() => {
 
             ctx.fillStyle = colors.text;
             ctx.textAlign = "right";
-            let label = point.topic;
-            const maxLabelSpace = padding.left - 12;
-            while (label.length > 1 && ctx.measureText(label).width > maxLabelSpace) {
-                label = label.slice(0, -1);
-            }
-            if (label !== point.topic) {
-                label += "\u2026";
-            }
+            const label = truncateToWidth(ctx, point.topic, padding.left - 12);
             ctx.fillText(label, padding.left - 8, y + barHeight - 6);
 
             items.push({
@@ -1015,14 +1025,7 @@ export const SketchCharts = (() => {
             if (!blob) {
                 return;
             }
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = filename || "chart.png";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            downloadBlob(blob, filename || "chart.png");
         }, "image/png");
     }
 

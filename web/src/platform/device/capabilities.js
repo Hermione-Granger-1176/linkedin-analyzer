@@ -3,16 +3,16 @@
  *
  * The tier controls decoration only: motion, filters, and future canvas or
  * WebGL scenes. It never decides how files are processed: nothing in the
- * processing path reads the tier, so an effects override, Save-Data, or
- * reduced motion cannot change how files are handled.
+ * processing path reads the tier, so Save-Data or reduced motion cannot change
+ * how files are handled.
+ *
+ * The device decides the tier on its own; there is no visitor setting for it.
  *
  * A missing API reads as unknown, never as low: Safari and Firefox do not
  * expose deviceMemory, and that must not push them into the lite tier.
  */
 
 export const EFFECTS_TIERS = Object.freeze(["lite", "standard", "rich"]);
-export const EFFECTS_OVERRIDES = Object.freeze(["auto", "lite", "full"]);
-const OVERRIDE_STORAGE_KEY = "linkedin-analyzer-effects";
 
 /**
  * @typedef {object} DeviceSignals
@@ -29,7 +29,6 @@ const OVERRIDE_STORAGE_KEY = "linkedin-analyzer-effects";
  * @typedef {object} DeviceProfile
  * @property {string} tier - The effects tier in use
  * @property {string} autoTier - The tier the signals alone pick
- * @property {string} override - The user's choice: auto, lite, or full
  * @property {DeviceSignals} signals - Raw device signals
  */
 
@@ -122,24 +121,6 @@ export function pickTier({ cores, deviceMemory, saveData, acceleratedWebgl }) {
 }
 
 /**
- * Apply the user's override to the automatic tier. Full means the most this
- * device can do: rich with accelerated WebGL, standard without it.
- * @param {string} autoTier - Tier from the signals
- * @param {string} override - auto, lite, or full
- * @param {DeviceSignals} signals - Device signals
- * @returns {string}
- */
-export function resolveTier(autoTier, override, signals) {
-    if (override === "lite") {
-        return "lite";
-    }
-    if (override === "full") {
-        return signals.acceleratedWebgl ? "rich" : "standard";
-    }
-    return autoTier;
-}
-
-/**
  * The next tier down, for a session that janks. Lite stays lite.
  * @param {string} tier - Current tier
  * @returns {string}
@@ -150,86 +131,31 @@ export function downgradeTier(tier) {
 }
 
 /**
- * Read the stored override, defaulting to auto.
- * @param {Storage|null} storage - localStorage
- * @returns {string}
- */
-export function readEffectsOverride(storage) {
-    try {
-        const value = storage ? storage.getItem(OVERRIDE_STORAGE_KEY) : null;
-        return value && EFFECTS_OVERRIDES.includes(value) ? value : "auto";
-    } catch {
-        return "auto";
-    }
-}
-
-/**
- * Store the override. Auto removes the stored value.
- * @param {Storage|null} storage - localStorage
- * @param {string} override - auto, lite, or full
- */
-export function writeEffectsOverride(storage, override) {
-    try {
-        if (!storage) {
-            return;
-        }
-        if (override === "auto") {
-            storage.removeItem(OVERRIDE_STORAGE_KEY);
-        } else {
-            storage.setItem(OVERRIDE_STORAGE_KEY, override);
-        }
-    } catch {
-        // Ignore storage failures: the choice then lasts for this page only.
-    }
-}
-
-/**
- * Whether the WebGL answer can change the tier: always under Full, and under
- * Auto only when the cheap signals leave Rich possible.
+ * Whether the WebGL answer can change the tier: only when the cheap signals
+ * leave Rich possible.
  * @param {DeviceSignals} signals - Signals read without the probe
- * @param {string} override - auto, lite, or full
  * @returns {boolean}
  */
-function probeCanMatter(signals, override) {
-    if (override === "full") {
-        return true;
-    }
-    if (override === "lite") {
-        return false;
-    }
+function probeCanMatter(signals) {
     return pickTier({ ...signals, acceleratedWebgl: true }) === "rich";
 }
 
 /**
  * Build a device profile. The WebGL probe runs only when the answer can change
- * the tier, so Lite, and an Auto device that cannot reach Rich, never create a
- * WebGL context.
+ * the tier, so a device that cannot reach Rich never creates a WebGL context.
  * @param {object} env - Browser APIs, injected for tests
  * @param {Navigator|undefined} env.navigator - navigator
  * @param {((query: string) => { matches: boolean })|undefined} env.matchMedia - window.matchMedia
  * @param {(() => HTMLCanvasElement|OffscreenCanvas|null)|null} env.createCanvas - Canvas factory
- * @param {string} override - auto, lite, or full
  * @returns {DeviceProfile}
  */
-export function buildDeviceProfile(env, override) {
+export function buildDeviceProfile(env) {
     const cheap = readSignals({ ...env, createCanvas: null });
-    const signals = probeCanMatter(cheap, override)
+    const signals = probeCanMatter(cheap)
         ? { ...cheap, acceleratedWebgl: readSignals(env).acceleratedWebgl }
         : cheap;
     const autoTier = pickTier(signals);
-    return { tier: resolveTier(autoTier, override, signals), autoTier, override, signals };
-}
-
-/**
- * Read localStorage, or null when the browser blocks it.
- * @returns {Storage|null}
- */
-export function safeLocalStorage() {
-    try {
-        return window.localStorage;
-    } catch {
-        return null;
-    }
+    return { tier: autoTier, autoTier, signals };
 }
 
 /** @type {DeviceProfile|null} */
@@ -241,7 +167,7 @@ let cachedProfile = null;
  */
 export function getDeviceProfile() {
     if (!cachedProfile) {
-        cachedProfile = buildDeviceProfile(browserEnv(), readEffectsOverride(safeLocalStorage()));
+        cachedProfile = buildDeviceProfile(browserEnv());
     }
     return cachedProfile;
 }
@@ -265,43 +191,13 @@ function browserEnv() {
 }
 
 /**
- * Change the override for this page and future visits, and return the new
- * profile. The cached signals are reused; WebGL is probed only if it was not
- * probed before and the new choice needs it.
- * @param {string} override - auto, lite, or full
- * @returns {DeviceProfile}
- */
-export function setEffectsOverride(override) {
-    const choice = EFFECTS_OVERRIDES.includes(override) ? override : "auto";
-    writeEffectsOverride(safeLocalStorage(), choice);
-    const previous = getDeviceProfile();
-    if (choice !== "lite" && previous.signals.acceleratedWebgl === null) {
-        // Build from the choice in hand, not from storage, which may have
-        // refused the write.
-        cachedProfile = buildDeviceProfile(browserEnv(), choice);
-        return cachedProfile;
-    }
-    const autoTier = pickTier(previous.signals);
-    cachedProfile = {
-        tier: resolveTier(autoTier, choice, previous.signals),
-        autoTier,
-        override: choice,
-        signals: previous.signals,
-    };
-    return cachedProfile;
-}
-
-/**
- * Drop the session one tier after repeated jank. Never upgrades, and never
- * overrides an explicit user choice.
+ * Drop the session one tier after repeated jank. Never upgrades.
  * @returns {DeviceProfile}
  */
 export function downgradeForJank() {
     const profile = getDeviceProfile();
-    if (profile.override === "auto") {
-        cachedProfile = { ...profile, tier: downgradeTier(profile.tier) };
-    }
-    return /** @type {DeviceProfile} */ (cachedProfile);
+    cachedProfile = { ...profile, tier: downgradeTier(profile.tier) };
+    return cachedProfile;
 }
 
 /**

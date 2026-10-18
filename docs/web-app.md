@@ -104,7 +104,7 @@ The app keeps your uploaded CSV files and computed analytics in browser storage 
 
 A session has a 24-hour inactivity limit. On startup, the app clears stored uploads and analytics when the last activity is older than that limit. Select **Clear data** to remove the stored files and analytics immediately. Clear data before you leave a shared or public computer.
 
-The app stores the theme preference, the visual effects choice, tutorial completion, and mini-tip state in `localStorage`. Those values do not contain CSV contents.
+The app stores the theme preference, tutorial completion, and mini-tip state in `localStorage`. Those values do not contain CSV contents.
 
 While an upload is processing, the app also keeps a small marker in `localStorage` so the next visit can tell whether the run finished. The marker holds a random run ID, the tab ID, start and heartbeat times, the combined file size rounded to a bucket such as "30 to 60 MB", and whether one file or several were processed. It holds no file names and no contents, and the app removes it when the run ends.
 
@@ -145,11 +145,11 @@ Where the browser cannot start the Clean screen's background worker, it cleans o
 
 The CLI uses a 128 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
 
-## Choose visual effects
+## Visual effects
 
 The app picks how much animation and decoration to show from what the device offers: CPU cores, memory where the browser reports it, the data-saver setting, and whether hardware-accelerated WebGL works. A low-end phone, an old PC, or a browser with data saver on gets the **Lite** tier: still drawings and simple moves, no blur or filters. Every number, chart, list, export, and control works the same in every tier.
 
-The round button under the theme toggle cycles through **Auto**, **Lite**, and **Full**. **Auto** uses the device's tier, and steps down for the rest of the session if animation makes the page stutter while idle. **Lite** turns decoration down on any device. **Full** shows the most the device can do. The choice is stored in this browser. Your system's reduced-motion setting always wins, and the setting never changes how files are processed.
+There is no setting to change. If animation makes the page stutter while it is idle, the app steps down one tier for the rest of the session. Your system's reduced-motion setting always wins, and the tier never changes how files are processed.
 
 ## Use tutorials and themes
 

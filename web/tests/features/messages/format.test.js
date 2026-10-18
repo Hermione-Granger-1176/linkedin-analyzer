@@ -6,7 +6,7 @@ import {
     formatShortDate,
     getRangeStart,
     MS_PER_DAY,
-    parseRangeParam,
+    RANGE_KEYS,
 } from "../../../src/features/messages/format.js";
 
 describe("messages-format", () => {
@@ -20,28 +20,9 @@ describe("messages-format", () => {
         });
     });
 
-    describe("parseRangeParam", () => {
-        it("returns a recognized numeric range unchanged", () => {
-            expect(parseRangeParam("3m", "12m")).toBe("3m");
-            expect(parseRangeParam("1m", "12m")).toBe("1m");
-            expect(parseRangeParam("6m", "12m")).toBe("6m");
-            expect(parseRangeParam("12m", "12m")).toBe("12m");
-        });
-
-        it('accepts "all" as a valid range', () => {
-            expect(parseRangeParam("all", "12m")).toBe("all");
-        });
-
-        it("lowercases the incoming value before matching", () => {
-            expect(parseRangeParam("3M", "12m")).toBe("3m");
-            expect(parseRangeParam("ALL", "12m")).toBe("all");
-        });
-
-        it("falls back for unrecognized or empty values", () => {
-            expect(parseRangeParam("bogus", "12m")).toBe("12m");
-            expect(parseRangeParam("", "6m")).toBe("6m");
-            expect(parseRangeParam(null, "1m")).toBe("1m");
-            expect(parseRangeParam(undefined, "12m")).toBe("12m");
+    describe("RANGE_KEYS", () => {
+        it("lists every bounded range and the unbounded one", () => {
+            expect(RANGE_KEYS).toEqual(["1m", "3m", "6m", "12m", "all"]);
         });
     });
 

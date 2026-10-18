@@ -12,19 +12,16 @@
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
-import { csvSourceSize, toCsvSource } from "../../shared/csv-source.js";
-import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
+import { toCsvSource } from "../../shared/csv-source.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
-import { readCsvSourcesOrNull, readOptionalCsvSource } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
 import { selectRecentThreads } from "./threads.js";
 import {
-    CANCELLED,
     createWorkerTransport,
-    FAILED,
     failureOutcome,
+    loadWithFallback,
     PENDING,
 } from "./worker-transport.js";
 
@@ -56,69 +53,28 @@ export function terminateThreadsWorker() {
  * @param {{people?: number, messagesPerPerson?: number, isCancelled?: () => boolean}} [options] - Selection limits and the run's cancellation check
  * @returns {Promise<SelectedThread[]>} Selected threads, newest conversation first
  */
-export async function loadRecentThreads(messagesCsv, connectionsCsv, options = {}) {
+export function loadRecentThreads(messagesCsv, connectionsCsv, options = {}) {
     const text = toCsvSource(messagesCsv);
     const contacts = toCsvSource(connectionsCsv);
-    if (!text) {
-        return [];
-    }
-    const isCancelled =
-        typeof options.isCancelled === "function" ? options.isCancelled : () => false;
-    // The caller reached here through several storage reads, any of which the
-    // user may have cancelled across. Creating the worker now would post the
-    // whole CSV to it on behalf of a run whose answer nobody will read.
-    if (isCancelled()) {
-        return [];
-    }
-
-    const outcome = await requestThreadsFromWorker(text, contacts, options);
-    if (outcome === CANCELLED) {
-        // Falling back here would redo on the UI thread precisely the work the
-        // user asked to stop, holding the CSV for as long as it took. Whoever
-        // cancelled owns the worker: either it is already terminated, or a newer
-        // request is still using it.
-        return [];
-    }
-    // Every remaining outcome is final, so the worker has nothing left to do.
-    terminateThreadsWorker();
-    if (outcome === FAILED) {
-        return [];
-    }
-    if (outcome !== null) {
-        return outcome;
-    }
-
-    // Both files, because the fallback below parses both: the messages export
-    // for the threads and the connections export for the tiebreak keys. The
-    // ceiling used to count the messages file alone, from when the UI thread
-    // derived those keys on every path and the fallback added nothing to what
-    // was already happening. It is the only path that parses them now, so a
-    // small messages file beside a large connections one would clear a ceiling
-    // that no longer measured the work.
-    if (
-        csvSourceSize(text) + csvSourceSize(contacts) > MAIN_THREAD_FALLBACK_MAX_CHARS ||
-        isCancelled()
-    ) {
-        return [];
-    }
-    // Connections is optional, so only an unreadable messages file stops this.
-    const texts = await readCsvSourcesOrNull(text);
-    const connections = await readOptionalCsvSource(contacts);
-    if (!texts || isCancelled()) {
-        return [];
-    }
-    return selectThreadsOnMainThread(texts[0], connections.text, options);
+    return loadWithFallback(transport, {
+        sources: [text, contacts],
+        isCancelled: options.isCancelled,
+        request: () => threadsRequest(text, contacts, options),
+        mainThread: (messagesText, contactsText) =>
+            selectThreadsOnMainThread(messagesText, contactsText, options),
+        empty: /** @type {SelectedThread[]} */ ([]),
+    });
 }
 
 /**
- * Ask the worker for the thread selection.
+ * The worker request for the thread selection.
  * @param {Blob|string} messagesCsv - Stored messages upload, or CSV text
  * @param {Blob|string} connectionsCsv - Stored connections upload, CSV text, or an empty string
  * @param {{people?: number, messagesPerPerson?: number}} options - Selection limits
- * @returns {Promise<SelectedThread[]|null|typeof CANCELLED|typeof FAILED>} Threads, null when the worker could not answer, CANCELLED, or FAILED when it answered that it could not
+ * @returns {import("./worker-transport.js").RequestOptions<import("../../app/worker-contracts.js").ThreadsWorkerMessage, SelectedThread[]|null|typeof import("./worker-transport.js").FAILED>}
  */
-function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
-    return transport.request({
+function threadsRequest(messagesCsv, connectionsCsv, options) {
+    return {
         envelope: {
             type: "threads",
             payload: {
@@ -143,14 +99,14 @@ function requestThreadsFromWorker(messagesCsv, connectionsCsv, options) {
         // two different allowances over one export was an accident of this
         // module having been written first.
         timeoutMs: computeWorkerTimeout(messagesCsv, connectionsCsv),
-    });
+    };
 }
 
 /**
  * Read one valid worker reply into an outcome for the request in flight.
  * @param {import("../../app/worker-contracts.js").ThreadsWorkerMessage} message - Parsed worker message
  * @param {import("./worker-transport.js").ReplyContext} context - The request's id and error reporter
- * @returns {SelectedThread[]|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
+ * @returns {SelectedThread[]|null|typeof import("./worker-transport.js").FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
 function interpretReply(message, context) {
     if (!message.payload.success) {
@@ -158,9 +114,7 @@ function interpretReply(message, context) {
         // in flight and waiting out the watchdog would look like a hang. The
         // worker declining to parse a file the user uploaded is the same event
         // under either id, so it is reported either way; what it settles as
-        // turns on the id, per `failureOutcome`. This worker answers a global
-        // failure under the request it was serving rather than under zero, so
-        // only a failure raised before it ever read a request lands there.
+        // turns on the id, per `failureOutcome`.
         context.report("Threads worker reported a failure.", "threads-worker-failure");
         return failureOutcome(message, context);
     }

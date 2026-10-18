@@ -70,8 +70,8 @@ class FakeWorker {
         this.listeners[type] = (this.listeners[type] || []).filter((item) => item !== listener);
     }
 
-    reply(requestId) {
-        const data = { type: "processed", requestId, payload: { success: true } };
+    reply(requestId, payload = { success: true }) {
+        const data = { type: "processed", requestId, payload };
         [...(this.listeners.message || [])].forEach((listener) => listener({ data }));
     }
 }
@@ -136,5 +136,43 @@ describe("messages parse worker lifecycle", () => {
         workers[0].reply(1);
         await expect(first).resolves.toEqual({ success: true });
         expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back on every request when the worker answers a global failure", async () => {
+        const { processFiles } = await loadParse();
+        const first = processFiles("a", null);
+        const second = processFiles("b", null);
+
+        // Id 0 is the worker falling over outside any one request.
+        workers[0].reply(0, { success: false, error: "Messages worker runtime failure." });
+
+        await expect(first).resolves.not.toEqual({ success: true });
+        await expect(second).resolves.not.toEqual({ success: true });
+        expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+    });
+
+    it("gives a request queued behind a larger one its own budget after it", async () => {
+        vi.useFakeTimers();
+        try {
+            const { processFiles } = await loadParse();
+            // 4 MiB earns 50 seconds; the small request earns the 30 second base.
+            const large = processFiles("x".repeat(4 * 1024 * 1024), null);
+            const small = processFiles("b", null);
+
+            // The small request's shorter budget does not cut the large one off.
+            vi.advanceTimersByTime(31000);
+            expect(workers[0].terminate).not.toHaveBeenCalled();
+            workers[0].reply(1);
+            await expect(large).resolves.toEqual({ success: true });
+
+            // The small one is due 30 seconds after the large one was, at 80.
+            vi.advanceTimersByTime(48000);
+            expect(workers[0].terminate).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(2000);
+            expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+            await expect(small).resolves.not.toEqual({ success: true });
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

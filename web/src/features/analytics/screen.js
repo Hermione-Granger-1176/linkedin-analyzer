@@ -13,6 +13,8 @@ import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-toolti
 import { SketchCharts } from "../../shared/ui/charts.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { prefersReducedMotion } from "../../shared/ui/motion.js";
+import { createRangeFilter } from "../../shared/ui/time-range.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 
@@ -173,9 +175,24 @@ export const AnalyticsPage = (() => {
     let initialized = false;
     let needsBaseReload = true;
     let isApplyingRouteParams = false;
+    /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
+    let rangeFilter = null;
 
-    /** @type {Worker|null} */
-    let worker = null;
+    const workers = createWorkerHandle({
+        create: () =>
+            new Worker(new URL("./analytics-worker.js", import.meta.url), {
+                type: "module",
+            }),
+        onMessage: handleWorkerMessage,
+        onError: handleWorkerError,
+        onStartError: (error) => {
+            captureError(error, {
+                module: "analytics-ui",
+                operation: "init-worker",
+            });
+            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
+        },
+    });
     let requestId = 0;
     /** @type {import("../../app/worker-contracts.js").RequestId} */
     let pendingViewId = 0;
@@ -187,8 +204,6 @@ export const AnalyticsPage = (() => {
     /** @type {AnalyticsScreenView|null} */
     let pendingRender = null;
 
-    /** @type {number|null} */
-    let workerTimeoutId = null;
     let renderRetryCount = 0;
     const MAX_RENDER_RETRIES = 5;
     /** @type {ResizeObserver|null} */
@@ -215,7 +230,7 @@ export const AnalyticsPage = (() => {
 
         initialized = true;
         bindEvents();
-        initWorker();
+        workers.ensure();
 
         DataCache.subscribe(handleCacheChange);
     }
@@ -299,23 +314,26 @@ export const AnalyticsPage = (() => {
 
     /** Attach event listeners for filters, charts, theme, and visibility. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((button) => {
-            button.addEventListener("click", () => handleTimeRangeChange(button));
+        // No route option: this screen writes its other filters into the route
+        // beside the range, so it syncs the whole set itself.
+        rangeFilter = createRangeFilter({
+            ranges: RANGE_VALUES,
+            fallback: FILTER_DEFAULTS.timeRange,
+            buttons: elements.timeRangeButtons,
+            select: elements.timeRangeSelect,
+            resetButton: elements.resetFiltersBtn,
+            onChange: (range) => {
+                state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+                syncRouteFromFilters();
+                scheduleViewRequest(true);
+            },
         });
-
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
-        }
-
-        if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener("click", resetFilters);
-        }
         if (elements.activeFiltersList) {
             elements.activeFiltersList.addEventListener("click", handleFilterChipClick);
         }
 
-        window.addEventListener("beforeunload", terminateWorker);
-        window.addEventListener("pagehide", terminateWorker);
+        window.addEventListener("beforeunload", workers.terminate);
+        window.addEventListener("pagehide", workers.terminate);
 
         document.addEventListener("themechange", () => {
             if (state.currentView) {
@@ -335,48 +353,6 @@ export const AnalyticsPage = (() => {
             canvas.addEventListener("click", handleChartClick);
             canvas.setAttribute("tabindex", "0");
         });
-    }
-
-    /** Create the analytics Web Worker. */
-    function initWorker() {
-        if (typeof Worker === "undefined" || worker) {
-            return;
-        }
-
-        try {
-            worker = new Worker(new URL("./analytics-worker.js", import.meta.url), {
-                type: "module",
-            });
-            worker.addEventListener("message", handleWorkerMessage);
-            worker.addEventListener("error", handleWorkerError);
-            worker.addEventListener("messageerror", handleWorkerError);
-        } catch (error) {
-            worker = null;
-            captureError(error, {
-                module: "analytics-ui",
-                operation: "init-worker",
-            });
-            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
-        }
-    }
-
-    /** Terminate the analytics Web Worker to free resources. */
-    function terminateWorker() {
-        clearWorkerTimeout();
-        if (!worker) {
-            return;
-        }
-        worker.terminate();
-        worker = null;
-    }
-
-    /** Clear any in-flight worker watchdog timeout. */
-    function clearWorkerTimeout() {
-        if (!workerTimeoutId) {
-            return;
-        }
-        window.clearTimeout(workerTimeoutId);
-        workerTimeoutId = null;
     }
 
     /**
@@ -401,7 +377,7 @@ export const AnalyticsPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            initWorker();
+            const worker = workers.ensure();
             if (!worker) {
                 setEmptyState(
                     "Analytics not supported",
@@ -418,6 +394,11 @@ export const AnalyticsPage = (() => {
                 analyticsBase = await Storage.getAnalytics();
                 DataCache.set("storage:analyticsBase", analyticsBase);
             }
+            // The worker may have been replaced or stopped while storage was
+            // read; a newer load owns it now, so this one steps aside.
+            if (workers.current() !== worker) {
+                return;
+            }
 
             if (!analyticsBase || !analyticsBase.months) {
                 setEmptyState(
@@ -433,15 +414,13 @@ export const AnalyticsPage = (() => {
                 type: "initBase",
                 payload: analyticsBase,
             });
-            clearWorkerTimeout();
-            workerTimeoutId = window.setTimeout(() => {
-                workerTimeoutId = null;
+            workers.watch(WORKER_TIMEOUT_MS, () => {
                 setEmptyState(
                     "Worker timeout",
                     "Analytics worker did not respond in time. Try refreshing the page.",
                 );
-                terminateWorker();
-            }, WORKER_TIMEOUT_MS);
+                workers.terminate();
+            });
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
@@ -476,7 +455,7 @@ export const AnalyticsPage = (() => {
 
         switch (message.type) {
             case "init":
-                clearWorkerTimeout();
+                workers.unwatch();
                 state.analyticsReady = true;
                 state.hasData = Boolean(message.payload && message.payload.hasData);
                 updateVisibility();
@@ -491,7 +470,7 @@ export const AnalyticsPage = (() => {
                 applyWorkerViewPayload(/** @type {AnalyticsViewPayload} */ (message.payload || {}));
                 return;
             case "error":
-                clearWorkerTimeout();
+                workers.unwatch();
                 captureError(
                     new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
                     {
@@ -557,8 +536,8 @@ export const AnalyticsPage = (() => {
         // Tear down the broken worker: this clears the in-flight loadBase watchdog
         // (so it cannot fire ~30s later and overwrite the screen) and nulls the
         // reference so a subsequent loadBase recreates a fresh worker instead of
-        // posting to a dead one (initWorker early-returns while `worker` is set).
-        terminateWorker();
+        // posting to a dead one (the handle reuses a worker while one is set).
+        workers.terminate();
         setEmptyState("Analytics worker error", "Refresh the page and try again.");
     }
 
@@ -601,6 +580,7 @@ export const AnalyticsPage = (() => {
      * @param {boolean} force - Whether to send even if the filter key hasn't changed.
      */
     function requestView(force) {
+        const worker = workers.current();
         if (!worker || !state.analyticsReady || !state.hasData) {
             return;
         }
@@ -815,63 +795,6 @@ export const AnalyticsPage = (() => {
             return;
         }
         hideEmptyState();
-    }
-
-    /**
-     * Handle click on a time range button.
-     * @param {HTMLElement} button - The clicked time range button element.
-     */
-    function handleTimeRangeChange(button) {
-        const range = button.getAttribute("data-range");
-        /* v8 ignore next 3 */
-        if (!range) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Apply the range chosen from the compact select, ignoring unknown values. */
-    function handleTimeRangeSelect() {
-        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        if (!RANGE_VALUES.has(range)) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Reset all filters to defaults and request a fresh view. */
-    function resetFilters() {
-        state.filters = { ...FILTER_DEFAULTS };
-        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
-        syncRouteFromFilters();
-        scheduleViewRequest(true);
-    }
-
-    /**
-     * Apply a new time range, reset other filters, and request view.
-     * @param {string} range - The time range identifier (e.g. '12m', '6m').
-     */
-    function applyTimeRange(range) {
-        const nextRange = RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
-        setActiveTimeRange(nextRange);
-        syncRouteFromFilters();
-        scheduleViewRequest(true);
-    }
-
-    /**
-     * Update the active class on time range buttons.
-     * @param {string} range - The active time range identifier.
-     */
-    function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach((btn) => {
-            const isActive = btn.getAttribute("data-range") === range;
-            btn.classList.toggle("active", isActive);
-            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.value = range;
-        }
     }
 
     /**
@@ -1125,7 +1048,9 @@ export const AnalyticsPage = (() => {
         const previousKey = getFilterKey(state.filters);
         isApplyingRouteParams = true;
         state.filters = { ...nextFilters };
-        setActiveTimeRange(state.filters.timeRange);
+        /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (rangeFilter).show(
+            state.filters.timeRange,
+        );
         renderActiveFilters();
         isApplyingRouteParams = false;
         return previousKey !== getFilterKey(state.filters);

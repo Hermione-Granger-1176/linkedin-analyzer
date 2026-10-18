@@ -12,6 +12,8 @@ import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { MAIN_THREAD_MAX_FILE_BYTES } from "../../shared/limits.js";
+import { GLOBAL_FAILURE_ID } from "../../shared/worker-entry.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { resetCleanJob, runCleanJob } from "./clean-job.js";
@@ -25,14 +27,24 @@ const MAIN_THREAD_TOO_LARGE =
 /** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null, cancelled?: boolean}} CleanReply */
 
-/** @type {Worker|null} */
-let worker = null;
 let requestCount = 0;
-/** @type {{id: number, resolve: (reply: CleanReply) => void, timeoutId: number}|null} */
+/** @type {{id: number, resolve: (reply: CleanReply) => void}|null} */
 let pending = null;
 // Main-thread runs: the latest one started, and how many Clears have happened.
 let fallbackRun = 0;
 let clearCount = 0;
+
+const workers = createWorkerHandle({
+    create: () => new Worker(new URL("./cleaning-worker.js", import.meta.url), { type: "module" }),
+    onMessage,
+    onError,
+    onStartError: () => {
+        captureError(new Error("Cleaning worker could not start."), {
+            module: "clean",
+            operation: "worker-init",
+        });
+    },
+});
 
 /**
  * Build a failed reply.
@@ -51,9 +63,9 @@ function settle(reply) {
     if (!pending) {
         return;
     }
-    const { resolve, timeoutId } = pending;
+    const { resolve } = pending;
     pending = null;
-    window.clearTimeout(timeoutId);
+    workers.unwatch();
     resolve(reply);
 }
 
@@ -62,10 +74,7 @@ function settle(reply) {
  * @param {CleanReply} [reply] - Outcome for the request in flight
  */
 function terminateCleanWorker(reply = failure()) {
-    if (worker) {
-        worker.terminate();
-        worker = null;
-    }
+    workers.terminate();
     settle(reply);
 }
 
@@ -75,10 +84,20 @@ function terminateCleanWorker(reply = failure()) {
  */
 function onMessage(event) {
     const parsed = parseCleaningWorkerMessage(event.data);
-    if (!parsed.valid || !pending || parsed.value.requestId !== pending.id) {
+    if (!parsed.valid || !pending) {
         return;
     }
-    settle(parsed.value.payload);
+    const { requestId, payload } = parsed.value;
+    // A global failure in the worker is answered under id 0 rather than under
+    // a request; only one request is ever in flight, so it is this one's.
+    if (requestId === GLOBAL_FAILURE_ID && !payload.success) {
+        failWorker();
+        return;
+    }
+    if (requestId !== pending.id) {
+        return;
+    }
+    settle(payload);
 }
 
 /**
@@ -89,34 +108,16 @@ function onMessage(event) {
 function onError(event) {
     // Handled here; keep the browser from also logging it as uncaught.
     event.preventDefault();
+    failWorker();
+}
+
+/** Report a worker that fell over and start a fresh one next time. */
+function failWorker() {
     captureError(new Error("Cleaning worker failed."), {
         module: "clean",
         operation: "worker-error",
     });
     terminateCleanWorker();
-}
-
-/**
- * Create the worker on first use, or leave it null where Workers are missing.
- * @returns {Worker|null}
- */
-function getWorker() {
-    if (worker || typeof Worker === "undefined") {
-        return worker;
-    }
-    try {
-        worker = new Worker(new URL("./cleaning-worker.js", import.meta.url), { type: "module" });
-        worker.addEventListener("message", onMessage);
-        worker.addEventListener("error", onError);
-        worker.addEventListener("messageerror", onError);
-    } catch {
-        worker = null;
-        captureError(new Error("Cleaning worker could not start."), {
-            module: "clean",
-            operation: "worker-init",
-        });
-    }
-    return worker;
 }
 
 /** @returns {CleanReply} */
@@ -161,7 +162,7 @@ async function runOnMainThread(payload) {
  * @returns {Promise<CleanReply>}
  */
 export function requestClean(payload) {
-    const active = getWorker();
+    const active = workers.ensure();
     if (!active) {
         return runOnMainThread(payload);
     }
@@ -176,14 +177,14 @@ export function requestClean(payload) {
         // A workbook takes longer than a clean, so a download gets twice the budget.
         const budget =
             computeWorkerTimeout(payload.source) * (payload.output === "preview" ? 1 : 2);
-        const timeoutId = window.setTimeout(() => {
+        pending = { id, resolve };
+        workers.watch(budget, () => {
             captureError(new Error("Cleaning worker timed out."), {
                 module: "clean",
                 operation: "worker-timeout",
             });
             terminateCleanWorker(failure(CLEAN_TIMEOUT));
-        }, budget);
-        pending = { id, resolve, timeoutId };
+        });
         try {
             active.postMessage({ type: "clean", requestId: id, payload });
         } catch {

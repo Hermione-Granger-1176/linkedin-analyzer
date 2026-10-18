@@ -153,7 +153,7 @@ describe("messages worker", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("worker listener forwards runtime error events as processed failure", () => {
+    it("worker listener answers runtime error events with fixed text", () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         const event = new Event("error");
@@ -164,12 +164,13 @@ describe("messages worker", () => {
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("processed");
         expect(message.payload.success).toBe(false);
-        expect(message.payload.error).toContain("messages-runtime");
+        // A thrown value can carry a row of the export, so only fixed text leaves.
+        expect(message.payload.error).toBe("Messages worker runtime failure.");
 
         postMessageSpy.mockRestore();
     });
 
-    it("worker listener forwards unhandled rejections as processed failure", () => {
+    it("worker listener answers unhandled rejections with fixed text", () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         const event = new Event("unhandledrejection");
@@ -180,7 +181,8 @@ describe("messages worker", () => {
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("processed");
         expect(message.payload.success).toBe(false);
-        expect(message.payload.error).toContain("messages-rejection");
+        // A thrown value can carry a row of the export, so only fixed text leaves.
+        expect(message.payload.error).toBe("Messages worker runtime failure.");
 
         postMessageSpy.mockRestore();
     });
@@ -207,7 +209,7 @@ describe("messages worker", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("worker error listener supports string-only error events", () => {
+    it("worker error listener hides the text of string-only error events", () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         const event = new Event("error");
@@ -217,7 +219,7 @@ describe("messages worker", () => {
         expect(postMessageSpy).toHaveBeenCalledOnce();
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.payload.success).toBe(false);
-        expect(message.payload.error).toBe("messages-string-error");
+        expect(message.payload.error).toBe("Messages worker runtime failure.");
 
         postMessageSpy.mockRestore();
     });

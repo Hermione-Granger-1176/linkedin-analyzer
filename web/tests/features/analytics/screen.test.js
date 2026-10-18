@@ -67,6 +67,9 @@ describe("AnalyticsPage", () => {
             this.listeners[type] = this.listeners[type] || [];
             this.listeners[type].push(callback);
         }
+        removeEventListener(type, callback) {
+            this.listeners[type] = (this.listeners[type] || []).filter((item) => item !== callback);
+        }
         terminate() {}
     }
 
@@ -412,6 +415,31 @@ describe("AnalyticsPage", () => {
         expect(document.getElementById("analyticsEmpty").hidden).toBe(false);
         expect(document.getElementById("analyticsEmpty").querySelector("h2").textContent).toContain(
             "worker error",
+        );
+    });
+
+    it("drops a load whose worker died while storage was read", async () => {
+        let release;
+        Storage.getAnalytics.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        DataCache.get.mockReturnValue(null);
+        AnalyticsPage.init();
+        const loading = AnalyticsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        deadWorker.listeners.error[0](new Event("error"));
+        release({ months: { "2024-01": {} } });
+        await loading;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Posting would hand the read to a terminated worker and arm a
+        // watchdog over the error the screen is already showing.
+        expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "initBase" }),
         );
     });
 

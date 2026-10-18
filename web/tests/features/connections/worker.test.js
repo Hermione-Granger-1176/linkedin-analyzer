@@ -104,7 +104,7 @@ describe("connections worker", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("connections worker forwards runtime error events", () => {
+    it("connections worker answers runtime error events with fixed text", () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         const event = new Event("error");
@@ -114,12 +114,13 @@ describe("connections worker", () => {
         expect(postMessageSpy).toHaveBeenCalled();
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
-        expect(message.payload.message).toContain("connections-runtime");
+        // A thrown value can carry a row of the export, so only fixed text leaves.
+        expect(message.payload.message).toBe("Connections worker runtime failure.");
 
         postMessageSpy.mockRestore();
     });
 
-    it("connections worker forwards unhandled rejections", () => {
+    it("connections worker answers unhandled rejections with fixed text", () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         const event = new Event("unhandledrejection");
@@ -129,7 +130,8 @@ describe("connections worker", () => {
         expect(postMessageSpy).toHaveBeenCalled();
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
-        expect(message.payload.message).toContain("connections-rejection");
+        // A thrown value can carry a row of the export, so only fixed text leaves.
+        expect(message.payload.message).toBe("Connections worker runtime failure.");
 
         postMessageSpy.mockRestore();
     });
@@ -175,7 +177,8 @@ describe("connections worker", () => {
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
         expect(message.requestId).toBe("conn-fail");
-        expect(message.payload.message).toBe("connections-failure");
+        // A thrown value can carry a row of the export, so only fixed text leaves.
+        expect(message.payload.message).toBe("Connections worker runtime failure.");
 
         processSpy.mockRestore();
         postMessageSpy.mockRestore();

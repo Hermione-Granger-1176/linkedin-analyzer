@@ -11,6 +11,8 @@ import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
+import { GLOBAL_FAILURE_ID } from "../../shared/worker-entry.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
@@ -23,51 +25,128 @@ import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
  * @typedef {import("./messages-worker.js").CleanedRows<Row>} CleanedRows
  */
 
-/** @type {Worker|null} */
-let parseWorker = null;
-let parseWorkerRequestId = 0;
-/** Requests the current worker has not answered yet. */
-const pendingRequestIds = new Set();
-/** @type {number|null} */
-let parseWorkerTimeoutId = null;
+/**
+ * The requests the worker has not answered yet, by request id, oldest first.
+ * More than one can be in flight: the screen re-parses when the files change.
+ *
+ * The worker answers in order, so a request's budget starts when the one ahead
+ * of it is due, not when it was posted. Each deadline is therefore at least the
+ * one before it, and the oldest request's is always the next to fall due.
+ * @type {Map<import("../../app/worker-contracts.js").RequestId, {resolve: (payload: MessagesProcessedPayload|null) => void, deadline: number}>}
+ */
+const pendingRequests = new Map();
+let requestCount = 0;
 
-/** Initialize background worker for messages/connections parsing. */
-export function initWorker() {
-    if (parseWorker || typeof Worker === "undefined") {
-        return;
-    }
-
-    try {
-        parseWorker = new Worker(new URL("./messages-worker.js", import.meta.url), {
-            type: "module",
-        });
-    } catch (error) {
-        parseWorker = null;
+const workers = createWorkerHandle({
+    create: () => new Worker(new URL("./messages-worker.js", import.meta.url), { type: "module" }),
+    onMessage: handleWorkerMessage,
+    onError: handleWorkerError,
+    onStartError: (error) => {
         captureError(error, {
             module: "messages-insights",
             operation: "init-worker",
         });
-    }
+    },
+});
+
+/** Initialize background worker for messages/connections parsing. */
+export function initWorker() {
+    workers.ensure();
 }
 
-/** Terminate messages parsing worker. */
+/**
+ * Terminate messages parsing worker.
+ *
+ * Requests still in flight are dropped, not failed: this runs when the page is
+ * leaving, and failing them would start the main-thread fallback parse.
+ */
 export function terminateWorker() {
-    if (!parseWorker) {
-        return;
-    }
-    parseWorker.terminate();
-    parseWorker = null;
-    pendingRequestIds.clear();
-    clearWorkerTimeout();
+    pendingRequests.clear();
+    workers.terminate();
 }
 
-/** Clear any in-flight worker watchdog timeout. */
-function clearWorkerTimeout() {
-    if (!parseWorkerTimeoutId) {
+/**
+ * End every request in flight as unanswered, so each falls back, and let the
+ * worker go: one that failed or stalled is not going to answer.
+ */
+function failPendingRequests() {
+    const entries = [...pendingRequests.values()];
+    pendingRequests.clear();
+    workers.terminate();
+    entries.forEach((entry) => entry.resolve(null));
+}
+
+/**
+ * Arm the watchdog for the oldest request still waiting, so a small request
+ * queued behind a large one neither cuts the large one short nor leaves the
+ * large one's budget armed once it is answered.
+ */
+function armWatchdog() {
+    const [oldest] = pendingRequests.values();
+    if (!oldest) {
+        workers.unwatch();
         return;
     }
-    window.clearTimeout(parseWorkerTimeoutId);
-    parseWorkerTimeoutId = null;
+    workers.watch(Math.max(0, oldest.deadline - Date.now()), () => {
+        captureError(new Error("Messages worker request timed out."), {
+            module: "messages-insights",
+            operation: "worker-timeout",
+        });
+        failPendingRequests();
+    });
+}
+
+/**
+ * Settle the request a worker reply answers.
+ * @param {MessageEvent} event - Worker message event
+ */
+function handleWorkerMessage(event) {
+    const parsed = parseMessagesWorkerMessage(event.data || {});
+    if (!parsed.valid) {
+        // Invalid worker responses normally include an error string. Keep the fallback for malformed responses.
+        /* v8 ignore next */
+        captureError(new Error(parsed.error || "Invalid messages worker response."), {
+            module: "messages-insights",
+            operation: "worker-message-parse",
+        });
+        return;
+    }
+
+    const message = parsed.value;
+    // A global failure in the worker is answered under id 0, outside any one
+    // request, and leaves the worker unable to vouch for the rest.
+    if (message.requestId === GLOBAL_FAILURE_ID && message.payload && !message.payload.success) {
+        failPendingRequests();
+        return;
+    }
+    const entry = message.type === "processed" && pendingRequests.get(message.requestId);
+    if (!entry) {
+        return;
+    }
+    pendingRequests.delete(message.requestId);
+    // The page keeps the state it was sent, and an idle worker can hold the
+    // parse's garbage for minutes, so let it go unless a newer request is
+    // still on its way to it.
+    if (pendingRequests.size === 0) {
+        workers.terminate();
+    } else {
+        armWatchdog();
+    }
+    entry.resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
+}
+
+/**
+ * A worker that fell over cannot answer anything it was asked.
+ * @param {Event} event - Worker error or messageerror event
+ */
+function handleWorkerError(event) {
+    // Fixed text: the worker parses the user's messages, so its own error can
+    // carry a line of one.
+    captureError(new Error(`Messages worker ${event && event.type ? event.type : "error"} event`), {
+        module: "messages-insights",
+        operation: "worker-error-event",
+    });
+    failPendingRequests();
 }
 
 /**
@@ -78,9 +157,7 @@ function clearWorkerTimeout() {
  * @returns {Promise<MessagesProcessedPayload>}
  */
 export async function processFiles(messagesCsv, connectionsCsv) {
-    if (!parseWorker) {
-        initWorker();
-    }
+    workers.ensure();
     const workerResult = await processFilesInWorker(messagesCsv, connectionsCsv);
     if (workerResult) {
         return workerResult;
@@ -118,97 +195,20 @@ export async function processFiles(messagesCsv, connectionsCsv) {
  * @returns {Promise<MessagesProcessedPayload|null>} Parsed payload or null on worker failure
  */
 function processFilesInWorker(messagesCsv, connectionsCsv) {
-    if (!parseWorker) {
+    const worker = workers.current();
+    if (!worker) {
         return Promise.resolve(null);
     }
 
-    const worker = parseWorker;
-    const requestId = ++parseWorkerRequestId;
-
+    const requestId = ++requestCount;
     return new Promise((resolve) => {
-        clearWorkerTimeout();
-        pendingRequestIds.add(requestId);
-        /** @param {MessageEvent} event - Worker message event */
-        const handleMessage = (event) => {
-            const parsed = parseMessagesWorkerMessage(event.data || {});
-            if (!parsed.valid) {
-                // Invalid worker responses normally include an error string. Keep the fallback for malformed responses.
-                /* v8 ignore next */
-                captureError(new Error(parsed.error || "Invalid messages worker response."), {
-                    module: "messages-insights",
-                    operation: "worker-message-parse",
-                    requestId,
-                });
-                return;
-            }
-
-            const message = parsed.value;
-            if (message.type !== "processed" || message.requestId !== requestId) {
-                return;
-            }
-            finishRequest();
-            // The page keeps the state it was sent, and an idle worker can hold
-            // the parse's garbage for minutes, so let it go once no other
-            // request is still waiting on the same worker. Parses run
-            // concurrently, so a newer one can answer before an older one.
-            if (pendingRequestIds.size === 0) {
-                terminateWorker();
-            }
-            resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
-        };
-
-        /** @param {Event & {error?: unknown}} event - Worker error or messageerror event */
-        const handleError = (event) => {
-            captureError(
-                event && event.error
-                    ? event.error
-                    : new Error(
-                          `Messages worker ${event && event.type ? event.type : "error"} event`,
-                      ),
-                {
-                    module: "messages-insights",
-                    operation: "worker-error-event",
-                    requestId,
-                },
-            );
-            finishRequest();
-            terminateWorker();
-            resolve(null);
-        };
-
-        const removeWorkerListeners = () => {
-            // A beforeunload or pagehide listener can call terminateWorker() and null the
-            // worker while this request is still in flight, so the guard is load-bearing.
-            /* v8 ignore next 3 */
-            if (!parseWorker) {
-                return;
-            }
-            parseWorker.removeEventListener("message", handleMessage);
-            parseWorker.removeEventListener("error", handleError);
-            parseWorker.removeEventListener("messageerror", handleError);
-        };
-
-        const finishRequest = () => {
-            pendingRequestIds.delete(requestId);
-            removeWorkerListeners();
-            clearWorkerTimeout();
-        };
-
-        parseWorkerTimeoutId = window.setTimeout(() => {
-            captureError(new Error("Messages worker request timed out."), {
-                module: "messages-insights",
-                operation: "worker-timeout",
-                requestId,
-            });
-            finishRequest();
-            terminateWorker();
-            resolve(null);
-        }, computeWorkerTimeout(messagesCsv, connectionsCsv));
+        const queuedBehind = [...pendingRequests.values()].at(-1);
+        const start = Math.max(Date.now(), queuedBehind ? queuedBehind.deadline : 0);
+        const deadline = start + computeWorkerTimeout(messagesCsv, connectionsCsv);
+        pendingRequests.set(requestId, { resolve, deadline });
+        armWatchdog();
 
         try {
-            worker.addEventListener("message", handleMessage);
-            worker.addEventListener("error", handleError);
-            worker.addEventListener("messageerror", handleError);
             worker.postMessage({
                 type: "process",
                 requestId,
@@ -217,15 +217,15 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
                     connectionsCsv,
                 },
             });
-        } catch (error) {
-            captureError(error, {
+        } catch {
+            // A structured-clone failure names the value it could not clone,
+            // and that value is one of the raw exports.
+            captureError(new Error("Messages worker request could not be sent."), {
                 module: "messages-insights",
                 operation: "worker-post-message",
                 requestId,
             });
-            finishRequest();
-            terminateWorker();
-            resolve(null);
+            failPendingRequests();
         }
     });
 }

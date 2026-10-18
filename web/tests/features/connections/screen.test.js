@@ -60,6 +60,9 @@ describe("ConnectionsPage", () => {
             this.listeners[type] = this.listeners[type] || [];
             this.listeners[type].push(callback);
         }
+        removeEventListener(type, callback) {
+            this.listeners[type] = (this.listeners[type] || []).filter((item) => item !== callback);
+        }
     }
 
     beforeEach(async () => {
@@ -263,6 +266,31 @@ describe("ConnectionsPage", () => {
         expect(
             document.getElementById("connectionsEmpty").querySelector("h2").textContent,
         ).toContain("Worker error");
+    });
+
+    it("drops a load whose worker died while storage was read", async () => {
+        let release;
+        Storage.getFile.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        DataCache.get.mockReturnValue(null);
+        ConnectionsPage.init();
+        const loading = ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        deadWorker.listeners.error[0](new Event("error"));
+        release({ blob: new Blob(["csv"]) });
+        await loading;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Posting would hand the read to a terminated worker and arm a
+        // watchdog over the error the screen is already showing.
+        expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "process" }),
+        );
     });
 
     it("recreates the worker after a worker-level error", async () => {
@@ -914,6 +942,22 @@ describe("ConnectionsPage", () => {
         expect(
             document.getElementById("connectionsEmpty").querySelector("h2").textContent,
         ).toContain("timeout");
+    });
+
+    it("scales the worker watchdog with the file size", async () => {
+        Storage.getFile.mockResolvedValue({ blob: new Blob([new Uint8Array(3 * 1024 * 1024)]) });
+        DataCache.get.mockReturnValue(null);
+        const spy = vi.spyOn(window, "setTimeout");
+        try {
+            ConnectionsPage.init();
+            await ConnectionsPage.onRouteChange({ range: "all" });
+            await new Promise((resolve) => globalThis.queueMicrotask(() => resolve(undefined)));
+            await Promise.resolve();
+
+            expect(spy.mock.calls.map((call) => call[1])).toContain(45000);
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it("ignores a worker message event that carries no data", async () => {

@@ -81,6 +81,10 @@ class FakeWorker {
         this.listeners[type] = listener;
     }
 
+    removeEventListener(type) {
+        delete this.listeners[type];
+    }
+
     postMessage(message) {
         this.posted.push(message);
     }

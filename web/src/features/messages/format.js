@@ -16,6 +16,9 @@ const RANGE_MONTHS = Object.freeze({
     "12m": 12,
 });
 
+/** Every range key the messages page answers to, the unbounded one included. */
+export const RANGE_KEYS = Object.freeze([...Object.keys(RANGE_MONTHS), "all"]);
+
 /** Milliseconds in one day. */
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -23,20 +26,6 @@ const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
     day: "2-digit",
     year: "numeric",
 });
-
-/**
- * Parse route range query value.
- * @param {string} value - Raw route value
- * @param {string} fallback - Range to use when the value is not recognized
- * @returns {string}
- */
-export function parseRangeParam(value, fallback) {
-    const range = String(value || "").toLowerCase();
-    if (range === "all" || Object.prototype.hasOwnProperty.call(RANGE_MONTHS, range)) {
-        return range;
-    }
-    return fallback;
-}
 
 /**
  * Get range start timestamp from the selected range.

@@ -8,6 +8,8 @@ import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
+import { createRangeFilter } from "../../shared/ui/time-range.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { formatReplyRate, formatSentRatio } from "../messages/format.js";
 
 import { buildInsightReaction } from "./reactions.js";
@@ -109,7 +111,7 @@ export const InsightsPage = (() => {
         shareType: "all",
     });
 
-    const RANGE_VALUES = new Set(["1m", "3m", "6m", "12m", "all"]);
+    const RANGE_KEYS = Object.freeze(["1m", "3m", "6m", "12m", "all"]);
     /** @type {Set<unknown>} */
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
     // Guard against a worker that constructs but never responds (chunk load
@@ -134,16 +136,28 @@ export const InsightsPage = (() => {
     // Assigned by init() before any handler that reads it can run.
     /** @type {InsightsElements} */
     let elements;
-    /** @type {Worker|null} */
-    let worker = null;
-    /** @type {number|null} */
-    let workerTimeoutId = null;
+    const workers = createWorkerHandle({
+        create: () =>
+            new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
+                type: "module",
+            }),
+        onMessage: handleWorkerMessage,
+        onError: handleWorkerError,
+        onStartError: (error) => {
+            captureError(error, {
+                module: "insights-ui",
+                operation: "init-worker",
+            });
+            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
+        },
+    });
     let requestId = 0;
     /** @type {import("../../app/worker-contracts.js").RequestId} */
     let pendingViewId = 0;
     let initialized = false;
     let needsBaseReload = true;
-    let isApplyingRouteParams = false;
+    /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
+    let rangeFilter = null;
 
     /** Initialize insights page dependencies. */
     function init() {
@@ -159,7 +173,7 @@ export const InsightsPage = (() => {
 
         initialized = true;
         bindEvents();
-        initWorker();
+        workers.ensure();
 
         DataCache.subscribe(handleCacheChange);
     }
@@ -183,8 +197,12 @@ export const InsightsPage = (() => {
         // onRouteLeave clears the latch so the next entry reloads.
         loadOutreach();
 
-        const range = parseRangeParam(params && params.range);
-        applyRangeFromRoute(range);
+        const filter = /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (
+            rangeFilter
+        );
+        const range = filter.parse(params && params.range);
+        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+        filter.show(range);
 
         if (needsBaseReload || !state.analyticsReady) {
             loadBase();
@@ -204,7 +222,7 @@ export const InsightsPage = (() => {
         showInsightsLoading(false);
         // Drop any in-flight worker watchdog so it cannot fire after navigation
         // and overwrite a now-hidden screen with a timeout message.
-        clearWorkerTimeout();
+        workers.unwatch();
         // Allow the next entry to reload outreach (e.g. after the user uploads
         // Messages from another screen).
         state.outreachLoaded = false;
@@ -246,20 +264,18 @@ export const InsightsPage = (() => {
 
     /** Attach event listeners for time range buttons and reset. */
     function bindEvents() {
-        elements.timeRangeButtons.forEach((button) => {
-            button.addEventListener("click", () => handleTimeRangeChange(button));
-            button.setAttribute(
-                "aria-pressed",
-                button.classList.contains("active") ? "true" : "false",
-            );
+        rangeFilter = createRangeFilter({
+            ranges: RANGE_KEYS,
+            fallback: FILTER_DEFAULTS.timeRange,
+            buttons: elements.timeRangeButtons,
+            select: elements.timeRangeSelect,
+            resetButton: elements.resetFiltersBtn,
+            route: { router: AppRouter, name: "insights" },
+            onChange: (range) => {
+                state.filters = { ...FILTER_DEFAULTS, timeRange: range };
+                requestView();
+            },
         });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.addEventListener("change", handleTimeRangeSelect);
-        }
-        /* v8 ignore next */
-        if (elements.resetFiltersBtn) {
-            elements.resetFiltersBtn.addEventListener("click", resetFilters);
-        }
     }
 
     /**
@@ -279,49 +295,6 @@ export const InsightsPage = (() => {
         state.currentViewRange = null;
     }
 
-    /** Create the analytics Web Worker. */
-    function initWorker() {
-        if (typeof Worker === "undefined" || worker) {
-            return;
-        }
-
-        try {
-            worker = new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
-                type: "module",
-            });
-            worker.addEventListener("message", handleWorkerMessage);
-            worker.addEventListener("error", handleWorkerError);
-            worker.addEventListener("messageerror", handleWorkerError);
-        } catch (error) {
-            worker = null;
-            captureError(error, {
-                module: "insights-ui",
-                operation: "init-worker",
-            });
-            setEmptyState("Worker blocked", "Open this page from a local server (not file://).");
-        }
-    }
-
-    /** Clear any in-flight worker watchdog timeout. */
-    function clearWorkerTimeout() {
-        if (!workerTimeoutId) {
-            return;
-        }
-        window.clearTimeout(workerTimeoutId);
-        workerTimeoutId = null;
-    }
-
-    /** Terminate the analytics Web Worker and clear its watchdog. */
-    function terminateWorker() {
-        clearWorkerTimeout();
-        /* v8 ignore next 3 */
-        if (!worker) {
-            return;
-        }
-        worker.terminate();
-        worker = null;
-    }
-
     /** Load analytics base from IndexedDB and send to worker. */
     async function loadBase() {
         showInsightsLoading(true);
@@ -329,7 +302,7 @@ export const InsightsPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            initWorker();
+            const worker = workers.ensure();
             /* v8 ignore next 5 */
             if (!worker) {
                 setEmptyState(
@@ -348,6 +321,11 @@ export const InsightsPage = (() => {
                 analyticsBase = await Storage.getAnalytics();
                 DataCache.set("storage:analyticsBase", analyticsBase);
             }
+            // The worker may have been replaced or stopped while storage was
+            // read; a newer load owns it now, so this one steps aside.
+            if (workers.current() !== worker) {
+                return;
+            }
 
             if (!analyticsBase || !analyticsBase.months) {
                 setEmptyState(
@@ -363,16 +341,14 @@ export const InsightsPage = (() => {
                 type: "initBase",
                 payload: analyticsBase,
             });
-            clearWorkerTimeout();
-            workerTimeoutId = window.setTimeout(() => {
-                workerTimeoutId = null;
+            workers.watch(WORKER_TIMEOUT_MS, () => {
                 setEmptyState(
                     "Insights timeout",
                     "Insights worker did not respond in time. Try refreshing the page.",
                 );
-                terminateWorker();
+                workers.terminate();
                 showInsightsLoading(false);
-            }, WORKER_TIMEOUT_MS);
+            });
             needsBaseReload = false;
         } catch (error) {
             captureError(error, {
@@ -404,7 +380,7 @@ export const InsightsPage = (() => {
 
         const message = parsed.value;
         // The worker responded, so the loadBase watchdog is no longer needed.
-        clearWorkerTimeout();
+        workers.unwatch();
 
         switch (message.type) {
             case "init":
@@ -619,13 +595,14 @@ export const InsightsPage = (() => {
         // Tear down the broken worker (clears the watchdog and nulls the
         // reference) so a later loadBase recreates a fresh worker rather than
         // posting to a dead one, and the stale watchdog cannot fire afterward.
-        terminateWorker();
+        workers.terminate();
         setEmptyState("Insights worker error", "Refresh the page and try again.");
         showInsightsLoading(false);
     }
 
     /** Send a view request to the worker with current filters. */
     function requestView() {
+        const worker = workers.current();
         if (!worker || !state.analyticsReady || !state.hasData) {
             return;
         }
@@ -638,63 +615,6 @@ export const InsightsPage = (() => {
             requestId: id,
             filters: { ...state.filters },
         });
-    }
-
-    /**
-     * Handle click on a time range button.
-     * @param {HTMLElement} button - The clicked time range button.
-     */
-    function handleTimeRangeChange(button) {
-        const range = button.getAttribute("data-range");
-        /* v8 ignore next 3 */
-        if (!range) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Apply the range chosen from the compact select, ignoring unknown values. */
-    function handleTimeRangeSelect() {
-        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
-        if (!RANGE_VALUES.has(range)) {
-            return;
-        }
-        applyTimeRange(range);
-    }
-
-    /** Reset all filters to defaults and request a fresh view. */
-    function resetFilters() {
-        state.filters = { ...FILTER_DEFAULTS };
-        setActiveTimeRange(FILTER_DEFAULTS.timeRange);
-        syncRouteRange();
-        requestView();
-    }
-
-    /**
-     * Apply a new time range and request view.
-     * @param {string} range - The time range key to apply.
-     */
-    function applyTimeRange(range) {
-        const nextRange = parseRangeParam(range);
-        state.filters = { ...FILTER_DEFAULTS, timeRange: nextRange };
-        setActiveTimeRange(nextRange);
-        syncRouteRange();
-        requestView();
-    }
-
-    /**
-     * Update the active class on time range buttons.
-     * @param {string} range - The active time range key.
-     */
-    function setActiveTimeRange(range) {
-        elements.timeRangeButtons.forEach((btn) => {
-            const isActive = btn.getAttribute("data-range") === range;
-            btn.classList.toggle("active", isActive);
-            btn.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-        if (elements.timeRangeSelect) {
-            elements.timeRangeSelect.value = range;
-        }
     }
 
     /** Toggle empty state vs insights grid based on data availability. */
@@ -775,40 +695,6 @@ export const InsightsPage = (() => {
     function hideEmptyState() {
         elements.insightsEmpty.hidden = true;
         elements.insightsGrid.hidden = false;
-    }
-
-    /**
-     * Parse route range query value.
-     * @param {string} value - Raw route value
-     * @returns {string}
-     */
-    function parseRangeParam(value) {
-        const range = String(value || "").toLowerCase();
-        return RANGE_VALUES.has(range) ? range : FILTER_DEFAULTS.timeRange;
-    }
-
-    /**
-     * Apply route-provided range without rewriting route.
-     * @param {string} range - Normalized range
-     */
-    function applyRangeFromRoute(range) {
-        isApplyingRouteParams = true;
-        state.filters = { ...FILTER_DEFAULTS, timeRange: range };
-        setActiveTimeRange(range);
-        isApplyingRouteParams = false;
-    }
-
-    /** Sync current range filter into route query params. */
-    function syncRouteRange() {
-        /* v8 ignore next 3 */
-        if (isApplyingRouteParams) {
-            return;
-        }
-        const currentRoute = AppRouter.getCurrentRoute();
-        if (!currentRoute || currentRoute.name !== "insights") {
-            return;
-        }
-        AppRouter.setParams({ range: state.filters.timeRange }, { replaceHistory: false });
     }
 
     /**

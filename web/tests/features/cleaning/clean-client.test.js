@@ -43,13 +43,23 @@ class FakeWorker {
         this.listeners[type] = listener;
     }
 
+    removeEventListener(type, listener) {
+        if (this.listeners[type] === listener) {
+            delete this.listeners[type];
+        }
+    }
+
     postMessage(message) {
         this.posted.push(message);
     }
 
     emit(type, data) {
+        // A detached listener hears nothing, as on a terminated worker.
+        const listener = this.listeners[type];
         const event = { data, preventDefault: vi.fn() };
-        this.listeners[type](event);
+        if (listener) {
+            listener(event);
+        }
         return event;
     }
 
@@ -236,6 +246,21 @@ describe("clean client", () => {
         await expect(result).resolves.toEqual(FAILED);
         expect(workers[0].terminate).toHaveBeenCalledTimes(1);
         expect(workers[0].terminate).toHaveBeenCalled();
+        expect(mocks.captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "clean",
+            operation: "worker-error",
+        });
+    });
+
+    it("fails and terminates when the worker answers a global failure under id 0", async () => {
+        vi.stubGlobal("Worker", FakeWorker);
+        const { requestClean } = await loadClient();
+        const result = requestClean(PAYLOAD);
+        // Only a failure under id 0 speaks for the request in flight.
+        workers[0].reply(0);
+        workers[0].reply(0, { ...FAILED, error: "Cleaning worker runtime failure." });
+        await expect(result).resolves.toEqual(FAILED);
+        expect(workers[0].terminate).toHaveBeenCalledTimes(1);
         expect(mocks.captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "clean",
             operation: "worker-error",

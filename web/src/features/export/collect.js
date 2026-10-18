@@ -18,6 +18,7 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { THREADS_EXPORT_MAX_BYTES } from "../../shared/limits.js";
+import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { enumerateMonths, monthKeyToLabel, toMonthKey } from "../analytics/dates.js";
 import { buildConnectionsView } from "../connections/view.js";
 import {
@@ -231,28 +232,8 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
     // these fields, and nothing should be able to edit the shared empty result.
     const empty = Object.freeze({ insights: [], tip: null, networkGrowth: null, view: null });
 
-    if (typeof Worker === "undefined") {
-        return Promise.resolve(empty);
-    }
-
-    /** @type {Worker} */
-    let worker;
-    try {
-        worker = new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
-            type: "module",
-        });
-    } catch {
-        captureError(new Error("Analytics worker could not start during export."), {
-            module: "pdf-export",
-            operation: "init-analytics-worker",
-        });
-        return Promise.resolve(empty);
-    }
-
     return new Promise((resolve) => {
         const requestId = 1;
-        /** @type {number|null} */
-        let timeoutId = null;
         let settled = false;
 
         /** @param {MessageEvent} event - Worker reply */
@@ -326,14 +307,7 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
                 return;
             }
             settled = true;
-            if (timeoutId !== null) {
-                window.clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-            worker.removeEventListener("message", onMessage);
-            worker.removeEventListener("error", handleError);
-            worker.removeEventListener("messageerror", handleError);
-            worker.terminate();
+            workers.terminate();
             if (activeAnalyticsRun && activeAnalyticsRun.cancel === cancel) {
                 activeAnalyticsRun = null;
             }
@@ -351,7 +325,7 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
          */
         function post(message) {
             try {
-                worker.postMessage(message);
+                /** @type {Worker} */ (workers.current()).postMessage(message);
             } catch {
                 captureError(new Error("Analytics worker request could not be sent."), {
                     module: "pdf-export",
@@ -361,18 +335,34 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
             }
         }
 
-        worker.addEventListener("message", onMessage);
-        worker.addEventListener("error", handleError);
-        worker.addEventListener("messageerror", handleError);
+        // A handle of its own per run: the export releases the worker as soon
+        // as it has the view, so nothing outlives the run.
+        const workers = createWorkerHandle({
+            create: () =>
+                new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
+                    type: "module",
+                }),
+            onMessage,
+            onError: handleError,
+            onStartError: () => {
+                captureError(new Error("Analytics worker could not start during export."), {
+                    module: "pdf-export",
+                    operation: "init-analytics-worker",
+                });
+            },
+        });
+        if (!workers.ensure()) {
+            resolve(empty);
+            return;
+        }
 
-        timeoutId = window.setTimeout(() => {
-            timeoutId = null;
+        workers.watch(WORKER_TIMEOUT_MS, () => {
             captureError(new Error("Analytics worker timed out during export."), {
                 module: "pdf-export",
                 operation: "analytics-worker-timeout",
             });
             finish(empty);
-        }, WORKER_TIMEOUT_MS);
+        });
 
         activeAnalyticsRun = { cancel };
         post({ type: "initBase", payload: analyticsBase });

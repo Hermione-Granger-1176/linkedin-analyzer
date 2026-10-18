@@ -35,39 +35,25 @@ export const MessagesPage = (() => {
         timeRange: DEFAULT_TIME_RANGE,
     });
 
-    /**
-     * @typedef {object} MessageContact
-     * @property {string} key
-     * @property {string} name
-     * @property {string} url
-     * @property {number} count
-     * @property {number} lastTimestamp
-     */
+    /** @typedef {import("./analytics.js").MessageRow} MessageRow */
+    /** @typedef {import("./analytics.js").ConnectionRow} ConnectionRow */
+    /** @typedef {import("./analytics.js").MessageState} MessageState */
+    /** @typedef {import("./analytics.js").Connection} Connection */
+    /** @typedef {import("./analytics.js").ConnectionState} ConnectionState */
+    /** @typedef {import("./analytics.js").OutreachSummary} OutreachSummary */
+    /** @typedef {import("./relationships.js").RangeContact} RangeContact */
+    /** @typedef {import("./relationships.js").FadingConversation} FadingConversation */
+    /** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
+    /** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
 
     /**
-     * @typedef {object} MessageState
-     * @property {Map<string, MessageContact>} contacts
-     * @property {{contactKeys: string[], contactIds: Int32Array, timestamps: Float64Array}} events
-     * @property {Float64Array} rowTimestamps
-     * @property {number} skippedRows
-     * @property {Set<string>} talkedNameKeys
-     * @property {Set<string>} talkedUrlKeys
-     * @property {number} latestTimestamp
-     * @property {object|null} outreach
-     */
-
-    /**
-     * @typedef {object} Connection
-     * @property {string} name
-     * @property {string} nameKey
-     * @property {string} url
-     * @property {string} company
-     * @property {string} position
-     * @property {number|null} connectedOnTimestamp
-     */
-
-    /**
-     * @typedef {{list: Connection[], byUrl: Map<string, Connection>, byName: Map<string, Connection>}} ConnectionState
+     * Computed page state cached per dataset signature.
+     * @typedef {object} CachedMessagesState
+     * @property {MessageState} messageState - Message analytics state
+     * @property {ConnectionState|null} connectionState - Connection state, if loaded
+     * @property {boolean} hasConnectionsFile - Whether a connections upload exists
+     * @property {string|null} connectionLoadError - Connections load error, if any
+     * @property {number} totalInputRows - Cleaned message rows
      */
 
     /** @type {{timeRangeButtons: NodeListOf<Element>, timeRangeSelect: HTMLSelectElement | null, resetFiltersBtn: HTMLElement | null, topContactsExportBtn: HTMLButtonElement | null, silentConnectionsExportBtn: HTMLButtonElement | null, fadingConversationsExportBtn: HTMLButtonElement | null, messagesEmpty: HTMLElement | null, messagesLayout: HTMLElement | null, topContactsList: HTMLElement | null, silentConnectionsList: HTMLElement | null, fadingConversationsList: HTMLElement | null, msgStatMessages: HTMLElement | null, msgStatContacts: HTMLElement | null, msgStatConnected: HTMLElement | null, msgStatFading: HTMLElement | null, messagesTip: HTMLElement | null, messagesTipText: HTMLElement | null}} */
@@ -99,7 +85,7 @@ export const MessagesPage = (() => {
         messagesTipText: document.getElementById("messagesTipText"),
     };
 
-    /** @type {{filters: {timeRange: string}, messageState: MessageState | null, connectionState: ConnectionState | null, hasConnectionsFile: boolean, connectionLoadError: string | null, loadedSignature: string | null, totalInputRows: number, currentLists: {topContacts: object[], silentConnections: object[], fadingConversations: object[]}}} */
+    /** @type {{filters: {timeRange: string}, messageState: MessageState | null, connectionState: ConnectionState | null, hasConnectionsFile: boolean, connectionLoadError: string | null, loadedSignature: string | null, totalInputRows: number, currentLists: {topContacts: RangeContact[], silentConnections: Connection[], fadingConversations: FadingConversation[]}}} */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         messageState: null,
@@ -133,7 +119,7 @@ export const MessagesPage = (() => {
 
     /**
      * Handle route activation and query param changes.
-     * @param {object} params - Route query params
+     * @param {import("../../app/router.js").RouteParams} params - Route query params
      */
     function onRouteChange(params) {
         if (!initialized) {
@@ -196,12 +182,17 @@ export const MessagesPage = (() => {
         try {
             await Session.waitForCleanup();
 
-            let messagesFile = DataCache.get("storage:file:messages") || null;
-            let connectionsFile = DataCache.get("storage:file:connections") || null;
-            let files = DataCache.get("storage:files") || null;
-
-            messagesFile = normalizeStoredFile(messagesFile, "messages");
-            connectionsFile = normalizeStoredFile(connectionsFile, "connections");
+            let messagesFile = normalizeStoredFile(
+                DataCache.get("storage:file:messages") || null,
+                "messages",
+            );
+            let connectionsFile = normalizeStoredFile(
+                DataCache.get("storage:file:connections") || null,
+                "connections",
+            );
+            let files = /** @type {CachedFileMetadata[]|null} */ (
+                DataCache.get("storage:files") || null
+            );
 
             if (!messagesFile || !connectionsFile) {
                 if (!files) {
@@ -333,7 +324,7 @@ export const MessagesPage = (() => {
 
             const messagesData = processed.messagesData || [];
             state.totalInputRows = Number.isFinite(processed.totalInputRows)
-                ? processed.totalInputRows
+                ? /** @type {number} */ (processed.totalInputRows)
                 : messagesData.length;
             if (processed.messageState) {
                 state.messageState = hydrateMessageState(processed.messageState);
@@ -387,9 +378,9 @@ export const MessagesPage = (() => {
 
     /**
      * Validate and normalize one stored upload file payload.
-     * @param {object|null} file - Raw stored file record
+     * @param {unknown} file - Raw stored file record
      * @param {'messages'|'connections'} expectedType - Expected file type
-     * @returns {object|null}
+     * @returns {StoredUploadFile|null}
      */
     function normalizeStoredFile(file, expectedType) {
         if (!file) {
@@ -418,10 +409,12 @@ export const MessagesPage = (() => {
     /**
      * Read computed analytics state from in-memory cache.
      * @param {string} signature - Dataset signature
-     * @returns {object|null}
+     * @returns {CachedMessagesState|null}
      */
     function getCachedState(signature) {
-        return DataCache.get(`messages:state:${signature}`) || null;
+        return /** @type {CachedMessagesState|null} */ (
+            DataCache.get(`messages:state:${signature}`) || null
+        );
     }
 
     /**
@@ -453,12 +446,12 @@ export const MessagesPage = (() => {
 
     /**
      * Build message analytics state from cleaned rows.
-     * @param {object[]} rows - Cleaned message rows
+     * @param {MessageRow[]} rows - Cleaned message rows
      * @returns {MessageState}
      */
     function buildMessageState(rows) {
         markPerformance("messages:build-state:start");
-        const result = /** @type {MessageState} */ (MessagesAnalytics.buildMessageState(rows));
+        const result = MessagesAnalytics.buildMessageState(rows);
         markPerformance("messages:build-state:end");
         measurePerformance(
             "messages:build-state",
@@ -470,14 +463,12 @@ export const MessagesPage = (() => {
 
     /**
      * Build connections lookup state from cleaned rows.
-     * @param {object[]} rows - Cleaned connections rows
+     * @param {ConnectionRow[]} rows - Cleaned connections rows
      * @returns {ConnectionState}
      */
     function buildConnectionState(rows) {
         markPerformance("messages:build-connections:start");
-        const result = /** @type {ConnectionState} */ (
-            MessagesAnalytics.buildConnectionState(rows)
-        );
+        const result = MessagesAnalytics.buildConnectionState(rows);
         markPerformance("messages:build-connections:end");
         measurePerformance(
             "messages:build-connections",
@@ -588,12 +579,13 @@ export const MessagesPage = (() => {
         );
         const topSummary = getTopContactsInRange(state.messageState, rangeStart);
 
-        const hasConnections = state.connectionState && state.connectionState.list.length > 0;
+        const { connectionState } = state;
+        const hasConnections = connectionState && connectionState.list.length > 0;
         const silentConnections = hasConnections
-            ? getSilentConnections(state.messageState, state.connectionState)
+            ? getSilentConnections(state.messageState, connectionState)
             : [];
         const fadingConversations = hasConnections
-            ? getFadingConversations(state.messageState, state.connectionState)
+            ? getFadingConversations(state.messageState, connectionState)
             : [];
 
         state.currentLists.topContacts = topSummary.items;
@@ -619,7 +611,7 @@ export const MessagesPage = (() => {
      * Best-effort persist of the lifetime outreach summary so the Insights page
      * can show it without loading the message export. Runs once per dataset load
      * (not per filter re-render) and never blocks the UI on a storage failure.
-     * @param {object|null} outreach - Outreach summary from the message state
+     * @param {OutreachSummary|null} outreach - Outreach summary from the message state
      */
     function persistOutreach(outreach) {
         if (!outreach) {
@@ -635,7 +627,7 @@ export const MessagesPage = (() => {
 
     /**
      * Render top contacts list.
-     * @param {object[]} items - Top contacts
+     * @param {RangeContact[]} items - Top contacts
      */
     function renderTopContacts(items) {
         const listElement = elements.topContactsList;
@@ -665,7 +657,7 @@ export const MessagesPage = (() => {
 
     /**
      * Render silent connections list.
-     * @param {object[]} items - Silent connection rows
+     * @param {Connection[]} items - Silent connection rows
      */
     function renderSilentConnections(items) {
         const listElement = elements.silentConnectionsList;
@@ -708,7 +700,7 @@ export const MessagesPage = (() => {
 
     /**
      * Render fading conversations list.
-     * @param {object[]} items - Fading conversation rows
+     * @param {FadingConversation[]} items - Fading conversation rows
      */
     function renderFadingConversations(items) {
         const listElement = elements.fadingConversationsList;
@@ -845,9 +837,9 @@ export const MessagesPage = (() => {
 
     /**
      * Update tip text.
-     * @param {object[]} topContacts - Top contacts list
-     * @param {object[]} silentConnections - Silent connections list
-     * @param {object[]} fadingConversations - Fading conversations list
+     * @param {RangeContact[]} topContacts - Top contacts list
+     * @param {Connection[]} silentConnections - Silent connections list
+     * @param {FadingConversation[]} fadingConversations - Fading conversations list
      */
     function updateTip(topContacts, silentConnections, fadingConversations) {
         const { messagesTip, messagesTipText } = elements;
@@ -868,9 +860,9 @@ export const MessagesPage = (() => {
     /**
      * Build a contextual tip string. Pip speaks the tip on screen, so every
      * branch stays in his first-person voice.
-     * @param {object[]} topContacts - Top contacts list
-     * @param {object[]} silentConnections - Silent connections list
-     * @param {object[]} fadingConversations - Fading conversations list
+     * @param {RangeContact[]} topContacts - Top contacts list
+     * @param {Connection[]} silentConnections - Silent connections list
+     * @param {FadingConversation[]} fadingConversations - Fading conversations list
      * @returns {string|null}
      */
     function buildTipText(topContacts, silentConnections, fadingConversations) {
@@ -982,7 +974,7 @@ export const MessagesPage = (() => {
      * Download rows as Excel file using export spec.
      * @param {string} filePrefix - File prefix
      * @param {string} sheetName - Worksheet name
-     * @param {object[]} rows - Export rows
+     * @param {Record<string, unknown>[]} rows - Export rows
      */
     async function downloadExport(filePrefix, sheetName, rows) {
         /* v8 ignore next 3 */

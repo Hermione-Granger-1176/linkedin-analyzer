@@ -38,6 +38,31 @@ import { loadRecentThreads } from "./threads-transport.js";
 
 const WORKER_TIMEOUT_MS = 30000;
 
+/**
+ * @typedef {import("./availability.js").ExportAnalyticsView} ExportAnalyticsView
+ * @typedef {import("./availability.js").InsightsSnapshot} InsightsSnapshot
+ * @typedef {import("./availability.js").NetworkGrowth} NetworkGrowth
+ * @typedef {import("./availability.js").OutreachSummary} OutreachSummary
+ * @typedef {import("./pdf-document.js").Insight} Insight
+ * @typedef {import("./pdf-document.js").Dashboard} Dashboard
+ * @typedef {import("./pdf-document.js").Chart} Chart
+ * @typedef {import("./pdf-document.js").ListChart} ListChart
+ * @typedef {import("./messages-transport.js").MessageState} MessageState
+ * @typedef {import("./messages-transport.js").ConnectionState} ConnectionState
+ * @typedef {import("./messages-transport.js").MessagesState} MessagesState
+ * @typedef {import("../messages/relationships.js").RangeContact} RangeContact
+ * @typedef {import("../messages/relationships.js").FadingConversation} FadingConversation
+ */
+
+/**
+ * What one analytics worker run produced for the export.
+ * @typedef {object} AnalyticsRun
+ * @property {Insight[]} insights - Insight cards in display order
+ * @property {string|null} tip - Closing tip, when there is one
+ * @property {NetworkGrowth|null} networkGrowth - Lifetime network growth
+ * @property {ExportAnalyticsView|null} view - Filtered analytics view
+ */
+
 // How many entries a dashboard list carries. The screens render ten, and a page
 // that showed more would stop being the same view the user is exporting.
 const LIST_LIMIT = 10;
@@ -88,7 +113,8 @@ const RANGE_LABELS = Object.freeze({
  */
 export function formatRangeLabel(timeRange) {
     const key = typeof timeRange === "string" ? timeRange : "";
-    return RANGE_LABELS[key] || RANGE_LABELS[DEFAULT_FILTERS.timeRange];
+    const labels = /** @type {Record<string, string>} */ (RANGE_LABELS);
+    return labels[key] || labels[DEFAULT_FILTERS.timeRange];
 }
 
 /**
@@ -125,7 +151,7 @@ function formatWindow(monthWindow) {
  * the window is but not where it sits. The monthly and the weekly timeline both
  * key their points by date, so the first seven characters are the month whichever
  * one the view carries.
- * @param {object|null} view - Filtered analytics view
+ * @param {ExportAnalyticsView|null} view - Filtered analytics view
  * @returns {MonthWindow|null} Window, or null when nothing was plotted
  */
 function viewWindow(view) {
@@ -181,8 +207,8 @@ function formatSentRatio(ratio) {
 
 /**
  * Build the all-time stat list, dropping stats with no data behind them.
- * @param {{multiplier?: number}|null} networkGrowth - Lifetime network growth from the view
- * @param {{selfInitiated: number, replyRate: number|null, unansweredContacts: number, sentReceivedRatio: number|null}|null} outreach - Persisted outreach summary
+ * @param {NetworkGrowth|null} networkGrowth - Lifetime network growth from the view
+ * @param {OutreachSummary|null} outreach - Persisted outreach summary
  * @returns {Array<{label: string, value: string}>} Stats in display order
  */
 function buildAllTimeStats(networkGrowth, outreach) {
@@ -209,9 +235,9 @@ function buildAllTimeStats(networkGrowth, outreach) {
  *
  * The worker computes the timeline, topics, and heatmap with the insight cards.
  * Keep that complete view so the activity dashboard uses data from this run.
- * @param {object} analyticsBase - Persisted analytics base
+ * @param {import("../../platform/persistence/storage.js").StoredAnalytics} analyticsBase - Persisted analytics base
  * @param {string} timeRange - Range key to build the view at
- * @returns {Promise<{insights: object[], tip: string|null, networkGrowth: object|null, view: object|null}>} Worker view
+ * @returns {Promise<AnalyticsRun>} Worker view
  */
 function runAnalyticsWorker(analyticsBase, timeRange) {
     // One identity is handed to every caller, so it is frozen: callers only read
@@ -222,7 +248,8 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
         return Promise.resolve(empty);
     }
 
-    let worker = null;
+    /** @type {Worker} */
+    let worker;
     try {
         worker = new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
             type: "module",
@@ -237,9 +264,11 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
 
     return new Promise((resolve) => {
         const requestId = 1;
+        /** @type {number|null} */
         let timeoutId = null;
         let settled = false;
 
+        /** @param {MessageEvent} event - Worker reply */
         const onMessage = (event) => {
             const parsed = parseAnalyticsWorkerMessage(event.data || {});
             if (!parsed.valid) {
@@ -259,7 +288,10 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
                         return;
                     }
                     /* v8 ignore next */
-                    const payload = message.payload || {};
+                    const payload =
+                        /** @type {{insights?: {insights?: Insight[], tip?: string|null}, view?: ExportAnalyticsView|null}} */ (
+                            message.payload || {}
+                        );
                     const insights = payload.insights || {};
                     finish({
                         insights: insights.insights || [],
@@ -278,6 +310,7 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
             }
         };
 
+        /** @param {Event} event - Worker error or messageerror event */
         const handleError = (event) => {
             // Cancelling the event suppresses the browser's own reporting of it,
             // as the three transports do. This worker derives topics from the
@@ -296,7 +329,7 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
 
         /**
          * Settle once and release the worker, whatever ended it.
-         * @param {object} value - Resolution value
+         * @param {AnalyticsRun} value - Resolution value
          */
         function finish(value) {
             // Every completion path removes listeners and clears the watchdog.
@@ -376,11 +409,11 @@ export function terminateAnalyticsWorker() {
 /**
  * @typedef {object} InsightSource
  * @property {string} timeRange - Range key the insights were computed at
- * @property {object[]} insights - Insight cards in display order
+ * @property {Insight[]} insights - Insight cards in display order
  * @property {string|null} tip - Closing tip, when there is one
- * @property {object|null} networkGrowth - Lifetime network growth
- * @property {object|null} outreach - Persisted outreach summary
- * @property {object|null} view - Filtered analytics view the activity dashboard is drawn from
+ * @property {NetworkGrowth|null} networkGrowth - Lifetime network growth
+ * @property {OutreachSummary|null} outreach - Persisted outreach summary
+ * @property {ExportAnalyticsView|null} view - Filtered analytics view the activity dashboard is drawn from
  */
 
 /**
@@ -400,7 +433,7 @@ function emptyInsightSource() {
 
 /**
  * Read the insight half of a published snapshot.
- * @param {object} snapshot - Published Insights snapshot
+ * @param {InsightsSnapshot} snapshot - Published Insights snapshot
  * @returns {InsightSource} Source with no view attached yet
  */
 function fromSnapshot(snapshot) {
@@ -428,7 +461,9 @@ function fromSnapshot(snapshot) {
  * @returns {Promise<InsightSource>} Insight source data
  */
 async function resolveInsightSource(isCancelled) {
-    const snapshot = DataCache.get(INSIGHTS_EXPORT_CACHE_KEY);
+    const snapshot = /** @type {InsightsSnapshot|undefined} */ (
+        DataCache.get(INSIGHTS_EXPORT_CACHE_KEY)
+    );
     const source = hasSnapshotContent(snapshot) ? fromSnapshot(snapshot) : null;
     if (source && source.view) {
         return source;
@@ -463,9 +498,9 @@ async function resolveInsightSource(isCancelled) {
  *
  * The stat wording and the three charts are the Analytics screen's, in its
  * order: a reader who knows the screen should recognize the page.
- * @param {object|null} view - Filtered analytics view
+ * @param {ExportAnalyticsView|null} view - Filtered analytics view
  * @param {string} rangeLabel - Window the view was built over
- * @returns {object|null} Dashboard, or null when there is no activity
+ * @returns {Dashboard|null} Dashboard, or null when there is no activity
  */
 function buildActivityDashboard(view, rangeLabel) {
     if (!view || !view.totals || !view.totals.total) {
@@ -519,7 +554,7 @@ function buildActivityDashboard(view, rangeLabel) {
  * two different ranges at once.
  * @param {Blob|string} connectionsCsv - Stored connections upload, or an empty string
  * @param {() => boolean} isCancelled - True once the run has been abandoned
- * @returns {Promise<object|null>} Dashboard, or null when there is nothing to show
+ * @returns {Promise<Dashboard|null>} Dashboard, or null when there is nothing to show
  */
 async function buildConnectionsDashboard(connectionsCsv, isCancelled) {
     if (!connectionsCsv || isCancelled()) {
@@ -618,11 +653,11 @@ function buildMessageTimeline(rowTimestamps, monthWindow) {
 
 /**
  * Build the lists of people the messages dashboard shows, when they are opted in.
- * @param {object} messageState - Hydrated message state
- * @param {object|null} connectionState - Hydrated connection state
- * @param {object[]} topContacts - Top contacts in range
- * @param {object[]} fading - Fading conversations
- * @returns {object[]} Chart configurations
+ * @param {MessageState} messageState - Hydrated message state
+ * @param {ConnectionState|null} connectionState - Hydrated connection state
+ * @param {RangeContact[]} topContacts - Top contacts in range
+ * @param {FadingConversation[]} fading - Fading conversations
+ * @returns {ListChart[]} Chart configurations
  */
 function buildMessagePeopleCharts(messageState, connectionState, topContacts, fading) {
     // Panel order, wording and per-row detail are the Messages screen's. A list
@@ -659,10 +694,11 @@ function buildMessagePeopleCharts(messageState, connectionState, topContacts, fa
  * The two panels that take this shape differ only in what they put on the right,
  * so the row limit and the title's count are stated once: a third cannot forget
  * either.
+ * @template {{name: string, lastTimestamp: number}} C
  * @param {string} label - Panel name
- * @param {object[]} contacts - Contacts in display order
- * @param {(contact: object) => string} toValue - Right-hand value for one row
- * @returns {object} Chart configuration
+ * @param {C[]} contacts - Contacts in display order
+ * @param {(contact: C) => string} toValue - Right-hand value for one row
+ * @returns {ListChart} Chart configuration
  */
 function buildLastMessageList(label, contacts, toValue) {
     return {
@@ -685,7 +721,7 @@ function buildLastMessageList(label, contacts, toValue) {
  * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {boolean} includeNames - Whether the people lists were opted into
  * @param {() => boolean} isCancelled - True once the run has been abandoned
- * @returns {Promise<{dashboard: object|null, window: MonthWindow|null}>} Dashboard and the months it covers
+ * @returns {Promise<{dashboard: Dashboard|null, window: MonthWindow|null}>} Dashboard and the months it covers
  */
 async function collectMessagesDashboard(files, includeNames, isCancelled) {
     // The window is returned alongside the page because the header may need it:
@@ -726,9 +762,9 @@ async function collectMessagesDashboard(files, includeNames, isCancelled) {
  * Pure, as the other builders in this module are: the loading, the cancellation
  * checks and the reporting stay with the caller, so what the page contains can
  * be read, and exercised, without a worker.
- * @param {{messageState: object, connectionState: object|null}} state - Hydrated message state
+ * @param {MessagesState} state - Hydrated message state
  * @param {boolean} includeNames - Whether the people lists were opted into
- * @returns {{dashboard: object, window: MonthWindow|null}} Dashboard and the months it covers
+ * @returns {{dashboard: Dashboard, window: MonthWindow|null}} Dashboard and the months it covers
  */
 function buildMessagesDashboard(state, includeNames) {
     const { messageState, connectionState } = state;
@@ -738,6 +774,7 @@ function buildMessagesDashboard(state, includeNames) {
     const fading = connectionState ? getFadingConversations(messageState, connectionState) : [];
     const rangeLabel = formatWindow(monthWindow) || formatRangeLabel(MESSAGES_RANGE).toLowerCase();
 
+    /** @type {Chart[]} */
     const charts = [];
     if (monthWindow) {
         charts.push({
@@ -808,7 +845,7 @@ async function readExportFiles(isCancelled) {
  * Each record is read on its own rather than the pair together: a messages
  * record whose getter throws used to cost the connections dashboard as well,
  * which is a wider blast radius than the failure deserves.
- * @param {object|null} file - Stored file record
+ * @param {import("../../platform/persistence/storage.js").StoredFile|null} file - Stored file record
  * @returns {Blob|string} The stored upload, or an empty string
  */
 function readStoredUpload(file) {
@@ -834,7 +871,7 @@ function readStoredUpload(file) {
  * every export that opted message contents in.
  * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {() => boolean} isCancelled - True once the run has been abandoned
- * @returns {Promise<object[]>} Threads for the document
+ * @returns {Promise<import("./threads.js").SelectedThread[]>} Threads for the document
  */
 async function collectThreads(files, isCancelled) {
     if (!files.messagesCsv || isCancelled()) {
@@ -905,11 +942,13 @@ export async function collectExportData(options = {}) {
         // fourth dashboard is an entry here instead of a change in four files.
         // The layout engine takes only real dashboards, so the ones that found
         // nothing to show are dropped rather than passed along as holes.
-        dashboards: [
-            buildActivityDashboard(source.view, activityLabel),
-            connections,
-            messages.dashboard,
-        ].filter(Boolean),
+        dashboards: /** @type {Dashboard[]} */ (
+            [
+                buildActivityDashboard(source.view, activityLabel),
+                connections,
+                messages.dashboard,
+            ].filter(Boolean)
+        ),
         insights: source.insights,
         tip: source.tip,
         allTime: buildAllTimeStats(source.networkGrowth, outreach),

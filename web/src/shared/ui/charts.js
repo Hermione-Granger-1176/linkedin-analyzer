@@ -4,15 +4,59 @@ import rough from "roughjs/bundled/rough.esm.js";
 
 import { DAY_LABELS } from "../../features/analytics/constants.js";
 
+/**
+ * One timeline bucket: a month, or a week in the short ranges.
+ * @typedef {object} TimelinePoint
+ * @property {string} key - Bucket key ("YYYY-MM" for months)
+ * @property {string} label - Axis and tooltip label
+ * @property {number} value - Bucket count
+ * @property {string} [monthKey] - Month a week belongs to
+ */
+
+/** @typedef {{topic: string, count: number}} TopicPoint - One bar of a topic chart */
+/** @typedef {{textOnly: number, links: number, media: number}} ContentMix - Donut counts */
+
+/**
+ * The hit area of a rectangular chart item.
+ * @typedef {{x: number, y: number, width: number, height: number, hitTest?: undefined}} ChartRect
+ */
+
+/**
+ * @typedef {ChartRect & {type: "month"|"week", key: string, monthKey: string, label: string,
+ * value: number, tooltip: string}} TimelineItem
+ */
+
+/**
+ * @typedef {ChartRect & {type: "topic", key: string, label: string, value: number,
+ * tooltip: string}} TopicItem
+ */
+
+/**
+ * @typedef {ChartRect & {type: "heatmap", day: number, hour: number, tooltip: string}} HeatmapItem
+ */
+
+/**
+ * @typedef {{type: "mix", label: string, value: number, tooltip: string,
+ * hitTest: (x: number, y: number) => boolean, x?: undefined}} MixItem
+ */
+
+/**
+ * A hit-test item a drawn chart registers, discriminated on `type`.
+ * @typedef {TimelineItem|TopicItem|HeatmapItem|MixItem} ChartItem
+ */
+
 export const SketchCharts = (() => {
     "use strict";
 
     const WEEKLY_TIME_RANGES = new Set(["1m", "3m"]);
 
+    /** @type {Map<HTMLCanvasElement, ChartItem[]>} */
     const registry = new Map();
+    /** @type {Map<HTMLCanvasElement, () => void>} */
     const drawRegistry = new Map();
     let animationId = 0;
     let exportDpr = 0;
+    /** @type {ResizeObserver|null} */
     let sizeObserver = null;
 
     const EXPORT_DPR = 3;
@@ -170,7 +214,7 @@ export const SketchCharts = (() => {
     /**
      * Register hit-test items for a canvas in the global registry.
      * @param {HTMLCanvasElement} canvas - The canvas element to register items for.
-     * @param {Array<object>} items - The hit-test items to register.
+     * @param {ChartItem[]} items - The hit-test items to register.
      */
     function register(canvas, items) {
         registry.set(canvas, items);
@@ -194,7 +238,7 @@ export const SketchCharts = (() => {
      * @param {HTMLCanvasElement} canvas - The canvas element to query.
      * @param {number} x - The x coordinate.
      * @param {number} y - The y coordinate.
-     * @returns {object | null} The matching item, or null if none found.
+     * @returns {ChartItem | null} The matching item, or null if none found.
      */
     function getItemAt(canvas, x, y) {
         const items = registry.get(canvas);
@@ -240,7 +284,7 @@ export const SketchCharts = (() => {
     /**
      * Draw the timeline line/area chart with labels.
      * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
-     * @param {Array<object>} data - Timeline points array.
+     * @param {TimelinePoint[]} data - Timeline points array.
      * @param {string} timeRange - Filter key (e.g. '1m', '3m', '12m', 'all').
      * @param {number} [progress=1] - Animation progress from 0 to 1.
      * @param {number} [maxOverride=0] - Optional max Y value override.
@@ -404,6 +448,7 @@ export const SketchCharts = (() => {
         ctx.fillStyle = colors.textSecondary;
         const isWeekly = WEEKLY_TIME_RANGES.has(timeRange);
         if (timeRange === "all" && data.length > 18) {
+            /** @type {number|null} */
             let lastYear = null;
             points.forEach(({ point, x }, index) => {
                 const [year, month] = point.key.split("-").map(Number);
@@ -437,6 +482,7 @@ export const SketchCharts = (() => {
             // Collect label candidates, then thin out any that would crowd their
             // neighbour so rotated labels (e.g. "Dec"/"Jan") no longer collide at
             // narrow widths. The last point wins over an adjacent regular label.
+            /** @type {typeof points} */
             const accepted = [];
             points.forEach((entry, index) => {
                 const isLast = index === points.length - 1;
@@ -465,6 +511,7 @@ export const SketchCharts = (() => {
             });
         }
 
+        /** @type {ChartItem[]} */
         const items = points.map(({ point, x }) => ({
             type: isWeekly ? "week" : "month",
             key: point.key,
@@ -484,7 +531,7 @@ export const SketchCharts = (() => {
     /**
      * Draw horizontal bar chart of topic counts.
      * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
-     * @param {Array<object>} data - Array of topic objects with topic and count properties.
+     * @param {TopicPoint[]} data - Array of topic objects with topic and count properties.
      * @param {number} [progress=1] - Animation progress from 0 to 1.
      * @param {string} [emptyMessage] - Message shown when there is no data.
      */
@@ -512,6 +559,7 @@ export const SketchCharts = (() => {
         const chartHeight = height - padding.top - padding.bottom;
         const maxValue = Math.max(...data.map((p) => p.count), 1);
         const barHeight = Math.min(24, chartHeight / data.length - 6);
+        /** @type {ChartItem[]} */
         const items = [];
 
         // Batch fill
@@ -607,6 +655,7 @@ export const SketchCharts = (() => {
             );
         }
 
+        /** @type {ChartItem[]} */
         const items = [];
 
         // Draw cells with fills instead of RoughJS paths.
@@ -669,7 +718,7 @@ export const SketchCharts = (() => {
     /**
      * Draw donut chart of content type mix.
      * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
-     * @param {object} mix - Content type mix with textOnly, links, and media counts.
+     * @param {ContentMix|null} mix - Content type mix with textOnly, links, and media counts.
      * @param {number} [progress=1] - Animation progress from 0 to 1.
      */
     function drawDonut(canvas, mix, progress = 1) {
@@ -705,6 +754,7 @@ export const SketchCharts = (() => {
         const innerRadius = radius * 0.55;
         let startAngle = -Math.PI / 2;
 
+        /** @type {ChartItem[]} */
         const items = [];
 
         // Draw segments with canvas instead of a RoughJS object per segment.
@@ -797,8 +847,10 @@ export const SketchCharts = (() => {
      */
     function animateDraw(drawFn, duration = 600) {
         const myId = ++animationId;
+        /** @type {number|null} */
         let start = null;
 
+        /** @param {number} timestamp - Frame time */
         function step(timestamp) {
             /* v8 ignore next */
             if (myId !== animationId) {

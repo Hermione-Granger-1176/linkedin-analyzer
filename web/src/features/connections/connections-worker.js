@@ -6,6 +6,9 @@ import { readCsvSource } from "../upload/read.js";
 
 import { buildGrowthTimeline, computeStats } from "./view.js";
 
+/** @typedef {import("./view.js").CleanedConnectionRow} CleanedConnectionRow */
+/** @typedef {import("./view.js").ConnectionsAnalytics} ConnectionsAnalytics */
+
 /* -- Main processing pipeline ------------------------------------------------ */
 
 /**
@@ -15,7 +18,8 @@ import { buildGrowthTimeline, computeStats } from "./view.js";
  * worker round-trip.
  *
  * @param {string} connectionsCsv - Raw CSV text from the Connections export
- * @returns {{success: boolean, analytics?: object, rows?: object[], error?: string}}
+ * @returns {{success: boolean, analytics?: Readonly<ConnectionsAnalytics>,
+ * rows?: CleanedConnectionRow[], error?: string}}
  */
 function processConnections(connectionsCsv) {
     if (!connectionsCsv || typeof connectionsCsv !== "string") {

@@ -48,7 +48,7 @@ export function getRangeStart(range, latestTimestamp) {
     if (range === "all") {
         return null;
     }
-    const months = RANGE_MONTHS[range];
+    const months = /** @type {Record<string, number>} */ (RANGE_MONTHS)[range];
     if (!months || !latestTimestamp) {
         return null;
     }
@@ -73,13 +73,25 @@ export function formatShortDate(timestamp) {
     return SHORT_DATE_FORMATTER.format(new Date(timestamp));
 }
 
+/** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
+
+/**
+ * Uploaded file fields that identify one version of an upload.
+ * @typedef {Pick<CachedFileMetadata, "name" | "updatedAt" | "rowCount">} FileSignatureSource
+ */
+
 /**
  * Build a cache signature from uploaded file metadata.
- * @param {object|null} messagesFile - Stored messages file
- * @param {object|null} connectionsFile - Stored connections file
+ * @param {FileSignatureSource|null} messagesFile - Stored messages file
+ * @param {FileSignatureSource|null} connectionsFile - Stored connections file
  * @returns {string}
  */
 export function buildDataSignature(messagesFile, connectionsFile) {
+    /**
+     * @param {FileSignatureSource|null} file - Stored file, if any
+     * @param {string} type - File type label
+     * @returns {string}
+     */
     const toPart = (file, type) => {
         if (!file) {
             return `${type}:none`;

@@ -23,12 +23,16 @@ export function toCsvField(value) {
 
 /**
  * Build the cleaned rows of one file type as a CSV Blob.
- * @param {object[]} data - Cleaned rows keyed by column name
+ * @param {import("./cleaner.js").CleanedRow[]} data - Cleaned rows keyed by column name
  * @param {string} fileType - Cleaner file type
  * @returns {Blob}
  */
 export function buildCleanedCsvBlob(data, fileType) {
     const headers = getConfig(fileType).columns.map((column) => column.name);
+    /**
+     * @param {unknown[]} fields - Cells of one line
+     * @returns {string} CSV line with its CRLF terminator
+     */
     const toLine = (fields) => `${fields.map(toCsvField).join(",")}\r\n`;
     const parts = [BYTE_ORDER_MARK + toLine(headers)];
     for (let start = 0; start < data.length; start += ROWS_PER_PART) {
@@ -53,6 +57,11 @@ export function cleanedCsvName(fileType) {
     return getConfig(fileType).outputName.replace(/\.xlsx$/, "_cleaned.csv");
 }
 
+/**
+ * Look up a file type's config, throwing for an unknown type.
+ * @param {string} fileType - Cleaner file type
+ * @returns {import("./configs.js").CleanerConfig}
+ */
 function getConfig(fileType) {
     const config = LinkedInCleaner.configs[fileType];
     if (!config) {

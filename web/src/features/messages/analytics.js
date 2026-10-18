@@ -2,6 +2,114 @@
 
 import { parseLocalDate, parseLocalDateTime } from "../analytics/dates.js";
 
+/**
+ * One cleaned messages.csv row, keyed by column name (FROM, TO, DATE, ...).
+ * @typedef {Record<string, string>} MessageRow
+ */
+
+/**
+ * One cleaned Connections.csv row, keyed by column name (First Name, URL, ...).
+ * @typedef {Record<string, string>} ConnectionRow
+ */
+
+/**
+ * Normalized URLs and names identified as the export owner.
+ * @typedef {object} SelfContext
+ * @property {Set<string>} selfUrls - Normalized self profile URLs
+ * @property {Set<string>} selfNames - Normalized self names
+ */
+
+/**
+ * A message participant after sanitizing: a display name and normalized URL.
+ * @typedef {object} Participant
+ * @property {string} name - Display name ("Unknown" when only a URL is known)
+ * @property {string} url - Normalized profile URL, or "" when absent
+ */
+
+/**
+ * Aggregated message totals for one contact.
+ * @typedef {object} MessageContact
+ * @property {string} key - Contact key ("url:..." or "name:...")
+ * @property {string} name - Display name
+ * @property {string} url - Normalized profile URL, or ""
+ * @property {number} count - Messages involving this contact
+ * @property {number} lastTimestamp - Latest message timestamp (ms)
+ */
+
+/**
+ * Message events stored as columns, one entry per participant per message.
+ * contactIds[i] indexes contactKeys; timestamps[i] is the message time.
+ * @typedef {object} MessageEvents
+ * @property {string[]} contactKeys - Contact key for each contact ID
+ * @property {Int32Array<ArrayBuffer>} contactIds - Contact ID of each event
+ * @property {Float64Array<ArrayBuffer>} timestamps - Timestamp (ms) of each event
+ */
+
+/**
+ * Outreach-funnel summary: who starts conversations and how often they are answered.
+ * @typedef {object} OutreachSummary
+ * @property {number} totalConversations - Distinct conversations
+ * @property {number} selfInitiated - Conversations started by self
+ * @property {number} othersInitiated - Conversations started by someone else
+ * @property {number} selfInitiatedReplied - Self-started conversations that got a reply
+ * @property {number|null} replyRate - selfInitiatedReplied / selfInitiated, or null
+ * @property {number} unansweredContacts - Contacts messaged who never replied
+ * @property {number} sent - Messages sent by self
+ * @property {number} received - Messages received from real correspondents
+ * @property {number|null} sentReceivedRatio - sent / received, or null
+ */
+
+/**
+ * Message analytics state built from cleaned rows.
+ * @typedef {object} MessageState
+ * @property {Map<string, MessageContact>} contacts - Contacts by contact key
+ * @property {MessageEvents} events - Per-participant event columns
+ * @property {Float64Array<ArrayBuffer>} rowTimestamps - Timestamp (ms) of each counted row
+ * @property {number} skippedRows - Rows without a date or a participant
+ * @property {Set<string>} talkedNameKeys - Normalized names of everyone messaged
+ * @property {Set<string>} talkedUrlKeys - Normalized URLs of everyone messaged
+ * @property {number} latestTimestamp - Latest counted message timestamp (ms)
+ * @property {OutreachSummary|null} outreach - Outreach summary, when available
+ */
+
+/**
+ * One connection, normalized for lookups.
+ * @typedef {object} Connection
+ * @property {string} name - Full name, or the URL when the name is blank
+ * @property {string} nameKey - Normalized full name
+ * @property {string} url - Normalized profile URL, or ""
+ * @property {string} company - Company
+ * @property {string} position - Position
+ * @property {number|null} connectedOnTimestamp - Connection date (ms), or null
+ */
+
+/**
+ * Connection list plus URL and name indexes (first entry wins).
+ * @typedef {object} ConnectionState
+ * @property {Connection[]} list - All connections, in file order
+ * @property {Map<string, Connection>} byUrl - Connections by normalized URL
+ * @property {Map<string, Connection>} byName - Connections by normalized name
+ */
+
+/**
+ * Per-conversation outreach aggregate.
+ * @typedef {object} ConversationAggregate
+ * @property {number} firstTimestamp - Earliest message timestamp (ms)
+ * @property {boolean} startedBySelf - Whether the earliest message was sent by self
+ * @property {boolean} gotReply - Whether a real correspondent ever sent a message
+ */
+
+/**
+ * Participation counts for a self-detection candidate key.
+ * @typedef {object} ParticipantStats
+ * @property {number} totalCount - Appearances on either side
+ * @property {number} senderCount - Appearances as sender
+ * @property {number} recipientCount - Appearances as recipient
+ * @property {Set<string>} conversations - Conversations the key appears in
+ */
+
+/** @typedef {"senderCount"|"recipientCount"} RoleCountField - Per-role counter in ParticipantStats */
+
 export const MessagesAnalytics = (() => {
     "use strict";
 
@@ -11,13 +119,15 @@ export const MessagesAnalytics = (() => {
     // unique value is normalized once; the cap bounds memory if a pathological
     // export has an unusually large unique set.
     const NORMALIZE_CACHE_LIMIT = 100000;
+    /** @type {Map<string, string>} */
     const nameNormalizeCache = new Map();
+    /** @type {Map<string, string>} */
     const urlNormalizeCache = new Map();
 
     /**
      * Build message analytics state from cleaned rows.
-     * @param {object[]} rows - Cleaned message rows
-     * @returns {object}
+     * @param {MessageRow[]} rows - Cleaned message rows
+     * @returns {MessageState}
      */
     function buildMessageState(rows) {
         const safeRows = Array.isArray(rows) ? rows : [];
@@ -36,24 +146,32 @@ export const MessagesAnalytics = (() => {
             }
         }
 
+        /** @type {Map<string, MessageContact>} */
         const contacts = new Map();
         // Maps a normalized contact name to the key its entry is currently stored
         // under, so the same person seen once with a profile URL and once without
         // folds into one contact instead of splitting across a url: and a name: key.
+        /** @type {Map<string, string>} */
         const nameToKey = new Map();
         // Events are stored as columns, one entry per participant per row: a
         // contact ID and a timestamp. A contact keeps its ID when it is promoted
         // from a name: key to a url: key, so earlier events follow the merge.
+        /** @type {Map<MessageContact, number>} */
         const contactIds = new Map();
+        /** @type {string[]} */
         const contactKeys = [];
         const eventContactIds = createGrowableColumn(Int32Array);
         const eventTimestamps = createGrowableColumn(Float64Array);
         const rowTimestamps = createGrowableColumn(Float64Array);
+        /** @type {Set<string>} */
         const talkedNameKeys = new Set();
+        /** @type {Set<string>} */
         const talkedUrlKeys = new Set();
         // Outreach-funnel accumulators, filled in the same pass as the contact
         // aggregates so large exports are not iterated (and re-parsed) twice.
+        /** @type {Map<string, ConversationAggregate>} */
         const conversations = new Map();
+        /** @type {Map<string, {sent: number, received: number}>} */
         const contactStats = new Map();
         let sentMessages = 0;
         let receivedMessages = 0;
@@ -211,8 +329,9 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Create a typed-array column that doubles its capacity as values arrive.
-     * @param {Int32ArrayConstructor|Float64ArrayConstructor} ArrayType - Typed array to store values in
-     * @returns {{push: (value: number) => void, toArray: () => Int32Array|Float64Array}} toArray copies
+     * @template {Int32Array<ArrayBuffer>|Float64Array<ArrayBuffer>} T
+     * @param {new (length: number) => T} ArrayType - Typed array to store values in
+     * @returns {{push: (value: number) => void, toArray: () => T}} toArray copies
      * the values into an exact-length array, so its buffer can be transferred whole.
      */
     function createGrowableColumn(ArrayType) {
@@ -229,7 +348,7 @@ export const MessagesAnalytics = (() => {
                 length += 1;
             },
             toArray() {
-                return values.slice(0, length);
+                return /** @type {T} */ (values.slice(0, length));
             },
         };
     }
@@ -238,11 +357,11 @@ export const MessagesAnalytics = (() => {
      * Summarize the outreach-funnel accumulators built during the main pass:
      * who starts conversations, how often self-initiated outreach gets a reply,
      * how many contacts never replied, and the sent-to-received message ratio.
-     * @param {Map<string, object>} conversations - Per-conversation aggregates
+     * @param {Map<string, ConversationAggregate>} conversations - Per-conversation aggregates
      * @param {Map<string, {sent: number, received: number}>} contactStats - Per-contact tallies
      * @param {number} sent - Total messages sent by self
      * @param {number} received - Total messages received from others
-     * @returns {object}
+     * @returns {OutreachSummary}
      */
     function summarizeOutreach(conversations, contactStats, sent, received) {
         let selfInitiated = 0;
@@ -280,7 +399,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Update a conversation aggregate with one message's sender/timestamp.
-     * @param {Map<string, object>} conversations - Conversation aggregates
+     * @param {Map<string, ConversationAggregate>} conversations - Conversation aggregates
      * @param {string} conversationKey - Conversation identifier
      * @param {{timestamp: number, senderIsSelf: boolean, hasSender: boolean}} message - Message facts
      */
@@ -305,9 +424,9 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Determine whether a name/url pair refers to the detected self.
-     * @param {string} name - Raw sender/recipient name
-     * @param {string} url - Raw sender/recipient URL
-     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+     * @param {unknown} name - Raw sender/recipient name
+     * @param {unknown} url - Raw sender/recipient URL
+     * @param {SelfContext} context - Self context
      * @returns {boolean}
      */
     function isSelfContact(name, url, context) {
@@ -337,13 +456,16 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Build connections lookup state from cleaned rows.
-     * @param {object[]} rows - Cleaned connections rows
-     * @returns {{list: object[], byUrl: Map<string, object>, byName: Map<string, object>}}
+     * @param {ConnectionRow[]} rows - Cleaned connections rows
+     * @returns {ConnectionState}
      */
     function buildConnectionState(rows) {
         const safeRows = Array.isArray(rows) ? rows : [];
+        /** @type {Connection[]} */
         const list = [];
+        /** @type {Map<string, Connection>} */
         const byUrl = new Map();
+        /** @type {Map<string, Connection>} */
         const byName = new Map();
 
         safeRows.forEach(row => {
@@ -383,15 +505,18 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Detect likely self identity using cross-conversation participation.
-     * @param {object[]} rows - Cleaned message rows
-     * @returns {{selfUrls: Set<string>, selfNames: Set<string>}}
+     * @param {MessageRow[]} rows - Cleaned message rows
+     * @returns {SelfContext}
      */
     function detectSelfContext(rows) {
         // buildMessageState passes an array. Keep an empty list for malformed input.
         /* v8 ignore next */
         const safeRows = Array.isArray(rows) ? rows : [];
+        /** @type {Map<string, ParticipantStats>} */
         const urlStats = new Map();
+        /** @type {Map<string, ParticipantStats>} */
         const nameStats = new Map();
+        /** @type {Map<string, Map<string, number>>} */
         const urlNameCounts = new Map();
 
         safeRows.forEach((row, index) => {
@@ -427,7 +552,9 @@ export const MessagesAnalytics = (() => {
         });
 
         const selfUrl = pickSelfKey(urlStats);
+        /** @type {Set<string>} */
         const selfUrls = new Set();
+        /** @type {Set<string>} */
         const selfNames = new Set();
         if (selfUrl) {
             selfUrls.add(selfUrl);
@@ -449,7 +576,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Build a stable conversation key for participation scoring.
-     * @param {object} row - Message row
+     * @param {MessageRow} row - Message row
      * @param {number} rowIndex - Row index fallback
      * @returns {string}
      */
@@ -460,7 +587,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Record sender/recipient participation metrics for a candidate key.
-     * @param {Map<string, object>} statsMap - Aggregated stats map
+     * @param {Map<string, ParticipantStats>} statsMap - Aggregated stats map
      * @param {string} key - Candidate key (URL or normalized name)
      * @param {string} conversationKey - Conversation identifier
      * @param {'sender'|'recipient'} role - Message-side role
@@ -483,7 +610,7 @@ export const MessagesAnalytics = (() => {
             existing.conversations.add(conversationKey);
             /* v8 ignore next */
             if (roleField) {
-                existing[roleField] += 1;
+                existing[/** @type {RoleCountField} */ (roleField)] += 1;
             }
             return;
         }
@@ -496,7 +623,7 @@ export const MessagesAnalytics = (() => {
         };
         /* v8 ignore next */
         if (roleField) {
-            next[roleField] = 1;
+            next[/** @type {RoleCountField} */ (roleField)] = 1;
         }
         statsMap.set(key, next);
     }
@@ -504,14 +631,16 @@ export const MessagesAnalytics = (() => {
     /**
      * Select likely self key from participation stats.
      * Candidate must appear on both sender and recipient sides.
-     * @param {Map<string, object>} statsMap - URL or name stats
+     * @param {Map<string, ParticipantStats>} statsMap - URL or name stats
      * @returns {string|null}
      */
     function pickSelfKey(statsMap) {
+        /** @type {string|null} */
         let bestBalancedKey = null;
         let bestBalancedConversationCount = -1;
         let bestBalancedTotalCount = -1;
 
+        /** @type {string|null} */
         let bestCoverageKey = null;
         let bestCoverageConversationCount = -1;
         let bestCoverageTotalCount = -1;
@@ -577,6 +706,7 @@ export const MessagesAnalytics = (() => {
             incrementCount(counts, innerKey);
             return;
         }
+        /** @type {Map<string, number>} */
         const next = new Map();
         incrementCount(next, innerKey);
         map.set(outerKey, next);
@@ -586,12 +716,14 @@ export const MessagesAnalytics = (() => {
      * Extract non-self participants from a message row.
      * Combines FROM and TO sides and counts each person once per row.
      *
-     * @param {object} row - Message row
-     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
-     * @returns {Array<{name: string, url: string}>}
+     * @param {MessageRow} row - Message row
+     * @param {SelfContext} context - Self context
+     * @returns {Participant[]}
      */
     function extractParticipantsFromRow(row, context) {
+        /** @type {Participant[]} */
         const participants = [];
+        /** @type {Set<string>} */
         const seenKeys = new Set();
 
         const sender = {
@@ -618,10 +750,10 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Append a participant when valid for analytics.
-     * @param {{name: string, url: string}} contact - Contact candidate
-     * @param {Array<{name: string, url: string}>} participants - Output array
+     * @param {Participant} contact - Contact candidate
+     * @param {Participant[]} participants - Output array
      * @param {Set<string>} seenKeys - De-dupe keys for this row
-     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
+     * @param {SelfContext} context - Self context
      */
     function addParticipant(contact, participants, seenKeys, context) {
         const sanitized = sanitizeParticipant(contact, context);
@@ -640,9 +772,9 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Sanitize participant and drop self/anonymous/blank contacts.
-     * @param {{name: string, url: string}} contact - Contact candidate
-     * @param {{selfUrls: Set<string>, selfNames: Set<string>}} context - Self context
-     * @returns {{name: string, url: string}|null}
+     * @param {Participant} contact - Contact candidate
+     * @param {SelfContext} context - Self context
+     * @returns {Participant|null}
      */
     function sanitizeParticipant(contact, context) {
         const name = cleanText(contact.name);
@@ -695,7 +827,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Parse a local date-only or date-time string ("YYYY-MM-DD" or "YYYY-MM-DD HH:MM[:SS]").
-     * @param {string} value - Date string
+     * @param {unknown} value - Date string
      * @returns {Date|null}
      */
     function parseDateTime(value) {
@@ -705,7 +837,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Parse date-only string in YYYY-MM-DD format.
-     * @param {string} value - Date string
+     * @param {unknown} value - Date string
      * @returns {Date|null}
      */
     function parseDateOnly(value) {
@@ -716,7 +848,7 @@ export const MessagesAnalytics = (() => {
      * Parse recipient names from TO field.
      * Uses URL count to avoid splitting single names that contain commas.
      *
-     * @param {string} value - Raw TO field
+     * @param {unknown} value - Raw TO field
      * @param {number} recipientUrlCount - Parsed recipient URL count
      * @returns {string[]}
      */
@@ -735,7 +867,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Normalize URL values and extract first LinkedIn URL.
-     * @param {string} value - Raw URL field
+     * @param {unknown} value - Raw URL field
      * @returns {string}
      */
     function normalizeUrl(value) {
@@ -774,7 +906,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Normalize a URL field containing one or more URLs.
-     * @param {string} value - Raw URL field
+     * @param {unknown} value - Raw URL field
      * @returns {string[]}
      */
     function normalizeUrlList(value) {
@@ -784,7 +916,9 @@ export const MessagesAnalytics = (() => {
         }
 
         const matches = text.match(/https?:\/\/[^\s,;]+/gi) || [];
+        /** @type {string[]} */
         const normalized = [];
+        /** @type {Set<string>} */
         const seen = new Set();
         matches.forEach(match => {
             const candidate = normalizeUrl(match);
@@ -799,7 +933,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Normalize names for matching.
-     * @param {string} value - Raw name
+     * @param {unknown} value - Raw name
      * @returns {string}
      */
     function normalizeName(value) {
@@ -834,6 +968,7 @@ export const MessagesAnalytics = (() => {
      * @returns {string|null}
      */
     function pickMostFrequentKey(counts) {
+        /** @type {string|null} */
         let bestKey = null;
         let bestCount = -1;
 

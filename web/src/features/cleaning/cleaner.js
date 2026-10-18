@@ -26,13 +26,77 @@ import {
     removeIllegalChars,
 } from "./field-cleaners.js";
 
+/** @typedef {import("./configs.js").FileType} FileType */
+/** @typedef {import("./configs.js").CleanerConfig} CleanerConfig */
+/** @typedef {import("./csv-parser.js").CsvRowParser} CsvRowParser */
+
+/**
+ * One parsed CSV data row, keyed by normalized header. Null-prototype object.
+ * @typedef {Record<string, string>} CsvRecord
+ */
+
+/**
+ * One cleaned row, keyed by the file type's configured column names.
+ * @typedef {Record<string, string>} CleanedRow
+ */
+
+/**
+ * Result of LinkedInCleaner.parseCSV().
+ * @typedef {object} ParsedCsv
+ * @property {string[]} headers - Normalized header names
+ * @property {CsvRecord[]} data - Data rows
+ * @property {string|null} error - Parse error, or null on success
+ */
+
+/**
+ * Result of LinkedInCleaner.validateColumns().
+ * @typedef {object} ColumnValidation
+ * @property {boolean} valid - Whether every required column is present
+ * @property {string[]} missing - Missing required columns
+ */
+
+/**
+ * Result of LinkedInCleaner.process() and of a stream processor's finish().
+ * @typedef {object} ProcessResult
+ * @property {boolean} success - Whether the file parsed, validated, and cleaned
+ * @property {string|null} fileType - Type processed as (requested type on a mismatch), or null
+ * @property {FileType|null} detectedType - Type detected from the headers, or null
+ * @property {string[]} headers - Normalized CSV headers
+ * @property {CleanedRow[]} cleanedData - Cleaned rows (empty on failure)
+ * @property {number} rowCount - Cleaned row count, or parsed row count on failure
+ * @property {string|null} error - User-facing error, or null on success
+ */
+
+/**
+ * Incremental processor returned by LinkedInCleaner.createStreamProcessor().
+ * @typedef {object} StreamProcessor
+ * @property {(text: string) => void} push - Feed the next text chunk
+ * @property {() => ProcessResult|null} finish - Successful result, or null to use process()
+ */
+
+/**
+ * One column's cleaning step.
+ * @typedef {object} CleaningStep
+ * @property {string} name - Column name
+ * @property {import("./field-cleaners.js").Cleaner} clean - Cell cleaner
+ */
+
+/** @typedef {(row: CsvRecord) => CleanedRow|null} RowCleaner */
+
+/**
+ * Display labels, indexable by an arbitrary (possibly unknown) type string.
+ * @type {Readonly<Record<string, string|undefined>>}
+ */
+const TYPE_LABELS = FILE_TYPE_LABELS;
+
+/** @type {Readonly<Record<string, readonly CleaningStep[]>>} */
 const CLEANING_PLANS = Object.freeze(
     Object.fromEntries(
         FILE_TYPES.map((fileType) => [
             fileType,
             CONFIGS[fileType].columns.map((column) => ({
                 name: column.name,
-                clean: CLEANERS[column.cleaner] || cleanValue,
+                clean: (column.cleaner && CLEANERS[column.cleaner]) || cleanValue,
             })),
         ]),
     ),
@@ -53,8 +117,8 @@ export const LinkedInCleaner = (() => {
 
     /**
      * Check if all required columns in a row have non-missing values.
-     * @param {object} row - Row object
-     * @param {string[]} requiredColumns - Columns that must be present
+     * @param {CleanedRow} row - Row object
+     * @param {readonly string[]} requiredColumns - Columns that must be present
      * @returns {boolean}
      */
     function hasRequiredRowValues(row, requiredColumns) {
@@ -68,8 +132,8 @@ export const LinkedInCleaner = (() => {
 
     /**
      * Check if at least one column has a non-missing value.
-     * @param {object} row - Row object
-     * @param {string[]} columns - Columns to scan
+     * @param {CleanedRow} row - Row object
+     * @param {readonly string[]} columns - Columns to scan
      * @returns {boolean}
      */
     function hasAnyRowValue(row, columns) {
@@ -140,7 +204,10 @@ export const LinkedInCleaner = (() => {
      */
     function getParseCacheKey(fileType) {
         const config = CONFIGS[fileType] || null;
-        const skipRows = config && Number.isInteger(config.skipRows) ? config.skipRows : 0;
+        const skipRows =
+            config && Number.isInteger(config.skipRows)
+                ? /** @type {number} */ (config.skipRows)
+                : 0;
         const optionsKey = fileType === "comments" ? "comments" : "default";
         return `${optionsKey}:${skipRows}`;
     }
@@ -149,15 +216,19 @@ export const LinkedInCleaner = (() => {
      * Parse CSV text into array of objects
      * @param {string} csvText - Raw CSV text
      * @param {string} [fileType='auto'] - Target file type for CSV options and skip rows
-     * @param {Map<string, object>|null} [parseCache=null] - Optional parse cache map
-     * @returns {{headers: string[], data: object[], error: string|null}}
+     * @param {Map<string, ParsedCsv>|null} [parseCache=null] - Optional parse cache map
+     * @returns {ParsedCsv}
      */
     function parseCSV(csvText, fileType = "auto", parseCache = null) {
         const cacheKey = parseCache ? getParseCacheKey(fileType) : null;
         if (parseCache && cacheKey && parseCache.has(cacheKey)) {
-            return parseCache.get(cacheKey);
+            return /** @type {ParsedCsv} */ (parseCache.get(cacheKey));
         }
 
+        /**
+         * @param {ParsedCsv} result - Parse result to cache
+         * @returns {ParsedCsv} The same result
+         */
         const finish = (result) => {
             if (parseCache && cacheKey) {
                 parseCache.set(cacheKey, result);
@@ -180,7 +251,10 @@ export const LinkedInCleaner = (() => {
         }
 
         const config = CONFIGS[fileType] || null;
-        const skipRows = config && Number.isInteger(config.skipRows) ? config.skipRows : 0;
+        const skipRows =
+            config && Number.isInteger(config.skipRows)
+                ? /** @type {number} */ (config.skipRows)
+                : 0;
         const rowsAfterSkip = skipRows > 0 ? rows.slice(skipRows) : rows;
         if (!rowsAfterSkip.length) {
             return finish({
@@ -205,6 +279,7 @@ export const LinkedInCleaner = (() => {
         }
 
         const headerCount = headers.length;
+        /** @type {CsvRecord[]} */
         const data = [];
         for (let r = 1; r < rowsAfterSkip.length; r += 1) {
             const row = rowsAfterSkip[r];
@@ -220,6 +295,7 @@ export const LinkedInCleaner = (() => {
             }
             // Null-prototype object: CSV headers are user-controlled, so keys
             // like "__proto__" must not mutate the prototype chain.
+            /** @type {CsvRecord} */
             const record = Object.create(null);
             for (let c = 0; c < headerCount; c += 1) {
                 const value = row[c];
@@ -234,7 +310,7 @@ export const LinkedInCleaner = (() => {
     /**
      * Auto-detect file type based on column headers
      * @param {string[]} headers - Array of column headers
-     * @returns {string|null} File type or null if unknown
+     * @returns {FileType|null} File type or null if unknown
      */
     function detectFileType(headers) {
         const normalizedHeaders = normalizeHeaders(headers);
@@ -249,10 +325,11 @@ export const LinkedInCleaner = (() => {
     /**
      * Find all supported file types that can parse and validate the given CSV text.
      * @param {string} csvText - Raw CSV text
-     * @param {Map<string, object>|null} [parseCache=null] - Optional parse cache map
-     * @returns {Array<{type: string, headers: string[], data: object[]}>}
+     * @param {Map<string, ParsedCsv>|null} [parseCache=null] - Optional parse cache map
+     * @returns {Array<{type: FileType, headers: string[], data: CsvRecord[]}>}
      */
     function detectMatchingFileTypes(csvText, parseCache = null) {
+        /** @type {Array<{type: FileType, headers: string[], data: CsvRecord[]}>} */
         const matches = [];
         for (const type of FILE_TYPES) {
             const parsed = parseCSV(csvText, type, parseCache);
@@ -276,8 +353,8 @@ export const LinkedInCleaner = (() => {
      * Detect a supported type other than the one selected by the user.
      * @param {string} csvText - Raw CSV text
      * @param {string} selectedType - Type selected by the user
-     * @param {Map<string, object>} parseCache - Full-file parse cache
-     * @returns {string|null} First alternate type, or null when none matches
+     * @param {Map<string, ParsedCsv>} parseCache - Full-file parse cache
+     * @returns {FileType|null} First alternate type, or null when none matches
      */
     function detectAlternateFileType(csvText, selectedType, parseCache) {
         return (
@@ -299,10 +376,11 @@ export const LinkedInCleaner = (() => {
      * multi-type detection in the caller, and the full parse still validates
      * every row, so a match here only picks the type.
      * @param {string} csvText - Raw CSV text
-     * @returns {string|null} Detected file type, or null if unknown from the prefix
+     * @returns {FileType|null} Detected file type, or null if unknown from the prefix
      */
     function detectTypeFromPrefix(csvText) {
         const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
+        /** @type {Map<object, string[][]|null>} */
         const rowsByOptions = new Map();
         for (const type of FILE_TYPES) {
             const csvOptions = type === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
@@ -310,7 +388,9 @@ export const LinkedInCleaner = (() => {
                 rowsByOptions.set(csvOptions, readPrefixRows(prefix, csvOptions));
             }
             const rows = rowsByOptions.get(csvOptions);
-            const skipRows = Number.isInteger(CONFIGS[type].skipRows) ? CONFIGS[type].skipRows : 0;
+            const skipRows = Number.isInteger(CONFIGS[type].skipRows)
+                ? /** @type {number} */ (CONFIGS[type].skipRows)
+                : 0;
             if (!rows || rows.length <= skipRows) {
                 continue;
             }
@@ -333,6 +413,7 @@ export const LinkedInCleaner = (() => {
      * @returns {string[][]|null} Complete rows, or null when the prefix will not parse
      */
     function readPrefixRows(prefix, csvOptions) {
+        /** @type {string[][]} */
         const rows = [];
         const parser = createCsvRowParser(csvOptions, (row) => rows.push(row));
         return parser.push(prefix) ? null : rows;
@@ -342,7 +423,7 @@ export const LinkedInCleaner = (() => {
      * Validate that required columns exist in the data
      * @param {string[]} headers - Array of column headers
      * @param {string} fileType - Supported file type
-     * @returns {{valid: boolean, missing: string[]}}
+     * @returns {ColumnValidation}
      */
     function validateColumns(headers, fileType) {
         const config = CONFIGS[fileType];
@@ -362,8 +443,8 @@ export const LinkedInCleaner = (() => {
 
     /**
      * Build a function that cleans one parsed row for a file type.
-     * @param {string} fileType - Supported file type
-     * @returns {(row: object) => object|null} Cleaned row, or null when the row is dropped
+     * @param {FileType} fileType - Supported file type
+     * @returns {RowCleaner} Cleans a row, returning null when the row is dropped
      */
     function createRowCleaner(fileType) {
         const config = CONFIGS[fileType];
@@ -376,6 +457,7 @@ export const LinkedInCleaner = (() => {
             : [];
 
         return (row) => {
+            /** @type {CleanedRow} */
             const cleanedRow = {};
             for (const column of cleaningPlan) {
                 const cleanedValue = column.clean(row[column.name]);
@@ -397,9 +479,9 @@ export const LinkedInCleaner = (() => {
 
     /**
      * Clean the parsed data based on file type
-     * @param {object[]} data - Parsed CSV data as array of objects
+     * @param {CsvRecord[]} data - Parsed CSV data as array of objects
      * @param {string} fileType - Supported file type
-     * @returns {object[]} Cleaned data
+     * @returns {CleanedRow[]} Cleaned data
      */
     function cleanData(data, fileType) {
         // process() validates the file type before cleaning. Keep the branch for an unknown type.
@@ -409,7 +491,8 @@ export const LinkedInCleaner = (() => {
         }
 
         // Clean and filter in a single pass to avoid intermediate arrays.
-        const cleanRow = createRowCleaner(fileType);
+        const cleanRow = createRowCleaner(/** @type {FileType} */ (fileType));
+        /** @type {CleanedRow[]} */
         const cleanedRows = [];
         for (const row of data) {
             const cleanedRow = cleanRow(row);
@@ -425,21 +508,21 @@ export const LinkedInCleaner = (() => {
      * Build a user-friendly error message for column validation failures.
      * @param {string} selectedType - The file type selected by the user ('shares', 'comments', 'messages', 'connections', or 'auto')
      * @param {string|null} detectedType - The auto-detected file type, or null
-     * @param {string[]} missing - List of missing required column names
+     * @param {readonly string[]} missing - List of missing required column names
      * @returns {string} Descriptive error message
      */
     function buildColumnErrorMessage(selectedType, detectedType, missing) {
         if (selectedType !== "auto" && detectedType && detectedType !== selectedType) {
             // Known file types have labels. Fall back to the type name for malformed config.
             /* v8 ignore next 2 */
-            const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
-            const detectedLabel = FILE_TYPE_LABELS[detectedType] || detectedType;
+            const selectedLabel = TYPE_LABELS[selectedType] || selectedType;
+            const detectedLabel = TYPE_LABELS[detectedType] || detectedType;
             return `This looks like a ${detectedLabel} file, but you selected ${selectedLabel}. Please switch to "${detectedLabel}" or "Auto-detect".`;
         }
 
         if (selectedType !== "auto" && !detectedType) {
             /* v8 ignore next */
-            const selectedLabel = FILE_TYPE_LABELS[selectedType] || selectedType;
+            const selectedLabel = TYPE_LABELS[selectedType] || selectedType;
             return `This file doesn't appear to be a LinkedIn ${selectedLabel} export. Missing columns: ${missing.join(", ")}. Please check that you uploaded the correct file.`;
         }
 
@@ -453,8 +536,8 @@ export const LinkedInCleaner = (() => {
      * Build a standardized process() result object.
      * @param {boolean} success - Whether processing succeeded
      * @param {string|null} error - Error message, or null on success
-     * @param {object} [overrides] - Fields that differ from the empty defaults
-     * @returns {object}
+     * @param {Partial<ProcessResult>} [overrides] - Fields that differ from the empty defaults
+     * @returns {ProcessResult}
      */
     function makeResult(success, error, overrides = {}) {
         return {
@@ -472,8 +555,8 @@ export const LinkedInCleaner = (() => {
     /**
      * Try the large-file prefix-detection fast path.
      * @param {unknown} csvText - Raw CSV text
-     * @param {Map<string, object>} parseCache - Full-file parse cache
-     * @returns {object|null} Successful process result, or null to use full detection
+     * @param {Map<string, ParsedCsv>} parseCache - Full-file parse cache
+     * @returns {ProcessResult|null} Successful process result, or null to use full detection
      */
     function processPrefixMatch(csvText, parseCache) {
         if (typeof csvText !== "string" || csvText.length <= PREFIX_DETECT_CHARS) {
@@ -504,9 +587,10 @@ export const LinkedInCleaner = (() => {
      * Process a CSV file completely
      * @param {string} csvText - Raw CSV text
      * @param {string} fileType - Supported file type or 'auto'
-     * @returns {object}
+     * @returns {ProcessResult}
      */
     function process(csvText, fileType = "auto") {
+        /** @type {Map<string, ParsedCsv>} */
         const parseCache = new Map();
 
         if (fileType === "auto") {
@@ -602,21 +686,28 @@ export const LinkedInCleaner = (() => {
      * would for a successful file. On any error or ambiguity it returns null,
      * and the caller runs process() on the full text, so failures and their
      * messages stay identical.
-     * @returns {{push: (text: string) => void, finish: () => object|null}}
+     * @returns {StreamProcessor}
      */
     function createStreamProcessor() {
         let prefix = "";
+        /** @type {FileType|null} */
         let fileType = null;
+        /** @type {CsvRowParser|null} */
         let parser = null;
         let failed = false;
         let skipRows = 0;
         let rowIndex = 0;
+        /** @type {string[]|null} */
         let headers = null;
+        /** @type {RowCleaner|null} */
         let cleanRow = null;
+        /** @type {CleanedRow[]} */
         const cleanedData = [];
 
         // Mirrors parseCSV(): skip rows, read and check the header, then build
         // and clean one record per non-empty data row.
+        // onRow only runs once startParsing() has set fileType and cleanRow.
+        /** @param {string[]} row */
         const onRow = (row) => {
             if (failed) {
                 return;
@@ -633,7 +724,7 @@ export const LinkedInCleaner = (() => {
                 if (
                     normalized.every((header) => header === "") ||
                     findDuplicateHeaders(normalized).length ||
-                    !validateColumns(normalized, fileType).valid
+                    !validateColumns(normalized, /** @type {FileType} */ (fileType)).valid
                 ) {
                     failed = true;
                     return;
@@ -649,12 +740,13 @@ export const LinkedInCleaner = (() => {
                 return;
             }
             // Null-prototype object, as in parseCSV().
+            /** @type {CsvRecord} */
             const record = Object.create(null);
             for (let c = 0; c < headers.length; c += 1) {
                 const value = row[c];
                 record[headers[c]] = value !== undefined ? value : "";
             }
-            const cleanedRow = cleanRow(record);
+            const cleanedRow = /** @type {RowCleaner} */ (cleanRow)(record);
             if (cleanedRow) {
                 cleanedData.push(cleanedRow);
             }
@@ -667,7 +759,9 @@ export const LinkedInCleaner = (() => {
                 return;
             }
             const config = CONFIGS[fileType];
-            skipRows = Number.isInteger(config.skipRows) ? config.skipRows : 0;
+            skipRows = Number.isInteger(config.skipRows)
+                ? /** @type {number} */ (config.skipRows)
+                : 0;
             cleanRow = createRowCleaner(fileType);
             const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
             parser = createCsvRowParser(csvOptions, onRow);
@@ -677,6 +771,7 @@ export const LinkedInCleaner = (() => {
             prefix = "";
         };
 
+        /** @param {string} text */
         const push = (text) => {
             if (failed) {
                 return;
@@ -701,7 +796,7 @@ export const LinkedInCleaner = (() => {
                 return null;
             }
             // Flushing the last row can also fail it, so check again afterward.
-            const parseError = parser.finish();
+            const parseError = /** @type {CsvRowParser} */ (parser).finish();
             // Detection found a header row, so headers is always set by now.
             if (parseError || failed || /* v8 ignore next */ !headers) {
                 return null;

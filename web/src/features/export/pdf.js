@@ -30,8 +30,29 @@ const OVERLAY_SOURCE = "pdf-export";
 const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
 const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), [href]";
 
+/**
+ * The export's DOM nodes, once `init()` has found every required one.
+ * @typedef {object} ExportElements
+ * @property {HTMLElement} trigger - Export button
+ * @property {HTMLElement|null} hint - Disabled-state hint
+ * @property {HTMLElement} backdrop - Dialog backdrop
+ * @property {HTMLElement} dialog - Confirmation dialog
+ * @property {HTMLInputElement} includeNames - Names opt-in
+ * @property {HTMLInputElement} includeMessages - Message contents opt-in
+ * @property {HTMLElement} error - Error message slot
+ * @property {HTMLElement} status - Live status slot
+ * @property {HTMLElement} cancel - Cancel button
+ * @property {HTMLButtonElement} confirm - Generate button
+ */
+
+/**
+ * The same nodes as looked up, before anything is known to exist.
+ * @typedef {{[K in keyof ExportElements]: ExportElements[K]|null}} ResolvedElements
+ */
+
 // These nodes are read without a null check. `hint` is excluded because every
 // use of it already checks for null.
+/** @type {ReadonlyArray<keyof ResolvedElements>} */
 const REQUIRED_ELEMENTS = Object.freeze([
     "trigger",
     "backdrop",
@@ -52,7 +73,9 @@ const GENERIC_ERROR = "Something went wrong while building the PDF. Please try a
 export const PdfExport = (() => {
     "use strict";
 
-    let elements = null;
+    // Every function that reads this runs only after init() has assigned it, so
+    // it is typed as the assigned value rather than as the null it starts as.
+    let elements = /** @type {ExportElements} */ (/** @type {unknown} */ (null));
     let initialized = false;
     let isOpen = false;
     let isGenerating = false;
@@ -81,7 +104,7 @@ export const PdfExport = (() => {
 
     /**
      * Resolve the DOM elements used by the export.
-     * @returns {object} Element references
+     * @returns {ResolvedElements} Element references
      */
     function resolveElements() {
         return {
@@ -98,7 +121,9 @@ export const PdfExport = (() => {
             error: document.getElementById("pdfExportDialogError"),
             status: document.getElementById("pdfExportDialogStatus"),
             cancel: document.getElementById("pdfExportCancelBtn"),
-            confirm: document.getElementById("pdfExportConfirmBtn"),
+            confirm: /** @type {HTMLButtonElement|null} */ (
+                document.getElementById("pdfExportConfirmBtn")
+            ),
         };
     }
 
@@ -115,7 +140,8 @@ export const PdfExport = (() => {
             return;
         }
 
-        elements = resolved;
+        // Every required node was checked just above.
+        elements = /** @type {ExportElements} */ (resolved);
         initialized = true;
         elements.trigger.addEventListener("click", open);
         elements.cancel.addEventListener("click", close);
@@ -128,7 +154,8 @@ export const PdfExport = (() => {
         document.addEventListener("keydown", handleKeydown);
 
         DataCache.subscribe((event) => {
-            if (event && CACHE_EVENTS.has(event.type)) {
+            const change = /** @type {{type: string}|null} */ (event);
+            if (change && CACHE_EVENTS.has(change.type)) {
                 refreshAvailability();
             }
         });
@@ -235,7 +262,7 @@ export const PdfExport = (() => {
      * which focus() silently refuses. Testing for it dropped the user at the top
      * of the page instead of back on the button they came from.
      * @param {HTMLElement|null} node - Node recorded when the dialog opened
-     * @returns {boolean} True when focusing it would land somewhere useful
+     * @returns {node is HTMLElement} True when focusing it would land somewhere useful
      */
     function canRestoreFocus(node) {
         return Boolean(

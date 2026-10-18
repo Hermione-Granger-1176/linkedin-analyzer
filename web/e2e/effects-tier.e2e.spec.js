@@ -37,11 +37,13 @@ async function countWebglRequests(page) {
             /** @type {unknown} */ (window)
         );
         globalWindow.__webglRequests = 0;
+        /** @param {{ getContext: (...args: never[]) => unknown } | null} proto */
         const wrap = (proto) => {
             if (!proto) {
                 return;
             }
             const original = proto.getContext;
+            /** @this {unknown} */
             proto.getContext = function getContext(type, ...rest) {
                 if (String(type).startsWith("webgl")) {
                     globalWindow.__webglRequests += 1;
@@ -72,7 +74,7 @@ function readAnimatedProperties(page) {
     );
 }
 
-const isCompositorOnly = (name) => name === "transform" || name === "opacity";
+const isCompositorOnly = (/** @type {string} */ name) => name === "transform" || name === "opacity";
 
 /**
  * Read how many WebGL contexts the page has asked for.

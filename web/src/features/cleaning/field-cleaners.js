@@ -37,6 +37,7 @@ const MISSING_STRINGS = new Set([
 // upper bound so isMissing can skip the uppercase + Set lookup for longer values.
 const MISSING_MAX_LENGTH = Math.max(...Array.from(MISSING_STRINGS, (s) => s.length));
 
+/** @type {Readonly<Record<string, string>>} */
 const CONNECTION_MONTH_LOOKUP = Object.freeze({
     jan: "01",
     january: "01",
@@ -66,7 +67,7 @@ const CONNECTION_MONTH_LOOKUP = Object.freeze({
 /**
  * Check if a value is missing (null, undefined, empty, or 'NA')
  * Port of: is_missing() from text.py
- * @param {*} value - Value to check
+ * @param {unknown} value - Value to check
  * @returns {boolean}
  */
 export function isMissing(value) {
@@ -101,7 +102,7 @@ export function isMissing(value) {
  * - Converts CSV line break patterns ("\n") to actual newlines
  * - Converts escaped quotes ("") to single quotes (")
  *
- * @param {*} value - Raw value from CSV
+ * @param {unknown} value - Raw value from CSV
  * @returns {string} Cleaned string
  */
 function cleanSharesCommentary(value) {
@@ -135,7 +136,7 @@ function cleanSharesCommentary(value) {
  * - Converts double-double quotes ("") to regular quotes (")
  * - Preserves line breaks
  *
- * @param {*} value - Raw value from CSV
+ * @param {unknown} value - Raw value from CSV
  * @returns {string} Cleaned string
  */
 function cleanEscapedQuotesText(value) {
@@ -157,7 +158,7 @@ function cleanEscapedQuotesText(value) {
  * Clean Message field from LinkedIn Comments export.
  * Port of: clean_comments_message() from text.py
  *
- * @param {*} value - Raw value from CSV
+ * @param {unknown} value - Raw value from CSV
  * @returns {string} Cleaned string
  */
 function cleanCommentsMessage(value) {
@@ -168,7 +169,7 @@ function cleanCommentsMessage(value) {
  * Clean CONTENT field from LinkedIn Messages export.
  * Handles quote escaping while preserving line breaks.
  *
- * @param {*} value - Raw value from CSV
+ * @param {unknown} value - Raw value from CSV
  * @returns {string} Cleaned string
  */
 function cleanMessagesContent(value) {
@@ -179,7 +180,7 @@ function cleanMessagesContent(value) {
  * Clean empty or quoted-empty fields.
  * Port of: clean_empty_field() from text.py
  *
- * @param {*} value - Raw value from CSV
+ * @param {unknown} value - Raw value from CSV
  * @returns {string} Empty string if the field is empty/missing, otherwise the cleaned value
  */
 function cleanEmptyField(value) {
@@ -241,7 +242,7 @@ function dateMatchesComponents(utcDate, year, month, day, hour, minute, second) 
  * LinkedIn exports dates in UTC format: "YYYY-MM-DD HH:MM:SS"
  * This converts to local time and returns in the same format.
  *
- * @param {*} value - Raw date value from CSV (UTC)
+ * @param {unknown} value - Raw date value from CSV (UTC)
  * @returns {string} Date string in local timezone (YYYY-MM-DD HH:MM:SS)
  */
 function cleanDate(value) {
@@ -286,7 +287,7 @@ function cleanDate(value) {
 /**
  * Convert LinkedIn Connections date to ISO format.
  *
- * @param {*} value - Raw date value (e.g. "30 Jan 2026")
+ * @param {unknown} value - Raw date value (e.g. "30 Jan 2026")
  * @returns {string} Date string in YYYY-MM-DD format
  */
 function cleanConnectionsDate(value) {
@@ -330,7 +331,7 @@ function cleanConnectionsDate(value) {
 
 /**
  * Clean a generic cell value.
- * @param {*} value - Raw cell value
+ * @param {unknown} value - Raw cell value
  * @returns {string} Trimmed cell value
  */
 export function cleanValue(value) {
@@ -360,6 +361,16 @@ export function escapeFormula(value) {
 export function removeIllegalChars(value) {
     return value.replace(ILLEGAL_XML_CHARS, "");
 }
+
+/**
+ * A cell-level cleaner: takes a raw CSV cell and returns the cleaned string.
+ * @typedef {(value: unknown) => string} Cleaner
+ */
+
+/**
+ * Id of a named cell cleaner, as referenced by a column config's `cleaner` field.
+ * @typedef {keyof typeof CLEANERS} CleanerName
+ */
 
 /** Named cell cleaners referenced by column configs via their string id. */
 export const CLEANERS = Object.freeze({

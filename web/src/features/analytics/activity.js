@@ -17,6 +17,167 @@ import { generateInsights } from "./insights.js";
 import { average, pearson } from "./stats.js";
 import { extractTopics } from "./text.js";
 
+/** @typedef {import("../cleaning/cleaner.js").CleanedRow} CleanedRow */
+/** @typedef {import("../../shared/ui/charts.js").ContentMix} ContentMix */
+/** @typedef {import("../../shared/ui/charts.js").TimelinePoint} TimelinePoint */
+/** @typedef {import("../../shared/ui/charts.js").TopicPoint} TopicPoint */
+
+/** @typedef {{posts: number, comments: number, total: number}} ActivityTotals - Activity counts */
+
+/**
+ * One month of activity as compute() serializes it.
+ * @typedef {object} MonthBucket
+ * @property {number} posts - Posts in the month
+ * @property {number} comments - Comments in the month
+ * @property {number} total - Posts plus comments
+ * @property {Record<string, number>} topics - Topic token counts
+ * @property {number[]} days - Activity per weekday, Monday first (7 entries)
+ * @property {number[]} hours - Activity per hour of day (24 entries)
+ * @property {number[][]} heatmap - Activity per weekday and hour (7 x 24)
+ * @property {ContentMix} shareTypes - Post counts per share type
+ * @property {string[]} activeDays - "YYYY-MM-DD" keys with any activity
+ */
+
+/**
+ * A month bucket after the worker hydrates it, with its active days as a Set.
+ * @typedef {Omit<MonthBucket, "activeDays"> & {activeDays: Set<string>}} HydratedMonthBucket
+ */
+
+/** @typedef {MonthBucket|HydratedMonthBucket} AnyMonthBucket - Serialized or hydrated bucket */
+
+/**
+ * One day of activity in the day index.
+ * @typedef {object} DayBucket
+ * @property {number} posts - Posts that day
+ * @property {number} comments - Comments that day
+ * @property {number} total - Posts plus comments
+ * @property {ContentMix} shareTypes - Post counts per share type
+ */
+
+/**
+ * Lifetime posting-versus-network-growth comparison.
+ * @typedef {object} NetworkGrowth
+ * @property {number} correlation - Pearson correlation, rounded to two places
+ * @property {number} multiplier - Busiest-month average over quiet-month average
+ * @property {number} topAvg - Average new connections in the busiest posting months
+ * @property {number} quietAvg - Average new connections in quiet months
+ * @property {number} months - Overlapping months compared
+ */
+
+/**
+ * The analytics base compute() produces: the aggregate the worker posts and storage keeps.
+ * @typedef {object} AnalyticsBase
+ * @property {Record<string, MonthBucket>} months - Month buckets keyed "YYYY-MM"
+ * @property {Record<string, DayBucket>} dayIndex - Day buckets keyed "YYYY-MM-DD"
+ * @property {string[]} activeDays - "YYYY-MM-DD" keys with any activity
+ * @property {number|null} latestTimestamp - Latest activity (ms), or null when none
+ * @property {number|null} earliestTimestamp - Earliest activity (ms), or null when none
+ * @property {NetworkGrowth|null} networkGrowth - Network-growth comparison, when meaningful
+ * @property {ActivityTotals} totals - Lifetime activity counts
+ */
+
+/**
+ * The analytics base after the worker hydrates it from storage.
+ * @typedef {Omit<AnalyticsBase, "months"|"activeDays"> & {
+ * months: Record<string, HydratedMonthBucket>, activeDays: Set<string>}} HydratedAnalytics
+ */
+
+/**
+ * Filters as the UI sends them, before the worker normalizes them.
+ * @typedef {object} AnalyticsFilterInput
+ * @property {string} [timeRange] - Time range key
+ * @property {string} [topic] - Topic token, or "all"
+ * @property {string|null} [monthFocus] - Single "YYYY-MM" month to show
+ * @property {unknown} [day] - Weekday index, Monday first
+ * @property {unknown} [hour] - Hour of day
+ * @property {string} [shareType] - Share type key ("text", "links", "media"), or "all"
+ */
+
+/**
+ * Normalized filters buildView() applies.
+ * @typedef {object} AnalyticsFilters
+ * @property {string} timeRange - Time range key, e.g. "1m", "12m", or "all"
+ * @property {string} topic - Topic token, or "all"
+ * @property {string|null} monthFocus - Single "YYYY-MM" month to show, or null
+ * @property {number|null} day - Weekday index, Monday first, or null
+ * @property {number|null} hour - Hour of day, or null
+ * @property {string} shareType - Share type key ("text", "links", "media"), or "all"
+ */
+
+/**
+ * Activity trend between the older and recent halves of the timeline.
+ * @typedef {object} ActivityTrend
+ * @property {number} percent - Percent change from the older half
+ * @property {"up"|"down"|"flat"} direction - Trend direction
+ * @property {number} currentCount - Activity in the recent half
+ * @property {number} previousCount - Activity in the older half
+ */
+
+/** @typedef {{from: string, to: string}} TopicShift - Dominant topic change */
+
+/**
+ * Comment-to-post ratio shift between the older and recent halves.
+ * @typedef {object} RatioTrend
+ * @property {"more-engaging"|"more-posting"} direction - Direction of the shift
+ * @property {number} recentRatio - Recent comment-to-post ratio
+ * @property {number} priorRatio - Older comment-to-post ratio
+ */
+
+/**
+ * The filtered view buildView() produces.
+ * @typedef {object} AnalyticsView
+ * @property {TimelinePoint[]} timeline - Monthly or weekly activity points
+ * @property {number} timelineMax - Largest unfiltered bucket value, at least 1
+ * @property {number[][]} heatmap - Activity per weekday and hour (7 x 24)
+ * @property {TopicPoint[]} topics - Top topics, most frequent first
+ * @property {ContentMix} contentMix - Post counts per share type
+ * @property {{current: number, longest: number}} streaks - Activity streaks in days
+ * @property {{hour: number, count: number}} peakHour - Busiest hour of day
+ * @property {{dayIndex: number, count: number}} peakDay - Busiest weekday
+ * @property {ActivityTrend|null} trend - Activity trend, or null with too little data
+ * @property {TopicShift|null} [topicShift] - Dominant topic change, when one shows
+ * @property {RatioTrend|null} [ratioTrend] - Engagement style change, when one shows
+ * @property {NetworkGrowth|null} [networkGrowth] - Lifetime network-growth comparison
+ * @property {ActivityTotals} totals - Filtered activity counts
+ */
+
+/**
+ * One narrative insight card.
+ * @typedef {object} Insight
+ * @property {string} id - Stable insight ID
+ * @property {string} title - Card title
+ * @property {string} body - Card text
+ * @property {string} icon - Icon name
+ * @property {string} accent - Accent class name
+ */
+
+/** @typedef {{insights: Insight[], tip: string|null}} InsightsResult - Cards and closing tip */
+
+/**
+ * The view payload the analytics worker posts: the view with its cache key, and its insights.
+ * @typedef {{view: AnalyticsView & {key: string}, insights: InsightsResult}} AnalyticsViewPayload
+ */
+
+/**
+ * A month bucket while compute() fills it.
+ * @typedef {object} WorkingMonthBucket
+ * @property {number} posts - Posts in the month
+ * @property {number} comments - Comments in the month
+ * @property {number} total - Posts plus comments
+ * @property {Map<string, number>} topics - Topic token counts
+ * @property {number[]} days - Activity per weekday
+ * @property {number[]} hours - Activity per hour of day
+ * @property {number[][]} heatmap - Activity per weekday and hour
+ * @property {ContentMix} shareTypes - Post counts per share type
+ * @property {Set<string>} activeDays - Active "YYYY-MM-DD" keys
+ */
+
+/**
+ * One included month's filtered counts, for the topic-shift and engagement-style cards.
+ * @typedef {{key: string, posts: number, comments: number, topics: Record<string, number>}} MonthlyStat
+ */
+/** @typedef {{topicRatio: number, hourRatio: number}} MonthMeta - Per-month filter ratios */
+
 export const AnalyticsEngine = (() => {
     "use strict";
 
@@ -31,35 +192,49 @@ export const AnalyticsEngine = (() => {
     // A focus shift / engagement-style card needs at least this many active
     // months so the first/last buckets are not built from a single data point.
     const MIN_SHIFT_MONTHS = 6;
+    /** @type {Readonly<Record<string, keyof ContentMix | undefined>>} */
     const SHARE_TYPE_MAP = Object.freeze({ text: "textOnly", links: "links", media: "media" });
+    // Callers pick the key from which of day and hour are set, so the casts hold.
+    /** @typedef {(bucket: AnyMonthBucket, filters: AnalyticsFilters) => number} DimensionCount */
+    /** @type {Readonly<Record<string, DimensionCount>>} */
     const DIMENSION_COUNT_BY_KEY = Object.freeze({
-        both: (bucket, filters) =>
-            (bucket.heatmap[filters.day] && bucket.heatmap[filters.day][filters.hour]) || 0,
-        day: (bucket, filters) => bucket.days[filters.day] || 0,
-        hour: (bucket, filters) => bucket.hours[filters.hour] || 0,
+        both: (bucket, filters) => {
+            const day = /** @type {number} */ (filters.day);
+            const hour = /** @type {number} */ (filters.hour);
+            return (bucket.heatmap[day] && bucket.heatmap[day][hour]) || 0;
+        },
+        day: (bucket, filters) => bucket.days[/** @type {number} */ (filters.day)] || 0,
+        hour: (bucket, filters) => bucket.hours[/** @type {number} */ (filters.hour)] || 0,
     });
 
     /**
      * Pre-compute aggregates during initial load.
      * This creates an indexed structure that allows fast filter lookups:
      * indexing by month and day means view building is O(months) instead of O(events).
-     * @param {object[]|null|undefined} sharesData - Cleaned shares rows
-     * @param {object[]|null|undefined} commentsData - Cleaned comments rows
-     * @param {object[]|null|undefined} connectionsData - Cleaned connections rows
-     * @returns {object} Analytics aggregates and indices
+     * @param {CleanedRow[]|null|undefined} sharesData - Cleaned shares rows
+     * @param {CleanedRow[]|null|undefined} commentsData - Cleaned comments rows
+     * @param {CleanedRow[]|null|undefined} connectionsData - Cleaned connections rows
+     * @returns {AnalyticsBase} Analytics aggregates and indices
      */
     function compute(sharesData, commentsData, connectionsData) {
         // Pre-aggregated indices
-        const monthIndex = new Map(); // monthKey -> { posts, comments, topics: Map, days: Map, hours: Map, shareTypes: Map }
+        /** @type {Map<string, WorkingMonthBucket>} */
+        const monthIndex = new Map();
+        /** @type {Set<string>} */
         const activeDays = new Set();
-        const dayIndex = new Map(); // dateKey -> { posts, comments, total, shareTypes }
+        /** @type {Map<string, DayBucket>} */
+        const dayIndex = new Map();
 
         let latestTimestamp = 0;
         let earliestTimestamp = Infinity;
         let totalPosts = 0;
         let totalComments = 0;
 
-        // Create the month bucket when needed.
+        /**
+         * Create the month bucket when needed.
+         * @param {string} monthKey - "YYYY-MM" month key
+         * @returns {WorkingMonthBucket}
+         */
         function getMonthBucket(monthKey) {
             if (!monthIndex.has(monthKey)) {
                 monthIndex.set(monthKey, {
@@ -74,9 +249,14 @@ export const AnalyticsEngine = (() => {
                     activeDays: new Set(),
                 });
             }
-            return monthIndex.get(monthKey);
+            return /** @type {WorkingMonthBucket} */ (monthIndex.get(monthKey));
         }
 
+        /**
+         * Create the day bucket when needed.
+         * @param {string} dateKey - "YYYY-MM-DD" date key
+         * @returns {DayBucket}
+         */
         function getDayBucket(dateKey) {
             if (!dayIndex.has(dateKey)) {
                 dayIndex.set(dateKey, {
@@ -86,7 +266,7 @@ export const AnalyticsEngine = (() => {
                     shareTypes: { textOnly: 0, links: 0, media: 0 },
                 });
             }
-            return dayIndex.get(dateKey);
+            return /** @type {DayBucket} */ (dayIndex.get(dateKey));
         }
 
         // Process shares
@@ -211,10 +391,11 @@ export const AnalyticsEngine = (() => {
      * Bucket cleaned connection rows into "YYYY-MM" -> new-connection counts.
      * The cleaner emits "Connected On" as an ISO "YYYY-MM-DD" string, so the
      * month key is the first seven characters once both parts are present.
-     * @param {object[]|null|undefined} connectionsData - Cleaned connections rows
+     * @param {CleanedRow[]|null|undefined} connectionsData - Cleaned connections rows
      * @returns {Map<string, number>} Monthly new-connection counts
      */
     function buildMonthlyConnections(connectionsData) {
+        /** @type {Map<string, number>} */
         const monthly = new Map();
         if (!Array.isArray(connectionsData)) {
             return monthly;
@@ -239,9 +420,10 @@ export const AnalyticsEngine = (() => {
      * the busiest posting months against quiet ones. Returns null unless there
      * are enough overlapping months and real posting variance, so the card only
      * fires when the relationship is meaningful.
-     * @param {Map<string, object>} monthIndex - Internal month buckets with post counts (non-empty)
+     * @param {Map<string, {posts: number}>} monthIndex - Internal month buckets with post counts
+     * (non-empty)
      * @param {Map<string, number>} monthlyConnections - Monthly new-connection counts
-     * @returns {{correlation: number, multiplier: number, topAvg: number, quietAvg: number, months: number}|null}
+     * @returns {NetworkGrowth|null}
      */
     function computeNetworkGrowth(monthIndex, monthlyConnections) {
         // Callers only invoke this with a non-empty monthIndex.
@@ -323,8 +505,8 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Get the topic filter ratio for a month bucket. Returns the fraction of activity matching the selected topic.
-     * @param {object} bucket - Month bucket with topics and total count.
-     * @param {object} filters - Active filters including topic.
+     * @param {AnyMonthBucket} bucket - Month bucket with topics and total count.
+     * @param {AnalyticsFilters} filters - Active filters including topic.
      * @returns {number} Ratio between 0 and 1.
      */
     function getTopicRatio(bucket, filters) {
@@ -342,8 +524,8 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Get the hour/day filter ratio for a month bucket. Returns the fraction of activity matching the selected hour and/or day.
-     * @param {object} bucket - Month bucket with hours, days, and heatmap arrays.
-     * @param {object} filters - Active filters including hour and day.
+     * @param {AnyMonthBucket} bucket - Month bucket with hours, days, and heatmap arrays.
+     * @param {AnalyticsFilters} filters - Active filters including hour and day.
      * @returns {number} Ratio between 0 and 1.
      */
     function getHourRatio(bucket, filters) {
@@ -363,8 +545,8 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Apply all active filters (topic, share type, day, hour) to a month bucket and return adjusted counts.
-     * @param {object} bucket - Month bucket with posts, comments, total, and sub-indices.
-     * @param {object} filters - Active filters to apply.
+     * @param {AnyMonthBucket} bucket - Month bucket with posts, comments, total, and sub-indices.
+     * @param {AnalyticsFilters} filters - Active filters to apply.
      * @param {number} topicRatio - Pre-computed topic ratio for this bucket.
      * @param {boolean} hasDay - Whether a day filter is active.
      * @param {boolean} hasHour - Whether an hour filter is active.
@@ -467,9 +649,9 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Build view from pre-computed aggregates - O(months) not O(events)
-     * @param {object|null} analytics - Pre-computed analytics payload
-     * @param {object} filters - Active filter state
-     * @returns {object|null} View model or null when no analytics
+     * @param {AnalyticsBase|HydratedAnalytics|null} analytics - Pre-computed analytics payload
+     * @param {AnalyticsFilters} filters - Active filter state
+     * @returns {AnalyticsView|null} View model or null when no analytics
      */
     function buildView(analytics, filters) {
         if (!analytics || !analytics.months) {
@@ -492,16 +674,21 @@ export const AnalyticsEngine = (() => {
         let posts = 0,
             comments = 0;
         const heatmap = Array.from({ length: 7 }, () => Array(24).fill(0));
+        /** @type {Map<string, number>} */
         const topicCounts = new Map();
         const contentMix = { textOnly: 0, links: 0, media: 0 };
         const hourCounts = Array(24).fill(0);
         const dayCounts = Array(7).fill(0);
+        /** @type {Set<string>} */
         const activeDaysSet = new Set();
+        /** @type {TimelinePoint[]} */
         const timeline = [];
         let timelineMax = 1;
+        /** @type {Record<string, MonthMeta>} */
         const monthMeta = {};
         // Per-included-month posts/comments/topics, used after the loop to derive
         // the topic-shift and engagement-style cards over the active range.
+        /** @type {MonthlyStat[]} */
         const monthlyStats = [];
         const useWeeklyTimeline = Boolean(dayIndex) && WEEKLY_TIME_RANGES.has(filters.timeRange);
         const hasDay = filters.day !== null && filters.day !== undefined;
@@ -644,10 +831,11 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Find the most frequent topic across a slice of monthly stats.
-     * @param {Array<{topics: object}>} monthlyStats - Per-month stats slice
+     * @param {Array<{topics: Record<string, number>}>} monthlyStats - Per-month stats slice
      * @returns {string|null} Top topic token, or null when none
      */
     function topTopicOf(monthlyStats) {
+        /** @type {Map<string, number>} */
         const counts = new Map();
         for (const month of monthlyStats) {
             // Normalized month stats include topics. Treat missing topics as empty.
@@ -671,8 +859,8 @@ export const AnalyticsEngine = (() => {
      * Detect whether the dominant topic changed from the first third of the
      * active range to the last third. Returns null when the range is too short
      * or the top topic is unchanged.
-     * @param {Array<{topics: object}>} monthlyStats - Per-month stats, oldest first
-     * @returns {{from: string, to: string}|null}
+     * @param {Array<{topics: Record<string, number>}>} monthlyStats - Per-month stats, oldest first
+     * @returns {TopicShift|null}
      */
     function computeTopicShift(monthlyStats) {
         if (monthlyStats.length < MIN_SHIFT_MONTHS) {
@@ -689,8 +877,8 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Sum a numeric field across monthly stats.
-     * @param {Array<object>} monthlyStats - Per-month stats slice
-     * @param {string} field - Field name to sum
+     * @param {Array<{posts: number, comments: number}>} monthlyStats - Per-month stats slice
+     * @param {"posts"|"comments"} field - Field name to sum
      * @returns {number}
      */
     function sumField(monthlyStats, field) {
@@ -702,7 +890,7 @@ export const AnalyticsEngine = (() => {
      * halves of the active range. Returns null when there is too little data or
      * the ratio holds steady.
      * @param {Array<{posts: number, comments: number}>} monthlyStats - Per-month stats, oldest first
-     * @returns {{direction: string, recentRatio: number, priorRatio: number}|null}
+     * @returns {RatioTrend|null}
      */
     function computeRatioTrend(monthlyStats) {
         if (monthlyStats.length < MIN_SHIFT_MONTHS) {
@@ -732,11 +920,13 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Build a weekly timeline from the day-level index for the given target months, applying all active filters.
-     * @param {object} dayIndex - Day-level index mapping dateKey to daily counts.
+     * @param {Record<string, DayBucket>} dayIndex - Day-level index mapping dateKey to daily
+     * counts.
      * @param {string[]} targetMonths - Array of "YYYY-MM" month keys to include.
-     * @param {object} filters - Active filters (shareType, day, topic, hour).
-     * @param {object} monthMeta - Per-month metadata with topicRatio and hourRatio.
-     * @returns {{ timeline: Array, timelineMax: number }} Weekly timeline entries and max baseline value.
+     * @param {AnalyticsFilters} filters - Active filters (shareType, day, topic, hour).
+     * @param {Record<string, MonthMeta>} monthMeta - Per-month topicRatio and hourRatio.
+     * @returns {{ timeline: TimelinePoint[], timelineMax: number }} Weekly timeline entries and
+     * max baseline value.
      */
     function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
         /* v8 ignore next 3 */
@@ -751,7 +941,9 @@ export const AnalyticsEngine = (() => {
         const startWeek = startOfWeek(rangeStart);
         const endWeek = startOfWeek(rangeEnd);
 
+        /** @type {TimelinePoint[]} */
         const weeks = [];
+        /** @type {Map<string, number>} */
         const weekIndex = new Map();
         for (let cursor = startWeek; cursor <= endWeek; cursor = addDays(cursor, 7)) {
             const key = formatDateKey(cursor);
@@ -840,7 +1032,7 @@ export const AnalyticsEngine = (() => {
 
     /**
      * Create an empty analytics view with zeroed-out values for all fields.
-     * @returns {object} Empty view object.
+     * @returns {AnalyticsView} Empty view object.
      */
     function createEmptyView() {
         return {
@@ -939,7 +1131,7 @@ export const AnalyticsEngine = (() => {
     /**
      * Compute trend direction by comparing the sum of the recent half of the timeline to the older half.
      * @param {Array<{ value: number }>} timeline - Array of timeline entries with numeric values.
-     * @returns {{ percent: number, direction: string, currentCount: number, previousCount: number } | null} Trend info, or null if insufficient data.
+     * @returns {ActivityTrend | null} Trend info, or null if insufficient data.
      */
     function computeTrendFromTimeline(timeline) {
         if (timeline.length < 2) {

@@ -16,6 +16,40 @@ import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
 
 const ANALYTICS_BASE_CACHE_KEY = "storage:analyticsBase";
 
+/** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
+/** @typedef {import("../messages/analytics.js").OutreachSummary} OutreachSummary */
+
+/**
+ * Lifetime network growth, as an analytics view carries it.
+ * @typedef {{multiplier?: number}} NetworkGrowth
+ */
+
+/**
+ * The parts of a filtered analytics view the export reads.
+ *
+ * It crosses a worker boundary unvalidated, so the fields the export guards are
+ * optional; the plotted series it hands straight to the charts are not.
+ * @typedef {object} ExportAnalyticsView
+ * @property {Array<{key: string, label: string, value: number}>} timeline - Activity timeline, keyed by date
+ * @property {import("./pdf-charts.js").BarItem[]} topics - Top topics
+ * @property {number[][]} heatmap - Day-by-hour activity counts
+ * @property {{posts: number, comments: number, total: number}|null} [totals] - Activity totals
+ * @property {{hour: number}|null} [peakHour] - Busiest hour of the day
+ * @property {{current: number}|null} [streaks] - Activity streaks
+ * @property {NetworkGrowth|null} [networkGrowth] - Lifetime network growth
+ */
+
+/**
+ * The snapshot the Insights screen publishes for the export.
+ * @typedef {object} InsightsSnapshot
+ * @property {string} timeRange - Range key the snapshot describes
+ * @property {import("./pdf-document.js").Insight[]} insights - Insight cards
+ * @property {string|null} tip - Closing tip
+ * @property {NetworkGrowth|null} networkGrowth - Lifetime network growth
+ * @property {OutreachSummary|null} outreach - Persisted outreach summary
+ * @property {ExportAnalyticsView|null} view - Filtered view the cards were built from
+ */
+
 // Stored files that produce a dashboard on their own, without contributing to
 // the analytics base the insight cards are built from.
 const DASHBOARD_FILE_TYPES = new Set(["connections", "messages"]);
@@ -25,9 +59,10 @@ const DASHBOARD_FILE_TYPES = new Set(["connections", "messages"]);
  *
  * The caught value is discarded rather than reported: one of these reads is the
  * stored messages CSV, so a storage error could carry a fragment of it.
- * @param {() => Promise<any>} read - Storage reader
+ * @template T
+ * @param {() => Promise<T>} read - Storage reader
  * @param {string} operation - Fixed identifier for diagnostics
- * @returns {Promise<any>} Stored value, or null when unavailable
+ * @returns {Promise<T|null>} Stored value, or null when unavailable
  */
 export async function readSafely(read, operation) {
     try {
@@ -48,10 +83,12 @@ export async function readSafely(read, operation) {
  * question the same way: a cached base with no months used to make the button
  * read the stored one and say yes, while collection gave up without looking and
  * exported nothing.
- * @returns {Promise<any>} Analytics base carrying months, or null
+ * @returns {Promise<StoredAnalytics|null>} Analytics base carrying months, or null
  */
 export async function readAnalyticsBase() {
-    const cached = DataCache.get(ANALYTICS_BASE_CACHE_KEY);
+    const cached = /** @type {StoredAnalytics|undefined} */ (
+        DataCache.get(ANALYTICS_BASE_CACHE_KEY)
+    );
     if (cached && cached.months) {
         return cached;
     }
@@ -65,10 +102,14 @@ export async function readAnalyticsBase() {
  * Shared with the collection itself for the same reason the analytics base is:
  * one statement of where the summary comes from, and of what it is reported as
  * when the read fails.
- * @returns {Promise<any>} Outreach summary, or null
+ * @returns {Promise<OutreachSummary|null>} Outreach summary, or null
  */
 export function readOutreach() {
-    return readSafely(() => Storage.getOutreach(), "load-outreach");
+    // Stored records are normalized only to plain objects; the summary inside
+    // is the one the messages worker computed.
+    return /** @type {Promise<OutreachSummary|null>} */ (
+        readSafely(() => Storage.getOutreach(), "load-outreach")
+    );
 }
 
 /**
@@ -78,8 +119,8 @@ export function readOutreach() {
  * produce no cards while the all-time stats below them are still populated.
  * Testing the cards alone would send that screen down the cold path and export
  * the default range instead of the one the user has selected.
- * @param {object|null|undefined} snapshot - Published Insights snapshot
- * @returns {boolean} True when the snapshot carries content
+ * @param {InsightsSnapshot|null|undefined} snapshot - Published Insights snapshot
+ * @returns {snapshot is InsightsSnapshot} True when the snapshot carries content
  */
 export function hasSnapshotContent(snapshot) {
     if (!snapshot) {
@@ -100,7 +141,9 @@ export function hasSnapshotContent(snapshot) {
  * @returns {Promise<boolean>} True when a PDF would contain something
  */
 export async function hasExportableData() {
-    const snapshot = DataCache.get(INSIGHTS_EXPORT_CACHE_KEY);
+    const snapshot = /** @type {InsightsSnapshot|undefined} */ (
+        DataCache.get(INSIGHTS_EXPORT_CACHE_KEY)
+    );
     if (hasSnapshotContent(snapshot)) {
         return true;
     }

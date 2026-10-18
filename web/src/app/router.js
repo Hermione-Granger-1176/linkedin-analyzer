@@ -1,15 +1,46 @@
 /* Hash-based SPA router */
 
+/** @typedef {Record<string, string>} RouteParams - Query params of a route state */
+/** @typedef {Record<string, unknown>} RouteParamsInput - Params to navigate with; stringified */
+
+/**
+ * Options a route is registered with.
+ * @typedef {object} RouteOptions
+ * @property {string[]} [sharedParams] - Params shared across routes that opt in
+ * @property {Record<string, unknown>} [defaultParams] - Defaults for shared params
+ */
+
+/**
+ * A route and its query params.
+ * @typedef {object} RouteState
+ * @property {string} name - Route name
+ * @property {RouteParams} params - Query params
+ */
+
+/**
+ * A route change delivered to subscribers.
+ * @typedef {object} RouteChange
+ * @property {RouteState} to - Route now active
+ * @property {RouteState|null} from - Route left, or null on the first change
+ */
+
+/** @typedef {{replaceHistory?: boolean}} NavigateOptions - Navigation options */
+
 export const AppRouter = (() => {
     "use strict";
 
+    /** @type {Map<string, RouteOptions>} */
     const routes = new Map();
+    /** @type {Set<(change: RouteChange) => void>} */
     const listeners = new Set();
+    /** @type {Map<string, RouteParams>} */
     const rememberedParams = new Map();
+    /** @type {Map<string, string>} */
     const sharedParamValues = new Map();
 
     let defaultRoute = "home";
     let started = false;
+    /** @type {RouteState|null} */
     let currentState = null;
 
     /**
@@ -24,7 +55,7 @@ export const AppRouter = (() => {
     /**
      * Register a route.
      * @param {string} name - Route name
-     * @param {object} [options] - Route options
+     * @param {RouteOptions} [options] - Route options
      */
     function registerRoute(name, options) {
         const normalized = normalizeRouteName(name);
@@ -62,8 +93,9 @@ export const AppRouter = (() => {
     /**
      * Navigate to a route and params.
      * @param {string} name - Route name
-     * @param {object|null|undefined} [params] - Query params; undefined reuses last known params for route
-     * @param {{replaceHistory?: boolean}} [options] - Navigation options
+     * @param {RouteParamsInput|null|undefined} [params] - Query params; undefined reuses the
+     * route's last known params
+     * @param {NavigateOptions} [options] - Navigation options
      */
     function navigate(name, params, options) {
         const normalized = normalizeRouteName(name);
@@ -87,8 +119,8 @@ export const AppRouter = (() => {
 
     /**
      * Replace current route params entirely.
-     * @param {object} params - Next full params object
-     * @param {{replaceHistory?: boolean}} [options] - Navigation options
+     * @param {RouteParamsInput} params - Next full params object
+     * @param {NavigateOptions} [options] - Navigation options
      */
     function setParams(params, options) {
         const current = getCurrentRoute();
@@ -102,8 +134,8 @@ export const AppRouter = (() => {
     /**
      * Merge partial params into current route params.
      * Null/empty values remove keys.
-     * @param {object} patch - Partial params
-     * @param {{replaceHistory?: boolean}} [options] - Navigation options
+     * @param {RouteParamsInput} patch - Partial params
+     * @param {NavigateOptions} [options] - Navigation options
      */
     function updateParams(patch, options) {
         const current = getCurrentRoute();
@@ -112,6 +144,7 @@ export const AppRouter = (() => {
             return;
         }
 
+        /** @type {RouteParams} */
         const merged = { ...current.params };
         Object.entries(patch || {}).forEach(([key, value]) => {
             if (isEmptyParamValue(value)) {
@@ -126,7 +159,7 @@ export const AppRouter = (() => {
 
     /**
      * Subscribe to route changes.
-     * @param {function({to: object, from: object|null}): void} listener - Route listener
+     * @param {(change: RouteChange) => void} listener - Route listener
      * @returns {function(): void} Unsubscribe function
      */
     function subscribe(listener) {
@@ -141,7 +174,7 @@ export const AppRouter = (() => {
 
     /**
      * Get the current route state.
-     * @returns {{name: string, params: object}|null}
+     * @returns {RouteState|null}
      */
     function getCurrentRoute() {
         return currentState
@@ -152,7 +185,7 @@ export const AppRouter = (() => {
     /**
      * Parse a hash into route + params.
      * @param {string} hash - Raw hash value
-     * @returns {{name: string, params: object}}
+     * @returns {RouteState}
      */
     function parseHash(hash) {
         const raw = (hash || "").replace(/^#/, "").trim();
@@ -164,6 +197,7 @@ export const AppRouter = (() => {
         const name = normalizeRouteName(parts[0]) || defaultRoute;
         const query = parts.slice(1).join("?");
         const search = new URLSearchParams(query);
+        /** @type {RouteParams} */
         const params = {};
         search.forEach((value, key) => {
             params[key] = value;
@@ -175,7 +209,7 @@ export const AppRouter = (() => {
     /**
      * Build a hash string from route + params.
      * @param {string} name - Route name
-     * @param {object} params - Query params
+     * @param {RouteParamsInput} params - Query params
      * @returns {string}
      */
     function buildHash(name, params) {
@@ -215,8 +249,10 @@ export const AppRouter = (() => {
         rememberSharedParams(currentState);
 
         listeners.forEach(listener => {
+            // Read at call time: a listener that navigates replaces the state.
+            const active = /** @type {RouteState} */ (currentState);
             listener({
-                to: { name: currentState.name, params: { ...currentState.params } },
+                to: { name: active.name, params: { ...active.params } },
                 from: previous
             });
         });
@@ -225,7 +261,7 @@ export const AppRouter = (() => {
     /**
      * Set browser hash from a route state.
      * @param {string} name - Route name
-     * @param {object} params - Query params
+     * @param {RouteParamsInput} params - Query params
      * @param {boolean} replaceHistory - Use replaceState instead of push
      */
     function setHash(name, params, replaceHistory) {
@@ -267,9 +303,9 @@ export const AppRouter = (() => {
     /**
      * Apply shared param values (e.g. time range) for routes that opt in.
      * Explicit params always win.
-     * @param {object} nextParams - Params object that will be navigated to
-     * @param {object} routeOptions - Registered route options
-     * @param {object|null|undefined} providedParams - Original navigate() params argument
+     * @param {RouteParamsInput} nextParams - Params object that will be navigated to
+     * @param {RouteOptions} routeOptions - Registered route options
+     * @param {RouteParamsInput|null|undefined} providedParams - Original navigate() params argument
      */
     function applySharedParams(nextParams, routeOptions, providedParams) {
         const keys = Array.isArray(routeOptions.sharedParams) ? routeOptions.sharedParams : [];
@@ -306,7 +342,7 @@ export const AppRouter = (() => {
 
     /**
      * Remember shared params from the current route for cross-tab reuse.
-     * @param {{name: string, params: object}} state - Current route state
+     * @param {RouteState} state - Current route state
      */
     function rememberSharedParams(state) {
         // state.name identifies a registered route. Keep the fallback for malformed state.
@@ -331,7 +367,7 @@ export const AppRouter = (() => {
 
     /**
      * Get normalized default param value for a route key.
-     * @param {object} routeOptions - Registered route options
+     * @param {RouteOptions} routeOptions - Registered route options
      * @param {string} key - Param key
      * @returns {string|null}
      */
@@ -352,8 +388,8 @@ export const AppRouter = (() => {
 
     /**
      * Compare route states.
-     * @param {{name: string, params: object}|null} left - Previous state
-     * @param {{name: string, params: object}|null} right - Next state
+     * @param {RouteState|null} left - Previous state
+     * @param {RouteState|null} right - Next state
      * @returns {boolean}
      */
     function isSameState(left, right) {

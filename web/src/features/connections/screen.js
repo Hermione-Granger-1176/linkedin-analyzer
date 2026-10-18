@@ -17,6 +17,38 @@ import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 
 import { RANGE_KEYS, buildConnectionsView, normalizeConnectionRows } from "./view.js";
 
+/** @typedef {import("../../app/router.js").RouteParams} RouteParams */
+/** @typedef {import("../../app/worker-contracts.js").ConnectionsWorkerMessage} WorkerMessage */
+/** @typedef {Extract<WorkerMessage, {type: "processed"}>} ProcessedMessage */
+/** @typedef {Extract<WorkerMessage, {type: "error"}>} ErrorMessage */
+/** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
+/** @typedef {import("../../platform/persistence/storage.js").StoredFile} StoredFile */
+/** @typedef {import("./view.js").CleanedConnectionRow} CleanedConnectionRow */
+/** @typedef {import("./view.js").ConnectionRow} ConnectionRow */
+/** @typedef {import("./view.js").ConnectionsAnalytics} ConnectionsAnalytics */
+/** @typedef {import("./view.js").ConnectionsView} ConnectionsView */
+/** @typedef {import("./view.js").GrowthPoint} GrowthPoint */
+/** @typedef {import("./view.js").ViewStats} ViewStats */
+
+/**
+ * DOM elements the connections screen reads and updates.
+ * @typedef {object} ConnectionsElements
+ * @property {NodeListOf<HTMLElement>} timeRangeButtons - Time range filter buttons
+ * @property {HTMLSelectElement|null} timeRangeSelect - Compact time range select
+ * @property {HTMLElement|null} resetFiltersBtn - Reset filters button
+ * @property {HTMLElement} connectionsEmpty - Empty state container
+ * @property {HTMLElement} connectionsGrid - Chart grid
+ * @property {HTMLElement} connectionsStatsGrid - Stats bar
+ * @property {HTMLElement} connStatTotal - Total connections stat
+ * @property {HTMLElement} connStatRecent - Recent connections stat
+ * @property {HTMLElement} connStatTopCompany - Top company stat
+ * @property {HTMLElement} connStatNetworkAge - Network age stat
+ * @property {HTMLCanvasElement} connectionGrowthChart - Growth timeline canvas
+ * @property {HTMLCanvasElement} connectionCompaniesChart - Companies chart canvas
+ * @property {HTMLCanvasElement} connectionPositionsChart - Positions chart canvas
+ * @property {HTMLElement|null} chartTooltip - Shared chart tooltip
+ */
+
 export const ConnectionsPage = (() => {
     "use strict";
 
@@ -26,10 +58,16 @@ export const ConnectionsPage = (() => {
     });
 
     const RANGE_VALUES = new Set(RANGE_KEYS);
+    /** @type {Set<string|undefined>} */
     const CACHE_EVENTS = new Set(["filesChanged", "storageCleared"]);
     const WORKER_TIMEOUT_MS = 30000;
 
-    /** @type {{filters: {timeRange: string}, dataReady: boolean, hasData: boolean, allRows: Array<{connectedOn: number, company: string, position: string}>|null, allTimeline: Array<object>|null, workerStats: {total?: number, networkAgeMonths?: number}|null, currentView: object|null}} */
+    /**
+     * @type {{filters: {timeRange: string}, dataReady: boolean, hasData: boolean,
+     * allRows: ConnectionRow[]|null, allTimeline: GrowthPoint[]|null,
+     * workerStats: {total?: number, networkAgeMonths?: number}|null,
+     * currentView: ConnectionsView|null}}
+     */
     const state = {
         filters: { ...FILTER_DEFAULTS },
         dataReady: false,
@@ -40,14 +78,19 @@ export const ConnectionsPage = (() => {
         currentView: null,
     };
 
-    let elements = null;
+    // Assigned by init() before any handler that reads it can run.
+    /** @type {ConnectionsElements} */
+    let elements;
+    /** @type {HTMLCanvasElement[]} */
     let chartCanvases = [];
     let initialized = false;
     let isApplyingRouteParams = false;
 
+    /** @type {Worker|null} */
     let worker = null;
     let requestId = 0;
     let pendingRequestId = 0;
+    /** @type {number|null} */
     let workerTimeoutId = null;
 
     /** Initialize connections page: bind events, worker, and cache subscription. */
@@ -77,7 +120,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Handle route activation and URL param changes.
-     * @param {object} params - Route query params
+     * @param {RouteParams} params - Route query params
      */
     function onRouteChange(params) {
         if (!initialized) {
@@ -114,10 +157,11 @@ export const ConnectionsPage = (() => {
 
     /**
      * Resolve connections DOM element references.
-     * @returns {object}
+     * @returns {ConnectionsElements}
      */
     function resolveElements() {
-        return {
+        // The connections screen shell provides these nodes; init() checks the grid.
+        return /** @type {ConnectionsElements} */ ({
             timeRangeButtons: document.querySelectorAll("#connectionsTimeRangeButtons .filter-btn"),
             timeRangeSelect: document.getElementById("connectionsTimeRangeSelect"),
             resetFiltersBtn: document.getElementById("connectionsResetFiltersBtn"),
@@ -132,7 +176,7 @@ export const ConnectionsPage = (() => {
             connectionCompaniesChart: document.getElementById("connectionCompaniesChart"),
             connectionPositionsChart: document.getElementById("connectionPositionsChart"),
             chartTooltip: document.getElementById("chartTooltip"),
-        };
+        });
     }
 
     /** Attach event listeners for filters and chart interactions. */
@@ -219,7 +263,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Handle cache notifications from uploads or clear operations.
-     * @param {object} event - Notification payload
+     * @param {{type?: string, fileType?: string}} event - Notification payload
      */
     function handleCacheChange(event) {
         const type = event && event.type;
@@ -314,7 +358,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Load the connections file from DataCache or IndexedDB.
-     * @returns {Promise<object|null>} The stored file record or null
+     * @returns {Promise<StoredUploadFile|null>} The stored file record or null
      */
     async function loadConnectionsFile() {
         const cacheKey = "storage:file:connections";
@@ -338,9 +382,9 @@ export const ConnectionsPage = (() => {
 
     /**
      * Validate one stored connections file record.
-     * @param {object|null} file - Raw storage payload
+     * @param {StoredFile|null} file - Raw storage payload
      * @param {'cache'|'storage'} source - Data source identifier
-     * @returns {object|null}
+     * @returns {StoredUploadFile|null}
      */
     function normalizeConnectionsFile(file, source) {
         if (!file) {
@@ -380,12 +424,6 @@ export const ConnectionsPage = (() => {
         return null;
     }
 
-    /** Worker payload handlers keyed by message type. */
-    const WORKER_MESSAGE_HANDLERS = Object.freeze({
-        processed: handleParsedPayload,
-        error: handleWorkerErrorPayload,
-    });
-
     /**
      * Handle messages received from the connections worker.
      * @param {MessageEvent} event - The message event from the worker
@@ -403,18 +441,16 @@ export const ConnectionsPage = (() => {
         }
 
         const message = parsed.value;
-
-        const handler = WORKER_MESSAGE_HANDLERS[message.type];
-        /* v8 ignore next 3 */
-        if (!handler) {
+        if (message.type === "processed") {
+            handleParsedPayload(message);
             return;
         }
-        handler(message);
+        handleWorkerErrorPayload(message);
     }
 
     /**
      * Process the parsed connections data from the worker.
-     * @param {object} message - Worker message with parsed payload
+     * @param {ProcessedMessage} message - Worker message with parsed payload
      */
     function handleParsedPayload(message) {
         if (message.requestId !== pendingRequestId) {
@@ -439,10 +475,11 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        const analytics = payload.analytics || {};
+        // The worker posts the analytics and rows processConnections() built.
+        const analytics = /** @type {Partial<ConnectionsAnalytics>} */ (payload.analytics || {});
         // The parser returns an array. Keep the fallback for malformed worker data.
         /* v8 ignore next */
-        const rawRows = payload.rows || [];
+        const rawRows = /** @type {CleanedConnectionRow[]} */ (payload.rows || []);
 
         markPerformance("connections:normalize:start");
         const rows = normalizeConnectionRows(rawRows);
@@ -478,7 +515,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Handle error payloads from the worker.
-     * @param {object} message - Worker error message
+     * @param {ErrorMessage} message - Worker error message
      */
     function handleWorkerErrorPayload(message) {
         clearWorkerTimeout();
@@ -544,7 +581,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Render the full connections view: stats, charts, and loading state.
-     * @param {object} view - The computed view data
+     * @param {ConnectionsView} view - The computed view data
      */
     function renderView(view) {
         /* v8 ignore next 6 */
@@ -572,7 +609,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Update the stats bar with current view statistics.
-     * @param {{total: number, recent: number, topCompany: string, networkAge: string}} stats
+     * @param {ViewStats} stats - Stats bar values
      */
     function updateStats(stats) {
         elements.connStatTotal.textContent = stats.total.toLocaleString();
@@ -583,7 +620,7 @@ export const ConnectionsPage = (() => {
 
     /**
      * Draw the growth timeline and company/position bar charts.
-     * @param {object} view - The computed view data
+     * @param {ConnectionsView} view - The computed view data
      */
     function renderCharts(view) {
         SketchCharts.drawTimeline(
@@ -636,7 +673,8 @@ export const ConnectionsPage = (() => {
 
     /** Apply the range chosen from the compact select, ignoring unknown values. */
     function handleTimeRangeSelect() {
-        const range = elements.timeRangeSelect.value;
+        // Bound only when the select exists.
+        const range = /** @type {HTMLSelectElement} */ (elements.timeRangeSelect).value;
         if (!RANGE_VALUES.has(range)) {
             return;
         }

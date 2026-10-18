@@ -9,7 +9,9 @@ import {
 import { watchForJank } from "../../platform/device/jank.js";
 import { setTelemetryEffectsTier } from "../../platform/observability/sentry.js";
 
+/** @type {Readonly<Record<string, string>>} */
 const OVERRIDE_CYCLE = Object.freeze({ auto: "lite", lite: "full", full: "auto" });
+/** @type {Readonly<Record<string, string>>} */
 const OVERRIDE_LABELS = Object.freeze({ auto: "Auto", lite: "Lite", full: "Full" });
 // Busy spans kept for matching late long-frame entries.
 const MAX_BUSY_SPANS = 16;
@@ -35,7 +37,7 @@ export const Effects = (() => {
             const last = busySpans[busySpans.length - 1];
             return last && last.end === Infinity ? last : null;
         };
-        const push = (span) => {
+        const push = (/** @type {{start: number, end: number}} */ span) => {
             busySpans.push(span);
             if (busySpans.length > MAX_BUSY_SPANS) {
                 busySpans.shift();

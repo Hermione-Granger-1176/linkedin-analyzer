@@ -1,6 +1,4 @@
-/* What the decoration layer needs from the visitor's motion preference, in one
-   place, so every drawing that sits out asks the same question the same way,
-   plus the shape every one of Pip's one-shot moments is played in. */
+/* Shared reduced-motion checks and timed mascot animations. */
 
 /**
  * Check whether the visitor asked for reduced motion.
@@ -11,12 +9,10 @@ export function prefersReducedMotion() {
 }
 
 /**
- * Play a one-shot pose: bring the drawing out, replay its move from the start,
- * and put it away again when the move is due to be over.
+ * Show a pose, restart its animation, and hide it after the specified duration.
  *
- * The timer is the backstop rather than animationend: a pose whose screen is
- * hidden underneath it sits in a display:none subtree, where no animation ever
- * ends and the moment would stay on screen for the rest of the session.
+ * A hidden screen has a display:none subtree, where animationend does not fire.
+ * The timer removes the pose even when its animation cannot finish.
  * @param {object} shot - The moment to play.
  * @param {Element} shot.element - The drawing the pose is held in.
  * @param {number} shot.durationMs - How long the pose stays on screen.
@@ -31,8 +27,7 @@ export function playOneShot({ element, durationMs, previousTimer, apply, reset, 
     // The element is an <svg>, and `hidden` is an HTMLElement property: setting
     // it there would never reach the attribute the stylesheet matches on.
     element.removeAttribute("hidden");
-    // Back to a clean slate first, so a second run replays the move instead of
-    // holding the state it is already in.
+    // Reset and force layout so repeated calls restart the animation.
     reset();
     void element.getBoundingClientRect();
     apply();

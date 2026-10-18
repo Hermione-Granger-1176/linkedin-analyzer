@@ -1,8 +1,5 @@
 /**
- * Vitest unit tests for narrative insight-card generation.
- *
- * generateInsights was extracted from analytics.js. It is pure: it maps a
- * already-built view model onto insight cards and a closing tip.
+ * Test insight cards and tips produced from an analytics view without a DOM.
  */
 
 import { describe, expect, it } from "vitest";
@@ -10,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { generateInsights } from "../../../src/features/analytics/insights.js";
 
 /**
- * Build a minimal view model with sensible defaults, overridable per test.
+ * Build a view model with fields that each test can override.
  * @param {object} overrides - Fields to override on the base view
  * @returns {object} View model accepted by generateInsights
  */

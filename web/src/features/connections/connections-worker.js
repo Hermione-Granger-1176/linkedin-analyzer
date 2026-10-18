@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Connections parsing & analytics worker */
+/* LinkedIn Analyzer: Connections parsing & analytics worker */
 
 import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.ts";
 import { serveWorker } from "../../shared/worker-entry.js";

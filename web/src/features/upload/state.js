@@ -1,10 +1,6 @@
 /**
- * Pure file-state and hint helpers for the upload page.
- *
- * These functions build the empty tracked-file map, resolve the upload hint
- * message, test analytics readiness, and map a file type to its cache key. They
- * are stateless and depend only on their arguments, so the UploadPage engine
- * imports them back and they are unit-tested directly in web/tests/features/upload/state.test.js.
+ * Build tracked-file state, choose upload hints, check analytics readiness,
+ * and map file types to cache keys. These helpers hold no page state.
  */
 
 /** @typedef {import("../../app/worker-contracts.ts").StoredUploadFile} StoredUploadFile */

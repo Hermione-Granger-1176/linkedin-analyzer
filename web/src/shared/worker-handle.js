@@ -1,10 +1,8 @@
 /**
- * One long-lived worker and its watchdog, owned by a screen or client.
+ * Manage one lazily created worker and its watchdog.
  *
- * The screens and clients that talk to a worker each carried the same
- * lifecycle: create it lazily with its three listeners, terminate it, and arm or
- * clear one watchdog timer. What a reply means stays with each owner; this is
- * only the plumbing around it.
+ * Attach and remove message, error, and messageerror listeners. The screen
+ * or client owns reply interpretation.
  */
 
 /**

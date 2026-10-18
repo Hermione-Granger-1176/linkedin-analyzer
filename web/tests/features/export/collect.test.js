@@ -126,11 +126,7 @@ const ACTIVITY_VIEW = Object.freeze({
 });
 
 /**
- * Name the twelve-month window a messages dashboard covers.
- *
- * Derived from the same instant the fixtures are dated against rather than
- * written out: the window is anchored on the newest message in the file, so a
- * hard-coded pair of months would start failing in a month nobody chose.
+ * Label the twelve-month window relative to the fixture's latest message.
  * @param {number} latestMs - Newest message in the fixture
  * @returns {string} Window label, as the caption prints it
  */
@@ -155,11 +151,8 @@ function connectedOn(timestamp) {
 }
 
 /**
- * Build a stored connections export, dated relative to now.
- *
- * Relative rather than fixed: "in selected range" and "network age" are both
- * measured against the clock, so hard-coded dates would make this suite start
- * failing on a date nobody chose.
+ * Build a connections CSV dated relative to the test clock.
+ * Range counts and network age depend on that clock.
  * @returns {string} Connections CSV, preamble and all
  */
 function connectionsCsv() {
@@ -194,12 +187,8 @@ function agedConnectionsCsv() {
 }
 
 /**
- * Build what the export's connections transport resolves a CSV with.
- *
- * Run through the same view helpers the transport itself uses rather than
- * written out by hand: the dashboard's stats and charts are aggregated from
- * these rows, and a fixture that invented them would keep passing after the
- * shape the worker answers in changed.
+ * Build a connections transport result through the view helpers.
+ * Keep cleaned rows and aggregates consistent with the worker's result.
  * @param {string} csv - Stored connections CSV
  * @returns {{rows: object[], timeline: object[], stats: object}} Transport result
  */
@@ -213,11 +202,7 @@ function connectionsData(csv) {
 }
 
 /**
- * Find one dashboard in the document by its title.
- *
- * The model carries dashboards in document order rather than a field per
- * screen, and drops the ones that found nothing, so a test that wants a
- * particular page asks for it by name.
+ * Find a dashboard by title, returning null if it was omitted.
  * @param {object} data - Document model
  * @param {string} title - Dashboard title
  * @returns {object|null} Dashboard, or null when the document has none
@@ -227,12 +212,8 @@ function dashboardNamed(data, title) {
 }
 
 /**
- * Build the hydrated state the export's messages transport resolves with.
- *
- * Run through the same hydration the transport itself applies rather than
- * written out by hand: the dashboard reads `contacts` as a Map and the
- * talked-to keys as Sets, and a fixture that skipped that step would keep
- * passing after either shape changed.
+ * Build hydrated messages state with the transport's hydration helpers.
+ * The dashboard expects contacts as a Map and contact keys as Sets.
  * @param {boolean} withConnections - Whether a connections file was parsed too
  * @returns {{messageState: object, connectionState: object|null}} Hydrated state
  */
@@ -428,12 +409,8 @@ describe("collectExportData", () => {
     });
 
     /**
-     * Find the captureError call made for one operation.
-     *
-     * Addressed by operation rather than by index: collection walks several
-     * reads before the one under test, so a diagnostic added anywhere earlier
-     * would silently shift index 0 and the assertions would start describing a
-     * different call while still passing.
+     * Find the diagnostic call for an operation.
+     * Selecting by operation keeps assertions independent of earlier reads.
      * @param {string} operation - Fixed diagnostic operation
      * @returns {[unknown, object]} Reported value and its context
      */
@@ -567,10 +544,8 @@ describe("collectExportData", () => {
     });
 
     it("asks the worker for the range the snapshot is showing", async () => {
-        // An older snapshot carries no view, so the worker supplies the charts -
-        // and has to be asked for the same range the header will print. A
-        // document headed with one window over a chart of another lies about
-        // itself.
+        // Without a cached view, request the same range shown in the snapshot.
+        // The header and charts must describe the same window.
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
             timeRange: "3m",
             insights: [{ title: "Mornings win", body: "…" }],
@@ -1142,9 +1117,7 @@ describe("collectExportData", () => {
     });
 
     it("reads each stored file once and passes the text to every consumer", async () => {
-        // The connections export used to be read and re-read once per consumer,
-        // which is both the slow way round and an odd thing to do alongside a
-        // promise to keep only one copy of it in memory.
+        // Read each stored upload once and share it across consumers.
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
         loadMessagesState.mockResolvedValue(messagesState(true));
         loadConnectionsData.mockResolvedValue(connectionsData(connectionsCsv()));
@@ -1175,11 +1148,8 @@ describe("collectExportData", () => {
 
         const messages = dashboardNamed(await collectExportData({ includeNames: true }), "Messages");
 
-        // Two ranges live on this page, so the caption names both rather than
-        // printing one over the top of the other: on screen each panel carries
-        // its own line of copy saying what it counts, and the page keeps only
-        // the caption. The ranged half names the months it covers, because
-        // "last 12 months" beside a generation date is only true on the day.
+        // The caption includes both the all-time and dated ranges represented
+        // on the messages dashboard.
         expect(messages.subtitle).toBe(
             `Messages and people: ${messageWindowLabel(LAST_MESSAGE_MS)}. ` +
                 "Connections, silent and fading: all time.",
@@ -1265,8 +1235,7 @@ describe("collectExportData", () => {
     });
 
     it("keeps the message counts but no names when the lists were not opted into", async () => {
-        // A file the reader may forward is not the place to put somebody else's
-        // name without being asked; the totals above them are nobody's.
+        // Include named contact lists only after the names opt-in.
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
         loadMessagesState.mockResolvedValue(messagesState(true));
 
@@ -1506,10 +1475,8 @@ describe("collectExportData", () => {
     });
 
     it("passes the connections file through raw as a self-detection tiebreak", async () => {
-        // Raw, and parsed by nobody on this thread: the keys are derived inside
-        // the transport's worker. Reading them out here was the last whole-file
-        // parse the export ran on the UI thread, and it ran on every export that
-        // opted message contents in.
+        // Send the raw connections source to the worker to derive tiebreak keys.
+        // Neither CSV parser entry point may run on the page for this step.
         const connections = [
             // LinkedIn puts three notes rows above the header.
             "Notes:",

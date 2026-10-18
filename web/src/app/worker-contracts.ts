@@ -310,7 +310,7 @@ function normalizeString(value: unknown, maxLength: number): string {
 }
 
 /**
- * Normalize optional string value to bounded string or null.
+ * Normalize an optional string to a bounded string or null.
  * @param value - Raw value
  * @param maxLength - Maximum allowed length
  */
@@ -698,10 +698,8 @@ export function parseThreadsWorkerRequest(
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
     const messages = readCsvField(payload, "messagesCsv", true);
-    // The connections file the worker derives its self-detection tiebreak keys
-    // from. Optional, as it is on the messages worker's own request. Half a
-    // connections file names half the people in it, and the tiebreak would then
-    // be wrong rather than absent, so an oversized one is refused, not truncated.
+    // Reject an oversized optional connections source. Truncation could omit
+    // contacts and change the account-owner tiebreak result.
     const connections = readCsvField(payload, "connectionsCsv", false);
     const error = messages.error || connections.error;
     if (error) {

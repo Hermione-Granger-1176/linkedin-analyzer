@@ -42,12 +42,9 @@ jobs:
           node-version: ""
           install-node-deps: "false"
 
-      # The watchdog writes `checked` itself. It cannot be inferred from an exit
-      # code out here: `make` rewrites every failing recipe's status to 2, so
-      # "found disabled schedules" and "could not check" would arrive identical
-      # even though they pick different alerts. A run that dies before the
-      # watchdog writes anything leaves `checked` unset, which the setup-failure
-      # job already treats the same as false.
+      # The watchdog writes checked because Make maps recipe failures to exit 2.
+      # The output distinguishes disabled schedules from an incomplete check.
+      # An unset output also selects the setup-failure alert.
       - name: Check scheduled workflow enabled states
         id: watchdog
         env:

@@ -451,14 +451,9 @@ describe("selectRecentThreads", () => {
     });
 
     it("does not merge two people in a group that exports only the owner's URL", () => {
-        // The failure this guards is not cosmetic: Carol's private one-to-one
-        // message was printed under Bob Brown's name and Bob's profile URL.
-        //
-        // `parseRecipientNames` collapses the whole TO field into one name when
-        // a row carries at most one recipient URL, which is what a group looks
-        // like when only the owner's URL is exported. That one name resolved to
-        // self and was dropped, leaving one participant per row - the shape of a
-        // one-to-one - so the aliaser lent Bob's URL to every bare name in it.
+        // A group row with only the owner's recipient URL must remain a group.
+        // Collapsing TO names can make it look like a one-to-one conversation
+        // and incorrectly associate Carol's messages with Bob's name and URL.
         const groupRow = (from, url, body, date) =>
             row({
                 FROM: from,
@@ -497,9 +492,8 @@ describe("selectRecentThreads", () => {
     });
 
     it("does not hand self to a contact when the owner never replies", () => {
-        // An inbox nobody has been answered in: Sam sends nothing at all. Making
-        // "sends and receives" a filter dropped Sam from the running entirely,
-        // and Ada then won outright - no tie, so nothing was left to notice it.
+        // Sam has only received messages. Requiring both sent and received
+        // messages would exclude the account owner and select Ada.
         const rows = [
             row({
                 FROM: "Ada",

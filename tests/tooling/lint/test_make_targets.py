@@ -577,11 +577,10 @@ def test_repository_makefile_has_no_unallowlisted_shell_control_flow() -> None:
 
 
 def test_control_flow_allowlist_has_no_unused_entries() -> None:
-    """The allowlist is a ratchet: fixing a target must remove it from the list.
+    """Require every allowlist entry to contain inline shell control flow.
 
-    Without this, an entry outlives the recipe that needed it and quietly
-    re-permits inline shell in a target that had been cleaned up. Every name
-    here has to still be earning its place.
+    An unused entry would permit shell control flow to return after a target
+    had moved that logic into a script.
     """
     content = make_targets.MAKEFILE_PATH.read_text(encoding="utf-8")
     offenders = {

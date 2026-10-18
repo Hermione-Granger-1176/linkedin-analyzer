@@ -78,12 +78,9 @@ const RANGE_DAYS = Object.freeze({
 });
 
 /**
- * Every range key the filter answers to, the unbounded one included.
- *
- * Exported so the screen's buttons are built from the same table that filters
- * by them. Kept apart, a button could offer a range this has no days for, and
- * `filterRowsByRange` would hand back every row: a control that looks like a
- * filter and filters nothing.
+ * Supported range keys, including the unbounded range.
+ * The screen builds its controls from this list so every offered range
+ * has a matching filter definition.
  * @type {readonly string[]}
  */
 export const RANGE_KEYS = Object.freeze([...Object.keys(RANGE_DAYS), "all"]);
@@ -185,11 +182,8 @@ export function buildGrowthTimeline(rows) {
 /* -- Summary stats ----------------------------------------------------------- */
 
 /**
- * Compute the stats that do not depend on the selected time range: the size of
- * the network and its age in whole months. Everything the range does move
- * (recent adds, top company) is computed from the filtered rows by
- * buildConnectionsView below, which takes this result as its starting point.
- *
+ * Compute the total connection count and network age in whole months.
+ * buildConnectionsView computes range-dependent values from filtered rows.
  * @param {CleanedConnectionRow[]} rows - Cleaned connection rows
  * @returns {Readonly<ConnectionStats>}
  */
@@ -346,9 +340,8 @@ export function buildConnectionsView(rows, timeline, workerStats, timeRange) {
     };
 
     return {
-        // Defaulted here rather than at each call site: the screen, the export
-        // and the transport all reached this with their own answer to what an
-        // absent timeline is, and only one of the three wrote it down.
+        // Default a missing timeline here so the screen, PDF export, and transport
+        // use the same empty value.
         timeline: Array.isArray(timeline) ? timeline : [],
         companies,
         positions,

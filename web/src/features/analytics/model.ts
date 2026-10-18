@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Shapes of the activity analytics data */
+/* LinkedIn Analyzer: Shapes of the activity analytics data */
 
 import type { ContentMix, TimelinePoint, TopicPoint } from "../../shared/ui/charts.js";
 

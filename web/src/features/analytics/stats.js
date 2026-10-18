@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics numeric helpers */
+/* LinkedIn Analyzer: Analytics numeric helpers */
 
 /**
  * Compute the Pearson correlation coefficient of two equal-length series.

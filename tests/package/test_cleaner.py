@@ -386,7 +386,7 @@ class TestRunCleaner:
 
     def test_illegal_control_characters_would_break_openpyxl(self) -> None:
         # Guard the premise of the fix: the same value written without stripping
-        # raises IllegalCharacterError, so the strip pass is load-bearing.
+        # raises IllegalCharacterError, so stripping is required for a writable export.
         from openpyxl import Workbook
         from openpyxl.utils.exceptions import IllegalCharacterError
 

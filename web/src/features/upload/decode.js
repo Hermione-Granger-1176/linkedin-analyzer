@@ -1,10 +1,6 @@
 /**
- * Pure byte-decoding and storage-error helpers for the upload page.
- *
- * These functions decode raw file bytes to text, concatenate stream chunks, and
- * classify storage quota errors. They are stateless and depend only on their
- * arguments (plus the shared MAX_CSV_CHARS limit), so the UploadPage engine
- * imports them back and they are unit-tested directly in web/tests/features/upload/decode.test.js.
+ * Decode upload bytes, join stream chunks, and identify storage quota errors.
+ * The helpers depend on their arguments and the shared CSV character limit.
  */
 
 import { MAX_CSV_CHARS } from "../../shared/limits.js";
@@ -43,7 +39,7 @@ export function decodeBytes(bytes, fileName) {
 }
 
 /**
- * Concatenate decoded stream chunks into a single byte array.
+ * Concatenate raw stream byte chunks into a single byte array.
  * @param {Uint8Array[]} chunks - Collected stream chunks
  * @param {number} totalBytes - Sum of all chunk byte lengths
  * @returns {Uint8Array}

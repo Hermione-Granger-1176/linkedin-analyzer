@@ -339,9 +339,8 @@ describe("threads worker listeners", () => {
     }
 
     /**
-     * Serve one thread request first, so each failure test shows a global
-     * failure is still answered under id 0 rather than the id just served: the
-     * export transport reads id 0 as a worker that fell over and falls back.
+     * Serve a request before testing global failures. They must still use id 0,
+     * which permits the export fallback, rather than reuse the served request id.
      * @param {number} requestId - Request id to serve
      * @returns {Promise<void>} Resolves once the request is answered
      */

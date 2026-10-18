@@ -7,8 +7,8 @@
 // allowlist of violation metadata and URL queries/fragments are removed. The app
 // never attaches uploaded file contents to these reports.
 //
-// Forwarding is opt-in and graceful: with no destination configured the function
-// absorbs reports and returns 204, so the CSP directive is always valid.
+// Without a forwarding destination, the function logs reduced metadata and
+// returns 204.
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -17,10 +17,8 @@ const MAX_BODY_BYTES = 64 * 1024;
 // relays caller-chosen top-level keys or content types upstream.
 const DEFAULT_CONTENT_TYPE = "application/csp-report";
 
-// Cap how long we wait on the upstream collector. Forwarding is best-effort, and
-// the serverless function must still respond promptly, but it cannot truly
-// fire-and-forget (pending work may be frozen once the response is sent), so the
-// request is awaited with a bounded timeout instead.
+// Await forwarding with a timeout. The serverless runtime may freeze pending
+// work after the response, so the handler waits before responding.
 const FORWARD_TIMEOUT_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_REPORT_MAX_PER_MINUTE = 120;

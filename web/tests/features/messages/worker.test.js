@@ -84,7 +84,7 @@ describe("messages worker", () => {
         expect(result.connectionError).toBe(null);
     });
 
-    // ── Worker message listener (lines 80-87) ─────────────────────────────────
+    // ── Worker message listener ─────────────────────────────────
 
     it("worker listener ignores non-process message types", () => {
         // self.addEventListener is registered at module load time; simulate via

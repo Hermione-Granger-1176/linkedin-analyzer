@@ -201,11 +201,8 @@ describe("pickLabelIndices", () => {
     });
 
     it("gives the last label the room every other pair gets", () => {
-        // Ten years of months over the plot's 164mm: the step left the last two
-        // indices six apart, which the index test read as clear and the paper
-        // read as 8mm, printing "Dec 2025" and "Jun 2026" as "Dec 202Jun 2026".
-        // 500 is the case where the step happens to leave the last two far
-        // enough apart that the one before it stays.
+        // Check physical spacing across 120 months in a 164 mm plot.
+        // Also check 500 points, where the penultimate label has enough room.
         for (const count of [8, 13, 60, 100, 124, 125, 240, 500, 519]) {
             const width = 164;
             const kept = [...pickLabelIndices(count, width)];
@@ -720,10 +717,8 @@ describe("buildListBlocks", () => {
     });
 
     it("fills the room a cut name has rather than stopping at a space", () => {
-        // Word-granular truncation cost one row 54 characters for the sake of
-        // one digit: "Bartholomewkonstantinos9 Vandenbroucke-..." printed whole
-        // while "Bartholomewkonstantinos13 ..." printed as its first token and
-        // then 53mm of blank row.
+        // A longer first token must not discard the rest of a label.
+        // Character-based truncation keeps nearby input lengths visually consistent.
         const { doc, painter } = createHarness();
         // Two tokens, the second far too long for the column, which is the
         // shape a wrap has nowhere to break: it hands back the first token and
@@ -747,8 +742,7 @@ describe("buildListBlocks", () => {
                 "Bartholomewkonstantinos13".length + 10,
             );
         }
-        // One character of data apart, one character of label apart: the rows
-        // no longer fall off a cliff between "…9" and "…13".
+        // Similar input lengths retain similar amounts of label text.
         const lengths = new Set(doc.calls.text.map((call) => call.value.length));
         expect(Math.max(...lengths) - Math.min(...lengths)).toBeLessThanOrEqual(1);
     });

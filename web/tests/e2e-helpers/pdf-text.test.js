@@ -1,11 +1,7 @@
 /**
- * Unit tests for the e2e helper that reads text back out of a generated PDF.
- *
- * The helper is what four privacy assertions in `pdf-export.e2e.spec.js` rest
- * on: they check that the exported file does *not* contain a spreadsheet-cleaned
- * body. A helper that silently returned "" would satisfy every one of those
- * `not.toContain` assertions while proving nothing, so its own behaviour needs a
- * test that fails loudly instead.
+ * Test the PDF text reader used by browser export assertions.
+ * Include a positive extraction check because an always-empty result
+ * would also pass assertions that forbidden content is absent.
  */
 
 import zlib from "node:zlib";

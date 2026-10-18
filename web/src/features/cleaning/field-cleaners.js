@@ -97,10 +97,10 @@ export function isMissing(value) {
  * Clean ShareCommentary field from LinkedIn Shares export.
  * Port of: clean_shares_commentary() from text.py
  *
- * Handles the double-double quote escaping pattern used in Shares.csv:
+ * Handles the doubled-quote escaping used in Shares.csv:
  * - Removes leading/trailing quotes
  * - Converts CSV line break patterns ("\n") to actual newlines
- * - Converts escaped quotes ("") to single quotes (")
+ * - Converts doubled quotes ("") to one literal quote (")
  *
  * @param {unknown} value - Raw value from CSV
  * @returns {string} Cleaned string
@@ -128,12 +128,12 @@ function cleanSharesCommentary(value) {
 }
 
 /**
- * Strip backslash- and double-double-quote escaping from a CSV value.
+ * Decode backslash-escaped and doubled quotes in a CSV value.
  * Shared helper for the Comments and Messages cleaners.
  *
  * Handles the escaping patterns used in those exports:
  * - Converts backslash-escaped quotes (\") to regular quotes (")
- * - Converts double-double quotes ("") to regular quotes (")
+ * - Converts doubled quotes ("") to one literal quote (")
  * - Preserves line breaks
  *
  * @param {unknown} value - Raw value from CSV

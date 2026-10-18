@@ -108,13 +108,11 @@ export function contrastRatio(left, right) {
 }
 
 /**
- * Pick whichever of the palette's two text colors reads on this fill.
+ * Choose the palette text color with the higher contrast against the fill.
  *
- * Text used to be colored by the name of the accent it sat on rather than by
- * what that produced: a card title in `--accent-yellow` on a tint of
- * `--accent-yellow` is 1.54:1, and the white roundel digit on the raw accent is
- * 1.71:1. Neither is visible on paper. Measuring instead keeps every one of them
- * legible whatever the tokens are later set to.
+ * Accent names do not establish contrast. For example, yellow text on a yellow
+ * tint measured 1.54:1, and a white digit on the yellow accent measured 1.71:1.
+ * Compare the actual colors so palette changes also affect the choice.
  * @param {Palette} palette - Palette from readPdfPalette()
  * @param {Rgb} background - Fill the text sits on
  * @returns {Rgb} The more readable text color

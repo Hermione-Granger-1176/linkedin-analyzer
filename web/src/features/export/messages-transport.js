@@ -1,14 +1,9 @@
 /**
- * Transport for the PDF export's messages dashboard.
+ * Load the PDF messages dashboard through an export-owned worker.
  *
- * The Messages screen has a transport of its own, and the export used to borrow
- * it; `worker-transport.js` carries why owning one outright was the answer, and
- * everything about owning it. What is here is what the messages dashboard asks
- * for and how it reads the reply.
- *
- * Nothing the worker was handed is ever reported. Every catch here discards what
- * it was given and reports a fixed error instead, because a failure while
- * parsing the user's messages can carry their text.
+ * worker-transport.js manages its lifecycle. This module builds messages
+ * requests and reads replies. Report fixed errors because thrown values may
+ * contain message text.
  */
 
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.ts";
@@ -153,12 +148,8 @@ function hydrateWorkerPayload(payload) {
 }
 
 /**
- * Parse and build the state on the UI thread, for a small export with no worker.
- *
- * Built here rather than by borrowing the Messages screen's fallback, which
- * answers with cleaned rows and leaves the state to its caller: a dashboard that
- * quietly disappeared whenever the browser had no worker is the bug this exists
- * to prevent.
+ * Parse and build message state on the main thread for a small export
+ * when no worker is available. Return the hydrated state the dashboard needs.
  * @param {string} messagesCsv - Raw messages CSV text
  * @param {string} connectionsCsv - Raw connections CSV text
  * @returns {MessagesState|null} State, or null when the file cannot be parsed

@@ -1,14 +1,9 @@
 /**
- * Document model assembly for the PDF export.
+ * Build the PDF document model.
  *
- * The export button is global, so this module cannot assume any screen has ever
- * run. It takes the on-screen snapshot when there is one and otherwise reads the
- * stored exports itself, mirroring each screen's own load: a short-lived
- * analytics worker for activity, and a transport of the export's own over each
- * screen's parsing worker for connections and for messages.
- *
- * The result is a dashboard per screen rather than one long list, so the
- * document divides the way the site does.
+ * Reuse a screen snapshot when available. Otherwise, read stored uploads and
+ * compute each dashboard through workers owned by this export. Each dashboard
+ * follows its corresponding screen.
  */
 
 import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.ts";
@@ -109,11 +104,8 @@ const RANGE_LABELS = Object.freeze({
 });
 
 /**
- * Name a time range the way the app's own controls do.
- *
- * The document's captions are the window below rather than one of these: a
- * relative name is only used where the data gives no window to state, and for
- * the connections dashboard, which really does cover all time.
+ * Return a time-range label for sections without dated windows.
+ * The connections dashboard uses its all-time label.
  * @param {unknown} timeRange - Filter range key
  * @returns {string} Human-readable range label
  */
@@ -128,15 +120,9 @@ export function formatRangeLabel(timeRange) {
  */
 
 /**
- * Label the months a section covers, or nothing when it has no window.
- *
- * A document outlives the moment it was made, so a caption written against that
- * moment stops being true the day after: the header read "Last 12 months" beside
- * a generation date nineteen months after the only post it counted. Every range
- * in the app is anchored on the user's own latest event rather than on today,
- * which is right on screen, where the reader can move the control and watch it
- * answer, and is exactly what makes the relative wording a lie on paper. The
- * window says the same thing about the data and goes on saying it.
+ * Label the months a section covers. Return an empty string without a window.
+ * Use calendar dates because a saved PDF outlives relative labels such as
+ * "Last 12 months". Activity and message windows end at the newest event in the file.
  * @param {MonthWindow|null} monthWindow - Months covered
  * @returns {string} Window label such as "Feb 2024 to Jan 2025", or an empty string
  */
@@ -151,12 +137,8 @@ function formatWindow(monthWindow) {
 }
 
 /**
- * Read the months an analytics view was built over.
- *
- * From the plotted timeline rather than from the range key, which says how long
- * the window is but not where it sits. The monthly and the weekly timeline both
- * key their points by date, so the first seven characters are the month whichever
- * one the view carries.
+ * Read the first and last months from the plotted timeline.
+ * Both monthly and weekly points begin with a YYYY-MM date prefix.
  * @param {ExportAnalyticsView|null} view - Filtered analytics view
  * @returns {MonthWindow|null} Window, or null when nothing was plotted
  */
@@ -171,12 +153,9 @@ function viewWindow(view) {
 }
 
 /**
- * Read the months the messages dashboard covers.
- *
- * The range start is midnight on the first of the oldest month in range, so the
- * window contains the months between the range endpoints. Return null when parsing
- * finds no dated message: `getRangeStart` has no anchor, so there is no window to
- * report.
+ * Read the months covered by the messages dashboard.
+ * The range starts at local midnight on the first day of its oldest month.
+ * Return null when there is no dated message to anchor the window.
  * @param {number|null} rangeStart - Start of the messages range
  * @param {number} latestTimestamp - Newest message in the file
  * @returns {MonthWindow|null} Window, or null when there is nothing in range
@@ -370,12 +349,8 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
 }
 
 /**
- * Abandon an analytics worker still running for a cancelled export.
- *
- * Cancelling used to leave it churning until it answered or its 30-second
- * watchdog fired. The generation token already stopped a late answer from being
- * used, but the worker itself, its listeners and the analytics base it was
- * handed all stayed alive for the wait.
+ * Terminate the analytics worker when an export is cancelled.
+ * Release its listeners and analytics data without waiting for a reply or timeout.
  */
 export function terminateAnalyticsWorker() {
     if (activeAnalyticsRun) {
@@ -425,15 +400,9 @@ function fromSnapshot(snapshot) {
 }
 
 /**
- * Resolve the insight cards, the range, and the view the charts are plotted from.
- *
- * The snapshot the Insights screen publishes wins outright when it carries the
- * view as well as the cards, which is the fast path it exists to be: exporting
- * from that screen then costs no worker run at all. A snapshot written before
- * that screen kept its view, or none at all, falls through to the worker, which
- * is asked for the range the snapshot is showing rather than the default one. A
- * header reading "All time" above a chart of the last twelve months would be a
- * lie about the same document.
+ * Resolve insight cards and their matching analytics view.
+ * Reuse a published snapshot that contains both. Otherwise, ask the worker
+ * for the snapshot range, or the default range when no snapshot exists.
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<InsightSource>} Insight source data
  */
@@ -471,10 +440,7 @@ async function resolveInsightSource(isCancelled) {
 }
 
 /**
- * Build the activity dashboard from an analytics view.
- *
- * The stat wording and the three charts are the Analytics screen's, in its
- * order: a reader who knows the screen should recognize the page.
+ * Build the activity dashboard with the Analytics screen's stats and chart order.
  * @param {ExportAnalyticsView|null} view - Filtered analytics view
  * @param {string} rangeLabel - Window the view was built over
  * @returns {Dashboard|null} Dashboard, or null when there is no activity
@@ -516,19 +482,10 @@ function buildActivityDashboard(view, rangeLabel) {
 }
 
 /**
- * Build the connections dashboard from the stored connections export.
- *
- * The file is cleaned and aggregated through the export's own transport, over
- * the Connections screen's worker. It used to be done inline, here, on the UI
- * thread: an export of thirty thousand rows held that thread long enough that
- * the Escape key which cancels the run could not reach its own handler.
- *
- * Drawn over the whole network rather than the screen's twelve-month default.
- * On screen that default sits beside a range control the reader can move; on
- * paper it cannot be moved, and most people's connections predate it, so the
- * default would print a page whose company and position charts are empty. The
- * growth chart is all-time on screen too, so this also stops one page carrying
- * two different ranges at once.
+ * Build the connections dashboard through an export-owned worker.
+ * Worker processing keeps cancellation responsive during large parses.
+ * The PDF covers all time because it has no range control, and the screen's
+ * twelve-month default can exclude most of the network.
  * @param {Blob|string} connectionsCsv - Stored connections upload, or an empty string
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<Dashboard|null>} Dashboard, or null when there is nothing to show
@@ -579,11 +536,8 @@ async function buildConnectionsDashboard(connectionsCsv, isCancelled) {
 }
 
 /**
- * Title a list, saying so when it is only the head of a longer one.
- *
- * The screen puts a "Full list" button beside each panel, so the reader can see
- * that ten is not all of them. The page has no such cue, and a list of ten under
- * a stat tile reading 157 would look like a contradiction.
+ * Title a list with its total when the displayed entries are incomplete.
+ * The PDF has no Full list button to indicate that more entries exist.
  * @param {string} label - Panel name
  * @param {number} total - How many entries there are in all
  * @returns {string} Chart title
@@ -593,16 +547,9 @@ function listTitle(label, total) {
 }
 
 /**
- * Count the messages in range by month, gap-filled the way growth is.
- *
- * The one chart on the messages dashboard that names nobody, and the reason the
- * page is worth printing at the default settings: every other panel on it is a
- * list of people, so with the names box unticked the sheet was four stat tiles
- * and blank paper. It is aggregated from the timestamps the parse already
- * produced, and its months add up to the "Messages in range" tile above it.
- *
- * Empty when nothing was sent or received in the window: a year of zeroes drawn
- * as a flat line is the empty axes the layout engine drops a chart to avoid.
+ * Count messages by month within the dashboard window, filling gaps with zeroes.
+ * The timeline remains visible when contact names are excluded. Return an empty
+ * series when the window contains no messages so the PDF omits empty axes.
  * @param {Float64Array} rowTimestamps - Timestamp of every message the parse kept
  * @param {MonthWindow} monthWindow - Months the dashboard covers
  * @returns {Array<{key: string, label: string, value: number}>} Points, oldest first
@@ -666,11 +613,8 @@ function buildMessagePeopleCharts(messageState, connectionState, topContacts, fa
 }
 
 /**
- * Build a list panel of contacts, each titled by when they last wrote.
- *
- * The two panels that take this shape differ only in what they put on the right,
- * so the row limit and the title's count are stated once: a third cannot forget
- * either.
+ * Build a contact list with last-contact dates and caller-supplied values.
+ * Both list variants share the row limit and total count in the title.
  * @template {{name: string, lastTimestamp: number}} C
  * @param {string} label - Panel name
  * @param {C[]} contacts - Contacts in display order
@@ -690,11 +634,9 @@ function buildLastMessageList(label, contacts, toValue) {
 }
 
 /**
- * Build the messages dashboard from the stored messages and connections exports.
- *
- * Counts and totals are always included; anything that names a person is behind
- * `includeNames`, because a file the reader may forward is not the place to put
- * somebody else's name without being asked.
+ * Build the messages dashboard from stored uploads.
+ * Include counts and totals in every export. Include contact lists only
+ * when includeNames is true.
  * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {boolean} includeNames - Whether the people lists were opted into
  * @param {() => boolean} isCancelled - True once the run has been abandoned
@@ -734,11 +676,8 @@ async function collectMessagesDashboard(files, includeNames, isCancelled) {
 }
 
 /**
- * Assemble the messages dashboard from hydrated state.
- *
- * Pure, as the other builders in this module are: the loading, the cancellation
- * checks and the reporting stay with the caller, so what the page contains can
- * be read, and exercised, without a worker.
+ * Build the messages dashboard from hydrated state.
+ * The caller handles loading, cancellation, and diagnostics.
  * @param {MessagesState} state - Hydrated message state
  * @param {boolean} includeNames - Whether the people lists were opted into
  * @returns {{dashboard: Dashboard, window: MonthWindow|null}} Dashboard and the months it covers
@@ -817,11 +756,8 @@ async function readExportFiles(isCancelled) {
 }
 
 /**
- * Read one stored record's upload Blob, treating an unreadable one as absent.
- *
- * Each record is read on its own rather than the pair together: a messages
- * record whose getter throws used to cost the connections dashboard as well,
- * which is a wider blast radius than the failure deserves.
+ * Read one stored upload Blob, returning an empty string when unreadable.
+ * Read records independently so a failure does not remove another dashboard.
  * @param {import("../../platform/persistence/storage.js").StoredFile|null} file - Stored file record
  * @returns {Blob|string} The stored upload, or an empty string
  */
@@ -840,12 +776,9 @@ function readStoredUpload(file) {
 }
 
 /**
- * Select the recent threads, with message bodies, from the stored messages file.
- *
- * Both files travel down raw. The self-detection tiebreak the connections
- * export settles is derived inside the transport's worker rather than here: it
- * was the last whole-file parse this module ran on the UI thread, and it ran on
- * every export that opted message contents in.
+ * Select recent threads and their message bodies from stored uploads.
+ * The worker derives account-owner tiebreak keys from the connections file
+ * so this collection step does not parse the file on the main thread.
  * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<import("./threads.js").SelectedThread[]>} Threads for the document
@@ -869,17 +802,10 @@ async function collectThreads(files, isCancelled) {
 }
 
 /**
- * Assemble everything the PDF layout needs.
- *
- * Cancellation is threaded down rather than left to the caller: collection walks
- * several storage reads before it reaches either worker, and terminating a
- * worker that has not been created yet does nothing. Without `isCancelled` an
- * abandoned run went on to build a worker and hand it the user's whole CSV, and
- * a second run started meanwhile could deadlock against it over the shared
- * worker handle. Each step that is about to start real work checks it; unlike
- * the threads transport, which distinguishes cancellation from failure by
- * symbol, a cancelled run returns the same empty sections as a run with no data,
- * and the caller discards the result either way.
+ * Build the PDF document model from stored data.
+ * Pass cancellation checks to each asynchronous collection step so a cancelled
+ * run does not start another worker. Cancelled runs return empty sections,
+ * and the caller discards their results.
  * @param {{includeNames?: boolean, includeMessages?: boolean, generatedAt?: Date, isCancelled?: () => boolean}} [options] - Export options
  * @returns {Promise<import("./pdf-document.js").DocumentModel>} Document model
  */
@@ -890,10 +816,7 @@ export async function collectExportData(options = {}) {
     const activityWindow = viewWindow(source.view);
     const activityLabel = formatWindow(activityWindow) || formatRangeLabel(source.timeRange);
     const outreach = source.outreach || (await readOutreach());
-    // Read once and pass the text down. The connections export used to be read
-    // and re-read up to three times in one run, once per consumer, which is both
-    // the slow way and an odd thing to do alongside a promise to keep only one
-    // copy of it in memory.
+    // Read each stored upload once and pass its Blob to every consumer.
     const files = await readExportFiles(isCancelled);
     // Refused before any worker starts: message contents from a file this
     // large cannot be held within the memory budget, and finding out after

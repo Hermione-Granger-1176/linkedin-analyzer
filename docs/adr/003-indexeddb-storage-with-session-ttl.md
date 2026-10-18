@@ -4,17 +4,19 @@
 
 ## Context
 
-The app processes uploads client-side and has no backend to persist state. Users still expect their uploaded exports and computed analytics to survive a page reload, so a purely in-memory model loses work on every refresh. Two realities complicate naive persistence:
+The app processes uploads in the browser and has no server that stores user data. Keeping uploads and analytics in memory alone would lose them on every reload. Local persistence has two constraints:
 
-- Some environments (private browsing, storage-partitioned or locked-down browsers) make IndexedDB unavailable or throwing. The app must stay functional without it.
+- Private browsing, storage partitioning, and browser policies can block IndexedDB or cause storage operations to fail. The app must work without IndexedDB.
 - Persisting personal data on a device is a privacy risk, especially on shared or public computers, so retained data must not live forever.
 
 ## Decision
 
-Persist raw CSV text and the analytics base in IndexedDB (`web/src/platform/persistence/storage.js`), with an in-memory fallback that transparently takes over when IndexedDB is missing or errors. A session TTL sweep (`web/src/platform/persistence/session.js`, `SESSION_TTL_MS = 24 * 60 * 60 * 1000`, that is 24 hours) runs on startup and clears uploads and cached analytics whose last activity is older than the TTL. Screens wait for the sweep before loading stored data, and a **Clear data** control lets the user purge immediately.
+The original decision stored raw CSV text and the analytics base in IndexedDB through `web/src/platform/persistence/storage.js`. [ADR-010](010-stream-uploads-and-store-original-files.md) replaces stored text with original file bytes. When IndexedDB is unavailable or fails, storage uses an in-memory fallback.
+
+At startup, `web/src/platform/persistence/session.js` removes uploads and cached analytics after 24 hours without activity (`SESSION_TTL_MS = 24 * 60 * 60 * 1000`). Screens wait for that cleanup before loading stored data. **Clear data** removes stored uploads and analytics immediately.
 
 ## Consequences
 
 - Uploads and analytics survive reloads when IndexedDB is available, so users do not re-upload on every visit.
-- When IndexedDB is unavailable the app degrades to an in-memory session: fully usable, but nothing persists across reloads. No hard failure.
-- Retained personal data is bounded: stale data is auto-cleared after 24 hours, and users on shared machines can clear it on demand. The privacy docs call out that persistence exists until the sweep runs or the user clears it.
+- Without IndexedDB, the app works in memory and loses session data on reload.
+- Startup cleanup removes data after 24 hours without activity. Users can also remove it with **Clear data**. The privacy documentation explains that retained data remains until cleanup runs or the user clears it.

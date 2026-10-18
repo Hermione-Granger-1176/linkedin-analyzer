@@ -1,11 +1,8 @@
 /**
- * PDF export thread selection worker.
+ * Select recent threads for the PDF in a worker.
  *
- * This worker is handed the raw messages CSV and the raw connections CSV, so
- * every failure inside it is assumed to carry the user's own text: a message
- * body, or the name, employer and profile URL of somebody they know.
- * `serveWorker` keeps every failure it posts to fixed text and silences the
- * browser's own error reporting.
+ * Both input files may appear in thrown values. serveWorker sends fixed
+ * failure messages and cancels global error reporting.
  */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.ts";
@@ -22,18 +19,10 @@ import { selectRecentThreadRows, selectRecentThreads } from "./threads.js";
 const RUNTIME_FAILURE = "Threads worker runtime failure.";
 
 /**
- * Derive the self-detection tiebreak keys, or none when they cannot be had.
- *
- * The connections file is parsed here rather than by the caller because the
- * caller is the UI thread, and a real connections export runs to tens of
- * thousands of rows: parsing it there held that thread long enough that the
- * Escape key which cancels an export could not reach its own handler.
- *
- * A tiebreak is a nicety, so a file that will not read or parse costs a
- * direction chip on a one-conversation export rather than the thread
- * selection. Nothing about the failure is described, here or anywhere else in
- * this worker, because the value that caused it came from the user's own
- * connections.
+ * Derive account-owner tiebreak keys from the connections source.
+ * Parse in the worker so large files do not block cancellation on the page.
+ * If the file fails, keep thread selection available with unknown direction
+ * where the account owner cannot otherwise be identified. Discard error details.
  * @param {unknown} connectionsSource - Stored connections Blob or CSV text
  * @returns {Promise<string[]>} Normalized keys, empty when there are none to be had
  */
@@ -192,12 +181,8 @@ async function processPayload(payload) {
 }
 
 /**
- * Post a normalized failure payload.
- *
- * The message is always a fixed string chosen by this module. Nothing thrown
- * inside the worker is ever forwarded: this worker holds the raw messages CSV
- * and the raw connections CSV, so a thrown value can carry a row, a name, an
- * employer, a profile URL or a message body.
+ * Post a fixed failure message under the request ID.
+ * Discard thrown values because they may contain uploaded data.
  * @param {number|string} requestId - Request id being answered
  * @param {string} message - Fixed failure text
  */

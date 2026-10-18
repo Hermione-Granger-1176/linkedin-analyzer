@@ -43,7 +43,7 @@ def test_makefile_branch_prune_target_uses_the_helper() -> None:
 
 
 def test_branch_prune_is_not_in_the_control_flow_allowlist() -> None:
-    """The ratchet stays closed once the recipe no longer holds shell logic."""
+    """Keep branch-prune outside the exceptions for inline shell control flow."""
     from scripts.lint.make_targets import CONTROL_FLOW_ALLOWLIST
 
     assert "branch-prune" not in CONTROL_FLOW_ALLOWLIST
@@ -82,7 +82,7 @@ def test_base_tree_returns_the_tree_id() -> None:
 
 
 def test_base_tree_raises_when_the_base_is_unresolvable() -> None:
-    """A missing base branch fails loudly rather than pruning against nothing."""
+    """Raise an error when the base branch cannot be resolved."""
     runner = make_runner({("rev-parse", "nope^{tree}"): (1, "")})
     with pytest.raises(RuntimeError, match="cannot resolve base branch nope"):
         prune_branches.base_tree("nope", runner=runner)

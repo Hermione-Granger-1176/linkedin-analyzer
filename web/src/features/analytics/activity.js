@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Local activity calculations */
+/* Local activity calculations. */
 
 import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 import {
@@ -48,8 +48,7 @@ export const AnalyticsEngine = (() => {
     "use strict";
 
     const WEEKLY_TIME_RANGES = new Set(["1m", "3m"]);
-    // Minimum overlapping months of posting + connection data before the
-    // network-growth correlation card is trustworthy enough to show.
+    // Minimum overlapping months required to display the network-growth comparison.
     const MIN_GROWTH_MONTHS = 12;
     // Number of top-posting months averaged for the network-growth comparison.
     const GROWTH_TOP_MONTHS = 10;
@@ -282,10 +281,8 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
-     * Correlate monthly posting volume with new-connection counts and compare
-     * the busiest posting months against quiet ones. Returns null unless there
-     * are enough overlapping months and real posting variance, so the card only
-     * fires when the relationship is meaningful.
+     * Compare monthly posting volume with new-connection counts.
+     * Return null unless there is enough overlap and posting variance.
      * @param {Map<string, {posts: number}>} monthIndex - Internal month buckets with post counts
      * (non-empty)
      * @param {Map<string, number>} monthlyConnections - Monthly new-connection counts
@@ -352,10 +349,8 @@ export const AnalyticsEngine = (() => {
         const quietAvg = Math.round(average(quietMonths.map((entry) => entry.connections)));
         const topAvg = Math.round(average(topMonths.map((entry) => entry.connections)));
         const multiplier = quietAvg > 0 ? Math.round(topAvg / quietAvg) : 0;
-        // The card claims posting *grows* the network, so require a strictly
-        // positive overall correlation as well as a meaningful busiest-vs-quiet
-        // multiplier. A non-positive correlation or a 0x/1x headline would
-        // misrepresent a flat or inverse relationship, so either keeps it dormant.
+        // Display the comparison only with positive correlation and a multiplier
+        // above one. These conditions do not establish that posting caused growth.
         if (correlation <= 0 || multiplier < 2) {
             return null;
         }
@@ -389,7 +384,7 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
-     * Get the hour/day filter ratio for a month bucket. Returns the fraction of activity matching the selected hour and/or day.
+     * Return the fraction of monthly activity matching the hour, day, or both.
      * @param {AnyMonthBucket} bucket - Month bucket with hours, days, and heatmap arrays.
      * @param {AnalyticsFilters} filters - Active filters including hour and day.
      * @returns {number} Ratio between 0 and 1.
@@ -514,7 +509,7 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
-     * Build view from pre-computed aggregates - O(months) not O(events)
+     * Build a view from monthly aggregates in O(months) time.
      * @param {AnalyticsBase|HydratedAnalytics|null} analytics - Pre-computed analytics payload
      * @param {AnalyticsFilters} filters - Active filter state
      * @returns {AnalyticsView|null} View model or null when no analytics

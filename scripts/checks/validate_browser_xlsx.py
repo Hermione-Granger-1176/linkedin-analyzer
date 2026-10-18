@@ -146,9 +146,8 @@ def check_safety(data_rows: list[list[str]]) -> list[str]:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse the workbook and expectation paths, with environment fallbacks."""
     parser = argparse.ArgumentParser(description=__doc__)
-    # argparse applies type= only to values parsed off the command line, not to
-    # environment-sourced defaults, so accept raw strings and coerce to Path
-    # once below for both the CLI and env-var paths.
+    # Accept CLI arguments and environment defaults as strings, then convert
+    # both to Path below so they use the same validation.
     parser.add_argument("--workbook", default=os.environ.get("BROWSER_XLSX_OUT"))
     parser.add_argument("--expected", default=os.environ.get("BROWSER_XLSX_EXPECTED"))
     args = parser.parse_args(argv)

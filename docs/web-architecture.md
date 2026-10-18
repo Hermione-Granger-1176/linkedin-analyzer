@@ -8,7 +8,11 @@ The app deploys as static assets. A hash router keeps the route after a reload w
 
 The registered routes are `home`, `clean`, `analytics`, `connections`, `messages`, and `insights`. The four data views share the `range` parameter. The router remembers shared parameters when the user changes screens, and it sorts query keys when it builds a hash.
 
-The upload screen ships in the main bundle because most visits land on it. Every other screen registers a loader instead of a controller, so the first page load downloads and runs only the main bundle, and a screen's code runs the first time its route opens: the screen manager shows the loading overlay, waits for the import, then initializes the controller with the route's latest parameters. If the import fails, the screen says so with a Try again button, and the next visit also tries again. Leaving a screen that is still loading removes its overlay. Once an upload makes Analytics available, `web/src/app/route-preload.js` loads its code while the browser is idle, except on the lite effects tier with Save-Data on. In production the service worker still precaches every screen's chunk after the page loads (see [How the PWA cache works](#how-the-pwa-cache-works)), so a later visit or an offline one opens screens from the cache.
+The upload screen ships in the main bundle because most visits start there. Other screens register loaders and import their code when their routes first open. The screen manager shows a loading overlay during the import, then initializes the controller with the route's latest parameters.
+
+If an import fails, the screen shows a **Try again** button. Revisiting the route also retries the import. Leaving a screen during loading removes its overlay.
+
+Once an upload makes Analytics available, `web/src/app/route-preload.js` loads its code while the browser is idle. Preloading is disabled when both the `lite` tier and Save-Data apply. In production, the service worker precaches screen chunks after the page loads. Later visits can open screens from that cache, including offline. See [How the PWA cache works](#how-the-pwa-cache-works).
 
 [ADR-002](adr/002-no-framework-hash-routed-spa.md) records the choice to use a small hand-written router instead of history-based routing.
 
@@ -31,9 +35,17 @@ No application endpoint receives the uploaded file contents. The only server-sid
 
 Long CSV parses and analytics calculations run in Web Workers so the main thread can continue handling input, navigation, and cancellation. `web/src/app/worker-contracts.ts` defines shared request and response shapes for worker messages as TypeScript types, alongside the runtime validators that check each message against them.
 
-The analytics worker runs its requests one at a time in arrival order, because reading a file is asynchronous. A multi-file upload therefore processes its files one after another, so only one file's parse state is alive at a time. The worker computes analytics once per batch, on the reply to its last file; when that file is rejected, or is not an analytics input and cannot be stored, the page still stores the analytics. It stores them only once every analytics input in the batch is saved; if one fails, the stored analytics stay as they were and the next upload primes the worker from storage again. The page times only the file the worker is running, so a small file queued behind a large one is not cut off while the large one uses its allowance. **Clear data** skips that queue: it aborts the read in flight, drops the requests queued before it, and resets the worker. A restore that was still reading stored files when Clear arrived discards what it read. The worker replies with the cleaned result only; the page stores the `File` it already holds.
+The analytics worker processes requests in arrival order. Only one file's parse state remains in memory at a time. The page starts each file's timeout when processing begins, so queued files do not use their time allowances while waiting.
 
-The Connections and Messages screens keep their own workers and request counters. The Messages worker keeps one event per participant per message as typed-array columns, a contact ID and a timestamp, instead of one object each, and transfers those buffers to the page rather than copying them. PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a worker that a screen is using. The export transports share lifecycle code from `worker-transport.js` and use a bounded main-thread fallback for small files when Workers are unavailable. Rows the streaming cleaner keeps share one copy of each repeated cell value, such as a name or profile URL (`web/src/features/cleaning/string-pool.js`).
+The worker computes analytics once per batch and includes them in the reply to the last file. The page saves those analytics after every analytics input in the batch has been saved. A rejected last file, or one that cannot be stored and is not an analytics input, does not prevent that save. If an analytics input fails to save, stored analytics remain unchanged. The next upload reloads the worker's state from storage.
+
+**Clear data** bypasses the queue. It aborts the active read, discards earlier queued requests, and resets the worker. A restore already reading stored files discards its results. Worker replies contain the cleaned result without the original text. The page stores the uploaded `File` reference it already holds.
+
+The Connections and Messages screens keep their own workers and request counters. The Messages worker stores each participant's message events in typed-array columns containing contact IDs and timestamps. It transfers those buffers to the page without copying them.
+
+PDF export uses separate transports in `web/src/features/export/` so an export cannot terminate or reset a screen's worker. The transports share lifecycle code from `worker-transport.js`. When Web Workers are unavailable, small files use a main-thread fallback with size limits.
+
+`web/src/features/cleaning/string-pool.js` shares repeated cell values across retained rows. Names and profile URLs therefore need only one stored string per distinct value while caching applies.
 
 The Clean screen sends its preview, Excel, and cleaned CSV builds to `cleaning-worker.js` through `clean-client.js`, one request at a time. The worker keeps the last file it cleaned, keyed by type and upload time, so a download right after the preview does not parse the file again. The page receives five preview rows or a finished `Blob`, never the cleaned rows. Where Workers are unavailable, the same job runs on the main thread.
 
@@ -57,7 +69,11 @@ Python implements the CLI cleaner under `src/linkedin_analyzer/`. JavaScript imp
 
 `web/src/platform/observability/telemetry.js` records only allowlisted numeric web-vitals and performance measurements. It buffers the latest value and a count, then sends a numeric `session-metrics` event when the page becomes hidden.
 
-`web/src/platform/observability/run-tracker.js` notices processing runs that did not finish. A tab the browser kills cannot report as it dies, so the upload page writes a `localStorage` marker when processing starts, refreshes its heartbeat every 5 seconds, and removes it when every job settles. `pagehide` records that the page was left, so a reload or a normal close is not reported. `freeze` counts as left too, because a frozen tab cannot answer another tab's ownership check; a tab that comes back from the back/forward cache or resumes writes its whole marker again, in case another tab removed it meanwhile. At startup, the app removes left markers silently, asks other open tabs over a `BroadcastChannel` whether one owns a remaining run, and rechecks a run with a recent heartbeat once it would be stale. Only a run with no owner and a stale heartbeat shows the notice and, with consent, sends one `processing-unfinished` event. The signal counts runs that did not finish, not crashes: read it as a trend across size buckets.
+`web/src/platform/observability/run-tracker.js` detects unfinished processing runs through a `localStorage` marker. The upload page creates the marker when processing starts, refreshes its heartbeat every 5 seconds, and removes it after all jobs settle. The marker survives if the browser stops the tab before the run ends.
+
+The `pagehide` and `freeze` events mark a run as left. This prevents normal navigation and frozen tabs from appearing as unfinished runs. When a tab resumes or returns from the browser's back or forward cache, it writes the complete marker again.
+
+At startup, the app removes markers for runs marked as left. It asks other tabs over a `BroadcastChannel` whether they own each remaining run. A recent heartbeat delays the check until that heartbeat becomes stale. A run with no owner and a stale heartbeat triggers the notice. With consent, it also sends one `processing-unfinished` event. This event identifies an unfinished run without establishing its cause.
 
 `api/csp-report.mjs` is separate from consent because a browser needs a valid CSP reporting endpoint even when diagnostics forwarding is off. It accepts legacy and Reporting API shapes, keeps only bounded violation metadata, removes URL queries and fragments, and forwards reports only when `CSP_REPORT_URI` or `SENTRY_DSN` is configured. [ADR-004](adr/004-opt-in-telemetry-with-pii-scrubbing.md) records the data reduction rules.
 
@@ -73,7 +89,7 @@ The export collects dashboard data from the feature workers and keeps names and 
 
 `web/src/platform/device/capabilities.js` reads CPU cores, `navigator.deviceMemory`, Save-Data, the coarse-pointer query, and accelerated WebGL once, picks the `lite`, `standard`, or `rich` tier, and caches the profile. `web/src/shared/ui/effects.js` applies the tier as `data-effects` on the root element and drops one tier when `web/src/platform/device/jank.js` sees repeated long animation frames while no processing or screen load is running. Stylesheets gate expensive effects on `:root[data-effects="lite"]`.
 
-The page ships marked `lite` and upgrades after the profile is known, because the CSP forbids the inline script that could set it before first paint. There is no visitor setting: the device decides. The WebGL probe is skipped whenever the cheap signals already rule out the rich tier. The tier controls decoration only: nothing in the processing path reads it. [ADR-009](adr/009-device-tiers-for-effects.md) records the thresholds and rules.
+The page starts with `lite` effects because the CSP forbids an inline script from choosing a tier before first paint. After reading the device profile, the app selects a tier automatically. If CPU or memory signals already rule out `rich`, it skips the WebGL probe. File processing does not read the effects tier. [ADR-009](adr/009-device-tiers-for-effects.md) records the thresholds and rules.
 
 ## Keep delegated events safe
 

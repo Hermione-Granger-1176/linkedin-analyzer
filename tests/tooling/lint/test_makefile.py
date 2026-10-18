@@ -393,7 +393,7 @@ def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> N
 
 
 def test_clean_removes_the_repository_local_playwright_cache() -> None:
-    """Make clean should drop the repository-local Playwright cache too."""
+    """Remove the repository-local Playwright cache during make clean."""
     recipe = _target_recipe("clean")
 
     assert " .playwright " in recipe

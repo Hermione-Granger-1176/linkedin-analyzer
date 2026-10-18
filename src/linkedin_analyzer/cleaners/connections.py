@@ -34,7 +34,7 @@ CONNECTIONS_COLUMNS: tuple[ColumnConfig, ...] = (
 class ConnectionsCleanerConfig(CleanerConfig):
     """Configuration for Connections CSV cleaner.
 
-    Provides sensible defaults for cleaning LinkedIn Connections export files.
+    Defines the columns, validation rules, and output name for Connections.csv.
     """
 
     input_path: Path = DEFAULT_INPUT

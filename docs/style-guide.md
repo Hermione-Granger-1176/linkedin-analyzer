@@ -20,7 +20,7 @@ Keep code, tests, docs, and repository automation consistent with the names alre
 - Use explicit semicolons in JavaScript.
 - Group imports by standard library, third-party, and local modules.
 - Use four spaces in Python, JavaScript, TypeScript, CSS, and HTML. Use two spaces in JSON and YAML.
-- Web code is JavaScript checked through JSDoc types. Shared contracts that many modules import live in TypeScript (`web/src/app/worker-contracts.ts`), imported with the `.ts` extension, and keep JSDoc for descriptions only.
+- Use JSDoc types to check JavaScript web modules. Define shared contracts in TypeScript, as in `web/src/app/worker-contracts.ts`, and import them with the `.ts` extension. In TypeScript files, use JSDoc for descriptions rather than type declarations.
 - Keep Markdown paragraphs on one line. Use `make align-tables-check` for Markdown tables.
 - Follow `.editorconfig` for line endings, final newlines, character encoding, and trailing whitespace.
 
@@ -61,6 +61,8 @@ Update parity fixtures when a cleaner rule changes intentionally. Run `make gen-
 Update docs when a command, option, route, output file, limit, workflow, or privacy rule changes. Put user actions in the user guide, lookup facts in a reference page, design reasons in an explanation, and multi-step tasks in a how-to page.
 
 Use sentence case headings. Use one H1 per page and do not skip heading levels. Use numbered lists for sequences and bullets for non-sequential facts. Put conditions before the step they guard.
+
+Apply the same writing standard to new and existing documentation, comments, and docstrings. Use direct instructions, active voice, and concrete descriptions. Split sentences that carry separate thoughts, keep necessary articles and verbs, and remove filler or figurative phrasing. Existing wording is not a reason to preserve a style violation.
 
 Write paths, symbols, flags, and Make targets exactly as they appear in the repository. Use code formatting for commands and symbols. Keep one name for each concept across all docs.
 

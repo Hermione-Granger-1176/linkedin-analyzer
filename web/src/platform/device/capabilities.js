@@ -131,8 +131,8 @@ export function downgradeTier(tier) {
 }
 
 /**
- * Whether the WebGL answer can change the tier: only when the cheap signals
- * leave Rich possible.
+ * Check whether CPU and memory signals allow the rich tier.
+ * Only then can the WebGL probe change the selected tier.
  * @param {DeviceSignals} signals - Signals read without the probe
  * @returns {boolean}
  */

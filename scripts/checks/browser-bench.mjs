@@ -2,9 +2,9 @@
  * Time the real browser flow on a large export, with simulated slow devices
  * and a combined page-plus-worker heap budget.
  *
- * Builds the bundle in "measurement" mode, which raises the upload limits
- * (128 MiB per file, 128 Mi characters, 1,000,000 rows; see
- * web/src/shared/limits.js) so exports above the public limits can be timed.
+ * Builds the bundle in "measurement" mode using limits from
+ * web/src/shared/limits.js. These match production by default and can be
+ * changed independently to investigate larger inputs.
  * It serves the bundle from a private preview server, and for each run opens
  * a fresh Chromium, uploads the export, and records:
  *   - time from file drop to the Analytics screen showing data,
@@ -25,7 +25,7 @@
  * phone safety threshold. It counts only sampled JavaScript heap, not browser,
  * graphics, or native memory, and sampling can miss short peaks.
  *
- * Usage (prefer the Makefile):
+ * Usage through Make:
  *   make bench-browser size_mb=100
  *   make bench-browser size_mb=55 cpu=4 gpu=0 mobile=1 budget_mb=300
  *   make bench-browser input_dir=/private/export runs=5

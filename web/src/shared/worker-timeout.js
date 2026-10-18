@@ -1,21 +1,11 @@
 /**
- * The watchdog budget a parsing worker is given.
+ * Shared timeout calculation for parsing workers.
  *
- * Four transports arm a watchdog over a worker parsing raw CSV: the Messages
- * screen's own, and the PDF export's three. One budget across all of them is
- * the point, because two of them hand their workers the very same pair of
- * files, and two different allowances over one export was an accident of one
- * module having been written first.
+ * The Messages screen and PDF export transports use the same size-based budget.
+ * Requests with the same input size receive the same timeout.
  *
- * It lived in `features/messages/format.js` for exactly that reason: the
- * Messages screen needed it before anything else did. By the time the export
- * had three transports of its own, all four callers were reaching across
- * features into a module whose own header calls it the messages page.
- *
- * Scaled to input size rather than fixed. A real export runs to tens of
- * megabytes, and a fixed allowance generous enough for a small one cuts a large
- * one off mid-parse, sending to the UI thread a parse the worker was still
- * doing.
+ * Larger files need more time to parse. A fixed timeout can terminate a worker
+ * that is still processing and trigger an unnecessary main-thread fallback.
  */
 
 import { csvSourceSize } from "./csv-source.js";
@@ -28,10 +18,7 @@ const BYTES_PER_MB = 1024 * 1024;
 /**
  * Compute a size-scaled worker watchdog timeout.
  *
- * Variadic so each caller passes only the files it actually hands the worker.
- * The connections transport used to pad the call with an empty messages file it
- * does not have, which read as a fact about that transport rather than as
- * filler for a fixed second parameter.
+ * Accept any number of sources so callers pass only the files sent to the worker.
  * @param {...(Blob|string|null|undefined)} sources - CSV text or stored upload for every file the worker is given
  * @returns {number} Timeout in milliseconds
  */

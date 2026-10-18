@@ -1,16 +1,8 @@
 /**
- * Font loading for the PDF export.
+ * Load and register TrueType fonts for PDF export.
  *
- * The handwritten faces the app uses on screen ship alongside the `.woff2`
- * files as TrueType, which is the only outline format jsPDF can embed. They are
- * fetched at export time so they never enter a JavaScript bundle, and any
- * failure degrades to jsPDF's built-in Helvetica rather than aborting the
- * export.
- *
- * Registration also settles what the document can spell: the faces are Latin,
- * and the collector has to know that before it puts a name on the page. The
- * answer is read out of each face's own cmap rather than assumed, so swapping a
- * face changes what survives without changing any code.
+ * Fetch fonts on demand and fall back to Helvetica if either font fails.
+ * Read each font's cmap to record the code points the document can draw.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
@@ -28,10 +20,7 @@ const FONT_TIMEOUT_MS = 10000;
 const FALLBACK_FAMILY = "helvetica";
 
 /**
- * Font families available to the layout engine when embedding fails.
- *
- * No separate "did this embed" flag: it is the family names that say so, and a
- * second field carrying the same fact is one more thing to keep true.
+ * Font families used when embedded font registration fails.
  */
 export const FALLBACK_FONTS = Object.freeze({
     body: FALLBACK_FAMILY,
@@ -84,12 +73,8 @@ function addRange(coverage, from, to) {
 const WINANSI_COVERAGE = buildWinAnsiCoverage();
 
 /**
- * What the document currently being drawn can spell.
- *
- * Registration is the only step that knows which faces a document ended up
- * with, and it runs before a word of it is collected, so it records the answer
- * here instead of the collector re-deriving it. Until it has, the coverage every
- * path is sure of is assumed.
+ * Code points supported by the registered document fonts.
+ * Use the fallback coverage until registration records the embedded coverage.
  * @type {Set<number>}
  */
 let drawableCoverage = WINANSI_COVERAGE;
@@ -132,12 +117,9 @@ function findFontTable(view, tag) {
 }
 
 /**
- * Collect the code points one segmented cmap subtable lists.
- *
- * The segment bounds are read, not the glyph ids they resolve to: a subsetted
- * face lists exactly the characters it kept, which is what both shipped faces
- * do, and resolving ids would buy only the ability to notice a face that maps
- * one of its own listed characters to .notdef.
+ * Collect code points listed by a segmented cmap subtable.
+ * The shipped subsets list their retained characters. This reads segment bounds
+ * without checking whether individual glyph IDs resolve to .notdef.
  * @param {DataView} view - Whole font file
  * @param {number} offset - Byte offset of the subtable
  * @param {Set<number>} coverage - Set to add to
@@ -164,11 +146,8 @@ function addSegmentedCoverage(view, offset, coverage) {
 }
 
 /**
- * Read the code points one face can draw, out of its own cmap.
- *
- * A cmap written in a format this does not read reports nothing rather than
- * guessing, and the caller falls back to the coverage every path is sure of.
- * That under-uses such a face; it never claims a glyph that is not there.
+ * Read supported code points from a font's cmap.
+ * Return null for an unsupported format so the caller uses fallback coverage.
  * @param {ArrayBuffer} buffer - Whole font file
  * @returns {Set<number>|null} Code points, or null when the cmap says nothing
  */
@@ -191,14 +170,9 @@ function readFontCoverage(buffer) {
 }
 
 /**
- * Narrow several faces' coverage to the characters all of them carry.
- *
- * The document model is built without knowing which face will draw which
- * string, so a character counts as drawable only when every embedded face has
- * it. A face whose cmap could not be read takes the whole document back to
- * WinAnsi rather than lending it coverage nobody has checked. So does being
- * asked to narrow nothing at all, which is the same question with no face able
- * to answer it.
+ * Intersect the coverage of all registered faces.
+ * The document model does not select a face for each string, so a character
+ * must exist in every face. Use WinAnsi if any cmap is unreadable or the list is empty.
  * @param {Array<Set<number>|null>} coverages - One entry per embedded face
  * @returns {Set<number>} Code points the document can draw
  */
@@ -225,12 +199,9 @@ export function readDrawableCoverage() {
 }
 
 /**
- * Fetch one TrueType asset, giving up rather than hanging.
- *
- * A font server that accepts the connection and then never answers would
- * otherwise leave the dialog busy and the overlay up forever: the export awaits
- * these before it draws anything. An abort is treated like any other font
- * failure, so the document falls back to Helvetica and still downloads.
+ * Fetch one TrueType asset with a timeout.
+ * An aborted fetch uses the Helvetica fallback so an unresponsive server
+ * does not leave the export dialog waiting.
  * @param {string} file - File name under the public fonts directory
  * @returns {Promise<ArrayBuffer>} Font bytes
  */

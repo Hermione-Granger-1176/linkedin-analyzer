@@ -149,7 +149,7 @@ export function createRunTracker({
         try {
             markers.setItem(key, JSON.stringify(marker));
         } catch {
-            // Storage full or blocked: the run simply goes untracked.
+            // Full or blocked storage prevents tracking this run.
         }
     };
     /** @param {string} key - Marker key */

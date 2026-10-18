@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """Run a policy-driven npm dependency security audit.
 
-A bare ``npm audit --audit-level=high`` fails the build on any high or critical
-advisory, including unfixable transitive ones, with no principled override.
-This module wraps ``npm audit --json`` with the same reviewed-exception policy
-the Python audit uses: exceptions expire on a ``review_by`` date, an exception
-is evicted once a fix becomes available (when it was granted only while
-unfixed), and unused exceptions are reported so the allow-list never rots.
+This module applies reviewed exceptions to ``npm audit --json`` results.
+Exceptions expire on their ``review_by`` date. An exception restricted to
+unfixed findings stops applying when a fix becomes available. Unused exceptions
+produce errors so obsolete entries cannot remain unnoticed.
 
-``npm audit --audit-level`` only changes npm's exit code, and this wrapper
-reads the JSON report instead, so the threshold is reapplied here. Every
-severity is gated by default, matching the sibling artifacts repository; the
-reviewed-exception policy, not a severity floor, is what silences a finding.
-``--audit-level`` remains available to narrow an ad-hoc run.
+The wrapper reads JSON findings rather than relying on npm's exit code, so it
+applies the severity threshold itself. Every severity is checked by default.
+``--audit-level`` narrows a local run.
 
 Exceptions live under ``npm_vulnerability_exceptions`` in
 ``config/security_audit.json`` and share the schema of the Python entries.

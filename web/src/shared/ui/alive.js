@@ -18,11 +18,8 @@ const IDLE_DELAY_MS = 20000;
 const IDLE_DOODLE_MS = 2600;
 const WAKE_MS = 800;
 
-/* How far the eyes travel, in viewBox units. Sideways there is most of a face to
-   move across, so the cap is what keeps the glance a glance. Upwards there is
-   only about 1.3 units of clearance before an eye meets the brow inked above it,
-   which reads as a scowl rather than a look, so the vertical cap is the drawing's
-   headroom rather than a matching number. */
+/* Maximum gaze offsets in viewBox units. Limit vertical movement to the
+1.3 units below the brows so the pupils do not touch them. */
 const GAZE_TRAVEL_X = 1.6;
 const GAZE_TRAVEL_Y = 0.8;
 /* The pointer distance at which the gaze is already all the way over. Past this
@@ -41,8 +38,7 @@ let gazeFrame = 0;
    position to aim at, only the origin. */
 const pendingPointer = { x: 0, y: 0 };
 let pointerSeen = false;
-/* Whether the yawn is on right now. Activity arrives a few hundred times a
-   minute, and this is what keeps all but the interesting one out of the DOM. */
+/* Whether a yawn is active. Avoid repeated DOM updates from activity events. */
 let bored = false;
 
 /**
@@ -84,9 +80,7 @@ function clamp(value, min, max) {
 }
 
 /**
- * Point the pupils at the last pointer position we were given. Runs inside an
- * animation frame, so a storm of pointermove events still only moves the eyes
- * once per painted frame.
+ * Move the pupils toward the latest pointer position once per animation frame.
  * @returns {void}
  */
 function applyGaze() {
@@ -105,9 +99,8 @@ function applyGaze() {
     }
 
     const rect = hero.getBoundingClientRect();
-    // A hidden hero measures zero on at least one side, and a box with no width
-    // or no height puts the centre somewhere Pip is not. Drop the last offset on
-    // the way out, so he is looking straight ahead when he comes back.
+    // A hidden or zero-width drawing has no useful gaze position. Reset its
+    // offset before returning.
     if (!rect.width || !rect.height) {
         gaze.style.transform = "";
         return;
@@ -121,7 +114,7 @@ function applyGaze() {
 }
 
 /**
- * Book the frame that aims the eyes, unless one is already booked.
+ * Schedule the gaze update unless an animation frame is already pending.
  * @returns {void}
  */
 function bookGaze() {
@@ -132,7 +125,7 @@ function bookGaze() {
 }
 
 /**
- * Note where the pointer is and book a frame to move the eyes there.
+ * Record the pointer position and schedule a gaze update.
  * @param {PointerEvent} event - The pointer move that came in.
  * @returns {void}
  */
@@ -179,7 +172,7 @@ function playIdleDoodle() {
 }
 
 /**
- * Start the boredom clock over. Called for every sign of life on the page.
+ * Reset the idle timer after page activity.
  * @returns {void}
  */
 function restartIdleTimer() {
@@ -202,14 +195,12 @@ function handleActivity() {
 }
 
 /**
- * React to the lights going on or off: a hard double blink and a shake of the
- * hair, over inside a second.
+ * Play the blink and hair-shake animation after a user changes the theme.
  * @param {Event} event - The themechange announcement, a CustomEvent.
  * @returns {void}
  */
 function handleThemeChange(event) {
-    // Theme.init() announces the theme it settled on at boot, which is nobody
-    // reaching for the switch, and it says so in the event it sends.
+    // Theme.init() emits a boot event without a user action.
     if (/** @type {CustomEvent} */ (event).detail?.boot) {
         return;
     }
@@ -221,8 +212,7 @@ function handleThemeChange(event) {
         return;
     }
     window.clearTimeout(wakeTimer);
-    // Reapply from a clean slate so a second toggle replays the flinch rather
-    // than leaving the class sitting there doing nothing.
+    // Remove the class and force layout so another toggle restarts the animation.
     hero.classList.remove("is-waking");
     void hero.getBoundingClientRect();
     hero.classList.add("is-waking");
@@ -230,11 +220,9 @@ function handleThemeChange(event) {
 }
 
 /**
- * Give hero Pip his own life: eyes that follow the pointer, a yawn when the page
- * has gone quiet, and a flinch at the theme switch. Binding is one-shot, because
- * a second call would double every listener. The listeners go on whatever the
- * motion preference says, since each move checks it for itself when the time
- * comes; a device without a fine pointer keeps the last two.
+ * Bind hero gaze, idle yawn, and theme-change reactions once.
+ * Each animation checks the current motion preference. Devices without
+ * a fine pointer skip gaze tracking.
  * @returns {void}
  */
 export function initAlive() {

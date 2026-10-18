@@ -1,22 +1,10 @@
 /**
- * Transport for the PDF export's connections dashboard.
+ * Load the PDF connections dashboard through an export-owned worker.
  *
- * The dashboard used to clean and aggregate the connections export inline, on
- * the UI thread, in the middle of `collectExportData`. A real export runs to
- * tens of thousands of rows, and while that block held the thread nothing else
- * could run on it, including the Escape key handler the dialog promises will
- * cancel an export at any point, mid-generation included. The Connections screen
- * has done this same work in a worker from the start, so the export runs that
- * worker rather than a second copy of the arithmetic.
- *
- * The worker is owned outright rather than borrowed from that screen;
- * `worker-transport.js` carries why, and everything about owning it. What is
- * here is what the connections dashboard asks for and how it reads the reply.
- *
- * Nothing the worker was handed is ever reported. Every catch here discards what
- * it was given and reports a fixed error instead, because a failure while
- * parsing the user's connections can carry the names, employers and profile URLs
- * of everyone they know.
+ * Use the Connections screen's worker implementation so parsing and aggregation
+ * keep the main thread available for cancellation. worker-transport.js manages
+ * the separate worker instance. Report fixed errors because thrown values may
+ * contain connection names, employers, or profile URLs.
  */
 
 import { parseConnectionsWorkerMessage } from "../../app/worker-contracts.ts";
@@ -152,12 +140,9 @@ function interpretReply(message, context) {
 }
 
 /**
- * Read a successful worker payload into the shape the dashboard is drawn from.
- *
- * The rows are normalized here rather than by the caller so both paths below
- * answer with one shape, and because the worker cannot do it: it sends the
- * cleaned rows on to the Connections screen, which filters them by a range this
- * export does not have.
+ * Normalize a successful worker payload for the dashboard.
+ * The worker returns the cleaned rows used by the Connections screen.
+ * Normalize them here so worker and main-thread results have the same shape.
  * @param {import("../../app/worker-contracts.ts").ConnectionsProcessedPayload} payload - Successful worker payload
  * @returns {ConnectionsData|null} Data, or null when the reply holds nothing to draw
  */

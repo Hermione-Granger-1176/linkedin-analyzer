@@ -237,7 +237,7 @@ class TestCleanDate:
         assert result == "2024-01-15"
 
     def test_converts_valid_datetime(self) -> None:
-        # We can't test exact local time conversion since it depends on timezone,
+        # Check the output format because conversion uses the host timezone,
         # but we can verify format is preserved
         result = clean_date("2024-01-15 14:30:00")
         assert len(result) == 19  # YYYY-MM-DD HH:MM:SS

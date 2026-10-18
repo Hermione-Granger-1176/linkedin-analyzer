@@ -84,10 +84,9 @@ jobs:
           pr-title: "Refresh CI pins"
           pr-body: |
             ## Summary
-            - Type: CI maintenance
             - Pin GitHub Actions to full commit SHAs for reproducible runs
             - Align the Playwright package and immutable CI image
-            - Refresh the exact pre-commit hook version (uv is a hand-raised floor)
+            - Refresh the pre-commit hook version. Keep the minimum uv version unchanged.
           pathspec: |
             .github/workflows
             .github/actions

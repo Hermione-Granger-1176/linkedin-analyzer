@@ -1,15 +1,8 @@
-/* Pip's stamp-sized reactions for the insight cards.
+/* Decorative Pip poses for insight cards.
 
-   Every card gets one small pose in its bottom-right corner, picked to match
-   what the card is saying: a flex for a rising trend, a doze for a quiet
-   stretch, a trophy for a top topic. The markup is built here rather than
-   inlined in index.html because the cards themselves are built in JS, and
-   because a dozen full poses in the page source would bury the content.
-
-   Poses share the bust, hair and torso every drawing of Pip is built from
-   (shared/ui/pip-parts.js), so only the brows, the eyes, the mouth, and the
-   arms change from one pose to the next. The wobble filter is the shared
-   #pipWobble already defined in index.html. */
+Select a pose by insight ID. Reuse the head, hair, and torso from
+shared/ui/pip-parts.js, changing the face and arms for each reaction.
+The SVG uses the shared pipWobble filter from index.html. */
 
 import {
     PIP_BROWS_HAPPY,
@@ -21,11 +14,8 @@ import {
     PIP_TORSO,
 } from "../../shared/ui/pip-parts.js";
 
-/* Square crop around the bust: head and hair at the top, the jacket running off
-   the bottom edge, and enough room out to the right for a raised arm and
-   whatever it is holding. Props are drawn deliberately large for their owner:
-   this whole box renders at 56px, so anything hand-sized in real proportions
-   would be four pixels of mush. */
+/* Crop the bust with room for raised arms and props. Enlarge the props
+so they remain recognizable at the rendered size of 56 pixels. */
 const REACTION_VIEWBOX = "26 4 98 98";
 
 /* Lifted clear of the eyes: the difference between pleased and proud. */
@@ -78,11 +68,8 @@ const ARMS_FLEX = `
     <circle class="pip-ink pip-paper" cx="48" cy="52" r="8" />
     <circle class="pip-ink pip-paper" cx="92" cy="52" r="8" />`;
 
-/* A fist with the thumb out, drawn behind it so the two read as one hand.
-   Everything here is about not reading as the other gesture at 56 pixels: the
-   thumb is short and fat rather than tall and narrow, it leaves the fist at the
-   top corner on a diagonal rather than straight up, and the three scallops down
-   the near side of the fist are the curled fingers it is clearly attached to. */
+/* Draw a short diagonal thumb behind the fist. Keep the curled fingers
+visible so the gesture reads as a thumbs-up at 56 pixels. */
 const ARMS_THUMBS_UP = `${ARM_LEFT_REST}
     <path class="pip-ink" d="M85 84 Q99 82 101 75" />
     <path class="pip-ink pip-paper" d="M99.6 54.1 L112.1 41.6 A5.5 5.5 0 0 1 119.9 49.4 L107.4 61.9 Z" />
@@ -211,12 +198,9 @@ const POSES = new Map([
 ]);
 
 /**
- * Build the reaction stamp for one insight card.
- *
- * The id only ever selects a pose from the table above, so an unexpected value
- * from the worker can reach the markup no more than an unexpected accent can.
- * The result is decoration: hidden from assistive technology, out of the card's
- * flow, and deaf to the pointer.
+ * Build a decorative reaction from the pose table.
+ * Unknown IDs use the neutral pose. The SVG is hidden from assistive
+ * technology, excluded from layout, and does not receive pointer events.
  * @param {unknown} insightId - The `id` on the insight the card was built from.
  * @returns {string} SVG markup for the card's corner.
  */

@@ -43,38 +43,30 @@ GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
 RUN_ID = $(if $(run),$(run),$(strip $(shell $(GH) latest-run-id 2>/dev/null)))
 # ─── Free text ────────────────────────────────────────────────────────────────
 #
-# A body is read from standard input. That is the only way in, so no target
-# below branches on how the text arrived:
+# Bodies arrive on standard input:
 #
 #     make pr-address thread=PRRT_... <<'EOF'
 #     git log -1 --format=%B | make pr-comment
 #     make issue-comment issue=7 < notes.md
 #
-# Text must not pass through make. Make expands a command-line assignment while
-# it parses it, so `make pr-comment body='$(shell rm -rf .)'` runs the command
-# before any recipe sees the value. Standard input never reaches that parser,
-# and it needs no quoting from the caller either, which the environment still
-# would. It also has no length limit and no argv escaping to get wrong.
+# Make expands command-line assignments during parsing. Text containing Make
+# expressions can execute before a recipe receives it. Standard input avoids
+# Make expansion, shell interpolation, and argument-length limits.
 #
-# A title is not a body: it is one short line, and the targets that take one
-# also take a body, so it arrives in the environment as a shell prefix:
+# Titles arrive through the environment so standard input remains available
+# for the body:
 #
 #     TITLE='Fix the retry loop' make issue-create < issue.md
 #
-# Make never expands a variable it inherited from its environment, so a prefix
-# arrives exactly as typed. `make issue-create TITLE=...` would be expanded, and
-# the two spellings differ only in where the assignment sits, so the unsafe one
-# is refused below rather than trusted to be caught in review.
+# Environment values remain literal. A command-line TITLE assignment would
+# expand Make expressions, so the check below rejects that form.
 #
-# Paths stay ordinary make arguments (`files=`, `path=`). A path is structured,
-# and where one names a file the shell must not reinterpret, as in `stage`, the
-# target exports it with $(value ...) so it never becomes source text either.
+# Paths use Make arguments such as files= and path=. Targets such as stage
+# export literal values with $(value ...) to keep them out of shell source.
 #
-# Where a target's text is *required*, reading a terminal is right: it waits for
-# what you are about to type, the way `cat` does. Where the text is optional and
-# its absence means something (keep the body, generate the notes, no detail),
-# a terminal must not be read at all, or the target would sit waiting for input
-# nobody intends to give. Those four guard the read with this.
+# Required bodies may be read from a terminal. Targets with optional bodies
+# use NO_TTY_READ so a title-only edit or generated release does not wait for
+# terminal input.
 NO_TTY_READ := [ -t 0 ] ||
 FREE_TEXT_VARS := TITLE COMMENT SEARCH
 $(foreach v,$(FREE_TEXT_VARS),$(if $(filter command line,$(origin $(v))),$(error \
@@ -253,10 +245,8 @@ format-py-diff: ## Show Python formatting changes without modifying files [paths
 format-js-check: ## Check Prettier formatting only
 	$(NPM) run format:check
 
-# Prettier has no --diff, so the formatted result is captured and compared. This
-# is the JavaScript-side counterpart to format-py-diff: it answers "what would
-# fmt change here" without running fmt, which matters when the only allowed way
-# to inspect a formatting failure would otherwise be to auto-fix the file.
+# Prettier has no --diff. Compare its output with the original file to preview
+# formatting changes without modifying the file, as format-py-diff does.
 #
 # The result goes to a file rather than through a pipe so that a Prettier
 # failure is still an error; in a pipeline its status would be discarded. Only
@@ -501,11 +491,8 @@ pr-create: ## Open a pull request for the current branch (make pr-create [base=b
 		gh pr create $(if $(base),--base "$(base)") --title "$$TITLE" --body-file -; \
 	fi
 
-# One of the targets whose input is optional, so an empty stream means "leave
-# the body alone" rather than "clear it", and a terminal is not read at all.
-# Without the -t test, `TITLE='...' make pr-edit` would sit waiting for a body
-# nobody intends to type. The branch is on what to change, not on how the text
-# arrived. See NO_TTY_READ above.
+# An empty stream leaves the body unchanged. NO_TTY_READ prevents title-only
+# edits from waiting for terminal input.
 pr-edit: ## Edit the current PR (TITLE='...' make pr-edit; new body on stdin: make pr-edit < body.md) [pr_num=N]
 	@set -e; \
 	body=""; $(NO_TTY_READ) body=$$(cat); \
@@ -534,10 +521,8 @@ pr-diff: ## Show the diff for the current PR
 pr-comments: ## Show all comments on the current PR
 	gh pr view --comments
 
-# Comment and reply text is prose: it carries newlines, quotes, backticks, and
-# version constraints like >=3.12. `--body-file -` hands stdin to the helper
-# untouched, so none of that is ever shell source text, the body never reaches
-# disk, and the recipe is the one command it looks like.
+# Pass prose directly from stdin to the helper. Quotes, backticks, and newlines
+# never become shell source text, and the body is not written to disk.
 pr-comment: ## Add a comment to the current PR, body on stdin (make pr-comment < notes.md) [pr_num=N]
 	@$(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file -
 
@@ -559,9 +544,8 @@ pr-address: ## Reply to and resolve a review thread, body on stdin (make pr-addr
 pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
 	@$(GH) list-comments $(if $(pr_num),--pr "$(pr_num)")
 
-# Named comment_id rather than comment because comment= is free text on the
-# issue targets. One spelling meaning an opaque id here and prose there is what
-# makes an unsafe interpolation look fine to a reader.
+# Use comment_id for an opaque identifier. The issue targets reserve comment
+# for prose, which must not be interpolated into shell source text.
 pr-comment-delete: ## Delete a review comment by node id (make pr-comment-delete comment_id=PRRC_...)
 	@test -n "$(comment_id)" || (printf 'Usage: make pr-comment-delete comment_id=PRRC_...\n' >&2; exit 1)
 	@$(GH) delete-comment --comment "$(comment_id)"

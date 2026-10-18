@@ -47,13 +47,13 @@ def _exception(
 
 
 def test_all_ids_includes_primary_and_aliases() -> None:
-    """All ids includes primary and aliases."""
+    """Include the primary advisory ID and its aliases."""
     finding = _finding(advisory_id="GHSA-1", aliases=("1234",))
     assert finding.all_ids == ("GHSA-1", "1234")
 
 
 def test_advisory_ids_prefers_ghsa_and_keeps_source_alias() -> None:
-    """Advisory ids prefers ghsa and keeps source alias."""
+    """Prefer the GHSA ID and retain the source ID as an alias."""
     primary, aliases = run_npm_audit._advisory_ids(
         {"url": "https://github.com/advisories/GHSA-aaaa-bbbb-cccc", "source": 1088820}
     )
@@ -62,7 +62,7 @@ def test_advisory_ids_prefers_ghsa_and_keeps_source_alias() -> None:
 
 
 def test_advisory_ids_ghsa_without_source() -> None:
-    """Advisory ids ghsa without source."""
+    """Accept a GHSA ID without a numeric source ID."""
     primary, aliases = run_npm_audit._advisory_ids(
         {"url": "https://github.com/advisories/GHSA-aaaa-bbbb-cccc"}
     )
@@ -71,7 +71,7 @@ def test_advisory_ids_ghsa_without_source() -> None:
 
 
 def test_advisory_ids_falls_back_to_numeric_source() -> None:
-    """Advisory ids falls back to numeric source."""
+    """Use the numeric source ID when no GHSA ID is available."""
     primary, aliases = run_npm_audit._advisory_ids({"source": 42})
     assert primary == "42"
     assert aliases == ()
@@ -96,7 +96,7 @@ def test_advisory_ids_rejects_non_string_url() -> None:
 
 
 def test_parse_advisory_skips_bare_package_reference() -> None:
-    """Parse advisory skips bare package reference."""
+    """Skip package references that contain no advisory details."""
     assert run_npm_audit._parse_advisory("upstream-pkg", package="dep", fix_available=False) is None
 
 
@@ -114,7 +114,7 @@ def test_parse_advisory_rejects_advisory_without_id() -> None:
 
 
 def test_parse_advisory_builds_finding() -> None:
-    """Parse advisory builds finding."""
+    """Convert advisory details into a finding."""
     finding = run_npm_audit._parse_advisory(
         {"url": "https://github.com/advisories/GHSA-aaaa-bbbb-cccc", "severity": "moderate"},
         package="dep",
@@ -137,7 +137,7 @@ def test_parse_advisory_rejects_invalid_severity(severity: object) -> None:
 
 
 def test_parse_npm_audit_collects_findings() -> None:
-    """Parse npm audit collects findings."""
+    """Collect the findings from an npm audit report."""
     payload = {
         "vulnerabilities": {
             "left-pad": {
@@ -169,7 +169,7 @@ def test_parse_npm_audit_collects_findings() -> None:
 
 
 def test_parse_npm_audit_defaults_package_name_to_key() -> None:
-    """Parse npm audit defaults package name to key."""
+    """Use the vulnerability key when the package name is absent."""
     payload = {
         "vulnerabilities": {
             "lodash": {
@@ -260,13 +260,13 @@ def test_parse_npm_audit_accepts_fix_description_object() -> None:
     ],
 )
 def test_parse_npm_audit_rejects_invalid_shapes(payload: dict[str, object]) -> None:
-    """Parse npm audit rejects invalid shapes."""
+    """Reject malformed npm audit reports."""
     with pytest.raises(ValueError):
         run_npm_audit._parse_npm_audit(payload)
 
 
 def test_run_npm_audit_parses_clean_report(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run npm audit parses clean report."""
+    """Parse an npm audit report with no vulnerabilities."""
     monkeypatch.setattr(
         run_npm_audit.subprocess,
         "run",
@@ -314,7 +314,7 @@ def test_run_npm_audit_rejects_empty_command() -> None:
 
 
 def test_run_npm_audit_raises_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run npm audit raises on timeout."""
+    """Report an audit subprocess timeout."""
 
     def _timeout(*_args: object, **_kwargs: object) -> None:
         raise subprocess.TimeoutExpired(["npm", "audit"], 120)
@@ -326,7 +326,7 @@ def test_run_npm_audit_raises_on_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_run_npm_audit_raises_when_npm_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run npm audit raises when npm missing."""
+    """Report a missing npm executable."""
 
     def _missing(*_args: object, **_kwargs: object) -> None:
         raise FileNotFoundError("no npm")
@@ -348,7 +348,7 @@ def test_run_npm_audit_raises_when_npm_missing(monkeypatch: pytest.MonkeyPatch) 
 def test_run_npm_audit_rejects_invalid_json(
     stdout: str, stderr: str, message: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Run npm audit rejects invalid json."""
+    """Reject audit output that is not valid JSON."""
     monkeypatch.setattr(
         run_npm_audit.subprocess,
         "run",
@@ -360,7 +360,7 @@ def test_run_npm_audit_rejects_invalid_json(
 
 
 def test_run_npm_audit_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run npm audit rejects non object json."""
+    """Reject an audit report whose JSON root is not an object."""
     monkeypatch.setattr(
         run_npm_audit.subprocess,
         "run",
@@ -386,7 +386,7 @@ def test_run_npm_audit_rejects_non_object_json(monkeypatch: pytest.MonkeyPatch) 
 def test_run_npm_audit_reports_audit_errors(
     payload: str, message: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Run npm audit reports audit errors."""
+    """Report errors returned by npm audit."""
     monkeypatch.setattr(
         run_npm_audit.subprocess,
         "run",
@@ -398,7 +398,7 @@ def test_run_npm_audit_reports_audit_errors(
 
 
 def test_matches_exception_compares_package_and_ids() -> None:
-    """Matches exception compares package and ids."""
+    """Match exceptions by package and advisory ID."""
     finding = _finding(advisory_id="GHSA-1", aliases=("99",), package="Left-Pad")
     assert run_npm_audit._matches_exception(
         _exception(vulnerability_id="99", package="left-pad"), finding
@@ -431,7 +431,7 @@ def test_audit_allows_lowercase_configured_exception() -> None:
 
 
 def test_audit_reports_unreviewed_vulnerability() -> None:
-    """Audit reports unreviewed vulnerability."""
+    """Report a vulnerability without a reviewed exception."""
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 1, 1),
         exceptions=(),
@@ -443,7 +443,7 @@ def test_audit_reports_unreviewed_vulnerability() -> None:
 
 
 def test_audit_allows_reviewed_unfixed_vulnerability() -> None:
-    """Audit allows reviewed unfixed vulnerability."""
+    """Accept a reviewed exception while no fix is available."""
     exception = _exception(ignore_only_without_fix=True)
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 1, 1),
@@ -457,7 +457,7 @@ def test_audit_allows_reviewed_unfixed_vulnerability() -> None:
 
 
 def test_audit_rejects_expired_exception() -> None:
-    """Audit rejects expired exception."""
+    """Reject an expired audit exception."""
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 6, 1),
         exceptions=(_exception(review_by=date(2026, 1, 1)),),
@@ -471,7 +471,7 @@ def test_audit_rejects_expired_exception() -> None:
 
 
 def test_audit_evicts_exception_when_fix_available() -> None:
-    """Audit evicts exception when fix available."""
+    """Reject an exception when a fix becomes available."""
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 1, 1),
         exceptions=(_exception(ignore_only_without_fix=True),),
@@ -486,7 +486,7 @@ def test_audit_evicts_exception_when_fix_available() -> None:
 
 
 def test_audit_reports_unused_exception() -> None:
-    """Audit reports unused exception."""
+    """Report an exception that matches no finding."""
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 1, 1),
         exceptions=(_exception(),),
@@ -580,7 +580,7 @@ def test_audit_rejects_multiple_exceptions_matching_one_advisory() -> None:
 def test_main_reports_success_with_reviewed_exceptions(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Main reports success with reviewed exceptions."""
+    """Report success when every finding has a valid exception."""
     exception = _exception(ignore_only_without_fix=True)
     finding = _finding()
     monkeypatch.setattr(
@@ -598,7 +598,7 @@ def test_main_reports_success_with_reviewed_exceptions(
 def test_main_reports_errors(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Main reports errors."""
+    """Print audit errors and return a non-zero status."""
     monkeypatch.setattr(run_npm_audit, "load_security_audit_exceptions", lambda **_kwargs: ())
     monkeypatch.setattr(run_npm_audit, "_run_npm_audit", lambda _npm: (_finding(),))
 

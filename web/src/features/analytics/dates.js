@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics date parsing and calendar math */
+/* LinkedIn Analyzer: Analytics date parsing and calendar math */
 
 import { MONTH_LABELS } from "./constants.js";
 

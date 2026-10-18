@@ -285,9 +285,8 @@ export const ScreenManager = (() => {
     }
 
     /**
-     * Transition between route screens. Only the incoming screen is ever painted:
-     * every other screen is reset to its hidden base state synchronously, so a fast
-     * switch can never leave the previous page overlaid on the new one.
+     * Show the incoming screen and synchronously hide every other screen.
+     * This prevents rapid navigation from leaving an earlier screen overlaid.
      * @param {HTMLElement|null} previousScreen - Previous screen
      * @param {HTMLElement|null} nextScreen - Next screen
      */

@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics shared label constants */
+/* LinkedIn Analyzer: Analytics shared label constants */
 
 export const DAY_LABELS = Object.freeze(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
 

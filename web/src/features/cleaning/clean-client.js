@@ -101,8 +101,8 @@ function onMessage(event) {
 }
 
 /**
- * A worker that fell over, or a reply that cannot be read, cannot answer;
- * start a fresh worker next time.
+ * Fail the current request after a worker error or unreadable reply.
+ * The next request starts a new worker.
  * @param {Event} event - Worker error or messageerror event
  */
 function onError(event) {
@@ -111,7 +111,7 @@ function onError(event) {
     failWorker();
 }
 
-/** Report a worker that fell over and start a fresh one next time. */
+/** Report the worker failure and terminate it so the next request starts a new one. */
 function failWorker() {
     captureError(new Error("Cleaning worker failed."), {
         module: "clean",

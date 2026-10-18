@@ -84,16 +84,9 @@ describe("loadRecentThreads", () => {
     });
 
     it("sends the raw connections file to the worker and parses nothing here", async () => {
-        // Without it the worker cannot tell which side of a single conversation
-        // is the account owner, and every direction chip in the exported
-        // document reads "unknown". Deriving the keys on this side instead is
-        // the whole-file parse that kept the Escape key from reaching its own
-        // handler, so the file travels raw and the worker does the reading.
-        // Both entry points, because a spy on either alone leaves a hole.
-        // `parseCSV` is module-local and merely re-exposed on the object, so
-        // cleaner.js's own calls to it hit the local binding and this spy never
-        // sees them: reintroducing the UI-thread parse through
-        // `LinkedInCleaner.process` used to pass this test untouched.
+        // Pass the connections source to the worker for the account-owner tiebreak.
+        // Spy on both parser entry points because the cleaner calls its local
+        // parseCSV binding without using the exported method.
         const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
         const processFile = vi.spyOn(LinkedInCleaner, "process");
         const pending = loadRecentThreads(MESSAGES_CSV, CONNECTIONS_CSV);
@@ -225,13 +218,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("falls back when a failure envelope names no request it was given", async () => {
-        // This worker answers a global failure under the request it was serving,
-        // so an id it was never given means it fell over before reading one at
-        // all. It never touched the CSV, and that is not the same event as the
-        // test above, where it read this request and declined the file.
-        //
-        // It settles at once either way: no timer is advanced, so a request left
-        // to sit out its watchdog fails this test.
+        // A failure for an unknown request does not establish that this file failed.
+        // Permit the small-file fallback and settle without advancing the timer.
         vi.useFakeTimers();
         const pending = loadRecentThreads(MESSAGES_CSV, "");
         const worker = harness.instance;
@@ -462,11 +450,8 @@ describe("loadRecentThreads", () => {
     });
 
     it("breaks the tie on the main thread with the same keys the worker derives", async () => {
-        // The fallback has to answer with the document the worker would have
-        // produced, tiebreak included: a browser with no worker is not a browser
-        // that deserves every direction chip reading "unknown". Ada's row
-        // carries no connection date, so a fallback that cleaned rather than
-        // parsed would drop her and lose the tie.
+        // The fallback must derive the same tiebreak keys as the worker.
+        // Keep Ada's row even without a connection date, which cleaning would drop.
         harness.uninstall();
 
         const unaided = await loadRecentThreads(TIED_CSV, "");

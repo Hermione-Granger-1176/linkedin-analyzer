@@ -1,13 +1,9 @@
 /**
- * Transport for the PDF export's thread selection.
+ * Select PDF message threads through an export-owned worker.
  *
- * The worker is handed both raw files, the messages export and the connections
- * export it breaks a self-detection tie with. Neither leaves this path, and
- * nothing about either is ever reported: every catch here discards what it was
- * handed and reports a fixed error instead.
- *
- * `worker-transport.js` owns the worker, its watchdog and its lifetime. What is
- * here is what the threads section asks for and how it reads the reply.
+ * Pass the stored messages and connections sources to the worker. Report
+ * fixed errors because either source may appear in thrown values.
+ * worker-transport.js manages the worker, timeout, and cancellation.
  */
 
 import { parseThreadsWorkerMessage } from "../../app/worker-contracts.ts";
@@ -147,12 +143,8 @@ function selectThreadsOnMainThread(messagesCsv, connectionsCsv, options) {
 }
 
 /**
- * Derive the tiebreak keys on the UI thread, for a small export with no worker.
- *
- * Parsing on this thread is what the transport exists to avoid, but this path
- * is already parsing the messages export here by definition, and the browser
- * that took it has no worker to move anything to. The alternative is a document
- * whose every direction chip reads "unknown" on exactly those browsers.
+ * Derive account-owner tiebreak keys on the main thread for a small export
+ * when workers are unavailable. This fallback already parses messages here.
  * @param {string} connectionsCsv - Raw connections CSV text
  * @returns {string[]} Normalized keys, empty when there are none to be had
  */

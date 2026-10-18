@@ -1,21 +1,16 @@
 /**
- * Vitest unit tests for Tutorial module.
- *
- * Tutorial is an IIFE with internal closure state.  vi.resetModules() + dynamic
- * import in beforeEach gives every test a fresh instance.
- *
- * Static imports MUST be at top (Vitest hoisting requirement).
- * vi.mock() calls follow immediately, they are hoisted above imports at
- * compile time regardless of their textual position.
+ * Test tutorial state, navigation, placement, and timers.
+ * Reset modules before each dynamic import to isolate the closure state.
+ * Vitest hoists vi.mock registrations before imports.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockMatchMedia, resetDom } from "../../helpers/dom.js";
 
-// ---------------------------------------------------------------------------
+
 // Module mocks, hoisted above imports by Vitest
-// ---------------------------------------------------------------------------
+
 
 vi.mock("../../../src/app/router.js", () => ({
     AppRouter: {
@@ -268,9 +263,9 @@ vi.mock("../../../src/features/tutorial/steps.js", () => ({
     },
 }));
 
-// ---------------------------------------------------------------------------
+
 // Helpers
-// ---------------------------------------------------------------------------
+
 
 /**
  * Make a visible element with a realistic bounding rect.
@@ -372,9 +367,9 @@ function patchComputedStyle() {
     });
 }
 
-// ---------------------------------------------------------------------------
+
 // Per-test state
-// ---------------------------------------------------------------------------
+
 
 let Tutorial;
 
@@ -384,7 +379,7 @@ beforeEach(async () => {
     resetDom();
     mockMatchMedia(false);
 
-    // Realistic viewport dimensions (jsdom defaults to 0 × 0)
+    // Set viewport dimensions explicitly for geometry assertions.
     Object.defineProperty(window, "innerWidth", {
         writable: true,
         configurable: true,
@@ -431,9 +426,9 @@ afterEach(() => {
     resetDom();
 });
 
-// ===========================================================================
+
 // Tutorial.init(), idempotent shell initialization
-// ===========================================================================
+
 
 describe("Tutorial.init()", () => {
     it("builds tutorial DOM layer on first call", () => {
@@ -486,9 +481,9 @@ describe("Tutorial.init()", () => {
     });
 });
 
-// ===========================================================================
+
 // Tutorial.isComplete()
-// ===========================================================================
+
 
 describe("Tutorial.isComplete()", () => {
     it("returns false when route has no completion key", () => {
@@ -514,9 +509,9 @@ describe("Tutorial.isComplete()", () => {
     });
 });
 
-// ===========================================================================
+
 // Tutorial.start(), direct start
-// ===========================================================================
+
 
 describe("Tutorial.start()", () => {
     it("returns false when route is already complete and force is not set", () => {
@@ -631,10 +626,10 @@ describe("Tutorial.start()", () => {
     });
 });
 
-// ===========================================================================
+
 // scheduleInitialRetry, retry when step element not immediately available
 // Only triggered when start() is called with { auto: true }
-// ===========================================================================
+
 
 describe("scheduleInitialRetry", () => {
     it("when auto=true and no target, schedules retry and returns true", () => {
@@ -693,9 +688,9 @@ describe("scheduleInitialRetry", () => {
     });
 });
 
-// ===========================================================================
+
 // Tutorial.onRouteChange()
-// ===========================================================================
+
 
 describe("Tutorial.onRouteChange()", () => {
     it("calls init and builds DOM on first use", () => {
@@ -791,9 +786,9 @@ describe("Tutorial.onRouteChange()", () => {
     });
 });
 
-// ===========================================================================
+
 // Next / Prev navigation
-// ===========================================================================
+
 
 describe("step navigation", () => {
     beforeEach(() => {
@@ -830,7 +825,7 @@ describe("step navigation", () => {
         const next = document.querySelector(".tutorial-btn-next");
         next.click();
         next.click();
-        next.click(); // Finish
+        next.click();
 
         expect(document.body.classList.contains("tutorial-open")).toBe(false);
         expect(Tutorial.isComplete("home")).toBe(true);
@@ -867,9 +862,9 @@ describe("step navigation", () => {
     });
 });
 
-// ===========================================================================
+
 // allowBack / allowNext / allowSkip guard clauses
-// ===========================================================================
+
 
 describe("step permission guards", () => {
     it("step with allowBack=false: Back click is a no-op", () => {
@@ -909,9 +904,9 @@ describe("step permission guards", () => {
     });
 });
 
-// ===========================================================================
+
 // Keyboard shortcuts
-// ===========================================================================
+
 
 describe("keyboard shortcuts", () => {
     beforeEach(() => {
@@ -998,9 +993,9 @@ describe("keyboard shortcuts", () => {
     });
 });
 
-// ===========================================================================
+
 // Tab focus trapping, trapFocus branches
-// ===========================================================================
+
 
 describe("focus trap (Tab key)", () => {
     beforeEach(() => {
@@ -1072,9 +1067,9 @@ describe("focus trap (Tab key)", () => {
     });
 });
 
-// ===========================================================================
+
 // Step dot navigation
-// ===========================================================================
+
 
 describe("dot navigation", () => {
     beforeEach(() => {
@@ -1106,7 +1101,7 @@ describe("dot navigation", () => {
     });
 
     it("dot click is a no-op when tutorial is not active", () => {
-        document.querySelector(".tutorial-btn-skip").click(); // close
+        document.querySelector(".tutorial-btn-skip").click();
         expect(document.body.classList.contains("tutorial-open")).toBe(false);
 
         // Dispatch a click on the popover area, should not throw
@@ -1117,9 +1112,9 @@ describe("dot navigation", () => {
     });
 });
 
-// ===========================================================================
+
 // Tutorial.reset()
-// ===========================================================================
+
 
 describe("Tutorial.reset()", () => {
     it("clears completion state from localStorage", () => {
@@ -1153,9 +1148,9 @@ describe("Tutorial.reset()", () => {
     });
 });
 
-// ===========================================================================
+
 // Tutorial completion flow
-// ===========================================================================
+
 
 describe("tutorial completion", () => {
     it("marks route complete in localStorage after Finish on last step", () => {
@@ -1165,7 +1160,7 @@ describe("tutorial completion", () => {
         const next = document.querySelector(".tutorial-btn-next");
         next.click();
         next.click();
-        next.click(); // Finish
+        next.click();
 
         expect(Tutorial.isComplete("home")).toBe(true);
     });
@@ -1212,9 +1207,9 @@ describe("tutorial completion", () => {
     });
 });
 
-// ===========================================================================
+
 // Restart button
-// ===========================================================================
+
 
 describe("restart button", () => {
     it('data-tutorial-action="restart" restarts the tutorial', () => {
@@ -1300,9 +1295,9 @@ describe("restart button", () => {
     });
 });
 
-// ===========================================================================
+
 // Spotlight and pointer geometry
-// ===========================================================================
+
 
 describe("spotlight and pointer geometry", () => {
     it("spotlight is visible (display:block) when step has a visible target", () => {
@@ -1357,19 +1352,14 @@ describe("spotlight and pointer geometry", () => {
     });
 });
 
-// ===========================================================================
+
 // Mini-tips rendering
-// ===========================================================================
+
 
 describe("renderMiniTips", () => {
-    // Set up conditions for mini-tips to render:
-    // 1. Route must be complete (markRouteComplete)
-    // 2. Visit count must satisfy shouldScheduleMiniTips:
-    //    getMiniTipVisitInterval(visitCount=2) = 2, 2%2===0, passes
-    //    No lastShownAt, passes
-    // 3. Must use onRouteChange path which calls scheduleMiniTips
-    // Set visitCount=1 in storage, call onRouteChange (increments to 2),
-    // then advance timers past MINI_TIP_INITIAL_DELAY_MS (2200ms + 2*90ms = 2380ms).
+    // Complete the route and begin at visit count 1. onRouteChange advances
+    // to visit 2, which satisfies the interval rule. No previous display time
+    // blocks the tip, and its initial delay is 2380 ms.
     function primeVisitCount(routeName) {
         // Pre-set visit count to 1 so onRouteChange increments it to 2
         // 2 % 2 === 0 → shouldScheduleMiniTips passes
@@ -1492,9 +1482,9 @@ describe("renderMiniTips", () => {
     });
 });
 
-// ===========================================================================
+
 // prefers-reduced-motion
-// ===========================================================================
+
 
 describe("prefers-reduced-motion", () => {
     it("matchMedia reduced motion false is the default in tests", () => {
@@ -1513,9 +1503,9 @@ describe("prefers-reduced-motion", () => {
     });
 });
 
-// ===========================================================================
+
 // handleViewportChange, resize / scroll events
-// ===========================================================================
+
 
 describe("handleViewportChange", () => {
     it("fires without error when tutorial is active", () => {
@@ -1542,9 +1532,9 @@ describe("handleViewportChange", () => {
     });
 });
 
-// ===========================================================================
+
 // handleScrollLock, wheel / touchmove prevention
-// ===========================================================================
+
 
 describe("handleScrollLock", () => {
     it("prevents wheel and touchmove on the page while tutorial is active", () => {
@@ -1565,9 +1555,9 @@ describe("handleScrollLock", () => {
     });
 });
 
-// ===========================================================================
+
 // Guard clauses when tutorial is inactive
-// ===========================================================================
+
 
 describe("inactive tutorial guards", () => {
     it("Next click when tutorial is not active is a no-op", () => {
@@ -1586,9 +1576,9 @@ describe("inactive tutorial guards", () => {
     });
 });
 
-// ===========================================================================
+
 // Loading overlay interaction
-// ===========================================================================
+
 
 describe("loading overlay interaction", () => {
     it("delays auto-start while LoadingOverlay.isActive() returns true", async () => {
@@ -1666,9 +1656,9 @@ describe("loading overlay interaction", () => {
     });
 });
 
-// ===========================================================================
+
 // Miscellaneous edge cases
-// ===========================================================================
+
 
 describe("miscellaneous edge cases", () => {
     it("Tutorial.init() is called implicitly by start()", () => {
@@ -1689,10 +1679,8 @@ describe("miscellaneous edge cases", () => {
     });
 
     it("start with a step that uses fallbackTarget when primary target missing", async () => {
-        // Build only step-target-2 and step-target-3, not step-target-1
-        // The 'home' mock has no fallback, so step 1 will be skipped,
-        // and moveToStep(0,1) will find step 1 at index 0... because target is null
-        // and hasStepTarget is true → step is skipped → finds step 2 with its target
+        // Only step-target-2 and step-target-3 exist, so the tutorial skips
+        // the missing first target.
         addTarget("step-target-2");
         addTarget("step-target-3");
 
@@ -1735,7 +1723,7 @@ describe("miscellaneous edge cases", () => {
         document.querySelector(".tutorial-btn-next").click(); // step 2
         expect(document.querySelector(".tutorial-counter").textContent).toMatch(/Step 2 of/);
 
-        // restart
+
         Tutorial.start("home", { force: true });
         expect(document.querySelector(".tutorial-counter").textContent).toMatch(/Step 1 of/);
     });
@@ -1825,15 +1813,13 @@ describe("miscellaneous edge cases", () => {
     });
 });
 
-// ===========================================================================
+
 // positionMiniTip, rendering and positioning
-// ===========================================================================
+
 
 describe("positionMiniTip rendering", () => {
     /**
-     * Mini-tip positioning is exercised through the renderMiniTips flow.
-     * The 'home' mini-tip uses placement 'top'.  We check that positioning
-     * styles are applied and the tip is visible.
+     * Check mini-tip visibility and positioning through renderMiniTips.
      */
     function triggerMiniTips() {
         const key = "linkedin-analyzer:tutorial:v2:mini-tip:route-visits";
@@ -1892,15 +1878,13 @@ describe("positionMiniTip rendering", () => {
     });
 });
 
-// ===========================================================================
+
 // Geometry, resolvePlacement and calculatePopoverPosition branches
-// ===========================================================================
+
 
 describe("geometry: resolvePlacement and calculatePopoverPosition", () => {
     /**
-     * To test different placement branches we need steps with placement='auto'
-     * and targets in various screen positions so the auto-placement logic picks
-     * a side. We place the target near different edges to force each branch.
+     * Place targets near different viewport edges to exercise automatic placement.
      */
 
     it('placement "bottom" is covered by the default home step', () => {
@@ -1943,9 +1927,9 @@ describe("geometry: resolvePlacement and calculatePopoverPosition", () => {
     });
 });
 
-// ===========================================================================
+
 // scheduleMiniTipRetry, retry when all tips have no visible target
-// ===========================================================================
+
 
 describe("scheduleMiniTipRetry", () => {
     it("retries rendering when no tips have visible targets on first attempt", () => {
@@ -2006,7 +1990,7 @@ describe("scheduleMiniTipRetry", () => {
         buildHomeTargets();
         Tutorial.start("home");
 
-        // Retry fires while tutorial is active → returns early (line 1411)
+        // Retry fires while tutorial is active → returns early
         expect(() => vi.advanceTimersByTime(500)).not.toThrow();
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
@@ -2024,14 +2008,14 @@ describe("scheduleMiniTipRetry", () => {
         // Change miniTipsRoute by switching routes
         Tutorial.onRouteChange("home");
 
-        // Retry fires but route has changed → returns early (line 1413)
+        // Retry fires but route has changed → returns early
         expect(() => vi.advanceTimersByTime(500)).not.toThrow();
     });
 });
 
-// ===========================================================================
+
 // shouldScheduleMiniTips, cooldown check
-// ===========================================================================
+
 
 describe("shouldScheduleMiniTips cooldown", () => {
     it("respects cooldown: does not show mini-tips if shown recently", () => {
@@ -2078,10 +2062,10 @@ describe("shouldScheduleMiniTips cooldown", () => {
     });
 });
 
-// ===========================================================================
-// resolvePlacement 'auto' branches (lines 938-955)
-// calculatePopoverPosition left/right (lines 988-994)
-// ===========================================================================
+
+// resolvePlacement 'auto' branches
+// calculatePopoverPosition left/right
+
 
 describe("resolvePlacement auto algorithm", () => {
     // The 'autoplace' route has placement:'auto'. By placing the target at
@@ -2162,9 +2146,9 @@ describe("resolvePlacement auto algorithm", () => {
     });
 });
 
-// ===========================================================================
-// resolvePointerVariant arrowStyle explicit (lines 1060-1062, 1099)
-// ===========================================================================
+
+// resolvePointerVariant arrowStyle explicit
+
 
 describe("resolvePointerVariant with explicit arrowStyle", () => {
     it("uses named arrowStyle when a matching ARROW_VARIANTS entry exists", () => {
@@ -2196,9 +2180,9 @@ describe("resolvePointerVariant with explicit arrowStyle", () => {
     });
 });
 
-// ===========================================================================
-// collectTargetCandidates with Array target (lines 805, 824-829)
-// ===========================================================================
+
+// collectTargetCandidates with Array target
+
 
 describe("collectTargetCandidates with Array target field", () => {
     it("resolves first visible element from an array target", () => {
@@ -2238,22 +2222,19 @@ describe("collectTargetCandidates with Array target field", () => {
     });
 });
 
-// ===========================================================================
-// resolveElementReference with Element instance (lines 845, 850-853)
-// ===========================================================================
+
+// resolveElementReference with Element instance
+
 
 describe("resolveElementReference with Element reference", () => {
     it("resolves to an Element reference passed directly as target", () => {
-        // The eltarget route uses '#eltarget-elem' which resolves via querySelector.
-        // This tests the string path. To test Element-instance path we need to
-        // inject an Element directly, we can do this by patching the step at runtime.
+        // Exercise selector resolution with an element added at the configured ID.
         const el = document.createElement("div");
         el.id = "eltarget-elem-direct";
         document.body.appendChild(el);
         makeVisible(el, { left: 200, top: 200, right: 300, bottom: 240, width: 100, height: 40 });
 
-        // We cannot inject into the frozen mock at runtime, but we CAN use eltarget
-        // route with '#eltarget-elem' selector, add the element with that id
+        // The frozen step config uses a selector, so this case tests selector lookup.
         const elById = document.createElement("div");
         elById.id = "eltarget-elem";
         document.body.appendChild(elById);
@@ -2271,9 +2252,9 @@ describe("resolveElementReference with Element reference", () => {
     });
 });
 
-// ===========================================================================
-// isElementVisible hidden/collapse (lines 868, 871)
-// ===========================================================================
+
+// isElementVisible hidden/collapse
+
 
 /**
  * Override getComputedStyle without recursion.
@@ -2364,10 +2345,10 @@ describe("isElementVisible with non-visible computed styles", () => {
     });
 });
 
-// ===========================================================================
-// isViewportPinned, fixed/sticky position (line 1718)
-// ensureTargetInView when target is viewport-pinned (lines 546, 557-558)
-// ===========================================================================
+
+// isViewportPinned, fixed/sticky position
+// ensureTargetInView when target is viewport-pinned
+
 
 describe("isViewportPinned and ensureTargetInView with fixed element", () => {
     it("skips scrollIntoView for a position:fixed target", () => {
@@ -2422,9 +2403,9 @@ describe("isViewportPinned and ensureTargetInView with fixed element", () => {
     });
 });
 
-// ===========================================================================
-// positionMiniTip left / right / bottom placements (lines 1345-1354)
-// ===========================================================================
+
+// positionMiniTip left / right / bottom placements
+
 
 describe("positionMiniTip with left, right, and bottom placements", () => {
     function setupMiniTipPlacementsRoute() {
@@ -2455,9 +2436,9 @@ describe("positionMiniTip with left, right, and bottom placements", () => {
     });
 });
 
-// ===========================================================================
-// getRouteConfigItems null/array/fallback (lines 1512, 1516, 1524)
-// ===========================================================================
+
+// getRouteConfigItems null/array/fallback
+
 
 describe("getRouteConfigItems edge cases", () => {
     it("does not throw when TutorialMiniTips has no entry for route", () => {
@@ -2472,11 +2453,11 @@ describe("getRouteConfigItems edge cases", () => {
     });
 });
 
-// ===========================================================================
-// scheduleMiniTips early returns (lines 1557-1568)
-// canStartMiniTips stale-token branch (line 1591)
-// scheduleMiniTipStart loading re-schedule (lines 1607-1611)
-// ===========================================================================
+
+// scheduleMiniTips early returns
+// canStartMiniTips stale-token branch
+// scheduleMiniTipStart loading re-schedule
+
 
 describe("scheduleMiniTips early returns and canStartMiniTips", () => {
     it("does not schedule mini-tips when the tutorial is active", () => {
@@ -2546,9 +2527,9 @@ describe("scheduleMiniTips early returns and canStartMiniTips", () => {
     });
 });
 
-// ===========================================================================
-// isLoadingActive DOM checks (lines 1746, 1751)
-// ===========================================================================
+
+// isLoadingActive DOM checks
+
 
 describe("isLoadingActive DOM overlay checks", () => {
     it("returns true when #contentLoadingOverlay is visible", () => {
@@ -2585,9 +2566,9 @@ describe("isLoadingActive DOM overlay checks", () => {
     });
 });
 
-// ===========================================================================
-// localStorage catch blocks (lines 1862, 1890, 1902)
-// ===========================================================================
+
+// localStorage catch blocks
+
 
 describe("localStorage error resilience", () => {
     it("getStorageValue catches errors from localStorage.getItem", () => {
@@ -2624,10 +2605,10 @@ describe("localStorage error resilience", () => {
     });
 });
 
-// ===========================================================================
+
 // Handler guard returns, allowBack=false, handleDotClick NaN index,
-// handleSkipClick allowSkip=false, shouldUseNativeEnter null target (lines 368, 425, 444, 583)
-// ===========================================================================
+// handleSkipClick allowSkip=false, shouldUseNativeEnter null target
+
 
 describe("handler guard returns", () => {
     it("handleBackClick returns early when step.allowBack is false", () => {
@@ -2673,9 +2654,9 @@ describe("handler guard returns", () => {
     });
 });
 
-// ===========================================================================
-// findRenderableStepIndex edge cases (lines 639, 651, 666)
-// ===========================================================================
+
+// findRenderableStepIndex edge cases
+
 
 describe("findRenderableStepIndex edge cases", () => {
     it("returns -1 when navigating back past step 0", () => {
@@ -2688,9 +2669,9 @@ describe("findRenderableStepIndex edge cases", () => {
     });
 });
 
-// ===========================================================================
+
 // Pip, the guide standing on the callout card
-// ===========================================================================
+
 
 describe("tutorial mascot", () => {
     it("mounts inside the popover without joining the focus trap", async () => {
@@ -2763,9 +2744,9 @@ describe("tutorial mascot", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Helpers used in new tests
-// ---------------------------------------------------------------------------
+
+
+
 
 function ui_nextButton() {
     return document.querySelector(".tutorial-btn-next");

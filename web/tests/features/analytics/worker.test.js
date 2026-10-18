@@ -29,9 +29,9 @@ vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     }
 }));
 
-// ---------------------------------------------------------------------------
+
 // Helpers
-// ---------------------------------------------------------------------------
+
 
 /** Minimal analytics object that satisfies hasAnalyticsData() */
 function makeAnalytics(overrides = {}) {
@@ -102,9 +102,9 @@ function mockCleanerSuccess(fileType = "shares") {
     });
 }
 
-// ---------------------------------------------------------------------------
+
 // normalizeFilters
-// ---------------------------------------------------------------------------
+
 
 describe("normalizeFilters", () => {
     it("fills in defaults for null/undefined input", () => {
@@ -157,9 +157,9 @@ describe("normalizeFilters", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // getViewKey
-// ---------------------------------------------------------------------------
+
 
 describe("getViewKey", () => {
     it("returns a pipe-delimited string with default fields", () => {
@@ -178,9 +178,9 @@ describe("getViewKey", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // handleInitBase
-// ---------------------------------------------------------------------------
+
 
 describe("handleInitBase", () => {
     beforeEach(() => {
@@ -245,9 +245,9 @@ describe("handleInitBase", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // handleView
-// ---------------------------------------------------------------------------
+
 
 describe("handleView", () => {
     beforeEach(() => {
@@ -379,9 +379,9 @@ describe("handleView", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // handleAddFile
-// ---------------------------------------------------------------------------
+
 
 describe("handleAddFile", () => {
     beforeEach(() => {
@@ -651,9 +651,9 @@ describe("handleAddFile with an uploaded File", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // handleRestoreFiles
-// ---------------------------------------------------------------------------
+
 
 describe("handleRestoreFiles", () => {
     beforeEach(() => {
@@ -790,9 +790,9 @@ describe("handleRestoreFiles", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // handleClear
-// ---------------------------------------------------------------------------
+
 
 describe("handleClear", () => {
     beforeEach(() => {
@@ -822,9 +822,9 @@ describe("handleClear", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // message dispatcher (via self.addEventListener handler)
-// ---------------------------------------------------------------------------
+
 
 describe("message event dispatcher", () => {
     it("registers a message listener on self during module load", async () => {
@@ -1210,9 +1210,9 @@ describe("message event dispatcher", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // hydrateAnalytics round-trip (tested via initBase → view)
-// ---------------------------------------------------------------------------
+
 
 describe("hydrateAnalytics via initBase/view round-trip", () => {
     beforeEach(() => {
@@ -1249,9 +1249,9 @@ describe("hydrateAnalytics via initBase/view round-trip", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // view cache LRU trimming
-// ---------------------------------------------------------------------------
+
 
 describe("view cache LRU trimming", () => {
     beforeEach(() => {

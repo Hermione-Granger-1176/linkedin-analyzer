@@ -1,4 +1,4 @@
-"""LinkedIn data export analyzer - Clean and export LinkedIn CSV data to Excel."""
+"""Clean LinkedIn CSV exports and write them to Excel."""
 
 from __future__ import annotations
 

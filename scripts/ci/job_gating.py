@@ -1,29 +1,19 @@
 #!/usr/bin/env python3
 """Decide which CI jobs a change needs, then check that exactly those jobs ran.
 
-A documentation edit cannot break a Playwright run, but it used to pay for one
-anyway. ``changed-areas`` classifies the paths in a diff into the two areas the
-workflow matrix is organized around, ``python`` and ``web``, and the workflow
-gates its jobs on the result.
+``changed-areas`` classifies changed paths as ``python``, ``web``, both, or
+neither. The workflow uses those results to select area-specific jobs.
 
-The gate has to be skipped in the right way. A workflow filtered out by
-``on: paths:`` never reports its checks at all, so a required check sits pending
-and the pull request can never merge; a job skipped by an ``if:`` condition
-reports a ``skipped`` conclusion that branch protection accepts. That is why the
-filtering lives here, in job conditions, rather than in the workflow trigger.
+Path filtering belongs in job conditions. Filtering the workflow trigger would
+leave required checks pending when a workflow does not run. A job skipped through
+``if:`` reports a conclusion that the aggregate check can validate.
 
-Two properties make this safe to trust.
+Unrecognized paths, unavailable diffs, and missing base commits select both
+areas. New directories therefore receive the full matrix until a rule identifies
+which jobs they require.
 
-Unrecognized paths fail open. A path that matches no rule below, a diff that
-cannot be computed, and an absent base commit all resolve to both areas and a
-full matrix. A new top-level directory is therefore covered the day it lands,
-and someone has to deliberately add a rule to make a path cheap.
-
-``check-results`` refuses to accept a skip it did not ask for. Treating every
-``skipped`` job as a pass would turn a mistyped ``if:`` condition into a silently
-green required check, which is the one failure this whole design could introduce.
-Each job is checked against what the areas say it should have done, so a job that
-skipped while its area changed fails the run exactly like a job that failed.
+``check-results`` compares each job conclusion with the detected areas. A job
+that skips when its area changed fails the aggregate check, as does a failed job.
 """
 
 from __future__ import annotations
@@ -190,12 +180,9 @@ def changed_paths(
 ) -> list[str] | None:
     """Return the paths differing between two commits, or ``None`` when unknown.
 
-    ``--no-renames`` is load-bearing rather than cosmetic. With rename detection
-    on, ``--name-only`` reports a rename as its destination alone, so moving
-    ``web/src/feature.js`` to ``docs/feature.md`` would list only the Markdown
-    path, report ``web=false``, and skip the very jobs the now-deleted module
-    breaks. Disabling detection reports a rename as a delete and an add, which
-    puts both areas back in the answer.
+    ``--no-renames`` includes both the deleted and added paths of a rename.
+    Without it, moving ``web/src/feature.js`` to ``docs/feature.md`` could report
+    only the Markdown destination and skip checks for the deleted web module.
 
     ``merge_base`` picks the comparison to match the event. A pull request wants
     the three-dot range, everything on the branch since it diverged, because its

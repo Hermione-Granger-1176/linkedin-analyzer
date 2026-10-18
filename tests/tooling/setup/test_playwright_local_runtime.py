@@ -965,7 +965,7 @@ def test_validate_extracted_root_accepts_a_dangling_link_that_stays_inside(
 
 
 def test_validate_extracted_root_rejects_a_dangling_link_that_escapes(tmp_path: Path) -> None:
-    """Not existing is no excuse: a relative link out of the root is still refused."""
+    """Reject a relative link outside the root even when its target is absent."""
     root = tmp_path / "root"
     library_dir = root / "usr" / "lib"
     library_dir.mkdir(parents=True)
@@ -988,7 +988,7 @@ def test_validate_extracted_root_rejects_a_symlink_loop(tmp_path: Path) -> None:
 
 
 def test_validate_extracted_root_still_rejects_a_dangling_libc_overlay(tmp_path: Path) -> None:
-    """Accepting dangling links must not let a loader overlay in behind one."""
+    """Reject loader overlays reached through dangling links."""
     root = tmp_path / "root"
     library_dir = root / "usr" / "lib"
     library_dir.mkdir(parents=True)

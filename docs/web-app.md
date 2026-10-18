@@ -108,7 +108,9 @@ The app stores the theme preference, tutorial completion, and mini-tip state in 
 
 While an upload is processing, the app also keeps a small marker in `localStorage` so the next visit can tell whether the run finished. The marker holds a random run ID, the tab ID, start and heartbeat times, the combined file size rounded to a bucket such as "30 to 60 MB", and whether one file or several were processed. It holds no file names and no contents, and the app removes it when the run ends.
 
-If a run did not finish, the next visit shows a notice: the last processing run did not finish, and if that keeps happening on the device, upload fewer files at once or use the Python CLI on a computer. A browser that runs out of memory can stop a tab without warning, which is the usual cause on phones. A reload, a navigation, or a normal tab close during processing does not trigger the notice, and neither does a run still going in another tab.
+If a processing run ended without recording success or an error, the next visit shows a notice. The browser may have stopped the tab after running out of memory. A reload, navigation, normal tab close, or run still active in another tab does not trigger the notice.
+
+If the notice keeps appearing, upload fewer files at once or use the Python CLI on a computer. See [unfinished processing runs](troubleshooting.md#the-app-says-the-last-processing-run-did-not-finish) for troubleshooting steps.
 
 The production service worker caches the app shell, scripts, styles, fonts, and images. It uses a network-first strategy for navigation, stale-while-revalidate for scripts and styles, and cache-first for fonts and images. A new build is picked up on the next navigation.
 
@@ -119,7 +121,9 @@ Diagnostics are disabled until both conditions hold:
 1. The build contains `VITE_SENTRY_DSN`.
 2. You select the diagnostics consent control.
 
-You can revoke consent from the footer. After consent, the app may send reduced error events, numeric performance measurements, and the visual effects tier in use, and one `processing-unfinished` event when a processing run did not finish. That event carries only the size bucket, the device memory bucket where the browser exposes it, and whether one file or several were processed. It does not attach CSV text, file names, message bodies, contact names, URLs, DOM text, or arbitrary exception values.
+You can revoke consent from the footer. With consent, the app may send reduced error events, numeric performance measurements, and the visual effects tier in use.
+
+When the app detects an unfinished processing run, it may also send one `processing-unfinished` event. That event contains the file-size bucket, the device memory bucket where available, and whether the run processed one file or several. Diagnostics exclude CSV text, file names, message bodies, contact names, URLs, DOM text, and arbitrary exception values.
 
 CSP violation reports use the same-origin `/api/csp-report` endpoint when the deployment provides it. The endpoint accepts only POST requests, limits the body to 64 KiB, keeps a bounded set of violation metadata, strips URL queries and fragments, and returns `204` when forwarding is disabled. Configure server-side forwarding with `CSP_REPORT_URI` or `SENTRY_DSN`. These variables must not be exposed to the client.
 
@@ -147,9 +151,9 @@ The CLI uses a 128 MiB input limit and 1,000,000 row limit by default. See [CLI 
 
 ## Visual effects
 
-The app picks how much animation and decoration to show from what the device offers: CPU cores, memory where the browser reports it, the data-saver setting, and whether hardware-accelerated WebGL works. A low-end phone, an old PC, or a browser with data saver on gets the **Lite** tier: still drawings and simple moves, no blur or filters. Every number, chart, list, export, and control works the same in every tier.
+The app chooses an effects tier from the device's CPU cores, reported memory, data-saver setting, and support for hardware-accelerated WebGL. Devices with limited memory or CPU cores, and browsers with data saver on, get the **Lite** tier. This tier uses static drawings and simple animations without blur or filters. Every number, chart, list, export, and control works the same in every tier.
 
-There is no setting to change. If animation makes the page stutter while it is idle, the app steps down one tier for the rest of the session. Your system's reduced-motion setting always wins, and the tier never changes how files are processed.
+The app selects the tier automatically. If animation makes the idle page stutter, the app lowers the tier for the rest of the session. Your system's reduced-motion setting takes precedence over the tier. The tier does not affect file processing.
 
 ## Use tutorials and themes
 

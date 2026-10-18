@@ -18,8 +18,7 @@ env:
   PRIMARY_PYTHON_VERSION: "3.14"
 
 jobs:
-  # Runs alongside quick-gates rather than ahead of it, so path detection costs
-  # no wall-clock time. Every gated job below waits on both.
+  # Detect changed areas alongside quick-gates. Every gated job waits on both.
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
@@ -87,9 +86,8 @@ jobs:
   heavy-checks:
     name: Heavy checks
     needs: [changes, quick-gates]
-    # Stays all-or-nothing rather than splitting by area: the 100% coverage gate
-    # is computed across the whole Python surface in one run, and splitting it to
-    # save a couple of minutes would weaken it.
+    # Keep one coverage run over all Python sources so the 100% threshold
+    # applies to the complete package and repository scripts.
     if: needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -108,12 +106,8 @@ jobs:
       - name: Run heavy checks
         run: make ci-heavy-checks
 
-      # Runs even when a suite failed, so the summary still reports whatever
-      # coverage was reached before the failure. The table also goes to the log
-      # because a step summary is readable only in the browser: a report that
-      # went missing degrades into a note rather than an error, and that must
-      # not be invisible from a terminal. pipefail keeps tee from swallowing a
-      # real failure the way the redirect could not.
+      # Report available coverage even after a test failure. Copy the summary
+      # to the log for terminal readers. pipefail preserves failures through tee.
       - name: Summarize coverage
         if: always()
         run: |
@@ -233,12 +227,9 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Not "success or skipped": that would accept a job that skipped when its
-      # area did change, which is exactly how a mistyped `if:` condition above
-      # would turn this required check silently green. The check compares each
-      # result against what the detected areas say it should have been, and the
-      # detection job itself must have succeeded outright. The truth table lives
-      # in scripts/ci/job_gating.py, where every row is tested.
+      # Compare each job result with the detected areas. A skipped job fails
+      # when its area requires it, and detection itself must succeed.
+      # scripts/ci/job_gating.py defines and tests the result table.
       - name: Check required jobs
         env:
           PYTHON_CHANGED: ${{ needs.changes.outputs.python }}

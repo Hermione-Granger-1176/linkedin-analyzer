@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Shapes of the messages analytics data */
+/* LinkedIn Analyzer: Shapes of the messages analytics data */
 
 /** One cleaned messages.csv row, keyed by column name (FROM, TO, DATE, ...). */
 export type MessageRow = Record<string, string>;

@@ -10,11 +10,8 @@ module.exports = defineConfig({
     workers: 4,
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 1 : 0,
-    // A test that fails and then passes on its retry is reported flaky and, by
-    // default, exits zero, so the job goes green with the failure buried in its
-    // log. The retry stays, because passing on a second run is what tells a
-    // flake apart from a break, but on CI the flake is the result rather than a
-    // footnote nobody reads.
+    // Keep retries to identify flaky tests, but fail CI when a retry passes.
+    // Playwright otherwise reports those tests with a successful exit status.
     failOnFlakyTests: Boolean(process.env.CI),
     reporter: [["list"], ["html", { open: "never" }]],
     use: {

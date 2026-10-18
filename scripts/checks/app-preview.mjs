@@ -89,9 +89,9 @@ export function run(command, args, env = process.env) {
 }
 
 /**
- * Build the bundle. Production by default; with measurementLimits, a
- * "measurement" build that raises the upload limits (web/src/shared/limits.js)
- * so exports above the public limits can be timed.
+ * Build in production mode by default. With measurementLimits, use the
+ * measurement limits from web/src/shared/limits.js. Those settings can differ
+ * from production limits when investigating larger inputs.
  * @param {{measurementLimits?: boolean}} [options] - Build options.
  */
 export function buildApp({ measurementLimits = false } = {}) {

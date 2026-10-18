@@ -60,7 +60,7 @@ describe("connections worker", () => {
         expect(result.error).toMatch(/no valid rows/i);
     });
 
-    // ── Worker message listener (lines 187-194) ───────────────────────────────
+    // ── Worker message listener ───────────────────────────────
 
     it("connections worker listener ignores non-process messages", () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});

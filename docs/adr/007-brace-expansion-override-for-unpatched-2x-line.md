@@ -35,7 +35,7 @@ Add a single npm override, following the pattern established in [ADR-001](001-np
 }
 ```
 
-Forcing 5.0.8 across the dependency tree is compatible with the repository's consumers. The package provides both import and CommonJS entry points, retains the same `expand()` surface, and supports this repository's Node versions.
+Forcing 5.0.8 across the dependency tree is compatible with the repository's consumers. The package provides both import and CommonJS entry points, retains the same `expand()` API, and supports this repository's Node versions.
 
 ## Consequences
 

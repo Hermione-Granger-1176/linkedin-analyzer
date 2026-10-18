@@ -43,7 +43,7 @@ class CleanerConfig:
     Attributes:
         input_path: Path to input CSV file
         output_path: Path to output Excel file
-        columns: List of column configurations
+        columns: Column configurations
         csv_kwargs: Additional arguments to pass to pd.read_csv
         skiprows: Number of rows to skip before reading headers
         required_row_columns: Columns that must contain row values after header validation
@@ -66,12 +66,12 @@ class CleanerConfig:
 
     @property
     def required_columns(self) -> list[str]:
-        """Return list of column names marked as required."""
+        """Return the names of columns marked as required."""
         return [col.name for col in self.columns if col.required]
 
     @property
     def column_widths(self) -> dict[str, int]:
-        """Return mapping of Excel column letters to widths."""
+        """Return a mapping of Excel column letters to widths."""
         return {
             get_column_letter(index): column.width
             for index, column in enumerate(self.columns, start=1)

@@ -346,13 +346,13 @@ describe("ConnectionsPage", () => {
         ConnectionsPage.init();
         await ConnectionsPage.onRouteChange({});
 
-        // Show tooltip first
+
         SketchCharts.getItemAt.mockReturnValue({ tooltip: "May: 2" });
         const canvas = document.getElementById("connectionGrowthChart");
         canvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10 }));
         expect(document.getElementById("chartTooltip").hidden).toBe(false);
 
-        // Now trigger mouseleave
+
         canvas.dispatchEvent(new MouseEvent("mouseleave"));
         expect(document.getElementById("chartTooltip").hidden).toBe(true);
     });

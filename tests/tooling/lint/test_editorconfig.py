@@ -10,19 +10,19 @@ if TYPE_CHECKING:
 
 
 def write_bytes(path: Path, content: bytes) -> None:
-    """Write bytes."""
+    """Write binary test content and create parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
 
 
 def write_text(path: Path, content: str) -> None:
-    """Write text."""
+    """Write UTF-8 test content and create parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
 
 def test_parse_editorconfig_reads_sections_in_order() -> None:
-    """Parse editorconfig reads sections in order."""
+    """Read EditorConfig sections in their declared order."""
     sections = check_editorconfig.parse_editorconfig(
         """
 root = true
@@ -46,7 +46,7 @@ indent_style = unset
 
 
 def test_resolve_settings_applies_later_unset() -> None:
-    """Resolve settings applies later unset."""
+    """Remove an earlier setting when a later section uses unset."""
     sections = [
         check_editorconfig.EditorConfigSection(
             "*",
@@ -64,7 +64,7 @@ def test_resolve_settings_applies_later_unset() -> None:
 
 
 def test_resolve_settings_expands_brace_patterns() -> None:
-    """Resolve settings supports EditorConfig brace patterns."""
+    """Match EditorConfig brace patterns."""
     sections = [
         check_editorconfig.EditorConfigSection(
             "*.{json,yaml,yml}",
@@ -106,7 +106,7 @@ def test_parse_editorconfig_normalizes_property_names_and_values() -> None:
 
 
 def test_should_check_file_limits_checks_to_supported_patterns() -> None:
-    """Should check file limits checks to supported patterns."""
+    """Check only files that match supported patterns."""
     sections = [
         check_editorconfig.EditorConfigSection("*", {"end_of_line": "lf"}),
         check_editorconfig.EditorConfigSection("*.py", {"indent_style": "space"}),
@@ -120,7 +120,7 @@ def test_should_check_file_limits_checks_to_supported_patterns() -> None:
 def test_iter_workspace_files_skips_dependency_and_build_directories(
     tmp_path: Path,
 ) -> None:
-    """Iter workspace files skips dependency and build directories."""
+    """Skip dependency and build directories during traversal."""
     write_text(tmp_path / "docs" / "guide.md", "hello\n")
     write_text(tmp_path / ".venv" / "ignored.py", "print('x')\n")
     write_text(tmp_path / "node_modules" / "pkg" / "index.js", "export {}\n")
@@ -146,7 +146,7 @@ def test_iter_workspace_files_skips_symlinks(tmp_path: Path) -> None:
 
 
 def test_check_file_reports_expected_text_violations(tmp_path: Path) -> None:
-    """Check file reports expected text violations."""
+    """Report line endings, whitespace, and indentation violations."""
     file_path = tmp_path / "demo.js"
     write_bytes(file_path, b"\tconst value = 1;  \r\n")
 
@@ -169,7 +169,7 @@ def test_check_file_reports_expected_text_violations(tmp_path: Path) -> None:
 
 
 def test_check_file_reports_missing_final_newline(tmp_path: Path) -> None:
-    """Check file reports missing final newline."""
+    """Report a missing final newline."""
     file_path = tmp_path / "demo.py"
     write_text(file_path, "print('hi')")
 
@@ -185,7 +185,7 @@ def test_check_file_reports_missing_final_newline(tmp_path: Path) -> None:
 def test_check_file_reports_unexpected_final_newline_and_space_indentation(
     tmp_path: Path,
 ) -> None:
-    """Check file reports unexpected final newline and space indentation."""
+    """Report an unwanted final newline and spaces where tabs are required."""
     file_path = tmp_path / "Makefile"
     write_text(file_path, "  target:\n")
 
@@ -205,7 +205,7 @@ def test_check_file_reports_unexpected_final_newline_and_space_indentation(
 
 
 def test_check_file_allows_binary_assets(tmp_path: Path) -> None:
-    """Check file allows binary assets."""
+    """Skip text checks for binary assets."""
     file_path = tmp_path / "icon.ico"
     write_bytes(file_path, b"\x00\x01binary")
 
@@ -215,7 +215,7 @@ def test_check_file_allows_binary_assets(tmp_path: Path) -> None:
 
 
 def test_check_file_reports_non_utf8_text(tmp_path: Path) -> None:
-    """Check file reports non utf8 text."""
+    """Report text that is not valid UTF-8."""
     file_path = tmp_path / "demo.py"
     write_bytes(file_path, b"\x80bad")
 
@@ -225,7 +225,7 @@ def test_check_file_reports_non_utf8_text(tmp_path: Path) -> None:
 
 
 def test_run_check_uses_repo_relative_settings(tmp_path: Path) -> None:
-    """Run check uses repo relative settings."""
+    """Resolve EditorConfig settings relative to the repository root."""
     write_text(
         tmp_path / ".editorconfig",
         """
@@ -252,7 +252,7 @@ trim_trailing_whitespace = true
 def test_main_prints_success_for_clean_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Main prints success for clean file."""
+    """Print success for a file that satisfies its settings."""
     write_text(
         tmp_path / ".editorconfig",
         """
@@ -277,7 +277,7 @@ trim_trailing_whitespace = false
 def test_main_scans_all_files_when_no_paths_given(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Main scans all files when no paths given."""
+    """Scan the workspace when no paths are supplied."""
     write_text(tmp_path / ".editorconfig", "[*.txt]\ninsert_final_newline = true\n")
     write_text(tmp_path / "hello.txt", "ok\n")
     monkeypatch.setattr(check_editorconfig, "REPO_ROOT", tmp_path)
@@ -292,7 +292,7 @@ def test_main_scans_all_files_when_no_paths_given(
 def test_main_rejects_missing_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Main rejects missing path."""
+    """Reject a requested path that does not exist."""
     write_text(tmp_path / ".editorconfig", "[*]\nend_of_line = lf\n")
     monkeypatch.setattr(check_editorconfig, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(check_editorconfig, "EDITORCONFIG_FILE", tmp_path / ".editorconfig")
@@ -361,7 +361,7 @@ def test_main_rejects_path_through_symlinked_directory(
 def test_main_prints_failures_for_invalid_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Main prints failures for invalid file."""
+    """Print the violations found in a requested file."""
     write_text(
         tmp_path / ".editorconfig",
         """

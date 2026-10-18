@@ -290,7 +290,11 @@ make pr-review-comments
 make pr-address thread=PRRT_... < response.md
 ```
 
-PR review watching observes the Copilot review that starts automatically when a pull request opens, and waits for settled checks. It does not request a second review by default. After pushing a correction, run `make pr-watch request=1` so it waits for a fresh review rather than settling on the previous one, or `make pr-watch checks_only=1` to observe CI only. `make pr-copilot-review` requests a review on its own. The watcher reads both Copilot review formats. A review in the newer overview format that recommends anything other than approval is not merge ready even with no open threads, and the report points to `make pr-comments` to read it.
+Run `make pr-watch` to observe the current Copilot review and wait for CI checks to finish. The watcher does not request another review by default.
+
+After pushing a correction, run `make pr-watch request=1` to request and wait for a fresh review. To watch CI checks alone, run `make pr-watch checks_only=1`. Use `make pr-copilot-review` to request a review without waiting for it.
+
+The watcher reads both Copilot review formats. A verdict other than "Approval recommended" blocks completion, even when no review threads are open. Run `make pr-comments` to read findings in the review overview.
 
 `make ci-jobs`, `make ci-failures`, `make ci-watch`, and `make ci-rerun` act on the current branch's latest run unless `run=ID` is given. `make ci-watch` exits non-zero when the run fails.
 
@@ -300,7 +304,7 @@ The Make wrappers keep paths and prose out of shell source text. That is why the
 
 GitHub Actions classifies changed paths into Python, Web, Both, or Neither. Quick gates always run. Heavy checks, compatibility matrices, and browser checks run when their area changed. An unrecognized path fails open to Both, so a new top-level area receives the full matrix until the rules document it.
 
-### Which jobs a change pays for
+### Which jobs run for a change
 
 The classifier in `scripts/ci/job_gating.py` contributes every matching rule instead of stopping at the first match. This makes `.github/SECURITY.md` Both because it matches both the `.github/` and `*.md` rules.
 

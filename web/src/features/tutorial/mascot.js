@@ -1,19 +1,11 @@
 /**
- * Pip, the guide who stands on the tutorial callout card.
+ * Build Pip's decorative tutorial drawing with two arm poses.
  *
- * One drawing carries both poses: everything except the right arm is shared,
- * and the two arm groups are switched by CSS off the `data-pose` attribute.
- * That keeps a step change to two attribute writes, which is all the variety
- * the tour needs. He is decoration, so the SVG is aria-hidden and unfocusable
- * and the stylesheet keeps him out of the pointer's way.
- *
- * Both hands are inked fingers first and palm last, so the palm covers where
- * they join it. The card renders him at 40px, 34px on a phone, which is why the
- * hands are drawn as large as they are: a hand in real proportions would be a
- * few pixels of mush, and the pose it is meant to be reading would go with it.
- *
- * Everything from the hood down to the drawstrings is the shared Pip in
- * shared/ui/pip-parts.js; the extra wisp, the arms and the legs are his own.
+ * CSS selects the arms through data-pose. Share the hood, jacket, and
+ * drawstrings with shared/ui/pip-parts.js. Enlarge the hands to keep them
+ * visible at 40 pixels, or 34 pixels on phones. Draw fingers before palms
+ * so the palms cover their joins. The SVG is hidden from assistive
+ * technology, unfocusable, and ignores pointer events.
  */
 
 import {

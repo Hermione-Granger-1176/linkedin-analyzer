@@ -136,7 +136,7 @@ function handleWorkerMessage(event) {
 }
 
 /**
- * A worker that fell over cannot answer anything it was asked.
+ * Fail pending requests when the worker reports an error or unreadable message.
  * @param {Event} event - Worker error or messageerror event
  */
 function handleWorkerError(event) {
@@ -163,7 +163,7 @@ export async function processFiles(messagesCsv, connectionsCsv) {
         return workerResult;
     }
     // The worker was unavailable, errored, or timed out. Re-parsing a large
-    // export on the UI thread would freeze the page, so bail out with an
+    // export on the UI thread would freeze the page, so return an
     // explanatory empty state above the size ceiling.
     if (
         csvSourceSize(messagesCsv) + csvSourceSize(connectionsCsv) >

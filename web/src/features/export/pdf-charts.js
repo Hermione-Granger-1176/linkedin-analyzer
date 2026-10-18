@@ -1,17 +1,12 @@
 /**
  * Vector chart blocks for the PDF export.
  *
- * The on-screen charts are canvas pixels, which is the one thing a printed page
- * must not be: a raster chart is fixed at the resolution it was captured at and
- * falls apart as soon as the reader zooms. The same series are re-plotted here
- * out of lines, rectangles and circles, so they stay sharp at any magnification.
+ * Redraw chart series as vector lines, rectangles, and circles. Unlike captured
+ * canvas images, these shapes retain their resolution when readers zoom.
  *
- * Every builder returns blocks in the shape `pdf-document.js` paginates:
- * measured rows that know how to draw themselves at a given corner. A plot
- * reserves its whole area as one tall row, so it is never sliced by a page
- * break; a bar or list is one row per entry and asks to be kept together, so it
- * moves whole rather than leaving a headless tail on the next page, and flows
- * row by row only once it is taller than a page can hold.
+ * Builders return measured rows that `pdf-document.js` positions and draws.
+ * Plots use one row so page breaks cannot split them. Bar charts and lists use
+ * one row per entry and stay together unless they exceed a page's height.
  */
 
 import { DAY_LABELS } from "../analytics/constants.js";
@@ -24,14 +19,9 @@ import {
     spacerRow,
 } from "./pdf-layout.js";
 
-// Height of a line plot, and of a heatmap plot, in millimetres. Sized to be read
-// at print size rather than to make a dashboard fit one page: a dashboard flows
-// onto a second sheet like every other section, so there is nothing to buy by
-// squeezing them. A line plot leaves 43mm between its axes, roughly a quarter of
-// the 164mm it spans, which is enough for the dots of a year of months to
-// separate; at 23mm a timeline read as a wavy line. A heatmap cell is 6.83mm
-// wide whatever happens, being a full day divided by 24, and 5mm of height keeps
-// it near enough square to read as a grid rather than as ribbons.
+// Plot heights in millimetres preserve detail at print size. Dashboards may
+// span pages. Line plots leave 43 mm between axes over a 164 mm width to separate
+// monthly points. Heatmap cells are about 6.83 mm wide and 5 mm high.
 const PLOT_HEIGHT = 56;
 const HEATMAP_HEIGHT = 44;
 
@@ -42,18 +32,13 @@ const LABEL_SIZE = 7.5;
 const LINE_PADDING = Object.freeze({ top: 5, right: 3, bottom: 8, left: 11 });
 const HEATMAP_PADDING = Object.freeze({ top: 3, right: 2, bottom: 6, left: 11 });
 
-// Ink per chart type, matching the screens: the timeline and the heatmap are
-// blue, topic bars purple. Fixed here rather than taken from a chart's config,
-// so a dashboard cannot ask for a color the site never draws that chart in.
+// Fix chart accents to match the screen colors regardless of dashboard config.
 const LINE_ACCENT = "--accent-blue";
 const BAR_ACCENT = "--accent-purple";
 const HEATMAP_ACCENT = "--accent-blue";
 
-// The steps a value axis is allowed to count in: a whole 1, 2 or 5 at some
-// magnitude, which is what a reader adds up without doing arithmetic. AXIS_TICKS
-// is the number of gaps a step is chosen against, not a promise: the step it
-// lands on may divide the scale into one more than that, which is worth more
-// than rounding the maximum up to keep the count exact.
+// Use axis steps of 1, 2, or 5 times a power of ten. AXIS_TICKS is a target
+// interval count. The chosen step may produce an extra interval.
 const AXIS_TICKS = 4;
 const AXIS_STEP_MULTIPLES = Object.freeze([1, 2, 5]);
 // Past this many points the value labels above the dots collide, so they are
@@ -76,9 +61,7 @@ const BAR_MIN_WIDTH = 0.6;
 const BAR_RADIUS = 0.5;
 const LIST_VALUE_WIDTH = 24;
 const LIST_TEXT_INSET = 2;
-// Where a list row's text sits inside its row. The same drop as a bar's height,
-// which is how the two kinds of row line up, but a list row draws no bar and
-// naming it after one sent a reader looking for the chart it belonged to.
+// Align list text with bar-row text without requiring a bar in the list row.
 const LIST_TEXT_BASELINE = BAR_HEIGHT;
 // A list row is two columns rather than two strings sharing one width: the
 // primary takes the larger share, the secondary what is left over.
@@ -99,10 +82,8 @@ const HOUR_LABEL_STEP = 3;
  */
 
 /**
- * Room to leave above the tallest value in a series.
- *
- * Mirrors the on-screen chart: without the headroom a flat or sparse series is
- * drawn as a block pinned to the top edge and stops reading as a chart.
+ * Add space above the largest plotted value.
+ * This keeps flat and sparse series below the top edge of the chart.
  * @param {number} peak - Largest value in the series
  * @returns {number} Height the scale has to cover
  */
@@ -117,7 +98,7 @@ function axisClearance(peak) {
 }
 
 /**
- * Round a step up to the next whole 1, 2 or 5 at its own magnitude.
+ * Round a step up to 1, 2, or 5 times a power of ten.
  * @param {number} raw - Step the data would like
  * @returns {number} Step a reader can count in
  */
@@ -133,12 +114,9 @@ function niceStep(raw) {
 }
 
 /**
- * Pick the gridline values a series is read against.
- *
- * The step is chosen first and the maximum follows from it, so every tick is a
- * round number and the topmost is still the maximum the plot scales by. Picking
- * a pleasant maximum first and dividing it instead is what printed scales of
- * 0/94/188/282/377 and 0/18/36/54/73, where only the two ends meant anything.
+ * Choose ascending gridline values from the data maximum.
+ * Choose a rounded step first, then derive the axis maximum from that step
+ * so every tick remains a round number.
  * @param {number} peak - Largest value in the series
  * @returns {number[]} Gridline values, ascending, ending at the axis maximum
  */
@@ -150,10 +128,7 @@ export function axisScale(peak) {
 }
 
 /**
- * Choose which x-axis labels to draw so neighbours cannot overlap.
- *
- * Indices rather than labels: the caller still needs each point's own position
- * to place the text it keeps.
+ * Choose x-axis label indices with enough space to avoid overlap.
  * @param {number} count - Number of points
  * @param {number} width - Plot width in millimetres
  * @returns {Set<number>} Indices to label
@@ -186,13 +161,9 @@ export function pickLabelIndices(count, width) {
 }
 
 /**
- * Truncate a label to the width it has, marking it when it had to be cut.
- *
- * Cut at a character rather than at a word: wrapping breaks on spaces, so one
- * character over the line threw away every word after the first. On one list
- * "Bartholomewkonstantinos9 Vandenbroucke-Steenhuyse-Papadopoulos-Rajagopalachari"
- * printed whole while "Bartholomewkonstantinos13 …" printed as its first token
- * and 53mm of empty row, one digit apart.
+ * Truncate a label to its available width and mark the truncation.
+ * Measure character prefixes because word-based wrapping can drop every word
+ * after a long first word.
  * @param {Painter} painter - Drawing helpers
  * @param {string|null|undefined} value - Raw label
  * @param {number} width - Available width in millimetres
@@ -256,11 +227,7 @@ function buildChartTitleBlock(painter, title) {
 }
 
 /**
- * The drawable rectangle a padded plot of the given height leaves.
- *
- * The padding is what the axis labels are drawn into, so the plot itself is
- * always the row inset by it. Stated once so a third plot type inherits the
- * convention rather than restating the arithmetic.
+ * Return the plot rectangle after reserving padding for axis labels.
  * @param {{top: number, right: number, bottom: number, left: number}} padding - Room the axes need
  * @param {number} height - Full row height
  * @returns {{left: number, top: number, width: number, height: number}} Plot area

@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
-"""Sync one monitored alert issue for a scheduled workflow.
+"""Keep one alert issue per monitored workflow.
 
-Scheduled workflows need a single, stable place to report that they are
-failing, and they need it to go away once they recover. Each monitored
-workflow owns one label and one issue title. Syncing an alert either opens
-that issue, adds a fresh failure comment to it, or closes it, so operators
-see one issue per monitored workflow instead of one per failing run.
-
-The workflow shell stays thin: state selection lives in the workflow, and
-every decision about issue identity, wording, and GitHub calls lives here
-where it is tested.
+Each workflow supplies a label, title, and state. A failure creates the issue
+or adds a comment. Recovery closes it. Workflow YAML selects the state, while
+this module handles issue matching, message construction, and GitHub calls.
 """
 
 from __future__ import annotations
@@ -242,12 +236,10 @@ def sync_alert_issue(
 
 
 def _read_detail(detail_file: str | None) -> str:
-    """Return the alert detail from a file, from stdin for ``-``, or nothing.
+    """Read alert detail from a file or stdin, or return an empty string.
 
-    Stdin is how the Makefile passes the detail, so a failing workflow's output
-    never has to survive a make command line. An empty stream, and an omitted
-    ``--detail-file`` when the caller had no detail to give, both mean the alert
-    has no detail, which ``build_alert_body`` already treats as "omit it".
+    The path ``-`` reads stdin, which lets Make pass workflow output without shell
+    interpolation. An omitted path or empty input produces no detail.
     """
     if detail_file is None:
         return ""

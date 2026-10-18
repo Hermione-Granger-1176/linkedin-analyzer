@@ -118,7 +118,7 @@ The browser initializes Sentry only when `VITE_SENTRY_DSN` exists and the user g
 
 Set `VITE_APP_RELEASE` during the build so Sentry can group events by release. The metrics buffer flushes when the page becomes hidden and includes only allowlisted nonnegative numbers and positive sample counts.
 
-Treat event volume as a lower bound. Most visitors do not opt in, and no event does not prove that no error occurred. Reproduce a suspected bug locally with a matching fixture before using event counts to judge impact.
+Consent limits which errors appear in diagnostics. Missing events do not establish that no errors occurred. Reproduce a suspected bug locally with a matching fixture before using event counts to judge impact.
 
 ### CSP reports
 
@@ -136,9 +136,17 @@ GitHub Actions references are pinned to full commit SHAs. Pull requests use depe
 
 Review `config/security_audit.json` before changing an exception. Each exception names its ecosystem, package, advisory, reason, and ISO `review_by` date. Set `ignore_only_without_fix` when the exception must stop applying as soon as a package manager reports a fix. Use `make check-overrides` to confirm that npm overrides remain necessary.
 
-The `npm_override_dev_dependencies` list in `config/security_audit.json` identifies direct dev dependencies added solely to supply a temporary `$name` override. The checker removes each listed dependency together with its override in a temporary project, resolves a fresh dependency tree, and audits every severity. Ordinary direct dependencies remain in the trial manifest. Once the regular dependency tree installs and passes the audit, the checker reports that the override is removable and fails the scheduled check so the existing dependency-audit alert issue notifies maintainers. The override check runs even if the preceding npm audit fails, provided setup succeeded. An expired exception therefore does not prevent the upstream trial. Detection does not modify the repository; retire the fork, its maintenance entry, the advisory exception, and the fork-specific pin assertions together after validating the replacement.
+The `npm_override_dev_dependencies` list in `config/security_audit.json` identifies direct development dependencies added to supply temporary `$name` overrides. For each entry, the checker removes the dependency and its override in a temporary project. It resolves a fresh dependency tree and audits every severity. Other direct dependencies remain in the trial manifest.
 
-For GHSA-vfj7-8cjw-p6xm, `package.json` overrides all `braces` consumers to the [FSDevelop security fork at commit 28d440b](https://github.com/FSDevelop/braces/tree/28d440b5dd449dbf1fe6f3506cf94ecca4d02660). The archive URL pins the full commit, and `package-lock.json` pins its SHA-512 integrity. `.npmrc` allows remote archives declared by the root project. `make test-js-quick ARGS=braces-override` verifies the source pin, excessive nesting rejection, direct AST guards, cycle rejection, and ordinary pattern compatibility. The fork retains version 3.0.3, so npm still reports the advisory; the temporary audit exception documents the tested mitigation and expires after November 5, 2026. npm's suggested Stylelint 7.7.0 downgrade does not preserve the current lint setup, so this exception requires manual review when a compatible fix becomes available. Replace the fork and remove the exception once an official patched release is available and the regression tests pass.
+If the dependency tree installs and passes the audit, the checker reports that the override can be removed. It fails the scheduled check so the dependency-audit alert notifies maintainers. Once setup succeeds, the override check runs even if the preceding npm audit fails. An expired exception therefore cannot prevent the trial.
+
+The checker does not modify the repository. After validating the replacement, remove the fork, its maintenance entry, the advisory exception, and the fork-specific pin assertions together.
+
+For GHSA-vfj7-8cjw-p6xm, `package.json` overrides all `braces` consumers to the [FSDevelop security fork at commit 28d440b](https://github.com/FSDevelop/braces/tree/28d440b5dd449dbf1fe6f3506cf94ecca4d02660). The archive URL pins the full commit, and `package-lock.json` pins its SHA-512 integrity. `.npmrc` allows remote archives declared by the root project.
+
+Run `make test-js-quick ARGS=braces-override` to check the source pin, excessive nesting rejection, AST guards, cycle rejection, and ordinary pattern compatibility. The fork retains version 3.0.3, so npm still reports the advisory. A temporary audit exception records the tested mitigation and expires after November 5, 2026.
+
+npm's suggested Stylelint 7.7.0 downgrade does not preserve the current lint configuration. When a compatible fix becomes available, review the exception manually. Once an official patched release is available and regression tests pass, replace the fork and remove the exception.
 
 The container publish job runs Trivy with every severity enabled and ignores only unfixed findings. A finding with an available fix blocks publication regardless of its severity or whether Trivy classifies it as `UNKNOWN`.
 

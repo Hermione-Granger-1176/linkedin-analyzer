@@ -166,7 +166,7 @@ export const CleanPage = (() => {
             DataCache.get("storage:files") || null
         );
         if (!files) {
-            // Cache metadata only; the selected file's text is loaded on demand in
+            // Cache metadata only. Load the selected upload Blob on demand in
             // renderPreview so large exports aren't kept in memory.
             files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
             DataCache.set("storage:files", files);

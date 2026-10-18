@@ -16,7 +16,7 @@ PUBLISH_WORKFLOW = (REPO_ROOT / ".github/workflows/publish.yml").read_text(encod
 
 
 def test_uv_setup_uses_one_pinned_version_without_a_duplicate_cache() -> None:
-    """Install uv from the project pin and keep one dependency cache owner."""
+    """Install uv from the project minimum requirement and use one dependency cache."""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     # A floor rather than an exact pin, so an install a few patches behind still

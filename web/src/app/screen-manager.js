@@ -195,6 +195,8 @@ export const ScreenManager = (() => {
             // change made while it loads is not lost.
             void activateWhenLoaded(routeName, previousName);
         } else {
+            // A preload may have fetched the code after an earlier failure.
+            clearLoadError(nextRoute);
             runControllerHooks(nextRoute, nextRoute.params, previousName, routeName);
         }
         announceRoute(routeName);

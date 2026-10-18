@@ -265,6 +265,11 @@ export const CleanPage = (() => {
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
             const token = ++previewRequest;
+            // A replaced upload's old preview and downloads must not stay
+            // usable while the new one loads.
+            delete cache[type];
+            hidePreview();
+            hideDownload();
             let stored;
             try {
                 // The cached record is metadata only; load the stored upload on

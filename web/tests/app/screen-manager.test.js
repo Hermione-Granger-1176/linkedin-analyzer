@@ -383,6 +383,25 @@ describe("ScreenManager", () => {
             await vi.waitFor(() => expect(controller.init).toHaveBeenCalledTimes(1));
         });
 
+        it("clears the notice when a preload fetched the code after a failure", async () => {
+            const controller = { init: vi.fn() };
+            const loader = deferredLoader();
+            const notice = () => document.querySelector("#screen-about [data-route-load-error]");
+            ScreenManager.register("lazy-h", { screenId: "screen-about", load: loader.load });
+
+            ScreenManager.activate("lazy-h", {});
+            loader.reject(new Error("chunk missing"));
+            await vi.waitFor(() => expect(notice()).not.toBeNull());
+            ScreenManager.activate("home", {});
+
+            const preload = ScreenManager.loadController("lazy-h");
+            loader.resolve(controller);
+            await preload;
+            ScreenManager.activate("lazy-h", {});
+            expect(notice()).toBeNull();
+            expect(controller.init).toHaveBeenCalledTimes(1);
+        });
+
         it("skips the notice for a screen whose element is missing", async () => {
             ScreenManager.register("lazy-g", {
                 screenId: "screen-missing",

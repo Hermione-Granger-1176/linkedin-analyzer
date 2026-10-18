@@ -307,6 +307,25 @@ describe("CleanPage", () => {
             expect(captureError).not.toHaveBeenCalled();
         });
 
+        it("hides a replaced upload's preview and downloads while the new one loads", async () => {
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            expect(document.getElementById("cleanDownloadSection").hidden).toBe(false);
+
+            Storage.getAllFiles.mockResolvedValue([
+                { type: "shares", updatedAt: 9 },
+                { type: "comments", updatedAt: 6 },
+            ]);
+            await CleanPage.onRouteChange();
+            await flush();
+
+            expect(document.getElementById("cleanPreviewSection").hidden).toBe(true);
+            expect(document.getElementById("cleanDownloadSection").hidden).toBe(true);
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            expect(document.getElementById("cleanDownloadSection").hidden).toBe(false);
+        });
+
         it("leaves the screen alone when stored data is cleared mid-preview", async () => {
             // The latest subscription belongs to this test's client.
             const listener = DataCache.subscribe.mock.calls.at(-1)[0];

@@ -548,7 +548,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch branch-current branch-switch branch-delete branch-prune rebase log diff diff-staged stage stage-all commit push release-create
+.PHONY: git branch branch-current branch-switch branch-delete branch-prune rebase cherry-pick log diff diff-staged stage stage-all commit push release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -583,6 +583,10 @@ branch-prune: ## Prune local branches whose content is already in main (make bra
 rebase: ## Rebase the current branch onto its remote base (make rebase base=origin/main)
 	@test -n "$(base)" || (printf 'Usage: make rebase base=origin/main\n' >&2; exit 1)
 	git rebase "$(base)"
+
+cherry-pick: ## Apply commits onto the current branch (make cherry-pick ref="sha ..." [nocommit=1])
+	@test -n "$(ref)" || (printf 'Usage: make cherry-pick ref="sha ..." [nocommit=1]\n' >&2; exit 1)
+	git cherry-pick $(if $(filter 1,$(value nocommit)),--no-commit) $(ref)
 
 log: ## Show recent commit log
 	git log --oneline -20

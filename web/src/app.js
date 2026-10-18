@@ -30,7 +30,7 @@ function init() {
     "use strict";
 
     // Upload is the screen most visits land on, so it ships in the main bundle.
-    // Every other screen is fetched the first time its route opens.
+    // Every other screen's code is imported the first time its route opens.
     const ROUTES = Object.freeze([
         {
             name: "home",

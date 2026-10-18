@@ -97,6 +97,36 @@ describe("clean client", () => {
         });
     });
 
+    it("reports a main-thread run that a newer request overtook as cancelled", async () => {
+        vi.stubGlobal("Worker", undefined);
+        let finishFirst;
+        mocks.runCleanJob
+            .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
+            .mockResolvedValueOnce(OK);
+        const { requestClean } = await loadClient();
+        const first = requestClean(PAYLOAD);
+        await expect(requestClean(PAYLOAD)).resolves.toEqual(OK);
+        finishFirst(OK);
+        await expect(first).resolves.toEqual(CANCELLED);
+        expect(mocks.resetCleanJob).not.toHaveBeenCalled();
+    });
+
+    it("drops the rows a main-thread run kept after a Clear overtook it", async () => {
+        vi.stubGlobal("Worker", undefined);
+        let finish;
+        mocks.runCleanJob.mockImplementationOnce(
+            () => new Promise((resolve) => (finish = resolve)),
+        );
+        const { requestClean } = await loadClient();
+        const { DataCache } = await import("../../../src/platform/persistence/data-cache.js");
+        const result = requestClean({ ...PAYLOAD, output: "csv" });
+        DataCache.notify({ type: "storageCleared" });
+        mocks.resetCleanJob.mockClear();
+        finish({ ...OK, blob: new Blob(["csv"]) });
+        await expect(result).resolves.toEqual(CANCELLED);
+        expect(mocks.resetCleanJob).toHaveBeenCalledTimes(1);
+    });
+
     it("falls back to the main thread when the worker cannot start", async () => {
         vi.stubGlobal(
             "Worker",

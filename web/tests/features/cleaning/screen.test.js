@@ -308,7 +308,8 @@ describe("CleanPage", () => {
         });
 
         it("leaves the screen alone when stored data is cleared mid-preview", async () => {
-            const listener = DataCache.subscribe.mock.calls[0][0];
+            // The latest subscription belongs to this test's client.
+            const listener = DataCache.subscribe.mock.calls.at(-1)[0];
             listener({ type: "storageCleared" });
             await flush();
 

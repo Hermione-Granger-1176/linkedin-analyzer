@@ -1,4 +1,4 @@
-/* Fetch a likely next screen's code while the browser is idle */
+/* Load a likely next screen's code while the browser is idle */
 
 import { getDeviceProfile } from "../platform/device/capabilities.js";
 
@@ -15,8 +15,8 @@ const requested = new Set();
 
 /**
  * Load a route's screen code when the browser is next idle, once per route.
- * Skipped on the lite tier with Save-Data on, where the visitor has asked for
- * fewer bytes and the screen can still load when it is opened.
+ * Skipped on the lite tier with Save-Data on, where the page does no work it
+ * can put off, and the screen still loads when it is opened.
  * @param {string} routeName - Route to preload
  */
 export function preloadRouteWhenIdle(routeName) {

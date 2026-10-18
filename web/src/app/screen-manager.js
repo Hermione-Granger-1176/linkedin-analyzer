@@ -16,7 +16,7 @@ export const ScreenManager = (() => {
     /**
      * Register a screen route. A route either carries its controller or a
      * `load` function that imports it the first time the route opens, so the
-     * first visit does not download every screen.
+     * first page load does not wait on every screen's code.
      * @param {string} routeName - Route name
      * @param {{screenId: string, controller?: object, load?: () => Promise<object>}} config - Route config
      */

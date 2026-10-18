@@ -3,8 +3,9 @@
  *
  * One request is in flight at a time: a new one stops the worker answering the
  * previous request and settles it as cancelled, which the screen ignores.
- * Where Workers are unavailable the same job runs on the main thread. Clearing
- * stored data drops the worker and the rows it holds.
+ * Where Workers are unavailable the same job runs on the main thread, where it
+ * cannot be stopped, so a superseded run's result is reported as cancelled
+ * instead. Clearing stored data drops the worker and the rows it holds.
  */
 
 import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
@@ -25,6 +26,9 @@ let worker = null;
 let requestCount = 0;
 /** @type {{id: number, resolve: (reply: CleanReply) => void, timeoutId: number}|null} */
 let pending = null;
+// Main-thread runs: the latest one started, and how many Clears have happened.
+let fallbackRun = 0;
+let clearCount = 0;
 
 /**
  * Build a failed reply.
@@ -111,18 +115,33 @@ function getWorker() {
     return worker;
 }
 
+/** @returns {CleanReply} */
+function cancelled() {
+    return { ...failure(null), cancelled: true };
+}
+
 /**
- * Run the job on the main thread, reporting a fixed error if it throws.
+ * Run the job on the main thread, reporting a fixed error if it throws. A run
+ * that a newer request or a Clear overtook reports cancelled, and one that
+ * outlived a Clear drops the rows it kept.
  * @param {object} payload - Request payload
  * @returns {Promise<CleanReply>}
  */
 async function runOnMainThread(payload) {
+    const run = ++fallbackRun;
+    const clears = clearCount;
+    let reply;
     try {
-        return await runCleanJob(payload);
+        reply = await runCleanJob(payload);
     } catch {
         captureError(new Error(CLEAN_FAILURE), { module: "clean", operation: "main-thread-clean" });
-        return failure();
+        reply = failure();
     }
+    if (clears !== clearCount) {
+        resetCleanJob();
+        return cancelled();
+    }
+    return run === fallbackRun ? reply : cancelled();
 }
 
 /**
@@ -139,7 +158,7 @@ export function requestClean(payload) {
     if (pending) {
         // The worker may still be busy with the abandoned job; a fresh one
         // starts on this request instead of waiting behind it.
-        terminateCleanWorker({ ...failure(null), cancelled: true });
+        terminateCleanWorker(cancelled());
         return requestClean(payload);
     }
     const id = ++requestCount;
@@ -166,7 +185,8 @@ export function requestClean(payload) {
 // Clearing stored data must not leave the last file's cleaned rows in memory.
 DataCache.subscribe((event) => {
     if (event && event.type === "storageCleared") {
-        terminateCleanWorker({ ...failure(null), cancelled: true });
+        clearCount += 1;
+        terminateCleanWorker(cancelled());
         resetCleanJob();
     }
 });

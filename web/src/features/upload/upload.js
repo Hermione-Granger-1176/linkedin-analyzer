@@ -82,6 +82,8 @@ export const UploadPage = (() => {
     const JOB_TIMEOUT_MS = 45000;
     // The file types the analytics worker keeps and primes from storage.
     const ANALYTICS_SOURCE_TYPES = new Set(["shares", "comments", "connections"]);
+    // The prime signature of a stored set with no analytics inputs.
+    const EMPTY_PRIME_SIGNATURE = "-|-|-";
     const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024;
 
     /**
@@ -718,11 +720,17 @@ export const UploadPage = (() => {
         );
         pendingSaves.add(save);
         try {
-            await save;
+            const analyticsStored = await save;
             if (generation !== clearGeneration) {
                 return;
             }
-            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase, generation);
+            // Only analytics that reached storage are published, so the screens
+            // never show an aggregate that counts an upload storage lacks.
+            await syncCacheAfterProcessedFile(
+                fileType,
+                analyticsStored ? payload.analyticsBase : null,
+                generation,
+            );
 
             const files = await getStoredFilesSnapshot();
             const fileMap = getFileMap(files);
@@ -789,7 +797,7 @@ export const UploadPage = (() => {
      * @param {number} rowCount - Processed row count
      * @param {PlainObject|null|undefined} analyticsBase - Optional analytics aggregate base
      * @param {number} generation - Clear generation the upload was processed under
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>} Whether the analytics were stored with it
      */
     async function persistProcessedFile(
         fileType,
@@ -818,12 +826,13 @@ export const UploadPage = (() => {
             throw error;
         }
         if (!analyticsBase || generation !== clearGeneration) {
-            return;
+            return false;
         }
         if (!(await analyticsInputsStored()) || generation !== clearGeneration) {
-            return;
+            return false;
         }
         await Storage.saveAnalytics(analyticsBase);
+        return true;
     }
 
     /**
@@ -1191,7 +1200,10 @@ export const UploadPage = (() => {
             return undefined;
         }
 
-        const signature = getPrimeSignature(fileMap);
+        // After a failed prime or save the worker may hold inputs storage lacks,
+        // so even an empty stored set is primed, which clears them.
+        const signature =
+            getPrimeSignature(fileMap) || (primeFailed ? EMPTY_PRIME_SIGNATURE : null);
         // Connections alone are worth priming: the worker retains the dataset so
         // the first later shares/comments upload picks up the already-stored
         // connections for the network-growth correlation without a re-upload.

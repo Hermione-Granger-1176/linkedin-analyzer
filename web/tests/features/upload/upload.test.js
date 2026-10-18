@@ -1291,6 +1291,42 @@ describe("UploadPage", () => {
             expect(document.getElementById("uploadHint").textContent).toContain("bad");
         });
 
+        it("publishes no analytics when an earlier input failed and the last file saved", async () => {
+            Storage.saveFile.mockRejectedValueOnce(new Error("disk"));
+            UploadPage.init();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            const input = document.getElementById("multiFileInput");
+            const files = ["Shares.csv", "messages.csv"].map(
+                (name) => new File(["col\nval"], name, { type: "text/csv" }),
+            );
+            Object.defineProperty(input, "files", { value: files });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            const jobs = workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .filter((message) => message.type === "addFile")
+                .map((message) => message.payload.jobId);
+
+            await reply({
+                fileType: "shares",
+                fileName: "Shares.csv",
+                rowCount: 1,
+                jobId: jobs[0],
+            });
+            await reply({
+                fileType: "messages",
+                fileName: "messages.csv",
+                rowCount: 1,
+                analyticsBase: BASE,
+                jobId: jobs[1],
+            });
+
+            expect(Storage.saveFile).toHaveBeenCalledTimes(2);
+            expect(Storage.saveAnalytics).not.toHaveBeenCalled();
+            expect(DataCache.set).not.toHaveBeenCalledWith("storage:analyticsBase", BASE);
+            expect(DataCache.notify).not.toHaveBeenCalledWith({ type: "analyticsChanged" });
+        });
+
         it("drops the analytics of a reply that outlived a Clear", async () => {
             const jobId = await upload();
             document.getElementById("clearAllBtn").click();
@@ -2350,6 +2386,45 @@ describe("UploadPage", () => {
         expect(types).toEqual(["addFile", "restoreFiles", "addFile"]);
 
         globalThis.FileReader = originalFileReader;
+    });
+
+    it("clears the worker's inputs after a first upload that failed to save", async () => {
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? [] : null));
+        Storage.saveFile.mockRejectedValueOnce(new Error("disk"));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const input = document.getElementById("multiFileInput");
+        const upload = async (name) => {
+            const file = new File(["col\nval"], name, { type: "text/csv" });
+            Object.defineProperty(input, "files", { value: [file], configurable: true });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+
+        // The worker keeps the shares it parsed, though storage never got them.
+        await upload("Shares.csv");
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: { fileType: "shares", fileName: "Shares.csv", rowCount: 1, jobId: null },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        await upload("Comments.csv");
+
+        const messages = workerInstance.postMessage.mock.calls.map((c) => c[0]);
+        expect(messages.map((message) => message.type)).toEqual([
+            "addFile",
+            "restoreFiles",
+            "addFile",
+        ]);
+        expect(messages[1].payload).toEqual({
+            sharesCsv: null,
+            commentsCsv: null,
+            connectionsCsv: null,
+        });
     });
 
     it("does not record a prime for a worker restarted while the upload saved", async () => {

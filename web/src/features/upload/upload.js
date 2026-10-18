@@ -431,15 +431,15 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Validate CSV uploads and send them to the worker for processing.
+     * Pick the CSV files the page will accept, and hint at the ones it will not.
      * @param {File[]} files - Selected files
-     * @returns {Promise<void>}
+     * @returns {File[]} CSV files within the size limit; empty when there are none
      */
-    async function processFiles(files) {
+    function selectAcceptedFiles(files) {
         const csvFiles = files.filter((file) => file.name.toLowerCase().endsWith(".csv"));
         if (!csvFiles.length) {
             setHint("Please upload CSV files.", true);
-            return;
+            return [];
         }
 
         const tooLargeFiles = csvFiles.filter((file) => file.size > MAX_FILE_BYTES);
@@ -450,7 +450,7 @@ export const UploadPage = (() => {
 
         const acceptedFiles = csvFiles.filter((file) => file.size <= MAX_FILE_BYTES);
         if (!acceptedFiles.length) {
-            return;
+            return [];
         }
 
         const oversizeFiles = acceptedFiles.filter((file) => file.size > LARGE_FILE_WARNING_BYTES);
@@ -460,6 +460,73 @@ export const UploadPage = (() => {
                 `Some files are large (${warningMb}MB+). Processing can take up to a minute and may not finish on a phone with little memory.`,
                 false,
             );
+        }
+        return acceptedFiles;
+    }
+
+    /**
+     * Seed the worker with the stored shares, comments, and connections before
+     * a new file goes out, so an added file recomputes analytics from the full
+     * set rather than from the new file alone. Awaiting here guarantees the
+     * restoreFiles is queued before the addFile messages (worker messages are
+     * FIFO), even when an upload races ahead of the not-yet-awaited
+     * restoreState() on load.
+     * @returns {Promise<void>}
+     */
+    async function primeBeforeUpload() {
+        try {
+            await primeWorkerFromStoredFiles();
+        } catch (error) {
+            // Priming is best-effort; a storage read failure must not block the upload.
+            captureError(error, { module: "upload", operation: "prime-before-upload" });
+            // The worker may be missing stored files, so this upload cannot mark them primed.
+            primeFailed = true;
+        }
+    }
+
+    /**
+     * Track a file as a job and post it to the worker.
+     * @param {File} file - Accepted file
+     */
+    function postFileToWorker(file) {
+        const jobId = createJobId(file);
+        activeJobs.add(jobId);
+        // The worker reads the File. Keep it here so it can be saved after
+        // the worker accepts it.
+        pendingFiles.set(jobId, { fileName: file.name, file });
+        try {
+            // A worker restart during priming can leave current() null.
+            // Handle that failure in the catch below.
+            /** @type {Worker} */ (workers.current()).postMessage({
+                type: "addFile",
+                payload: {
+                    file,
+                    fileName: file.name,
+                    jobId,
+                    totalSize: file.size,
+                },
+            });
+        } catch (error) {
+            captureError(error, {
+                module: "upload",
+                operation: "post-file",
+                fileName: file.name,
+                fileSize: file.size,
+            });
+            completeJob(jobId, file.name);
+            setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
+        }
+    }
+
+    /**
+     * Validate CSV uploads and send them to the worker for processing.
+     * @param {File[]} files - Selected files
+     * @returns {Promise<void>}
+     */
+    async function processFiles(files) {
+        const acceptedFiles = selectAcceptedFiles(files);
+        if (!acceptedFiles.length) {
+            return;
         }
         if (!workers.current()) {
             setHint("Workers are unavailable. Open this page from a local server.", true);
@@ -477,20 +544,7 @@ export const UploadPage = (() => {
         if (activeJobs.size === 0) {
             UploadProgress.show(() => activeJobs.size > 0);
         }
-        // Seed the worker with any already-stored shares/comments before sending
-        // the new file(s), so an added shares/comments file recomputes analytics
-        // from the full set rather than from the new file alone. Awaiting here
-        // guarantees the restoreFiles is queued before the addFile messages below
-        // (worker messages are FIFO), even when an upload races ahead of the
-        // not-yet-awaited restoreState() on load.
-        try {
-            await primeWorkerFromStoredFiles();
-        } catch (error) {
-            // Priming is best-effort; a storage read failure must not block the upload.
-            captureError(error, { module: "upload", operation: "prime-before-upload" });
-            // The worker may be missing stored files, so this upload cannot mark them primed.
-            primeFailed = true;
-        }
+        await primeBeforeUpload();
         // Files dropped before a Clear that ran during the priming await went
         // with it; Clear has already reset the overlay and the jobs.
         if (generation !== clearGeneration) {
@@ -500,35 +554,7 @@ export const UploadPage = (() => {
         // the jobs: earlier jobs finishing during the priming await would
         // otherwise finish the run these files just joined.
         RunTracker.start({ totalBytes: incomingBytes, fileCount: acceptedFiles.length });
-        acceptedFiles.forEach((file) => {
-            const jobId = createJobId(file);
-            activeJobs.add(jobId);
-            // The worker reads the File. Keep it here so it can be saved after
-            // the worker accepts it.
-            pendingFiles.set(jobId, { fileName: file.name, file });
-            try {
-                // A worker restart during priming can leave current() null.
-                // Handle that failure in the catch below.
-                /** @type {Worker} */ (workers.current()).postMessage({
-                    type: "addFile",
-                    payload: {
-                        file,
-                        fileName: file.name,
-                        jobId,
-                        totalSize: file.size,
-                    },
-                });
-            } catch (error) {
-                captureError(error, {
-                    module: "upload",
-                    operation: "post-file",
-                    fileName: file.name,
-                    fileSize: file.size,
-                });
-                completeJob(jobId, file.name);
-                setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
-            }
-        });
+        acceptedFiles.forEach((file) => postFileToWorker(file));
         armRunningJobTimeout();
     }
 
@@ -654,46 +680,39 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Persist processed worker payload and refresh upload status.
+     * Report a reply for a file the worker could not process.
      * @param {FileProcessedPayload} payload - Worker payload for fileProcessed
+     * @param {{fileName: string, file: File}|null} pending - The pending upload this reply answers, if any
      */
-    async function handleFileProcessedMessage(payload) {
-        const fileType = payload.fileType;
-        const fileName = payload.fileName;
-        const jobId = payload.jobId || null;
-        const rowCount = payload.rowCount || 0;
-        const pending = consumePendingFile(pendingFiles, jobId, fileName);
-        // A restart while this reply is saved replaces the worker it describes.
-        const replyWorker = workers.current();
-        // The worker has moved on to the next queued file.
-        armRunningJobTimeout();
-
-        if (!fileType) {
-            const generation = clearGeneration;
-            // A reply with no pending job outlived a Clear, so its analytics
-            // describe data that is gone.
-            if (pending) {
-                await persistAnalyticsOnly(payload.analyticsBase);
-            }
-            // Set after the save, whose status update would replace it.
-            if (generation === clearGeneration) {
-                setHint(payload.error || "File could not be processed.", true);
-            }
-            completeJob(jobId, fileName);
-            return;
+    async function reportUnprocessedFile(payload, pending) {
+        const generation = clearGeneration;
+        // A reply with no pending job outlived a Clear, so its analytics
+        // describe data that is gone.
+        if (pending) {
+            await persistAnalyticsOnly(payload.analyticsBase);
         }
-
-        if (!pending) {
-            completeJob(jobId, fileName);
-            return;
+        // Set after the save, whose status update would replace it.
+        if (generation === clearGeneration) {
+            setHint(payload.error || "File could not be processed.", true);
         }
+        completeJob(payload.jobId || null, payload.fileName);
+    }
 
+    /**
+     * Save a processed file and its analytics, then refresh the upload status.
+     * @param {FileProcessedPayload} payload - Worker payload for fileProcessed
+     * @param {string} fileType - Type the worker processed the file as
+     * @param {File} file - The pending upload this reply answers
+     * @param {Worker|null} replyWorker - Worker that sent the reply
+     */
+    async function saveProcessedFile(payload, fileType, file, replyWorker) {
+        const { fileName } = payload;
         const generation = clearGeneration;
         const save = persistProcessedFile(
             fileType,
             fileName,
-            pending.file,
-            rowCount,
+            file,
+            payload.rowCount || 0,
             payload.analyticsBase,
             generation,
         );
@@ -751,8 +770,34 @@ export const UploadPage = (() => {
             }
         } finally {
             pendingSaves.delete(save);
-            completeJob(jobId, fileName);
+            completeJob(payload.jobId || null, fileName);
         }
+    }
+
+    /**
+     * Persist processed worker payload and refresh upload status.
+     * @param {FileProcessedPayload} payload - Worker payload for fileProcessed
+     */
+    async function handleFileProcessedMessage(payload) {
+        const jobId = payload.jobId || null;
+        const pending = consumePendingFile(pendingFiles, jobId, payload.fileName);
+        // A restart while this reply is saved replaces the worker it describes.
+        const replyWorker = workers.current();
+        // The worker has moved on to the next queued file.
+        armRunningJobTimeout();
+
+        const fileType = payload.fileType;
+        if (!fileType) {
+            await reportUnprocessedFile(payload, pending);
+            return;
+        }
+
+        if (!pending) {
+            completeJob(jobId, payload.fileName);
+            return;
+        }
+
+        await saveProcessedFile(payload, fileType, pending.file, replyWorker);
     }
 
     /**

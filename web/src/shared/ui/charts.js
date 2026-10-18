@@ -13,6 +13,27 @@ import { DAY_LABELS } from "../../features/analytics/constants.js";
  * @property {string} [monthKey] - Month a week belongs to
  */
 
+/** @typedef {{text: string, textSecondary: string, border: string, blue: string, yellow: string, green: string, purple: string, red: string}} ChartColors */
+
+/**
+ * Where a chart sits inside its canvas, in CSS pixels.
+ * @typedef {object} TimelineLayout
+ * @property {{top: number, right: number, bottom: number, left: number}} padding - Space around the plot
+ * @property {number} chartWidth - Plot width
+ * @property {number} chartHeight - Plot height
+ * @property {number} baseY - Vertical position of the x axis
+ * @property {number} sliceWidth - Width given to each point
+ */
+
+/**
+ * A timeline point placed on the canvas.
+ * @typedef {object} PlacedTimelinePoint
+ * @property {TimelinePoint} point - The data point
+ * @property {number} x - Horizontal position
+ * @property {number} y - Vertical position
+ * @property {number} index - Position in the series
+ */
+
 /** @typedef {{topic: string, count: number}} TopicPoint - One bar of a topic chart */
 /** @typedef {{textOnly: number, links: number, media: number}} ContentMix - Donut counts */
 
@@ -63,7 +84,7 @@ export const SketchCharts = (() => {
 
     /**
      * Read CSS custom properties and return a color palette object.
-     * @returns {{text: string, textSecondary: string, border: string, blue: string, yellow: string, green: string, purple: string, red: string}}
+     * @returns {ChartColors}
      */
     function getColors() {
         const styles = getComputedStyle(document.documentElement);
@@ -157,17 +178,14 @@ export const SketchCharts = (() => {
      */
     function drawEmptyState(canvas, message) {
         setChartEmpty(canvas, true);
-        const size = resizeCanvas(canvas);
+        // The redraw lets exportPng (and any other drawRegistry consumer)
+        // reproduce the empty-state message; clear() dropped the previous handle.
+        const chart = beginChart(canvas, () => drawEmptyState(canvas, message));
         /* v8 ignore next 3 */
-        if (!size) {
+        if (!chart) {
             return;
         }
-        const { ctx, width, height } = size;
-        const colors = getColors();
-        clear(canvas, ctx, width, height);
-        // Register a redraw so exportPng (and any other drawRegistry consumer) can
-        // reproduce the empty-state message; clear() dropped the previous handle.
-        drawRegistry.set(canvas, () => drawEmptyState(canvas, message));
+        const { ctx, width, height, colors } = chart;
         ctx.font = "14px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.textSecondary;
         ctx.textAlign = "center";
@@ -234,6 +252,24 @@ export const SketchCharts = (() => {
     }
 
     /**
+     * Size a canvas, clear it, and register how to redraw it.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {() => void} redraw - Draws the chart again at full progress.
+     * @returns {{ctx: CanvasRenderingContext2D, width: number, height: number, colors: ChartColors}|null} Null when the canvas has no size
+     */
+    function beginChart(canvas, redraw) {
+        const size = resizeCanvas(canvas);
+        if (!size) {
+            return null;
+        }
+        const { ctx, width, height } = size;
+        const colors = getColors();
+        clear(canvas, ctx, width, height);
+        drawRegistry.set(canvas, redraw);
+        return { ctx, width, height, colors };
+    }
+
+    /**
      * Get the hit-test item at the given coordinates on a canvas.
      * @param {HTMLCanvasElement} canvas - The canvas element to query.
      * @param {number} x - The x coordinate.
@@ -282,60 +318,29 @@ export const SketchCharts = (() => {
     }
 
     /**
-     * Draw the timeline line/area chart with labels.
-     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
-     * @param {TimelinePoint[]} data - Timeline points array.
-     * @param {string} timeRange - Filter key (e.g. '1m', '3m', '12m', 'all').
-     * @param {number} [progress=1] - Animation progress from 0 to 1.
-     * @param {number} [maxOverride=0] - Optional max Y value override.
-     * @param {string} [emptyMessage] - Message shown when there is no data.
+     * Keep the points an entrance animation has reached so far.
+     * @param {PlacedTimelinePoint[]} points - Every placed point
+     * @param {number} progress - Animation progress from 0 to 1
+     * @returns {PlacedTimelinePoint[]}
      */
-    function drawTimeline(
-        canvas,
-        data,
-        timeRange,
-        progress = 1,
-        maxOverride = 0,
-        emptyMessage = "No activity to show yet.",
-    ) {
-        if (!data || !data.length) {
-            drawEmptyState(canvas, emptyMessage);
-            return;
-        }
-        setChartEmpty(canvas, false);
-        const size = resizeCanvas(canvas);
-        /* v8 ignore next */
-        if (!size) {
-            return;
-        }
-        const { ctx, width, height } = size;
-        const colors = getColors();
-        clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () =>
-            drawTimeline(canvas, data, timeRange, 1, maxOverride, emptyMessage),
-        );
-
-        const padding = { top: 28, right: 12, bottom: 42, left: 40 };
-        const chartWidth = width - padding.left - padding.right;
-        const chartHeight = height - padding.top - padding.bottom;
-        const rawMax = Math.max(maxOverride || 0, ...data.map((p) => p.value), 1);
-        const maxValue = niceTimelineMax(rawMax);
-        const sliceWidth = chartWidth / data.length;
-        const baseY = padding.top + chartHeight;
-
-        const points = data.map((point, index) => {
-            const value = point.value;
-            const x = padding.left + sliceWidth * index + sliceWidth / 2;
-            const y = baseY - (value / maxValue) * chartHeight;
-            return { point, x, y, index };
-        });
-
-        let visiblePoints = points;
+    function visibleTimelinePoints(points, progress) {
         if (progress < 1 && points.length > 1) {
             const capped = Math.max(0, Math.min(progress, 1));
             const visibleCount = Math.max(1, Math.floor(capped * (points.length - 1)) + 1);
-            visiblePoints = points.slice(0, visibleCount);
+            return points.slice(0, visibleCount);
         }
+        return points;
+    }
+
+    /**
+     * Draw the x axis, the y gridlines, and their value labels.
+     * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+     * @param {ChartColors} colors - Chart palette.
+     * @param {TimelineLayout} layout - Plot position.
+     * @param {number} maxValue - Value at the top of the plot.
+     */
+    function drawTimelineAxes(ctx, colors, layout, maxValue) {
+        const { padding, chartWidth, chartHeight, baseY } = layout;
 
         // Axis line
         ctx.strokeStyle = colors.border;
@@ -365,7 +370,16 @@ export const SketchCharts = (() => {
             }
             ctx.fillText(String(tickValue), padding.left - 6, tickY);
         }
+    }
 
+    /**
+     * Draw the filled area, the line over it, a sketchy second line, and the dots.
+     * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+     * @param {ChartColors} colors - Chart palette.
+     * @param {PlacedTimelinePoint[]} visiblePoints - Points to draw.
+     * @param {number} baseY - Vertical position of the x axis.
+     */
+    function drawTimelineSeries(ctx, colors, visiblePoints, baseY) {
         // Area fill
         ctx.fillStyle = colors.blue;
         ctx.globalAlpha = 0.16;
@@ -422,10 +436,18 @@ export const SketchCharts = (() => {
             ctx.arc(x, y, 3.2, 0, Math.PI * 2);
             ctx.fill();
         });
+    }
 
-        // Value labels
-        const showAllValues = data.length <= 24;
-        const valueEvery = showAllValues ? 1 : Math.ceil(data.length / 10);
+    /**
+     * Write each point's value above it, thinning the labels on long series.
+     * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+     * @param {ChartColors} colors - Chart palette.
+     * @param {PlacedTimelinePoint[]} visiblePoints - Points to label.
+     * @param {number} pointCount - Number of points in the whole series.
+     */
+    function drawTimelineValueLabels(ctx, colors, visiblePoints, pointCount) {
+        const showAllValues = pointCount <= 24;
+        const valueEvery = showAllValues ? 1 : Math.ceil(pointCount / 10);
         ctx.font = "11px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.text;
         ctx.textAlign = "center";
@@ -435,19 +457,29 @@ export const SketchCharts = (() => {
             if (point.value === 0) {
                 return;
             }
-            if (!showAllValues && index % valueEvery !== 0 && index !== points.length - 1) {
+            if (!showAllValues && index % valueEvery !== 0 && index !== pointCount - 1) {
                 return;
             }
             // Keep the label above the point and clear of the top edge.
             const labelY = Math.max(14, y - 8);
             ctx.fillText(String(point.value), x, labelY);
         });
+    }
 
-        // Labels
+    /**
+     * Write the labels under the x axis: one per year on a long "all" range,
+     * otherwise a thinned set of point labels.
+     * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+     * @param {ChartColors} colors - Chart palette.
+     * @param {PlacedTimelinePoint[]} points - Every placed point.
+     * @param {string} timeRange - Filter key (e.g. '1m', '3m', '12m', 'all').
+     * @param {number} baseY - Vertical position of the x axis.
+     */
+    function drawTimelineAxisLabels(ctx, colors, points, timeRange, baseY) {
         ctx.font = "12px Patrick Hand, sans-serif";
         ctx.fillStyle = colors.textSecondary;
         const isWeekly = WEEKLY_TIME_RANGES.has(timeRange);
-        if (timeRange === "all" && data.length > 18) {
+        if (timeRange === "all" && points.length > 18) {
             /** @type {number|null} */
             let lastYear = null;
             points.forEach(({ point, x }, index) => {
@@ -475,57 +507,121 @@ export const SketchCharts = (() => {
                 ctx.fillText(String(year), 0, 0);
                 ctx.restore();
             });
-        } else {
-            const labelEvery = data.length <= 10 ? 1 : Math.ceil(data.length / 8);
-            const minLabelSpacing = 38;
-
-            // Collect label candidates, then thin out any that would crowd their
-            // neighbour so rotated labels (e.g. "Dec"/"Jan") no longer collide at
-            // narrow widths. The last point wins over an adjacent regular label.
-            /** @type {typeof points} */
-            const accepted = [];
-            points.forEach((entry, index) => {
-                const isLast = index === points.length - 1;
-                if (index % labelEvery !== 0 && !isLast) {
-                    return;
-                }
-                const prev = accepted[accepted.length - 1];
-                if (prev && entry.x - prev.x < minLabelSpacing) {
-                    // Crowded: a regular label yields; the last point evicts its neighbour.
-                    if (!isLast) {
-                        return;
-                    }
-                    accepted.pop();
-                }
-                accepted.push(entry);
-            });
-
-            accepted.forEach(({ point, x }) => {
-                const labelText = isWeekly ? point.label : point.label.split(" ")[0];
-                ctx.save();
-                ctx.translate(x, baseY + 18);
-                ctx.rotate(-0.35);
-                ctx.textAlign = "center";
-                ctx.fillText(labelText, 0, 0);
-                ctx.restore();
-            });
+            return;
         }
 
-        /** @type {ChartItem[]} */
-        const items = points.map(({ point, x }) => ({
+        const labelEvery = points.length <= 10 ? 1 : Math.ceil(points.length / 8);
+        const minLabelSpacing = 38;
+
+        // Collect label candidates, then thin out any that would crowd their
+        // neighbour so rotated labels (e.g. "Dec"/"Jan") no longer collide at
+        // narrow widths. The last point wins over an adjacent regular label.
+        /** @type {PlacedTimelinePoint[]} */
+        const accepted = [];
+        points.forEach((entry, index) => {
+            const isLast = index === points.length - 1;
+            if (index % labelEvery !== 0 && !isLast) {
+                return;
+            }
+            const prev = accepted[accepted.length - 1];
+            if (prev && entry.x - prev.x < minLabelSpacing) {
+                // Crowded: a regular label yields; the last point evicts its neighbour.
+                if (!isLast) {
+                    return;
+                }
+                accepted.pop();
+            }
+            accepted.push(entry);
+        });
+
+        accepted.forEach(({ point, x }) => {
+            const labelText = isWeekly ? point.label : point.label.split(" ")[0];
+            ctx.save();
+            ctx.translate(x, baseY + 18);
+            ctx.rotate(-0.35);
+            ctx.textAlign = "center";
+            ctx.fillText(labelText, 0, 0);
+            ctx.restore();
+        });
+    }
+
+    /**
+     * Build the hit areas that give each point's bucket a tooltip.
+     * @param {PlacedTimelinePoint[]} points - Every placed point.
+     * @param {boolean} isWeekly - Whether the points are weeks rather than months.
+     * @param {TimelineLayout} layout - Plot position.
+     * @returns {ChartItem[]}
+     */
+    function buildTimelineItems(points, isWeekly, layout) {
+        return points.map(({ point, x }) => ({
             type: isWeekly ? "week" : "month",
             key: point.key,
             monthKey: point.monthKey || point.key,
             label: point.label,
             value: point.value,
-            x: x - sliceWidth / 2,
-            y: padding.top,
-            width: sliceWidth,
-            height: chartHeight,
+            x: x - layout.sliceWidth / 2,
+            y: layout.padding.top,
+            width: layout.sliceWidth,
+            height: layout.chartHeight,
             tooltip: `${point.label}: ${point.value}`,
         }));
+    }
 
-        register(canvas, items);
+    /**
+     * Draw the timeline line/area chart with labels.
+     * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+     * @param {TimelinePoint[]} data - Timeline points array.
+     * @param {string} timeRange - Filter key (e.g. '1m', '3m', '12m', 'all').
+     * @param {number} [progress=1] - Animation progress from 0 to 1.
+     * @param {number} [maxOverride=0] - Optional max Y value override.
+     * @param {string} [emptyMessage] - Message shown when there is no data.
+     */
+    function drawTimeline(
+        canvas,
+        data,
+        timeRange,
+        progress = 1,
+        maxOverride = 0,
+        emptyMessage = "No activity to show yet.",
+    ) {
+        if (!data || !data.length) {
+            drawEmptyState(canvas, emptyMessage);
+            return;
+        }
+        setChartEmpty(canvas, false);
+        const chart = beginChart(canvas, () =>
+            drawTimeline(canvas, data, timeRange, 1, maxOverride, emptyMessage),
+        );
+        /* v8 ignore next 3 */
+        if (!chart) {
+            return;
+        }
+        const { ctx, width, height, colors } = chart;
+
+        const padding = { top: 28, right: 12, bottom: 42, left: 40 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+        const rawMax = Math.max(maxOverride || 0, ...data.map((p) => p.value), 1);
+        const maxValue = niceTimelineMax(rawMax);
+        const sliceWidth = chartWidth / data.length;
+        const baseY = padding.top + chartHeight;
+        /** @type {TimelineLayout} */
+        const layout = { padding, chartWidth, chartHeight, baseY, sliceWidth };
+
+        /** @type {PlacedTimelinePoint[]} */
+        const points = data.map((point, index) => {
+            const x = padding.left + sliceWidth * index + sliceWidth / 2;
+            const y = baseY - (point.value / maxValue) * chartHeight;
+            return { point, x, y, index };
+        });
+        const visiblePoints = visibleTimelinePoints(points, progress);
+
+        drawTimelineAxes(ctx, colors, layout, maxValue);
+        drawTimelineSeries(ctx, colors, visiblePoints, baseY);
+        drawTimelineValueLabels(ctx, colors, visiblePoints, points.length);
+        drawTimelineAxisLabels(ctx, colors, points, timeRange, baseY);
+
+        register(canvas, buildTimelineItems(points, WEEKLY_TIME_RANGES.has(timeRange), layout));
     }
 
     /**
@@ -541,15 +637,12 @@ export const SketchCharts = (() => {
             return;
         }
         setChartEmpty(canvas, false);
-        const size = resizeCanvas(canvas);
-        /* v8 ignore next */
-        if (!size) {
+        const chart = beginChart(canvas, () => drawTopics(canvas, data, 1, emptyMessage));
+        /* v8 ignore next 3 */
+        if (!chart) {
             return;
         }
-        const { ctx, width, height } = size;
-        const colors = getColors();
-        clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () => drawTopics(canvas, data, 1, emptyMessage));
+        const { ctx, width, height, colors } = chart;
 
         ctx.font = "13px Patrick Hand, sans-serif";
         const maxLabelWidth = Math.max(...data.map((p) => ctx.measureText(p.topic).width), 60);
@@ -619,15 +712,12 @@ export const SketchCharts = (() => {
             return;
         }
         setChartEmpty(canvas, false);
-        const size = resizeCanvas(canvas);
-        /* v8 ignore next */
-        if (!size) {
+        const chart = beginChart(canvas, () => drawHeatmap(canvas, grid, emptyMessage));
+        /* v8 ignore next 3 */
+        if (!chart) {
             return;
         }
-        const { ctx, width, height } = size;
-        const colors = getColors();
-        clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () => drawHeatmap(canvas, grid, emptyMessage));
+        const { ctx, width, height, colors } = chart;
 
         const padding = { top: 20, right: 20, bottom: 26, left: 44 };
         const chartWidth = width - padding.left - padding.right;
@@ -722,15 +812,12 @@ export const SketchCharts = (() => {
      * @param {number} [progress=1] - Animation progress from 0 to 1.
      */
     function drawDonut(canvas, mix, progress = 1) {
-        const size = resizeCanvas(canvas);
-        /* v8 ignore next */
-        if (!size) {
+        const chart = beginChart(canvas, () => drawDonut(canvas, mix, 1));
+        /* v8 ignore next 3 */
+        if (!chart) {
             return;
         }
-        const { ctx, width, height } = size;
-        const colors = getColors();
-        clear(canvas, ctx, width, height);
-        drawRegistry.set(canvas, () => drawDonut(canvas, mix, 1));
+        const { ctx, width, height, colors } = chart;
         if (!mix) {
             return;
         }

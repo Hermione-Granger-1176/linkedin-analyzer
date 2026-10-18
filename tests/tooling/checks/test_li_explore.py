@@ -1,9 +1,8 @@
 """Tests for the ad-hoc export explorer behind `make explore`.
 
-The explorer is a top-level script: importing it runs the whole report. Every
-test therefore loads it from its real path with a redirected repository root so
-it reads a synthetic export from ``tmp_path`` instead of the private one in
-``data/input``.
+The explorer reads its export path when it is imported, so every test loads it
+from its real path with a redirected repository root. It then reads a synthetic
+export from ``tmp_path`` instead of the private one in ``data/input``.
 """
 
 from __future__ import annotations
@@ -14,10 +13,10 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import pytest
-
 if TYPE_CHECKING:
     from types import ModuleType
+
+    import pytest
 
 MODULE_PATH = Path(__file__).parents[3] / "scripts" / "checks" / "li_explore.py"
 # Bound before any test can patch it: the explorer raises the csv field-size
@@ -149,6 +148,13 @@ def _load_explorer(monkeypatch: pytest.MonkeyPatch, repo_root: Path) -> ModuleTy
     return module
 
 
+def _run_explorer(monkeypatch: pytest.MonkeyPatch, repo_root: Path) -> ModuleType:
+    """Load the explorer against a fake repository root, print its report, and return it."""
+    module = _load_explorer(monkeypatch, repo_root)
+    assert module.main() == 0
+    return module
+
+
 def test_explorer_skips_a_repository_without_an_export(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -157,10 +163,8 @@ def test_explorer_skips_a_repository_without_an_export(
     """A missing private export skips cleanly instead of raising."""
     monkeypatch.setenv("LIA_ME", OWNER)
 
-    with pytest.raises(SystemExit) as exit_info:
-        _load_explorer(monkeypatch, tmp_path)
+    _run_explorer(monkeypatch, tmp_path)
 
-    assert exit_info.value.code == 0
     assert "SKIP: no local export in data/input" in capsys.readouterr().out
 
 
@@ -173,10 +177,10 @@ def test_explorer_reports_every_section_of_a_synthetic_export(
     monkeypatch.setenv("LIA_ME", OWNER)
     _write_export(tmp_path)
 
-    module = _load_explorer(monkeypatch, tmp_path)
+    module = _run_explorer(monkeypatch, tmp_path)
     output = capsys.readouterr().out
 
-    assert module.ME == OWNER
+    assert module.detect_me() == OWNER
     assert "posts=3 range=2024-01-15..2024-02-20" in output
     assert "with_media=1" in output
     assert "'python', 1" in output
@@ -200,7 +204,7 @@ def test_explorer_handles_an_export_without_links_or_dated_comments(
     base = _write_export(tmp_path)
     _write_csv(base / "Comments.csv", [{"Date": "", "Link": ""}])
 
-    _load_explorer(monkeypatch, tmp_path)
+    _run_explorer(monkeypatch, tmp_path)
 
     assert "max_comments_on_one_post=0" in capsys.readouterr().out
 
@@ -222,8 +226,7 @@ def test_explorer_shrinks_the_csv_field_limit_until_it_is_accepted(
 
     monkeypatch.setattr(csv, "field_size_limit", field_size_limit)
 
-    with pytest.raises(SystemExit):
-        _load_explorer(monkeypatch, tmp_path)
+    _load_explorer(monkeypatch, tmp_path)
 
     assert accepted and accepted[-1] <= 2**31 - 1
 

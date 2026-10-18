@@ -7,12 +7,11 @@ import json
 import os
 import re
 import sys
-import time
-from collections.abc import Callable
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 from scripts.ci import refresh_action_shas
+from scripts.ci.refresh_action_shas import retry
 
 REPO_ROOT = Path()
 MAKEFILE_PATH = REPO_ROOT / "Makefile"
@@ -33,22 +32,6 @@ PRE_COMMIT_HOOKS_PATTERN = re.compile(
 )
 SEMVER_PATTERN = re.compile(r"v?([0-9]+\.[0-9]+\.[0-9]+)")
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
-
-FetchText = Callable[[], str]
-
-
-def retry(
-    fetch: FetchText, *, attempts: int = 3, sleep: Callable[[float], None] = time.sleep
-) -> str:
-    """Return a fetched value with bounded backoff for transient registry failures."""
-    if attempts < 1:
-        raise ValueError("attempts must be at least 1")
-    for attempt in range(1, attempts):
-        try:
-            return fetch()
-        except Exception:
-            sleep(attempt * 0.25)
-    return fetch()
 
 
 def github_latest_version(repo: str, *, token: str, timeout: float = 15) -> str:

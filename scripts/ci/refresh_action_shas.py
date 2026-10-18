@@ -102,6 +102,27 @@ def refresh_files(roots: Iterable[Path], resolve: ResolveSha) -> list[Path]:
     return changed
 
 
+def retry[T](
+    fetch: Callable[[], T],
+    *,
+    attempts: int = 3,
+    sleep: Callable[[float], None] = time.sleep,
+) -> T:
+    """Return a fetched value with bounded backoff for transient failures.
+
+    Every attempt but the last is retried after a growing sleep. The last one
+    runs outside the handler, so its error reaches the caller.
+    """
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    for attempt in range(1, attempts):
+        try:
+            return fetch()
+        except Exception:
+            sleep(attempt * 0.25)
+    return fetch()
+
+
 def make_resolver(
     fetch: FetchSha,
     *,
@@ -116,19 +137,15 @@ def make_resolver(
     def resolve(action: str, ref: str) -> str:
         repo = "/".join(action.split("/")[:2])
         key = f"{repo}@{ref}"
-        if key in cache:
-            return cache[key]
-        for attempt in range(1, max_attempts):
-            try:
-                sha = _validate_resolved_sha(fetch(repo, ref), action=action, ref=ref)
-            except Exception:  # retried below; the final attempt propagates instead
-                sleep(attempt * 0.25)
-                continue
-            cache[key] = sha
-            return sha
-        sha = _validate_resolved_sha(fetch(repo, ref), action=action, ref=ref)
-        cache[key] = sha
-        return sha
+        if key not in cache:
+            # An invalid SHA is retried like a failed fetch, so a transient bad
+            # response does not fail the run.
+            cache[key] = retry(
+                lambda: _validate_resolved_sha(fetch(repo, ref), action=action, ref=ref),
+                attempts=max_attempts,
+                sleep=sleep,
+            )
+        return cache[key]
 
     return resolve
 

@@ -57,6 +57,32 @@ def _sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
+def _command_failure(
+    cmd: list[str], result: subprocess.CompletedProcess[str]
+) -> tuple[str, GhError]:
+    """Classify a failed command and return its kind and the error to raise.
+
+    The kind is the :func:`gh_policy.classify_gh_failure` result. Only
+    ``"transient"`` is worth retrying; the other kinds always end the call.
+    """
+    # Classify on the real output, but never raise a bare "failed:" when the
+    # command exited quietly: the exit code is the only clue left.
+    detail = (result.stderr or result.stdout or "").strip()
+    reported = detail or f"no output (exit code {result.returncode})"
+    kind = gh_policy.classify_gh_failure(detail)
+    if kind == "rate_limit":
+        return kind, GhRateLimitError(
+            f"GitHub rate limit hit running {_label(cmd)}: {detail}\n"
+            "Wait for the limit window to reset before retrying."
+        )
+    if kind == "forbidden":
+        return kind, GhError(
+            f"{_label(cmd)} was refused: {detail}\n"
+            "The token is missing a permission or scope this call needs."
+        )
+    return kind, GhError(f"{_label(cmd)} failed: {reported}")
+
+
 def _run(
     cmd: list[str],
     *,
@@ -97,26 +123,12 @@ def _run(
         if result.returncode == 0:
             return result
 
-        # Classify on the real output, but never raise a bare "failed:" when the
-        # command exited quietly: the exit code is the only clue left.
-        detail = (result.stderr or result.stdout or "").strip()
-        reported = detail or f"no output (exit code {result.returncode})"
-        kind = gh_policy.classify_gh_failure(detail)
-        if kind == "rate_limit":
-            raise GhRateLimitError(
-                f"GitHub rate limit hit running {_label(cmd)}: {detail}\n"
-                "Wait for the limit window to reset before retrying."
-            )
-        if kind == "forbidden":
-            raise GhError(
-                f"{_label(cmd)} was refused: {detail}\n"
-                "The token is missing a permission or scope this call needs."
-            )
+        kind, error = _command_failure(cmd, result)
         if kind == "transient" and attempt < retries:
             _sleep(gh_policy.retry_backoff_seconds(attempt))
             attempt += 1
             continue
-        raise GhError(f"{_label(cmd)} failed: {reported}")
+        raise error
 
 
 def run_gh(
@@ -155,6 +167,44 @@ def gh_json(
         raise GhError(f"gh returned invalid JSON: {exc}") from exc
 
 
+def _graphql_args(query: str, variables: Mapping[str, object] | None) -> list[str]:
+    """Return the ``gh api graphql`` arguments that bind ``query`` and ``variables``."""
+    args = ["api", "graphql", "-f", f"query={query}"]
+    for key, value in (variables or {}).items():
+        # bool is a subclass of int, so both go through -F (typed parameters).
+        # gh expects JSON booleans, so serialize bool as lowercase true/false
+        # rather than Python's True/False, which gh would send as a string.
+        if isinstance(value, bool):
+            args += ["-F", f"{key}={str(value).lower()}"]
+        elif isinstance(value, int):
+            args += ["-F", f"{key}={value}"]
+        else:
+            args += ["-f", f"{key}={value}"]
+    return args
+
+
+def _graphql_data(payload: object) -> Any:
+    """Return the ``data`` of a GraphQL response, or raise on errors or a missing body."""
+    if not isinstance(payload, dict):
+        raise GhError("Unexpected GraphQL response shape")
+    # gh exits non-zero on GraphQL errors (handled above), but a 200 response
+    # can still carry an errors array alongside partial data; catch that too.
+    errors = payload.get("errors")
+    if errors:
+        message = json.dumps(errors)
+        # Trust the structured error type first; fall back to string heuristics
+        # only when the type is absent or unrecognized.
+        rate_limited = any(
+            isinstance(error, dict) and error.get("type") == "RATE_LIMITED" for error in errors
+        )
+        if rate_limited or gh_policy.classify_gh_failure(message) == "rate_limit":
+            raise GhRateLimitError(f"GitHub rate limit reported by GraphQL: {message}")
+        raise GhError(f"GraphQL errors: {message}")
+    if "data" not in payload:
+        raise GhError("GraphQL response missing data")
+    return payload["data"]
+
+
 def graphql(
     query: str,
     *,
@@ -182,37 +232,13 @@ def graphql(
         GhRateLimitError: If the response reports a rate limit.
         GhError: If the response contains other errors or is missing ``data``.
     """
-    args = ["api", "graphql", "-f", f"query={query}"]
-    for key, value in (variables or {}).items():
-        # bool is a subclass of int, so both go through -F (typed parameters).
-        # gh expects JSON booleans, so serialize bool as lowercase true/false
-        # rather than Python's True/False, which gh would send as a string.
-        if isinstance(value, bool):
-            args += ["-F", f"{key}={str(value).lower()}"]
-        elif isinstance(value, int):
-            args += ["-F", f"{key}={value}"]
-        else:
-            args += ["-f", f"{key}={value}"]
-
-    payload = gh_json(args, run_fn=run_fn, timeout=timeout, retries=retries)
-    if not isinstance(payload, dict):
-        raise GhError("Unexpected GraphQL response shape")
-    # gh exits non-zero on GraphQL errors (handled above), but a 200 response
-    # can still carry an errors array alongside partial data; catch that too.
-    errors = payload.get("errors")
-    if errors:
-        message = json.dumps(errors)
-        # Trust the structured error type first; fall back to string heuristics
-        # only when the type is absent or unrecognized.
-        rate_limited = any(
-            isinstance(error, dict) and error.get("type") == "RATE_LIMITED" for error in errors
-        )
-        if rate_limited or gh_policy.classify_gh_failure(message) == "rate_limit":
-            raise GhRateLimitError(f"GitHub rate limit reported by GraphQL: {message}")
-        raise GhError(f"GraphQL errors: {message}")
-    if "data" not in payload:
-        raise GhError("GraphQL response missing data")
-    return payload["data"]
+    payload = gh_json(
+        _graphql_args(query, variables),
+        run_fn=run_fn,
+        timeout=timeout,
+        retries=retries,
+    )
+    return _graphql_data(payload)
 
 
 def resolve_repo(*, run_fn: RunFunction | None = None) -> str:

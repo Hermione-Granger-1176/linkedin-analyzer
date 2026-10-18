@@ -36,8 +36,10 @@ export interface MessageContact {
     lastTimestamp: number;
 }
 
-/** Message events stored as columns, one entry per participant per message.
-contactIds[i] indexes contactKeys; timestamps[i] is the message time. */
+/**
+ * Message events stored as columns, one entry per participant per message.
+ * contactIds[i] indexes contactKeys; timestamps[i] is the message time.
+ */
 export interface MessageEvents {
     /** Contact key for each contact ID */
     contactKeys: string[];

@@ -722,7 +722,7 @@ describe("PdfExport", () => {
 
         // Let the run finish here, so it cannot touch the shared mocks after
         // the next test has cleared them.
-        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true));
+        await vi.waitFor(() => expect(ui().backdrop.hidden).toBe(true), SETTLE);
     });
 
     it("shows a refusal's own reason and does not report it", async () => {

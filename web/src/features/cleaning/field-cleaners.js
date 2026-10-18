@@ -184,11 +184,8 @@ function cleanMessagesContent(value) {
  * @returns {string} Empty string if the field is empty/missing, otherwise the cleaned value
  */
 function cleanEmptyField(value) {
-    if (isMissing(value)) {
-        return "";
-    }
-    const text = String(value).trim();
-    return text === '""' || text === '"' || text === "" ? "" : text;
+    const text = cleanValue(value);
+    return text === '""' || text === '"' ? "" : text;
 }
 
 /**
@@ -374,11 +371,7 @@ function cleanDate(value) {
  * @returns {string} Date string in YYYY-MM-DD format
  */
 function cleanConnectionsDate(value) {
-    if (isMissing(value)) {
-        return "";
-    }
-
-    const text = String(value).trim();
+    const text = cleanValue(value);
     const monthMatch = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
     if (!monthMatch) {
         return text;

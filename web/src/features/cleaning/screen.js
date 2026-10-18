@@ -253,6 +253,16 @@ export const CleanPage = (() => {
     }
 
     /**
+     * Show an error and take the preview and download away.
+     * @param {string} message - User-facing error message
+     */
+    function showPreviewError(message) {
+        showError(message);
+        hidePreview();
+        hideDownload();
+    }
+
+    /**
      * Report a file parse error and reset the preview UI.
      * @param {unknown} error - The error to report
      * @param {string} message - User-facing error message
@@ -266,9 +276,70 @@ export const CleanPage = (() => {
             fileType,
             fileName,
         });
-        showError(message);
+        showPreviewError(message);
+    }
+
+    /**
+     * Load a stored upload, clean it in the worker, and cache its preview.
+     * @param {string} type - File type
+     * @param {CachedFileMetadata} file - Stored file metadata
+     * @param {number} fileUpdatedAt - Upload timestamp
+     * @returns {Promise<boolean>} Whether the preview is cached; false when the load failed, or a newer selection took over
+     */
+    async function loadPreview(type, file, fileUpdatedAt) {
+        const token = ++previewRequest;
+        // A replaced upload's old preview and downloads must not stay
+        // usable while the new one loads.
+        delete cache[type];
         hidePreview();
         hideDownload();
+        let stored;
+        try {
+            // The cached record is metadata only; load the stored upload on
+            // demand. The worker reads and cleans it off the main thread.
+            stored = await Storage.getFile(type);
+            if (!stored || !stored.blob) {
+                // Metadata says the file exists but its contents are gone
+                // (cleared in another tab or degraded persistence); report a
+                // load failure rather than parsing an empty payload into a
+                // misleading parse error.
+                throw new Error("Stored file record is missing.");
+            }
+        } catch (error) {
+            // An abandoned load must not replace the newer selection's preview.
+            if (getSelectedType() !== type) {
+                return false;
+            }
+            handleParseError(error, "Unable to load file.", type, file.name || null);
+            return false;
+        }
+        if (token !== previewRequest || getSelectedType() !== type) {
+            return false;
+        }
+        const reply = await requestClean({
+            fileType: type,
+            output: "preview",
+            source: stored.blob,
+            key: fileKey(type, fileUpdatedAt),
+        });
+        // The selection may have changed while the clean was in flight;
+        // abandon this stale render so the newer one wins.
+        if (reply.cancelled || token !== previewRequest || getSelectedType() !== type) {
+            return false;
+        }
+        if (!reply.success) {
+            /* v8 ignore next */
+            const message = reply.error || "Unable to parse file.";
+            handleParseError(new Error(message), message, type, file.name || null);
+            return false;
+        }
+        cache[type] = {
+            updatedAt: fileUpdatedAt,
+            sourceSize: stored.blob.size,
+            rowCount: reply.rowCount,
+            previewRows: reply.previewRows,
+        };
+        return true;
     }
 
     /**
@@ -279,9 +350,7 @@ export const CleanPage = (() => {
         const type = getSelectedType();
         const file = storedFiles[type];
         if (!file) {
-            showError(`No ${type} file uploaded yet.`);
-            hidePreview();
-            hideDownload();
+            showPreviewError(`No ${type} file uploaded yet.`);
             return;
         }
 
@@ -291,61 +360,12 @@ export const CleanPage = (() => {
         const fileUpdatedAt = file.updatedAt || 0;
 
         if (!cached || cached.updatedAt !== fileUpdatedAt) {
-            const token = ++previewRequest;
-            // A replaced upload's old preview and downloads must not stay
-            // usable while the new one loads.
-            delete cache[type];
-            hidePreview();
-            hideDownload();
-            let stored;
-            try {
-                // The cached record is metadata only; load the stored upload on
-                // demand. The worker reads and cleans it off the main thread.
-                stored = await Storage.getFile(type);
-                if (!stored || !stored.blob) {
-                    // Metadata says the file exists but its contents are gone
-                    // (cleared in another tab or degraded persistence); report a
-                    // load failure rather than parsing an empty payload into a
-                    // misleading parse error.
-                    throw new Error("Stored file record is missing.");
-                }
-            } catch (error) {
-                // An abandoned load must not replace the newer selection's preview.
-                if (getSelectedType() !== type) {
-                    return;
-                }
-                handleParseError(error, "Unable to load file.", type, file.name || null);
+            if (!(await loadPreview(type, file, fileUpdatedAt))) {
                 return;
             }
-            if (token !== previewRequest || getSelectedType() !== type) {
-                return;
-            }
-            const reply = await requestClean({
-                fileType: type,
-                output: "preview",
-                source: stored.blob,
-                key: fileKey(type, fileUpdatedAt),
-            });
-            // The selection may have changed while the clean was in flight;
-            // abandon this stale render so the newer one wins.
-            if (reply.cancelled || token !== previewRequest || getSelectedType() !== type) {
-                return;
-            }
-            if (!reply.success) {
-                /* v8 ignore next */
-                const message = reply.error || "Unable to parse file.";
-                handleParseError(new Error(message), message, type, file.name || null);
-                return;
-            }
-            cache[type] = {
-                updatedAt: fileUpdatedAt,
-                sourceSize: stored.blob.size,
-                rowCount: reply.rowCount,
-                previewRows: reply.previewRows,
-            };
         }
 
-        // Either cached already or set just above.
+        // Either cached already or set by loadPreview.
         showPreview(/** @type {CleanPreview} */ (cache[type]), type);
         showDownload();
     }

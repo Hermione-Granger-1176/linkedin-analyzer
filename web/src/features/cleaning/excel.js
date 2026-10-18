@@ -350,19 +350,29 @@ export const ExcelGenerator = (() => {
     }
 
     /**
+     * Run a download and report how it ended, so a failure reaches the caller as a result.
+     * @param {() => Promise<void>} work - Builds and saves the workbook
+     * @returns {Promise<DownloadResult>}
+     */
+    async function toDownloadResult(work) {
+        try {
+            await work();
+            return { success: true, error: null };
+        } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : String(err) };
+        }
+    }
+
+    /**
      * Build and download a workbook from a sheet spec.
      * @param {SheetSpec} spec - Sheet spec
      * @param {string} filename - Download file name
      * @returns {Promise<DownloadResult>}
      */
-    async function downloadFromSpec(spec, filename) {
-        try {
-            const blob = await generateFromSpec(spec);
-            download(blob, filename);
-            return { success: true, error: null };
-        } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : String(err) };
-        }
+    function downloadFromSpec(spec, filename) {
+        return toDownloadResult(async () => {
+            download(await generateFromSpec(spec), filename);
+        });
     }
 
     /**
@@ -423,15 +433,11 @@ export const ExcelGenerator = (() => {
      * @param {string|null} [customFilename=null] - File name override
      * @returns {Promise<DownloadResult>}
      */
-    async function generateAndDownload(data, fileType, customFilename = null) {
-        try {
+    function generateAndDownload(data, fileType, customFilename = null) {
+        return toDownloadResult(async () => {
             const blob = await generate(data, fileType);
-            const filename = customFilename || getConfig(fileType).outputName;
-            download(blob, filename);
-            return { success: true, error: null };
-        } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : String(err) };
-        }
+            download(blob, customFilename || getConfig(fileType).outputName);
+        });
     }
 
     return {

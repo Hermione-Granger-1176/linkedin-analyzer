@@ -41,9 +41,9 @@ def run_make_target(
     return result, args_file
 
 
-@pytest.mark.parametrize("target", ["branch-switch", "branch-delete"])
+@pytest.mark.parametrize("target", ["branch-switch", "branch-delete", "branch-delete-remote"])
 def test_branch_helpers_require_a_name(target: str, tmp_path: Path) -> None:
-    """Both helpers reject a missing name before invoking Git."""
+    """Each helper rejects a missing name before invoking Git."""
     result, args_file = run_make_target(tmp_path, target)
 
     assert result.returncode != 0
@@ -56,6 +56,7 @@ def test_branch_helpers_require_a_name(target: str, tmp_path: Path) -> None:
     [
         ("branch-switch", ["switch", "--"]),
         ("branch-delete", ["branch", "-d", "--"]),
+        ("branch-delete-remote", ["push", "--delete", "--", "origin"]),
     ],
 )
 def test_branch_helpers_pass_shell_metacharacters_as_literal_names(
@@ -76,6 +77,7 @@ def test_branch_helpers_pass_shell_metacharacters_as_literal_names(
     [
         ("branch-switch", ["switch", "--"]),
         ("branch-delete", ["branch", "-d", "--"]),
+        ("branch-delete-remote", ["push", "--delete", "--", "origin"]),
     ],
 )
 def test_branch_helpers_preserve_make_syntax_from_environment(
@@ -118,3 +120,85 @@ def test_branch_delete_preserves_force_make_syntax_from_environment(tmp_path: Pa
         "feature/old",
     ]
     assert not marker.exists()
+
+
+def test_cherry_pick_requires_a_ref(tmp_path: Path) -> None:
+    """Cherry-pick rejects a missing ref before invoking Git."""
+    result, args_file = run_make_target(tmp_path, "cherry-pick")
+
+    assert result.returncode != 0
+    assert 'Usage: make cherry-pick ref="sha ..."' in result.stderr
+    assert not args_file.exists()
+
+
+@pytest.mark.parametrize(
+    ("assignments", "expected_args"),
+    [
+        (["ref=abc123 def456"], ["cherry-pick", "--", "abc123", "def456"]),
+        (["ref=abc123", "nocommit=1"], ["cherry-pick", "--no-commit", "--", "abc123"]),
+    ],
+)
+def test_cherry_pick_passes_each_ref_after_the_separator(
+    assignments: list[str], expected_args: list[str], tmp_path: Path
+) -> None:
+    """Refs split on whitespace and follow the option separator."""
+    result, args_file = run_make_target(tmp_path, "cherry-pick", *assignments)
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text(encoding="utf-8").splitlines() == expected_args
+
+
+def test_cherry_pick_keeps_shell_and_glob_syntax_literal(tmp_path: Path) -> None:
+    """Shell metacharacters and globs in refs reach Git unexpanded."""
+    marker = tmp_path / "expanded"
+    ref = f"abc;true>{marker};#"
+    result, args_file = run_make_target(tmp_path, "cherry-pick", f"ref={ref} *")
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text(encoding="utf-8").splitlines() == ["cherry-pick", "--", ref, "*"]
+    assert not marker.exists()
+
+
+def test_cherry_pick_preserves_make_syntax_from_environment(tmp_path: Path) -> None:
+    """An environment ref keeps Make functions inert until Git receives it."""
+    ref = "abc$(firstword,x)"
+    result, args_file = run_make_target(tmp_path, "cherry-pick", variables={"ref": ref})
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text(encoding="utf-8").splitlines() == ["cherry-pick", "--", ref]
+
+
+@pytest.mark.parametrize("ref", ["--output=x", "abc -m", "-x abc"])
+def test_cherry_pick_refuses_option_like_refs(ref: str, tmp_path: Path) -> None:
+    """Git reads revision options even after the separator, so dashed words never reach it."""
+    result, args_file = run_make_target(tmp_path, "cherry-pick", f"ref={ref}")
+
+    assert result.returncode != 0
+    assert "Refusing option-like ref: -" in result.stderr
+    assert not args_file.exists()
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_args"),
+    [
+        ("cherry-pick-continue", ["cherry-pick", "--continue"]),
+        ("cherry-pick-abort", ["cherry-pick", "--abort"]),
+    ],
+)
+def test_cherry_pick_sequencer_targets(
+    target: str, expected_args: list[str], tmp_path: Path
+) -> None:
+    """The sequencer targets pass only their fixed option to Git."""
+    result, args_file = run_make_target(tmp_path, target)
+
+    assert result.returncode == 0, result.stderr
+    assert args_file.read_text(encoding="utf-8").splitlines() == expected_args
+
+
+def test_branch_delete_remote_refuses_main(tmp_path: Path) -> None:
+    """The remote delete helper never removes main."""
+    result, args_file = run_make_target(tmp_path, "branch-delete-remote", "name=main")
+
+    assert result.returncode != 0
+    assert "Refusing to delete main on origin." in result.stderr
+    assert not args_file.exists()

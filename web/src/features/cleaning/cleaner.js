@@ -292,27 +292,50 @@ export const LinkedInCleaner = (() => {
      * of the text. Returns the first supported type (in FILE_TYPES order) whose
      * required columns are present, or null when no prefix match is found.
      *
-     * A truncated tail can only corrupt the prefix's last row, never the header
-     * at the top, so a positive match is reliable; a null result falls back to
-     * full multi-type detection in the caller, which keeps behavior identical.
-     * Uses a throwaway parse cache so truncated parses never poison the caller's
-     * full-parse cache.
+     * Only the rows up to the header are read. The prefix usually ends inside a
+     * row, often inside a quoted message body, and an incremental parse holds
+     * that unfinished row back instead of failing on it the way a whole-text
+     * parse fails on the unmatched quote. A null result falls back to full
+     * multi-type detection in the caller, and the full parse still validates
+     * every row, so a match here only picks the type.
      * @param {string} csvText - Raw CSV text
      * @returns {string|null} Detected file type, or null if unknown from the prefix
      */
     function detectTypeFromPrefix(csvText) {
         const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
-        const prefixCache = new Map();
+        const rowsByOptions = new Map();
         for (const type of FILE_TYPES) {
-            const parsed = parseCSV(prefix, type, prefixCache);
-            if (parsed.error) {
+            const csvOptions = type === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+            if (!rowsByOptions.has(csvOptions)) {
+                rowsByOptions.set(csvOptions, readPrefixRows(prefix, csvOptions));
+            }
+            const rows = rowsByOptions.get(csvOptions);
+            const skipRows = Number.isInteger(CONFIGS[type].skipRows) ? CONFIGS[type].skipRows : 0;
+            if (!rows || rows.length <= skipRows) {
                 continue;
             }
-            if (validateColumns(parsed.headers, type).valid) {
+            const headers = normalizeHeaders(rows[skipRows]);
+            if (findDuplicateHeaders(headers).length) {
+                continue;
+            }
+            if (validateColumns(headers, type).valid) {
                 return type;
             }
         }
         return null;
+    }
+
+    /**
+     * Read the complete rows at the start of a prefix, leaving out the row it
+     * ends inside.
+     * @param {string} prefix - Leading slice of the CSV text
+     * @param {{delimiter: string, quote: string, escape: string|null}} csvOptions - Parser options
+     * @returns {string[][]|null} Complete rows, or null when the prefix will not parse
+     */
+    function readPrefixRows(prefix, csvOptions) {
+        const rows = [];
+        const parser = createCsvRowParser(csvOptions, (row) => rows.push(row));
+        return parser.push(prefix) ? null : rows;
     }
 
     /**

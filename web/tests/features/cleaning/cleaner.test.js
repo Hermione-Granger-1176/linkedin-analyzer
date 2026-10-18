@@ -791,6 +791,21 @@ describe("LinkedInCleaner.createStreamProcessor", () => {
         expect(processor.finish()).toBeNull();
     });
 
+    it("streams a file whose detection prefix ends inside a quoted field", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const row = "2025-01-01 10:00:00 UTC,https://example.test/s,hello,,,PUBLIC\n";
+        const lead = `${header}${row.repeat(1000)}`;
+        expect(lead.length).toBeLessThan(64 * 1024);
+        const longBody = "line\n".repeat(4000);
+        const text = `${lead}2025-01-02 10:00:00 UTC,https://example.test/l,"${longBody}",,,PUBLIC\n${row}`;
+        // The quoted body spans the 64K mark, so the prefix ends inside it.
+        expect(lead.length + 100).toBeLessThan(64 * 1024);
+        expect(text.length).toBeGreaterThan(64 * 1024 + 100);
+        const expected = LinkedInCleaner.process(text, "auto");
+        expect(expected.success).toBe(true);
+        expect(streamProcess(text, 4096)).toEqual(expected);
+    });
+
     it("gives up when the last row past the prefix has an unmatched quote", () => {
         const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
         const row = "2025-01-01 10:00:00 UTC,https://example.test/s,hello,,,PUBLIC\n";

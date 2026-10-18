@@ -291,9 +291,14 @@ export const UploadPage = (() => {
         }
 
         restorePromise = (async () => {
+            const generation = clearGeneration;
             await Session.waitForCleanup();
             updateOfflineBanner();
             const files = await Storage.getAllFiles();
+            // A Clear during the read leaves these files describing a wiped store.
+            if (generation !== clearGeneration) {
+                return;
+            }
             const fileMap = getFileMap(files);
             DataCache.set("storage:files", files.map(toStoredFileMetadata));
             // Intentionally do NOT prime the worker on load: the dashboard reads
@@ -302,6 +307,9 @@ export const UploadPage = (() => {
             // does, so priming is deferred to processFiles(), saving a redundant
             // re-parse of shares+comments on every page load.
             const analyticsReady = await hasAnalyticsData();
+            if (generation !== clearGeneration) {
+                return;
+            }
             updateStatus({ fileMap, analyticsReady });
             // If a stale 24h session was wiped, tell the user once rather than
             // letting their previously-uploaded files silently disappear.
@@ -454,6 +462,7 @@ export const UploadPage = (() => {
         if (clearInFlight) {
             await clearInFlight;
         }
+        const generation = clearGeneration;
         if (activeJobs.size === 0) {
             UploadProgress.show(() => activeJobs.size > 0);
         }
@@ -468,6 +477,11 @@ export const UploadPage = (() => {
         } catch (error) {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
+        }
+        // Files dropped before a Clear that ran during the priming await went
+        // with it; Clear has already reset the overlay and the jobs.
+        if (generation !== clearGeneration) {
+            return;
         }
         // Start or join the tracked run only now, in the same task that adds
         // the jobs: earlier jobs finishing during the priming await would
@@ -662,11 +676,14 @@ export const UploadPage = (() => {
             if (generation !== clearGeneration) {
                 return;
             }
-            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);
+            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase, generation);
 
             const files = await getStoredFilesSnapshot();
             const fileMap = getFileMap(files);
             const analyticsReady = await hasAnalyticsData();
+            if (generation !== clearGeneration) {
+                return;
+            }
             updateStatus({ fileMap, analyticsReady });
             setHint(
                 payload.usedFallback
@@ -744,9 +761,10 @@ export const UploadPage = (() => {
      * Sync in-memory caches and notify listeners after file persistence.
      * @param {string} fileType - Processed file type
      * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @param {number} generation - Clear generation the upload was processed under
      * @returns {Promise<void>}
      */
-    async function syncCacheAfterProcessedFile(fileType, analyticsBase) {
+    async function syncCacheAfterProcessedFile(fileType, analyticsBase, generation) {
         DataCache.invalidate("storage:");
         DataCache.invalidate("clean:");
         DataCache.invalidate("messages:");
@@ -756,6 +774,10 @@ export const UploadPage = (() => {
         DataCache.invalidate("insights:");
 
         const files = await Storage.getAllFiles();
+        // A Clear during the read would have these stale files cached after it.
+        if (generation !== clearGeneration) {
+            return;
+        }
         DataCache.set("storage:files", files.map(toStoredFileMetadata));
         syncTypeSpecificFileCache(fileType, files);
 
@@ -1066,9 +1088,10 @@ export const UploadPage = (() => {
         }
         const { signature } = pendingPrimePayload;
         pendingPrimePayload = null;
+        const generation = clearGeneration;
 
         const previous = primeInFlight || Promise.resolve();
-        const run = previous.then(() => postPrimeToWorker(signature));
+        const run = previous.then(() => postPrimeToWorker(signature, generation));
         const trackedRun = run.finally(() => {
             if (primeInFlight === trackedRun) {
                 primeInFlight = null;
@@ -1084,9 +1107,10 @@ export const UploadPage = (() => {
      * and posting one passes a reference rather than the file's contents. Best-effort: a load failure is logged and skipped. Runs
      * inside the `primeInFlight` chain so posts stay ordered.
      * @param {string} signature - Payload signature recorded once posted
+     * @param {number} generation - Clear generation the prime was requested under
      * @returns {Promise<void>}
      */
-    async function postPrimeToWorker(signature) {
+    async function postPrimeToWorker(signature, generation) {
         // Entry guard for a worker torn down before the chained post runs; the
         // caller only reaches here with a live worker in unit flows.
         /* v8 ignore next 3 */
@@ -1110,6 +1134,11 @@ export const UploadPage = (() => {
         } catch (error) {
             // Leave lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-load-text" });
+            return;
+        }
+        // Posting files read before a Clear would restore them into the worker
+        // after the clear it was sent.
+        if (generation !== clearGeneration) {
             return;
         }
 

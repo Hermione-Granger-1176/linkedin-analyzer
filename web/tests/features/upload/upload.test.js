@@ -587,6 +587,111 @@ describe("UploadPage", () => {
         expect(addFilePosted()).toBe(true);
     });
 
+    it("drops an upload and its prime when Clear runs while the prime reads storage", async () => {
+        let finishRead;
+        const read = new Promise((resolve) => {
+            finishRead = resolve;
+        });
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" },
+        ]);
+        Storage.getFile.mockImplementation(() => read);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        finishRead({ type: "shares", blob: new Blob(["old"]) });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map(([message]) => message.type);
+        expect(types).toContain("clear");
+        // Neither the files read before Clear nor the upload dropped before it reach the worker.
+        expect(types).not.toContain("restoreFiles");
+        expect(types).not.toContain("addFile");
+    });
+
+    it("drops a post-upload prime whose storage read outlives a Clear", async () => {
+        let holdReads = false;
+        let finishRead;
+        const heldRead = new Promise((resolve) => {
+            finishRead = resolve;
+        });
+        Storage.getFile.mockImplementation(() => (holdReads ? heldRead : Promise.resolve(null)));
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFile = workerInstance.postMessage.mock.calls
+            .map(([message]) => message)
+            .find((message) => message.type === "addFile");
+        holdReads = true;
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" },
+        ]);
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "shares",
+                    fileName: "Shares.csv",
+                    rowCount: 2,
+                    jobId: addFile.payload.jobId,
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(Storage.getFile).toHaveBeenCalledWith("shares");
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        finishRead({ type: "shares", blob: new Blob(["old"]) });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map(([message]) => message.type);
+        expect(types.indexOf("clear")).toBeGreaterThan(-1);
+        expect(types.slice(types.indexOf("clear"))).not.toContain("restoreFiles");
+
+        Math.random.mockRestore();
+    });
+
+    it("drops a restore read that outlives a Clear", async () => {
+        let finishRead;
+        Storage.getAllFiles.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishRead = resolve;
+                }),
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        finishRead([{ type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" }]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(DataCache.set).not.toHaveBeenCalledWith("storage:files", expect.anything());
+    });
+
     it("times a queued upload from when the job ahead of it finishes", async () => {
         vi.useFakeTimers();
         vi.spyOn(Math, "random").mockReturnValue(0.42);

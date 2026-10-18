@@ -105,23 +105,13 @@ function validateAppHeaders(response, baseUrl) {
 }
 
 /**
- * Run a lightweight HTTP smoke check against the deployed web app.
- * @param {string} rawUrl - Web app base URL.
- * @param {object} [options] - Optional fetch and timeout overrides.
- * @param {Function} [options.fetchImpl=fetch] - Fetch implementation.
- * @param {number} [options.timeoutMs=10000] - Timeout per request.
- * @returns {Promise<{ok: boolean, url: string}>} Smoke result.
+ * Fetch the app shell and check its status, headers, and markers.
+ * @param {Function} fetchImpl - Fetch implementation.
+ * @param {URL} baseUrl - Web app base URL.
+ * @param {number} timeoutMs - Timeout per request.
+ * @returns {Promise<string[]>} Failure descriptions, empty when the shell is healthy.
  */
-export async function runWebSmoke(
-    rawUrl,
-    { fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {},
-) {
-    const baseUrl = normalizeBaseUrl(rawUrl);
-    if (typeof fetchImpl !== "function") {
-        throw new Error("No fetch implementation is available.");
-    }
-
-    const failures = [];
+async function checkAppShell(fetchImpl, baseUrl, timeoutMs) {
     const appUrl = new URL(baseUrl);
     if (!appUrl.pathname.endsWith("/")) {
         appUrl.pathname += "/";
@@ -130,20 +120,29 @@ export async function runWebSmoke(
     try {
         appResponse = await fetchWithTimeout(fetchImpl, appUrl, { method: "GET" }, timeoutMs);
     } catch (error) {
-        failures.push(`app shell request failed: ${errorMessage(error)}`);
+        return [`app shell request failed: ${errorMessage(error)}`];
     }
 
-    if (appResponse) {
-        if (appResponse.status < 200 || appResponse.status >= 400) {
-            failures.push(`app shell returned HTTP ${appResponse.status}`);
-        }
-        failures.push(...validateAppHeaders(appResponse, baseUrl));
-        const body = await appResponse.text();
-        if (!body.includes('id="appMain"') || !body.includes('id="screen-home"')) {
-            failures.push("app shell markers were not found");
-        }
+    const failures = [];
+    if (appResponse.status < 200 || appResponse.status >= 400) {
+        failures.push(`app shell returned HTTP ${appResponse.status}`);
     }
+    failures.push(...validateAppHeaders(appResponse, baseUrl));
+    const body = await appResponse.text();
+    if (!body.includes('id="appMain"') || !body.includes('id="screen-home"')) {
+        failures.push("app shell markers were not found");
+    }
+    return failures;
+}
 
+/**
+ * Post a sample violation to the CSP report endpoint and expect a 204.
+ * @param {Function} fetchImpl - Fetch implementation.
+ * @param {URL} baseUrl - Web app base URL.
+ * @param {number} timeoutMs - Timeout per request.
+ * @returns {Promise<string[]>} Failure descriptions, empty when the endpoint accepts it.
+ */
+async function checkCspReportEndpoint(fetchImpl, baseUrl, timeoutMs) {
     const reportUrl = new URL("/api/csp-report", baseUrl);
     try {
         const reportResponse = await fetchWithTimeout(
@@ -161,12 +160,35 @@ export async function runWebSmoke(
             },
             timeoutMs,
         );
-        if (reportResponse.status !== 204) {
-            failures.push(`/api/csp-report returned HTTP ${reportResponse.status}`);
-        }
+        return reportResponse.status === 204
+            ? []
+            : [`/api/csp-report returned HTTP ${reportResponse.status}`];
     } catch (error) {
-        failures.push(`csp report request failed: ${errorMessage(error)}`);
+        return [`csp report request failed: ${errorMessage(error)}`];
     }
+}
+
+/**
+ * Run a lightweight HTTP smoke check against the deployed web app.
+ * @param {string} rawUrl - Web app base URL.
+ * @param {object} [options] - Optional fetch and timeout overrides.
+ * @param {Function} [options.fetchImpl=fetch] - Fetch implementation.
+ * @param {number} [options.timeoutMs=10000] - Timeout per request.
+ * @returns {Promise<{ok: boolean, url: string}>} Smoke result.
+ */
+export async function runWebSmoke(
+    rawUrl,
+    { fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {},
+) {
+    const baseUrl = normalizeBaseUrl(rawUrl);
+    if (typeof fetchImpl !== "function") {
+        throw new Error("No fetch implementation is available.");
+    }
+
+    const failures = [
+        ...(await checkAppShell(fetchImpl, baseUrl, timeoutMs)),
+        ...(await checkCspReportEndpoint(fetchImpl, baseUrl, timeoutMs)),
+    ];
 
     if (failures.length) {
         throw new Error(`Web smoke check failed:\n- ${failures.join("\n- ")}`);

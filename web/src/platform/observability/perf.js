@@ -61,3 +61,18 @@ export function measurePerformance(name, start, end) {
         // Ignore missing marks to keep instrumentation resilient.
     }
 }
+
+/**
+ * Mark the start of a performance span.
+ * @param {string} name - Span name; its marks are `${name}:start` and `${name}:end`
+ * @returns {() => void} Call to mark the end and record the measure
+ */
+export function startPerformanceSpan(name) {
+    const start = `${name}:start`;
+    const end = `${name}:end`;
+    markPerformance(start);
+    return () => {
+        markPerformance(end);
+        measurePerformance(name, start, end);
+    };
+}

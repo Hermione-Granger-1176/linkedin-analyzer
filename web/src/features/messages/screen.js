@@ -2,7 +2,7 @@
 
 import { AppRouter } from "../../app/router.js";
 import { parseStoredUploadFile, toStoredFileMetadata } from "../../app/worker-contracts.ts";
-import { markPerformance, measurePerformance, nextFrame } from "../../platform/observability/perf.js";
+import { nextFrame, startPerformanceSpan } from "../../platform/observability/perf.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
@@ -178,22 +178,9 @@ export const MessagesPage = (() => {
         updateExportButtonStates();
     }
 
-    /**
-     * Mark the start of a performance span.
-     * @param {string} name - Span name
-     * @returns {() => void} Call to mark the end and record the measure
-     */
-    function startSpan(name) {
-        markPerformance(`${name}:start`);
-        return () => {
-            markPerformance(`${name}:end`);
-            measurePerformance(name, `${name}:start`, `${name}:end`);
-        };
-    }
-
     /** Render the current state, then hide the loading overlay. */
     function renderAndFinish() {
-        const endRender = startSpan("messages:render");
+        const endRender = startPerformanceSpan("messages:render");
         renderView();
         endRender();
         showMessagesLoading(false);
@@ -311,7 +298,7 @@ export const MessagesPage = (() => {
         const { messagesBlob, connectionsBlob, connectionsFileMissing } =
             await readUploads(hasConnectionsFile);
 
-        const endParse = startSpan("messages:worker-parse");
+        const endParse = startPerformanceSpan("messages:worker-parse");
         const processed = await processFiles(messagesBlob, connectionsBlob);
         endParse();
 
@@ -364,7 +351,7 @@ export const MessagesPage = (() => {
     /** Load messages and connections files from IndexedDB. */
     async function loadData() {
         showMessagesLoading(true);
-        const endIdbRead = startSpan("messages:idb-read");
+        const endIdbRead = startPerformanceSpan("messages:idb-read");
 
         try {
             await Session.waitForCleanup();
@@ -483,14 +470,9 @@ export const MessagesPage = (() => {
      * @returns {MessageState}
      */
     function buildMessageState(rows) {
-        markPerformance("messages:build-state:start");
+        const endBuild = startPerformanceSpan("messages:build-state");
         const result = MessagesAnalytics.buildMessageState(rows);
-        markPerformance("messages:build-state:end");
-        measurePerformance(
-            "messages:build-state",
-            "messages:build-state:start",
-            "messages:build-state:end",
-        );
+        endBuild();
         return result;
     }
 
@@ -500,14 +482,9 @@ export const MessagesPage = (() => {
      * @returns {ConnectionState}
      */
     function buildConnectionState(rows) {
-        markPerformance("messages:build-connections:start");
+        const endBuild = startPerformanceSpan("messages:build-connections");
         const result = MessagesAnalytics.buildConnectionState(rows);
-        markPerformance("messages:build-connections:end");
-        measurePerformance(
-            "messages:build-connections",
-            "messages:build-connections:start",
-            "messages:build-connections:end",
-        );
+        endBuild();
         return result;
     }
 

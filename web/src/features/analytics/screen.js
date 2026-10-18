@@ -5,9 +5,9 @@ import rough from "roughjs/bundled/rough.esm.js";
 import { AppRouter } from "../../app/router.js";
 import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
+import { loadAnalyticsBase } from "../../platform/persistence/analytics-base.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
-import { Storage } from "../../platform/persistence/storage.js";
 import { DomEvents } from "../../shared/dom-events.js";
 import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-tooltip.js";
 import { SketchCharts } from "../../shared/ui/charts.js";
@@ -21,7 +21,6 @@ import { DAY_LABELS, MONTH_LABELS } from "./constants.js";
 /** @typedef {import("../../app/router.js").RouteParams} RouteParams */
 /** @typedef {import("../../shared/ui/charts.js").TimelinePoint} TimelinePoint */
 /** @typedef {import("../../shared/ui/charts.js").TopicPoint} TopicPoint */
-/** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
 
 /**
  * Filter state the analytics and insights screens send with a worker view request.
@@ -386,14 +385,7 @@ export const AnalyticsPage = (() => {
                 return;
             }
 
-            let analyticsBase =
-                /** @type {StoredAnalytics|undefined} */ (DataCache.get("storage:analyticsBase")) ||
-                null;
-
-            if (!analyticsBase) {
-                analyticsBase = await Storage.getAnalytics();
-                DataCache.set("storage:analyticsBase", analyticsBase);
-            }
+            const analyticsBase = await loadAnalyticsBase();
             // The worker may have been replaced or stopped while storage was
             // read; a newer load owns it now, so this one steps aside.
             if (workers.current() !== worker) {

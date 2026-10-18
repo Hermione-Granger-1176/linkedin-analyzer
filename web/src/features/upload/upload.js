@@ -9,6 +9,7 @@ import {
 } from "../../app/worker-contracts.ts";
 import { RunTracker } from "../../platform/observability/run-tracker.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { loadAnalyticsBase } from "../../platform/persistence/analytics-base.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
@@ -1092,14 +1093,7 @@ export const UploadPage = (() => {
      * @returns {Promise<boolean>}
      */
     async function hasAnalyticsData() {
-        let analyticsBase = /** @type {StoredAnalytics|null} */ (
-            DataCache.get("storage:analyticsBase") || null
-        );
-        if (!analyticsBase) {
-            analyticsBase = await Storage.getAnalytics();
-            DataCache.set("storage:analyticsBase", analyticsBase);
-        }
-        return hasAnalyticsMonths(analyticsBase);
+        return hasAnalyticsMonths(await loadAnalyticsBase());
     }
 
     /**

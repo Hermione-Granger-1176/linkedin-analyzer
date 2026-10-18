@@ -6,7 +6,11 @@ import {
     parseStoredUploadFile,
     toStoredFileMetadata,
 } from "../../app/worker-contracts.ts";
-import { markPerformance, measurePerformance } from "../../platform/observability/perf.js";
+import {
+    markPerformance,
+    measurePerformance,
+    startPerformanceSpan,
+} from "../../platform/observability/perf.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
@@ -255,10 +259,48 @@ export const ConnectionsPage = (() => {
         state.currentView = null;
     }
 
+    /**
+     * Show an empty state that explains a problem, and stop the loading overlay.
+     * @param {string} title - Empty state title
+     * @param {string} message - Empty state explanation
+     */
+    function showConnectionsProblem(title, message) {
+        setEmptyState(title, message);
+        showConnectionsLoading(false);
+    }
+
+    /**
+     * Send the connections upload to the worker and wait for its answer.
+     * @param {Worker} worker - Worker that parses the upload
+     * @param {Blob} blob - Stored connections CSV
+     */
+    function requestParse(worker, blob) {
+        const id = ++requestId;
+        pendingRequestId = id;
+        // Scaled to the file like every other raw-CSV parse: a fixed 30
+        // seconds cut a large export off while the worker was still on it.
+        workers.watch(computeWorkerTimeout(blob), () => {
+            // A response clears this timeout. Keep the check for a stale callback.
+            /* v8 ignore next 3 */
+            if (pendingRequestId !== id) {
+                return;
+            }
+            pendingRequestId = 0;
+            showConnectionsProblem("Connections timeout", "Parsing took too long. Please retry the upload.");
+            workers.terminate();
+        });
+        markPerformance("connections:worker-parse:start");
+        worker.postMessage({
+            type: "process",
+            requestId: id,
+            payload: { connectionsCsv: blob },
+        });
+    }
+
     /** Load connections CSV from IndexedDB and send to worker for parsing. */
     async function loadData() {
         showConnectionsLoading(true);
-        markPerformance("connections:idb-read:start");
+        const endIdbRead = startPerformanceSpan("connections:idb-read");
 
         try {
             await Session.waitForCleanup();
@@ -271,66 +313,35 @@ export const ConnectionsPage = (() => {
             if (workers.current() !== worker) {
                 return;
             }
-            markPerformance("connections:idb-read:end");
-            measurePerformance(
-                "connections:idb-read",
-                "connections:idb-read:start",
-                "connections:idb-read:end",
-            );
+            endIdbRead();
             if (!file || !file.blob) {
-                setEmptyState(
+                showConnectionsProblem(
                     "No connections data available yet",
                     "Upload Connections.csv on the Home page to see your network analytics.",
                 );
-                showConnectionsLoading(false);
                 return;
             }
 
             if (!worker) {
-                setEmptyState(
+                showConnectionsProblem(
                     "Connections not supported",
                     "Your browser does not support Web Workers. Open this page from a local server (not file://).",
                 );
-                showConnectionsLoading(false);
                 return;
             }
 
-            const id = ++requestId;
-            pendingRequestId = id;
-            // Scaled to the file like every other raw-CSV parse: a fixed 30
-            // seconds cut a large export off while the worker was still on it.
-            workers.watch(computeWorkerTimeout(file.blob), () => {
-                // A response clears this timeout. Keep the check for a stale callback.
-                /* v8 ignore next 3 */
-                if (pendingRequestId !== id) {
-                    return;
-                }
-                pendingRequestId = 0;
-                setEmptyState(
-                    "Connections timeout",
-                    "Parsing took too long. Please retry the upload.",
-                );
-                showConnectionsLoading(false);
-                workers.terminate();
-            });
-            markPerformance("connections:worker-parse:start");
-            worker.postMessage({
-                type: "process",
-                requestId: id,
-                payload: { connectionsCsv: file.blob },
-            });
-            /* v8 ignore next 7 */
+            requestParse(worker, file.blob);
+            /* v8 ignore next 6 */
         } catch (error) {
             captureError(error, {
                 module: "connections-ui",
                 operation: "load-data",
             });
             workers.unwatch();
-            setEmptyState(
+            showConnectionsProblem(
                 "Storage error",
                 "Unable to load saved data. Try clearing browser data and re-uploading.",
             );
-            showConnectionsLoading(false);
         }
     }
 
@@ -445,8 +456,10 @@ export const ConnectionsPage = (() => {
         const payload = message.payload || {};
 
         if (!payload.success) {
-            setEmptyState("Connections error", payload.error || "Unable to parse Connections.csv.");
-            showConnectionsLoading(false);
+            showConnectionsProblem(
+                "Connections error",
+                payload.error || "Unable to parse Connections.csv.",
+            );
             return;
         }
 
@@ -456,14 +469,9 @@ export const ConnectionsPage = (() => {
         /* v8 ignore next */
         const rawRows = /** @type {CleanedConnectionRow[]} */ (payload.rows || []);
 
-        markPerformance("connections:normalize:start");
+        const endNormalize = startPerformanceSpan("connections:normalize");
         const rows = normalizeConnectionRows(rawRows);
-        markPerformance("connections:normalize:end");
-        measurePerformance(
-            "connections:normalize",
-            "connections:normalize:start",
-            "connections:normalize:end",
-        );
+        endNormalize();
 
         state.dataReady = true;
         state.hasData = rows.length > 0;
@@ -478,14 +486,9 @@ export const ConnectionsPage = (() => {
             return;
         }
 
-        markPerformance("connections:render:start");
+        const endRender = startPerformanceSpan("connections:render");
         applyFiltersAndRender();
-        markPerformance("connections:render:end");
-        measurePerformance(
-            "connections:render",
-            "connections:render:start",
-            "connections:render:end",
-        );
+        endRender();
     }
 
     /**
@@ -505,8 +508,7 @@ export const ConnectionsPage = (() => {
             operation: "worker-error-payload",
             requestId: message.requestId,
         });
-        setEmptyState("Connections error", text);
-        showConnectionsLoading(false);
+        showConnectionsProblem("Connections error", text);
     }
 
     /**
@@ -529,8 +531,7 @@ export const ConnectionsPage = (() => {
             },
         );
         workers.terminate();
-        setEmptyState("Worker error", "Refresh the page and try again.");
-        showConnectionsLoading(false);
+        showConnectionsProblem("Worker error", "Refresh the page and try again.");
     }
 
     /**

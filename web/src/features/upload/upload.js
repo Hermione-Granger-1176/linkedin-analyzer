@@ -726,7 +726,11 @@ export const UploadPage = (() => {
                     : "File loaded successfully.",
                 false,
             );
-            if (ANALYTICS_SOURCE_TYPES.has(fileType) && !primeFailed && workers.current() === replyWorker) {
+            if (
+                ANALYTICS_SOURCE_TYPES.has(fileType) &&
+                !primeFailed &&
+                workers.current() === replyWorker
+            ) {
                 // The worker that processed this file already holds it along
                 // with the rest of the stored set, so record that set as primed
                 // instead of having the worker read and parse it all again.

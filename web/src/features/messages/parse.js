@@ -11,6 +11,7 @@ import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
+import { GLOBAL_FAILURE_ID } from "../../shared/worker-entry.js";
 import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
@@ -25,9 +26,13 @@ import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
  */
 
 /**
- * Resolvers for the requests the worker has not answered yet, by request id.
+ * The requests the worker has not answered yet, by request id, oldest first.
  * More than one can be in flight: the screen re-parses when the files change.
- * @type {Map<import("../../app/worker-contracts.js").RequestId, (payload: MessagesProcessedPayload|null) => void>}
+ *
+ * The worker answers in order, so a request's budget starts when the one ahead
+ * of it is due, not when it was posted. Each deadline is therefore at least the
+ * one before it, and the oldest request's is always the next to fall due.
+ * @type {Map<import("../../app/worker-contracts.js").RequestId, {resolve: (payload: MessagesProcessedPayload|null) => void, deadline: number}>}
  */
 const pendingRequests = new Map();
 let requestCount = 0;
@@ -65,10 +70,30 @@ export function terminateWorker() {
  * worker go: one that failed or stalled is not going to answer.
  */
 function failPendingRequests() {
-    const resolvers = [...pendingRequests.values()];
+    const entries = [...pendingRequests.values()];
     pendingRequests.clear();
     workers.terminate();
-    resolvers.forEach((resolve) => resolve(null));
+    entries.forEach((entry) => entry.resolve(null));
+}
+
+/**
+ * Arm the watchdog for the oldest request still waiting, so a small request
+ * queued behind a large one neither cuts the large one short nor leaves the
+ * large one's budget armed once it is answered.
+ */
+function armWatchdog() {
+    const [oldest] = pendingRequests.values();
+    if (!oldest) {
+        workers.unwatch();
+        return;
+    }
+    workers.watch(Math.max(0, oldest.deadline - Date.now()), () => {
+        captureError(new Error("Messages worker request timed out."), {
+            module: "messages-insights",
+            operation: "worker-timeout",
+        });
+        failPendingRequests();
+    });
 }
 
 /**
@@ -88,8 +113,14 @@ function handleWorkerMessage(event) {
     }
 
     const message = parsed.value;
-    const resolve = message.type === "processed" && pendingRequests.get(message.requestId);
-    if (!resolve) {
+    // A global failure in the worker is answered under id 0, outside any one
+    // request, and leaves the worker unable to vouch for the rest.
+    if (message.requestId === GLOBAL_FAILURE_ID && message.payload && !message.payload.success) {
+        failPendingRequests();
+        return;
+    }
+    const entry = message.type === "processed" && pendingRequests.get(message.requestId);
+    if (!entry) {
         return;
     }
     pendingRequests.delete(message.requestId);
@@ -98,8 +129,10 @@ function handleWorkerMessage(event) {
     // still on its way to it.
     if (pendingRequests.size === 0) {
         workers.terminate();
+    } else {
+        armWatchdog();
     }
-    resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
+    entry.resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
 }
 
 /**
@@ -169,15 +202,11 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
 
     const requestId = ++requestCount;
     return new Promise((resolve) => {
-        pendingRequests.set(requestId, resolve);
-        workers.watch(computeWorkerTimeout(messagesCsv, connectionsCsv), () => {
-            captureError(new Error("Messages worker request timed out."), {
-                module: "messages-insights",
-                operation: "worker-timeout",
-                requestId,
-            });
-            failPendingRequests();
-        });
+        const queuedBehind = [...pendingRequests.values()].at(-1);
+        const start = Math.max(Date.now(), queuedBehind ? queuedBehind.deadline : 0);
+        const deadline = start + computeWorkerTimeout(messagesCsv, connectionsCsv);
+        pendingRequests.set(requestId, { resolve, deadline });
+        armWatchdog();
 
         try {
             worker.postMessage({

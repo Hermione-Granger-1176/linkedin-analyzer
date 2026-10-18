@@ -114,9 +114,7 @@ function interpretReply(message, context) {
         // in flight and waiting out the watchdog would look like a hang. The
         // worker declining to parse a file the user uploaded is the same event
         // under either id, so it is reported either way; what it settles as
-        // turns on the id, per `failureOutcome`. This worker answers a global
-        // failure under the request it was serving rather than under zero, so
-        // only a failure raised before it ever read a request lands there.
+        // turns on the id, per `failureOutcome`.
         context.report("Threads worker reported a failure.", "threads-worker-failure");
         return failureOutcome(message, context);
     }

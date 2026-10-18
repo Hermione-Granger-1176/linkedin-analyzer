@@ -76,11 +76,9 @@ export const PENDING = Symbol("export-request-pending");
  * fell over says nothing about whether the file can be parsed, so both leave
  * the small-export fallback its job.
  *
- * That also settles what used to be a race. A crash inside the messages or
- * connections worker reaches the main thread twice, as the posted envelope
- * under id 0 and as a propagated `error` event on the Worker object, and
- * nothing in the spec orders them. Both routes now answer null, so whichever
- * arrives first no longer decides what the export does.
+ * The worker entry cancels every global failure event, so a crash reaches the
+ * main thread only as that envelope under id 0, never as an `error` event on
+ * the Worker object, and the fallback depends on reading id 0 as null.
  *
  * The request ends here either way rather than sitting out its watchdog: only
  * one request is ever in flight, and a worker that has reported it cannot

@@ -106,6 +106,31 @@ describe("InsightsPage", () => {
         expect(document.getElementById("insightsGrid").hidden).toBe(true);
     });
 
+    it("drops a load whose worker died while storage was read", async () => {
+        let release;
+        Storage.getAnalytics.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        DataCache.get.mockReturnValue(null);
+        InsightsPage.init();
+        const loading = InsightsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        deadWorker.listeners.error[0](new Event("error"));
+        release({ months: { "2024-01": {} } });
+        await loading;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Posting would hand the read to a terminated worker and arm a
+        // watchdog over the error the screen is already showing.
+        expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "initBase" }),
+        );
+    });
+
     it("times out and hides the overlay when the worker never responds", async () => {
         vi.useFakeTimers();
         try {

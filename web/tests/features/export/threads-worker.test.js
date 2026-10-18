@@ -339,11 +339,9 @@ describe("threads worker listeners", () => {
     }
 
     /**
-     * Serve one thread request, so the worker has an active id to answer under.
-     *
-     * `activeRequestId` is module-level state that outlives a test. Setting it
-     * explicitly is what lets each failure test assert the id it is answered
-     * under rather than inheriting whichever one the previous test left behind.
+     * Serve one thread request first, so each failure test shows a global
+     * failure is still answered under id 0 rather than the id just served: the
+     * export transport reads id 0 as a worker that fell over and falls back.
      * @param {number} requestId - Request id to serve
      * @returns {Promise<void>} Resolves once the request is answered
      */
@@ -401,7 +399,7 @@ describe("threads worker listeners", () => {
         expect(message.payload.error).toContain("Missing messagesCsv payload");
     });
 
-    it("answers a runtime error under the active request id without its text", async () => {
+    it("answers a runtime error under id 0, not the served request, without its text", async () => {
         spyOnPostMessage();
         await serveRequest(21);
         const event = dispatch("error", { error: piiError("worker-runtime") });
@@ -410,7 +408,7 @@ describe("threads worker listeners", () => {
         // goes to the console carrying whatever the error holds.
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
-        expect(message.requestId).toBe(21);
+        expect(message.requestId).toBe(0);
         expectFixedFailure(message);
     });
 
@@ -421,7 +419,7 @@ describe("threads worker listeners", () => {
 
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
-        expect(message.requestId).toBe(41);
+        expect(message.requestId).toBe(0);
         expectFixedFailure(message);
     });
 
@@ -432,7 +430,7 @@ describe("threads worker listeners", () => {
 
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
-        expect(message.requestId).toBe(42);
+        expect(message.requestId).toBe(0);
         expectFixedFailure(message);
     });
 
@@ -443,7 +441,7 @@ describe("threads worker listeners", () => {
 
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
-        expect(message.requestId).toBe(43);
+        expect(message.requestId).toBe(0);
         expectFixedFailure(message);
     });
 
@@ -456,7 +454,7 @@ describe("threads worker listeners", () => {
 
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
-        expect(message.requestId).toBe(44);
+        expect(message.requestId).toBe(0);
         expectFixedFailure(message);
     });
 
@@ -467,7 +465,7 @@ describe("threads worker listeners", () => {
 
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
-        expect(message.requestId).toBe(45);
+        expect(message.requestId).toBe(0);
         expectFixedFailure(message);
     });
 

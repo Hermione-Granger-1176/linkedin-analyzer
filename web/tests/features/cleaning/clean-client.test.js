@@ -252,6 +252,21 @@ describe("clean client", () => {
         });
     });
 
+    it("fails and terminates when the worker answers a global failure under id 0", async () => {
+        vi.stubGlobal("Worker", FakeWorker);
+        const { requestClean } = await loadClient();
+        const result = requestClean(PAYLOAD);
+        // Only a failure under id 0 speaks for the request in flight.
+        workers[0].reply(0);
+        workers[0].reply(0, { ...FAILED, error: "Cleaning worker runtime failure." });
+        await expect(result).resolves.toEqual(FAILED);
+        expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+        expect(mocks.captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "clean",
+            operation: "worker-error",
+        });
+    });
+
     it("fails and terminates when a reply cannot be deserialized", async () => {
         vi.stubGlobal("Worker", FakeWorker);
         const { requestClean } = await loadClient();

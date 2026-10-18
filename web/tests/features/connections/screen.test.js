@@ -268,6 +268,31 @@ describe("ConnectionsPage", () => {
         ).toContain("Worker error");
     });
 
+    it("drops a load whose worker died while storage was read", async () => {
+        let release;
+        Storage.getFile.mockReturnValue(
+            new Promise((resolve) => {
+                release = resolve;
+            }),
+        );
+        DataCache.get.mockReturnValue(null);
+        ConnectionsPage.init();
+        const loading = ConnectionsPage.onRouteChange({});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const deadWorker = workerInstance;
+        deadWorker.listeners.error[0](new Event("error"));
+        release({ blob: new Blob(["csv"]) });
+        await loading;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Posting would hand the read to a terminated worker and arm a
+        // watchdog over the error the screen is already showing.
+        expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "process" }),
+        );
+    });
+
     it("recreates the worker after a worker-level error", async () => {
         Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);

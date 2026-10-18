@@ -321,6 +321,11 @@ export const InsightsPage = (() => {
                 analyticsBase = await Storage.getAnalytics();
                 DataCache.set("storage:analyticsBase", analyticsBase);
             }
+            // The worker may have been replaced or stopped while storage was
+            // read; a newer load owns it now, so this one steps aside.
+            if (workers.current() !== worker) {
+                return;
+            }
 
             if (!analyticsBase || !analyticsBase.months) {
                 setEmptyState(

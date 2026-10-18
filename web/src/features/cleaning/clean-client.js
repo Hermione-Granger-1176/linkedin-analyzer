@@ -12,6 +12,7 @@ import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { MAIN_THREAD_MAX_FILE_BYTES } from "../../shared/limits.js";
+import { GLOBAL_FAILURE_ID } from "../../shared/worker-entry.js";
 import { createWorkerHandle } from "../../shared/worker-handle.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
@@ -83,10 +84,20 @@ function terminateCleanWorker(reply = failure()) {
  */
 function onMessage(event) {
     const parsed = parseCleaningWorkerMessage(event.data);
-    if (!parsed.valid || !pending || parsed.value.requestId !== pending.id) {
+    if (!parsed.valid || !pending) {
         return;
     }
-    settle(parsed.value.payload);
+    const { requestId, payload } = parsed.value;
+    // A global failure in the worker is answered under id 0 rather than under
+    // a request; only one request is ever in flight, so it is this one's.
+    if (requestId === GLOBAL_FAILURE_ID && !payload.success) {
+        failWorker();
+        return;
+    }
+    if (requestId !== pending.id) {
+        return;
+    }
+    settle(payload);
 }
 
 /**
@@ -97,6 +108,11 @@ function onMessage(event) {
 function onError(event) {
     // Handled here; keep the browser from also logging it as uncaught.
     event.preventDefault();
+    failWorker();
+}
+
+/** Report a worker that fell over and start a fresh one next time. */
+function failWorker() {
     captureError(new Error("Cleaning worker failed."), {
         module: "clean",
         operation: "worker-error",

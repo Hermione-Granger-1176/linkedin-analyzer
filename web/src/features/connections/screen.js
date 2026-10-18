@@ -266,6 +266,11 @@ export const ConnectionsPage = (() => {
             const worker = workers.ensure();
 
             const file = await loadConnectionsFile();
+            // The worker may have been replaced or stopped while storage was
+            // read; a newer load owns it now, so this one steps aside.
+            if (workers.current() !== worker) {
+                return;
+            }
             markPerformance("connections:idb-read:end");
             measurePerformance(
                 "connections:idb-read",

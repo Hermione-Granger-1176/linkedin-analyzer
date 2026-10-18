@@ -245,17 +245,12 @@ export const UploadPage = (() => {
         }
     }
 
-    /** Attach event listeners for drag/drop, file input, and buttons. */
-    function bindEvents() {
-        const { dropZone, fileInput, openAnalyticsBtn, clearAllBtn } = elements;
-        // Match init()'s contract: only dropZone/fileInput are required for uploads.
-        // The optional buttons are guarded individually below so a missing button
-        // never disables drag/drop or the file input. init() already returns before
-        // calling bindEvents when either is missing, so this mirror is unreachable here.
-        /* v8 ignore next 3 */
-        if (!dropZone || !fileInput) {
-            return;
-        }
+    /**
+     * Attach drag/drop, click and keyboard handlers that feed files in.
+     * @param {HTMLElement} dropZone - Drop target
+     * @param {HTMLElement} fileInput - Hidden file input
+     */
+    function bindDropTargets(dropZone, fileInput) {
         dropZone.addEventListener("click", () => fileInput.click());
         dropZone.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
@@ -270,7 +265,14 @@ export const UploadPage = (() => {
 
         window.addEventListener("dragover", (event) => event.preventDefault());
         window.addEventListener("drop", (event) => event.preventDefault());
+    }
 
+    /**
+     * Attach the optional open-analytics and clear-all button handlers.
+     * @param {HTMLButtonElement|null|undefined} openAnalyticsBtn - Open analytics button
+     * @param {HTMLElement|null|undefined} clearAllBtn - Clear all data button
+     */
+    function bindActionButtons(openAnalyticsBtn, clearAllBtn) {
         if (openAnalyticsBtn) {
             openAnalyticsBtn.addEventListener("click", () => {
                 if (openAnalyticsBtn.disabled) {
@@ -290,6 +292,21 @@ export const UploadPage = (() => {
                 }
             });
         }
+    }
+
+    /** Attach event listeners for drag/drop, file input, and buttons. */
+    function bindEvents() {
+        const { dropZone, fileInput, openAnalyticsBtn, clearAllBtn } = elements;
+        // Match init()'s contract: only dropZone/fileInput are required for uploads.
+        // The optional buttons are guarded individually below so a missing button
+        // never disables drag/drop or the file input. init() already returns before
+        // calling bindEvents when either is missing, so this mirror is unreachable here.
+        /* v8 ignore next 3 */
+        if (!dropZone || !fileInput) {
+            return;
+        }
+        bindDropTargets(dropZone, fileInput);
+        bindActionButtons(openAnalyticsBtn, clearAllBtn);
 
         window.addEventListener("resize", () => UploadProgress.redraw());
         window.addEventListener("online", updateOfflineBanner);
@@ -297,9 +314,45 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Restore upload status from storage and refresh the file cache on load.
+     * Read stored files and analytics, then show them in the upload status.
      * Does not prime the worker. That is deferred to the first upload (see
      * processFiles); the dashboard reads the persisted analyticsBase directly.
+     * @returns {Promise<void>}
+     */
+    async function loadStoredState() {
+        const generation = clearGeneration;
+        await Session.waitForCleanup();
+        updateOfflineBanner();
+        const files = await Storage.getAllFiles();
+        // A Clear during the read leaves these files describing a wiped store.
+        if (generation !== clearGeneration) {
+            return;
+        }
+        const fileMap = getFileMap(files);
+        DataCache.set("storage:files", files.map(toStoredFileMetadata));
+        // Intentionally do NOT prime the worker on load: the dashboard reads
+        // the persisted analyticsBase directly and never needs the worker's
+        // raw shares/comments. Only a fresh upload (which recomputes the base)
+        // does, so priming is deferred to processFiles(), saving a redundant
+        // re-parse of shares+comments on every page load.
+        const analyticsReady = await hasAnalyticsData();
+        if (generation !== clearGeneration) {
+            return;
+        }
+        updateStatus({ fileMap, analyticsReady });
+        // If a stale 24h session was wiped, tell the user once rather than
+        // letting their previously-uploaded files silently disappear.
+        if (Session.consumeExpiryNotice()) {
+            setHint(
+                "Your saved data expired after 24 hours and was cleared for privacy. Re-upload to continue.",
+                false,
+            );
+        }
+    }
+
+    /**
+     * Restore upload status from storage and refresh the file cache on load.
+     * Concurrent calls share one restore.
      * @returns {Promise<void>}
      */
     async function restoreState() {
@@ -308,36 +361,7 @@ export const UploadPage = (() => {
             return;
         }
 
-        restorePromise = (async () => {
-            const generation = clearGeneration;
-            await Session.waitForCleanup();
-            updateOfflineBanner();
-            const files = await Storage.getAllFiles();
-            // A Clear during the read leaves these files describing a wiped store.
-            if (generation !== clearGeneration) {
-                return;
-            }
-            const fileMap = getFileMap(files);
-            DataCache.set("storage:files", files.map(toStoredFileMetadata));
-            // Intentionally do NOT prime the worker on load: the dashboard reads
-            // the persisted analyticsBase directly and never needs the worker's
-            // raw shares/comments. Only a fresh upload (which recomputes the base)
-            // does, so priming is deferred to processFiles(), saving a redundant
-            // re-parse of shares+comments on every page load.
-            const analyticsReady = await hasAnalyticsData();
-            if (generation !== clearGeneration) {
-                return;
-            }
-            updateStatus({ fileMap, analyticsReady });
-            // If a stale 24h session was wiped, tell the user once rather than
-            // letting their previously-uploaded files silently disappear.
-            if (Session.consumeExpiryNotice()) {
-                setHint(
-                    "Your saved data expired after 24 hours and was cleared for privacy. Re-upload to continue.",
-                    false,
-                );
-            }
-        })();
+        restorePromise = loadStoredState();
 
         try {
             await restorePromise;
@@ -699,6 +723,68 @@ export const UploadPage = (() => {
     }
 
     /**
+     * Report a failed save of a processed file and tell the user why.
+     * @param {unknown} error - Error thrown while saving
+     * @param {string} fileType - Type the worker processed the file as
+     * @param {string} fileName - Uploaded file name
+     */
+    function reportSaveFailure(error, fileType, fileName) {
+        captureError(error, {
+            module: "upload",
+            operation: "persist-processed-file",
+            fileType,
+            fileName,
+        });
+        if (isQuotaExceededError(error)) {
+            setHint("Storage is full. Clear saved data or free up space, then try again.", true);
+        } else {
+            setHint("Error saving file data. Please try again.", true);
+        }
+    }
+
+    /**
+     * Refresh the cache, status and hint once a processed file is stored.
+     * @param {FileProcessedPayload} payload - Worker payload for fileProcessed
+     * @param {string} fileType - Type the worker processed the file as
+     * @param {boolean} analyticsStored - Whether the analytics were stored with the file
+     * @param {number} generation - Clear generation the upload was processed under
+     * @param {Worker|null} replyWorker - Worker that sent the reply
+     */
+    async function publishStoredFile(payload, fileType, analyticsStored, generation, replyWorker) {
+        // Only analytics that reached storage are published, so the screens
+        // never show an aggregate that counts an upload storage lacks.
+        await syncCacheAfterProcessedFile(
+            fileType,
+            analyticsStored ? payload.analyticsBase : null,
+            generation,
+        );
+
+        const files = await getStoredFilesSnapshot();
+        const fileMap = getFileMap(files);
+        const analyticsReady = await hasAnalyticsData();
+        if (generation !== clearGeneration) {
+            return;
+        }
+        updateStatus({ fileMap, analyticsReady });
+        setHint(
+            payload.usedFallback
+                ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a Windows-1252 fallback. Double-check accented names."
+                : "File loaded successfully.",
+            false,
+        );
+        if (
+            ANALYTICS_SOURCE_TYPES.has(fileType) &&
+            !primeFailed &&
+            workers.current() === replyWorker
+        ) {
+            // The worker that processed this file already holds it along
+            // with the rest of the stored set, so record that set as primed
+            // instead of having the worker read and parse it all again.
+            lastPrimedSignature = getPrimeSignature(fileMap);
+        }
+    }
+
+    /**
      * Save a processed file and its analytics, then refresh the upload status.
      * @param {FileProcessedPayload} payload - Worker payload for fileProcessed
      * @param {string} fileType - Type the worker processed the file as
@@ -722,52 +808,9 @@ export const UploadPage = (() => {
             if (generation !== clearGeneration) {
                 return;
             }
-            // Only analytics that reached storage are published, so the screens
-            // never show an aggregate that counts an upload storage lacks.
-            await syncCacheAfterProcessedFile(
-                fileType,
-                analyticsStored ? payload.analyticsBase : null,
-                generation,
-            );
-
-            const files = await getStoredFilesSnapshot();
-            const fileMap = getFileMap(files);
-            const analyticsReady = await hasAnalyticsData();
-            if (generation !== clearGeneration) {
-                return;
-            }
-            updateStatus({ fileMap, analyticsReady });
-            setHint(
-                payload.usedFallback
-                    ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a Windows-1252 fallback. Double-check accented names."
-                    : "File loaded successfully.",
-                false,
-            );
-            if (
-                ANALYTICS_SOURCE_TYPES.has(fileType) &&
-                !primeFailed &&
-                workers.current() === replyWorker
-            ) {
-                // The worker that processed this file already holds it along
-                // with the rest of the stored set, so record that set as primed
-                // instead of having the worker read and parse it all again.
-                lastPrimedSignature = getPrimeSignature(fileMap);
-            }
+            await publishStoredFile(payload, fileType, analyticsStored, generation, replyWorker);
         } catch (error) {
-            captureError(error, {
-                module: "upload",
-                operation: "persist-processed-file",
-                fileType,
-                fileName,
-            });
-            if (isQuotaExceededError(error)) {
-                setHint(
-                    "Storage is full. Clear saved data or free up space, then try again.",
-                    true,
-                );
-            } else {
-                setHint("Error saving file data. Please try again.", true);
-            }
+            reportSaveFailure(error, fileType, fileName);
         } finally {
             pendingSaves.delete(save);
             completeJob(payload.jobId || null, fileName);

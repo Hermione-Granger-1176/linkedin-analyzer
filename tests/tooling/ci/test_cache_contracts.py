@@ -87,7 +87,7 @@ def test_e2e_uses_an_immutable_version_matched_playwright_container() -> None:
 
     assert image_match is not None
     assert image_match.group("version") == package_version
-    assert "run: make web-e2e-container" in CI_WORKFLOW
+    assert "run: make test-e2e-container" in CI_WORKFLOW
     assert "playwright-engines" not in CI_SETUP
     assert "Cache Playwright browsers" not in CI_SETUP
     assert "Install Playwright browsers" not in CI_SETUP

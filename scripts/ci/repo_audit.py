@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -255,14 +256,8 @@ def extract_allowed_action_patterns(payload: object) -> set[str]:
     return patterns
 
 
-def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | None]:
-    """Return required reviewer logins and self-review policy from an environment."""
-    if not isinstance(payload, dict):
-        raise GhError(f"{PYPI_ENVIRONMENT_NAME} environment must be a JSON object.")
-    raw_rules = payload.get("protection_rules")
-    if not isinstance(raw_rules, list):
-        raise GhError(f"{PYPI_ENVIRONMENT_NAME} protection_rules must be a JSON array.")
-
+def _required_reviewers_rule(raw_rules: list[object]) -> dict[str, object] | None:
+    """Return the environment's one required-reviewers rule, or None when it has none."""
     required_rule: dict[str, object] | None = None
     for raw_rule in raw_rules:
         if not isinstance(raw_rule, dict):
@@ -276,19 +271,11 @@ def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | Non
             if required_rule is not None:
                 raise GhError(f"{PYPI_ENVIRONMENT_NAME} has multiple required reviewer rules.")
             required_rule = raw_rule
+    return required_rule
 
-    if required_rule is None:
-        return set(), None
 
-    prevent_self_review = required_rule.get("prevent_self_review")
-    if not isinstance(prevent_self_review, bool):
-        raise GhError(
-            f"{PYPI_ENVIRONMENT_NAME} required reviewer rule has an invalid self-review policy."
-        )
-    raw_reviewers = required_rule.get("reviewers")
-    if not isinstance(raw_reviewers, list):
-        raise GhError(f"{PYPI_ENVIRONMENT_NAME} required reviewers must be a JSON array.")
-
+def _reviewer_logins(raw_reviewers: list[object]) -> set[str]:
+    """Return the logins of the users in a required-reviewers list."""
     reviewers: set[str] = set()
     for raw_reviewer in raw_reviewers:
         if not isinstance(raw_reviewer, dict):
@@ -308,7 +295,30 @@ def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | Non
                 f"{PYPI_ENVIRONMENT_NAME} required reviewers contains an entry without a login."
             )
         reviewers.add(login)
-    return reviewers, prevent_self_review
+    return reviewers
+
+
+def extract_environment_reviewers(payload: object) -> tuple[set[str], bool | None]:
+    """Return required reviewer logins and self-review policy from an environment."""
+    if not isinstance(payload, dict):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} environment must be a JSON object.")
+    raw_rules = payload.get("protection_rules")
+    if not isinstance(raw_rules, list):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} protection_rules must be a JSON array.")
+
+    required_rule = _required_reviewers_rule(raw_rules)
+    if required_rule is None:
+        return set(), None
+
+    prevent_self_review = required_rule.get("prevent_self_review")
+    if not isinstance(prevent_self_review, bool):
+        raise GhError(
+            f"{PYPI_ENVIRONMENT_NAME} required reviewer rule has an invalid self-review policy."
+        )
+    raw_reviewers = required_rule.get("reviewers")
+    if not isinstance(raw_reviewers, list):
+        raise GhError(f"{PYPI_ENVIRONMENT_NAME} required reviewers must be a JSON array.")
+    return _reviewer_logins(raw_reviewers), prevent_self_review
 
 
 def extract_deployment_policies(payload: object) -> set[str]:
@@ -439,6 +449,11 @@ def _missing(actual: set[str], expected: frozenset[str], label: str) -> list[str
     return [f"missing {label}: " + ", ".join(sorted(missing))]
 
 
+def _exact_match_findings(actual: set[str], expected: frozenset[str], label: str) -> list[str]:
+    """Return the missing-item finding, then the unexpected-item finding, for one set."""
+    return [*_missing(actual, expected, label), *_unexpected(actual, expected, label)]
+
+
 def audit_actions(
     actions_permissions: dict[str, object],
     selected_actions: dict[str, object] | None,
@@ -465,10 +480,9 @@ def audit_actions(
         findings.append("Verified Marketplace Actions are allowed")
     allowed_patterns = extract_allowed_action_patterns(selected_actions)
     findings.extend(
-        _missing(allowed_patterns, EXPECTED_ACTION_PATTERNS, "allowed Actions patterns")
-    )
-    findings.extend(
-        _unexpected(allowed_patterns, EXPECTED_ACTION_PATTERNS, "allowed Actions patterns")
+        _exact_match_findings(
+            allowed_patterns, EXPECTED_ACTION_PATTERNS, "allowed Actions patterns"
+        )
     )
     return findings
 
@@ -505,9 +519,7 @@ def _audit_pypi_deployment_refs(
         raise GhError(f"{PYPI_ENVIRONMENT_NAME} deployment branch policies were not fetched.")
 
     actual = extract_deployment_policies(deployment_policies)
-    findings = _missing(actual, EXPECTED_PYPI_DEPLOYMENT_POLICIES, "pypi deployment refs")
-    findings.extend(_unexpected(actual, EXPECTED_PYPI_DEPLOYMENT_POLICIES, "pypi deployment refs"))
-    return findings
+    return _exact_match_findings(actual, EXPECTED_PYPI_DEPLOYMENT_POLICIES, "pypi deployment refs")
 
 
 def audit_pypi_environment(
@@ -565,16 +577,16 @@ def audit_release_tag_rulesets(rulesets: list[dict[str, object]]) -> list[str]:
 
     included_patterns, excluded_patterns = extract_ruleset_ref_patterns(ruleset)
     findings.extend(
-        _missing(included_patterns, EXPECTED_RELEASE_TAG_PATTERNS, "release tag patterns")
-    )
-    findings.extend(
-        _unexpected(included_patterns, EXPECTED_RELEASE_TAG_PATTERNS, "release tag patterns")
+        _exact_match_findings(
+            included_patterns, EXPECTED_RELEASE_TAG_PATTERNS, "release tag patterns"
+        )
     )
     findings.extend(_unexpected(excluded_patterns, frozenset(), "excluded release tag patterns"))
 
     rule_types = extract_ruleset_rule_types(ruleset)
-    findings.extend(_missing(rule_types, EXPECTED_RELEASE_TAG_RULES, "release tag rules"))
-    findings.extend(_unexpected(rule_types, EXPECTED_RELEASE_TAG_RULES, "release tag rules"))
+    findings.extend(
+        _exact_match_findings(rule_types, EXPECTED_RELEASE_TAG_RULES, "release tag rules")
+    )
     return findings
 
 
@@ -641,13 +653,28 @@ def audit_protection(protection: dict[str, object] | None, *, default_branch: st
     return findings
 
 
-def audit_repo_settings(
-    *,
+@dataclass(frozen=True)
+class _RepoSettings:
+    """The GitHub API responses the audit judges, fetched in one pass."""
+
+    repository: dict[str, object]
+    actions_permissions: dict[str, object]
+    selected_actions: dict[str, object] | None
+    pypi_environment: dict[str, object]
+    deployment_policies: dict[str, object] | None
+    rulesets: list[dict[str, object]]
+    protection: dict[str, object] | None
+    variables: dict[str, object]
+    secrets: dict[str, object]
+
+
+def _fetch_repo_settings(
     repo: str,
-    default_branch: str = "main",
+    default_branch: str,
+    *,
     run_fn: gh_runner.RunFunction | None = None,
-) -> list[str]:
-    """Return one finding per repository setting that drifted from expectations."""
+) -> _RepoSettings:
+    """Fetch every setting the audit judges, skipping calls an earlier answer rules out."""
     repository = _fetch_object(f"repos/{repo}", "repository metadata", run_fn=run_fn)
     actions_permissions = _fetch_object(
         f"repos/{repo}/actions/permissions", "Actions permissions", run_fn=run_fn
@@ -675,23 +702,52 @@ def audit_repo_settings(
     protection = _fetch_protection(repo, default_branch, run_fn=run_fn)
     variables = _fetch_object(f"repos/{repo}/actions/variables", "Actions variables", run_fn=run_fn)
     secrets = _fetch_object(f"repos/{repo}/actions/secrets", "Actions secrets", run_fn=run_fn)
+    return _RepoSettings(
+        repository=repository,
+        actions_permissions=actions_permissions,
+        selected_actions=selected_actions,
+        pypi_environment=pypi_environment,
+        deployment_policies=deployment_policies,
+        rulesets=rulesets,
+        protection=protection,
+        variables=variables,
+        secrets=secrets,
+    )
 
-    findings = audit_repository(repository, default_branch=default_branch)
-    findings.extend(audit_actions(actions_permissions, selected_actions))
-    findings.extend(audit_pypi_environment(pypi_environment, deployment_policies))
-    findings.extend(audit_release_tag_rulesets(rulesets))
-    findings.extend(audit_protection(protection, default_branch=default_branch))
+
+def _audit_settings(settings: _RepoSettings, *, default_branch: str) -> list[str]:
+    """Return one finding per fetched setting that drifted from expectations."""
+    findings = audit_repository(settings.repository, default_branch=default_branch)
+    findings.extend(audit_actions(settings.actions_permissions, settings.selected_actions))
+    findings.extend(audit_pypi_environment(settings.pypi_environment, settings.deployment_policies))
+    findings.extend(audit_release_tag_rulesets(settings.rulesets))
+    findings.extend(audit_protection(settings.protection, default_branch=default_branch))
     findings.extend(
         _missing(
-            collect_named_items(variables, "variables"),
+            collect_named_items(settings.variables, "variables"),
             EXPECTED_VARIABLES,
             "repository variables",
         )
     )
     findings.extend(
-        _missing(collect_named_items(secrets, "secrets"), EXPECTED_SECRETS, "repository secrets")
+        _missing(
+            collect_named_items(settings.secrets, "secrets"),
+            EXPECTED_SECRETS,
+            "repository secrets",
+        )
     )
     return findings
+
+
+def audit_repo_settings(
+    *,
+    repo: str,
+    default_branch: str = "main",
+    run_fn: gh_runner.RunFunction | None = None,
+) -> list[str]:
+    """Return one finding per repository setting that drifted from expectations."""
+    settings = _fetch_repo_settings(repo, default_branch, run_fn=run_fn)
+    return _audit_settings(settings, default_branch=default_branch)
 
 
 def _build_parser() -> argparse.ArgumentParser:

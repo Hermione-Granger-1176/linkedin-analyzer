@@ -75,20 +75,14 @@ def build_alert_body(*, state: str, run_url: str, detail: str = "") -> str:
     return body
 
 
-def find_alert_issue(
+def _list_open_labeled_issues(
     repo: str,
     title: str,
     label: str,
     *,
-    run_fn: gh_runner.RunFunction | None = None,
-) -> dict[str, object] | None:
-    """Return the open issue that exactly matches ``title`` within ``label``.
-
-    Filtering by label first keeps the search bounded to issues this alert
-    owns. `gh issue list` never returns pull requests, so no extra filtering
-    is needed to keep a same-titled pull request from being mistaken for the
-    alert issue.
-    """
+    run_fn: gh_runner.RunFunction | None,
+) -> list[dict[str, object]]:
+    """Return the open issues carrying ``label``, refusing a list that may be truncated."""
     payload = gh_runner.gh_json(
         [
             "issue",
@@ -114,13 +108,28 @@ def find_alert_issue(
             f"{ISSUE_MATCH_LIMIT} open issues, so the matching issue may be truncated "
             "out of the results. Reserve this label for its alert issue."
         )
-
-    matches = []
     for issue in payload:
         if not isinstance(issue, dict):
             raise GhError("Unexpected issue entry shape in issue list response.")
-        if issue.get("title") == title:
-            matches.append(issue)
+    return payload
+
+
+def find_alert_issue(
+    repo: str,
+    title: str,
+    label: str,
+    *,
+    run_fn: gh_runner.RunFunction | None = None,
+) -> dict[str, object] | None:
+    """Return the open issue that exactly matches ``title`` within ``label``.
+
+    Filtering by label first keeps the search bounded to issues this alert
+    owns. `gh issue list` never returns pull requests, so no extra filtering
+    is needed to keep a same-titled pull request from being mistaken for the
+    alert issue.
+    """
+    issues = _list_open_labeled_issues(repo, title, label, run_fn=run_fn)
+    matches = [issue for issue in issues if issue.get("title") == title]
     if not matches:
         return None
     # Oldest issue wins so repeated syncs converge on one issue even if a

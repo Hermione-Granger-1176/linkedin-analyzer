@@ -182,10 +182,8 @@ def clean_empty_field(value: object) -> str:
     Returns:
         Empty string if the field is empty/missing, otherwise the cleaned value
     """
-    if is_missing(value):
-        return ""
-    text = str(value).strip()
-    return "" if text in {'""', '"', ""} else text
+    text = clean_value(value)
+    return "" if text in {'""', '"'} else text
 
 
 def clean_date(value: object) -> str:
@@ -201,10 +199,10 @@ def clean_date(value: object) -> str:
         Datetime string converted to local timezone, empty string if missing,
         or the original value as-is if the format is unexpected
     """
-    if is_missing(value):
+    text = clean_value(value)
+    if not text:
         return ""
 
-    text = str(value).strip()
     if text.upper().endswith(" UTC"):
         text = text[:-4].strip()
 
@@ -232,10 +230,7 @@ def clean_connections_date(value: object) -> str:
         Date string in ISO format, empty string if missing, or original value
         if parsing fails
     """
-    if is_missing(value):
-        return ""
-
-    text = str(value).strip()
+    text = clean_value(value)
     parts = text.split()
     if len(parts) != 3:
         return text

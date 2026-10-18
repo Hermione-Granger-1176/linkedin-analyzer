@@ -183,35 +183,8 @@ def _add_named_io_args(
     )
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser with all subcommands.
-
-    Returns:
-        Configured argument parser with all supported subcommands
-    """
-    parser = argparse.ArgumentParser(
-        prog="linkedin-analyzer",
-        description="Clean and export LinkedIn CSV data to Excel",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-    # Clean Shares.csv and export to Shares.xlsx
-    linkedin-analyzer shares
-
-    # Clean Comments.csv and export to Comments.xlsx
-    linkedin-analyzer comments
-
-    # Clean all exports
-    linkedin-analyzer all
-
-    # Clean messages and connections
-    linkedin-analyzer messages
-    linkedin-analyzer connections
-
-    # Specify custom input/output paths
-    linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
-        """,
-    )
+def _add_global_options(parser: argparse.ArgumentParser) -> None:
+    """Add the options shared by every subcommand."""
     parser.add_argument(
         "--version",
         action="version",
@@ -256,12 +229,16 @@ Examples:
         ),
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+def _add_single_commands(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add one subcommand per cleaner, each with --input and --output."""
     for name, help_text, default_input, default_output in SINGLE_COMMAND_SPECS:
         command_parser = subparsers.add_parser(name, help=help_text)
         _add_default_io_args(command_parser, default_input, default_output)
 
+
+def _add_all_command(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``all`` subcommand with --skip-missing and per-cleaner paths."""
     all_parser = subparsers.add_parser(
         "all",
         help="Clean all LinkedIn CSV exports",
@@ -276,6 +253,42 @@ Examples:
     )
     for name, _help_text, default_input, default_output in SINGLE_COMMAND_SPECS:
         _add_named_io_args(all_parser, name, default_input, default_output)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser with all subcommands.
+
+    Returns:
+        Configured argument parser with all supported subcommands
+    """
+    parser = argparse.ArgumentParser(
+        prog="linkedin-analyzer",
+        description="Clean and export LinkedIn CSV data to Excel",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    # Clean Shares.csv and export to Shares.xlsx
+    linkedin-analyzer shares
+
+    # Clean Comments.csv and export to Comments.xlsx
+    linkedin-analyzer comments
+
+    # Clean all exports
+    linkedin-analyzer all
+
+    # Clean messages and connections
+    linkedin-analyzer messages
+    linkedin-analyzer connections
+
+    # Specify custom input/output paths
+    linkedin-analyzer shares --input my_shares.csv --output cleaned_shares.xlsx
+        """,
+    )
+    _add_global_options(parser)
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    _add_single_commands(subparsers)
+    _add_all_command(subparsers)
 
     return parser
 
@@ -334,12 +347,7 @@ def run_all(args: argparse.Namespace) -> int:
     exit_code = 0
     for label, cleaner, input_path, output_path in tasks:
         LOG.info("Processing %s...", label)
-        result = cleaner(
-            input_path=input_path,
-            output_path=output_path,
-            encoding=args.encoding,
-            **_cleaner_limit_kwargs(args),
-        )
+        result = _invoke_cleaner(args, cleaner, input_path, output_path)
         if skip_missing and result.missing_input:
             LOG.warning("Skipping %s: %s", label, result.error)
             continue
@@ -371,13 +379,22 @@ def _run_single_cleaner(
     cleaner: Callable[..., CleanerResult],
 ) -> int:
     """Run one cleaner function with standard CLI arguments."""
-    result = cleaner(
-        input_path=args.input,
-        output_path=args.output,
+    return _handle_result(_invoke_cleaner(args, cleaner, args.input, args.output))
+
+
+def _invoke_cleaner(
+    args: argparse.Namespace,
+    cleaner: Callable[..., CleanerResult],
+    input_path: Path,
+    output_path: Path,
+) -> CleanerResult:
+    """Call a cleaner with the given paths and the encoding and limits from ``args``."""
+    return cleaner(
+        input_path=input_path,
+        output_path=output_path,
         encoding=args.encoding,
         **_cleaner_limit_kwargs(args),
     )
-    return _handle_result(result)
 
 
 def _cleaner_limit_kwargs(args: argparse.Namespace) -> dict[str, int]:

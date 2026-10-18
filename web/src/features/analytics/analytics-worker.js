@@ -182,6 +182,61 @@ function postError(requestId, message) {
 }
 
 /**
+ * Post an upload progress message.
+ * @param {string|null} jobId - Upload job ID
+ * @param {string} fileName - Uploaded file name
+ * @param {number} percent - Progress from 0 to 1
+ * @param {{bytesRead: number, totalBytes: number}} [bytes] - Bytes read, while the file is still being read
+ */
+function postProgress(jobId, fileName, percent, bytes) {
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent, ...bytes },
+    });
+}
+
+/**
+ * Reply that an uploaded file could not be processed. A failed file still
+ * carries the batch's analytics when it is the last one queued.
+ * @param {string|null} jobId - Upload job ID
+ * @param {string} fileName - Uploaded file name
+ * @param {string} error - Fixed error description
+ */
+function postFileFailure(jobId, fileName, error) {
+    self.postMessage({
+        type: "fileProcessed",
+        payload: {
+            error,
+            jobId,
+            fileName,
+            analyticsBase: takeAnalyticsBase(jobId, fileName),
+        },
+    });
+}
+
+/**
+ * Replace the source dataset for a file type.
+ * @param {string} fileType - Type the file was processed as
+ * @param {CleanedRow[]} cleanedData - Cleaned rows of the file
+ * @returns {boolean} Whether the type feeds the analytics
+ */
+function setSourceData(fileType, cleanedData) {
+    switch (fileType) {
+        case "shares":
+            sharesData = cleanedData;
+            return true;
+        case "comments":
+            commentsData = cleanedData;
+            return true;
+        case "connections":
+            connectionsData = cleanedData;
+            return true;
+        default:
+            return false;
+    }
+}
+
+/**
  * Store a view payload in the LRU cache, trimming old entries when full.
  * @param {string} key - Cache key from getViewKey
  * @param {AnalyticsViewPayload} payload - The view and insights payload to cache
@@ -220,10 +275,7 @@ async function readUpload(read, jobId, fileName, epoch) {
             return;
         }
         lastPercent = percent;
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent, bytesRead, totalBytes },
-        });
+        postProgress(jobId, fileName, percent, { bytesRead, totalBytes });
     };
     try {
         const result = await read({ signal: controller.signal, onProgress });
@@ -316,10 +368,7 @@ async function handleAddFile(payload) {
     let processed;
     const epoch = requestEpoch;
 
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: READ_PROGRESS_START },
-    });
+    postProgress(jobId, fileName, READ_PROGRESS_START);
 
     if (file) {
         let result;
@@ -332,15 +381,7 @@ async function handleAddFile(payload) {
             if (epoch !== requestEpoch) {
                 return;
             }
-            self.postMessage({
-                type: "fileProcessed",
-                payload: {
-                    error: toErrorMessage(error, RUNTIME_FAILURE),
-                    jobId,
-                    fileName,
-                    analyticsBase: takeAnalyticsBase(jobId, fileName),
-                },
-            });
+            postFileFailure(jobId, fileName, toErrorMessage(error, RUNTIME_FAILURE));
             return;
         }
         if (!result) {
@@ -352,40 +393,15 @@ async function handleAddFile(payload) {
     }
 
     if (!processed.success) {
-        self.postMessage({
-            type: "fileProcessed",
-            payload: {
-                error: processed.error || "Unable to process file.",
-                jobId,
-                fileName,
-                analyticsBase: takeAnalyticsBase(jobId, fileName),
-            },
-        });
+        postFileFailure(jobId, fileName, processed.error || "Unable to process file.");
         return;
     }
 
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: 0.4 },
-    });
+    postProgress(jobId, fileName, 0.4);
 
     // A successful result always carries the type it was processed as.
     const fileType = /** @type {string} */ (processed.fileType);
-    /** @type {Record<string, () => void>} */
-    const updateSourceByType = {
-        shares: () => {
-            sharesData = processed.cleanedData;
-        },
-        comments: () => {
-            commentsData = processed.cleanedData;
-        },
-        connections: () => {
-            connectionsData = processed.cleanedData;
-        },
-    };
-    const updateSource = updateSourceByType[fileType];
-    if (updateSource) {
-        updateSource();
+    if (setSourceData(fileType, processed.cleanedData)) {
         analyticsStale = true;
     }
     const analyticsBase = takeAnalyticsBase(jobId, fileName);
@@ -416,21 +432,12 @@ function takeAnalyticsBase(jobId, fileName) {
     if (!analyticsStale || queuedAddFiles > 0) {
         return null;
     }
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: 0.55 },
-    });
+    postProgress(jobId, fileName, 0.55);
     computeAnalytics();
     analyticsStale = false;
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: 0.85 },
-    });
+    postProgress(jobId, fileName, 0.85);
     const analyticsBase = serializeAnalytics(analytics);
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: 0.95 },
-    });
+    postProgress(jobId, fileName, 0.95);
     return analyticsBase;
 }
 

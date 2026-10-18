@@ -43,6 +43,28 @@ import { extractTopics } from "./text.js";
 /** @typedef {import("./model.ts").WorkingMonthBucket} WorkingMonthBucket */
 /** @typedef {import("./model.ts").MonthlyStat} MonthlyStat */
 /** @typedef {import("./model.ts").MonthMeta} MonthMeta */
+/** @typedef {NonNullable<ReturnType<typeof parseLinkedInDate>>} DateInfo */
+
+/**
+ * Running totals a view sums month buckets into.
+ * @typedef {object} ViewTotals
+ * @property {number} posts - Posts in the filtered months
+ * @property {number} comments - Comments in the filtered months
+ * @property {number[][]} heatmap - Day-by-hour activity counts
+ * @property {Map<string, number>} topicCounts - Mentions per topic
+ * @property {ContentMix} contentMix - Share counts by type
+ * @property {number[]} hourCounts - Activity per hour of the day
+ * @property {number[]} dayCounts - Activity per weekday
+ * @property {Set<string>} activeDays - "YYYY-MM-DD" keys with activity
+ */
+
+/**
+ * Indexes dated events by month and day, then builds the analytics base.
+ * @typedef {object} ActivityAccumulator
+ * @property {(dateInfo: DateInfo, row: CleanedRow) => void} recordShare - Count one share
+ * @property {(dateInfo: DateInfo, row: CleanedRow) => void} recordComment - Count one comment
+ * @property {(connectionsData: CleanedRow[]|null|undefined) => AnalyticsBase} build - Build the serializable base
+ */
 
 export const AnalyticsEngine = (() => {
     "use strict";
@@ -73,15 +95,12 @@ export const AnalyticsEngine = (() => {
     });
 
     /**
-     * Pre-compute aggregates during initial load.
-     * This creates an indexed structure that allows fast filter lookups:
-     * indexing by month and day means view building is O(months) instead of O(events).
-     * @param {CleanedRow[]|null|undefined} sharesData - Cleaned shares rows
-     * @param {CleanedRow[]|null|undefined} commentsData - Cleaned comments rows
-     * @param {CleanedRow[]|null|undefined} connectionsData - Cleaned connections rows
-     * @returns {AnalyticsBase} Analytics aggregates and indices
+     * Create the accumulator that indexes dated events by month and day.
+     * Indexing by month and day lets view building cost O(months) instead of
+     * O(events).
+     * @returns {ActivityAccumulator}
      */
-    function compute(sharesData, commentsData, connectionsData) {
+    function createActivityAccumulator() {
         // Pre-aggregated indices
         /** @type {Map<string, WorkingMonthBucket>} */
         const monthIndex = new Map();
@@ -134,122 +153,146 @@ export const AnalyticsEngine = (() => {
             return /** @type {DayBucket} */ (dayIndex.get(dateKey));
         }
 
-        // Process shares
-        if (Array.isArray(sharesData)) {
-            for (const row of sharesData) {
-                const dateInfo = parseLinkedInDate(row.Date);
-                if (!dateInfo) {
-                    continue;
-                }
+        /**
+         * Count one dated event in the global stats and its month and day buckets.
+         * @param {DateInfo} dateInfo - Parsed event date
+         * @param {"posts"|"comments"} kind - Which count the event adds to
+         * @param {Iterable<string>} topics - Topics found in the event text
+         * @returns {{bucket: WorkingMonthBucket, dayBucket: DayBucket}} The buckets it was counted in
+         */
+        function recordEvent(dateInfo, kind, topics) {
+            const { timestamp, monthKey, dayIndex: dayIdx, hour, dateKey } = dateInfo;
 
-                const hasMedia = Boolean(String(row.MediaUrl || "").trim());
-                const hasLink = Boolean(String(row.SharedUrl || "").trim());
-                const topics = extractTopics(row.ShareCommentary);
-                const { timestamp, monthKey, dayIndex: dayIdx, hour, dateKey } = dateInfo;
-
-                // Update global stats
+            // Update global stats
+            if (kind === "posts") {
                 totalPosts++;
-                latestTimestamp = Math.max(latestTimestamp, timestamp);
-                earliestTimestamp = Math.min(earliestTimestamp, timestamp);
-                activeDays.add(dateKey);
-
-                // Month bucket
-                const bucket = getMonthBucket(monthKey);
-                bucket.posts++;
-                bucket.total++;
-                bucket.days[dayIdx]++;
-                bucket.hours[hour]++;
-                bucket.heatmap[dayIdx][hour]++;
-                bucket.activeDays.add(dateKey);
-
-                const dayBucket = getDayBucket(dateKey);
-                dayBucket.posts++;
-                dayBucket.total++;
-
-                const shareTypeKey = hasMedia ? "media" : hasLink ? "links" : "textOnly";
-                bucket.shareTypes[shareTypeKey]++;
-                dayBucket.shareTypes[shareTypeKey]++;
-
-                for (const topic of topics) {
-                    bucket.topics.set(topic, (bucket.topics.get(topic) || 0) + 1);
-                }
-            }
-        }
-
-        // Process comments
-        if (Array.isArray(commentsData)) {
-            for (const row of commentsData) {
-                const dateInfo = parseLinkedInDate(row.Date);
-                if (!dateInfo) {
-                    continue;
-                }
-
-                const topics = extractTopics(row.Message);
-                const { timestamp, monthKey, dayIndex: dayIdx, hour, dateKey } = dateInfo;
-
+            } else {
                 totalComments++;
-                latestTimestamp = Math.max(latestTimestamp, timestamp);
-                earliestTimestamp = Math.min(earliestTimestamp, timestamp);
-                activeDays.add(dateKey);
+            }
+            latestTimestamp = Math.max(latestTimestamp, timestamp);
+            earliestTimestamp = Math.min(earliestTimestamp, timestamp);
+            activeDays.add(dateKey);
 
-                const bucket = getMonthBucket(monthKey);
-                bucket.comments++;
-                bucket.total++;
-                bucket.days[dayIdx]++;
-                bucket.hours[hour]++;
-                bucket.heatmap[dayIdx][hour]++;
-                bucket.activeDays.add(dateKey);
+            // Month bucket
+            const bucket = getMonthBucket(monthKey);
+            bucket[kind]++;
+            bucket.total++;
+            bucket.days[dayIdx]++;
+            bucket.hours[hour]++;
+            bucket.heatmap[dayIdx][hour]++;
+            bucket.activeDays.add(dateKey);
 
-                const dayBucket = getDayBucket(dateKey);
-                dayBucket.comments++;
-                dayBucket.total++;
+            const dayBucket = getDayBucket(dateKey);
+            dayBucket[kind]++;
+            dayBucket.total++;
 
-                for (const topic of topics) {
-                    bucket.topics.set(topic, (bucket.topics.get(topic) || 0) + 1);
-                }
+            for (const topic of topics) {
+                bucket.topics.set(topic, (bucket.topics.get(topic) || 0) + 1);
+            }
+            return { bucket, dayBucket };
+        }
+
+        /**
+         * Count a share, including how much of it is text, links, or media.
+         * @param {DateInfo} dateInfo - Parsed share date
+         * @param {CleanedRow} row - Cleaned shares row
+         */
+        function recordShare(dateInfo, row) {
+            const hasMedia = Boolean(String(row.MediaUrl || "").trim());
+            const hasLink = Boolean(String(row.SharedUrl || "").trim());
+            const { bucket, dayBucket } = recordEvent(
+                dateInfo,
+                "posts",
+                extractTopics(row.ShareCommentary),
+            );
+
+            const shareTypeKey = hasMedia ? "media" : hasLink ? "links" : "textOnly";
+            bucket.shareTypes[shareTypeKey]++;
+            dayBucket.shareTypes[shareTypeKey]++;
+        }
+
+        /**
+         * Count a comment.
+         * @param {DateInfo} dateInfo - Parsed comment date
+         * @param {CleanedRow} row - Cleaned comments row
+         */
+        function recordComment(dateInfo, row) {
+            recordEvent(dateInfo, "comments", extractTopics(row.Message));
+        }
+
+        /**
+         * Convert the working indices to the serializable analytics base.
+         * @param {CleanedRow[]|null|undefined} connectionsData - Cleaned connections rows
+         * @returns {AnalyticsBase}
+         */
+        function build(connectionsData) {
+            // Convert month index to serializable format
+            const months = Object.fromEntries(
+                Array.from(monthIndex, ([key, bucket]) => [
+                    key,
+                    {
+                        posts: bucket.posts,
+                        comments: bucket.comments,
+                        total: bucket.total,
+                        topics: Object.fromEntries(bucket.topics),
+                        days: bucket.days,
+                        hours: bucket.hours,
+                        heatmap: bucket.heatmap,
+                        shareTypes: bucket.shareTypes,
+                        activeDays: Array.from(bucket.activeDays),
+                    },
+                ]),
+            );
+
+            // Skip the full pass over connection rows entirely when there is no
+            // posting activity to correlate them against, so the card cannot fire.
+            const networkGrowth =
+                monthIndex.size === 0
+                    ? null
+                    : computeNetworkGrowth(monthIndex, buildMonthlyConnections(connectionsData));
+
+            return {
+                months,
+                dayIndex: Object.fromEntries(dayIndex),
+                activeDays: Array.from(activeDays),
+                latestTimestamp: latestTimestamp || null,
+                earliestTimestamp: earliestTimestamp === Infinity ? null : earliestTimestamp,
+                networkGrowth,
+                totals: {
+                    posts: totalPosts,
+                    comments: totalComments,
+                    total: totalPosts + totalComments,
+                },
+            };
+        }
+
+        return { recordShare, recordComment, build };
+    }
+
+    /**
+     * Pre-compute aggregates during initial load.
+     * @param {CleanedRow[]|null|undefined} sharesData - Cleaned shares rows
+     * @param {CleanedRow[]|null|undefined} commentsData - Cleaned comments rows
+     * @param {CleanedRow[]|null|undefined} connectionsData - Cleaned connections rows
+     * @returns {AnalyticsBase} Analytics aggregates and indices
+     */
+    function compute(sharesData, commentsData, connectionsData) {
+        const activity = createActivityAccumulator();
+
+        for (const row of Array.isArray(sharesData) ? sharesData : []) {
+            const dateInfo = parseLinkedInDate(row.Date);
+            if (dateInfo) {
+                activity.recordShare(dateInfo, row);
+            }
+        }
+        for (const row of Array.isArray(commentsData) ? commentsData : []) {
+            const dateInfo = parseLinkedInDate(row.Date);
+            if (dateInfo) {
+                activity.recordComment(dateInfo, row);
             }
         }
 
-        // Convert month index to serializable format
-        const months = Object.fromEntries(
-            Array.from(monthIndex, ([key, bucket]) => [
-                key,
-                {
-                    posts: bucket.posts,
-                    comments: bucket.comments,
-                    total: bucket.total,
-                    topics: Object.fromEntries(bucket.topics),
-                    days: bucket.days,
-                    hours: bucket.hours,
-                    heatmap: bucket.heatmap,
-                    shareTypes: bucket.shareTypes,
-                    activeDays: Array.from(bucket.activeDays),
-                },
-            ]),
-        );
-
-        const dayIndexData = Object.fromEntries(dayIndex);
-
-        // Skip the full pass over connection rows entirely when there is no
-        // posting activity to correlate them against, so the card cannot fire.
-        const networkGrowth =
-            monthIndex.size === 0
-                ? null
-                : computeNetworkGrowth(monthIndex, buildMonthlyConnections(connectionsData));
-
-        return {
-            months,
-            dayIndex: dayIndexData,
-            activeDays: Array.from(activeDays),
-            latestTimestamp: latestTimestamp || null,
-            earliestTimestamp: earliestTimestamp === Infinity ? null : earliestTimestamp,
-            networkGrowth,
-            totals: {
-                posts: totalPosts,
-                comments: totalComments,
-                total: totalPosts + totalComments,
-            },
-        };
+        return activity.build(connectionsData);
     }
 
     /**
@@ -509,6 +552,58 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
+     * Create the running totals a view sums month buckets into.
+     * @returns {ViewTotals}
+     */
+    function createViewTotals() {
+        return {
+            posts: 0,
+            comments: 0,
+            heatmap: Array.from({ length: 7 }, () => Array(24).fill(0)),
+            topicCounts: new Map(),
+            contentMix: { textOnly: 0, links: 0, media: 0 },
+            hourCounts: Array(24).fill(0),
+            dayCounts: Array(7).fill(0),
+            activeDays: new Set(),
+        };
+    }
+
+    /**
+     * Add one month bucket's heatmap, hours, content mix, topics, and active days to the totals.
+     * @param {ViewTotals} totals - Running totals
+     * @param {AnyMonthBucket} bucket - Month bucket to add
+     */
+    function addBucketToTotals(totals, bucket) {
+        // Aggregate heatmap
+        for (let d = 0; d < 7; d++) {
+            const targetDay = totals.heatmap[d];
+            const sourceDay = bucket.heatmap[d];
+            for (let h = 0; h < 24; h++) {
+                targetDay[h] += sourceDay[h];
+            }
+            totals.dayCounts[d] += bucket.days[d];
+        }
+        for (let h = 0; h < 24; h++) {
+            totals.hourCounts[h] += bucket.hours[h];
+        }
+
+        // Content mix
+        totals.contentMix.textOnly += bucket.shareTypes.textOnly;
+        totals.contentMix.links += bucket.shareTypes.links;
+        totals.contentMix.media += bucket.shareTypes.media;
+
+        // Topics
+        for (const [topic, count] of Object.entries(bucket.topics)) {
+            totals.topicCounts.set(topic, (totals.topicCounts.get(topic) || 0) + count);
+        }
+
+        // Active days
+        for (const day of bucket.activeDays) {
+            totals.activeDays.add(day);
+        }
+    }
+
+    /**
      * Build a view from monthly aggregates in O(months) time.
      * @param {AnalyticsBase|HydratedAnalytics|null} analytics - Pre-computed analytics payload
      * @param {AnalyticsFilters} filters - Active filter state
@@ -532,16 +627,7 @@ export const AnalyticsEngine = (() => {
         }
 
         // Aggregate from pre-computed month buckets
-        let posts = 0,
-            comments = 0;
-        const heatmap = Array.from({ length: 7 }, () => Array(24).fill(0));
-        /** @type {Map<string, number>} */
-        const topicCounts = new Map();
-        const contentMix = { textOnly: 0, links: 0, media: 0 };
-        const hourCounts = Array(24).fill(0);
-        const dayCounts = Array(7).fill(0);
-        /** @type {Set<string>} */
-        const activeDaysSet = new Set();
+        const totals = createViewTotals();
         /** @type {TimelinePoint[]} */
         const timeline = [];
         let timelineMax = 1;
@@ -555,6 +641,17 @@ export const AnalyticsEngine = (() => {
         const hasDay = filters.day !== null && filters.day !== undefined;
         const hasHour = filters.hour !== null && filters.hour !== undefined;
 
+        /**
+         * Add a month's point to the timeline, unless the weekly timeline replaces it.
+         * @param {string} monthKey - "YYYY-MM" month key
+         * @param {number} value - Activity count for the month
+         */
+        function addMonthPoint(monthKey, value) {
+            if (!useWeeklyTimeline) {
+                timeline.push({ key: monthKey, label: monthKeyToLabel(monthKey), value });
+            }
+        }
+
         for (const monthKey of monthKeys) {
             const bucket = months[monthKey];
             const baselineValue = bucket ? bucket.total : 0;
@@ -562,9 +659,7 @@ export const AnalyticsEngine = (() => {
                 timelineMax = Math.max(timelineMax, baselineValue);
             }
             if (!bucket) {
-                if (!useWeeklyTimeline) {
-                    timeline.push({ key: monthKey, label: monthKeyToLabel(monthKey), value: 0 });
-                }
+                addMonthPoint(monthKey, 0);
                 continue;
             }
 
@@ -584,14 +679,12 @@ export const AnalyticsEngine = (() => {
             );
 
             if (!useMonth || monthTotal === 0) {
-                if (!useWeeklyTimeline) {
-                    timeline.push({ key: monthKey, label: monthKeyToLabel(monthKey), value: 0 });
-                }
+                addMonthPoint(monthKey, 0);
                 continue;
             }
 
-            posts += monthPosts;
-            comments += monthComments;
+            totals.posts += monthPosts;
+            totals.comments += monthComments;
 
             monthlyStats.push({
                 key: monthKey,
@@ -600,41 +693,8 @@ export const AnalyticsEngine = (() => {
                 topics: bucket.topics,
             });
 
-            // Aggregate heatmap
-            for (let d = 0; d < 7; d++) {
-                const targetDay = heatmap[d];
-                const sourceDay = bucket.heatmap[d];
-                for (let h = 0; h < 24; h++) {
-                    targetDay[h] += sourceDay[h];
-                }
-                dayCounts[d] += bucket.days[d];
-            }
-            for (let h = 0; h < 24; h++) {
-                hourCounts[h] += bucket.hours[h];
-            }
-
-            // Content mix
-            contentMix.textOnly += bucket.shareTypes.textOnly;
-            contentMix.links += bucket.shareTypes.links;
-            contentMix.media += bucket.shareTypes.media;
-
-            // Topics
-            for (const [topic, count] of Object.entries(bucket.topics)) {
-                topicCounts.set(topic, (topicCounts.get(topic) || 0) + count);
-            }
-
-            // Active days
-            for (const day of bucket.activeDays) {
-                activeDaysSet.add(day);
-            }
-
-            if (!useWeeklyTimeline) {
-                timeline.push({
-                    key: monthKey,
-                    label: monthKeyToLabel(monthKey),
-                    value: monthTotal,
-                });
-            }
+            addBucketToTotals(totals, bucket);
+            addMonthPoint(monthKey, monthTotal);
         }
 
         if (useWeeklyTimeline) {
@@ -644,17 +704,17 @@ export const AnalyticsEngine = (() => {
         }
 
         // Sort and limit topics
-        const topicsArray = Array.from(topicCounts.entries())
+        const topicsArray = Array.from(totals.topicCounts.entries())
             .sort((a, b) => b[1] - a[1])
             .slice(0, 12)
             .map(([topic, count]) => ({ topic, count }));
 
         // Calculate peaks
-        const peakHour = getPeakFromArray(hourCounts);
-        const peakDay = getPeakFromArray(dayCounts);
+        const peakHour = getPeakFromArray(totals.hourCounts);
+        const peakDay = getPeakFromArray(totals.dayCounts);
 
         // Calculate streaks
-        const streaks = calculateStreaksFromDays(activeDaysSet);
+        const streaks = calculateStreaksFromDays(totals.activeDays);
 
         // Calculate trend
         const trend = computeTrendFromTimeline(timeline);
@@ -668,9 +728,9 @@ export const AnalyticsEngine = (() => {
         return {
             timeline,
             timelineMax,
-            heatmap,
+            heatmap: totals.heatmap,
             topics: topicsArray,
-            contentMix,
+            contentMix: totals.contentMix,
             streaks,
             peakHour: { hour: peakHour.index, count: peakHour.value },
             peakDay: { dayIndex: peakDay.index, count: peakDay.value },
@@ -683,9 +743,9 @@ export const AnalyticsEngine = (() => {
             // not as one of the filter-driven cards.
             networkGrowth: analytics.networkGrowth || null,
             totals: {
-                posts,
-                comments,
-                total: posts + comments,
+                posts: totals.posts,
+                comments: totals.comments,
+                total: totals.posts + totals.comments,
             },
         };
     }
@@ -780,21 +840,12 @@ export const AnalyticsEngine = (() => {
     }
 
     /**
-     * Build a weekly timeline from the day-level index for the given target months, applying all active filters.
-     * @param {Record<string, DayBucket>} dayIndex - Day-level index mapping dateKey to daily
-     * counts.
-     * @param {string[]} targetMonths - Array of "YYYY-MM" month keys to include.
-     * @param {AnalyticsFilters} filters - Active filters (shareType, day, topic, hour).
-     * @param {Record<string, MonthMeta>} monthMeta - Per-month topicRatio and hourRatio.
-     * @returns {{ timeline: TimelinePoint[], timelineMax: number }} Weekly timeline entries and
-     * max baseline value.
+     * Lay out one empty timeline slot per week the target months touch.
+     * @param {string[]} targetMonths - Non-empty array of "YYYY-MM" month keys, oldest first.
+     * @returns {{ weeks: TimelinePoint[], weekIndex: Map<string, number>, startKey: string, endKey: string }}
+     * The slots, each slot's position by week key, and the first and last day keys of the months.
      */
-    function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
-        /* v8 ignore next 3 */
-        if (!dayIndex || !targetMonths.length) {
-            return { timeline: [], timelineMax: 1 };
-        }
-
+    function createWeekSlots(targetMonths) {
         const [startYear, startMonth] = targetMonths[0].split("-").map(Number);
         const [endYear, endMonth] = targetMonths[targetMonths.length - 1].split("-").map(Number);
         const rangeStart = new Date(startYear, startMonth - 1, 1);
@@ -816,12 +867,79 @@ export const AnalyticsEngine = (() => {
                 value: 0,
             });
         }
+        return {
+            weeks,
+            weekIndex,
+            startKey: formatDateKey(rangeStart),
+            endKey: formatDateKey(rangeEnd),
+        };
+    }
 
-        const baselineTotals = new Array(weeks.length).fill(0);
-        const startKey = formatDateKey(rangeStart);
-        const endKey = formatDateKey(rangeEnd);
+    /**
+     * Apply the active filters to one day's activity.
+     * @param {DayBucket} entry - The day's counts.
+     * @param {string} dateKey - "YYYY-MM-DD" key of the day.
+     * @param {Date} date - The day.
+     * @param {AnalyticsFilters} filters - Active filters (shareType, day, topic, hour).
+     * @param {Record<string, MonthMeta>} monthMeta - Per-month topicRatio and hourRatio.
+     * @returns {number} The day's filtered activity, which may be fractional.
+     */
+    function filteredDayValue(entry, dateKey, date, filters, monthMeta) {
         const hasDay = filters.day !== null && filters.day !== undefined;
         const hasHour = filters.hour !== null && filters.hour !== undefined;
+
+        // Activity days normally have a positive total. Use zero for malformed data.
+        /* v8 ignore next */
+        let value = entry.total || 0;
+        const typeKey = SHARE_TYPE_MAP[filters.shareType];
+        if (typeKey) {
+            /* v8 ignore next */
+            value = entry.shareTypes ? entry.shareTypes[typeKey] : 0;
+        }
+
+        if (hasDay) {
+            const dayIndexValue = (date.getDay() + 6) % 7;
+            if (dayIndexValue !== filters.day) {
+                value = 0;
+            }
+        }
+
+        if (filters.topic && filters.topic !== "all") {
+            const meta = monthMeta[dateKey.slice(0, 7)];
+            // Activity days normally have month metadata. Use zero when it is missing.
+            /* v8 ignore next */
+            const ratio = meta ? meta.topicRatio : 0;
+            value *= ratio;
+        }
+
+        if (hasHour) {
+            const meta = monthMeta[dateKey.slice(0, 7)];
+            // Activity days normally have month metadata. Use zero when it is missing.
+            /* v8 ignore next */
+            const ratio = meta ? meta.hourRatio : 0;
+            value *= ratio;
+        }
+        return value;
+    }
+
+    /**
+     * Build a weekly timeline from the day-level index for the given target months, applying all active filters.
+     * @param {Record<string, DayBucket>} dayIndex - Day-level index mapping dateKey to daily
+     * counts.
+     * @param {string[]} targetMonths - Array of "YYYY-MM" month keys to include.
+     * @param {AnalyticsFilters} filters - Active filters (shareType, day, topic, hour).
+     * @param {Record<string, MonthMeta>} monthMeta - Per-month topicRatio and hourRatio.
+     * @returns {{ timeline: TimelinePoint[], timelineMax: number }} Weekly timeline entries and
+     * max baseline value.
+     */
+    function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
+        /* v8 ignore next 3 */
+        if (!dayIndex || !targetMonths.length) {
+            return { timeline: [], timelineMax: 1 };
+        }
+
+        const { weeks, weekIndex, startKey, endKey } = createWeekSlots(targetMonths);
+        const baselineTotals = new Array(weeks.length).fill(0);
 
         for (const [dateKey, entry] of Object.entries(dayIndex)) {
             if (dateKey < startKey || dateKey > endKey) {
@@ -844,42 +962,8 @@ export const AnalyticsEngine = (() => {
 
             // Activity days normally have a positive total. Use zero for malformed data.
             /* v8 ignore next */
-            const dayTotal = entry.total || 0;
-            baselineTotals[index] += dayTotal;
-
-            let value = dayTotal;
-            const typeKey = SHARE_TYPE_MAP[filters.shareType];
-            if (typeKey) {
-                /* v8 ignore next */
-                value = entry.shareTypes ? entry.shareTypes[typeKey] : 0;
-            }
-
-            if (hasDay) {
-                const dayIndexValue = (date.getDay() + 6) % 7;
-                if (dayIndexValue !== filters.day) {
-                    value = 0;
-                }
-            }
-
-            if (filters.topic && filters.topic !== "all") {
-                const monthKey = dateKey.slice(0, 7);
-                const meta = monthMeta[monthKey];
-                // Activity days normally have month metadata. Use zero when it is missing.
-                /* v8 ignore next */
-                const ratio = meta ? meta.topicRatio : 0;
-                value *= ratio;
-            }
-
-            if (hasHour) {
-                const monthKey = dateKey.slice(0, 7);
-                const meta = monthMeta[monthKey];
-                // Activity days normally have month metadata. Use zero when it is missing.
-                /* v8 ignore next */
-                const ratio = meta ? meta.hourRatio : 0;
-                value *= ratio;
-            }
-
-            weeks[index].value += value;
+            baselineTotals[index] += entry.total || 0;
+            weeks[index].value += filteredDayValue(entry, dateKey, date, filters, monthMeta);
         }
 
         weeks.forEach((week) => {

@@ -548,7 +548,7 @@ help-json: ## Emit groups and commands as JSON
 
 # ─── Git @git ──────────────────────────────────────────────────────────────────────
 
-.PHONY: git branch branch-current branch-switch branch-delete branch-prune rebase cherry-pick merge log diff diff-staged stage stage-all commit push release-create
+.PHONY: git branch branch-current branch-switch branch-delete branch-delete-remote branch-prune rebase cherry-pick cherry-pick-continue cherry-pick-abort merge log diff diff-staged stage stage-all commit push release-create
 
 git: ## Git commands (make git)
 	@$(MAKE) --no-print-directory help-git
@@ -573,6 +573,12 @@ branch-delete: ## Delete a local branch (make branch-delete name=X [force=1])
 	@test -n "$$BRANCH_NAME" || (printf 'Usage: make branch-delete name=branch-name [force=1]\n' >&2; exit 1)
 	git branch $(if $(filter 1,$(value force)),-D,-d) -- "$$BRANCH_NAME"
 
+branch-delete-remote: export BRANCH_NAME := $(value name)
+branch-delete-remote: ## Delete a branch on origin (make branch-delete-remote name=X)
+	@test -n "$$BRANCH_NAME" || (printf 'Usage: make branch-delete-remote name=branch-name\n' >&2; exit 1)
+	$(if $(filter main heads/main refs/heads/main,$(value name)),$(error Refusing to delete main on origin))
+	git push --delete -- origin "$$BRANCH_NAME"
+
 # Branch names reach the helper through the environment, never interpolated
 # into the recipe, so the target holds no shell logic of its own.
 branch-prune: export PRUNE_MAIN_BRANCH := main
@@ -584,9 +590,20 @@ rebase: ## Rebase the current branch onto its remote base (make rebase base=orig
 	@test -n "$(base)" || (printf 'Usage: make rebase base=origin/main\n' >&2; exit 1)
 	git rebase "$(base)"
 
+# Refs split on whitespace with globbing off. Git's revision walker reads
+# options even after `--`, so Make refuses a word starting with `-` before any
+# shell runs.
+cherry-pick: export CHERRY_PICK_REFS := $(value ref)
 cherry-pick: ## Apply commits onto the current branch (make cherry-pick ref="sha ..." [nocommit=1])
-	@test -n "$(ref)" || (printf 'Usage: make cherry-pick ref="sha ..." [nocommit=1]\n' >&2; exit 1)
-	git cherry-pick $(if $(filter 1,$(value nocommit)),--no-commit) $(ref)
+	@test -n "$$CHERRY_PICK_REFS" || (printf 'Usage: make cherry-pick ref="sha ..." [nocommit=1]\n' >&2; exit 1)
+	$(if $(filter -%,$(value ref)),$(error Refusing option-like ref: $(firstword $(filter -%,$(value ref)))))
+	set -f; git cherry-pick $(if $(filter 1,$(value nocommit)),--no-commit) -- $$CHERRY_PICK_REFS
+
+cherry-pick-continue: ## Continue a cherry-pick after resolving conflicts
+	git cherry-pick --continue
+
+cherry-pick-abort: ## Abort an in-progress cherry-pick and restore the branch
+	git cherry-pick --abort
 
 merge: export MERGE_REF := $(value ref)
 merge: ## Merge a ref into the current branch with a merge commit (make merge ref=origin/main)

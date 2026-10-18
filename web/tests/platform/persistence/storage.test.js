@@ -520,6 +520,84 @@ describe("Storage", () => {
             expect(await (await Storage.getFile("messages")).blob.text()).toBe("v4-bytes");
         });
 
+        it("keeps the later of two same-type saves when the earlier byte read is slower", async () => {
+            await Storage.clearAll();
+            const put = IDBObjectStore.prototype.put;
+            const spy = vi
+                .spyOn(IDBObjectStore.prototype, "put")
+                .mockImplementation(function guarded(value, key) {
+                    if (value && value.blob instanceof Blob) {
+                        throw new DOMException("Error preparing Blob/File data", "UnknownError");
+                    }
+                    return put.call(this, value, key);
+                });
+            const earlier = new File(["earlier"], "Shares.csv", { type: "text/csv" });
+            const later = new File(["later"], "Shares (1).csv", { type: "text/csv" });
+            let releaseEarlier = () => {};
+            let earlierReadStarted = () => {};
+            const earlierReading = new Promise((resolve) => {
+                earlierReadStarted = resolve;
+            });
+            const earlierBytes = earlier.arrayBuffer();
+            earlier.arrayBuffer = () =>
+                new Promise((resolve) => {
+                    releaseEarlier = () => resolve(earlierBytes);
+                    earlierReadStarted();
+                });
+            try {
+                const first = Storage.saveFile("shares", {
+                    name: earlier.name,
+                    blob: earlier,
+                    rowCount: 1,
+                });
+                const second = Storage.saveFile("shares", {
+                    name: later.name,
+                    blob: later,
+                    rowCount: 1,
+                });
+                // Hold the earlier read, giving the later save time to land first if unordered.
+                await earlierReading;
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                releaseEarlier();
+                await Promise.all([first, second]);
+            } finally {
+                spy.mockRestore();
+            }
+            const file = await Storage.getFile("shares");
+            expect(file.name).toBe("Shares (1).csv");
+            expect(await file.blob.text()).toBe("later");
+        });
+
+        it("still writes a same-type save queued behind one that failed", async () => {
+            await Storage.clearAll();
+            const put = IDBObjectStore.prototype.put;
+            const spy = vi
+                .spyOn(IDBObjectStore.prototype, "put")
+                .mockImplementation(function quotaForFirst(value, key) {
+                    if (value && value.name === "first.csv") {
+                        throw new DOMException("Quota exceeded", "QuotaExceededError");
+                    }
+                    return put.call(this, value, key);
+                });
+            try {
+                const first = Storage.saveFile("shares", {
+                    name: "first.csv",
+                    text: "a",
+                    rowCount: 1,
+                });
+                const second = Storage.saveFile("shares", {
+                    name: "second.csv",
+                    text: "b",
+                    rowCount: 1,
+                });
+                await expect(first).rejects.toThrow();
+                await second;
+            } finally {
+                spy.mockRestore();
+            }
+            expect((await Storage.getFile("shares")).name).toBe("second.csv");
+        });
+
         it("returns a null blob when a record has no contents", async () => {
             await Storage.clearAll();
             await Storage.saveFile("comments", { name: "empty.csv", text: "", rowCount: 0 });

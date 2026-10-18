@@ -47,8 +47,12 @@ export interface MessageEvents {
     timestamps: Float64Array<ArrayBuffer>;
 }
 
-/** Outreach-funnel summary: who starts conversations and how often they are answered. */
-export interface OutreachSummary {
+/**
+ * Outreach-funnel summary: who starts conversations and how often they are answered.
+ * A type alias rather than an interface, so it stays assignable to the plain
+ * record `Storage.saveOutreach` stores.
+ */
+export type OutreachSummary = {
     /** Distinct conversations */
     totalConversations: number;
     /** Conversations started by self */
@@ -67,7 +71,7 @@ export interface OutreachSummary {
     received: number;
     /** sent / received, or null */
     sentReceivedRatio: number | null;
-}
+};
 
 /** Message analytics state built from cleaned rows. */
 export interface MessageState {

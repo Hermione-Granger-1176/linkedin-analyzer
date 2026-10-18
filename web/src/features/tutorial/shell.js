@@ -33,96 +33,114 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  */
 
 /**
- * Build tutorial and mini-tip DOM layers into the given handle object.
- * @param {TutorialUi} ui - Handle object populated with the built elements
+ * Create an element with a class name.
+ * @template {keyof HTMLElementTagNameMap} K
+ * @param {K} tag - Element tag name
+ * @param {string} className - Class name to set
+ * @returns {HTMLElementTagNameMap[K]} The new element
  */
-export function buildTutorialShell(ui) {
-    ui.root = document.createElement("div");
-    ui.root.className = "tutorial-layer";
-    ui.root.hidden = true;
-    ui.root.setAttribute("aria-hidden", "true");
+function createElement(tag, className) {
+    const element = document.createElement(tag);
+    element.className = className;
+    return element;
+}
 
-    ui.overlay = document.createElement("div");
-    ui.overlay.className = "tutorial-overlay";
+/**
+ * Create a tutorial control button.
+ * @param {string} variant - Button variant, which names its `tutorial-btn-*` class
+ * @param {string} label - Button text
+ * @returns {HTMLButtonElement} The new button
+ */
+function createButton(variant, label) {
+    const button = createElement("button", `tutorial-btn tutorial-btn-${variant}`);
+    button.type = "button";
+    button.textContent = label;
+    return button;
+}
 
-    ui.spotlight = document.createElement("div");
-    ui.spotlight.className = "tutorial-spotlight";
+/**
+ * Create an empty SVG path with a class name.
+ * @param {string} className - Class name to add
+ * @returns {SVGPathElement} The new path
+ */
+function createPointerPath(className) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.classList.add(className);
+    return path;
+}
 
-    ui.pointer = document.createElementNS(SVG_NS, "svg");
-    ui.pointer.classList.add("tutorial-pointer");
-    ui.pointer.setAttribute("aria-hidden", "true");
-    ui.pointer.setAttribute("viewBox", "0 0 96 96");
-    ui.pointer.setAttribute("preserveAspectRatio", "xMidYMid meet");
+/**
+ * Build the pointer SVG and its three paths into the handle object.
+ * @param {TutorialUi} ui - Handle object populated with the built elements
+ * @returns {SVGSVGElement} The pointer
+ */
+function buildPointer(ui) {
+    const pointer = document.createElementNS(SVG_NS, "svg");
+    pointer.classList.add("tutorial-pointer");
+    pointer.setAttribute("aria-hidden", "true");
+    pointer.setAttribute("viewBox", "0 0 96 96");
+    pointer.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-    ui.pointerMainPath = document.createElementNS(SVG_NS, "path");
-    ui.pointerMainPath.classList.add("tutorial-pointer-path-main");
+    ui.pointer = pointer;
+    ui.pointerMainPath = createPointerPath("tutorial-pointer-path-main");
+    ui.pointerEchoPath = createPointerPath("tutorial-pointer-path-echo");
+    ui.pointerHeadPath = createPointerPath("tutorial-pointer-head");
 
-    ui.pointerEchoPath = document.createElementNS(SVG_NS, "path");
-    ui.pointerEchoPath.classList.add("tutorial-pointer-path-echo");
+    pointer.appendChild(ui.pointerEchoPath);
+    pointer.appendChild(ui.pointerMainPath);
+    pointer.appendChild(ui.pointerHeadPath);
+    return pointer;
+}
 
-    ui.pointerHeadPath = document.createElementNS(SVG_NS, "path");
-    ui.pointerHeadPath.classList.add("tutorial-pointer-head");
+/**
+ * Build the popover footer: the step counter and dots, then the Back, Next, and Skip buttons.
+ * @param {TutorialUi} ui - Handle object populated with the built elements
+ * @returns {HTMLDivElement} The footer
+ */
+function buildFooter(ui) {
+    const footer = createElement("div", "tutorial-footer");
 
-    ui.pointer.appendChild(ui.pointerEchoPath);
-    ui.pointer.appendChild(ui.pointerMainPath);
-    ui.pointer.appendChild(ui.pointerHeadPath);
-
-    ui.popover = document.createElement("section");
-    ui.popover.className = "tutorial-popover";
-    ui.popover.hidden = true;
-    ui.popover.setAttribute("role", "dialog");
-    ui.popover.setAttribute("aria-modal", "true");
-    ui.popover.setAttribute("aria-labelledby", "tutorialPopoverTitle");
-    ui.popover.setAttribute("aria-describedby", "tutorialPopoverBody");
-    ui.popover.tabIndex = -1;
-
-    ui.title = document.createElement("h3");
-    ui.title.className = "tutorial-title";
-    ui.title.id = "tutorialPopoverTitle";
-
-    ui.body = document.createElement("p");
-    ui.body.className = "tutorial-text";
-    ui.body.id = "tutorialPopoverBody";
-
-    const footer = document.createElement("div");
-    footer.className = "tutorial-footer";
-
-    const progress = document.createElement("div");
-    progress.className = "tutorial-progress";
-
-    ui.counter = document.createElement("span");
-    ui.counter.className = "tutorial-counter";
-
-    ui.dots = document.createElement("div");
-    ui.dots.className = "tutorial-dots";
-
+    const progress = createElement("div", "tutorial-progress");
+    ui.counter = createElement("span", "tutorial-counter");
+    ui.dots = createElement("div", "tutorial-dots");
     progress.appendChild(ui.counter);
     progress.appendChild(ui.dots);
 
-    const controls = document.createElement("div");
-    controls.className = "tutorial-controls";
-
-    ui.backButton = document.createElement("button");
-    ui.backButton.type = "button";
-    ui.backButton.className = "tutorial-btn tutorial-btn-back";
-    ui.backButton.textContent = "Back";
-
-    ui.nextButton = document.createElement("button");
-    ui.nextButton.type = "button";
-    ui.nextButton.className = "tutorial-btn tutorial-btn-next";
-    ui.nextButton.textContent = "Next";
-
-    ui.skipButton = document.createElement("button");
-    ui.skipButton.type = "button";
-    ui.skipButton.className = "tutorial-btn tutorial-btn-skip";
-    ui.skipButton.textContent = "Skip";
-
+    const controls = createElement("div", "tutorial-controls");
+    ui.backButton = createButton("back", "Back");
+    ui.nextButton = createButton("next", "Next");
+    ui.skipButton = createButton("skip", "Skip");
     controls.appendChild(ui.backButton);
     controls.appendChild(ui.nextButton);
     controls.appendChild(ui.skipButton);
 
     footer.appendChild(progress);
     footer.appendChild(controls);
+    return footer;
+}
+
+/**
+ * Build the popover dialog with its mascot, title, text, and footer.
+ * @param {TutorialUi} ui - Handle object populated with the built elements
+ * @returns {HTMLElement} The popover
+ */
+function buildPopover(ui) {
+    const popover = createElement("section", "tutorial-popover");
+    popover.hidden = true;
+    popover.setAttribute("role", "dialog");
+    popover.setAttribute("aria-modal", "true");
+    popover.setAttribute("aria-labelledby", "tutorialPopoverTitle");
+    popover.setAttribute("aria-describedby", "tutorialPopoverBody");
+    popover.tabIndex = -1;
+    ui.popover = popover;
+
+    ui.title = createElement("h3", "tutorial-title");
+    ui.title.id = "tutorialPopoverTitle";
+
+    ui.body = createElement("p", "tutorial-text");
+    ui.body.id = "tutorialPopoverBody";
+
+    const footer = buildFooter(ui);
 
     // Pip leads the popover children and is positioned out of flow, so he adds
     // nothing to the card's own size and the focus trap never sees him. The
@@ -132,19 +150,36 @@ export function buildTutorialShell(ui) {
     // stands in changes with the step.
     ui.mascot = buildTutorialMascot();
 
-    ui.popover.appendChild(ui.mascot);
-    ui.popover.appendChild(ui.title);
-    ui.popover.appendChild(ui.body);
-    ui.popover.appendChild(footer);
+    popover.appendChild(ui.mascot);
+    popover.appendChild(ui.title);
+    popover.appendChild(ui.body);
+    popover.appendChild(footer);
+    return popover;
+}
 
-    ui.root.appendChild(ui.overlay);
-    ui.root.appendChild(ui.spotlight);
+/**
+ * Build tutorial and mini-tip DOM layers into the given handle object.
+ * @param {TutorialUi} ui - Handle object populated with the built elements
+ */
+export function buildTutorialShell(ui) {
+    const root = createElement("div", "tutorial-layer");
+    root.hidden = true;
+    root.setAttribute("aria-hidden", "true");
+    ui.root = root;
 
-    ui.miniTipsLayer = document.createElement("div");
-    ui.miniTipsLayer.className = "tutorial-mini-layer";
+    ui.overlay = createElement("div", "tutorial-overlay");
+    ui.spotlight = createElement("div", "tutorial-spotlight");
 
-    document.body.appendChild(ui.root);
-    document.body.appendChild(ui.popover);
-    document.body.appendChild(ui.pointer);
+    const pointer = buildPointer(ui);
+    const popover = buildPopover(ui);
+
+    root.appendChild(ui.overlay);
+    root.appendChild(ui.spotlight);
+
+    ui.miniTipsLayer = createElement("div", "tutorial-mini-layer");
+
+    document.body.appendChild(root);
+    document.body.appendChild(popover);
+    document.body.appendChild(pointer);
     document.body.appendChild(ui.miniTipsLayer);
 }

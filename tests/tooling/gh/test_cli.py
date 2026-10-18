@@ -150,6 +150,25 @@ def test_ci_failures_defaults_to_the_latest_run(monkeypatch: pytest.MonkeyPatch)
     assert calls == [((None,), {})]
 
 
+def test_latest_run_id_prints_the_branch_run_id(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """latest-run-id prints only the id of the branch's newest run."""
+    run = ci_status.RunInfo(
+        run_id=4242,
+        status="completed",
+        conclusion="success",
+        workflow="CI",
+        branch="feature",
+        url="https://example.com/runs/4242",
+    )
+    calls = _record(monkeypatch, ci_status, "latest_run", run)
+
+    assert cli.main(["latest-run-id"]) == 0
+    assert calls == [((), {})]
+    assert capsys.readouterr().out.strip() == "4242"
+
+
 def test_list_json_emits_parseable_threads(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

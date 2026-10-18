@@ -162,6 +162,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ci_parser.add_argument("--run", type=int, help="Run id (default: latest for this branch)")
 
+    subparsers.add_parser(
+        "latest-run-id", help="Print the latest workflow run id for the current branch"
+    )
+
     return parser
 
 
@@ -293,6 +297,12 @@ def _handle_ci_failures(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_latest_run_id(_args: argparse.Namespace) -> int:
+    """Print the latest workflow run id for the current branch."""
+    print(ci_status.latest_run().run_id)
+    return 0
+
+
 COMMAND_HANDLERS = {
     "list": _handle_list,
     "reply": _handle_reply,
@@ -308,6 +318,7 @@ COMMAND_HANDLERS = {
     "check-commit-message": _handle_check_commit_message,
     "watch": _handle_watch,
     "ci-failures": _handle_ci_failures,
+    "latest-run-id": _handle_latest_run_id,
 }
 
 

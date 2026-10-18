@@ -38,6 +38,9 @@ PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}
 # below are thin wrappers; the testable logic (repo and PR auto-detection,
 # GraphQL, CI triage) lives in Python.
 GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
+# The run the Actions targets act on: run=ID, or else this branch's newest run.
+# The lookup only happens when a recipe that uses it runs without run=.
+RUN_ID = $(if $(run),$(run),$(strip $(shell $(GH) latest-run-id 2>/dev/null)))
 # ─── Free text ────────────────────────────────────────────────────────────────
 #
 # A body is read from standard input. That is the only way in, so no target
@@ -706,13 +709,16 @@ ci-runs: ## List recent CI workflow runs
 # it cannot say anything about a run that is hanging. This reports per-job
 # status and elapsed time while the run is still going, which is what tells a
 # stuck job apart from a slow one.
-ci-jobs: ## Show per-job status for a run, including one still in progress (make ci-jobs run=ID)
-	@test -n "$(run)" || (printf 'Usage: make ci-jobs run=123456\n' >&2; exit 1)
-	gh run view "$(run)" --json jobs \
+ci-jobs: ## Show per-job status for a run, including one still in progress (make ci-jobs [run=ID], defaults to this branch's latest)
+	@run_id="$(RUN_ID)"; \
+	test -n "$$run_id" || { printf 'Usage: make ci-jobs run=123456 (or run on a branch with a resolvable latest run)\n' >&2; exit 1; }; \
+	gh run view "$$run_id" --json jobs \
 		--template '{{range .jobs}}{{printf "%-12s %-10s %-8s %s\n" .status .conclusion .startedAt .name}}{{end}}'
 
-ci-watch: ## Watch the latest CI run until done
-	gh run watch
+ci-watch: ## Watch a CI run until done and fail if it fails (make ci-watch [run=ID], defaults to this branch's latest)
+	@run_id="$(RUN_ID)"; \
+	test -n "$$run_id" || { printf 'Usage: make ci-watch run=123456 (or run on a branch with a resolvable latest run)\n' >&2; exit 1; }; \
+	gh run watch "$$run_id" --exit-status
 
 ci-failures: ## Show failed-step logs for this branch's latest run (make ci-failures [run=ID])
 	@$(GH) ci-failures $(if $(run),--run "$(run)")
@@ -723,9 +729,10 @@ ci-cancel: ## Cancel a workflow run that is still in progress (make ci-cancel ru
 	@test -n "$(run)" || (printf 'Usage: make ci-cancel run=123456\n' >&2; exit 1)
 	gh run cancel "$(run)"
 
-ci-rerun: ## Re-run a workflow run (make ci-rerun run=ID [failed=1])
-	@test -n "$(run)" || (printf 'Usage: make ci-rerun run=123456 [failed=1]\n' >&2; exit 1)
-	gh run rerun "$(run)" $(if $(filter 1,$(failed)),--failed)
+ci-rerun: ## Re-run a workflow run (make ci-rerun [run=ID] [failed=1], defaults to this branch's latest)
+	@run_id="$(RUN_ID)"; \
+	test -n "$$run_id" || { printf 'Usage: make ci-rerun run=123456 [failed=1] (or run on a branch with a resolvable latest run)\n' >&2; exit 1; }; \
+	gh run rerun "$$run_id" $(if $(filter 1,$(failed)),--failed)
 
 ci-dispatch: ## Start a workflow run (make ci-dispatch workflow=dependency-audit.yml [ref=branch] [inputs="key=value ..."])
 	@test -n "$(workflow)" || (printf 'Usage: make ci-dispatch workflow=dependency-audit.yml [ref=branch] [inputs="key=value ..."]\n' >&2; exit 1)

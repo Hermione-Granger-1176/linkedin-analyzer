@@ -66,4 +66,6 @@ When the watcher finishes, run `make pr-summary` and `make pr-review-comments`. 
 
 Finish when the latest Copilot review recommends approval, no new actionable comments exist, no threads remain open, and the required checks pass. Historical resolved threads and suppressed notes do not block completion.
 
+A verdict such as "Changes recommended" or "Needs a closer look" is not approval, even with no open threads. Copilot can describe a finding in the overview without opening a thread, so read it with `make pr-comments` and treat each finding like an open thread.
+
 If another round produces actionable comments, repeat the loop. Stop and report the conflict if the same finding returns after two verified fixes or if resolving it would expand the change's scope.

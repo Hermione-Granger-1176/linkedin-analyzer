@@ -15,7 +15,7 @@ import { LinkedInCleaner } from "./cleaner.js";
 import { cleanedCsvName } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
-/** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+/** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
 
 /**
  * The previewed clean of one stored upload.
@@ -83,7 +83,7 @@ export const CleanPage = (() => {
         connections: null,
     };
 
-    /** @type {Record<string, StoredFileMetadata|null>} */
+    /** @type {Record<string, CachedFileMetadata|null>} */
     const storedFiles = {
         shares: null,
         comments: null,
@@ -162,7 +162,7 @@ export const CleanPage = (() => {
     async function loadFiles() {
         await Session.waitForCleanup();
 
-        let files = /** @type {StoredFileMetadata[]|null} */ (
+        let files = /** @type {CachedFileMetadata[]|null} */ (
             DataCache.get("storage:files") || null
         );
         if (!files) {

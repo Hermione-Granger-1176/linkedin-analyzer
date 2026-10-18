@@ -196,7 +196,7 @@ const LIMITS = Object.freeze({
  */
 
 /**
- * @typedef {object} StoredFileMetadata
+ * @typedef {object} CachedFileMetadata
  * @property {string} type - File type
  * @property {string} name - File name
  * @property {number} rowCount - Stored row count
@@ -840,7 +840,7 @@ export function parseStoredUploadFile(file) {
  * retained in memory across the whole session.
  * @param {{type: string, name: string, rowCount?: number, updatedAt?: number}} file - Stored
  * file record
- * @returns {StoredFileMetadata}
+ * @returns {CachedFileMetadata}
  */
 export function toStoredFileMetadata(file) {
     return {

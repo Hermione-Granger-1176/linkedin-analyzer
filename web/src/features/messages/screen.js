@@ -44,7 +44,7 @@ export const MessagesPage = (() => {
     /** @typedef {import("./relationships.js").RangeContact} RangeContact */
     /** @typedef {import("./relationships.js").FadingConversation} FadingConversation */
     /** @typedef {import("../../app/worker-contracts.js").StoredUploadFile} StoredUploadFile */
-    /** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+    /** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
 
     /**
      * Computed page state cached per dataset signature.
@@ -190,7 +190,7 @@ export const MessagesPage = (() => {
                 DataCache.get("storage:file:connections") || null,
                 "connections",
             );
-            let files = /** @type {StoredFileMetadata[]|null} */ (
+            let files = /** @type {CachedFileMetadata[]|null} */ (
                 DataCache.get("storage:files") || null
             );
 

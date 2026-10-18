@@ -73,11 +73,11 @@ export function formatShortDate(timestamp) {
     return SHORT_DATE_FORMATTER.format(new Date(timestamp));
 }
 
-/** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+/** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
 
 /**
  * Uploaded file fields that identify one version of an upload.
- * @typedef {Pick<StoredFileMetadata, "name" | "updatedAt" | "rowCount">} FileSignatureSource
+ * @typedef {Pick<CachedFileMetadata, "name" | "updatedAt" | "rowCount">} FileSignatureSource
  */
 
 /**

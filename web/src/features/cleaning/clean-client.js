@@ -185,7 +185,8 @@ export function requestClean(payload) {
 
 // Clearing stored data must not leave the last file's cleaned rows in memory.
 DataCache.subscribe((event) => {
-    if (/** @type {{type?: string}} */ (event).type === "storageCleared") {
+    const type = /** @type {{type?: string}|null} */ (event)?.type;
+    if (type === "storageCleared") {
         clearCount += 1;
         terminateCleanWorker(cancelled());
         resetCleanJob();

@@ -349,8 +349,10 @@ export const ScreenManager = (() => {
         });
     }
 
-    /** Human-readable screen names for the route announcer. */
-    /** @type {Readonly<Record<string, string>>} */
+    /**
+     * Human-readable screen names for the route announcer.
+     * @type {Readonly<Record<string, string>>}
+     */
     const ROUTE_LABELS = Object.freeze({
         home: "Home",
         clean: "Clean",

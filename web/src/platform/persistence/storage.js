@@ -34,8 +34,8 @@ const ANALYTICS_SCHEMA_VERSION = 2;
  * @typedef {object} RawStoredFileRecord
  * @property {string} type - File type key
  * @property {string} name - Uploaded file name
- * @property {unknown} [blob] - Stored Blob, or its bytes where IndexedDB refused the Blob (version 4)
- * @property {unknown} [text] - Legacy CSV text (before version 4)
+ * @property {unknown} [blob] - Stored Blob, or its bytes where IndexedDB refused the Blob
+ * @property {unknown} [text] - Legacy CSV text, from before the DB version 4 blob store
  * @property {number} [size] - Content size in bytes
  * @property {number} [rowCount] - Processed row count
  * @property {number} [updatedAt] - Last update timestamp (ms)
@@ -50,7 +50,7 @@ const ANALYTICS_SCHEMA_VERSION = 2;
  * @property {"base"|"outreach"} id - Record key
  * @property {number} updatedAt - Last update timestamp (ms)
  * @property {number} schemaVersion - Record schema version
- * @property {object} data - Stored analytics or outreach data
+ * @property {StoredAnalytics} data - Stored analytics or outreach data
  */
 
 /**
@@ -59,17 +59,18 @@ const ANALYTICS_SCHEMA_VERSION = 2;
  * @property {(type: string, data: StoredFileInput) => Promise<void>} saveFile - Save a file
  * @property {(type: string) => Promise<StoredFile|null>} getFile - Read one file
  * @property {() => Promise<StoredFileMetadata[]>} getAllFiles - List file metadata
- * @property {(base: object) => Promise<void>} saveAnalytics - Save analytics
+ * @property {(base: StoredAnalytics) => Promise<void>} saveAnalytics - Save analytics
  * @property {() => Promise<StoredAnalytics|null>} getAnalytics - Read analytics
- * @property {(outreach: object) => Promise<void>} saveOutreach - Save outreach summary
+ * @property {(outreach: StoredAnalytics) => Promise<void>} saveOutreach - Save outreach summary
  * @property {() => Promise<StoredAnalytics|null>} getOutreach - Read outreach summary
  * @property {() => Promise<void>} clearAll - Clear everything
  */
 
 /**
- * Wrap stored CSV contents as a File: text from a record stored before version
- * 3, or the bytes a browser that refuses Blobs in IndexedDB stored instead. Every
- * reader receives the same shape whichever path wrote the record.
+ * Wrap stored CSV contents as a File: text from a record stored before the DB
+ * version 4 blob store, or the bytes a browser that refuses Blobs in IndexedDB
+ * stored instead. Every reader receives the same shape whichever path wrote the
+ * record.
  * @param {string|ArrayBuffer} text - Stored CSV text or bytes
  * @param {string} name - Stored file name
  * @returns {Blob}
@@ -201,7 +202,7 @@ function buildFilePayload(type, data) {
 
 /**
  * Wrap analytics data in its store record.
- * @param {object} base - Analytics aggregate base
+ * @param {StoredAnalytics} base - Analytics aggregate base
  * @returns {AnalyticsRecord}
  */
 function buildAnalyticsPayload(base) {
@@ -215,7 +216,7 @@ function buildAnalyticsPayload(base) {
 
 /**
  * Wrap the outreach summary in its store record.
- * @param {object} outreach - Outreach summary
+ * @param {StoredAnalytics} outreach - Outreach summary
  * @returns {AnalyticsRecord}
  */
 function buildOutreachPayload(outreach) {
@@ -700,7 +701,7 @@ export const Storage = (() => {
 
     /**
      * Save pre-computed analytics aggregates.
-     * @param {object} base - Serialized analytics data from the worker
+     * @param {StoredAnalytics} base - Serialized analytics data from the worker
      * @returns {Promise<void>}
      */
     function saveAnalytics(base) {
@@ -735,7 +736,7 @@ export const Storage = (() => {
      * Persist the lifetime outreach-funnel summary so the Insights page can show
      * it without loading the message export. The payload is a small numeric
      * object, shares the analytics store, and is keyed separately from "base".
-     * @param {object} outreach - Outreach summary from the messages worker
+     * @param {StoredAnalytics} outreach - Outreach summary from the messages worker
      * @returns {Promise<void>}
      */
     function saveOutreach(outreach) {

@@ -26,7 +26,7 @@ import {
     hasAnalyticsMonths,
 } from "./state.js";
 
-/** @typedef {import("../../app/worker-contracts.js").StoredFileMetadata} StoredFileMetadata */
+/** @typedef {import("../../app/worker-contracts.js").CachedFileMetadata} CachedFileMetadata */
 /** @typedef {import("../../app/worker-contracts.js").FileProcessedPayload} FileProcessedPayload */
 /** @typedef {import("../../app/worker-contracts.js").PlainObject} PlainObject */
 /** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
@@ -224,7 +224,7 @@ export const UploadPage = (() => {
         if (!worker) {
             return;
         }
-        const cachedFiles = /** @type {StoredFileMetadata[]|undefined} */ (
+        const cachedFiles = /** @type {CachedFileMetadata[]|undefined} */ (
             DataCache.get("storage:files")
         );
         if (cachedFiles) {
@@ -378,7 +378,7 @@ export const UploadPage = (() => {
 
     /** Sync upload status from cache when available, otherwise restore from storage. */
     function syncStatusFromCache() {
-        const files = /** @type {StoredFileMetadata[]|undefined} */ (
+        const files = /** @type {CachedFileMetadata[]|undefined} */ (
             DataCache.get("storage:files")
         );
         const analyticsReady = getAnalyticsReadyFromCache();
@@ -828,7 +828,7 @@ export const UploadPage = (() => {
     /**
      * Sync type-specific file cache entries.
      * @param {string} fileType - Processed file type
-     * @param {StoredFileMetadata[]} files - Stored files snapshot
+     * @param {CachedFileMetadata[]} files - Stored files snapshot
      */
     function syncTypeSpecificFileCache(fileType, files) {
         const key = getTypeSpecificFileCacheKey(fileType);
@@ -847,10 +847,10 @@ export const UploadPage = (() => {
 
     /**
      * Read files from cache when available, otherwise from storage.
-     * @returns {Promise<StoredFileMetadata[]>}
+     * @returns {Promise<CachedFileMetadata[]>}
      */
     async function getStoredFilesSnapshot() {
-        const files = /** @type {StoredFileMetadata[]|undefined} */ (
+        const files = /** @type {CachedFileMetadata[]|undefined} */ (
             DataCache.get("storage:files")
         );
         if (files) {
@@ -1022,7 +1022,7 @@ export const UploadPage = (() => {
      * @returns {Promise<void>}
      */
     async function primeWorkerFromStoredFiles() {
-        let cachedFiles = /** @type {StoredFileMetadata[]|undefined} */ (
+        let cachedFiles = /** @type {CachedFileMetadata[]|undefined} */ (
             DataCache.get("storage:files")
         );
         if (!cachedFiles) {

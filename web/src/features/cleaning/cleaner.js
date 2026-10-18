@@ -96,7 +96,7 @@ const CLEANING_PLANS = Object.freeze(
             fileType,
             CONFIGS[fileType].columns.map((column) => ({
                 name: column.name,
-                clean: column.cleaner ? CLEANERS[column.cleaner] : cleanValue,
+                clean: (column.cleaner && CLEANERS[column.cleaner]) || cleanValue,
             })),
         ]),
     ),

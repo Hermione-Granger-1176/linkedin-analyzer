@@ -499,6 +499,8 @@ export const UploadPage = (() => {
         } catch (error) {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
+            // The worker may be missing stored files, so this upload cannot mark them primed.
+            primeFailed = true;
         }
         // Files dropped before a Clear that ran during the priming await went
         // with it; Clear has already reset the overlay and the jobs.
@@ -512,7 +514,6 @@ export const UploadPage = (() => {
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
-            scheduleJobTimeout(jobId, file);
             // The worker reads the File itself. Posting a File clones a
             // reference to its bytes, so the page never holds the text; the
             // page keeps the File to store once the worker accepts it.
@@ -540,6 +541,7 @@ export const UploadPage = (() => {
                 setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
             }
         });
+        armRunningJobTimeout();
     }
 
     /**
@@ -674,13 +676,19 @@ export const UploadPage = (() => {
         const jobId = payload.jobId || null;
         const rowCount = payload.rowCount || 0;
         const pending = consumePendingFile(pendingFiles, jobId, fileName);
+        // The worker has moved on to the next queued file.
+        armRunningJobTimeout();
 
         if (!fileType) {
-            setHint(payload.error || "File could not be processed.", true);
+            const generation = clearGeneration;
             // A reply with no pending job outlived a Clear, so its analytics
             // describe data that is gone.
             if (pending) {
                 await persistAnalyticsOnly(payload.analyticsBase);
+            }
+            // Set after the save, whose status update would replace it.
+            if (generation === clearGeneration) {
+                setHint(payload.error || "File could not be processed.", true);
             }
             completeJob(jobId, fileName);
             return;
@@ -783,7 +791,20 @@ export const UploadPage = (() => {
         analyticsBase,
         generation,
     ) {
-        await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+        try {
+            await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+        } catch (error) {
+            // A batch's analytics ride on its last reply. When that file is not
+            // an analytics input, they still describe the files that are stored.
+            if (
+                analyticsBase &&
+                !ANALYTICS_SOURCE_TYPES.has(fileType) &&
+                generation === clearGeneration
+            ) {
+                await persistAnalyticsOnly(analyticsBase);
+            }
+            throw error;
+        }
         if (!analyticsBase || generation !== clearGeneration) {
             return;
         }
@@ -942,13 +963,23 @@ export const UploadPage = (() => {
         pendingFiles.delete(resolvedJobId);
         clearJobTimeout(resolvedJobId);
         activeJobs.delete(resolvedJobId);
-        // The worker takes jobs one at a time, so a job still waiting on it has
-        // spent its watchdog behind this one. Restart those so each is timed
-        // from when it can start; the job now running still stops a stall.
-        pendingFiles.forEach((entry, waitingJobId) => {
-            scheduleJobTimeout(waitingJobId, entry.file);
-        });
+        armRunningJobTimeout();
         checkJobs();
+    }
+
+    /**
+     * Time the job the worker is running. The worker takes jobs one at a time
+     * in the order they were posted, so only the oldest unanswered job is
+     * running; the ones behind it are timed from when they start, and a small
+     * file is not cut off while a large one ahead of it uses its allowance.
+     */
+    function armRunningJobTimeout() {
+        const running = pendingFiles.entries().next();
+        if (running.done || jobTimeouts.has(running.value[0])) {
+            return;
+        }
+        const [jobId, entry] = running.value;
+        scheduleJobTimeout(jobId, entry.file);
     }
 
     /**

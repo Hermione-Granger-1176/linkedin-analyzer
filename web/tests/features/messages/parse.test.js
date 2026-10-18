@@ -123,4 +123,18 @@ describe("messages parse worker lifecycle", () => {
         await expect(second).resolves.toEqual({ success: true });
         expect(workers[0].terminate).toHaveBeenCalledTimes(1);
     });
+
+    it("keeps the worker while an older request is still parsing", async () => {
+        const { processFiles } = await loadParse();
+        const first = processFiles("a", null);
+        const second = processFiles("b", null);
+
+        workers[0].reply(2);
+        await expect(second).resolves.toEqual({ success: true });
+        expect(workers[0].terminate).not.toHaveBeenCalled();
+
+        workers[0].reply(1);
+        await expect(first).resolves.toEqual({ success: true });
+        expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+    });
 });

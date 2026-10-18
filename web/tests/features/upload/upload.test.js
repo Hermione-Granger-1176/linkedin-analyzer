@@ -695,6 +695,53 @@ describe("UploadPage", () => {
         }
     });
 
+    it("does not time out a queued upload while a large file ahead of it runs", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+        try {
+            UploadPage.init();
+            await vi.runAllTimersAsync();
+
+            const first = new File(["csv"], "Shares.csv", { type: "text/csv" });
+            // 20 MiB earns 30 s plus 5 s a megabyte, well past the 45 s floor.
+            Object.defineProperty(first, "size", { value: 20 * 1024 * 1024 });
+            const second = new File(["csv"], "Comments.csv", { type: "text/csv" });
+            const input = document.getElementById("multiFileInput");
+            Object.defineProperty(input, "files", { value: [first, second] });
+            input.dispatchEvent(new Event("change"));
+            await vi.advanceTimersByTimeAsync(0);
+
+            const firstJob = workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .find(
+                    (message) =>
+                        message.type === "addFile" && message.payload.fileName === "Shares.csv",
+                );
+
+            // Past the small file's own allowance, inside the large file's.
+            await vi.advanceTimersByTimeAsync(60000);
+            const hint = document.getElementById("uploadHint");
+            expect(hint.textContent).not.toContain("Processing took too long");
+
+            await workerInstance.listeners.message[0]({
+                data: {
+                    type: "fileProcessed",
+                    payload: {
+                        fileType: "shares",
+                        fileName: "Shares.csv",
+                        rowCount: 2,
+                        jobId: firstJob.payload.jobId,
+                    },
+                },
+            });
+            await vi.advanceTimersByTimeAsync(46000);
+            expect(hint.textContent).toContain("Processing took too long for Comments.csv");
+        } finally {
+            Math.random.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+
     it("skips files above hard upload limit", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1152,6 +1199,39 @@ describe("UploadPage", () => {
             expect(DataCache.set).toHaveBeenCalledWith("storage:analyticsBase", BASE);
             expect(DataCache.notify).toHaveBeenCalledWith({ type: "analyticsChanged" });
             expect(Storage.saveFile).not.toHaveBeenCalled();
+            expect(document.getElementById("uploadHint").textContent).toContain("bad");
+        });
+
+        it("stores the batch's analytics when an unrelated last file cannot be stored", async () => {
+            Storage.saveFile.mockRejectedValue(new Error("disk"));
+            const jobId = await upload();
+            await reply({
+                fileType: "messages",
+                fileName: "x.csv",
+                rowCount: 1,
+                analyticsBase: BASE,
+                jobId,
+            });
+
+            expect(Storage.saveAnalytics).toHaveBeenCalledWith(BASE);
+            expect(DataCache.set).toHaveBeenCalledWith("storage:analyticsBase", BASE);
+            expect(document.getElementById("uploadHint").textContent).toContain(
+                "Error saving file data",
+            );
+        });
+
+        it("keeps the analytics out of storage when their own file cannot be stored", async () => {
+            Storage.saveFile.mockRejectedValue(new Error("disk"));
+            const jobId = await upload();
+            await reply({
+                fileType: "shares",
+                fileName: "x.csv",
+                rowCount: 1,
+                analyticsBase: BASE,
+                jobId,
+            });
+
+            expect(Storage.saveAnalytics).not.toHaveBeenCalled();
         });
 
         it("drops the analytics of a reply that outlived a Clear", async () => {
@@ -2116,6 +2196,66 @@ describe("UploadPage", () => {
 
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
+        const input = document.getElementById("multiFileInput");
+        const upload = async (name) => {
+            const file = new File(["col\nval"], name, { type: "text/csv" });
+            Object.defineProperty(input, "files", { value: [file], configurable: true });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+
+        await upload("Comments.csv");
+        const stored = [
+            { type: "shares", name: "Shares.csv", rowCount: 2, updatedAt: 10 },
+            { type: "comments", name: "Comments.csv", rowCount: 1, updatedAt: 20 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(stored);
+        cachedFiles = stored;
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "comments",
+                    fileName: "Comments.csv",
+                    rowCount: 1,
+                    jobId: null,
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        Storage.getFile.mockResolvedValue({ type: "shares", blob: new Blob(["s"]) });
+
+        await upload("Connections.csv");
+
+        const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
+        expect(types).toEqual(["addFile", "restoreFiles", "addFile"]);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("primes again after an upload whose stored file list did not load", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        // The prime before the first upload cannot list the stored files, so
+        // the worker that processes comments does not hold the stored shares.
+        let cachedFiles = null;
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        Storage.getAllFiles.mockRejectedValueOnce(new Error("storage offline"));
         const input = document.getElementById("multiFileInput");
         const upload = async (name) => {
             const file = new File(["col\nval"], name, { type: "text/csv" });

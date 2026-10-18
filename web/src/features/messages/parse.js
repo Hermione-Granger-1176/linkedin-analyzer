@@ -26,6 +26,8 @@ import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
 /** @type {Worker|null} */
 let parseWorker = null;
 let parseWorkerRequestId = 0;
+/** Requests the current worker has not answered yet. */
+const pendingRequestIds = new Set();
 /** @type {number|null} */
 let parseWorkerTimeoutId = null;
 
@@ -55,6 +57,7 @@ export function terminateWorker() {
     }
     parseWorker.terminate();
     parseWorker = null;
+    pendingRequestIds.clear();
     clearWorkerTimeout();
 }
 
@@ -124,6 +127,7 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
 
     return new Promise((resolve) => {
         clearWorkerTimeout();
+        pendingRequestIds.add(requestId);
         /** @param {MessageEvent} event - Worker message event */
         const handleMessage = (event) => {
             const parsed = parseMessagesWorkerMessage(event.data || {});
@@ -144,9 +148,10 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
             }
             finishRequest();
             // The page keeps the state it was sent, and an idle worker can hold
-            // the parse's garbage for minutes, so let it go unless a newer
-            // request is already on its way to the same worker.
-            if (requestId === parseWorkerRequestId) {
+            // the parse's garbage for minutes, so let it go once no other
+            // request is still waiting on the same worker. Parses run
+            // concurrently, so a newer one can answer before an older one.
+            if (pendingRequestIds.size === 0) {
                 terminateWorker();
             }
             resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
@@ -184,6 +189,7 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
         };
 
         const finishRequest = () => {
+            pendingRequestIds.delete(requestId);
             removeWorkerListeners();
             clearWorkerTimeout();
         };

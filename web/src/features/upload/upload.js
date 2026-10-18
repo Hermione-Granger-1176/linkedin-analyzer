@@ -103,6 +103,12 @@ export const UploadPage = (() => {
     // Saves still writing a processed upload. Clear waits for them so a save
     // that began before it cannot write the upload back afterwards.
     const pendingSaves = new Set();
+    // Saves of analytics inputs still writing. A batch's analytics wait for
+    // them, so an aggregate is never stored over an input storage lacks.
+    /** @type {Set<Promise<void>>} */
+    const analyticsInputSaves = new Set();
+    // True once an analytics input in the running batch failed to save.
+    let analyticsInputFailed = false;
     // Bumped by Clear, so a save that began before it skips its analytics,
     // cache and status continuations.
     let clearGeneration = 0;
@@ -676,6 +682,8 @@ export const UploadPage = (() => {
         const jobId = payload.jobId || null;
         const rowCount = payload.rowCount || 0;
         const pending = consumePendingFile(pendingFiles, jobId, fileName);
+        // A restart while this reply is saved replaces the worker it describes.
+        const replyWorker = worker;
         // The worker has moved on to the next queued file.
         armRunningJobTimeout();
 
@@ -729,7 +737,7 @@ export const UploadPage = (() => {
                     : "File loaded successfully.",
                 false,
             );
-            if (ANALYTICS_SOURCE_TYPES.has(fileType) && !primeFailed) {
+            if (ANALYTICS_SOURCE_TYPES.has(fileType) && !primeFailed && worker === replyWorker) {
                 // The worker that processed this file already holds it along
                 // with the rest of the stored set, so record that set as primed
                 // instead of having the worker read and parse it all again.
@@ -791,8 +799,12 @@ export const UploadPage = (() => {
         analyticsBase,
         generation,
     ) {
+        const fileSave = Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+        if (ANALYTICS_SOURCE_TYPES.has(fileType)) {
+            trackAnalyticsInputSave(fileSave);
+        }
         try {
-            await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+            await fileSave;
         } catch (error) {
             // A batch's analytics ride on its last reply. When that file is not
             // an analytics input, they still describe the files that are stored.
@@ -808,7 +820,38 @@ export const UploadPage = (() => {
         if (!analyticsBase || generation !== clearGeneration) {
             return;
         }
+        if (!(await analyticsInputsStored()) || generation !== clearGeneration) {
+            return;
+        }
         await Storage.saveAnalytics(analyticsBase);
+    }
+
+    /**
+     * Track the save of an analytics input, so the batch's analytics wait for
+     * it. A failed save leaves the worker holding an input storage lacks, so
+     * the worker is primed again from storage before the next upload.
+     * @param {Promise<unknown>} save - Storage.saveFile promise
+     */
+    function trackAnalyticsInputSave(save) {
+        const settled = save.then(
+            () => {},
+            () => {
+                analyticsInputFailed = true;
+                lastPrimedSignature = null;
+                primeFailed = true;
+            },
+        );
+        analyticsInputSaves.add(settled);
+        settled.then(() => analyticsInputSaves.delete(settled));
+    }
+
+    /**
+     * Wait for the analytics inputs still saving.
+     * @returns {Promise<boolean>} Whether every input in the batch was stored
+     */
+    async function analyticsInputsStored() {
+        await Promise.all(analyticsInputSaves);
+        return !analyticsInputFailed;
     }
 
     /**
@@ -823,6 +866,11 @@ export const UploadPage = (() => {
             return;
         }
         const generation = clearGeneration;
+        // An input the aggregate counts did not reach storage, so the stored
+        // analytics stay as they were rather than describe it.
+        if (!(await analyticsInputsStored()) || generation !== clearGeneration) {
+            return;
+        }
         const save = Storage.saveAnalytics(analyticsBase);
         // Clear waits for this save, so it cannot write analytics back after the wipe.
         pendingSaves.add(save);
@@ -1318,6 +1366,7 @@ export const UploadPage = (() => {
     /** Hide progress overlay when all active jobs complete. */
     function checkJobs() {
         if (activeJobs.size === 0) {
+            analyticsInputFailed = false;
             UploadProgress.hide();
             RunTracker.finish();
         }
@@ -1330,6 +1379,7 @@ export const UploadPage = (() => {
         pendingFiles.clear();
         clearAllJobTimeouts();
         activeJobs.clear();
+        analyticsInputFailed = false;
         UploadProgress.hide();
         RunTracker.finish();
     }

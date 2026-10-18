@@ -342,9 +342,12 @@ async function runExport(page, kind) {
             timeout: STEP_TIMEOUT_MS,
         });
         await page.getByTestId("clean-download-btn").click({ timeout: STEP_TIMEOUT_MS });
-        const refusal = page
-            .locator("#cleanErrorMessage")
-            .waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+        // Only the size refusal counts; a worker timeout or a failed build
+        // shows the same element and must fail the run.
+        const refusal = expect(page.locator("#cleanErrorMessage")).toHaveText(
+            /too large to build an Excel file/,
+            { timeout: STEP_TIMEOUT_MS },
+        );
         return downloadOrRefusal(download, refusal);
     }
     const trigger = page.locator("#pdfExportBtn");

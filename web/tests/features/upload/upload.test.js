@@ -1234,6 +1234,63 @@ describe("UploadPage", () => {
             expect(Storage.saveAnalytics).not.toHaveBeenCalled();
         });
 
+        it("keeps the analytics out of storage when an earlier input in the batch fails to save", async () => {
+            let failSave;
+            Storage.saveFile.mockImplementationOnce(
+                () =>
+                    new Promise((_, reject) => {
+                        failSave = reject;
+                    }),
+            );
+            UploadPage.init();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            const input = document.getElementById("multiFileInput");
+            const files = ["Shares.csv", "x.csv"].map(
+                (name) => new File(["col\nval"], name, { type: "text/csv" }),
+            );
+            Object.defineProperty(input, "files", { value: files });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            const jobs = workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .filter((message) => message.type === "addFile")
+                .map((message) => message.payload.jobId);
+
+            // The shares save is still writing when the batch's last reply lands.
+            const listener = workerInstance.listeners.message[0];
+            const sharesReply = listener({
+                data: {
+                    type: "fileProcessed",
+                    payload: {
+                        fileType: "shares",
+                        fileName: "Shares.csv",
+                        rowCount: 1,
+                        jobId: jobs[0],
+                    },
+                },
+            });
+            const lastReply = listener({
+                data: {
+                    type: "fileProcessed",
+                    payload: {
+                        fileType: null,
+                        fileName: "x.csv",
+                        error: "bad",
+                        analyticsBase: BASE,
+                        jobId: jobs[1],
+                    },
+                },
+            });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(Storage.saveAnalytics).not.toHaveBeenCalled();
+
+            failSave(new Error("disk"));
+            await Promise.all([sharesReply, lastReply]);
+
+            expect(Storage.saveAnalytics).not.toHaveBeenCalled();
+            expect(document.getElementById("uploadHint").textContent).toContain("bad");
+        });
+
         it("drops the analytics of a reply that outlived a Clear", async () => {
             const jobId = await upload();
             document.getElementById("clearAllBtn").click();
@@ -1274,6 +1331,8 @@ describe("UploadPage", () => {
                 analyticsBase: BASE,
                 jobId,
             });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(Storage.saveAnalytics).toHaveBeenCalled();
             document.getElementById("clearAllBtn").click();
             await new Promise((resolve) => setTimeout(resolve, 0));
             expect(Storage.clearAll).not.toHaveBeenCalled();
@@ -2289,6 +2348,81 @@ describe("UploadPage", () => {
 
         const types = workerInstance.postMessage.mock.calls.map((c) => c[0] && c[0].type);
         expect(types).toEqual(["addFile", "restoreFiles", "addFile"]);
+
+        globalThis.FileReader = originalFileReader;
+    });
+
+    it("does not record a prime for a worker restarted while the upload saved", async () => {
+        const originalFileReader = globalThis.FileReader;
+        globalThis.FileReader = function FileReader() {
+            return {
+                result: encodeBuf("col\nval"),
+                onload: null,
+                onerror: null,
+                readAsArrayBuffer() {
+                    if (this.onload) {
+                        this.onload();
+                    }
+                },
+            };
+        };
+
+        let cachedFiles = [{ type: "shares", name: "Shares.csv", rowCount: 2, updatedAt: 10 }];
+        DataCache.get.mockImplementation((key) => (key === "storage:files" ? cachedFiles : null));
+        Storage.getFile.mockResolvedValue({ type: "shares", blob: new Blob(["s"]) });
+        let finishSave;
+        Storage.saveFile.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finishSave = resolve;
+                }),
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const input = document.getElementById("multiFileInput");
+        const upload = async (name) => {
+            const file = new File(["col\nval"], name, { type: "text/csv" });
+            Object.defineProperty(input, "files", { value: [file], configurable: true });
+            input.dispatchEvent(new Event("change"));
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+
+        await upload("Comments.csv");
+        const oldWorker = workerInstance;
+        const replied = oldWorker.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "comments",
+                    fileName: "Comments.csv",
+                    rowCount: 1,
+                    jobId: null,
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The worker crashes while the comments upload is still being stored,
+        // so its replacement never receives the comments.
+        oldWorker.listeners.error[0](new Event("error"));
+        const newWorker = workerInstance;
+        expect(newWorker).not.toBe(oldWorker);
+        const stored = [
+            { type: "shares", name: "Shares.csv", rowCount: 2, updatedAt: 10 },
+            { type: "comments", name: "Comments.csv", rowCount: 1, updatedAt: 20 },
+        ];
+        Storage.getAllFiles.mockResolvedValue(stored);
+        cachedFiles = stored;
+        finishSave();
+        await replied;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const before = newWorker.postMessage.mock.calls.length;
+        await upload("Connections.csv");
+
+        const types = newWorker.postMessage.mock.calls.slice(before).map((c) => c[0] && c[0].type);
+        expect(types).toEqual(["restoreFiles", "addFile"]);
 
         globalThis.FileReader = originalFileReader;
     });

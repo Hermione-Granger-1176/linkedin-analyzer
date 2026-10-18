@@ -195,10 +195,11 @@ def test_cherry_pick_sequencer_targets(
     assert args_file.read_text(encoding="utf-8").splitlines() == expected_args
 
 
-def test_branch_delete_remote_refuses_main(tmp_path: Path) -> None:
-    """The remote delete helper never removes main."""
-    result, args_file = run_make_target(tmp_path, "branch-delete-remote", "name=main")
+@pytest.mark.parametrize("name", ["main", "heads/main", "refs/heads/main"])
+def test_branch_delete_remote_refuses_main(name: str, tmp_path: Path) -> None:
+    """The remote delete helper never removes main, however it is spelled."""
+    result, args_file = run_make_target(tmp_path, "branch-delete-remote", f"name={name}")
 
     assert result.returncode != 0
-    assert "Refusing to delete main on origin." in result.stderr
+    assert "Refusing to delete main on origin" in result.stderr
     assert not args_file.exists()

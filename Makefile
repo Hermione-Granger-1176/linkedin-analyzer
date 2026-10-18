@@ -576,7 +576,7 @@ branch-delete: ## Delete a local branch (make branch-delete name=X [force=1])
 branch-delete-remote: export BRANCH_NAME := $(value name)
 branch-delete-remote: ## Delete a branch on origin (make branch-delete-remote name=X)
 	@test -n "$$BRANCH_NAME" || (printf 'Usage: make branch-delete-remote name=branch-name\n' >&2; exit 1)
-	@test "$$BRANCH_NAME" != main || (printf 'Refusing to delete main on origin.\n' >&2; exit 1)
+	$(if $(filter main heads/main refs/heads/main,$(value name)),$(error Refusing to delete main on origin))
 	git push --delete -- origin "$$BRANCH_NAME"
 
 # Branch names reach the helper through the environment, never interpolated
@@ -591,11 +591,12 @@ rebase: ## Rebase the current branch onto its remote base (make rebase base=orig
 	git rebase "$(base)"
 
 # Refs split on whitespace with globbing off. Git's revision walker reads
-# options even after `--`, so a word starting with `-` is refused outright.
+# options even after `--`, so Make refuses a word starting with `-` before any
+# shell runs.
 cherry-pick: export CHERRY_PICK_REFS := $(value ref)
 cherry-pick: ## Apply commits onto the current branch (make cherry-pick ref="sha ..." [nocommit=1])
 	@test -n "$$CHERRY_PICK_REFS" || (printf 'Usage: make cherry-pick ref="sha ..." [nocommit=1]\n' >&2; exit 1)
-	@set -f; for word in $$CHERRY_PICK_REFS; do case "$$word" in -*) printf 'Refusing option-like ref: %s\n' "$$word" >&2; exit 1;; esac; done
+	$(if $(filter -%,$(value ref)),$(error Refusing option-like ref: $(firstword $(filter -%,$(value ref)))))
 	set -f; git cherry-pick $(if $(filter 1,$(value nocommit)),--no-commit) -- $$CHERRY_PICK_REFS
 
 cherry-pick-continue: ## Continue a cherry-pick after resolving conflicts

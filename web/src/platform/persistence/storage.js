@@ -558,6 +558,34 @@ export const Storage = (() => {
      * @returns {Promise<void>}
      */
     function saveFile(type, data) {
+        // Writes of one type land in call order. The byte fallback awaits each
+        // file's read before writing, so a later save could otherwise finish
+        // first and be overwritten by an earlier one.
+        const previous = fileWrites.get(type) || Promise.resolve();
+        const write = previous.then(
+            () => writeFile(type, data),
+            () => writeFile(type, data),
+        );
+        fileWrites.set(type, write);
+        const release = () => {
+            if (fileWrites.get(type) === write) {
+                fileWrites.delete(type);
+            }
+        };
+        write.then(release, release);
+        return write;
+    }
+
+    /** @type {Map<string, Promise<void>>} */
+    const fileWrites = new Map();
+
+    /**
+     * Write one uploaded CSV file record.
+     * @param {string} type - File type key
+     * @param {StoredFileInput & {rowCount: number}} data - File data to persist
+     * @returns {Promise<void>}
+     */
+    function writeFile(type, data) {
         return runOp(
             () => memory.saveFile(type, data),
             async (db) => {

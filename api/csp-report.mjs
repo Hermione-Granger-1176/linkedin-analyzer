@@ -269,6 +269,40 @@ function normalizeReportInteger(value) {
     return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+/** Output field names mapped to the input names each report shape may use. */
+const DIRECTIVE_FIELDS = [
+    ["effective-directive", ["effective-directive", "effectiveDirective"]],
+    ["violated-directive", ["violated-directive", "violatedDirective"]],
+];
+const URL_FIELDS = [
+    ["blocked-uri", ["blocked-uri", "blockedURL"]],
+    ["document-uri", ["document-uri", "documentURL"]],
+    ["referrer", ["referrer"]],
+    ["source-file", ["source-file", "sourceFile"]],
+];
+const INTEGER_FIELDS = [
+    ["status-code", ["status-code", "statusCode"]],
+    ["line-number", ["line-number", "lineNumber"]],
+    ["column-number", ["column-number", "columnNumber"]],
+];
+
+/**
+ * Copy each field that survives normalization into the reduced report.
+ * @param {Record<string, unknown>} reduced - Report being built.
+ * @param {object} report - Raw report object.
+ * @param {[string, string[]][]} fields - Output name and accepted input names per field.
+ * @param {(value: unknown) => unknown} normalize - Normalizer for the field's value.
+ * @param {(value: any) => boolean} isValid - Whether a normalized value is kept.
+ */
+function copyReportFields(reduced, report, fields, normalize, isValid) {
+    for (const [outputName, inputNames] of fields) {
+        const value = normalize(getReportField(report, inputNames));
+        if (isValid(value)) {
+            reduced[outputName] = value;
+        }
+    }
+}
+
 /**
  * Rebuild an untrusted CSP report from a strict, bounded metadata allowlist.
  * The output uses the legacy report-uri field names expected by the forwarding
@@ -282,41 +316,15 @@ function reduceCspReport(report) {
     }
 
     const reduced = {};
-    const directiveFields = [
-        ["effective-directive", ["effective-directive", "effectiveDirective"]],
-        ["violated-directive", ["violated-directive", "violatedDirective"]],
-    ];
-    for (const [outputName, inputNames] of directiveFields) {
-        const value = normalizeDirective(getReportField(report, inputNames));
-        if (value) {
-            reduced[outputName] = value;
-        }
-    }
-
-    const urlFields = [
-        ["blocked-uri", ["blocked-uri", "blockedURL"]],
-        ["document-uri", ["document-uri", "documentURL"]],
-        ["referrer", ["referrer"]],
-        ["source-file", ["source-file", "sourceFile"]],
-    ];
-    for (const [outputName, inputNames] of urlFields) {
-        const value = normalizeReportUrl(getReportField(report, inputNames));
-        if (value) {
-            reduced[outputName] = value;
-        }
-    }
-
-    const integerFields = [
-        ["status-code", ["status-code", "statusCode"]],
-        ["line-number", ["line-number", "lineNumber"]],
-        ["column-number", ["column-number", "columnNumber"]],
-    ];
-    for (const [outputName, inputNames] of integerFields) {
-        const value = normalizeReportInteger(getReportField(report, inputNames));
-        if (value !== null) {
-            reduced[outputName] = value;
-        }
-    }
+    copyReportFields(reduced, report, DIRECTIVE_FIELDS, normalizeDirective, Boolean);
+    copyReportFields(reduced, report, URL_FIELDS, normalizeReportUrl, Boolean);
+    copyReportFields(
+        reduced,
+        report,
+        INTEGER_FIELDS,
+        normalizeReportInteger,
+        (value) => value !== null,
+    );
 
     const disposition = getReportField(report, ["disposition"]);
     if (disposition === "enforce" || disposition === "report") {
@@ -366,6 +374,32 @@ function summarizeReport(report) {
 }
 
 /**
+ * Forward a reduced report upstream. Best effort: a failed or timed-out
+ * forward must never affect the response.
+ * @param {string} endpoint - Report endpoint URL.
+ * @param {object} report - Reduced report.
+ * @returns {Promise<void>}
+ */
+async function forwardReport(endpoint, report) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT_MS);
+    try {
+        await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "content-type": DEFAULT_CONTENT_TYPE,
+            },
+            body: JSON.stringify({ "csp-report": report }),
+            signal: controller.signal,
+        });
+    } catch {
+        // Best-effort forwarding: a failed or timed-out report must never affect the response.
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+/**
  * Vercel serverless handler that accepts and forwards CSP violation reports.
  * @param {object} req - Incoming request.
  * @param {object} res - Server response.
@@ -405,22 +439,7 @@ export default async function handler(req, res) {
 
     const endpoint = resolveReportEndpoint(process.env);
     if (endpoint) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), FORWARD_TIMEOUT_MS);
-        try {
-            await fetch(endpoint, {
-                method: "POST",
-                headers: {
-                    "content-type": DEFAULT_CONTENT_TYPE,
-                },
-                body: JSON.stringify({ "csp-report": report }),
-                signal: controller.signal,
-            });
-        } catch {
-            // Best-effort forwarding: a failed or timed-out report must never affect the response.
-        } finally {
-            clearTimeout(timeout);
-        }
+        await forwardReport(endpoint, report);
     } else {
         // With no forwarding destination, leave a one-line, host-only trace so
         // violations remain searchable in Vercel logs. Uses console.error because

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { compactEvents } from "../../helpers/message-events.js";
+
 vi.mock("../../../src/platform/persistence/data-cache.js", () => {
     const values = new Map();
     const DataCache = {
@@ -36,6 +38,13 @@ vi.mock("../../../src/platform/persistence/storage.js", () => ({
 
 vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     LinkedInCleaner: { process: vi.fn() },
+}));
+
+// The main-thread fallback decodes the stored upload; the cleaner is mocked, so
+// a stand-in that answers on the next microtask keeps the tests' timing.
+vi.mock("../../../src/features/upload/read.js", () => ({
+    readCsvSource: vi.fn(async (source) => (source ? "csv" : "")),
+    readOptionalCsvSource: vi.fn(async (source) => ({ text: source ? "csv" : "", failed: false })),
 }));
 
 vi.mock("../../../src/features/messages/analytics.js", () => ({
@@ -120,8 +129,8 @@ function makeMessageState(overrides = {}) {
                 },
             ],
         ]),
-        events: [{ contactKey: "c1", timestamp }],
-        rowTimestamps: [timestamp],
+        events: compactEvents([{ contactKey: "c1", timestamp }]),
+        rowTimestamps: Float64Array.of(timestamp),
         skippedRows: 0,
         talkedNameKeys: new Set(["ada lovelace"]),
         talkedUrlKeys: new Set(["https://linkedin.com/in/ada"]),
@@ -175,7 +184,7 @@ async function bootWithWorker(file = {}) {
     DataCache.set("storage:file:messages", {
         type: "messages",
         name: "w.csv",
-        text: "csv",
+        blob: new Blob(["csv"]),
         updatedAt: 1,
         rowCount: 1,
         ...file,
@@ -263,7 +272,7 @@ describe("MessagesPage", () => {
         // loadData loads the messages/connections text on demand (caches hold
         // metadata only); the parser is mocked, so any non-empty text resolves.
         Storage.getFile.mockReset();
-        Storage.getFile.mockResolvedValue({ text: "csv-content" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv-content"]) });
     });
 
     // -------------------------------------------------------------------------
@@ -287,7 +296,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 10,
             rowCount: 2,
         };
@@ -305,8 +314,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(["https://linkedin.com/in/ada"]),
@@ -345,7 +354,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 20,
             rowCount: 3,
         };
@@ -356,8 +365,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 2,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(),
@@ -389,7 +398,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 30,
             rowCount: 1,
         };
@@ -400,8 +409,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(),
@@ -432,7 +441,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "messages.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 40,
             rowCount: 0,
         };
@@ -440,8 +449,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -517,7 +526,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "m.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 50,
             rowCount: 1,
         };
@@ -531,8 +540,8 @@ describe("MessagesPage", () => {
                     { name: "Ada Lovelace", url: "https://li.com/ada", lastTimestamp: timestamp },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada lovelace"]),
             talkedUrlKeys: new Set(["https://li.com/ada"]),
@@ -576,7 +585,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "m2.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 51,
             rowCount: 1,
         };
@@ -585,8 +594,8 @@ describe("MessagesPage", () => {
         const timestamp = new Date("2024-01-15").getTime();
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -636,7 +645,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "fading.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 60,
             rowCount: 1,
         };
@@ -658,8 +667,8 @@ describe("MessagesPage", () => {
                     { name: "Old Friend", url: "https://li.com/old", lastTimestamp: oldTimestamp },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp: oldTimestamp }],
-            rowTimestamps: [oldTimestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp: oldTimestamp }]),
+            rowTimestamps: Float64Array.of(oldTimestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["old friend"]),
             talkedUrlKeys: new Set(["https://li.com/old"]),
@@ -696,7 +705,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "recent.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 61,
             rowCount: 1,
         };
@@ -720,8 +729,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp: recentTimestamp }],
-            rowTimestamps: [recentTimestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp: recentTimestamp }]),
+            rowTimestamps: Float64Array.of(recentTimestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["active person"]),
             talkedUrlKeys: new Set(["https://li.com/active"]),
@@ -759,7 +768,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "sc.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 70,
             rowCount: 1,
         };
@@ -776,8 +785,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -820,7 +829,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "fc.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 80,
             rowCount: 1,
         };
@@ -838,8 +847,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Fading Fred", url: "https://li.com/fred", lastTimestamp: oldTs }],
             ]),
-            events: [{ contactKey: "c1", timestamp: oldTs }],
-            rowTimestamps: [oldTs],
+            events: compactEvents([{ contactKey: "c1", timestamp: oldTs }]),
+            rowTimestamps: Float64Array.of(oldTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["fading fred"]),
             talkedUrlKeys: new Set(["https://li.com/fred"]),
@@ -889,7 +898,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "rng.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 90,
             rowCount: 1,
         };
@@ -897,8 +906,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Ada", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada"]),
             talkedUrlKeys: new Set(),
@@ -942,7 +951,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "rst.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 95,
             rowCount: 1,
         };
@@ -950,8 +959,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Ada", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada"]),
             talkedUrlKeys: new Set(),
@@ -1156,7 +1165,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "w.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 100,
             rowCount: 5,
         };
@@ -1174,8 +1183,8 @@ describe("MessagesPage", () => {
             totalInputRows: 5,
             messageState: {
                 contacts: [{ key: "c1", name: "Hydra Test", url: "", lastTimestamp: timestamp }],
-                events: [{ contactKey: "c1", timestamp }],
-                rowTimestamps: [timestamp],
+                events: compactEvents([{ contactKey: "c1", timestamp }]),
+                rowTimestamps: Float64Array.of(timestamp),
                 skippedRows: 0,
                 talkedNameKeys: ["hydra test"],
                 talkedUrlKeys: [],
@@ -1234,7 +1243,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "werr.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 110,
             rowCount: 2,
         };
@@ -1248,8 +1257,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Ada", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["ada"]),
             talkedUrlKeys: new Set(),
@@ -1306,7 +1315,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "timeout.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 120,
             rowCount: 2,
         };
@@ -1321,8 +1330,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Timeout User", url: "", lastTimestamp: timestamp }],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["timeout user"]),
             talkedUrlKeys: new Set(),
@@ -1373,7 +1382,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "noworker.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 130,
             rowCount: 1,
         };
@@ -1386,8 +1395,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "No Worker", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["no worker"]),
             talkedUrlKeys: new Set(),
@@ -1424,7 +1433,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "bad.csv",
-            text: "bad",
+            blob: new Blob(["bad"]),
             updatedAt: 140,
             rowCount: 0,
         };
@@ -1467,7 +1476,7 @@ describe("MessagesPage", () => {
         };
         DataCache.set("storage:file:messages", messagesFile);
         // The cache holds metadata; the large text is loaded on demand from storage.
-        Storage.getFile.mockResolvedValue({ text: "a".repeat(5 * 1024 * 1024 + 1) });
+        Storage.getFile.mockResolvedValue({ blob: new Blob([new Uint8Array(5 * 1024 * 1024 + 1)]) });
 
         MessagesPage.init();
         MessagesPage.onRouteChange({});
@@ -1499,7 +1508,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "empty.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 141,
             rowCount: 0,
         };
@@ -1510,8 +1519,8 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map(),
-            events: [], // empty, triggers the "No usable rows" path
-            rowTimestamps: [],
+            events: compactEvents([]), // empty, triggers the "No usable rows" path
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -1540,7 +1549,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "plain.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 150,
             rowCount: 1,
         };
@@ -1580,7 +1589,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "outreach.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 170,
             rowCount: 1,
         };
@@ -1620,7 +1629,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skip.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 160,
             rowCount: 5,
         };
@@ -1661,7 +1670,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skipenter.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 161,
             rowCount: 3,
         };
@@ -1692,7 +1701,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skipfocus.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 162,
             rowCount: 3,
         };
@@ -1726,7 +1735,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "skipmouse.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 163,
             rowCount: 3,
         };
@@ -1763,7 +1772,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "tip2.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 170,
             rowCount: 2,
         };
@@ -1782,11 +1791,11 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Top Guy", url: "", lastTimestamp: now }],
                 ["c2", { name: "Old Pal", url: "https://li.com/pal", lastTimestamp: oldTs }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: now },
                 { contactKey: "c2", timestamp: oldTs },
-            ],
-            rowTimestamps: [now, oldTs],
+            ]),
+            rowTimestamps: Float64Array.of(now, oldTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["top guy", "old pal"]),
             talkedUrlKeys: new Set(["https://li.com/pal"]),
@@ -1827,7 +1836,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "tip3.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 171,
             rowCount: 1,
         };
@@ -1844,8 +1853,8 @@ describe("MessagesPage", () => {
             contacts: new Map([
                 ["c1", { name: "Active Conn", url: "https://li.com/ac", lastTimestamp: recentTs }],
             ]),
-            events: [{ contactKey: "c1", timestamp: recentTs }],
-            rowTimestamps: [recentTs],
+            events: compactEvents([{ contactKey: "c1", timestamp: recentTs }]),
+            rowTimestamps: Float64Array.of(recentTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["active conn"]),
             talkedUrlKeys: new Set(["https://li.com/ac"]),
@@ -1882,7 +1891,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "tip4.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 172,
             rowCount: 0,
         };
@@ -1900,8 +1909,8 @@ describe("MessagesPage", () => {
         // No message events = no top contacts
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -1937,7 +1946,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "reuse.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 180,
             rowCount: 1,
         };
@@ -2097,7 +2106,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "namekey.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 190,
             rowCount: 1,
         };
@@ -2117,8 +2126,8 @@ describe("MessagesPage", () => {
                 // url is empty, forces name-key lookup in findMatchingConnection
                 ["c1", { name: "Name Match", url: "", lastTimestamp: oldTs }],
             ]),
-            events: [{ contactKey: "c1", timestamp: oldTs }],
-            rowTimestamps: [oldTs],
+            events: compactEvents([{ contactKey: "c1", timestamp: oldTs }]),
+            rowTimestamps: Float64Array.of(oldTs),
             skippedRows: 0,
             talkedNameKeys: new Set(["name match"]),
             talkedUrlKeys: new Set(),
@@ -2166,14 +2175,14 @@ describe("MessagesPage", () => {
             {
                 type: "messages",
                 name: "fromdb.csv",
-                text: "csv-content",
+                blob: new Blob(["csv-content"]),
                 updatedAt: 200,
                 rowCount: 1,
             },
             {
                 type: "connections",
                 name: "Connections.csv",
-                text: "conn-content",
+                blob: new Blob(["conn-content"]),
                 updatedAt: 200,
                 rowCount: 2,
             },
@@ -2185,8 +2194,8 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "DB User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["db user"]),
             talkedUrlKeys: new Set(),
@@ -2237,7 +2246,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "throw.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 210,
             rowCount: 1,
         };
@@ -2246,8 +2255,8 @@ describe("MessagesPage", () => {
         LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "Throw User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["throw user"]),
             talkedUrlKeys: new Set(),
@@ -2286,11 +2295,11 @@ describe("MessagesPage", () => {
         // Storage.getAllFiles, no need for a blanket mockReturnValue(null) override.
 
         Storage.getAllFiles.mockResolvedValue([
-            { type: "messages", name: "connerr.csv", text: "csv", updatedAt: 220, rowCount: 1 },
+            { type: "messages", name: "connerr.csv", blob: new Blob(["csv"]), updatedAt: 220, rowCount: 1 },
             {
                 type: "connections",
                 name: "Connections.csv",
-                text: "bad-conn",
+                blob: new Blob(["bad-conn"]),
                 updatedAt: 220,
                 rowCount: 0,
             },
@@ -2302,8 +2311,8 @@ describe("MessagesPage", () => {
 
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "Err User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["err user"]),
             talkedUrlKeys: new Set(),
@@ -2379,15 +2388,15 @@ describe("MessagesPage", () => {
         // Messages text loads, but the connections text record is missing.
         Storage.getFile.mockImplementation((type) =>
             Promise.resolve(
-                type === "messages" ? { type: "messages", text: "csv" } : { type: "connections" },
+                type === "messages" ? { type: "messages", blob: new Blob(["csv"]) } : { type: "connections" },
             ),
         );
 
         LinkedInCleaner.process.mockReturnValue({ success: true, cleanedData: [] });
         MessagesAnalytics.buildMessageState.mockReturnValue({
             contacts: new Map([["c1", { name: "User", url: "", lastTimestamp: timestamp }]]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["user"]),
             talkedUrlKeys: new Set(),
@@ -2434,7 +2443,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "range.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 230,
             rowCount: 2,
         };
@@ -2445,11 +2454,11 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Recent Contact", url: "", lastTimestamp: recent }],
                 ["c2", { name: "Old Contact", url: "", lastTimestamp: old }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: recent },
                 { contactKey: "c2", timestamp: old },
-            ],
-            rowTimestamps: [recent, old],
+            ]),
+            rowTimestamps: Float64Array.of(recent, old),
             skippedRows: 0,
             talkedNameKeys: new Set(["recent contact", "old contact"]),
             talkedUrlKeys: new Set(),
@@ -2484,7 +2493,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "link.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 240,
             rowCount: 1,
         };
@@ -2501,8 +2510,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["link person"]),
             talkedUrlKeys: new Set(["https://linkedin.com/in/link"]),
@@ -2531,7 +2540,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "link.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 240,
             rowCount: 1,
         };
@@ -2548,8 +2557,8 @@ describe("MessagesPage", () => {
                     },
                 ],
             ]),
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: new Set(["sneaky person"]),
             talkedUrlKeys: new Set([]),
@@ -2605,14 +2614,14 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "hyd.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 250,
             rowCount: 1,
         };
         const connectionsFile = {
             type: "connections",
             name: "Connections.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 250,
             rowCount: 1,
         };
@@ -2635,8 +2644,8 @@ describe("MessagesPage", () => {
                             contacts: [
                                 { key: "c1", name: "Hyd User", url: "", lastTimestamp: oldTs },
                             ],
-                            events: [{ contactKey: "c1", timestamp: oldTs }],
-                            rowTimestamps: [oldTs],
+                            events: compactEvents([{ contactKey: "c1", timestamp: oldTs }]),
+                            rowTimestamps: Float64Array.of(oldTs),
                             skippedRows: 0,
                             talkedNameKeys: ["hyd user"],
                             talkedUrlKeys: [],
@@ -2671,7 +2680,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "noexp.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 260,
             rowCount: 0,
         };
@@ -2679,8 +2688,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -2731,7 +2740,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "wrongid.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 270,
             rowCount: 1,
         };
@@ -2779,7 +2788,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "multi.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 280,
             rowCount: 2,
         };
@@ -2791,12 +2800,12 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Repeat Contact", url: "", lastTimestamp: t2 }],
                 ["c2", { name: "Single Contact", url: "", lastTimestamp: t1 }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: t1 },
                 { contactKey: "c1", timestamp: t2 }, // second event for c1
                 { contactKey: "c2", timestamp: t1 },
-            ],
-            rowTimestamps: [t1, t2, t1],
+            ]),
+            rowTimestamps: Float64Array.of(t1, t2, t1),
             skippedRows: 0,
             talkedNameKeys: new Set(["repeat contact", "single contact"]),
             talkedUrlKeys: new Set(),
@@ -2829,7 +2838,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "silentsort.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 290,
             rowCount: 1,
         };
@@ -2849,8 +2858,8 @@ describe("MessagesPage", () => {
         };
         const messageState = {
             contacts: new Map(),
-            events: [],
-            rowTimestamps: [],
+            events: compactEvents([]),
+            rowTimestamps: Float64Array.of(),
             skippedRows: 0,
             talkedNameKeys: new Set(),
             talkedUrlKeys: new Set(),
@@ -2900,7 +2909,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "fadingsort.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 300,
             rowCount: 2,
         };
@@ -2925,11 +2934,11 @@ describe("MessagesPage", () => {
                 ["c1", { name: "Old Fader", url: "https://li.com/old", lastTimestamp: t1 }],
                 ["c2", { name: "New Fader", url: "https://li.com/new", lastTimestamp: t2 }],
             ]),
-            events: [
+            events: compactEvents([
                 { contactKey: "c1", timestamp: t1 },
                 { contactKey: "c2", timestamp: t2 },
-            ],
-            rowTimestamps: [t1, t2],
+            ]),
+            rowTimestamps: Float64Array.of(t1, t2),
             skippedRows: 0,
             talkedNameKeys: new Set(["old fader", "new fader"]),
             talkedUrlKeys: new Set(["https://li.com/old", "https://li.com/new"]),
@@ -2975,7 +2984,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "allrange.csv",
-            text: "x",
+            blob: new Blob(["x"]),
             updatedAt: 310,
             rowCount: 1,
         };
@@ -2983,8 +2992,8 @@ describe("MessagesPage", () => {
 
         const messageState = {
             contacts: new Map([["c1", { name: "Old Timer", url: "", lastTimestamp: old }]]),
-            events: [{ contactKey: "c1", timestamp: old }],
-            rowTimestamps: [old],
+            events: compactEvents([{ contactKey: "c1", timestamp: old }]),
+            rowTimestamps: Float64Array.of(old),
             skippedRows: 0,
             talkedNameKeys: new Set(["old timer"]),
             talkedUrlKeys: new Set(),
@@ -3056,7 +3065,7 @@ describe("MessagesPage", () => {
         const messagesFile = {
             type: "messages",
             name: "nullkey.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 320,
             rowCount: 1,
         };
@@ -3081,8 +3090,8 @@ describe("MessagesPage", () => {
                                 { key: "", name: "No Key User" }, // empty key, should be skipped
                                 { key: "c1", name: "Valid User", url: "", lastTimestamp: now },
                             ],
-                            events: [{ contactKey: "c1", timestamp: now }],
-                            rowTimestamps: [now],
+                            events: compactEvents([{ contactKey: "c1", timestamp: now }]),
+                            rowTimestamps: Float64Array.of(now),
                             skippedRows: 0,
                             talkedNameKeys: ["valid user"],
                             talkedUrlKeys: [],
@@ -3109,8 +3118,8 @@ describe("MessagesPage", () => {
         const timestamp = new Date("2024-06-01").getTime();
         return {
             contacts: [{ key: "c1", name: "Ada Lovelace", url: "", lastTimestamp: timestamp }],
-            events: [{ contactKey: "c1", timestamp }],
-            rowTimestamps: [timestamp],
+            events: compactEvents([{ contactKey: "c1", timestamp }]),
+            rowTimestamps: Float64Array.of(timestamp),
             skippedRows: 0,
             talkedNameKeys: ["ada lovelace"],
             talkedUrlKeys: [],
@@ -3276,8 +3285,8 @@ describe("MessagesPage", () => {
                 contacts: [
                     { key: "c1", name: "Old Friend", url: "https://li.com/old", lastTimestamp: old },
                 ],
-                events: [{ contactKey: "c1", timestamp: old }],
-                rowTimestamps: [old],
+                events: compactEvents([{ contactKey: "c1", timestamp: old }]),
+                rowTimestamps: Float64Array.of(old),
                 skippedRows: 0,
                 talkedNameKeys: ["old friend"],
                 talkedUrlKeys: ["https://li.com/old"],
@@ -3365,7 +3374,7 @@ describe("MessagesPage", () => {
         DataCache.set("storage:file:messages", {
             type: "messages",
             name: "m.csv",
-            text: "csv",
+            blob: new Blob(["csv"]),
             updatedAt: 1,
             rowCount: 1,
         });
@@ -3383,7 +3392,7 @@ describe("MessagesPage", () => {
             "storage:file:messages": {
                 type: "messages",
                 name: "m.csv",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 updatedAt: 1,
                 rowCount: 1,
             },
@@ -3404,14 +3413,14 @@ describe("MessagesPage", () => {
             "storage:file:messages": {
                 type: "messages",
                 name: "m.csv",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 updatedAt: 1,
                 rowCount: 1,
             },
             "storage:file:connections": {
                 type: "connections",
                 name: "c.csv",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 updatedAt: 2,
                 rowCount: 1,
             },
@@ -3438,7 +3447,7 @@ describe("MessagesPage", () => {
 
     it("skips a stored messages file whose type is invalid", async () => {
         await bootMainThread({
-            "storage:file:messages": { type: "bogus", text: "csv", name: "x" },
+            "storage:file:messages": { type: "bogus", blob: new Blob(["csv"]), name: "x" },
         });
         Storage.getAllFiles.mockResolvedValue([]);
 
@@ -3455,7 +3464,7 @@ describe("MessagesPage", () => {
         await bootMainThread({
             "storage:file:messages": {
                 type: "connections",
-                text: "csv",
+                blob: new Blob(["csv"]),
                 name: "x",
                 updatedAt: 1,
                 rowCount: 1,
@@ -3501,8 +3510,8 @@ describe("MessagesPage", () => {
             totalInputRows: 1,
             messageState: {
                 contacts: [{ key: "c1", name: "Ancient", url: "", lastTimestamp: ancient }],
-                events: [{ contactKey: "c1", timestamp: ancient }],
-                rowTimestamps: [ancient],
+                events: compactEvents([{ contactKey: "c1", timestamp: ancient }]),
+                rowTimestamps: Float64Array.of(ancient),
                 skippedRows: 0,
                 talkedNameKeys: ["ancient"],
                 talkedUrlKeys: [],

@@ -1,6 +1,6 @@
 # ADR-003: IndexedDB storage with session TTL and in-memory fallback
 
-**Date:** 2026-07-03 **Status:** Accepted **Deciders:** Aditya Kumar Darak
+**Date:** 2026-07-03 **Status:** Accepted, storage format amended by [ADR-010](010-stream-uploads-and-store-original-files.md) **Deciders:** Aditya Kumar Darak
 
 ## Context
 

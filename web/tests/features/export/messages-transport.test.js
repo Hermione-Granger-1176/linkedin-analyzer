@@ -7,6 +7,7 @@ import {
 } from "../../../src/features/export/messages-transport.js";
 import { MessagesAnalytics } from "../../../src/features/messages/analytics.js";
 import { captureError } from "../../../src/platform/observability/sentry.js";
+import { compactEvents } from "../../helpers/message-events.js";
 import { createWorkerHarness } from "../../helpers/mock-worker.js";
 import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
@@ -47,8 +48,8 @@ const WORKER_MESSAGE_STATE = Object.freeze({
             lastTimestamp: 1735725600000,
         },
     ],
-    events: [{ contactKey: `url:${ADA_URL}`, timestamp: 1735725600000 }],
-    rowTimestamps: [1735725600000],
+    events: compactEvents([{ contactKey: `url:${ADA_URL}`, timestamp: 1735725600000 }]),
+    rowTimestamps: Float64Array.of(1735725600000),
     skippedRows: 1,
     talkedNameKeys: ["ada lovelace"],
     talkedUrlKeys: [ADA_URL],
@@ -188,6 +189,36 @@ describe("loadMessagesState", () => {
             connectionState: EMPTY_WORKER_CONNECTION_STATE,
         });
         await pending;
+    });
+
+    it("reads stored upload Blobs on the main thread", async () => {
+        harness.uninstall();
+
+        const state = await loadMessagesState(new Blob([MESSAGES_CSV]), new Blob([CONNECTIONS_CSV]));
+
+        expect(state.messageState.rowTimestamps).toHaveLength(3);
+        expect(state.connectionState.list).toHaveLength(2);
+    });
+
+    it("returns nothing on the main thread when a stored upload cannot be read", async () => {
+        harness.uninstall();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        expect(await loadMessagesState(new Blob([MESSAGES_CSV]), "")).toBeNull();
+    });
+
+    it("keeps the messages on the main thread when only the connections file cannot be read", async () => {
+        harness.uninstall();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        const state = await loadMessagesState(MESSAGES_CSV, new Blob([CONNECTIONS_CSV]));
+
+        expect(state.messageState.rowTimestamps).toHaveLength(3);
+        expect(state.connectionState).toBeNull();
     });
 
     it("builds the state on the main thread when the platform has no worker", async () => {

@@ -2,6 +2,12 @@
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import {
+    canStreamFileText,
+    readCsvSource,
+    readFileAsText,
+    streamFileText,
+} from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -14,6 +20,19 @@ const VIEW_CACHE_LIMIT = 50;
 const VIEW_CACHE_TRIM = 20;
 const ANALYTICS_SOURCE_TYPES = Object.freeze(["shares", "comments", "connections"]);
 const WORKER_REQUEST_TYPES = new Set(["addFile", "restoreFiles", "initBase", "view", "clear"]);
+// Reading the file fills this share of the progress bar, after the first 5%.
+const READ_PROGRESS_START = 0.05;
+const READ_PROGRESS_SPAN = 0.3;
+// Post a read progress update only when it moves the bar at least this much.
+const READ_PROGRESS_STEP = 0.01;
+
+// Requests run one at a time in arrival order, because reading a file is
+// asynchronous. Clear runs at once instead: it aborts the read in flight, bumps
+// the epoch so requests from before it drop their results, and starts a fresh
+// queue so a request after it never waits on a stale read.
+let requestQueue = Promise.resolve();
+let requestEpoch = 0;
+let activeRead = null;
 
 /**
  * Normalize raw filter values into a safe, complete filter object.
@@ -122,7 +141,7 @@ function hydrateAnalytics(base) {
  * analytics engine, which never interpolate row/cell content) so the value that
  * `analytics-ui` forwards to Sentry can never carry user data. `worker-contracts`
  * also length-caps it on receipt.
- * @param {number} requestId - ID of the originating request
+ * @param {number|string} requestId - ID of the originating request
  * @param {string} message - Human-readable error description
  */
 function postError(requestId, message) {
@@ -164,23 +183,168 @@ function cacheView(key, payload) {
 }
 
 /**
- * Process an uploaded CSV file: parse, clean, recompute analytics, and reply.
- * @param {{csvText: string, fileName: string, jobId?: string, totalSize?: number}} payload - File content and name
+ * Run a read of an uploaded file, reporting bytes read as progress.
+ * Resolves null when a clear cancels the read or arrived since the request began.
+ * @template T
+ * @param {(options: {signal: AbortSignal, onProgress: (bytesRead: number, totalBytes: number) => void}) => Promise<T>} read - The read to run
+ * @param {string|null} jobId - Upload job ID
+ * @param {string} fileName - Uploaded file name
+ * @param {number} epoch - Request epoch the read belongs to
+ * @returns {Promise<T|null>}
  */
-function handleAddFile(payload) {
-    const { csvText = "", fileName = "", jobId = null } = payload || {};
+async function readUpload(read, jobId, fileName, epoch) {
+    // A stale request must not start a read, or it would take over activeRead.
+    if (epoch !== requestEpoch) {
+        return null;
+    }
+    const controller = new AbortController();
+    activeRead = controller;
+    let lastPercent = READ_PROGRESS_START;
+    const onProgress = (bytesRead, totalBytes) => {
+        const fraction = totalBytes > 0 ? Math.min(bytesRead / totalBytes, 1) : 1;
+        const percent = READ_PROGRESS_START + READ_PROGRESS_SPAN * fraction;
+        if (percent - lastPercent < READ_PROGRESS_STEP && fraction < 1) {
+            return;
+        }
+        lastPercent = percent;
+        self.postMessage({
+            type: "progress",
+            payload: { jobId, fileName, percent, bytesRead, totalBytes },
+        });
+    };
+    try {
+        const result = await read({ signal: controller.signal, onProgress });
+        // A Clear during the last read can let it finish with done; drop it.
+        return controller.signal.aborted || epoch !== requestEpoch ? null : result;
+    } catch (error) {
+        if (controller.signal.aborted) {
+            return null;
+        }
+        throw error;
+    } finally {
+        if (activeRead === controller) {
+            activeRead = null;
+        }
+    }
+}
+
+/**
+ * Read, parse, and clean an uploaded File.
+ *
+ * Where the File can be streamed, each decoded chunk is parsed and cleaned as
+ * it arrives, so the full text and the full row arrays are never built. The
+ * page stores the original File, so no text goes back. When the streaming
+ * processor cannot finish (an error, or no type found in the prefix), the File
+ * is read again whole and process() runs on that text, so results and
+ * messages match the whole-text path.
+ * Resolves null when a clear cancels the read.
+ * @param {File} file - Uploaded file
+ * @param {string|null} jobId - Upload job ID
+ * @param {string} fileName - Uploaded file name
+ * @param {number} epoch - Request epoch the upload belongs to
+ * @returns {Promise<{usedFallback: boolean, processed: object}|null>}
+ */
+async function readAndProcessUpload(file, jobId, fileName, epoch) {
+    if (!canStreamFileText(file)) {
+        const read = await readUpload(
+            (options) => readFileAsText(file, options),
+            jobId,
+            fileName,
+            epoch,
+        );
+        if (!read) {
+            return null;
+        }
+        return {
+            usedFallback: read.usedFallback,
+            processed: LinkedInCleaner.process(read.text, "auto"),
+        };
+    }
+
+    let processor = LinkedInCleaner.createStreamProcessor();
+    const read = await readUpload(
+        (options) =>
+            streamFileText(file, {
+                ...options,
+                onText: (text) => {
+                    processor.push(text);
+                },
+                onRestart: () => {
+                    processor = LinkedInCleaner.createStreamProcessor();
+                },
+            }),
+        jobId,
+        fileName,
+        epoch,
+    );
+    if (!read) {
+        return null;
+    }
+    const streamed = processor.finish();
+    if (streamed) {
+        return { usedFallback: read.usedFallback, processed: streamed };
+    }
+    const whole = await readUpload(
+        (options) => readFileAsText(file, options),
+        jobId,
+        fileName,
+        epoch,
+    );
+    if (!whole) {
+        return null;
+    }
+    return {
+        usedFallback: whole.usedFallback,
+        processed: LinkedInCleaner.process(whole.text, "auto"),
+    };
+}
+
+/**
+ * Process an uploaded CSV file: read, parse, clean, recompute analytics, and
+ * reply. The page posts the File so the read happens here, off the main
+ * thread, and stores that File itself, so the reply carries no text.
+ * @param {{file?: File|null, csvText?: string, fileName: string, jobId?: string|null, totalSize?: number}} payload - File and name
+ * @returns {Promise<void>}
+ */
+async function handleAddFile(payload) {
+    const { file = null, fileName = "", jobId = null } = payload || {};
+    const { csvText = "" } = payload || {};
+    let usedFallback = false;
+    let processed;
+    const epoch = requestEpoch;
 
     self.postMessage({
         type: "progress",
-        payload: { jobId, fileName, percent: 0.05 },
+        payload: { jobId, fileName, percent: READ_PROGRESS_START },
     });
 
-    self.postMessage({
-        type: "progress",
-        payload: { jobId, fileName, percent: 0.12 },
-    });
+    if (file) {
+        let result;
+        try {
+            result = await readAndProcessUpload(file, jobId, fileName, epoch);
+        } catch (error) {
+            // A failure in a read a clear has since abandoned is nobody's to see.
+            if (epoch !== requestEpoch) {
+                return;
+            }
+            self.postMessage({
+                type: "fileProcessed",
+                payload: {
+                    error: toErrorMessage(error) || "Error reading file. Please try again.",
+                    jobId,
+                    fileName,
+                },
+            });
+            return;
+        }
+        if (!result) {
+            return;
+        }
+        ({ usedFallback, processed } = result);
+    } else {
+        processed = LinkedInCleaner.process(csvText, "auto");
+    }
 
-    const processed = LinkedInCleaner.process(csvText, "auto");
     if (!processed.success) {
         self.postMessage({
             type: "fileProcessed",
@@ -234,22 +398,33 @@ function handleAddFile(payload) {
             rowCount: processed.rowCount,
             analyticsBase,
             hasData: hasAnalyticsData(),
+            usedFallback,
         },
     });
 }
 
 /**
- * Restore worker source datasets from persisted CSV texts.
- * @param {{sharesCsv?: string, commentsCsv?: string, connectionsCsv?: string}} payload - Persisted analytics inputs
+ * Restore worker source datasets from the stored uploads. Each file arrives as
+ * its stored Blob, read here, or as CSV text.
+ * @param {{sharesCsv?: Blob|string, commentsCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Persisted analytics inputs
+ * @returns {Promise<void>}
  */
-function handleRestoreFiles(payload) {
+async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
+    const epoch = requestEpoch;
+    // A stored Blob the browser can no longer read counts as absent, like a
+    // file that fails to parse, so it cannot fail the other types' restore.
+    const readOrSkip = (source) => readCsvSource(source).catch(() => "");
     const sourceCsvByType = {
-        shares: sharesCsv,
-        comments: commentsCsv,
-        connections: connectionsCsv,
+        shares: await readOrSkip(sharesCsv),
+        comments: await readOrSkip(commentsCsv),
+        connections: await readOrSkip(connectionsCsv),
     };
+    // Clear arrived while the stored files were read: keep what it cleared gone.
+    if (epoch !== requestEpoch) {
+        return;
+    }
     const assignSourceByType = {
         shares: (cleanedData) => {
             sharesData = cleanedData;
@@ -376,39 +551,81 @@ function handleClear() {
     self.postMessage({ type: "cleared" });
 }
 
-self.addEventListener("message", (event) => {
+/**
+ * Cancel the read in flight and skip every request queued before now.
+ */
+function cancelPendingRequests() {
+    requestEpoch += 1;
+    // Stale reads may still be settling; they drop their results by epoch,
+    // so nothing after the clear has to wait for them.
+    requestQueue = Promise.resolve();
+    if (activeRead) {
+        activeRead.abort();
+    }
+}
+
+/**
+ * Run a request after the ones before it, unless a clear arrives first.
+ * @param {() => unknown} run - Request handler
+ * @param {number|string} requestId - ID reported with a failure
+ * @returns {Promise<void>}
+ */
+function enqueueRequest(run, requestId) {
+    const epoch = requestEpoch;
+    requestQueue = requestQueue.then(async () => {
+        if (epoch !== requestEpoch) {
+            return;
+        }
+        try {
+            await run();
+        } catch (error) {
+            postError(requestId || 0, toErrorMessage(error));
+        }
+    });
+    return requestQueue;
+}
+
+/**
+ * Dispatch one raw worker message.
+ * @param {MessageEvent} event - Worker message event
+ * @returns {Promise<void>|undefined}
+ */
+function handleMessage(event) {
     const rawMessage = event.data || {};
     const type = rawMessage && typeof rawMessage.type === "string" ? rawMessage.type : "";
     if (!WORKER_REQUEST_TYPES.has(type)) {
-        return;
+        return undefined;
     }
 
     const parsed = parseAnalyticsWorkerRequest(rawMessage);
     /* v8 ignore next 4 */
     if (!parsed.valid) {
         postError(0, parsed.error || "Invalid analytics worker message.");
-        return;
+        return undefined;
     }
 
     const message = parsed.value;
-    /* v8 ignore next 6 */
+    if (message.type === "clear") {
+        cancelPendingRequests();
+        handleClear();
+        return undefined;
+    }
+    /* v8 ignore next 5 */
     const handlers = {
         addFile: () => handleAddFile(message.payload),
         restoreFiles: () => handleRestoreFiles(message.payload),
         initBase: () => handleInitBase(message.payload),
         view: () => handleView(message.requestId, message.filters),
-        clear: () => handleClear(),
     };
     const handler = handlers[message.type];
-    /* v8 ignore next */
-    if (handler) {
-        try {
-            handler();
-        } catch (error) {
-            postError(message.requestId || 0, toErrorMessage(error));
-        }
+    /* v8 ignore next 3 */
+    if (!handler) {
+        return undefined;
     }
-});
+    return enqueueRequest(handler, message.requestId);
+}
+
+self.addEventListener("message", handleMessage);
 
 self.addEventListener("error", (event) => {
     /* v8 ignore next */

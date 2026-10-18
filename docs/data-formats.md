@@ -62,6 +62,6 @@ The CLI and browser use the same cleaning rules through separate implementations
 
 ## Resource limits
 
-The CLI defaults to a 100 MiB input file limit and 1,000,000 parsed rows. Set `--max-input-bytes 0` or `--max-rows 0` to disable one limit. The browser accepts files up to 80 MiB, limits decoded text to 60 MiB, parses at most 500,000 rows, accepts at most 256 columns per row, and limits one field to 200,000 characters.
+The CLI defaults to a 128 MiB input file limit and 1,000,000 parsed rows. Set `--max-input-bytes 0` or `--max-rows 0` to disable one limit. The browser accepts files up to 80 MiB, limits decoded text to 60 MiB, parses at most 500,000 rows, accepts at most 256 columns per row, and limits one field to 200,000 characters.
 
 These limits protect different runtimes. Do not assume that a file accepted by the browser app will be accepted by the CLI, or the reverse.

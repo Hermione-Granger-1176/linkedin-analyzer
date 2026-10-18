@@ -1,11 +1,13 @@
 /* Runtime contracts for worker request/response payloads */
 
-import { FILE_TYPES as FILE_TYPE_LIST, MAX_CSV_CHARS } from "../shared/constants.js";
+import { FILE_TYPES as FILE_TYPE_LIST } from "../shared/constants.js";
+import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../shared/limits.js";
 
 const FILE_TYPES = new Set(FILE_TYPE_LIST);
 
 const LIMITS = Object.freeze({
     maxCsvChars: MAX_CSV_CHARS,
+    maxFileBytes: MAX_FILE_BYTES,
     maxFileNameChars: 255,
     maxJobIdChars: 128,
     maxMessageChars: 500,
@@ -118,7 +120,36 @@ function normalizeRequestId(value) {
 }
 
 /**
- * Parse upload worker addFile payload.
+ * Check whether a value is a Blob (a File is one), without relying on a
+ * same-realm instanceof where the global is missing.
+ * @param {unknown} value - Candidate value
+ * @returns {value is Blob}
+ */
+function isBlob(value) {
+    return typeof Blob !== "undefined" && value instanceof Blob;
+}
+
+/**
+ * Accept one CSV source for a worker: the stored upload as a Blob, which the
+ * worker reads itself, or text from a caller that already holds it. An empty
+ * Blob counts as missing, like empty text.
+ * @param {unknown} value - Raw payload field
+ * @returns {{source: Blob|string, tooLarge: boolean}}
+ */
+function parseCsvSource(value) {
+    if (isBlob(value)) {
+        return {
+            source: value.size > 0 ? value : "",
+            tooLarge: value.size > LIMITS.maxFileBytes,
+        };
+    }
+    const text = normalizeString(value, LIMITS.maxCsvChars + 1);
+    return { source: text, tooLarge: text.length > LIMITS.maxCsvChars };
+}
+
+/**
+ * Parse upload worker addFile payload. The page posts the uploaded `file` so
+ * the worker reads it; `csvText` remains for callers that already hold text.
  * @param {unknown} payload - Raw payload
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
@@ -127,9 +158,13 @@ function parseAddFilePayload(payload) {
         return invalid("Invalid addFile payload");
     }
 
-    const csvText = normalizeString(payload.csvText, LIMITS.maxCsvChars + 1);
-    if (!csvText) {
-        return invalid("Missing csvText payload");
+    const file = isBlob(payload.file) ? payload.file : null;
+    if (file && file.size > LIMITS.maxFileBytes) {
+        return invalid("File payload exceeds allowed size");
+    }
+    const csvText = file ? "" : normalizeString(payload.csvText, LIMITS.maxCsvChars + 1);
+    if (!file && !csvText) {
+        return invalid("Missing file payload");
     }
     if (csvText.length > LIMITS.maxCsvChars) {
         return invalid("CSV payload exceeds allowed size");
@@ -144,6 +179,7 @@ function parseAddFilePayload(payload) {
     const totalSize = normalizeNumber(payload.totalSize, 0, 0, Number.MAX_SAFE_INTEGER);
 
     return valid({
+        file,
         csvText,
         fileName,
         jobId,
@@ -161,19 +197,19 @@ function parseRestoreFilesPayload(payload) {
         return invalid("Invalid restoreFiles payload");
     }
 
-    const sharesCsv = normalizeString(payload.sharesCsv, LIMITS.maxCsvChars + 1);
-    const commentsCsv = normalizeString(payload.commentsCsv, LIMITS.maxCsvChars + 1);
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
+    const shares = parseCsvSource(payload.sharesCsv);
+    const comments = parseCsvSource(payload.commentsCsv);
+    const connections = parseCsvSource(payload.connectionsCsv);
 
-    if (
-        sharesCsv.length > LIMITS.maxCsvChars ||
-        commentsCsv.length > LIMITS.maxCsvChars ||
-        connectionsCsv.length > LIMITS.maxCsvChars
-    ) {
+    if (shares.tooLarge || comments.tooLarge || connections.tooLarge) {
         return invalid("CSV payload exceeds allowed size");
     }
 
-    return valid({ sharesCsv, commentsCsv, connectionsCsv });
+    return valid({
+        sharesCsv: shares.source,
+        commentsCsv: comments.source,
+        connectionsCsv: connections.source,
+    });
 }
 
 /**
@@ -260,6 +296,8 @@ export function parseAnalyticsWorkerMessage(message) {
                     jobId: normalizeOptionalString(payload.jobId, LIMITS.maxJobIdChars),
                     fileName: normalizeString(payload.fileName, LIMITS.maxFileNameChars),
                     percent: normalizeNumber(payload.percent, 0, 0, 1),
+                    bytesRead: normalizeNumber(payload.bytesRead, 0, 0, Number.MAX_SAFE_INTEGER),
+                    totalBytes: normalizeNumber(payload.totalBytes, 0, 0, Number.MAX_SAFE_INTEGER),
                 },
             });
         }
@@ -277,6 +315,7 @@ export function parseAnalyticsWorkerMessage(message) {
                         ? payload.analyticsBase
                         : null,
                     hasData: Boolean(payload.hasData),
+                    usedFallback: Boolean(payload.usedFallback),
                     error: normalizeOptionalString(payload.error, LIMITS.maxMessageChars),
                 },
             });
@@ -310,17 +349,17 @@ export function parseConnectionsWorkerRequest(message) {
         return invalid("Invalid connections worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
-    if (!connectionsCsv) {
+    const connections = parseCsvSource(payload.connectionsCsv);
+    if (!connections.source) {
         return invalid("Missing connectionsCsv payload");
     }
-    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+    if (connections.tooLarge) {
         return invalid("connectionsCsv payload exceeds allowed size");
     }
     return valid({
         type: "process",
         requestId: normalizeRequestId(message.requestId),
-        payload: { connectionsCsv },
+        payload: { connectionsCsv: connections.source },
     });
 }
 
@@ -374,25 +413,25 @@ export function parseMessagesWorkerRequest(message) {
         return invalid("Invalid messages worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
-    if (!messagesCsv) {
+    const messages = parseCsvSource(payload.messagesCsv);
+    if (!messages.source) {
         return invalid("Missing messagesCsv payload");
     }
-    if (messagesCsv.length > LIMITS.maxCsvChars) {
+    if (messages.tooLarge) {
         return invalid("messagesCsv payload exceeds allowed size");
     }
     // connectionsCsv is optional, but when present it must respect the same size
     // ceiling as every other CSV payload rather than being silently truncated.
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
-    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+    const connections = parseCsvSource(payload.connectionsCsv);
+    if (connections.tooLarge) {
         return invalid("connectionsCsv payload exceeds allowed size");
     }
     return valid({
         type: "process",
         requestId: normalizeRequestId(message.requestId),
         payload: {
-            messagesCsv,
-            connectionsCsv,
+            messagesCsv: messages.source,
+            connectionsCsv: connections.source,
         },
     });
 }
@@ -430,11 +469,11 @@ export function parseThreadsWorkerRequest(message) {
         return rejected("Invalid threads worker request envelope");
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
-    const messagesCsv = normalizeString(payload.messagesCsv, LIMITS.maxCsvChars + 1);
-    if (!messagesCsv) {
+    const messages = parseCsvSource(payload.messagesCsv);
+    if (!messages.source) {
         return rejected("Missing messagesCsv payload");
     }
-    if (messagesCsv.length > LIMITS.maxCsvChars) {
+    if (messages.tooLarge) {
         return rejected("messagesCsv payload exceeds allowed size");
     }
     // The connections file the worker derives its self-detection tiebreak keys
@@ -442,16 +481,16 @@ export function parseThreadsWorkerRequest(message) {
     // present it must respect the same size ceiling as every other CSV payload
     // rather than being silently truncated: half a connections file names half
     // the people in it, and the tiebreak would then be wrong rather than absent.
-    const connectionsCsv = normalizeString(payload.connectionsCsv, LIMITS.maxCsvChars + 1);
-    if (connectionsCsv.length > LIMITS.maxCsvChars) {
+    const connections = parseCsvSource(payload.connectionsCsv);
+    if (connections.tooLarge) {
         return rejected("connectionsCsv payload exceeds allowed size");
     }
     return valid({
         type: "threads",
         requestId,
         payload: {
-            messagesCsv,
-            connectionsCsv,
+            messagesCsv: messages.source,
+            connectionsCsv: connections.source,
             people: normalizeNumber(
                 payload.people,
                 LIMITS.maxThreadPeople,
@@ -510,17 +549,17 @@ export function parseStoredUploadFile(file) {
     return valid({
         type,
         name: normalizeString(file.name, LIMITS.maxFileNameChars),
-        text: normalizeString(file.text, LIMITS.maxCsvChars),
+        blob: isBlob(file.blob) ? file.blob : null,
         rowCount: normalizeNumber(file.rowCount, 0, 0, Number.MAX_SAFE_INTEGER),
         updatedAt: normalizeNumber(file.updatedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER),
     });
 }
 
 /**
- * Strip the CSV text from a stored file record, keeping only the metadata the
- * in-memory caches need (status, counts, dataset signatures). The full text
- * stays in IndexedDB and is loaded on demand so large exports aren't retained
- * in memory across the whole session.
+ * Strip the stored upload from a file record, keeping only the metadata the
+ * in-memory caches need (status, counts, dataset signatures). The upload stays
+ * in IndexedDB as a Blob that workers read on demand, so large exports aren't
+ * retained in memory across the whole session.
  * @param {object} file - Stored file record
  * @returns {{type: string, name: string, rowCount: number, updatedAt: number}}
  */

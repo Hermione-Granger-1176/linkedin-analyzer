@@ -23,7 +23,18 @@ vi.mock("../../../src/platform/persistence/data-cache.js", () => {
 });
 
 vi.mock("../../../src/features/cleaning/excel.js", () => ({
-    ExcelGenerator: { generateAndDownload: vi.fn() },
+    ExcelGenerator: { download: vi.fn(), generateAndDownload: vi.fn() },
+}));
+
+vi.mock("../../../src/features/cleaning/csv-export.js", () => ({
+    buildCleanedCsvBlob: vi.fn(() => new Blob(["csv"])),
+    cleanedCsvName: vi.fn((type) => `${type}.csv`),
+}));
+
+// The stored upload is decoded by the real reader elsewhere; the parser is
+// mocked here, so any readable upload decodes to the same placeholder text.
+vi.mock("../../../src/features/upload/read.js", () => ({
+    readCsvSource: vi.fn(async () => "csv"),
 }));
 
 vi.mock("../../../src/platform/persistence/session.js", () => ({
@@ -43,6 +54,7 @@ vi.mock("../../../src/shared/ui/mascot.js", () => ({
 }));
 
 let CleanPage;
+let CsvExport;
 let DataCache;
 let ExcelGenerator;
 let LinkedInCleaner;
@@ -66,6 +78,7 @@ describe("CleanPage", () => {
             </section>
             <section id="cleanDownloadSection" hidden></section>
             <button id="cleanDownloadBtn"></button>
+            <button id="cleanCsvBtn"></button>
             <div id="cleanErrorMessage" hidden><span id="cleanErrorText"></span></div>
             <label><input type="radio" name="cleanFileType" value="shares" checked /></label>
             <label><input type="radio" name="cleanFileType" value="comments" /></label>
@@ -75,6 +88,7 @@ describe("CleanPage", () => {
 
         vi.resetModules();
         ({ CleanPage } = await import("../../../src/features/cleaning/screen.js"));
+        CsvExport = await import("../../../src/features/cleaning/csv-export.js");
         ({ DataCache } = await import("../../../src/platform/persistence/data-cache.js"));
         ({ ExcelGenerator } = await import("../../../src/features/cleaning/excel.js"));
         ({ LinkedInCleaner } = await import("../../../src/features/cleaning/cleaner.js"));
@@ -83,12 +97,14 @@ describe("CleanPage", () => {
         ({ celebrateDownload } = await import("../../../src/shared/ui/mascot.js"));
 
         DataCache.get.mockReturnValue(null);
-        // renderPreview loads the selected file's text on demand; the parser is
-        // mocked, so the text content is irrelevant as long as the load resolves.
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        // renderPreview loads the selected upload on demand; the parser is
+        // mocked, so the contents are irrelevant as long as the load resolves.
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         LinkedInCleaner.process.mockReset();
         ExcelGenerator.generateAndDownload.mockReset();
         ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
+        ExcelGenerator.download.mockReset();
+        CsvExport.buildCleanedCsvBlob.mockClear();
         captureError.mockReset();
         celebrateDownload.mockReset();
     });
@@ -196,6 +212,82 @@ describe("CleanPage", () => {
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
         expect(document.getElementById("cleanErrorText").textContent).toContain("Failed");
         expect(celebrateDownload).not.toHaveBeenCalled();
+    });
+
+    it("refuses an Excel file over the export limit and points to CSV", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 3 }]);
+        // Only the stored upload's size decides the limit.
+        Storage.getFile.mockResolvedValue({ blob: { size: 10 * 1024 * 1024 + 1 } });
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanDownloadBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(ExcelGenerator.generateAndDownload).not.toHaveBeenCalled();
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "over 10 MB, too large to build an Excel file",
+        );
+        expect(captureError).not.toHaveBeenCalled();
+    });
+
+    it("downloads the cleaned rows as CSV and celebrates", async () => {
+        const cleanedData = [{ Title: "Hello", Link: "https://example.com" }];
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 4 }]);
+        LinkedInCleaner.process.mockReturnValue({ success: true, rowCount: 1, cleanedData });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanCsvBtn").click();
+
+        expect(CsvExport.buildCleanedCsvBlob).toHaveBeenCalledWith(cleanedData, "shares");
+        expect(ExcelGenerator.download).toHaveBeenCalledWith(expect.any(Blob), "shares.csv");
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+        expect(celebrateDownload).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports CSV generation errors", async () => {
+        Storage.getAllFiles.mockResolvedValue([{ type: "shares", updatedAt: 5 }]);
+        LinkedInCleaner.process.mockReturnValue({
+            success: true,
+            rowCount: 1,
+            cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
+        });
+        CsvExport.buildCleanedCsvBlob.mockImplementationOnce(() => {
+            throw new Error("boom");
+        });
+
+        await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        document.getElementById("cleanCsvBtn").click();
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Error generating CSV",
+        );
+        expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+            module: "clean",
+            operation: "csv-generate",
+            fileType: "shares",
+        });
+        expect(celebrateDownload).not.toHaveBeenCalled();
+    });
+
+    it("shows an error when a CSV download is attempted with no cached data", async () => {
+        Storage.getAllFiles.mockResolvedValue([]);
+
+        await CleanPage.init();
+        document.getElementById("cleanCsvBtn").click();
+
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "No data to download",
+        );
+        expect(CsvExport.buildCleanedCsvBlob).not.toHaveBeenCalled();
     });
 
     it("shows an error when download is attempted with no cached data", async () => {
@@ -481,11 +573,35 @@ describe("CleanPage", () => {
         document.querySelector('input[value="shares"]').checked = false;
         document.querySelector('input[value="comments"]').checked = true;
 
-        resolveText({ text: "csv" });
+        resolveText({ blob: new Blob(["csv"]) });
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         // The stale shares render must bail after the await instead of parsing.
         expect(LinkedInCleaner.process).not.toHaveBeenCalled();
+    });
+
+    it("drops a stale load failure instead of replacing the newer selection", async () => {
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", updatedAt: 10, rowCount: 1, name: "Shares.csv" },
+            { type: "comments", updatedAt: 20, rowCount: 1, name: "Comments.csv" },
+        ]);
+        let rejectLoad;
+        Storage.getFile.mockReturnValue(
+            new Promise((_resolve, reject) => {
+                rejectLoad = reject;
+            }),
+        );
+
+        await CleanPage.init();
+
+        document.querySelector('input[value="shares"]').checked = false;
+        document.querySelector('input[value="comments"]').checked = true;
+
+        rejectLoad(new Error("read failed"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+        expect(captureError).not.toHaveBeenCalled();
     });
 
     it("defaults a missing updatedAt to 0 when caching the parse", async () => {

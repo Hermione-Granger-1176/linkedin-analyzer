@@ -256,7 +256,7 @@ export const ConnectionsPage = (() => {
                 "connections:idb-read:start",
                 "connections:idb-read:end",
             );
-            if (!file || !file.text) {
+            if (!file || !file.blob) {
                 setEmptyState(
                     "No connections data available yet",
                     "Upload Connections.csv on the Home page to see your network analytics.",
@@ -295,7 +295,7 @@ export const ConnectionsPage = (() => {
             worker.postMessage({
                 type: "process",
                 requestId: id,
-                payload: { connectionsCsv: file.text },
+                payload: { connectionsCsv: file.blob },
             });
             /* v8 ignore next 7 */
         } catch (error) {
@@ -319,16 +319,16 @@ export const ConnectionsPage = (() => {
     async function loadConnectionsFile() {
         const cacheKey = "storage:file:connections";
 
-        // The cache holds metadata only, so always load the record (with text)
-        // from storage when parsing. This runs at most once per session (the
-        // dataReady guard skips reloads), so the large export isn't retained.
+        // The cache holds metadata only, so always load the record (with its
+        // Blob) from storage when parsing. The worker reads the Blob, so the
+        // page never holds the file text.
         const file = normalizeConnectionsFile(await Storage.getFile("connections"), "storage");
-        if (file && !file.text) {
-            // Metadata exists but the text record is gone (cleared in another
+        if (file && !file.blob) {
+            // Metadata exists but the file record is gone (cleared in another
             // tab / degraded persistence). Treat it as a load failure so the
             // catch shows the storage-error UI, matching clean/messages, rather
             // than the "not uploaded" empty state.
-            throw new Error("Stored connections text record is missing.");
+            throw new Error("Stored connections file record is missing.");
         }
         if (file) {
             DataCache.set(cacheKey, toStoredFileMetadata(file));
@@ -352,11 +352,11 @@ export const ConnectionsPage = (() => {
             return parsed.value;
         }
 
-        if (typeof file.text === "string") {
+        if (typeof Blob !== "undefined" && file.blob instanceof Blob) {
             return {
                 type: "connections",
                 name: typeof file.name === "string" ? file.name : "Connections.csv",
-                text: file.text,
+                blob: file.blob,
                 rowCount: Number.isFinite(file.rowCount) ? file.rowCount : 0,
                 updatedAt: Number.isFinite(file.updatedAt) ? file.updatedAt : Date.now(),
             };

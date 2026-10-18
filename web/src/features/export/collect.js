@@ -517,7 +517,7 @@ function buildActivityDashboard(view, rangeLabel) {
  * default would print a page whose company and position charts are empty. The
  * growth chart is all-time on screen too, so this also stops one page carrying
  * two different ranges at once.
- * @param {string} connectionsCsv - Raw connections CSV text, or an empty string
+ * @param {Blob|string} connectionsCsv - Stored connections upload, or an empty string
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<object|null>} Dashboard, or null when there is nothing to show
  */
@@ -591,7 +591,7 @@ function listTitle(label, total) {
  *
  * Empty when nothing was sent or received in the window: a year of zeroes drawn
  * as a flat line is the empty axes the layout engine drops a chart to avoid.
- * @param {number[]} rowTimestamps - Timestamp of every message the parse kept
+ * @param {Float64Array} rowTimestamps - Timestamp of every message the parse kept
  * @param {MonthWindow} monthWindow - Months the dashboard covers
  * @returns {Array<{key: string, label: string, value: number}>} Points, oldest first
  */
@@ -682,7 +682,7 @@ function buildLastMessageList(label, contacts, toValue) {
  * Counts and totals are always included; anything that names a person is behind
  * `includeNames`, because a file the reader may forward is not the place to put
  * somebody else's name without being asked.
- * @param {{messagesCsv: string, connectionsCsv: string}} files - Stored export texts
+ * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {boolean} includeNames - Whether the people lists were opted into
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<{dashboard: object|null, window: MonthWindow|null}>} Dashboard and the months it covers
@@ -780,10 +780,12 @@ function buildMessagesDashboard(state, includeNames) {
 /**
  * Read the stored exports the dashboards and the thread section are built from.
  *
- * One read each, shared by every consumer below. A record whose `text` getter
- * throws is treated as absent rather than allowed to abort the export.
+ * One read each, shared by every consumer below. Each is the stored upload
+ * Blob, which the workers read, so the page never holds the file text. A
+ * record whose `blob` getter throws is treated as absent rather than allowed
+ * to abort the export.
  * @param {() => boolean} isCancelled - True once the run has been abandoned
- * @returns {Promise<{messagesCsv: string, connectionsCsv: string}>} Raw CSV texts
+ * @returns {Promise<{messagesCsv: Blob|string, connectionsCsv: Blob|string}>} Stored uploads, or empty strings
  */
 async function readExportFiles(isCancelled) {
     const empty = { messagesCsv: "", connectionsCsv: "" };
@@ -795,23 +797,23 @@ async function readExportFiles(isCancelled) {
         readSafely(() => Storage.getFile("connections"), "load-connections-file"),
     ]);
     return {
-        messagesCsv: readStoredText(messagesFile),
-        connectionsCsv: readStoredText(connectionsFile),
+        messagesCsv: readStoredUpload(messagesFile),
+        connectionsCsv: readStoredUpload(connectionsFile),
     };
 }
 
 /**
- * Read one stored record's text, treating an unreadable one as absent.
+ * Read one stored record's upload Blob, treating an unreadable one as absent.
  *
  * Each record is read on its own rather than the pair together: a messages
  * record whose getter throws used to cost the connections dashboard as well,
  * which is a wider blast radius than the failure deserves.
  * @param {object|null} file - Stored file record
- * @returns {string} Raw CSV text, or an empty string
+ * @returns {Blob|string} The stored upload, or an empty string
  */
-function readStoredText(file) {
+function readStoredUpload(file) {
     try {
-        return file && file.text ? file.text : "";
+        return file && file.blob ? file.blob : "";
     } catch {
         // The caught value came off a stored record holding the user's own
         // export, so only a fixed error is reported.
@@ -830,7 +832,7 @@ function readStoredText(file) {
  * export settles is derived inside the transport's worker rather than here: it
  * was the last whole-file parse this module ran on the UI thread, and it ran on
  * every export that opted message contents in.
- * @param {{messagesCsv: string, connectionsCsv: string}} files - Stored export texts
+ * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<object[]>} Threads for the document
  */

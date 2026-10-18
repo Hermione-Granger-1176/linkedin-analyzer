@@ -11,6 +11,7 @@
  */
 
 import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
+import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
 
 import { collectContactKeys } from "./contact-keys.js";
 import { parseMessagesForExport } from "./messages-parse.js";
@@ -34,25 +35,28 @@ let activeRequestId = 0;
  * on a one-conversation export rather than the thread selection. Nothing about
  * the failure is described, here or anywhere else in this worker, because the
  * value that caused it came from the user's own connections.
- * @param {unknown} connectionsCsv - Raw connections CSV text, when there is one
+ * @param {string} connectionsCsv - Raw connections CSV text, empty when there is none
  * @returns {string[]} Normalized keys, empty when there are none to be had
  */
 function contactKeysFrom(connectionsCsv) {
     try {
-        return collectContactKeys(typeof connectionsCsv === "string" ? connectionsCsv : "");
+        return collectContactKeys(connectionsCsv);
     } catch {
         return [];
     }
 }
 
 /**
- * Parse the messages CSV and pick the recent threads for the export.
- * @param {{messagesCsv?: string, connectionsCsv?: string, people?: number, messagesPerPerson?: number}} payload - Raw payload
- * @returns {{success: boolean, threads: object[], error: string|null}}
+ * Parse the messages CSV and pick the recent threads for the export. Each
+ * file arrives as the stored upload Blob, read here, or as CSV text.
+ * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string, people?: number, messagesPerPerson?: number}} payload - Raw payload
+ * @returns {Promise<{success: boolean, threads: object[], error: string|null}>}
  */
-function processPayload(payload) {
-    /* v8 ignore next */
-    const messagesCsv = typeof payload.messagesCsv === "string" ? payload.messagesCsv : "";
+async function processPayload(payload) {
+    const messagesCsv = await readCsvSource(payload.messagesCsv);
+    // A Connections file that will not read costs the tiebreak, as one that
+    // will not parse does.
+    const { text: connectionsCsv } = await readOptionalCsvSource(payload.connectionsCsv);
     const result = parseMessagesForExport(messagesCsv);
     if (!result.success) {
         return {
@@ -68,7 +72,7 @@ function processPayload(payload) {
         threads: selectRecentThreads(result.rows, {
             people: payload.people,
             messagesPerPerson: payload.messagesPerPerson,
-            contactKeys: contactKeysFrom(payload.connectionsCsv),
+            contactKeys: contactKeysFrom(connectionsCsv),
         }),
         error: null,
     };
@@ -110,7 +114,7 @@ function silenceDefaultReporting(event) {
 
 /* v8 ignore next 17 */
 if (typeof self !== "undefined") {
-    self.addEventListener("message", (event) => {
+    self.addEventListener("message", async (event) => {
         const rawMessage = event.data || {};
         if (!rawMessage || rawMessage.type !== "threads") {
             return;
@@ -128,7 +132,7 @@ if (typeof self !== "undefined") {
             self.postMessage({
                 type: "threads",
                 requestId: message.requestId,
-                payload: processPayload(message.payload),
+                payload: await processPayload(message.payload),
             });
         } catch {
             postThreadsError(message.requestId, RUNTIME_FAILURE);

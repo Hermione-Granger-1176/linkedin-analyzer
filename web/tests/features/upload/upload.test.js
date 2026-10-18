@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_CSV_CHARS } from "../../../src/shared/constants.js";
+import { MAX_CSV_CHARS } from "../../../src/shared/limits.js";
 import { createCanvas, mockMatchMedia, setupDom } from "../../helpers/dom.js";
 
 // The reader path now reads raw bytes via FileReader.readAsArrayBuffer, so mock
@@ -444,6 +444,299 @@ describe("UploadPage", () => {
         const hint = document.getElementById("uploadHint");
         expect(hint.textContent).toContain("Unable to clear stored data");
         expect(hint.classList.contains("is-error")).toBe(true);
+    });
+
+    it("waits for a save in flight before Clear, and skips its follow-up work", async () => {
+        let finishSave;
+        Storage.saveFile.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishSave = resolve;
+                }),
+        );
+        vi.spyOn(Date, "now").mockReturnValue(1234);
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const processed = workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "shares",
+                    fileName: "Shares.csv",
+                    rowCount: 2,
+                    jobId: "Shares.csv:1234:6b851eb851eb85",
+                    analyticsBase: { months: { "2024-01": {} } },
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(Storage.saveFile).toHaveBeenCalled();
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // Clearing now would let the pending save write the upload back after it.
+        expect(Storage.clearAll).not.toHaveBeenCalled();
+
+        finishSave();
+        await processed;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(Storage.clearAll).toHaveBeenCalled();
+        expect(Storage.saveAnalytics).not.toHaveBeenCalled();
+        expect(DataCache.notify).not.toHaveBeenCalledWith(
+            expect.objectContaining({ type: "filesChanged" }),
+        );
+
+        Date.now.mockRestore();
+        Math.random.mockRestore();
+    });
+
+    it("drops a reply that lands while Clear waits on an earlier save", async () => {
+        let finishSave;
+        Storage.saveFile.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishSave = resolve;
+                }),
+        );
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const first = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const second = new File(["csv"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [first, second] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const jobIdFor = (name) =>
+            workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .find((message) => message.type === "addFile" && message.payload.fileName === name)
+                .payload.jobId;
+        const reply = (fileType, fileName) =>
+            workerInstance.listeners.message[0]({
+                data: {
+                    type: "fileProcessed",
+                    payload: { fileType, fileName, rowCount: 1, jobId: jobIdFor(fileName) },
+                },
+            });
+
+        const firstReply = reply("shares", "Shares.csv");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(workerInstance.postMessage).toHaveBeenCalledWith({ type: "clear" });
+
+        // The second file's reply arrives while Clear is still waiting.
+        await reply("comments", "Comments.csv");
+        expect(Storage.saveFile).toHaveBeenCalledTimes(1);
+
+        finishSave();
+        await firstReply;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(Storage.clearAll).toHaveBeenCalled();
+        expect(Storage.saveFile).toHaveBeenCalledTimes(1);
+
+        Math.random.mockRestore();
+    });
+
+    it("processes files dropped during Clear only after it finishes", async () => {
+        let finishClear;
+        Storage.clearAll.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishClear = resolve;
+                }),
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // A second click joins the Clear already running.
+        document.getElementById("clearAllBtn").click();
+        expect(Storage.clearAll).toHaveBeenCalledTimes(1);
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFilePosted = () =>
+            workerInstance.postMessage.mock.calls.some(([message]) => message.type === "addFile");
+        expect(addFilePosted()).toBe(false);
+
+        finishClear();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(addFilePosted()).toBe(true);
+    });
+
+    it("drops an upload and its prime when Clear runs while the prime reads storage", async () => {
+        let finishRead;
+        const read = new Promise((resolve) => {
+            finishRead = resolve;
+        });
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" },
+        ]);
+        Storage.getFile.mockImplementation(() => read);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Comments.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        finishRead({ type: "shares", blob: new Blob(["old"]) });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map(([message]) => message.type);
+        expect(types).toContain("clear");
+        // Neither the files read before Clear nor the upload dropped before it reach the worker.
+        expect(types).not.toContain("restoreFiles");
+        expect(types).not.toContain("addFile");
+    });
+
+    it("drops a post-upload prime whose storage read outlives a Clear", async () => {
+        let holdReads = false;
+        let finishRead;
+        const heldRead = new Promise((resolve) => {
+            finishRead = resolve;
+        });
+        Storage.getFile.mockImplementation(() => (holdReads ? heldRead : Promise.resolve(null)));
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file] });
+        input.dispatchEvent(new Event("change"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const addFile = workerInstance.postMessage.mock.calls
+            .map(([message]) => message)
+            .find((message) => message.type === "addFile");
+        holdReads = true;
+        Storage.getAllFiles.mockResolvedValue([
+            { type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" },
+        ]);
+        await workerInstance.listeners.message[0]({
+            data: {
+                type: "fileProcessed",
+                payload: {
+                    fileType: "shares",
+                    fileName: "Shares.csv",
+                    rowCount: 2,
+                    jobId: addFile.payload.jobId,
+                },
+            },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(Storage.getFile).toHaveBeenCalledWith("shares");
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        finishRead({ type: "shares", blob: new Blob(["old"]) });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const types = workerInstance.postMessage.mock.calls.map(([message]) => message.type);
+        expect(types.indexOf("clear")).toBeGreaterThan(-1);
+        expect(types.slice(types.indexOf("clear"))).not.toContain("restoreFiles");
+
+        Math.random.mockRestore();
+    });
+
+    it("drops a restore read that outlives a Clear", async () => {
+        let finishRead;
+        Storage.getAllFiles.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishRead = resolve;
+                }),
+        );
+
+        UploadPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        document.getElementById("clearAllBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        finishRead([{ type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" }]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(DataCache.set).not.toHaveBeenCalledWith("storage:files", expect.anything());
+    });
+
+    it("times a queued upload from when the job ahead of it finishes", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, "random").mockReturnValue(0.42);
+        try {
+            UploadPage.init();
+            await vi.runAllTimersAsync();
+
+            const first = new File(["csv"], "Shares.csv", { type: "text/csv" });
+            const second = new File(["csv"], "Comments.csv", { type: "text/csv" });
+            const input = document.getElementById("multiFileInput");
+            Object.defineProperty(input, "files", { value: [first, second] });
+            input.dispatchEvent(new Event("change"));
+            await vi.advanceTimersByTimeAsync(0);
+
+            const firstJob = workerInstance.postMessage.mock.calls
+                .map(([message]) => message)
+                .find(
+                    (message) =>
+                        message.type === "addFile" && message.payload.fileName === "Shares.csv",
+                );
+
+            await vi.advanceTimersByTimeAsync(30000);
+            await workerInstance.listeners.message[0]({
+                data: {
+                    type: "fileProcessed",
+                    payload: {
+                        fileType: "shares",
+                        fileName: "Shares.csv",
+                        rowCount: 2,
+                        jobId: firstJob.payload.jobId,
+                    },
+                },
+            });
+
+            // Past the second job's original deadline, but inside a fresh one.
+            await vi.advanceTimersByTimeAsync(30000);
+            const hint = document.getElementById("uploadHint");
+            expect(hint.textContent).not.toContain("Processing took too long");
+
+            await vi.advanceTimersByTimeAsync(16000);
+            expect(hint.textContent).toContain("Processing took too long for Comments.csv");
+        } finally {
+            Math.random.mockRestore();
+            vi.useRealTimers();
+        }
     });
 
     it("skips files above hard upload limit", async () => {
@@ -1255,12 +1548,12 @@ describe("UploadPage", () => {
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getFile.mockImplementation((type) => {
             if (type === "shares") {
-                return Promise.resolve({ type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 });
+                return Promise.resolve({ type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 });
             }
             if (type === "comments") {
                 return Promise.resolve({
                     type: "comments",
-                    text: "comments-head\nc1\nc2\nc3",
+                    blob: new Blob(["comments-head\nc1\nc2\nc3"]),
                     rowCount: 3,
                 });
             }
@@ -1283,13 +1576,13 @@ describe("UploadPage", () => {
         // The pre-upload prime seeds existing shares+comments (text from storage)...
         expect(restoreIndex).toBeGreaterThanOrEqual(0);
         const restoreCall = workerInstance.postMessage.mock.calls[restoreIndex][0];
-        expect(restoreCall.payload.sharesCsv).toContain("shares-head");
-        expect(restoreCall.payload.commentsCsv).toContain("comments-head");
+        expect(await restoreCall.payload.sharesCsv.text()).toContain("shares-head");
+        expect(await restoreCall.payload.commentsCsv.text()).toContain("comments-head");
         // ...and lands before the new file's addFile so the recompute sees both.
         expect(addIndex).toBeGreaterThan(restoreIndex);
         // Connections always travels with the prime so the worker can correlate
         // posting with network growth; none stored here, so it primes empty.
-        expect(restoreCall.payload).toHaveProperty("connectionsCsv", "");
+        expect(restoreCall.payload).toHaveProperty("connectionsCsv", null);
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1357,12 +1650,12 @@ describe("UploadPage", () => {
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
         Storage.getFile.mockImplementation((type) => {
             if (type === "shares") {
-                return Promise.resolve({ type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 });
+                return Promise.resolve({ type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 });
             }
             if (type === "connections") {
                 return Promise.resolve({
                     type: "connections",
-                    text: "connections-head\nc1",
+                    blob: new Blob(["connections-head\nc1"]),
                     rowCount: 5,
                 });
             }
@@ -1383,7 +1676,7 @@ describe("UploadPage", () => {
             .map((c) => c[0])
             .find((m) => m && m.type === "restoreFiles");
         expect(restoreCall).toBeDefined();
-        expect(restoreCall.payload.connectionsCsv).toContain("connections-head");
+        expect(await restoreCall.payload.connectionsCsv.text()).toContain("connections-head");
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1412,7 +1705,7 @@ describe("UploadPage", () => {
             if (type === "connections") {
                 return Promise.resolve({
                     type: "connections",
-                    text: "connections-head\nc1",
+                    blob: new Blob(["connections-head\nc1"]),
                     rowCount: 5,
                 });
             }
@@ -1433,8 +1726,8 @@ describe("UploadPage", () => {
             .map((c) => c[0])
             .find((m) => m && m.type === "restoreFiles");
         expect(restoreCall).toBeDefined();
-        expect(restoreCall.payload.connectionsCsv).toContain("connections-head");
-        expect(restoreCall.payload.sharesCsv).toBe("");
+        expect(await restoreCall.payload.connectionsCsv.text()).toContain("connections-head");
+        expect(restoreCall.payload.sharesCsv).toBeNull();
 
         globalThis.FileReader = originalFileReader;
     });
@@ -1469,7 +1762,7 @@ describe("UploadPage", () => {
         // later loads resolve immediately so the upload's prime can finish.
         let releaseFirstLoad;
         let firstSharesLoad = true;
-        const sharesRecord = { type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 };
+        const sharesRecord = { type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 };
         Storage.getFile.mockImplementation((type) => {
             if (type !== "shares") {
                 return Promise.resolve(null);
@@ -1536,7 +1829,7 @@ describe("UploadPage", () => {
 
         const cachedFiles = [{ type: "shares", rowCount: 2, updatedAt: 10 }];
         Storage.getAllFiles.mockResolvedValue(cachedFiles);
-        Storage.getFile.mockResolvedValue({ type: "shares", text: "shares-head\nr1", rowCount: 2 });
+        Storage.getFile.mockResolvedValue({ type: "shares", blob: new Blob(["shares-head\nr1"]), rowCount: 2 });
         DataCache.get.mockImplementation((key) =>
             key === "storage:files" ? cachedFiles : null,
         );
@@ -1586,7 +1879,7 @@ describe("UploadPage", () => {
         Storage.getAllFiles.mockResolvedValue(storedFiles);
         Storage.getFile.mockImplementation((type) =>
             Promise.resolve(
-                type === "shares" ? { type: "shares", text: "shares-head\nr1\nr2", rowCount: 2 } : null,
+                type === "shares" ? { type: "shares", blob: new Blob(["shares-head\nr1\nr2"]), rowCount: 2 } : null,
             ),
         );
         // Cache miss for "storage:files" forces the storage fallback in the prime.
@@ -1605,9 +1898,8 @@ describe("UploadPage", () => {
         const restoreIndex = types.indexOf("restoreFiles");
         const addIndex = types.indexOf("addFile");
         expect(restoreIndex).toBeGreaterThanOrEqual(0);
-        expect(workerInstance.postMessage.mock.calls[restoreIndex][0].payload.sharesCsv).toContain(
-            "shares-head",
-        );
+        const primed = workerInstance.postMessage.mock.calls[restoreIndex][0].payload;
+        expect(await primed.sharesCsv.text()).toContain("shares-head");
         expect(addIndex).toBeGreaterThan(restoreIndex);
 
         globalThis.FileReader = originalFileReader;
@@ -1957,172 +2249,6 @@ describe("UploadPage", () => {
     });
 
     // --- FileReader error branch ---------------------------------------------
-
-    it("shows error hint and completes job when FileReader errors", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    if (this.onerror) {
-                        this.onerror(new Error("read error"));
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["bad"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-        expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("errors instead of treating a non-ArrayBuffer read result as empty", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    // A successful onload but with a non-ArrayBuffer result must
-                    // report an error, not a silently empty file.
-                    this.result = null;
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("errors when the read result is a truthy non-buffer value", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    // A truthy result without a numeric byteLength (e.g. a stray
-                    // string) must also be rejected, not coerced to empty bytes.
-                    this.result = "not-a-buffer";
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("errors with a clear message when TextDecoder is unavailable", async () => {
-        const originalFileReader = globalThis.FileReader;
-        const originalTextDecoder = globalThis.TextDecoder;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    this.result = encodeBuf("col\nval");
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-        // Simulate a browser without TextDecoder support.
-        globalThis.TextDecoder = undefined;
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("text-decoding support");
-
-        globalThis.TextDecoder = originalTextDecoder;
-        globalThis.FileReader = originalFileReader;
-    });
-
-    it("falls back when streaming file read rejects with a non-error value", async () => {
-        const originalReadableStream = globalThis.ReadableStream;
-        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["bad"], "Messages.csv", { type: "text/csv" });
-        Object.defineProperty(file, "size", { value: 6 * 1024 * 1024 });
-        Object.defineProperty(file, "stream", {
-            value: () => ({
-                getReader: () => ({
-                    read: () => ({ then: (_resolve, reject) => reject("read failed") }),
-                    cancel: () => Promise.resolve(),
-                }),
-            }),
-        });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(document.getElementById("uploadHint").textContent).toContain("Error reading file");
-
-        globalThis.ReadableStream = originalReadableStream;
-    });
 
     // --- oversize file warning -----------------------------------------------
 
@@ -2751,24 +2877,7 @@ describe("UploadPage", () => {
 
     // --- encoding fallback (UTF-8 -> windows-1252) ---------------------------
 
-    it("falls back to windows-1252 when the read is not valid UTF-8", async () => {
-        const originalFileReader = globalThis.FileReader;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                readAsArrayBuffer() {
-                    // 0xE9 is an invalid UTF-8 lead byte, so the strict UTF-8
-                    // decode fails and the bytes fall back to windows-1252 ("é").
-                    this.result = new Uint8Array([0xe9]).buffer;
-                    if (this.onload) {
-                        this.onload();
-                    }
-                },
-            };
-        };
-
+    it("posts the File to the worker and shows the fallback hint the worker reports", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -2778,98 +2887,24 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
+        // The page hands over the File itself; the worker reads and decodes it.
         const addFileCall = workerInstance.postMessage.mock.calls.find(
             (call) => call[0].type === "addFile",
         );
-        expect(addFileCall[0].payload.csvText).toBe("é");
+        expect(addFileCall[0].payload.file).toBe(file);
+        expect(addFileCall[0].payload).not.toHaveProperty("csvText");
 
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
-                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
-            },
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(document.getElementById("uploadHint").textContent).toContain(
-            "decoded with a Windows-1252 fallback",
-        );
-
-        globalThis.FileReader = originalFileReader;
-    });
-
-    /**
-     * Build a streaming File-like object whose stream yields the given byte chunks.
-     */
-    function makeStreamFile(name, chunks) {
-        let index = 0;
-        return {
-            name,
-            size: 6 * 1024 * 1024,
-            stream() {
-                return {
-                    getReader() {
-                        return {
-                            read() {
-                                if (index < chunks.length) {
-                                    return Promise.resolve({ done: false, value: chunks[index++] });
-                                }
-                                return Promise.resolve({ done: true, value: undefined });
-                            },
-                            cancel() {
-                                return Promise.resolve();
-                            },
-                        };
-                    },
-                };
-            },
-        };
-    }
-
-    it("streams large UTF-8 files without triggering the encoding fallback", async () => {
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = makeStreamFile("Messages.csv", [new Uint8Array([99, 111, 108, 10, 118, 97, 108])]);
-        const event = new Event("drop");
-        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-        document.getElementById("multiDropZone").dispatchEvent(event);
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const addFileCall = workerInstance.postMessage.mock.calls.find(
-            (call) => call[0].type === "addFile",
-        );
-        expect(addFileCall[0].payload.csvText).toBe("col\nval");
-
-        await workerInstance.listeners.message[0]({
-            data: {
-                type: "fileProcessed",
-                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
-            },
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(document.getElementById("uploadHint").textContent).toContain("File loaded successfully");
-    });
-
-    it("streams large non-UTF-8 files and falls back to windows-1252", async () => {
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        // 0xE9 is an invalid UTF-8 lead byte but decodes to "é" under windows-1252.
-        const file = makeStreamFile("Messages.csv", [new Uint8Array([0xe9])]);
-        const event = new Event("drop");
-        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-        document.getElementById("multiDropZone").dispatchEvent(event);
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const addFileCall = workerInstance.postMessage.mock.calls.find(
-            (call) => call[0].type === "addFile",
-        );
-        expect(addFileCall[0].payload.csvText).toBe("é");
-
-        await workerInstance.listeners.message[0]({
-            data: {
-                type: "fileProcessed",
-                payload: { fileType: "messages", fileName: "Messages.csv", rowCount: 1, jobId: null },
+                payload: {
+                    fileType: "messages",
+                    fileName: "Messages.csv",
+                    rowCount: 1,
+                    jobId: null,
+                    csvText: "é",
+                    usedFallback: true,
+                },
             },
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -2878,23 +2913,23 @@ describe("UploadPage", () => {
         );
     });
 
-    it("rejects a streamed file whose decoded length exceeds the character limit", async () => {
+    it("completes the job with an error hint when posting the File fails", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
+        workerInstance.postMessage.mockImplementation((message) => {
+            if (message.type === "addFile") {
+                throw new Error("DataCloneError");
+            }
+        });
 
-        // One byte over the character limit: bytes (NUL) decode 1:1 to characters,
-        // so the post-decode check (not the byte count) is what trips.
-        const oversized = new Uint8Array(MAX_CSV_CHARS + 1);
-        const file = makeStreamFile("Messages.csv", [oversized]);
-        const event = new Event("drop");
-        Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-        document.getElementById("multiDropZone").dispatchEvent(event);
+        const file = new File(["x"], "Messages.csv", { type: "text/csv" });
+        const input = document.getElementById("multiFileInput");
+        Object.defineProperty(input, "files", { value: [file], configurable: true });
+        input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(
-            workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-        ).toBe(false);
-        expect(document.getElementById("uploadHint").textContent).toContain("text limit");
+        expect(document.getElementById("uploadHint").textContent).toContain("DataCloneError");
+        expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
     });
 
     // --- consumePendingFile by fileName (lines 564-568) ----------------------
@@ -4351,111 +4386,4 @@ describe("UploadPage", () => {
         }
     });
 
-    // --- read watchdog timeouts ----------------------------------------------
-
-    it("rejects a FileReader read that exceeds the timeout", async () => {
-        vi.useFakeTimers();
-        const originalFileReader = globalThis.FileReader;
-        let aborted = false;
-        globalThis.FileReader = function FileReader() {
-            return {
-                result: null,
-                onload: null,
-                onerror: null,
-                // Never resolves, so only the 30s watchdog can settle the read.
-                readAsArrayBuffer() {},
-                abort() {
-                    aborted = true;
-                },
-            };
-        };
-
-        try {
-            UploadPage.init();
-            await vi.advanceTimersByTimeAsync(0);
-
-            const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
-            const input = document.getElementById("multiFileInput");
-            Object.defineProperty(input, "files", { value: [file], configurable: true });
-            input.dispatchEvent(new Event("change"));
-            await vi.advanceTimersByTimeAsync(0);
-
-            // Fire the file-read watchdog (FILE_READ_TIMEOUT_MS = 30000).
-            await vi.advanceTimersByTimeAsync(30000);
-            await vi.advanceTimersByTimeAsync(0);
-
-            expect(aborted).toBe(true);
-            expect(document.getElementById("uploadHint").textContent).toMatch(/timed out/i);
-        } finally {
-            globalThis.FileReader = originalFileReader;
-            vi.useRealTimers();
-        }
-    });
-
-    it("aborts a streamed read that times out mid-stream", async () => {
-        vi.useFakeTimers();
-        const originalReadableStream = globalThis.ReadableStream;
-        globalThis.ReadableStream = originalReadableStream || class ReadableStream {};
-
-        let cancelled = false;
-        let reads = 0;
-        const file = {
-            name: "Messages.csv",
-            size: 6 * 1024 * 1024,
-            stream() {
-                return {
-                    getReader() {
-                        return {
-                            read() {
-                                reads += 1;
-                                if (reads === 1) {
-                                    return Promise.resolve({
-                                        done: false,
-                                        value: new Uint8Array([99]),
-                                    });
-                                }
-                                // The next chunk only arrives after the watchdog has
-                                // already fired, so the loop observes timedOut.
-                                return new Promise((resolve) => {
-                                    setTimeout(
-                                        () =>
-                                            resolve({ done: false, value: new Uint8Array([100]) }),
-                                        40000,
-                                    );
-                                });
-                            },
-                            cancel() {
-                                cancelled = true;
-                                return Promise.resolve();
-                            },
-                        };
-                    },
-                };
-            },
-        };
-
-        try {
-            UploadPage.init();
-            await vi.advanceTimersByTimeAsync(0);
-
-            const event = new Event("drop");
-            Object.defineProperty(event, "dataTransfer", { value: { files: [file] } });
-            document.getElementById("multiDropZone").dispatchEvent(event);
-            await vi.advanceTimersByTimeAsync(0);
-
-            // Fire the stream watchdog, then release the gated second read.
-            await vi.advanceTimersByTimeAsync(30000);
-            await vi.advanceTimersByTimeAsync(11000);
-            await vi.advanceTimersByTimeAsync(0);
-
-            expect(cancelled).toBe(true);
-            expect(document.getElementById("uploadHint").textContent).toMatch(/timed out/i);
-            expect(
-                workerInstance.postMessage.mock.calls.some((call) => call[0].type === "addFile"),
-            ).toBe(false);
-        } finally {
-            globalThis.ReadableStream = originalReadableStream;
-            vi.useRealTimers();
-        }
-    });
 });

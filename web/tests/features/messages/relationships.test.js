@@ -12,6 +12,7 @@ import {
     getSilentConnections,
     getTopContactsInRange,
 } from "../../../src/features/messages/relationships.js";
+import { compactEvents } from "../../helpers/message-events.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const nameKeyFor = (name) => MessagesAnalytics.normalizeName(name);
@@ -23,9 +24,9 @@ const nameKeyFor = (name) => MessagesAnalytics.normalizeName(name);
  */
 function messageState(parts = {}) {
     return {
-        events: [],
+        events: compactEvents([]),
         contacts: new Map(),
-        rowTimestamps: [],
+        rowTimestamps: Float64Array.of(),
         talkedUrlKeys: new Set(),
         talkedNameKeys: new Set(),
         ...parts,
@@ -49,16 +50,16 @@ function connectionState(parts = {}) {
 describe("getTopContactsInRange", () => {
     it("aggregates counts and last-seen timestamps per contact", () => {
         const state = messageState({
-            events: [
+            events: compactEvents([
                 { contactKey: "a", timestamp: 100 },
                 { contactKey: "a", timestamp: 300 },
                 { contactKey: "b", timestamp: 200 },
-            ],
+            ]),
             contacts: new Map([
                 ["a", { name: "Ada", url: "u/ada" }],
                 ["b", { name: "Bob", url: "u/bob" }],
             ]),
-            rowTimestamps: [100, 200, 300],
+            rowTimestamps: Float64Array.of(100, 200, 300),
         });
 
         const result = getTopContactsInRange(state, null);
@@ -71,8 +72,8 @@ describe("getTopContactsInRange", () => {
 
     it("labels contacts missing from the map as Unknown", () => {
         const state = messageState({
-            events: [{ contactKey: "ghost", timestamp: 100 }],
-            rowTimestamps: [100],
+            events: compactEvents([{ contactKey: "ghost", timestamp: 100 }]),
+            rowTimestamps: Float64Array.of(100),
         });
         const result = getTopContactsInRange(state, null);
         expect(result.items[0]).toMatchObject({ name: "Unknown", url: "" });
@@ -80,12 +81,12 @@ describe("getTopContactsInRange", () => {
 
     it("filters events and rows before the range start", () => {
         const state = messageState({
-            events: [
+            events: compactEvents([
                 { contactKey: "a", timestamp: 100 },
                 { contactKey: "a", timestamp: 500 },
-            ],
+            ]),
             contacts: new Map([["a", { name: "Ada", url: "u/ada" }]]),
-            rowTimestamps: [100, 500],
+            rowTimestamps: Float64Array.of(100, 500),
         });
         const result = getTopContactsInRange(state, 300);
         expect(result.items[0].count).toBe(1);
@@ -95,15 +96,15 @@ describe("getTopContactsInRange", () => {
     it("breaks ties by count, then recency, then name", () => {
         const state = messageState({
             // Same count and same last timestamp forces the name tie-break.
-            events: [
+            events: compactEvents([
                 { contactKey: "z", timestamp: 200 },
                 { contactKey: "a", timestamp: 200 },
-            ],
+            ]),
             contacts: new Map([
                 ["z", { name: "Zoe", url: "u/zoe" }],
                 ["a", { name: "Ada", url: "u/ada" }],
             ]),
-            rowTimestamps: [200, 200],
+            rowTimestamps: Float64Array.of(200, 200),
         });
         const result = getTopContactsInRange(state, null);
         expect(result.items.map((item) => item.name)).toEqual(["Ada", "Zoe"]);

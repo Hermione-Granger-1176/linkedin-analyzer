@@ -130,6 +130,7 @@ make bench
 make bench-decode
 make audit-memory-python
 make audit-memory-browser local_libs=1
+make audit-state
 make explore
 ```
 
@@ -144,15 +145,15 @@ make gen-large-export size_mb=30 dir=/tmp/export-30mb
 
 The generator writes `messages.csv`, `Connections.csv`, `Shares.csv`, and `Comments.csv` under the system temp directory by default and refuses to write inside the repository. The same size always produces the same bytes. The data has one self account, a few thousand contacts with stable profile URLs (including different people who share a name), conversation IDs tied to participants, multi-year dates, and message bodies with commas, quotes, line breaks, emoji, and non-Latin scripts.
 
-`make bench-browser` times the real browser flow. It builds the production bundle, serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
+`make bench-browser` times the real browser flow. It builds the bundle in `measurement` mode, which raises the upload limits to 128 MiB per file, 128 Mi characters, and 1,000,000 rows (`web/src/shared/limits.js`; a production build always ignores this), serves it privately, and for each run (3 by default) opens a fresh Chromium, uploads the export, and reports the time from file drop to Analytics and to Messages showing data, one cached Analytics filter change, the combined peak JS heap of the page and every worker, and whether the tab crashed. It prints each run, then the median and range:
 
 ```bash
 make bench-browser size_mb=55
-make bench-browser size_mb=90 cpu=6 gpu=0 mobile=1 budget_mb=300
+make bench-browser size_mb=100 cpu=6 gpu=0 mobile=1 budget_mb=300
 make bench-browser input_dir=data/input runs=5
 ```
 
-`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `messages.csv` takes 80% of the generated size, and the bench stops before launching a browser when any file is over the app's per-file upload limit. Runs use reduced motion, so the optional timeline animation cannot end a filter timing early. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
+`size_mb=N` generates a synthetic export of that size first; otherwise `input_dir` defaults to `data/input`. `messages.csv` takes 80% of the generated size, and the bench stops before launching a browser when any file is over the measurement build's per-file limit. Runs use reduced motion, so the optional timeline animation cannot end a filter timing early. `cpu=N` applies Chromium CPU throttling, `gpu=0` launches with `--disable-gpu`, and `mobile=1` uses a Pixel 7 viewport with touch. `budget_mb=N` fails the run when the combined peak goes over it. The budget is a provisional engineering budget for comparing designs and catching regressions, not a phone safety threshold: it counts only sampled JavaScript heap, not browser, graphics, or native memory, and sampling can miss short peaks.
 
 CPU throttling slows only the page's main thread. Chromium rejects it on worker targets, and a measured worker loop ran at the same speed at rates 1 and 4, so throttled timings understate slow-device time for work done in workers.
 
@@ -181,6 +182,82 @@ What the baselines show:
 - Throttled runs report higher peaks. The likely cause is that slower runs let the 200 ms sampler catch more short-lived allocations; this was not measured separately.
 - CPU throttling reaches only the main thread, so the throttled timings are a lower bound for a slow device.
 - Disabling the GPU changes nothing measurable, because no screen uses WebGL today.
+
+The measurements below follow the large-file pipeline in steps: 4a moved the upload limits to one module (the baseline), 4b let the analytics worker read the uploaded `File`, 4c parsed and cleaned each chunk as it streams, 4d stored message events as typed-array columns and bounded the exports, and 4e stored uploads as `Blob` records that workers read themselves.
+
+At 100 MB, measured with the `measurement` build's higher limits before step 4b of the large-file pipeline, on the same machine. `cpu=1` is 3 runs; `cpu=4` and `cpu=6` are one run each:
+
+| Size   | Options | Analytics ready     | Messages ready      | Cached filter    | Peak heap         |
+| ------ | ------- | ------------------- | ------------------- | ---------------- | ----------------- |
+| 100 MB | `cpu=1` | 7.62 s (7.20-10.67) | 8.05 s (7.65-11.14) | 174 ms (163-184) | 934 MB (919-1101) |
+| 100 MB | `cpu=4` | 10.68 s             | 11.35 s             | 206 ms           | 945 MB            |
+| 100 MB | `cpu=6` | 13.43 s             | 14.31 s             | 280 ms           | 833 MB            |
+
+- At 100 MB the workers hold about 800 MB of the peak and the page about 150 MB, roughly three times the 300 MB budget. Heap grows faster than linearly between 55 and 100 MB.
+- The Python CLI peaks at 1.44 GB RSS on a 107 MiB `messages.csv` from a 128 MiB synthetic export (`make audit-memory-python`), 399 MB on its 10.7 MiB `Connections.csv`, and under 200 MB on the shares and comments files.
+
+After step 4b (the analytics worker reads the uploaded `File` itself), 3 runs at `cpu=1` on the same machine and export:
+
+| Size   | Options | Analytics ready    | Messages ready     | Cached filter    | Peak heap          |
+| ------ | ------- | ------------------ | ------------------ | ---------------- | ------------------ |
+| 100 MB | `cpu=1` | 7.09 s (7.09-7.24) | 7.54 s (7.53-7.72) | 179 ms (144-188) | 1000 MB (997-1001) |
+
+- The workers now hold about 670 MB and the page about 330 MB. The page still receives the decoded text back from the worker for storage, so the total peak did not fall; step 4e removes that copy.
+
+After step 4c (the analytics worker parses and cleans each chunk as it streams), 3 runs at `cpu=1` on the same machine and export:
+
+| Size   | Options | Analytics ready    | Messages ready     | Cached filter    | Peak heap           |
+| ------ | ------- | ------------------ | ------------------ | ---------------- | ------------------- |
+| 100 MB | `cpu=1` | 6.34 s (6.15-7.04) | 6.79 s (6.59-7.44) | 155 ms (155-185) | 1177 MB (1174-1181) |
+
+- Analytics is about 0.75 s faster, but the workers now peak near 845 MB. Cleaned cells are slices of the decoded chunks, so the chunks stay alive, and the worker still joins them into one more full string to return to the page. Step 4e stops returning the text, which removes that copy.
+
+After step 4e (uploads are stored as `Blob` records and every worker reads the stored file itself), 3 runs at `cpu=1` on the same machine and export:
+
+| Size   | Options | Analytics ready    | Messages ready     | Cached filter    | Peak heap        |
+| ------ | ------- | ------------------ | ------------------ | ---------------- | ---------------- |
+| 100 MB | `cpu=1` | 7.99 s (7.64-8.29) | 8.40 s (8.12-8.60) | 180 ms (108-196) | 589 MB (585-593) |
+
+- The peak halved from 1177 MB after step 4c and is 37% below the 934 MB step 4a baseline. The page now holds about 6 MB at the peak, down from 330 MB: it never holds file text.
+- The workers still peak near 585 MB, about twice the provisional 300 MB budget, so the public limits stay where they are. The rest is the decoded text and cleaned rows inside the parsing workers.
+- Analytics is about 5% slower than the step 4a baseline at 100 MB and 1.6 s slower than after step 4c, because the Messages screen's worker now reads the stored file itself rather than receiving text.
+
+### Retained analysis state
+
+`make audit-state` forces garbage collection around each step and reports how many bytes of heap and array-buffer memory each structure keeps alive. It loads the web modules in `measurement` mode, so a 100 MB export passes the raised limits. Cleaned rows are transient: a worker holds them only while it builds state. The page keeps the message and connection state, and the analytics worker keeps its analytics state for filter changes. Field rows show what dropping that field frees, in table order.
+
+Measured on 2026-10-16 after step 4d on the synthetic exports, same machine:
+
+| Structure                    | 10 MB   | 55 MB   | 100 MB   | 100 MB before 4d |
+| ---------------------------- | ------- | ------- | -------- | ---------------- |
+| Cleaned message rows         | 14.0 MB | 76.9 MB | 138.7 MB | 138.6 MB         |
+| Cleaned connection rows      | 2.5 MB  | 13.4 MB | 24.8 MB  | 24.8 MB          |
+| Cleaned share rows           | 1.3 MB  | 6.8 MB  | 11.1 MB  | 11.1 MB          |
+| Cleaned comment rows         | 0.7 MB  | 3.7 MB  | 5.8 MB   | 5.8 MB           |
+| Page message and connections | 6.7 MB  | 23.6 MB | 39.0 MB  | 104.9 MB         |
+| Connection state             | 3.2 MB  | 17.2 MB | 31.1 MB  | 31.1 MB          |
+| Message events               | 0.8 MB  | 2.6 MB  | 4.4 MB   | 64.8 MB          |
+| Message row timestamps       | 0.3 MB  | 1.5 MB  | 2.7 MB   | 8.1 MB           |
+| Message contacts             | 1.2 MB  | 1.2 MB  | 1.2 MB   | 1.2 MB           |
+| Analytics state              | 3.4 MB  | 10.3 MB | 17.7 MB  | 17.7 MB          |
+
+- Storing message events as typed-array columns cut the page's message state at 100 MB from 105 MB to 39 MB. Events went from one object per message to an `Int32Array` of contact IDs and a `Float64Array` of timestamps, which the worker transfers instead of copying.
+- Cleaned message rows are the largest structure, about 1.65 bytes of heap per byte of `messages.csv`. They live only inside the messages worker, so they set its peak, not the page's.
+- The connection state is now the largest thing the page keeps.
+
+### Export memory
+
+`make bench-browser export=excel` adds one cleaned `messages.csv` Excel download from the Clean screen after Messages is ready; `export=pdf` adds a PDF export with message bodies and `export=pdf-summary` one without. The run reports the export time and the combined peak while it runs, which includes every worker still alive. Measured on 2026-10-16 after step 4d, one run each at `cpu=1`, with the step 4e column the median of two runs:
+
+| Export      | 10 MB export   | 30 MB export   | 100 MB export    | 100 MB after 4e |
+| ----------- | -------------- | -------------- | ---------------- | --------------- |
+| Excel       | 2.62 s, 191 MB | 7.64 s, 610 MB | 29.22 s, 1281 MB | refused         |
+| PDF, bodies | 2.47 s, 162 MB | 5.75 s, 458 MB | 18.08 s, 1114 MB | 19.26 s, 648 MB |
+| PDF summary | not measured   | not measured   | 15.00 s, 1927 MB | 12.94 s, 599 MB |
+
+- The Excel workbook costs about 25 MB of heap per MB of `messages.csv`, almost all on the page, so it would pass the 300 MB budget only up to about 12 MB. The Clean screen now builds workbooks only for files up to 10 MiB, says why for larger ones, and offers a cleaned CSV that it writes in 2,000-row parts into a `Blob`, so no single string holds the whole file.
+- Before step 4e both PDF exports went over the budget at 100 MB, with or without message bodies. Most of the peak was the stored text read back from IndexedDB and the analysis workers still alive, not the bodies.
+- After step 4e the PDF export adds about 60 MB with message bodies and about 10 MB without them over the 589 MB analysis peak, and the page holds about 80 MB during the export. The export is no longer what sets the peak, so it gets no size limit of its own; the analysis workers are what must shrink.
 
 ## Run documentation and repository checks
 

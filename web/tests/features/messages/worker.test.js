@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { processPayload } from "../../../src/features/messages/messages-worker.js";
+import { processPayload, transferablesOf } from "../../../src/features/messages/messages-worker.js";
 
 const VALID_MESSAGES_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
@@ -16,23 +16,36 @@ const VALID_CONNECTIONS_CSV = [
 ].join("\n");
 
 describe("messages worker", () => {
-    it("processPayload parses valid messages CSV", () => {
-        const result = processPayload({ messagesCsv: VALID_MESSAGES_CSV });
+    it("processPayload parses valid messages CSV", async () => {
+        const result = await processPayload({ messagesCsv: VALID_MESSAGES_CSV });
 
         expect(result.success).toBe(true);
         expect(result.messagesData.length).toBe(0);
         expect(result.connectionError).toBe(null);
     });
 
-    it("processPayload returns error for invalid messages CSV", () => {
-        const result = processPayload({ messagesCsv: "not,a,valid,csv" });
+    it("transferablesOf lists the event and row timestamp buffers", async () => {
+        const result = await processPayload({ messagesCsv: VALID_MESSAGES_CSV });
+        const { events, rowTimestamps } = result.messageState;
+
+        expect(events.contactIds).toBeInstanceOf(Int32Array);
+        expect(transferablesOf(result)).toEqual([
+            events.contactIds.buffer,
+            events.timestamps.buffer,
+            rowTimestamps.buffer,
+        ]);
+        expect(transferablesOf({ success: false, error: "bad" })).toEqual([]);
+    });
+
+    it("processPayload returns error for invalid messages CSV", async () => {
+        const result = await processPayload({ messagesCsv: "not,a,valid,csv" });
 
         expect(result.success).toBe(false);
         expect(result.error).toBeTruthy();
     });
 
-    it("processPayload parses both messages and connections", () => {
-        const result = processPayload({
+    it("processPayload parses both messages and connections", async () => {
+        const result = await processPayload({
             messagesCsv: VALID_MESSAGES_CSV,
             connectionsCsv: VALID_CONNECTIONS_CSV
         });
@@ -41,8 +54,8 @@ describe("messages worker", () => {
         expect(result.connectionError).toBe(null);
     });
 
-    it("processPayload handles connections failure gracefully", () => {
-        const result = processPayload({
+    it("processPayload handles connections failure gracefully", async () => {
+        const result = await processPayload({
             messagesCsv: VALID_MESSAGES_CSV,
             connectionsCsv: "bad,csv,data"
         });
@@ -51,21 +64,21 @@ describe("messages worker", () => {
         expect(result.connectionError).toBeTruthy();
     });
 
-    it("processPayload handles missing connectionsCsv", () => {
-        const result = processPayload({ messagesCsv: VALID_MESSAGES_CSV });
+    it("processPayload handles missing connectionsCsv", async () => {
+        const result = await processPayload({ messagesCsv: VALID_MESSAGES_CSV });
 
         expect(result.success).toBe(true);
         expect(result.connectionError).toBe(null);
     });
 
-    it("processPayload handles a non-string messagesCsv", () => {
+    it("processPayload handles a non-string messagesCsv", async () => {
         // When messagesCsv is not a string, it defaults to '' which causes a parse failure
-        const result = processPayload({ messagesCsv: null });
+        const result = await processPayload({ messagesCsv: null });
         expect(result.success).toBe(false);
     });
 
-    it("processPayload handles a non-string connectionsCsv", () => {
-        const result = processPayload({ messagesCsv: VALID_MESSAGES_CSV, connectionsCsv: 42 });
+    it("processPayload handles a non-string connectionsCsv", async () => {
+        const result = await processPayload({ messagesCsv: VALID_MESSAGES_CSV, connectionsCsv: 42 });
         // connectionsCsv coerces to '' which means no connections parsed, success=true
         expect(result.success).toBe(true);
         expect(result.connectionError).toBe(null);
@@ -86,7 +99,38 @@ describe("messages worker", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("worker listener posts processed result for process message type", () => {
+    it("processPayload reads stored upload Blobs", async () => {
+        const result = await processPayload({
+            messagesCsv: new Blob([VALID_MESSAGES_CSV]),
+            connectionsCsv: new Blob([VALID_CONNECTIONS_CSV]),
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.connectionError).toBe(null);
+        expect(result.totalInputRows).toBe(1);
+    });
+
+    it("processPayload keeps the messages when Connections.csv will not read", async () => {
+        const read = vi
+            .spyOn(FileReader.prototype, "readAsArrayBuffer")
+            .mockImplementation(function fail() {
+                this.onerror();
+            });
+        try {
+            const result = await processPayload({
+                messagesCsv: VALID_MESSAGES_CSV,
+                connectionsCsv: new Blob([VALID_CONNECTIONS_CSV]),
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.totalInputRows).toBe(1);
+            expect(result.connectionError).toBe("Unable to read Connections.csv.");
+        } finally {
+            read.mockRestore();
+        }
+    });
+
+    it("worker listener posts processed result for process message type", async () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         globalThis.dispatchEvent(
@@ -99,11 +143,12 @@ describe("messages worker", () => {
             })
         );
 
-        expect(postMessageSpy).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(postMessageSpy).toHaveBeenCalledOnce());
         const [msg] = postMessageSpy.mock.calls[0];
         expect(msg.type).toBe("processed");
         expect(msg.requestId).toBe("req-42");
         expect(msg.payload.success).toBe(true);
+        expect(postMessageSpy.mock.calls[0][1]).toHaveLength(3);
 
         postMessageSpy.mockRestore();
     });

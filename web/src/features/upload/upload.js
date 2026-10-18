@@ -11,13 +11,13 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
-import { FILE_TYPES, MAX_CSV_CHARS } from "../../shared/constants.js";
+import { FILE_TYPES } from "../../shared/constants.js";
+import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../../shared/limits.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
 import { hideCatcher, playCatch, showCatcher } from "./mascot.js";
 import { UploadProgress } from "./progress.js";
-import { MAX_FILE_BYTES, readFileAsText } from "./read.js";
 import {
     createEmptyFileMap,
     getTypeSpecificFileCacheKey,
@@ -85,6 +85,14 @@ export const UploadPage = (() => {
     const pendingFiles = new Map();
     const activeJobs = new Set();
     const jobTimeouts = new Map();
+    // Saves still writing a processed upload. Clear waits for them so a save
+    // that began before it cannot write the upload back afterwards.
+    const pendingSaves = new Set();
+    // Bumped by Clear, so a save that began before it skips its analytics,
+    // cache and status continuations.
+    let clearGeneration = 0;
+    // The Clear in progress, so new uploads wait for it rather than racing it.
+    let clearInFlight = null;
     let initialized = false;
     let lastPrimedSignature = null;
     let restorePromise = null;
@@ -256,25 +264,11 @@ export const UploadPage = (() => {
         }
 
         if (clearAllBtn) {
-            clearAllBtn.addEventListener("click", async () => {
-                try {
-                    await Storage.clearAll();
-                    clearPrimeSchedule();
-                    pendingPrimePayload = null;
-                    if (worker) {
-                        worker.postMessage({ type: "clear" });
-                    }
-                    DataCache.clear();
-                    DataCache.notify({ type: "storageCleared" });
-                    lastPrimedSignature = null;
-                    resetProcessingState();
-                    updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
-                } catch (error) {
-                    captureError(error, {
-                        module: "upload",
-                        operation: "clear-all",
+            clearAllBtn.addEventListener("click", () => {
+                if (!clearInFlight) {
+                    clearInFlight = clearAllData().finally(() => {
+                        clearInFlight = null;
                     });
-                    setHint("Unable to clear stored data. Please try again.", true);
                 }
             });
         }
@@ -297,9 +291,14 @@ export const UploadPage = (() => {
         }
 
         restorePromise = (async () => {
+            const generation = clearGeneration;
             await Session.waitForCleanup();
             updateOfflineBanner();
             const files = await Storage.getAllFiles();
+            // A Clear during the read leaves these files describing a wiped store.
+            if (generation !== clearGeneration) {
+                return;
+            }
             const fileMap = getFileMap(files);
             DataCache.set("storage:files", files.map(toStoredFileMetadata));
             // Intentionally do NOT prime the worker on load: the dashboard reads
@@ -308,6 +307,9 @@ export const UploadPage = (() => {
             // does, so priming is deferred to processFiles(), saving a redundant
             // re-parse of shares+comments on every page load.
             const analyticsReady = await hasAnalyticsData();
+            if (generation !== clearGeneration) {
+                return;
+            }
             updateStatus({ fileMap, analyticsReady });
             // If a stale 24h session was wiped, tell the user once rather than
             // letting their previously-uploaded files silently disappear.
@@ -455,6 +457,12 @@ export const UploadPage = (() => {
         const incomingBytes = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
         warnIfStorageLow(incomingBytes);
 
+        // Files dropped during a Clear are processed after it, so the wipe
+        // cannot take them with it.
+        if (clearInFlight) {
+            await clearInFlight;
+        }
+        const generation = clearGeneration;
         if (activeJobs.size === 0) {
             UploadProgress.show(() => activeJobs.size > 0);
         }
@@ -470,6 +478,11 @@ export const UploadPage = (() => {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
         }
+        // Files dropped before a Clear that ran during the priming await went
+        // with it; Clear has already reset the overlay and the jobs.
+        if (generation !== clearGeneration) {
+            return;
+        }
         // Start or join the tracked run only now, in the same task that adds
         // the jobs: earlier jobs finishing during the priming await would
         // otherwise finish the run these files just joined.
@@ -478,30 +491,64 @@ export const UploadPage = (() => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
             scheduleJobTimeout(jobId, file.name);
-            readFileAsText(file)
-                .then(({ text, usedFallback }) => {
-                    pendingFiles.set(jobId, { text, fileName: file.name, usedFallback });
-                    worker.postMessage({
-                        type: "addFile",
-                        payload: {
-                            csvText: text,
-                            fileName: file.name,
-                            jobId,
-                            totalSize: file.size,
-                        },
-                    });
-                })
-                .catch((error) => {
-                    captureError(error, {
-                        module: "upload",
-                        operation: "read-file",
+            // The worker reads the File itself. Posting a File clones a
+            // reference to its bytes, so the page never holds the text; the
+            // page keeps the File to store once the worker accepts it.
+            pendingFiles.set(jobId, { fileName: file.name, file });
+            try {
+                worker.postMessage({
+                    type: "addFile",
+                    payload: {
+                        file,
                         fileName: file.name,
-                        fileSize: file.size,
-                    });
-                    completeJob(jobId, file.name);
-                    setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
+                        jobId,
+                        totalSize: file.size,
+                    },
                 });
+            } catch (error) {
+                captureError(error, {
+                    module: "upload",
+                    operation: "post-file",
+                    fileName: file.name,
+                    fileSize: file.size,
+                });
+                completeJob(jobId, file.name);
+                setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
+            }
         });
+    }
+
+    /**
+     * Wipe stored uploads and analytics.
+     *
+     * Everything that could still start a save is stopped first: the pending
+     * jobs are dropped, so a reply that lands meanwhile finds nothing to save,
+     * and the worker is cleared. Only then does Clear wait out the saves already
+     * writing, so none of them can write an upload back after the wipe.
+     * @returns {Promise<void>}
+     */
+    async function clearAllData() {
+        clearGeneration += 1;
+        resetProcessingState();
+        clearPrimeSchedule();
+        pendingPrimePayload = null;
+        lastPrimedSignature = null;
+        if (worker) {
+            worker.postMessage({ type: "clear" });
+        }
+        try {
+            await Promise.allSettled(pendingSaves);
+            await Storage.clearAll();
+            DataCache.clear();
+            DataCache.notify({ type: "storageCleared" });
+            updateStatus({ fileMap: createEmptyFileMap(), analyticsReady: false });
+        } catch (error) {
+            captureError(error, {
+                module: "upload",
+                operation: "clear-all",
+            });
+            setHint("Unable to clear stored data. Please try again.", true);
+        }
     }
 
     /**
@@ -614,18 +661,32 @@ export const UploadPage = (() => {
             return;
         }
 
+        const generation = clearGeneration;
+        const save = persistProcessedFile(
+            fileType,
+            fileName,
+            pending.file,
+            rowCount,
+            payload.analyticsBase,
+            generation,
+        );
+        pendingSaves.add(save);
         try {
-            const text = pending.text;
-
-            await persistProcessedFile(fileType, fileName, text, rowCount, payload.analyticsBase);
-            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase);
+            await save;
+            if (generation !== clearGeneration) {
+                return;
+            }
+            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase, generation);
 
             const files = await getStoredFilesSnapshot();
             const fileMap = getFileMap(files);
             const analyticsReady = await hasAnalyticsData();
+            if (generation !== clearGeneration) {
+                return;
+            }
             updateStatus({ fileMap, analyticsReady });
             setHint(
-                pending.usedFallback
+                payload.usedFallback
                     ? "File loaded, but some characters weren't valid UTF-8 and were decoded with a Windows-1252 fallback. Double-check accented names."
                     : "File loaded successfully.",
                 false,
@@ -649,6 +710,7 @@ export const UploadPage = (() => {
                 setHint("Error saving file data. Please try again.", true);
             }
         } finally {
+            pendingSaves.delete(save);
             completeJob(jobId, fileName);
         }
     }
@@ -671,17 +733,25 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Persist processed file payload in IndexedDB.
+     * Persist the original upload and its analytics in IndexedDB.
      * @param {string} fileType - Processed file type
      * @param {string} fileName - Uploaded file name
-     * @param {string} text - Raw CSV text
+     * @param {Blob} blob - The uploaded File
      * @param {number} rowCount - Processed row count
      * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @param {number} generation - Clear generation the upload was processed under
      * @returns {Promise<void>}
      */
-    async function persistProcessedFile(fileType, fileName, text, rowCount, analyticsBase) {
-        await Storage.saveFile(fileType, { name: fileName, text, rowCount });
-        if (!analyticsBase) {
+    async function persistProcessedFile(
+        fileType,
+        fileName,
+        blob,
+        rowCount,
+        analyticsBase,
+        generation,
+    ) {
+        await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+        if (!analyticsBase || generation !== clearGeneration) {
             return;
         }
         await Storage.saveAnalytics(analyticsBase);
@@ -691,9 +761,10 @@ export const UploadPage = (() => {
      * Sync in-memory caches and notify listeners after file persistence.
      * @param {string} fileType - Processed file type
      * @param {object|undefined} analyticsBase - Optional analytics aggregate base
+     * @param {number} generation - Clear generation the upload was processed under
      * @returns {Promise<void>}
      */
-    async function syncCacheAfterProcessedFile(fileType, analyticsBase) {
+    async function syncCacheAfterProcessedFile(fileType, analyticsBase, generation) {
         DataCache.invalidate("storage:");
         DataCache.invalidate("clean:");
         DataCache.invalidate("messages:");
@@ -703,6 +774,10 @@ export const UploadPage = (() => {
         DataCache.invalidate("insights:");
 
         const files = await Storage.getAllFiles();
+        // A Clear during the read would have these stale files cached after it.
+        if (generation !== clearGeneration) {
+            return;
+        }
         DataCache.set("storage:files", files.map(toStoredFileMetadata));
         syncTypeSpecificFileCache(fileType, files);
 
@@ -797,6 +872,12 @@ export const UploadPage = (() => {
         pendingFiles.delete(resolvedJobId);
         clearJobTimeout(resolvedJobId);
         activeJobs.delete(resolvedJobId);
+        // The worker takes jobs one at a time, so a job still waiting on it has
+        // spent its watchdog behind this one. Restart those so each is timed
+        // from when it can start; the job now running still stops a stall.
+        pendingFiles.forEach((entry, waitingJobId) => {
+            scheduleJobTimeout(waitingJobId, entry.fileName);
+        });
         checkJobs();
     }
 
@@ -1007,9 +1088,10 @@ export const UploadPage = (() => {
         }
         const { signature } = pendingPrimePayload;
         pendingPrimePayload = null;
+        const generation = clearGeneration;
 
         const previous = primeInFlight || Promise.resolve();
-        const run = previous.then(() => postPrimeToWorker(signature));
+        const run = previous.then(() => postPrimeToWorker(signature, generation));
         const trackedRun = run.finally(() => {
             if (primeInFlight === trackedRun) {
                 primeInFlight = null;
@@ -1020,23 +1102,24 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Load the captured shares/comments text from storage and post it to the
-     * worker. Text is fetched here (not held in the file cache) so large exports
-     * stay in IndexedDB. Best-effort: a load failure is logged and skipped. Runs
+     * Load the stored shares/comments uploads and post them to the worker,
+     * which reads them. Blobs are fetched here (not held in the file cache),
+     * and posting one passes a reference rather than the file's contents. Best-effort: a load failure is logged and skipped. Runs
      * inside the `primeInFlight` chain so posts stay ordered.
      * @param {string} signature - Payload signature recorded once posted
+     * @param {number} generation - Clear generation the prime was requested under
      * @returns {Promise<void>}
      */
-    async function postPrimeToWorker(signature) {
+    async function postPrimeToWorker(signature, generation) {
         // Entry guard for a worker torn down before the chained post runs; the
         // caller only reaches here with a live worker in unit flows.
         /* v8 ignore next 3 */
         if (!worker) {
             return;
         }
-        let sharesCsv = "";
-        let commentsCsv = "";
-        let connectionsCsv = "";
+        let sharesCsv = null;
+        let commentsCsv = null;
+        let connectionsCsv = null;
         try {
             // Connections feeds the posting-vs-network-growth correlation, so it
             // primes alongside shares/comments even though it is not a posting source.
@@ -1045,12 +1128,17 @@ export const UploadPage = (() => {
                 Storage.getFile("comments"),
                 Storage.getFile("connections"),
             ]);
-            sharesCsv = sharesFile && sharesFile.text ? sharesFile.text : "";
-            commentsCsv = commentsFile && commentsFile.text ? commentsFile.text : "";
-            connectionsCsv = connectionsFile && connectionsFile.text ? connectionsFile.text : "";
+            sharesCsv = sharesFile ? sharesFile.blob : null;
+            commentsCsv = commentsFile ? commentsFile.blob : null;
+            connectionsCsv = connectionsFile ? connectionsFile.blob : null;
         } catch (error) {
             // Leave lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-load-text" });
+            return;
+        }
+        // Posting files read before a Clear would restore them into the worker
+        // after the clear it was sent.
+        if (generation !== clearGeneration) {
             return;
         }
 

@@ -424,6 +424,34 @@ describe("loadRecentThreads", () => {
         });
     });
 
+    it("reads stored upload Blobs on the main thread", async () => {
+        harness.uninstall();
+
+        const threads = await loadRecentThreads(new Blob([MESSAGES_CSV]), new Blob([CONNECTIONS_CSV]));
+
+        expect(threads.map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
+    });
+
+    it("returns no threads on the main thread when a stored upload cannot be read", async () => {
+        harness.uninstall();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        expect(await loadRecentThreads(new Blob([MESSAGES_CSV]), "")).toEqual([]);
+    });
+
+    it("keeps the threads on the main thread when only the connections file cannot be read", async () => {
+        harness.uninstall();
+        vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
+            this.onerror();
+        });
+
+        const threads = await loadRecentThreads(MESSAGES_CSV, new Blob([CONNECTIONS_CSV]));
+
+        expect(threads.map((thread) => thread.name)).toEqual(["Bob", "Ada"]);
+    });
+
     it("selects on the main thread when workers are unavailable", async () => {
         harness.uninstall();
 

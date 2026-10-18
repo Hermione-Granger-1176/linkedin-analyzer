@@ -2,19 +2,24 @@
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
 
 import { MessagesAnalytics } from "./analytics.js";
 
+const CONNECTIONS_READ_ERROR = "Unable to read Connections.csv.";
+
 /**
- * Parse messages and connections CSV payload.
- * @param {{messagesCsv?: string, connectionsCsv?: string}} payload - Raw CSV payload
- * @returns {{success: boolean, messageState?: object, connectionState?: object, totalInputRows?: number, connectionError?: string|null, error?: string, messagesData?: object[], connectionsData?: object[]}}
+ * Parse messages and connections payload. Each file arrives as the stored
+ * upload Blob, read here off the main thread, or as CSV text.
+ * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Raw payload
+ * @returns {Promise<{success: boolean, messageState?: object, connectionState?: object, totalInputRows?: number, connectionError?: string|null, error?: string, messagesData?: object[], connectionsData?: object[]}>}
  */
-function processPayload(payload) {
-    /* v8 ignore next */
-    const messagesCsv = typeof payload.messagesCsv === "string" ? payload.messagesCsv : "";
-    /* v8 ignore next */
-    const connectionsCsv = typeof payload.connectionsCsv === "string" ? payload.connectionsCsv : "";
+async function processPayload(payload) {
+    const messagesCsv = await readCsvSource(payload.messagesCsv);
+    // Connections is optional: a file that will not read degrades like one that
+    // will not parse, so the messages still load.
+    const connections = await readOptionalCsvSource(payload.connectionsCsv);
+    const connectionsCsv = connections.text;
 
     const messagesResult = LinkedInCleaner.process(messagesCsv, "messages");
     if (!messagesResult.success) {
@@ -26,7 +31,7 @@ function processPayload(payload) {
     }
 
     let connectionsData = [];
-    let connectionError = null;
+    let connectionError = connections.failed ? CONNECTIONS_READ_ERROR : null;
 
     if (connectionsCsv) {
         const connectionsResult = LinkedInCleaner.process(connectionsCsv, "connections");
@@ -73,6 +78,20 @@ function serializeMessageState(state) {
         latestTimestamp: state.latestTimestamp,
         outreach: state.outreach,
     };
+}
+
+/**
+ * List the typed-array buffers in a processed payload, so posting it moves
+ * them to the page instead of copying them.
+ * @param {{messageState?: object|null}} payload - Processed payload
+ * @returns {ArrayBuffer[]}
+ */
+function transferablesOf(payload) {
+    if (!payload.messageState) {
+        return [];
+    }
+    const { events, rowTimestamps } = payload.messageState;
+    return [events.contactIds.buffer, events.timestamps.buffer, rowTimestamps.buffer];
 }
 
 /**
@@ -148,9 +167,9 @@ function extractWorkerRejection(event) {
     return event.reason;
 }
 
-/* v8 ignore next 16 */
+/* v8 ignore next 19 */
 if (typeof self !== "undefined") {
-    self.addEventListener("message", (event) => {
+    self.addEventListener("message", async (event) => {
         const rawMessage = event.data || {};
         if (!rawMessage || rawMessage.type !== "process") {
             return;
@@ -164,12 +183,15 @@ if (typeof self !== "undefined") {
 
         const message = parsed.value;
         try {
-            const payload = processPayload(message.payload);
-            self.postMessage({
-                type: "processed",
-                requestId: message.requestId,
-                payload,
-            });
+            const payload = await processPayload(message.payload);
+            self.postMessage(
+                {
+                    type: "processed",
+                    requestId: message.requestId,
+                    payload,
+                },
+                transferablesOf(payload),
+            );
         } catch (error) {
             postProcessedError(message.requestId, error);
         }
@@ -184,4 +206,4 @@ if (typeof self !== "undefined") {
     });
 }
 
-export { processPayload };
+export { processPayload, transferablesOf };

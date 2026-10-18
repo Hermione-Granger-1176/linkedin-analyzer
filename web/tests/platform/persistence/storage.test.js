@@ -1,7 +1,8 @@
+// @vitest-environment node
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Storage } from "../../../src/platform/persistence/storage.js";
+import { probeBlobStorage, Storage } from "../../../src/platform/persistence/storage.js";
 
 describe("Storage", () => {
     it("reports isAvailable as true when IndexedDB exists", () => {
@@ -12,9 +13,49 @@ describe("Storage", () => {
         await Storage.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 });
         const file = await Storage.getFile("shares");
         expect(file.name).toBe("Shares.csv");
-        expect(file.text).toBe("a,b");
+        expect(await file.blob.text()).toBe("a,b");
+        expect(file.size).toBe(3);
         const files = await Storage.getAllFiles();
         expect(files.length).toBe(1);
+    });
+
+    it("stores the bytes when the browser refuses a Blob, and reads them back as a File", async () => {
+        const put = IDBObjectStore.prototype.put;
+        const spy = vi
+            .spyOn(IDBObjectStore.prototype, "put")
+            .mockImplementation(function guarded(value, key) {
+                // WebKit's ephemeral sessions reject Blobs in IndexedDB.
+                if (value && value.blob instanceof Blob) {
+                    throw new DOMException("Error preparing Blob/File data", "UnknownError");
+                }
+                return put.call(this, value, key);
+            });
+        try {
+            await Storage.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 });
+        } finally {
+            spy.mockRestore();
+        }
+        const file = await Storage.getFile("shares");
+        expect(file.blob).toBeInstanceOf(Blob);
+        expect(file.blob.name).toBe("Shares.csv");
+        expect(await file.blob.text()).toBe("a,b");
+        expect(file.rowCount).toBe(2);
+    });
+
+    it("rejects a save that fails with no Blob to fall back from, or fails again as bytes", async () => {
+        const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(() => {
+            throw new DOMException("Quota exceeded", "QuotaExceededError");
+        });
+        try {
+            await expect(
+                Storage.saveFile("shares", { name: "Shares.csv", rowCount: 0 }),
+            ).rejects.toThrow("Quota exceeded");
+            await expect(
+                Storage.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 }),
+            ).rejects.toThrow("Quota exceeded");
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it("saves and retrieves analytics", async () => {
@@ -124,12 +165,12 @@ describe("Storage", () => {
         await Storage.clearAll();
         await Storage.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 1 });
         const file = await Storage.getFile("shares");
-        expect(file.schemaVersion).toBe(2);
+        expect(file.schemaVersion).toBe(3);
     });
 
     it("ignores future-version file records during reads", async () => {
         const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("linkedin-analyzer", 3);
+            const request = indexedDB.open("linkedin-analyzer", 4);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -155,7 +196,7 @@ describe("Storage", () => {
 
     it("ignores future-version analytics records during reads", async () => {
         const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("linkedin-analyzer", 3);
+            const request = indexedDB.open("linkedin-analyzer", 4);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -179,7 +220,7 @@ describe("Storage", () => {
 
     it("reads legacy analytics records without wrapped data payload", async () => {
         const db = await new Promise((resolve, reject) => {
-            const request = indexedDB.open("linkedin-analyzer", 3);
+            const request = indexedDB.open("linkedin-analyzer", 4);
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
@@ -301,7 +342,7 @@ describe("Storage", () => {
     describe("record normalization fallbacks", () => {
         async function openRawDb() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open("linkedin-analyzer", 3);
+                const request = indexedDB.open("linkedin-analyzer", 4);
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
@@ -326,10 +367,10 @@ describe("Storage", () => {
             db.close();
 
             const file = await Storage.getFile("shares");
-            expect(file.schemaVersion).toBe(2);
+            expect(file.schemaVersion).toBe(3);
             expect(file.updatedAt).toBe(0);
             expect(file.rowCount).toBe(0);
-            expect(file.text).toBe("a,b");
+            expect(await file.blob.text()).toBe("a,b");
         });
 
         it("falls back to inline text when the text store row is not a string", async () => {
@@ -348,7 +389,7 @@ describe("Storage", () => {
             db.close();
 
             const file = await Storage.getFile("shares");
-            expect(file.text).toBe("inline-text");
+            expect(await file.blob.text()).toBe("inline-text");
         });
 
         it("drops future-version records from getAllFiles", async () => {
@@ -411,7 +452,7 @@ describe("Storage", () => {
 
             expect((await MemStorage.getOutreach()).selfInitiated).toBe(9);
             await MemStorage.saveFile("shares", { name: "m.csv", text: "a,b", rowCount: 2 });
-            expect((await MemStorage.getFile("shares")).text).toBe("a,b");
+            expect(await (await MemStorage.getFile("shares")).blob.text()).toBe("a,b");
             await MemStorage.saveAnalytics({ months: { "2024-03": { total: 1 } } });
             expect((await MemStorage.getAnalytics()).months["2024-03"].total).toBe(1);
             expect((await MemStorage.getAllFiles()).length).toBe(1);
@@ -421,6 +462,70 @@ describe("Storage", () => {
             expect(await MemStorage.getFile("shares")).toBeNull();
 
             openSpy.mockRestore();
+        });
+    });
+
+    describe("version 4 Blob records", () => {
+        it("stores the original upload as a Blob and returns it unchanged", async () => {
+            await Storage.clearAll();
+            const upload = new File(["h\u00e9llo,world"], "Shares.csv", { type: "text/csv" });
+            await Storage.saveFile("shares", { name: "Shares.csv", blob: upload, rowCount: 1 });
+
+            const file = await Storage.getFile("shares");
+            expect(file.blob).toBeInstanceOf(Blob);
+            expect(file.size).toBe(upload.size);
+            expect(await file.blob.text()).toBe("h\u00e9llo,world");
+            const [metadata] = await Storage.getAllFiles();
+            expect(metadata).toMatchObject({ type: "shares", size: upload.size, rowCount: 1 });
+            expect(metadata.blob).toBeUndefined();
+        });
+
+        it("reads a version 3 text record and replaces it on the next save", async () => {
+            await Storage.clearAll();
+            const db = await new Promise((resolve, reject) => {
+                const request = indexedDB.open("linkedin-analyzer", 4);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            const put = (storeName, record) =>
+                new Promise((resolve, reject) => {
+                    const tx = db.transaction(storeName, "readwrite");
+                    tx.objectStore(storeName).put(record);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            await put("files", {
+                type: "messages",
+                name: "messages.csv",
+                rowCount: 2,
+                updatedAt: 5,
+                schemaVersion: 2,
+            });
+            await put("fileTexts", { type: "messages", text: "v3-text" });
+
+            const legacy = await Storage.getFile("messages");
+            expect(await legacy.blob.text()).toBe("v3-text");
+            expect(legacy.size).toBe(7);
+
+            const upload = new File(["v4-bytes"], "messages.csv", { type: "text/csv" });
+            await Storage.saveFile("messages", { name: "messages.csv", blob: upload, rowCount: 3 });
+            const textRecord = await new Promise((resolve, reject) => {
+                const tx = db.transaction("fileTexts", "readonly");
+                const request = tx.objectStore("fileTexts").get("messages");
+                tx.oncomplete = () => resolve(request.result);
+                tx.onerror = () => reject(tx.error);
+            });
+            db.close();
+            expect(textRecord).toBeUndefined();
+            expect(await (await Storage.getFile("messages")).blob.text()).toBe("v4-bytes");
+        });
+
+        it("returns a null blob when a record has no contents", async () => {
+            await Storage.clearAll();
+            await Storage.saveFile("comments", { name: "empty.csv", text: "", rowCount: 0 });
+            const file = await Storage.getFile("comments");
+            expect(file.blob).toBeNull();
+            expect(file.size).toBe(0);
         });
     });
 
@@ -444,7 +549,7 @@ describe("Storage", () => {
             await new Promise((resolve, reject) => {
                 // Open above the current schema version to force an upgrade, which
                 // fires versionchange on the shared connection.
-                const request = indexedDB.open("linkedin-analyzer", 4);
+                const request = indexedDB.open("linkedin-analyzer", 5);
                 request.onupgradeneeded = () => {};
                 request.onsuccess = () => {
                     request.result.close();
@@ -512,12 +617,13 @@ describe("Storage", () => {
             expect(all[0].rowCount).toBe(5);
             expect(all[0].text).toBeUndefined();
             const file = await MigratedStorage.getFile("messages");
-            expect(file.text).toBe("legacy-csv-text");
+            expect(await file.blob.text()).toBe("legacy-csv-text");
+            expect(file.blob.name).toBe("messages.csv");
 
             // Inspect the raw stores to prove the migration actually moved the text
             // out of the metadata store (rather than getFile falling back to inline).
             const rawDb = await new Promise((resolve, reject) => {
-                const request = indexedDB.open("linkedin-analyzer", 3);
+                const request = indexedDB.open("linkedin-analyzer", 4);
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
@@ -532,5 +638,114 @@ describe("Storage", () => {
             expect(fileRecord.text).toBeUndefined();
             expect(textRecord.text).toBe("legacy-csv-text");
         });
+    });
+});
+
+/**
+ * Build an IDBFactory stand-in whose probe database behaves as told.
+ * @param {{open?: (request: object) => void, put?: () => void, stored?: unknown, abort?: boolean, deleteThrows?: boolean}} behavior - Probe behavior
+ * @returns {{idb: IDBFactory, closed: () => number}}
+ */
+function fakeIdb(behavior) {
+    let closes = 0;
+    const db = {
+        close: () => {
+            closes += 1;
+        },
+        transaction: () => {
+            const tx = {};
+            const read = { result: behavior.stored };
+            setTimeout(() => (behavior.abort ? tx.onabort?.() : tx.oncomplete?.()), 0);
+            tx.objectStore = () => ({ put: behavior.put || (() => {}), get: () => read });
+            return tx;
+        },
+    };
+    const idb = {
+        open: () => {
+            const request = { result: db };
+            setTimeout(() => (behavior.open || ((r) => r.onsuccess()))(request), 0);
+            return request;
+        },
+        deleteDatabase: () => {
+            if (behavior.deleteThrows) {
+                throw new Error("blocked");
+            }
+        },
+    };
+    return { idb: /** @type {IDBFactory} */ (/** @type {unknown} */ (idb)), closed: () => closes };
+}
+
+describe("probeBlobStorage", () => {
+    it("reports support when a Blob stores and reads back", async () => {
+        expect(await probeBlobStorage()).toBe(true);
+        const { idb } = fakeIdb({ stored: new Blob(["probe"]), deleteThrows: true });
+        expect(await probeBlobStorage({ idb })).toBe(true);
+    });
+
+    it("reports no support when the probe cannot store or read a Blob", async () => {
+        const cases = [
+            { open: (request) => request.onerror() },
+            {
+                put: () => {
+                    throw new DOMException("refused", "UnknownError");
+                },
+            },
+            { abort: true },
+            { stored: "probe" },
+            { stored: new Blob(["other"]) },
+            {
+                stored: Object.assign(new Blob(["probe"]), {
+                    text: () => Promise.reject(new Error("gone")),
+                }),
+            },
+        ];
+        for (const behavior of cases) {
+            expect(await probeBlobStorage(fakeIdb(behavior))).toBe(false);
+        }
+        const throwing = {
+            open: () => {
+                throw new Error("no idb");
+            },
+            deleteDatabase: () => {},
+        };
+        expect(
+            await probeBlobStorage({
+                idb: /** @type {IDBFactory} */ (/** @type {unknown} */ (throwing)),
+            }),
+        ).toBe(false);
+    });
+
+    it("gives up on a probe that never answers and releases a late connection", async () => {
+        let late;
+        const { idb, closed } = fakeIdb({
+            open: (request) => {
+                late = request;
+            },
+        });
+        expect(await probeBlobStorage({ idb, timeoutMs: 5 })).toBe(false);
+        late.onsuccess();
+        expect(closed()).toBe(1);
+    });
+
+    it("stores bytes from the start when the session cannot store Blobs", async () => {
+        const put = IDBObjectStore.prototype.put;
+        const spy = vi
+            .spyOn(IDBObjectStore.prototype, "put")
+            .mockImplementation(function guarded(value, key) {
+                if (value instanceof Blob || (value && value.blob instanceof Blob)) {
+                    throw new DOMException("Error preparing Blob/File data", "UnknownError");
+                }
+                return put.call(this, value, key);
+            });
+        try {
+            vi.resetModules();
+            const { Storage: Fresh } = await import("../../../src/platform/persistence/storage.js");
+            await Fresh.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 });
+            // One attempt only: the probe already said Blobs will not store.
+            expect(spy.mock.calls.filter(([value]) => value && "blob" in value)).toHaveLength(1);
+            expect(await (await Fresh.getFile("shares")).blob.text()).toBe("a,b");
+        } finally {
+            spy.mockRestore();
+        }
     });
 });

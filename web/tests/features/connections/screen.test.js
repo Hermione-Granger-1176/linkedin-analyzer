@@ -157,7 +157,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("renders stats and charts on worker success", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -190,7 +190,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("excludes impossible connection dates from range analytics", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -221,7 +221,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("shows tooltip on chart hover", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -235,7 +235,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("syncs range into router on button click", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -250,7 +250,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("sets empty state when worker fires error event", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -266,7 +266,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("recreates the worker after a worker-level error", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -291,7 +291,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("sets empty state when worker sends error payload message", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -312,7 +312,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("hides tooltip when mouseleave fires on chart canvas", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -330,7 +330,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("hides tooltip on hover when no item found at position", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -344,7 +344,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("onRouteLeave hides tooltip and loading", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -355,7 +355,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("calls drawTopics for companies and positions charts", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -388,7 +388,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("shows empty state when processed payload has success=false", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -414,7 +414,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("shows empty state when rows result in no data", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -441,7 +441,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("does not sync route when not on connections route", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         AppRouter.getCurrentRoute.mockReturnValue({ name: "home", params: {} });
@@ -455,7 +455,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("syncRouteRange leaves the route alone when another screen owns it", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         // Set route to something other than 'connections'
@@ -475,7 +475,7 @@ describe("ConnectionsPage", () => {
         // Remove the connectionsGrid element from DOM before init
         document.getElementById("connectionsGrid").remove();
 
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         // Should not throw even without connectionsGrid
@@ -489,7 +489,7 @@ describe("ConnectionsPage", () => {
     it("showTooltip does nothing when the tooltip element is absent", async () => {
         document.getElementById("chartTooltip").remove();
 
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -504,7 +504,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("ignores processed message with mismatched requestId", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -525,7 +525,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("themechange event triggers re-render when currentView is set", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -554,7 +554,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("visibilitychange event triggers re-render when visible", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -585,7 +585,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("terminateWorker fires on beforeunload", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -598,7 +598,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("handleCacheChange resets state for valid cache events", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -622,7 +622,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("onRouteChange goes to updateVisibility when dataReady=true but hasData=false", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -651,7 +651,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("reset filters button restores default range and syncs route", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -691,7 +691,7 @@ describe("ConnectionsPage", () => {
         Storage.getFile.mockReset();
         Storage.getFile.mockResolvedValue({
             type: "connections",
-            text: "csv",
+            blob: new Blob(["csv"]),
             rowCount: 2,
             updatedAt: 5,
         });
@@ -707,11 +707,11 @@ describe("ConnectionsPage", () => {
             (call) => call[0] === "storage:file:connections",
         );
         expect(cacheSet).toBeTruthy();
-        expect(cacheSet[1].text).toBeUndefined();
+        expect(cacheSet[1].blob).toBeUndefined();
     });
 
     it("tooltip is clamped to viewport when it would overflow right/bottom edges", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -749,7 +749,7 @@ describe("ConnectionsPage", () => {
 
     /** Init, route in, and return the pending worker request id. */
     async function primeWorker(routeParams = {}) {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
         ConnectionsPage.init();
         await ConnectionsPage.onRouteChange(routeParams);
@@ -827,7 +827,7 @@ describe("ConnectionsPage", () => {
 
     it("normalizes a stored file that carries its own metadata", async () => {
         Storage.getFile.mockResolvedValue({
-            text: "csv",
+            blob: new Blob(["csv"]),
             name: "MyConnections.csv",
             rowCount: 3,
             updatedAt: 1700000000000,
@@ -892,7 +892,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("shows a timeout state when the worker never responds", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
         const realSetTimeout = globalThis.setTimeout;
         let workerTimeoutCb = null;
@@ -947,7 +947,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("syncs range into router on select change", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -964,7 +964,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("ignores a select change carrying an unknown range value", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -979,7 +979,7 @@ describe("ConnectionsPage", () => {
     });
 
     it("mirrors the active range onto the select when applied from the route", async () => {
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         DataCache.get.mockReturnValue(null);
 
         ConnectionsPage.init();
@@ -993,7 +993,7 @@ describe("ConnectionsPage", () => {
         button.className = "filter-btn";
         button.dataset.range = "bogus";
         document.getElementById("connectionsTimeRangeButtons").append(button);
-        Storage.getFile.mockResolvedValue({ text: "csv" });
+        Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         ConnectionsPage.init();
         await ConnectionsPage.onRouteChange({});
         button.click();

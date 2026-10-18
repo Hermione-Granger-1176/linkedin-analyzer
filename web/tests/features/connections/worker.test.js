@@ -73,7 +73,7 @@ describe("connections worker", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("connections worker listener posts result for process message type", () => {
+    it("connections worker listener posts result for process message type", async () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
 
         const csv = [
@@ -94,7 +94,7 @@ describe("connections worker", () => {
             })
         );
 
-        expect(postMessageSpy).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(postMessageSpy).toHaveBeenCalledOnce());
         const [msg] = postMessageSpy.mock.calls[0];
         expect(msg.type).toBe("processed");
         expect(msg.requestId).toBe("conn-req-1");
@@ -155,7 +155,7 @@ describe("connections worker", () => {
         postMessageSpy.mockRestore();
     });
 
-    it("connections worker catches processing exceptions and posts normalized error", () => {
+    it("connections worker catches processing exceptions and posts normalized error", async () => {
         const postMessageSpy = vi.spyOn(globalThis, "postMessage").mockImplementation(() => {});
         const processSpy = vi.spyOn(LinkedInCleaner, "process").mockImplementationOnce(() => {
             throw new Error("connections-failure");
@@ -171,7 +171,7 @@ describe("connections worker", () => {
             })
         );
 
-        expect(postMessageSpy).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(postMessageSpy).toHaveBeenCalledOnce());
         const [message] = postMessageSpy.mock.calls[0];
         expect(message.type).toBe("error");
         expect(message.requestId).toBe("conn-fail");

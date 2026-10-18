@@ -14,6 +14,7 @@ import { CONFIGS, FILE_TYPES } from "./configs.js";
 import {
     CSV_OPTIONS_COMMENTS,
     CSV_OPTIONS_DEFAULT,
+    createCsvRowParser,
     isRowEmpty,
     parseCsvRows,
 } from "./csv-parser.js";
@@ -291,27 +292,50 @@ export const LinkedInCleaner = (() => {
      * of the text. Returns the first supported type (in FILE_TYPES order) whose
      * required columns are present, or null when no prefix match is found.
      *
-     * A truncated tail can only corrupt the prefix's last row, never the header
-     * at the top, so a positive match is reliable; a null result falls back to
-     * full multi-type detection in the caller, which keeps behavior identical.
-     * Uses a throwaway parse cache so truncated parses never poison the caller's
-     * full-parse cache.
+     * Only the rows up to the header are read. The prefix usually ends inside a
+     * row, often inside a quoted message body, and an incremental parse holds
+     * that unfinished row back instead of failing on it the way a whole-text
+     * parse fails on the unmatched quote. A null result falls back to full
+     * multi-type detection in the caller, and the full parse still validates
+     * every row, so a match here only picks the type.
      * @param {string} csvText - Raw CSV text
      * @returns {string|null} Detected file type, or null if unknown from the prefix
      */
     function detectTypeFromPrefix(csvText) {
         const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
-        const prefixCache = new Map();
+        const rowsByOptions = new Map();
         for (const type of FILE_TYPES) {
-            const parsed = parseCSV(prefix, type, prefixCache);
-            if (parsed.error) {
+            const csvOptions = type === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+            if (!rowsByOptions.has(csvOptions)) {
+                rowsByOptions.set(csvOptions, readPrefixRows(prefix, csvOptions));
+            }
+            const rows = rowsByOptions.get(csvOptions);
+            const skipRows = Number.isInteger(CONFIGS[type].skipRows) ? CONFIGS[type].skipRows : 0;
+            if (!rows || rows.length <= skipRows) {
                 continue;
             }
-            if (validateColumns(parsed.headers, type).valid) {
+            const headers = normalizeHeaders(rows[skipRows]);
+            if (findDuplicateHeaders(headers).length) {
+                continue;
+            }
+            if (validateColumns(headers, type).valid) {
                 return type;
             }
         }
         return null;
+    }
+
+    /**
+     * Read the complete rows at the start of a prefix, leaving out the row it
+     * ends inside.
+     * @param {string} prefix - Leading slice of the CSV text
+     * @param {{delimiter: string, quote: string, escape: string|null}} csvOptions - Parser options
+     * @returns {string[][]|null} Complete rows, or null when the prefix will not parse
+     */
+    function readPrefixRows(prefix, csvOptions) {
+        const rows = [];
+        const parser = createCsvRowParser(csvOptions, (row) => rows.push(row));
+        return parser.push(prefix) ? null : rows;
     }
 
     /**
@@ -337,20 +361,13 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Clean the parsed data based on file type
-     * @param {object[]} data - Parsed CSV data as array of objects
+     * Build a function that cleans one parsed row for a file type.
      * @param {string} fileType - Supported file type
-     * @returns {object[]} Cleaned data
+     * @returns {(row: object) => object|null} Cleaned row, or null when the row is dropped
      */
-    function cleanData(data, fileType) {
+    function createRowCleaner(fileType) {
         const config = CONFIGS[fileType];
         const cleaningPlan = CLEANING_PLANS[fileType];
-        // process() validates the file type before cleaning. Keep the branch for an unknown type.
-        /* v8 ignore next 2 */
-        if (!config) {
-            return data;
-        }
-
         const requiredRowColumns = Array.isArray(config.requiredRowColumns)
             ? config.requiredRowColumns
             : config.requiredColumns;
@@ -358,9 +375,7 @@ export const LinkedInCleaner = (() => {
             ? config.dropIfAllMissing
             : [];
 
-        // Clean and filter in a single pass to avoid intermediate arrays.
-        const cleanedRows = [];
-        for (const row of data) {
+        return (row) => {
             const cleanedRow = {};
             for (const column of cleaningPlan) {
                 const cleanedValue = column.clean(row[column.name]);
@@ -371,12 +386,36 @@ export const LinkedInCleaner = (() => {
             }
 
             if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
-                continue;
+                return null;
             }
             if (dropIfAllMissing.length && !hasAnyRowValue(cleanedRow, dropIfAllMissing)) {
-                continue;
+                return null;
             }
-            cleanedRows.push(cleanedRow);
+            return cleanedRow;
+        };
+    }
+
+    /**
+     * Clean the parsed data based on file type
+     * @param {object[]} data - Parsed CSV data as array of objects
+     * @param {string} fileType - Supported file type
+     * @returns {object[]} Cleaned data
+     */
+    function cleanData(data, fileType) {
+        // process() validates the file type before cleaning. Keep the branch for an unknown type.
+        /* v8 ignore next 2 */
+        if (!CONFIGS[fileType]) {
+            return data;
+        }
+
+        // Clean and filter in a single pass to avoid intermediate arrays.
+        const cleanRow = createRowCleaner(fileType);
+        const cleanedRows = [];
+        for (const row of data) {
+            const cleanedRow = cleanRow(row);
+            if (cleanedRow) {
+                cleanedRows.push(cleanedRow);
+            }
         }
 
         return cleanedRows;
@@ -553,9 +592,136 @@ export const LinkedInCleaner = (() => {
         });
     }
 
+    /**
+     * Create a processor that parses and cleans text chunks as they arrive.
+     *
+     * It detects the file type from the first PREFIX_DETECT_CHARS characters,
+     * the same way process() does for auto-detection, then parses and cleans
+     * each row as it completes instead of building the full row and record
+     * arrays first. finish() returns the same result process(text, "auto")
+     * would for a successful file. On any error or ambiguity it returns null,
+     * and the caller runs process() on the full text, so failures and their
+     * messages stay identical.
+     * @returns {{push: (text: string) => void, finish: () => object|null}}
+     */
+    function createStreamProcessor() {
+        let prefix = "";
+        let fileType = null;
+        let parser = null;
+        let failed = false;
+        let skipRows = 0;
+        let rowIndex = 0;
+        let headers = null;
+        let cleanRow = null;
+        const cleanedData = [];
+
+        // Mirrors parseCSV(): skip rows, read and check the header, then build
+        // and clean one record per non-empty data row.
+        const onRow = (row) => {
+            if (failed) {
+                return;
+            }
+            rowIndex += 1;
+            if (rowIndex <= skipRows) {
+                return;
+            }
+            if (!headers) {
+                const normalized = normalizeHeaders(row);
+                // Prefix detection already parsed and validated this same header
+                // row, so this guard only protects against a future drift.
+                /* v8 ignore next 8 */
+                if (
+                    normalized.every((header) => header === "") ||
+                    findDuplicateHeaders(normalized).length ||
+                    !validateColumns(normalized, fileType).valid
+                ) {
+                    failed = true;
+                    return;
+                }
+                headers = normalized;
+                return;
+            }
+            if (isRowEmpty(row)) {
+                return;
+            }
+            if (row.length > headers.length) {
+                failed = true;
+                return;
+            }
+            // Null-prototype object, as in parseCSV().
+            const record = Object.create(null);
+            for (let c = 0; c < headers.length; c += 1) {
+                const value = row[c];
+                record[headers[c]] = value !== undefined ? value : "";
+            }
+            const cleanedRow = cleanRow(record);
+            if (cleanedRow) {
+                cleanedData.push(cleanedRow);
+            }
+        };
+
+        const startParsing = () => {
+            fileType = detectTypeFromPrefix(prefix);
+            if (!fileType) {
+                failed = true;
+                return;
+            }
+            const config = CONFIGS[fileType];
+            skipRows = Number.isInteger(config.skipRows) ? config.skipRows : 0;
+            cleanRow = createRowCleaner(fileType);
+            const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+            parser = createCsvRowParser(csvOptions, onRow);
+            if (parser.push(prefix)) {
+                failed = true;
+            }
+            prefix = "";
+        };
+
+        const push = (text) => {
+            if (failed) {
+                return;
+            }
+            if (!parser) {
+                prefix += text;
+                if (prefix.length >= PREFIX_DETECT_CHARS) {
+                    startParsing();
+                }
+                return;
+            }
+            if (parser.push(text)) {
+                failed = true;
+            }
+        };
+
+        const finish = () => {
+            if (!failed && !parser) {
+                startParsing();
+            }
+            if (failed) {
+                return null;
+            }
+            // Flushing the last row can also fail it, so check again afterward.
+            const parseError = parser.finish();
+            // Detection found a header row, so headers is always set by now.
+            if (parseError || failed || /* v8 ignore next */ !headers) {
+                return null;
+            }
+            return makeResult(true, null, {
+                fileType,
+                detectedType: fileType,
+                headers,
+                cleanedData,
+                rowCount: cleanedData.length,
+            });
+        };
+
+        return { push, finish };
+    }
+
     return {
         configs: CONFIGS,
         process,
+        createStreamProcessor,
         parseCSV,
         detectFileType,
         validateColumns,

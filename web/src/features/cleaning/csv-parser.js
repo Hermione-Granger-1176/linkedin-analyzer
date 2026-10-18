@@ -6,7 +6,7 @@
  * LinkedInCleaner facade in cleaner.js to turn file text into rows.
  */
 
-import { MAX_CSV_CHARS } from "../../shared/constants.js";
+import { MAX_CSV_CHARS, MAX_CSV_ROWS } from "../../shared/limits.js";
 
 import { isMissing } from "./field-cleaners.js";
 
@@ -29,7 +29,7 @@ const CSV_PARSE_STATE = Object.freeze({
 
 const CSV_LIMITS = Object.freeze({
     maxChars: MAX_CSV_CHARS,
-    maxRows: 500000,
+    maxRows: MAX_CSV_ROWS,
     maxColumns: 256,
     maxFieldChars: 200000,
 });
@@ -43,21 +43,25 @@ export function isRowEmpty(row) {
     return row.every((cell) => isMissing(cell));
 }
 
+/** Step result meaning the scanner needs the next chunk before it can decide. */
+const NEED_MORE = -1;
+
 /**
- * Parse CSV into rows with support for quoted fields, configured escaped characters, and newlines.
- * @param {string} csvText
+ * Create an incremental CSV parser that takes text chunks and emits complete rows.
+ *
+ * Quote, escape, and newline state carries across chunks, so a quoted field, a
+ * CRLF pair, an escape, or a surrogate pair may straddle two chunks. Running
+ * counts enforce the same character, row, column, and field limits as a
+ * whole-text parse. Empty rows are held back until a non-empty row follows,
+ * so trailing empty rows are never emitted. Rows emitted before an error are
+ * not retracted; a caller that sees an error should discard them.
  * @param {{delimiter: string, quote: string, escape: string|null}} options
- * @returns {{rows: string[][], error: string|null}}
+ * @param {(row: string[]) => void} onRow - Called once per complete row, in order
+ * @returns {{push: (chunk: string) => string|null, finish: () => string|null}} push returns the
+ * first error so far, or null; finish flushes the last row and returns the final error, or null.
  */
-export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
+export function createCsvRowParser(options, onRow) {
     const { delimiter, quote, escape } = options;
-    if (csvText.length > CSV_LIMITS.maxChars) {
-        const maxMb = Math.round(CSV_LIMITS.maxChars / (1024 * 1024));
-        return {
-            rows: [],
-            error: `CSV file exceeds ${maxMb}MB parser limit`,
-        };
-    }
 
     // Character codes for the hot scanning loop (avoids per-char string allocation).
     const CR = 13;
@@ -65,13 +69,24 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
     const quoteCode = quote.charCodeAt(0);
     const delimiterCode = delimiter.charCodeAt(0);
     const escapeCode = escape ? escape.charCodeAt(0) : -1;
-    const length = csvText.length;
 
-    const rows = [];
+    // The text being scanned: the unconsumed tail of the previous chunk plus the new chunk.
+    let csvText = "";
+    let length = 0;
+    // True when no more chunks will follow, so lookahead past the end means end of input.
+    let atEnd = false;
+    let carry = "";
+    let totalChars = 0;
+    let rowCount = 0;
+    /** @type {string[][]} */
+    let heldEmptyRows = [];
+    let finished = false;
+
     let row = [];
     let field = "";
     /** @type {number} */
     let state = CSV_PARSE_STATE.OUTSIDE_QUOTES;
+    /** @type {string|null} */
     let parseError = null;
 
     // Reject oversized fields *before* appending, so we never allocate a
@@ -85,10 +100,22 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         return false;
     };
 
+    // True when the character at index is a high surrogate whose pair may arrive in the next chunk.
+    const splitsSurrogatePair = (index) => {
+        const code = csvText.charCodeAt(index);
+        return index + 1 >= length && !atEnd && code >= 0xd800 && code <= 0xdbff;
+    };
+
     const consumeEscape = (start) => {
         if (start + 1 >= length) {
+            if (!atEnd) {
+                return NEED_MORE;
+            }
             parseError = "CSV parsing error: trailing escape character.";
             return length;
+        }
+        if (splitsSurrogatePair(start + 1)) {
+            return NEED_MORE;
         }
         // start + 1 < length was checked, so the index is in range and
         // codePointAt always returns a code point (never undefined) here.
@@ -112,16 +139,26 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
     };
 
     const pushRow = () => {
-        if (rows.length >= CSV_LIMITS.maxRows) {
+        if (rowCount >= CSV_LIMITS.maxRows) {
             parseError = "CSV parsing error: row limit exceeded for this file.";
             return false;
         }
-        rows.push(row);
+        rowCount += 1;
+        if (isRowEmpty(row)) {
+            heldEmptyRows.push(row);
+        } else {
+            for (const emptyRow of heldEmptyRows) {
+                onRow(emptyRow);
+            }
+            heldEmptyRows = [];
+            onRow(row);
+        }
         row = [];
         return true;
     };
 
-    // Handle one step while inside a quoted field; returns the next index.
+    // Handle one step while inside a quoted field; returns the next index,
+    // or NEED_MORE when the decision depends on the next chunk.
     // Setting parseError (here, in consumeEscape, or in wouldOverflowField) stops the outer loop.
     const stepInsideQuotes = (start) => {
         // Bulk-copy the run of ordinary characters up to the next quote,
@@ -146,6 +183,9 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         if (code === escapeCode) {
             return consumeEscape(start);
         }
+        if ((code === quoteCode || code === CR) && start + 1 >= length && !atEnd) {
+            return NEED_MORE;
+        }
         if (code === quoteCode) {
             // Lone closing quote: leave the quoted section.
             if (csvText.charCodeAt(start + 1) !== quoteCode) {
@@ -162,19 +202,16 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
         if (wouldOverflowField(1)) {
             return start + 1;
         }
-        if (code === CR) {
-            if (csvText.charCodeAt(start + 1) === LF) {
-                field += "\n";
-                return start + 2;
-            }
-            field += "\r";
-            return start + 1;
+        if (csvText.charCodeAt(start + 1) === LF) {
+            field += "\n";
+            return start + 2;
         }
-        field += csvText[start];
+        field += "\r";
         return start + 1;
     };
 
-    // Handle one step while outside quotes; returns the next index.
+    // Handle one step while outside quotes; returns the next index,
+    // or NEED_MORE when the decision depends on the next chunk.
     const stepOutsideQuotes = (start) => {
         // Bulk-copy ordinary characters up to the next quote, escape,
         // delimiter, or line break.
@@ -230,48 +267,103 @@ export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
             return start + 1;
         }
         // Carriage return ends the row, consuming a following newline (CRLF).
+        if (start + 1 >= length && !atEnd) {
+            return NEED_MORE;
+        }
         if (pushField()) {
             pushRow();
         }
         return csvText.charCodeAt(start + 1) === LF ? start + 2 : start + 1;
     };
 
-    let i = 0;
-    while (i < length && !parseError) {
-        i =
-            state === CSV_PARSE_STATE.INSIDE_QUOTES
-                ? stepInsideQuotes(i)
-                : stepOutsideQuotes(i);
-    }
-
-    if (parseError) {
-        return {
-            rows: [],
-            error: parseError,
-        };
-    }
-
-    if (!pushField() || !pushRow()) {
-        return {
-            rows: [],
-            error: parseError || "CSV parsing error.",
-        };
-    }
-
-    let lastNonEmptyIndex = -1;
-    for (let k = rows.length - 1; k >= 0; k -= 1) {
-        if (!isRowEmpty(rows[k])) {
-            lastNonEmptyIndex = k;
-            break;
+    // Scan csvText from the start, keeping any tail that needs lookahead as the next carry.
+    const scan = () => {
+        let i = 0;
+        while (i < length && !parseError) {
+            const next =
+                state === CSV_PARSE_STATE.INSIDE_QUOTES
+                    ? stepInsideQuotes(i)
+                    : stepOutsideQuotes(i);
+            if (next === NEED_MORE) {
+                break;
+            }
+            i = next;
         }
-    }
-    const trimmedRows = lastNonEmptyIndex === -1 ? [] : rows.slice(0, lastNonEmptyIndex + 1);
-
-    return {
-        rows: trimmedRows,
-        error:
-            state === CSV_PARSE_STATE.INSIDE_QUOTES
-                ? "CSV parsing error: unmatched quote"
-                : null,
+        carry = i < length ? csvText.slice(i) : "";
+        csvText = "";
+        length = 0;
     };
+
+    const push = (chunk) => {
+        if (parseError || finished || chunk.length === 0) {
+            return parseError;
+        }
+        totalChars += chunk.length;
+        if (totalChars > CSV_LIMITS.maxChars) {
+            const maxMb = Math.round(CSV_LIMITS.maxChars / (1024 * 1024));
+            parseError = `CSV file exceeds ${maxMb}MB parser limit`;
+            return parseError;
+        }
+        csvText = carry + chunk;
+        length = csvText.length;
+        scan();
+        return parseError;
+    };
+
+    const finish = () => {
+        if (finished) {
+            return parseError;
+        }
+        finished = true;
+        if (parseError) {
+            return parseError;
+        }
+        atEnd = true;
+        csvText = carry;
+        length = carry.length;
+        scan();
+        if (parseError) {
+            return parseError;
+        }
+        // Both pushers set parseError when they refuse.
+        if (!pushField() || !pushRow()) {
+            return parseError;
+        }
+        heldEmptyRows = [];
+        return state === CSV_PARSE_STATE.INSIDE_QUOTES
+            ? "CSV parsing error: unmatched quote"
+            : null;
+    };
+
+    return { push, finish };
+}
+
+/**
+ * Parse CSV into rows with support for quoted fields, configured escaped characters, and newlines.
+ *
+ * A thin wrapper that feeds the whole text through createCsvRowParser in one chunk.
+ * @param {string} csvText
+ * @param {{delimiter: string, quote: string, escape: string|null}} options
+ * @returns {{rows: string[][], error: string|null}}
+ */
+export function parseCsvRows(csvText, options = CSV_OPTIONS_DEFAULT) {
+    if (csvText.length > CSV_LIMITS.maxChars) {
+        const maxMb = Math.round(CSV_LIMITS.maxChars / (1024 * 1024));
+        return {
+            rows: [],
+            error: `CSV file exceeds ${maxMb}MB parser limit`,
+        };
+    }
+
+    /** @type {string[][]} */
+    const rows = [];
+    const parser = createCsvRowParser(options, (row) => {
+        rows.push(row);
+    });
+    parser.push(csvText);
+    const error = parser.finish();
+    if (error && error !== "CSV parsing error: unmatched quote") {
+        return { rows: [], error };
+    }
+    return { rows, error };
 }

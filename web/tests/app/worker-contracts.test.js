@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
     parseAnalyticsWorkerMessage,
     parseAnalyticsWorkerRequest,
+    CLEAN_PREVIEW_MAX_ROWS,
+    parseCleaningWorkerMessage,
+    parseCleaningWorkerRequest,
     parseConnectionsWorkerMessage,
     parseConnectionsWorkerRequest,
     parseMessagesWorkerMessage,
@@ -701,5 +704,101 @@ describe("worker contracts", () => {
 
         expect(parsed.value.payload.error).toHaveLength(500);
         expect(parsed.value.payload.threads).toEqual([]);
+    });
+
+    it("parses a cleaning request for each output", () => {
+        const source = new Blob(["a,b"]);
+        for (const output of ["preview", "xlsx", "csv"]) {
+            const parsed = parseCleaningWorkerRequest({
+                type: "clean",
+                requestId: 2,
+                payload: { fileType: "shares", output, source, key: "shares:1" },
+            });
+            expect(parsed.valid).toBe(true);
+            expect(parsed.value).toEqual({
+                type: "clean",
+                requestId: 2,
+                payload: { fileType: "shares", output, source, key: "shares:1" },
+            });
+        }
+        const text = parseCleaningWorkerRequest({
+            type: "clean",
+            payload: { fileType: "comments", output: "csv", source: "a,b" },
+        });
+        expect(text.value.payload).toMatchObject({ source: "a,b", key: "" });
+    });
+
+    it("rejects a malformed cleaning request but keeps its id", () => {
+        const base = { fileType: "shares", output: "preview", source: "a,b" };
+        const cases = [
+            [null, "Invalid cleaning worker request envelope", 0],
+            [{ type: "process", requestId: 3 }, "Invalid cleaning worker request envelope", 3],
+            [{ type: "clean", requestId: 4 }, "Invalid cleaning file type", 4],
+            [
+                { type: "clean", payload: { ...base, fileType: "other" } },
+                "Invalid cleaning file type",
+                0,
+            ],
+            [{ type: "clean", payload: { ...base, output: "pdf" } }, "Invalid cleaning output", 0],
+            [
+                { type: "clean", payload: { ...base, source: "" } },
+                "Missing cleaning source payload",
+                0,
+            ],
+            [
+                { type: "clean", payload: { ...base, source: getOversizeCsv() } },
+                "Cleaning source payload exceeds allowed size",
+                0,
+            ],
+        ];
+        for (const [message, error, requestId] of cases) {
+            const parsed = parseCleaningWorkerRequest(message);
+            expect(parsed.valid).toBe(false);
+            expect(parsed.error).toBe(error);
+            expect(parsed.requestId).toBe(requestId);
+        }
+    });
+
+    it("normalizes a cleaning reply", () => {
+        const blob = new Blob(["x"]);
+        const parsed = parseCleaningWorkerMessage({
+            type: "cleaned",
+            requestId: 5,
+            payload: {
+                success: 1,
+                error: null,
+                rowCount: 7,
+                previewRows: [["a", 2, null], "not a row"],
+                blob,
+            },
+        });
+        expect(parsed.value).toEqual({
+            type: "cleaned",
+            requestId: 5,
+            payload: {
+                success: true,
+                error: null,
+                rowCount: 7,
+                previewRows: [["a", "", ""]],
+                blob,
+            },
+        });
+        const empty = parseCleaningWorkerMessage({ type: "cleaned", payload: { blob: "x" } });
+        expect(empty.value.payload).toEqual({
+            success: false,
+            error: null,
+            rowCount: 0,
+            previewRows: [],
+            blob: null,
+        });
+        const many = parseCleaningWorkerMessage({
+            type: "cleaned",
+            payload: {
+                previewRows: Array.from({ length: CLEAN_PREVIEW_MAX_ROWS + 3 }, () => ["x"]),
+            },
+        });
+        expect(many.value.payload.previewRows).toHaveLength(CLEAN_PREVIEW_MAX_ROWS);
+        expect(parseCleaningWorkerMessage({ type: "cleaned" }).valid).toBe(true);
+        expect(parseCleaningWorkerMessage({ type: "threads" }).valid).toBe(false);
     });
 });

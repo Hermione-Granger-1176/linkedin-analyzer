@@ -1,5 +1,6 @@
 /* Screen transitions and page lifecycle management */
 
+import { captureError } from "../platform/observability/sentry.js";
 import { LoadingOverlay } from "../shared/ui/loading-overlay.js";
 
 export const ScreenManager = (() => {
@@ -13,9 +14,11 @@ export const ScreenManager = (() => {
     let transitionToken = 0;
 
     /**
-     * Register a screen route.
+     * Register a screen route. A route either carries its controller or a
+     * `load` function that imports it the first time the route opens, so the
+     * first page load does not wait on every screen's code.
      * @param {string} routeName - Route name
-     * @param {{screenId: string, controller: object}} config - Route config
+     * @param {{screenId: string, controller?: object, load?: () => Promise<object>}} config - Route config
      */
     function register(routeName, config) {
         if (!routeName || !config || !config.screenId) {
@@ -24,8 +27,134 @@ export const ScreenManager = (() => {
         routes.set(routeName, {
             screenId: config.screenId,
             controller: config.controller || null,
+            load: typeof config.load === "function" ? config.load : null,
+            loading: null,
+            activation: 0,
+            params: {},
             initialized: false
         });
+    }
+
+    /**
+     * Import a route's controller once. A failed import is forgotten so a
+     * retry or the next visit tries again, which is what recovers from a chunk
+     * that went missing in a deploy.
+     * @param {string} routeName - Route name
+     * @returns {Promise<object|null>} The controller, or null when it cannot be loaded
+     */
+    function loadController(routeName) {
+        const route = routes.get(routeName);
+        if (!route) {
+            return Promise.resolve(null);
+        }
+        if (route.controller || !route.load) {
+            return Promise.resolve(route.controller);
+        }
+        if (!route.loading) {
+            route.loading = route.load().then(
+                (controller) => {
+                    route.controller = controller || null;
+                    return route.controller;
+                },
+                () => {
+                    route.loading = null;
+                    captureError(new Error("Screen code could not be loaded."), {
+                        module: "screen-manager",
+                        operation: "route-load",
+                        route: routeName
+                    });
+                    return null;
+                }
+            );
+        }
+        return route.loading;
+    }
+
+    /**
+     * Wait for a lazy route's controller behind the loading overlay, then run
+     * its first lifecycle hooks if this is still the route's latest activation.
+     * @param {string} routeName - Route name
+     * @param {string|null} previousName - Route the user came from
+     */
+    async function activateWhenLoaded(routeName, previousName) {
+        const source = `route:${routeName}`;
+        const route = routes.get(routeName);
+        const activation = ++route.activation;
+        clearLoadError(route);
+        LoadingOverlay.show(source, { title: "Loading", message: "Opening this screen." });
+        let controller;
+        try {
+            controller = await loadController(routeName);
+        } finally {
+            // An earlier activation settling must not hide a later one's overlay.
+            if (route.activation === activation) {
+                LoadingOverlay.hide(source);
+            }
+        }
+        if (currentRouteName !== routeName || route.activation !== activation) {
+            return;
+        }
+        // A failed import clears `loading`; a loader that yields nothing keeps it.
+        if (!controller && !route.loading) {
+            showLoadError(routeName, route);
+            return;
+        }
+        runControllerHooks(route, route.params, previousName, routeName);
+    }
+
+    /**
+     * Tell the user a screen's code did not arrive, with a way to try again.
+     * @param {string} routeName - Route name
+     * @param {object} route - Registered route
+     */
+    function showLoadError(routeName, route) {
+        const screen = document.getElementById(route.screenId);
+        if (!screen) {
+            return;
+        }
+        const notice = document.createElement("div");
+        notice.className = "error-message";
+        notice.setAttribute("role", "alert");
+        notice.dataset.routeLoadError = "";
+        const text = document.createElement("p");
+        text.textContent = "This screen could not be opened. Check your connection and try again.";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "ghost-btn";
+        retry.textContent = "Try again";
+        retry.addEventListener("click", () => {
+            if (currentRouteName === routeName) {
+                void activateWhenLoaded(routeName, null);
+            }
+        });
+        notice.append(text, retry);
+        screen.prepend(notice);
+    }
+
+    /**
+     * Remove a load-failure notice left on a route's screen.
+     * @param {object} route - Registered route
+     */
+    function clearLoadError(route) {
+        const screen = document.getElementById(route.screenId);
+        const notice = screen ? screen.querySelector("[data-route-load-error]") : null;
+        if (notice) {
+            notice.remove();
+        }
+    }
+
+    /**
+     * Initialize a route's controller once, then tell it about the route.
+     * @param {object} route - Registered route
+     * @param {object} params - Route query params
+     * @param {string|null} from - Previous route name
+     * @param {string} to - Active route name
+     */
+    function runControllerHooks(route, params, from, to) {
+        ensureControllerInitialized(route);
+        if (route.controller && typeof route.controller.onRouteChange === "function") {
+            route.controller.onRouteChange(params, { from, to });
+        }
     }
 
     /**
@@ -49,19 +178,27 @@ export const ScreenManager = (() => {
         updateActiveLinks(routeName);
 
         if (previousName !== routeName) {
+            // A screen still loading must not leave its overlay on the next one.
+            if (previousName) {
+                LoadingOverlay.hide(`route:${previousName}`);
+            }
             if (previousRoute && previousRoute.controller && typeof previousRoute.controller.onRouteLeave === "function") {
                 previousRoute.controller.onRouteLeave({ from: previousName, to: routeName });
             }
             switchScreens(previousScreen, nextScreen);
         }
 
-        ensureControllerInitialized(nextRoute);
-        if (nextRoute.controller && typeof nextRoute.controller.onRouteChange === "function") {
-            /* v8 ignore next */
-            nextRoute.controller.onRouteChange(params || {}, { from: previousName, to: routeName });
-        }
-
         currentRouteName = routeName;
+        nextRoute.params = params || {};
+        if (!nextRoute.controller && nextRoute.load) {
+            // The latest params are read once the code arrives, so a route
+            // change made while it loads is not lost.
+            void activateWhenLoaded(routeName, previousName);
+        } else {
+            // A preload may have fetched the code after an earlier failure.
+            clearLoadError(nextRoute);
+            runControllerHooks(nextRoute, nextRoute.params, previousName, routeName);
+        }
         announceRoute(routeName);
 
         if (previousName !== routeName && nextScreen) {
@@ -83,10 +220,10 @@ export const ScreenManager = (() => {
 
     /**
      * Ensure a route controller init is called only once.
-     * @param {{controller: object, initialized: boolean}} route - Route config
+     * @param {{controller: object|null, load?: Function|null, initialized: boolean}} route - Route config
      */
     function ensureControllerInitialized(route) {
-        if (route.initialized) {
+        if (route.initialized || (!route.controller && route.load)) {
             return;
         }
         if (route.controller && typeof route.controller.init === "function") {
@@ -206,6 +343,7 @@ export const ScreenManager = (() => {
     return {
         register,
         activate,
+        loadController,
         getCurrentRouteName
     };
 })();

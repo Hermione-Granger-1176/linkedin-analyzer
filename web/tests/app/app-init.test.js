@@ -88,6 +88,18 @@ describe("app init wiring", () => {
         expect(ScreenManager.activate).toHaveBeenCalledWith("analytics", { range: "12m" });
         expect(Tutorial.onRouteChange).toHaveBeenCalledWith("analytics");
         expect(Session.touch).toHaveBeenCalled();
+
+        // Upload ships in the main bundle; every other screen loads on demand.
+        const registrations = Object.fromEntries(
+            ScreenManager.register.mock.calls.map(([name, config]) => [name, config]),
+        );
+        expect(registrations.home.controller).toBeTruthy();
+        expect(registrations.home.load).toBeUndefined();
+        for (const name of ["clean", "analytics", "connections", "messages", "insights"]) {
+            expect(registrations[name].controller).toBeUndefined();
+            const controller = await registrations[name].load();
+            expect(controller.init).toEqual(expect.any(Function));
+        }
     });
 
     it("checks for stale session data before initial route activity is recorded", async () => {

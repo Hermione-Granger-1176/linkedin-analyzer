@@ -3,12 +3,7 @@
 import { AppRouter } from "./app/router.js";
 import { initRuntime } from "./app/runtime.js";
 import { ScreenManager } from "./app/screen-manager.js";
-import { AnalyticsPage } from "./features/analytics/screen.js";
-import { CleanPage } from "./features/cleaning/screen.js";
-import { ConnectionsPage } from "./features/connections/screen.js";
 import { PdfExport } from "./features/export/pdf.js";
-import { InsightsPage } from "./features/insights/screen.js";
-import { MessagesPage } from "./features/messages/screen.js";
 import { Tutorial } from "./features/tutorial/tutorial.js";
 import { UploadPage } from "./features/upload/upload.js";
 import { RunTracker, memoryBucket } from "./platform/observability/run-tracker.js";
@@ -34,21 +29,24 @@ import { Theme } from "./shared/ui/theme.js";
 function init() {
     "use strict";
 
+    // Upload is the screen most visits land on, so it ships in the main bundle.
+    // Every other screen's code is imported the first time its route opens.
     const ROUTES = Object.freeze([
         {
             name: "home",
             screenId: "screen-home",
-            controller: () => UploadPage,
+            controller: UploadPage,
         },
         {
             name: "clean",
             screenId: "screen-clean",
-            controller: () => CleanPage,
+            load: () => import("./features/cleaning/screen.js").then((module) => module.CleanPage),
         },
         {
             name: "analytics",
             screenId: "screen-analytics",
-            controller: () => AnalyticsPage,
+            load: () =>
+                import("./features/analytics/screen.js").then((module) => module.AnalyticsPage),
             routerOptions: {
                 sharedParams: ["range"],
                 defaultParams: { range: "12m" },
@@ -57,7 +55,8 @@ function init() {
         {
             name: "connections",
             screenId: "screen-connections",
-            controller: () => ConnectionsPage,
+            load: () =>
+                import("./features/connections/screen.js").then((module) => module.ConnectionsPage),
             routerOptions: {
                 sharedParams: ["range"],
                 defaultParams: { range: "12m" },
@@ -66,7 +65,8 @@ function init() {
         {
             name: "messages",
             screenId: "screen-messages",
-            controller: () => MessagesPage,
+            load: () =>
+                import("./features/messages/screen.js").then((module) => module.MessagesPage),
             routerOptions: {
                 sharedParams: ["range"],
                 defaultParams: { range: "12m" },
@@ -75,7 +75,8 @@ function init() {
         {
             name: "insights",
             screenId: "screen-insights",
-            controller: () => InsightsPage,
+            load: () =>
+                import("./features/insights/screen.js").then((module) => module.InsightsPage),
             routerOptions: {
                 sharedParams: ["range"],
                 defaultParams: { range: "12m" },
@@ -175,7 +176,8 @@ function init() {
             AppRouter.registerRoute(route.name, route.routerOptions || {});
             ScreenManager.register(route.name, {
                 screenId: route.screenId,
-                controller: route.controller(),
+                controller: route.controller,
+                load: route.load,
             });
         });
     }

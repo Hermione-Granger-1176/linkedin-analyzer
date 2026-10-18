@@ -43,10 +43,15 @@ vi.mock("../../../src/app/router.js", () => ({
     AppRouter: { navigate: vi.fn() },
 }));
 
+vi.mock("../../../src/app/route-preload.js", () => ({
+    preloadRouteWhenIdle: vi.fn(),
+}));
+
 let DataCache;
 let Storage;
 let UploadPage;
 let AppRouter;
+let preloadRouteWhenIdle;
 
 describe("UploadPage", () => {
     let workerInstance;
@@ -158,6 +163,8 @@ describe("UploadPage", () => {
         ({ Storage } = await import("../../../src/platform/persistence/storage.js"));
         ({ UploadPage } = await import("../../../src/features/upload/upload.js"));
         ({ AppRouter } = await import("../../../src/app/router.js"));
+        ({ preloadRouteWhenIdle } = await import("../../../src/app/route-preload.js"));
+        preloadRouteWhenIdle.mockReset();
 
         // Reset all mock call counts and return-value overrides. Since vi.mock()
         // creates module-level singletons that persist across vi.resetModules(),
@@ -2071,6 +2078,8 @@ describe("UploadPage", () => {
 
         expect(document.getElementById("sharesStatus").textContent).toBe("5 rows loaded");
         expect(document.getElementById("commentsStatus").textContent).toBe("3 rows loaded");
+        // Analytics is where the open button leads, so its code is fetched early.
+        expect(preloadRouteWhenIdle).toHaveBeenCalledWith("analytics");
         expect(
             document
                 .querySelector('.file-status-item[data-file="shares"]')

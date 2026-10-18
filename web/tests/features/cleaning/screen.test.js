@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setupDom } from "../../helpers/dom.js";
 
 vi.mock("../../../src/features/cleaning/cleaner.js", () => ({
     LinkedInCleaner: {
         configs: {
-            shares: { columns: [{ name: "Title" }, { name: "Link" }] },
+            shares: { columns: [{ name: "Title" }, { name: "Link" }], outputName: "Shares.xlsx" },
             comments: { columns: [{ name: "Text" }] },
         },
         process: vi.fn(),
@@ -18,12 +18,13 @@ vi.mock("../../../src/platform/persistence/data-cache.js", () => {
         DataCache: {
             get: vi.fn((key) => values.get(key)),
             set: vi.fn((key, value) => values.set(key, value)),
+            subscribe: vi.fn(() => () => {}),
         },
     };
 });
 
 vi.mock("../../../src/features/cleaning/excel.js", () => ({
-    ExcelGenerator: { download: vi.fn(), generateAndDownload: vi.fn() },
+    ExcelGenerator: { download: vi.fn(), generate: vi.fn() },
 }));
 
 vi.mock("../../../src/features/cleaning/csv-export.js", () => ({
@@ -61,6 +62,44 @@ let LinkedInCleaner;
 let Storage;
 let captureError;
 let celebrateDownload;
+
+/** Worker stand-in whose replies each test sends by hand. */
+class FakeWorker {
+    static instances = [];
+
+    constructor() {
+        this.listeners = {};
+        this.posted = [];
+        this.terminate = vi.fn();
+        FakeWorker.instances.push(this);
+    }
+
+    addEventListener(type, listener) {
+        this.listeners[type] = listener;
+    }
+
+    postMessage(message) {
+        this.posted.push(message);
+    }
+
+    reply(payload) {
+        const { requestId } = this.posted[this.posted.length - 1];
+        this.listeners.message({ data: { type: "cleaned", requestId, payload } });
+    }
+}
+
+const PREVIEW_OK = {
+    success: true,
+    error: null,
+    rowCount: 1,
+    previewRows: [["Hello", "https://example.com"]],
+    blob: null,
+};
+
+/** Let pending promise callbacks and timers run. */
+function flush() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 describe("CleanPage", () => {
     beforeEach(async () => {
@@ -101,12 +140,17 @@ describe("CleanPage", () => {
         // mocked, so the contents are irrelevant as long as the load resolves.
         Storage.getFile.mockResolvedValue({ blob: new Blob(["csv"]) });
         LinkedInCleaner.process.mockReset();
-        ExcelGenerator.generateAndDownload.mockReset();
-        ExcelGenerator.generateAndDownload.mockResolvedValue({ success: true, error: null });
+        ExcelGenerator.generate.mockReset();
+        ExcelGenerator.generate.mockResolvedValue(new Blob(["xlsx"]));
         ExcelGenerator.download.mockReset();
         CsvExport.buildCleanedCsvBlob.mockClear();
         captureError.mockReset();
         celebrateDownload.mockReset();
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        FakeWorker.instances = [];
     });
 
     it("shows empty state when no files are loaded", async () => {
@@ -150,6 +194,7 @@ describe("CleanPage", () => {
         });
 
         await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         const cell = document.querySelector("#cleanPreviewTable tbody td");
         cell.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
@@ -199,10 +244,7 @@ describe("CleanPage", () => {
             rowCount: 1,
             cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
         });
-        ExcelGenerator.generateAndDownload.mockResolvedValue({
-            success: false,
-            error: "Failed",
-        });
+        ExcelGenerator.generate.mockRejectedValue(new Error("Failed"));
 
         await CleanPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -210,8 +252,90 @@ describe("CleanPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
-        expect(document.getElementById("cleanErrorText").textContent).toContain("Failed");
+        // The thrown value can carry a row of the file, so only fixed text is shown.
+        expect(document.getElementById("cleanErrorText").textContent).toContain(
+            "Error generating Excel: Unable to parse file.",
+        );
         expect(celebrateDownload).not.toHaveBeenCalled();
+    });
+
+    describe("with a worker", () => {
+        beforeEach(async () => {
+            vi.stubGlobal("Worker", FakeWorker);
+            Storage.getAllFiles.mockResolvedValue([
+                { type: "shares", updatedAt: 6 },
+                { type: "comments", updatedAt: 6 },
+            ]);
+            await CleanPage.init();
+            await flush();
+        });
+
+        it("ignores a download that a newer one cancelled", async () => {
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            document.getElementById("cleanDownloadBtn").click();
+            await flush();
+            document.getElementById("cleanCsvBtn").click();
+            await flush();
+            // The Excel request was cancelled and its worker stopped.
+            expect(FakeWorker.instances[0].terminate).toHaveBeenCalled();
+            FakeWorker.instances[1].reply({ ...PREVIEW_OK, blob: new Blob(["csv"]) });
+            await flush();
+
+            expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+            expect(captureError).not.toHaveBeenCalled();
+            expect(ExcelGenerator.download).toHaveBeenCalledTimes(1);
+            expect(ExcelGenerator.download).toHaveBeenCalledWith(expect.any(Blob), "shares.csv");
+        });
+
+        it("keeps a failed download's error off a file type the user moved to", async () => {
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            document.getElementById("cleanDownloadBtn").click();
+            await flush();
+            /** @type {HTMLInputElement} */ (
+                document.querySelector('input[name="cleanFileType"][value="comments"]')
+            ).checked = true;
+            FakeWorker.instances[0].reply({
+                ...PREVIEW_OK,
+                success: false,
+                error: "Unable to parse file.",
+            });
+            await flush();
+
+            expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+            expect(captureError).not.toHaveBeenCalled();
+        });
+
+        it("hides a replaced upload's preview and downloads while the new one loads", async () => {
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            expect(document.getElementById("cleanDownloadSection").hidden).toBe(false);
+
+            Storage.getAllFiles.mockResolvedValue([
+                { type: "shares", updatedAt: 9 },
+                { type: "comments", updatedAt: 6 },
+            ]);
+            await CleanPage.onRouteChange();
+            await flush();
+
+            expect(document.getElementById("cleanPreviewSection").hidden).toBe(true);
+            expect(document.getElementById("cleanDownloadSection").hidden).toBe(true);
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            expect(document.getElementById("cleanDownloadSection").hidden).toBe(false);
+        });
+
+        it("leaves the screen alone when stored data is cleared mid-preview", async () => {
+            // The latest subscription belongs to this test's client.
+            const listener = DataCache.subscribe.mock.calls.at(-1)[0];
+            listener({ type: "storageCleared" });
+            await flush();
+
+            expect(FakeWorker.instances[0].terminate).toHaveBeenCalled();
+            expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+            expect(document.getElementById("cleanPreviewSection").hidden).toBe(true);
+        });
     });
 
     it("refuses an Excel file over the export limit and points to CSV", async () => {
@@ -229,7 +353,7 @@ describe("CleanPage", () => {
         document.getElementById("cleanDownloadBtn").click();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        expect(ExcelGenerator.generateAndDownload).not.toHaveBeenCalled();
+        expect(ExcelGenerator.generate).not.toHaveBeenCalled();
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
         expect(document.getElementById("cleanErrorText").textContent).toContain(
             "over 10 MB, too large to build an Excel file",
@@ -245,6 +369,7 @@ describe("CleanPage", () => {
         await CleanPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
         document.getElementById("cleanCsvBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(CsvExport.buildCleanedCsvBlob).toHaveBeenCalledWith(cleanedData, "shares");
         expect(ExcelGenerator.download).toHaveBeenCalledWith(expect.any(Blob), "shares.csv");
@@ -266,6 +391,7 @@ describe("CleanPage", () => {
         await CleanPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
         document.getElementById("cleanCsvBtn").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(document.getElementById("cleanErrorText").textContent).toContain(
             "Error generating CSV",
@@ -388,6 +514,7 @@ describe("CleanPage", () => {
 
         // The default radio selection has no file, so the first loaded type should take over.
         await CleanPage.init();
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         // The preview should render with the fallback file type and update the selected radio.
         expect(document.getElementById("cleanPreviewSection").hidden).toBe(false);
@@ -711,7 +838,7 @@ describe("CleanPage", () => {
             rowCount: 1,
             cleanedData: [{ Title: "Hello", Link: "https://example.com" }],
         });
-        ExcelGenerator.generateAndDownload.mockResolvedValue({ success: false });
+        ExcelGenerator.generate.mockResolvedValue(null);
 
         await CleanPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -719,6 +846,7 @@ describe("CleanPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         expect(document.getElementById("cleanErrorMessage").hidden).toBe(false);
+        expect(document.getElementById("cleanErrorText").textContent).toContain("Try again.");
         expect(captureError).toHaveBeenCalled();
     });
 });

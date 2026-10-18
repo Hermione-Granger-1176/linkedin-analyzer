@@ -326,6 +326,32 @@ describe("CleanPage", () => {
             expect(document.getElementById("cleanDownloadSection").hidden).toBe(false);
         });
 
+        it("drops a download whose read finishes after the user picked another file type", async () => {
+            FakeWorker.instances[0].reply(PREVIEW_OK);
+            await flush();
+            let finishRead;
+            Storage.getFile.mockImplementationOnce(
+                () => new Promise((resolve) => (finishRead = resolve)),
+            );
+            document.getElementById("cleanDownloadBtn").click();
+            await flush();
+            const comments = /** @type {HTMLInputElement} */ (
+                document.querySelector('input[name="cleanFileType"][value="comments"]')
+            );
+            comments.checked = true;
+            comments.dispatchEvent(new Event("change"));
+            await flush();
+            const posted = FakeWorker.instances[0].posted.length;
+
+            finishRead({ blob: new Blob(["csv"]) });
+            await flush();
+
+            // The Comments preview keeps its worker, and the late download posts nothing.
+            expect(FakeWorker.instances[0].terminate).not.toHaveBeenCalled();
+            expect(FakeWorker.instances[0].posted).toHaveLength(posted);
+            expect(document.getElementById("cleanErrorMessage").hidden).toBe(true);
+        });
+
         it("leaves the screen alone when stored data is cleared mid-preview", async () => {
             // The latest subscription belongs to this test's client.
             const listener = DataCache.subscribe.mock.calls.at(-1)[0];

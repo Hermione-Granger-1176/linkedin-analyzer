@@ -472,6 +472,11 @@ export const CleanPage = (() => {
         if (!stored || !stored.blob) {
             return { success: false, error: "Stored file record is missing.", blob: null };
         }
+        // The user picked another file type while the read ran; starting this
+        // download now would cancel that type's preview.
+        if (getSelectedType() !== type) {
+            return { success: false, error: null, blob: null, cancelled: true };
+        }
         return requestClean({
             fileType: type,
             output,

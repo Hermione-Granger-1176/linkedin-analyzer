@@ -14,6 +14,7 @@ const SHARES_CSV = [
 ].join("\n");
 
 let runCleanJob;
+let resetCleanJob;
 let PREVIEW_ROW_LIMIT;
 let LinkedInCleaner;
 let ExcelGenerator;
@@ -21,7 +22,7 @@ let ExcelGenerator;
 describe("clean job", () => {
     beforeEach(async () => {
         vi.resetModules();
-        ({ runCleanJob, PREVIEW_ROW_LIMIT } =
+        ({ runCleanJob, resetCleanJob, PREVIEW_ROW_LIMIT } =
             await import("../../../src/features/cleaning/clean-job.js"));
         ({ LinkedInCleaner } = await import("../../../src/features/cleaning/cleaner.js"));
         ({ ExcelGenerator } = await import("../../../src/features/cleaning/excel.js"));
@@ -58,6 +59,11 @@ describe("clean job", () => {
 
         await runCleanJob({ ...payload, key: "shares:3", output: "preview" });
         expect(process).toHaveBeenCalledTimes(2);
+
+        // Clearing stored data drops the held rows, so the next request cleans again.
+        resetCleanJob();
+        await runCleanJob({ ...payload, key: "shares:3", output: "csv" });
+        expect(process).toHaveBeenCalledTimes(3);
     });
 
     it("builds an Excel workbook within the size limit and refuses one over it", async () => {

@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     runCleanJob: vi.fn(),
+    resetCleanJob: vi.fn(),
     captureError: vi.fn(),
 }));
 
 vi.mock("../../../src/features/cleaning/clean-job.js", () => ({
     runCleanJob: mocks.runCleanJob,
+    resetCleanJob: mocks.resetCleanJob,
 }));
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
@@ -22,6 +24,7 @@ const FAILED = {
     previewRows: [],
     blob: null,
 };
+const CANCELLED = { ...FAILED, error: null, cancelled: true };
 
 /** @type {FakeWorker[]} */
 let workers = [];
@@ -43,7 +46,9 @@ class FakeWorker {
     }
 
     emit(type, data) {
-        this.listeners[type]({ data });
+        const event = { data, preventDefault: vi.fn() };
+        this.listeners[type](event);
+        return event;
     }
 
     reply(requestId, payload = OK) {
@@ -64,6 +69,7 @@ describe("clean client", () => {
     beforeEach(() => {
         workers = [];
         mocks.runCleanJob.mockReset();
+        mocks.resetCleanJob.mockReset();
         mocks.captureError.mockReset();
     });
 
@@ -128,14 +134,30 @@ describe("clean client", () => {
         await expect(next).resolves.toEqual(OK);
     });
 
-    it("fails a request that a newer one supersedes", async () => {
+    it("cancels a request that a newer one supersedes and runs the newer one on a fresh worker", async () => {
         vi.stubGlobal("Worker", FakeWorker);
         const { requestClean } = await loadClient();
         const first = requestClean(PAYLOAD);
         const second = requestClean(PAYLOAD);
-        await expect(first).resolves.toEqual(FAILED);
-        workers[0].reply(2);
+        await expect(first).resolves.toEqual(CANCELLED);
+        expect(workers[0].terminate).toHaveBeenCalled();
+        expect(workers).toHaveLength(2);
+        expect(workers[1].posted).toEqual([{ type: "clean", requestId: 2, payload: PAYLOAD }]);
+        workers[1].reply(2);
         await expect(second).resolves.toEqual(OK);
+    });
+
+    it("drops the worker and the held rows when stored data is cleared", async () => {
+        vi.stubGlobal("Worker", FakeWorker);
+        const { requestClean } = await loadClient();
+        const { DataCache } = await import("../../../src/platform/persistence/data-cache.js");
+        const result = requestClean(PAYLOAD);
+        DataCache.notify({ type: "filesChanged" });
+        expect(workers[0].terminate).not.toHaveBeenCalled();
+        DataCache.notify({ type: "storageCleared" });
+        await expect(result).resolves.toEqual(CANCELLED);
+        expect(workers[0].terminate).toHaveBeenCalled();
+        expect(mocks.resetCleanJob).toHaveBeenCalled();
     });
 
     it("terminates the worker on a timeout and starts a new one next time", async () => {
@@ -144,7 +166,10 @@ describe("clean client", () => {
         const { requestClean } = await loadClient();
         const result = requestClean({ ...PAYLOAD, output: "xlsx" });
         vi.runOnlyPendingTimers();
-        await expect(result).resolves.toEqual(FAILED);
+        await expect(result).resolves.toEqual({
+            ...FAILED,
+            error: "Cleaning took too long. Try again.",
+        });
         expect(workers[0].terminate).toHaveBeenCalled();
         expect(mocks.captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "clean",
@@ -158,7 +183,8 @@ describe("clean client", () => {
         vi.stubGlobal("Worker", FakeWorker);
         const { requestClean } = await loadClient();
         const result = requestClean(PAYLOAD);
-        workers[0].emit("error");
+        const event = workers[0].emit("error");
+        expect(event.preventDefault).toHaveBeenCalled();
         // A second error from the same worker finds nothing left to tear down.
         workers[0].emit("error");
         await expect(result).resolves.toEqual(FAILED);
@@ -170,13 +196,26 @@ describe("clean client", () => {
         });
     });
 
-    it("fails when the request cannot be posted", async () => {
+    it("fails and terminates when a reply cannot be deserialized", async () => {
         vi.stubGlobal("Worker", FakeWorker);
         const { requestClean } = await loadClient();
-        requestClean(PAYLOAD);
-        workers[0].postMessage = () => {
-            throw new Error("DataCloneError");
-        };
+        const result = requestClean(PAYLOAD);
+        const event = workers[0].emit("messageerror");
+        expect(event.preventDefault).toHaveBeenCalled();
+        await expect(result).resolves.toEqual(FAILED);
+        expect(workers[0].terminate).toHaveBeenCalled();
+    });
+
+    it("fails when the request cannot be posted", async () => {
+        vi.stubGlobal(
+            "Worker",
+            class extends FakeWorker {
+                postMessage() {
+                    throw new Error("DataCloneError");
+                }
+            },
+        );
+        const { requestClean } = await loadClient();
         await expect(requestClean(PAYLOAD)).resolves.toEqual(FAILED);
         expect(workers[0].terminate).toHaveBeenCalled();
     });

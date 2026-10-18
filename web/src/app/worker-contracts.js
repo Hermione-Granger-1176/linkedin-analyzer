@@ -5,6 +5,9 @@ import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../shared/limits.js";
 
 const FILE_TYPES = new Set(FILE_TYPE_LIST);
 
+/** Rows of a cleaned file the Clean screen previews. */
+export const CLEAN_PREVIEW_MAX_ROWS = 5;
+
 const LIMITS = Object.freeze({
     maxCsvChars: MAX_CSV_CHARS,
     maxFileBytes: MAX_FILE_BYTES,
@@ -577,8 +580,9 @@ export function parseCleaningWorkerRequest(message) {
 }
 
 /**
- * Parse cleaning worker outbound message. Preview cells are bounded strings;
- * a download carries its Blob.
+ * Parse cleaning worker outbound message. The preview keeps at most
+ * `CLEAN_PREVIEW_MAX_ROWS` rows of strings, each cut to the CSV text limit;
+ * any other cell value reads as empty. A download carries its Blob.
  * @param {unknown} message - Raw worker message
  * @returns {{valid: boolean, value?: object, error?: string}}
  */
@@ -590,6 +594,7 @@ export function parseCleaningWorkerMessage(message) {
     const previewRows = Array.isArray(payload.previewRows)
         ? payload.previewRows
               .filter(Array.isArray)
+              .slice(0, CLEAN_PREVIEW_MAX_ROWS)
               .map((row) => row.map((cell) => normalizeString(cell, LIMITS.maxCsvChars)))
         : [];
     return valid({

@@ -1,21 +1,24 @@
 /**
  * Page-side client for the Clean screen's worker.
  *
- * One request is in flight at a time: a new one settles the previous as a
- * failure, and the screen ignores replies for a selection it has moved past.
- * Where Workers are unavailable the same job runs on the main thread.
+ * One request is in flight at a time: a new one stops the worker answering the
+ * previous request and settles it as cancelled, which the screen ignores.
+ * Where Workers are unavailable the same job runs on the main thread. Clearing
+ * stored data drops the worker and the rows it holds.
  */
 
 import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
+import { DataCache } from "../../platform/persistence/data-cache.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
-import { runCleanJob } from "./clean-job.js";
+import { resetCleanJob, runCleanJob } from "./clean-job.js";
 
 // Fixed text: a failure inside the worker can carry a row of the user's file.
 const CLEAN_FAILURE = "Unable to parse file.";
+const CLEAN_TIMEOUT = "Cleaning took too long. Try again.";
 
-/** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null}} CleanReply */
+/** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null, cancelled?: boolean}} CleanReply */
 
 /** @type {Worker|null} */
 let worker = null;
@@ -25,7 +28,7 @@ let pending = null;
 
 /**
  * Build a failed reply.
- * @param {string} [error] - Failure text
+ * @param {string|null} [error] - Failure text, or null for a cancelled request
  * @returns {CleanReply}
  */
 function failure(error = CLEAN_FAILURE) {
@@ -46,13 +49,16 @@ function settle(reply) {
     resolve(reply);
 }
 
-/** Terminate the worker and fail whatever it was answering. */
-function terminateCleanWorker() {
+/**
+ * Terminate the worker and settle whatever it was answering.
+ * @param {CleanReply} [reply] - Outcome for the request in flight
+ */
+function terminateCleanWorker(reply = failure()) {
     if (worker) {
         worker.terminate();
         worker = null;
     }
-    settle(failure());
+    settle(reply);
 }
 
 /**
@@ -67,8 +73,14 @@ function onMessage(event) {
     settle(parsed.value.payload);
 }
 
-/** A worker that fell over cannot answer; start a fresh one next time. */
-function onError() {
+/**
+ * A worker that fell over, or a reply that cannot be read, cannot answer;
+ * start a fresh worker next time.
+ * @param {Event} event - Worker error or messageerror event
+ */
+function onError(event) {
+    // Handled here; keep the browser from also logging it as uncaught.
+    event.preventDefault();
     captureError(new Error("Cleaning worker failed."), {
         module: "clean",
         operation: "worker-error",
@@ -88,6 +100,7 @@ function getWorker() {
         worker = new Worker(new URL("./cleaning-worker.js", import.meta.url), { type: "module" });
         worker.addEventListener("message", onMessage);
         worker.addEventListener("error", onError);
+        worker.addEventListener("messageerror", onError);
     } catch {
         worker = null;
         captureError(new Error("Cleaning worker could not start."), {
@@ -123,7 +136,12 @@ export function requestClean(payload) {
     if (!active) {
         return runOnMainThread(payload);
     }
-    settle(failure());
+    if (pending) {
+        // The worker may still be busy with the abandoned job; a fresh one
+        // starts on this request instead of waiting behind it.
+        terminateCleanWorker({ ...failure(null), cancelled: true });
+        return requestClean(payload);
+    }
     const id = ++requestCount;
     return new Promise((resolve) => {
         // A workbook takes longer than a clean, so a download gets twice the budget.
@@ -134,7 +152,7 @@ export function requestClean(payload) {
                 module: "clean",
                 operation: "worker-timeout",
             });
-            terminateCleanWorker();
+            terminateCleanWorker(failure(CLEAN_TIMEOUT));
         }, budget);
         pending = { id, resolve, timeoutId };
         try {
@@ -144,3 +162,11 @@ export function requestClean(payload) {
         }
     });
 }
+
+// Clearing stored data must not leave the last file's cleaned rows in memory.
+DataCache.subscribe((event) => {
+    if (event && event.type === "storageCleared") {
+        terminateCleanWorker({ ...failure(null), cancelled: true });
+        resetCleanJob();
+    }
+});

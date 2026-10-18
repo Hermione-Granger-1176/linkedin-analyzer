@@ -8,7 +8,7 @@ The app deploys as static assets. A hash router keeps the route after a reload w
 
 The registered routes are `home`, `clean`, `analytics`, `connections`, `messages`, and `insights`. The four data views share the `range` parameter. The router remembers shared parameters when the user changes screens, and it sorts query keys when it builds a hash.
 
-The upload screen ships in the main bundle because most visits land on it. Every other screen registers a loader instead of a controller, and its code is fetched the first time its route opens: the screen manager shows the loading overlay, waits for the import, then initializes the controller with the route's latest parameters. A failed import is reported and tried again on the next visit. Once an upload makes Analytics available, `web/src/app/route-preload.js` fetches its code while the browser is idle, except on the lite effects tier with Save-Data on.
+The upload screen ships in the main bundle because most visits land on it. Every other screen registers a loader instead of a controller, and its code is fetched the first time its route opens: the screen manager shows the loading overlay, waits for the import, then initializes the controller with the route's latest parameters. If the import fails, the screen says so with a Try again button, and the next visit also tries again. Leaving a screen that is still loading removes its overlay. Once an upload makes Analytics available, `web/src/app/route-preload.js` fetches its code while the browser is idle, except on the lite effects tier with Save-Data on.
 
 [ADR-002](adr/002-no-framework-hash-routed-spa.md) records the choice to use a small hand-written router instead of a UI framework and history-based routing.
 

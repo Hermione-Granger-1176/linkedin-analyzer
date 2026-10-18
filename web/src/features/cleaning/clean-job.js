@@ -9,6 +9,7 @@
  * cleaned data.
  */
 
+import { CLEAN_PREVIEW_MAX_ROWS } from "../../app/worker-contracts.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 import { readCsvSource } from "../upload/read.js";
@@ -17,10 +18,15 @@ import { LinkedInCleaner } from "./cleaner.js";
 import { buildCleanedCsvBlob } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
 
-export const PREVIEW_ROW_LIMIT = 5;
+export const PREVIEW_ROW_LIMIT = CLEAN_PREVIEW_MAX_ROWS;
 
 /** @type {{key: string, fileType: string, sourceSize: number, rows: object[], rowCount: number}|null} */
 let held = null;
+
+/** Drop the cleaned rows held from the last file. */
+export function resetCleanJob() {
+    held = null;
+}
 
 /**
  * Clean the requested file, or reuse the rows already cleaned from it.

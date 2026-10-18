@@ -313,7 +313,9 @@ describe("ScreenManager", () => {
             loader.resolve(controller);
             await vi.waitFor(() => expect(controller.init).toHaveBeenCalledTimes(1));
             expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-a");
-            expect(controller.onRouteChange).toHaveBeenLastCalledWith(
+            // Only the latest activation runs the hooks.
+            expect(controller.onRouteChange).toHaveBeenCalledTimes(1);
+            expect(controller.onRouteChange).toHaveBeenCalledWith(
                 { range: "6m" },
                 { from: "lazy-a", to: "lazy-a" }
             );
@@ -332,8 +334,11 @@ describe("ScreenManager", () => {
 
             ScreenManager.activate("lazy-b", {});
             ScreenManager.activate("home", {});
+            // Leaving takes the loading overlay with it.
+            expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-b");
             loader.resolve(controller);
-            await vi.waitFor(() => expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-b"));
+            await loader.load.mock.results[0].value;
+            await Promise.resolve();
             expect(controller.init).not.toHaveBeenCalled();
 
             ScreenManager.activate("lazy-b", { x: "1" });
@@ -341,25 +346,69 @@ describe("ScreenManager", () => {
             expect(controller.onRouteChange).toHaveBeenCalledWith({ x: "1" }, { from: "home", to: "lazy-b" });
         });
 
-        it("reports a failed load and tries again on the next visit", async () => {
+        it("reports a failed load, offers a retry, and tries again on the next visit", async () => {
             const controller = { init: vi.fn() };
             const loader = deferredLoader();
+            const notice = () => document.querySelector("#screen-about [data-route-load-error]");
             ScreenManager.register("lazy-c", { screenId: "screen-about", load: loader.load });
 
             ScreenManager.activate("lazy-c", {});
             loader.reject(new Error("chunk missing"));
-            await vi.waitFor(() => expect(captureError).toHaveBeenCalledTimes(1));
+            await vi.waitFor(() => expect(notice()).not.toBeNull());
             expect(captureError).toHaveBeenCalledWith(new Error("Screen code could not be loaded."), {
                 module: "screen-manager",
                 operation: "route-load",
                 route: "lazy-c"
             });
             expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-c");
+            expect(notice().getAttribute("role")).toBe("alert");
+
+            // Try again re-imports and clears the notice while it loads.
+            notice().querySelector("button").click();
+            expect(loader.load).toHaveBeenCalledTimes(2);
+            expect(notice()).toBeNull();
+            loader.reject(new Error("still missing"));
+            await vi.waitFor(() => expect(notice()).not.toBeNull());
+
+            // A retry button left behind does nothing once the user moved on.
+            const staleRetry = notice().querySelector("button");
+            ScreenManager.activate("home", {});
+            staleRetry.click();
+            expect(loader.load).toHaveBeenCalledTimes(2);
 
             ScreenManager.activate("lazy-c", {});
-            expect(loader.load).toHaveBeenCalledTimes(2);
+            expect(loader.load).toHaveBeenCalledTimes(3);
+            expect(notice()).toBeNull();
             loader.resolve(controller);
             await vi.waitFor(() => expect(controller.init).toHaveBeenCalledTimes(1));
+        });
+
+        it("skips the notice for a screen whose element is missing", async () => {
+            ScreenManager.register("lazy-g", {
+                screenId: "screen-missing",
+                load: () => Promise.reject(new Error("chunk missing"))
+            });
+            ScreenManager.activate("lazy-g", {});
+            await vi.waitFor(() => expect(captureError).toHaveBeenCalledTimes(1));
+            await Promise.resolve();
+            expect(document.querySelector("[data-route-load-error]")).toBeNull();
+        });
+
+        it("runs the hooks once for a route reopened while it loads", async () => {
+            const controller = { init: vi.fn(), onRouteChange: vi.fn() };
+            const loader = deferredLoader();
+            ScreenManager.register("lazy-f", { screenId: "screen-about", load: loader.load });
+
+            ScreenManager.activate("lazy-f", {});
+            ScreenManager.activate("home", {});
+            ScreenManager.activate("lazy-f", { y: "2" });
+            vi.mocked(LoadingOverlay.hide).mockClear();
+            loader.resolve(controller);
+            await vi.waitFor(() => expect(controller.init).toHaveBeenCalledTimes(1));
+            expect(controller.onRouteChange).toHaveBeenCalledTimes(1);
+            expect(controller.onRouteChange).toHaveBeenCalledWith({ y: "2" }, { from: "home", to: "lazy-f" });
+            // Only the latest activation hides the overlay.
+            expect(LoadingOverlay.hide).toHaveBeenCalledTimes(1);
         });
 
         it("treats a loader that yields nothing as a route without a controller", async () => {

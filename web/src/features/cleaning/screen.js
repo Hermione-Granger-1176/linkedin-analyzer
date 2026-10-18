@@ -296,7 +296,7 @@ export const CleanPage = (() => {
             });
             // The selection may have changed while the clean was in flight;
             // abandon this stale render so the newer one wins.
-            if (token !== previewRequest || getSelectedType() !== type) {
+            if (reply.cancelled || token !== previewRequest || getSelectedType() !== type) {
                 return;
             }
             if (!reply.success) {
@@ -427,7 +427,7 @@ export const CleanPage = (() => {
      * @param {string} type - File type
      * @param {object} cached - Previewed file
      * @param {"xlsx"|"csv"} output - What to build
-     * @returns {Promise<{success: boolean, error: string|null, blob: Blob|null}>}
+     * @returns {Promise<{success: boolean, error: string|null, blob: Blob|null, cancelled?: boolean}>}
      */
     async function buildDownload(type, cached, output) {
         let stored;
@@ -445,6 +445,17 @@ export const CleanPage = (() => {
             source: stored.blob,
             key: fileKey(type, cached.updatedAt),
         });
+    }
+
+    /**
+     * Whether a download reply should be dropped: a newer request cancelled
+     * it, or it failed for a file type the user has moved away from.
+     * @param {{success: boolean, cancelled?: boolean}} reply - Download reply
+     * @param {string} type - File type the download was for
+     * @returns {boolean}
+     */
+    function isAbandoned(reply, type) {
+        return Boolean(reply.cancelled) || (!reply.success && getSelectedType() !== type);
     }
 
     /**
@@ -467,6 +478,9 @@ export const CleanPage = (() => {
         }
         hideError();
         const reply = await buildDownload(type, cached, "xlsx");
+        if (isAbandoned(reply, type)) {
+            return;
+        }
         if (!reply.success || !reply.blob) {
             captureError(new Error("Excel generation failed."), {
                 module: "clean",
@@ -490,6 +504,9 @@ export const CleanPage = (() => {
         }
         const { type, cached } = downloadable;
         const reply = await buildDownload(type, cached, "csv");
+        if (isAbandoned(reply, type)) {
+            return;
+        }
         if (!reply.success || !reply.blob) {
             captureError(new Error("CSV generation failed."), {
                 module: "clean",

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     parseAnalyticsWorkerMessage,
     parseAnalyticsWorkerRequest,
+    CLEAN_PREVIEW_MAX_ROWS,
     parseCleaningWorkerMessage,
     parseCleaningWorkerRequest,
     parseConnectionsWorkerMessage,
@@ -790,6 +791,13 @@ describe("worker contracts", () => {
             previewRows: [],
             blob: null,
         });
+        const many = parseCleaningWorkerMessage({
+            type: "cleaned",
+            payload: {
+                previewRows: Array.from({ length: CLEAN_PREVIEW_MAX_ROWS + 3 }, () => ["x"]),
+            },
+        });
+        expect(many.value.payload.previewRows).toHaveLength(CLEAN_PREVIEW_MAX_ROWS);
         expect(parseCleaningWorkerMessage({ type: "cleaned" }).valid).toBe(true);
         expect(parseCleaningWorkerMessage({ type: "threads" }).valid).toBe(false);
     });

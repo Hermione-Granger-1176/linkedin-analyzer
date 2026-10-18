@@ -178,16 +178,8 @@ def _leading_whitespace(line: str) -> str:
     return line[: len(line) - len(line.lstrip(" \t"))]
 
 
-def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list[str]:
-    """Return all supported EditorConfig violations for one file."""
-    try:
-        text = _decode_text_file(path)
-    except UnicodeDecodeError as exc:
-        return [f"{relative_path}: not valid UTF-8 text ({exc.reason})"]
-
-    if text is None:
-        return []
-
+def _file_violations(text: str, relative_path: str, settings: dict[str, str]) -> list[str]:
+    """Return the line-ending and final-newline violations for a whole file."""
     violations: list[str] = []
     if settings.get("end_of_line") == "lf" and "\r" in text:
         violations.append(f"{relative_path}: expected LF line endings")
@@ -199,12 +191,16 @@ def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list
             violations.append(f"{relative_path}: missing final newline")
         case "false" if has_final_newline:
             violations.append(f"{relative_path}: unexpected final newline")
+    return violations
 
-    lines = text.splitlines()
+
+def _line_violations(text: str, relative_path: str, settings: dict[str, str]) -> list[str]:
+    """Return the trailing-whitespace and indentation violations line by line."""
+    violations: list[str] = []
     trim_trailing_whitespace = settings.get("trim_trailing_whitespace") == "true"
     indent_style = settings.get("indent_style")
 
-    for line_number, line in enumerate(lines, start=1):
+    for line_number, line in enumerate(text.splitlines(), start=1):
         if trim_trailing_whitespace and line.rstrip(" \t") != line:
             violations.append(f"{relative_path}:{line_number}: trailing whitespace")
 
@@ -217,8 +213,23 @@ def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list
                 violations.append(f"{relative_path}:{line_number}: tab used for indentation")
             case "tab" if leading and not leading.startswith("\t"):
                 violations.append(f"{relative_path}:{line_number}: spaces used for indentation")
-
     return violations
+
+
+def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list[str]:
+    """Return all supported EditorConfig violations for one file."""
+    try:
+        text = _decode_text_file(path)
+    except UnicodeDecodeError as exc:
+        return [f"{relative_path}: not valid UTF-8 text ({exc.reason})"]
+
+    if text is None:
+        return []
+
+    return [
+        *_file_violations(text, relative_path, settings),
+        *_line_violations(text, relative_path, settings),
+    ]
 
 
 def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list[str]:

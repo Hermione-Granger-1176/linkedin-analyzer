@@ -81,18 +81,17 @@ def measure(type_name: str, input_path: Path, output_dir: Path) -> tuple[int, in
     return None
 
 
-def run_audit(input_dir: Path, strict: bool) -> int:
-    """Measure every cleaner's peak RSS and return nonzero for errors."""
-    missing = [
-        name for name, (filename, _) in TYPES.items() if not (input_dir / filename).is_file()
-    ]
-    if missing:
-        for name in missing:
-            print(f"{name:<12} MISSING    input-file-absent=1")
-        status = "FAILED" if strict else "SKIPPED"
-        print(f"RESULT       {status:<10} missing-inputs={len(missing)}")
-        return 1 if strict else 0
+def _report_missing_inputs(missing: list[str], *, strict: bool) -> int:
+    """Print the missing inputs and return the exit code, which only strict mode fails."""
+    for name in missing:
+        print(f"{name:<12} MISSING    input-file-absent=1")
+    status = "FAILED" if strict else "SKIPPED"
+    print(f"RESULT       {status:<10} missing-inputs={len(missing)}")
+    return 1 if strict else 0
 
+
+def _measure_all(input_dir: Path) -> int:
+    """Measure every cleaner in an isolated process, print one line each, and count errors."""
     errors = 0
     with tempfile.TemporaryDirectory(prefix="linkedin-analyzer-memory-") as temp_dir:
         output_dir = Path(temp_dir)
@@ -114,7 +113,18 @@ def run_audit(input_dir: Path, strict: bool) -> int:
                 f"{type_name:<12} {status:<10} input-bytes={input_bytes} rows={rows} "
                 f"peak-rss-kib={peak_rss_kib} peak-rss-mib={peak_rss_kib / 1024:.1f}"
             )
+    return errors
 
+
+def run_audit(input_dir: Path, strict: bool) -> int:
+    """Measure every cleaner's peak RSS and return nonzero for errors."""
+    missing = [
+        name for name, (filename, _) in TYPES.items() if not (input_dir / filename).is_file()
+    ]
+    if missing:
+        return _report_missing_inputs(missing, strict=strict)
+
+    errors = _measure_all(input_dir)
     status = "FAILED" if errors else "MEASURED"
     print(f"RESULT       {status:<10} types={len(TYPES)} errors={errors}")
     return 1 if errors else 0

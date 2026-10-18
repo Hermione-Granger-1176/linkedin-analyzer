@@ -25,14 +25,13 @@ class CheckResult:
 DEFAULT_TIMEOUT = 600
 
 
-def run_check(
+def _execute_make_target(
     name: str,
     *,
-    timeout: int = DEFAULT_TIMEOUT,
-    run_fn: RunFunction | None = None,
-) -> CheckResult:
-    """Run a single Make target and return the captured result."""
-    start = time.monotonic()
+    timeout: int,
+    run_fn: RunFunction | None,
+) -> tuple[bool, str]:
+    """Run one Make target and return whether it passed, with its output."""
     try:
         result = (run_fn or subprocess.run)(
             ["make", name],
@@ -41,26 +40,22 @@ def run_check(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        return CheckResult(
-            name=name,
-            passed=False,
-            elapsed=time.monotonic() - start,
-            output=f"Timed out after {timeout}s",
-        )
+        return False, f"Timed out after {timeout}s"
     except (OSError, ValueError) as exc:
-        return CheckResult(
-            name=name,
-            passed=False,
-            elapsed=time.monotonic() - start,
-            output=f"Failed to run: {exc}",
-        )
+        return False, f"Failed to run: {exc}"
+    return result.returncode == 0, (result.stdout + result.stderr).rstrip("\n")
 
-    return CheckResult(
-        name=name,
-        passed=result.returncode == 0,
-        elapsed=time.monotonic() - start,
-        output=(result.stdout + result.stderr).rstrip("\n"),
-    )
+
+def run_check(
+    name: str,
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    run_fn: RunFunction | None = None,
+) -> CheckResult:
+    """Run a single Make target and return the captured result."""
+    start = time.monotonic()
+    passed, output = _execute_make_target(name, timeout=timeout, run_fn=run_fn)
+    return CheckResult(name=name, passed=passed, elapsed=time.monotonic() - start, output=output)
 
 
 def run_checks(

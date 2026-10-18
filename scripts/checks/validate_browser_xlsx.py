@@ -70,27 +70,24 @@ def read_workbook(path: Path) -> tuple[list[str], list[str], list[list[str]]]:
     return sheet_names, header, data_rows
 
 
-def check_structure(
-    sheet_names: list[str],
-    header: list[str],
-    data_rows: list[list[str]],
-    expected: dict[str, Any],
-) -> list[str]:
-    """Check worksheet count, sheet name, header row, and data row count."""
-    failures: list[str] = []
-
+def _check_sheets(sheet_names: list[str], expected: dict[str, Any]) -> list[str]:
+    """Check there is exactly one worksheet and that it has the expected name."""
     if len(sheet_names) != 1:
-        failures.append(f"SHEETS   FAIL expected=1 actual={len(sheet_names)}")
-    elif sheet_names[0] != expected["sheetName"]:
-        failures.append("SHEET    FAIL name-mismatch")
+        return [f"SHEETS   FAIL expected=1 actual={len(sheet_names)}"]
+    if sheet_names[0] != expected["sheetName"]:
+        return ["SHEET    FAIL name-mismatch"]
+    return []
 
+
+def _check_header(header: list[str], expected: dict[str, Any]) -> list[str]:
+    """Check the header row has the expected column count and values."""
     expected_headers = list(expected["headers"])
     if len(header) != len(expected_headers):
-        failures.append(
+        return [
             f"HEADER   FAIL check=length expected-cols={len(expected_headers)} "
             f"actual-cols={len(header)}"
-        )
-    elif header != expected_headers:
+        ]
+    if header != expected_headers:
         first_mismatch = next(
             index
             for index, (actual, want) in enumerate(
@@ -99,14 +96,29 @@ def check_structure(
             )
             if actual != want
         )
-        failures.append(f"HEADER   FAIL check=values first-mismatch-column={first_mismatch}")
+        return [f"HEADER   FAIL check=values first-mismatch-column={first_mismatch}"]
+    return []
 
+
+def _check_row_count(data_rows: list[list[str]], expected: dict[str, Any]) -> list[str]:
+    """Check the number of data rows."""
     if len(data_rows) != expected["dataRowCount"]:
-        failures.append(
-            f"ROWS     FAIL expected={expected['dataRowCount']} actual={len(data_rows)}"
-        )
+        return [f"ROWS     FAIL expected={expected['dataRowCount']} actual={len(data_rows)}"]
+    return []
 
-    return failures
+
+def check_structure(
+    sheet_names: list[str],
+    header: list[str],
+    data_rows: list[list[str]],
+    expected: dict[str, Any],
+) -> list[str]:
+    """Check worksheet count, sheet name, header row, and data row count."""
+    return [
+        *_check_sheets(sheet_names, expected),
+        *_check_header(header, expected),
+        *_check_row_count(data_rows, expected),
+    ]
 
 
 def check_cells(data_rows: list[list[str]], expected: dict[str, Any]) -> list[str]:

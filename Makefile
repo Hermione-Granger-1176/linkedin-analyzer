@@ -588,9 +588,10 @@ cherry-pick: ## Apply commits onto the current branch (make cherry-pick ref="sha
 	@test -n "$(ref)" || (printf 'Usage: make cherry-pick ref="sha ..." [nocommit=1]\n' >&2; exit 1)
 	git cherry-pick $(if $(filter 1,$(value nocommit)),--no-commit) $(ref)
 
+merge: export MERGE_REF := $(value ref)
 merge: ## Merge a ref into the current branch with a merge commit (make merge ref=origin/main)
-	@test -n "$(ref)" || (printf 'Usage: make merge ref=origin/main\n' >&2; exit 1)
-	git merge --no-edit "$(ref)"
+	@test -n "$$MERGE_REF" || (printf 'Usage: make merge ref=origin/main\n' >&2; exit 1)
+	git merge --no-ff --no-edit -- "$$MERGE_REF"
 
 log: ## Show recent commit log
 	git log --oneline -20

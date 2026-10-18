@@ -203,7 +203,7 @@ jobs:
           install-python-deps: "false"
 
       - name: Test web E2E
-        run: make web-e2e-container
+        run: make test-e2e-container
 
       - name: Upload Playwright artifacts
         if: failure()

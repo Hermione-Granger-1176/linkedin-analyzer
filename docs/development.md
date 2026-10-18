@@ -272,7 +272,7 @@ Committing, pushing, and opening or merging a pull request are maintainer decisi
 
 ## Use GitHub helpers
 
-Use the Make wrappers for pull requests, issues, and Actions. Run `make help-pr`, `make help-issue`, or `make help-ci` for every target and argument.
+Use the Make wrappers for pull requests, issues, and Actions. Run `make help-pr`, `make help-issue`, or `make help-actions` for every target and argument.
 
 Free-text bodies come from standard input. Titles come from the `TITLE` environment variable. Do not pass a body as a Make argument.
 

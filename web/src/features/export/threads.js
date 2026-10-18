@@ -44,15 +44,26 @@ const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
 /**
  * @typedef {{urls: Set<string>, names: Set<string>, conversations: Set<string>, sent: number, received: number}} Identity
  * @typedef {{name: string, url: string}} Correspondent
- * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, sequence: number, body: string}} MessageEntry
+ * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, sequence: number, rowIndex: number}} MessageEntry
  * @typedef {import("./messages-parse.js").MessageRow} MessageRow
- * @typedef {{row: MessageRow, date: Date}} DatedRow
+ * @typedef {{row: MessageRow, date: Date, rowIndex: number}} DatedRow
  * @typedef {{selfUrls: Set<string>, selfNames: Set<string>}} SelfContext
  */
 
 /**
  * One message of a selected thread, as the document draws it.
  * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, body: string}} ThreadMessage
+ */
+
+/**
+ * One message of a selected thread before its body is filled in: the index of
+ * the input row it came from stands in for the body.
+ * @typedef {{direction: 'sent'|'received'|'unknown', timestamp: number, rowIndex: number}} ThreadMessageRef
+ */
+
+/**
+ * A selected thread whose messages still point at their input rows.
+ * @typedef {Omit<SelectedThread, "messages"> & {messages: ThreadMessageRef[]}} SelectedThreadRef
  */
 
 /**
@@ -180,14 +191,15 @@ function messageBody(value) {
  * @returns {DatedRow[]} Dated rows, in file order
  */
 function withParsedDates(rows) {
+    /** @type {DatedRow[]} */
     const dated = [];
 
-    for (const row of rows) {
+    rows.forEach((row, rowIndex) => {
         const date = MessagesAnalytics.parseDateTime(row.DATE);
         if (date) {
-            dated.push({ row, date });
+            dated.push({ row, date, rowIndex });
         }
-    }
+    });
 
     return dated;
 }
@@ -641,7 +653,7 @@ function correspondentLabel(correspondent) {
  * Order the tail of a thread chronologically and keep the last N messages.
  * @param {MessageEntry[]} entries - Recorded messages with a sequence number
  * @param {number} messagesPerPerson - How many messages to keep
- * @returns {ThreadMessage[]} Trimmed messages
+ * @returns {ThreadMessageRef[]} Trimmed messages
  */
 function tailMessages(entries, messagesPerPerson) {
     const ordered = entries
@@ -655,7 +667,7 @@ function tailMessages(entries, messagesPerPerson) {
     return ordered.slice(-messagesPerPerson).map((entry) => ({
         direction: entry.direction,
         timestamp: entry.timestamp,
-        body: entry.body,
+        rowIndex: entry.rowIndex,
     }));
 }
 
@@ -670,7 +682,7 @@ function tailMessages(entries, messagesPerPerson) {
 function groupConversations(dated, context, selfKnown, nameToUrl) {
     const conversations = new Map();
 
-    dated.forEach(({ row, date }, index) => {
+    dated.forEach(({ row, date, rowIndex }, index) => {
         const id = conversationId(row);
         const scope = conversationKeyForRow(row, index);
         const participants = exportParticipants(row, context, Boolean(id));
@@ -706,7 +718,7 @@ function groupConversations(dated, context, selfKnown, nameToUrl) {
             direction: resolveDirection(row, context, selfKnown),
             timestamp: date.getTime(),
             sequence: index,
-            body: messageBody(row.CONTENT),
+            rowIndex,
         });
     });
 
@@ -810,11 +822,14 @@ function takeWithinPeopleBudget(threads, people) {
  * Rows whose date cannot be parsed are skipped before anything else, exactly as
  * `MessagesAnalytics.buildMessageState` does, so they cannot influence which
  * identity is taken to be the account owner.
- * @param {MessageRow[]} rows - Parsed message rows, including CONTENT
+ *
+ * Nothing here reads `CONTENT`, so the rows may leave it out: each message
+ * names the input row it came from, and the caller fetches only those bodies.
+ * @param {MessageRow[]} rows - Parsed message rows, with or without CONTENT
  * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} [options] - Selection limits and known connections
- * @returns {SelectedThread[]} Threads, most recent first
+ * @returns {SelectedThreadRef[]} Threads, most recent first
  */
-export function selectRecentThreads(rows, options = {}) {
+export function selectRecentThreadRows(rows, options = {}) {
     const safeRows = Array.isArray(rows) ? rows : [];
     const people = normalizeLimit(options.people, DEFAULT_PEOPLE);
     const messagesPerPerson = normalizeLimit(
@@ -853,4 +868,22 @@ export function selectRecentThreads(rows, options = {}) {
             messages: tailMessages(thread.entries, messagesPerPerson),
         };
     });
+}
+
+/**
+ * Pick the recent threads from rows that carry their message bodies.
+ * @param {MessageRow[]} rows - Parsed message rows, including CONTENT
+ * @param {{people?: number, messagesPerPerson?: number, contactKeys?: string[]}} [options] - Selection limits and known connections
+ * @returns {SelectedThread[]} Threads, most recent first
+ */
+export function selectRecentThreads(rows, options = {}) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    return selectRecentThreadRows(safeRows, options).map((thread) => ({
+        ...thread,
+        messages: thread.messages.map(({ direction, timestamp, rowIndex }) => ({
+            direction,
+            timestamp,
+            body: messageBody(safeRows[rowIndex].CONTENT),
+        })),
+    }));
 }

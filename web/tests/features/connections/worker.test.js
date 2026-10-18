@@ -4,7 +4,7 @@ import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { processConnections } from "../../../src/features/connections/connections-worker.js";
 
 describe("connections worker", () => {
-    it("processConnections succeeds with valid CSV", () => {
+    it("processConnections succeeds with valid CSV", async () => {
         const csv = [
             "Notes:",
             "Export metadata",
@@ -14,7 +14,7 @@ describe("connections worker", () => {
             "Bob,Smith,https://linkedin.com/in/bob,,Acme,Engineer,15 Jun 2024"
         ].join("\n");
 
-        const result = processConnections(csv);
+        const result = await processConnections(csv);
 
         expect(result.success).toBe(true);
         expect(result.rows.length).toBe(2);
@@ -23,19 +23,19 @@ describe("connections worker", () => {
         expect(result.analytics.stats.networkAgeMonths).toBeGreaterThan(0);
     });
 
-    it("processConnections rejects empty input", () => {
-        expect(processConnections("").success).toBe(false);
-        expect(processConnections(null).success).toBe(false);
-        expect(processConnections("").error).toBeTruthy();
+    it("processConnections rejects empty input", async () => {
+        expect((await processConnections("")).success).toBe(false);
+        expect((await processConnections(null)).success).toBe(false);
+        expect((await processConnections("")).error).toBeTruthy();
     });
 
-    it("processConnections uses fallback parser error message when cleaner omits error", () => {
+    it("processConnections uses fallback parser error message when cleaner omits error", async () => {
         const processSpy = vi.spyOn(LinkedInCleaner, "process").mockReturnValueOnce({
             success: false,
             error: ""
         });
 
-        const result = processConnections("First Name,Last Name\nAda,Lovelace");
+        const result = await processConnections("First Name,Last Name\nAda,Lovelace");
 
         expect(result.success).toBe(false);
         expect(result.error).toBe("Unable to parse Connections.csv.");
@@ -43,7 +43,7 @@ describe("connections worker", () => {
         processSpy.mockRestore();
     });
 
-    it("processConnections reports an error when the CSV parses but yields no valid rows", () => {
+    it("processConnections reports an error when the CSV parses but yields no valid rows", async () => {
         // A valid connections header but every row is empty (all identity fields missing)
         const csv = [
             "Notes:",
@@ -54,7 +54,7 @@ describe("connections worker", () => {
             ",,,,,,"
         ].join("\n");
 
-        const result = processConnections(csv);
+        const result = await processConnections(csv);
 
         expect(result.success).toBe(false);
         expect(result.error).toMatch(/no valid rows/i);

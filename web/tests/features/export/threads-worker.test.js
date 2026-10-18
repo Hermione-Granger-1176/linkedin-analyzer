@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { processPayload } from "../../../src/features/export/threads-worker.js";
 import { PII_MARKER, piiError } from "../../helpers/pii-sentinel.js";
+import { storedUpload } from "../../helpers/stored-upload.js";
 
 const MESSAGES_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
@@ -155,6 +156,68 @@ describe("threads worker", () => {
         expect(directions(result)).toEqual(["sent", "received"]);
     });
 
+    it("streams a stored messages upload to the same threads as its text", async () => {
+        const parseCSV = vi.spyOn(LinkedInCleaner, "parseCSV");
+        const fromText = await processPayload({ messagesCsv: MESSAGES_CSV });
+        parseCSV.mockClear();
+
+        const streamed = await processPayload({ messagesCsv: storedUpload(MESSAGES_CSV) });
+
+        expect(streamed).toEqual(fromText);
+        // The stream builds the rows itself; no whole-text parse runs.
+        expect(parseCSV).not.toHaveBeenCalled();
+    });
+
+    it("restarts a stored messages upload that is not UTF-8 as windows-1252", async () => {
+        // 0xE9 alone is invalid UTF-8 and "é" in windows-1252.
+        const bytes = Uint8Array.from(
+            MESSAGES_CSV.replace("Hello Bob", "Caf\u0000").split(""),
+            (char) => (char === "\u0000" ? 0xe9 : char.charCodeAt(0)),
+        );
+
+        const result = await processPayload({ messagesCsv: storedUpload(bytes) });
+
+        expect(result.success).toBe(true);
+        expect(result.threads[0].messages.map((entry) => entry.body)).toContain("Café");
+    });
+
+    it("streams twice and takes only the selected bodies from the second pass", async () => {
+        const createStreamProcessor = vi.spyOn(LinkedInCleaner, "createStreamProcessor");
+        // Rows without a body are dropped, so record numbers and row numbers
+        // differ; the second pass must still find each selected body.
+        const csv = [
+            "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
+            "c0,Sam Self,Ada,2024-12-01 10:00:00 UTC,,INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada",
+            "c0,Sam Self,Ada,2024-12-02 10:00:00 UTC,,INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada",
+            ...MESSAGES_CSV.split("\n").slice(1),
+        ].join("\n");
+
+        const fromText = await processPayload({ messagesCsv: csv, messagesPerPerson: 1 });
+        createStreamProcessor.mockClear();
+        const streamed = await processPayload({
+            messagesCsv: storedUpload(csv),
+            messagesPerPerson: 1,
+        });
+
+        expect(createStreamProcessor).toHaveBeenCalledTimes(2);
+        expect(streamed).toEqual(fromText);
+        expect(streamed.threads.map((thread) => thread.messages[0].body)).toEqual([
+            "Hello Bob",
+            "Hi Sam",
+        ]);
+    });
+
+    it("parses a stored upload whole when it streams as another file type", async () => {
+        const shares =
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2025-01-01,x,y,,,PUBLIC";
+
+        const result = await processPayload({ messagesCsv: storedUpload(shares) });
+
+        expect(result.success).toBe(false);
+        expect(result.threads).toEqual([]);
+        expect(result.error).toContain("missing required Messages columns");
+    });
+
     it("keeps the thread selection when the connections file cannot be read", async () => {
         const messagesCsv = await new Blob([TIED_CSV]).text();
         vi.spyOn(FileReader.prototype, "readAsArrayBuffer").mockImplementation(function fail() {
@@ -198,8 +261,11 @@ describe("threads worker", () => {
             ...rows,
         ].join("\n");
 
-        const result = await processPayload({ messagesCsv: csv, people: 10 });
+        const fromText = await processPayload({ messagesCsv: csv, people: 10 });
+        const streamed = await processPayload({ messagesCsv: storedUpload(csv), people: 10 });
 
+        expect(streamed).toEqual(fromText);
+        const result = streamed;
         expect(result.success).toBe(true);
         const exported = result.threads
             .map((thread) => thread.messages[0].body)
@@ -215,7 +281,7 @@ describe("threads worker", () => {
             'c2,Sam Self,Bob,2025-01-02 10:00:00 UTC,"she said ""yes"" twice",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
         ].join("\n");
 
-        const result = await processPayload({ messagesCsv: csv });
+        const result = await processPayload({ messagesCsv: storedUpload(csv) });
         const bodies = Object.fromEntries(
             result.threads.map((thread) => [thread.name, thread.messages[0].body]),
         );

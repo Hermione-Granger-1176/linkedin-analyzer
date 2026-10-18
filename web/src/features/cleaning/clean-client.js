@@ -11,6 +11,7 @@
 import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
+import { MAIN_THREAD_MAX_FILE_BYTES } from "../../shared/limits.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { resetCleanJob, runCleanJob } from "./clean-job.js";
@@ -18,6 +19,8 @@ import { resetCleanJob, runCleanJob } from "./clean-job.js";
 // Fixed text: a failure inside the worker can carry a row of the user's file.
 const CLEAN_FAILURE = "Unable to parse file.";
 const CLEAN_TIMEOUT = "Cleaning took too long. Try again.";
+const MAIN_THREAD_TOO_LARGE =
+    "This file is too large to clean without background workers. Open this page from a local server.";
 
 /** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null, cancelled?: boolean}} CleanReply */
@@ -122,8 +125,9 @@ function cancelled() {
 }
 
 /**
- * Run the job on the main thread, reporting a fixed error if it throws. A run
- * that a newer request or a Clear overtook reports cancelled, and one that
+ * Run the job on the main thread, reporting a fixed error if it throws. A file
+ * above the main-thread limit is refused rather than risk freezing the tab. A
+ * run that a newer request or a Clear overtook reports cancelled, and one that
  * outlived a Clear drops the rows it kept.
  * @param {CleaningRequestPayload} payload - Request payload
  * @returns {Promise<CleanReply>}
@@ -131,6 +135,11 @@ function cancelled() {
 async function runOnMainThread(payload) {
     const run = ++fallbackRun;
     const clears = clearCount;
+    const { source } = payload;
+    const size = typeof source === "string" ? source.length : source.size;
+    if (size > MAIN_THREAD_MAX_FILE_BYTES) {
+        return failure(MAIN_THREAD_TOO_LARGE);
+    }
     let reply;
     try {
         reply = await runCleanJob(payload);

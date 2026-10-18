@@ -8,6 +8,7 @@ import {
     enumerateMonths,
     formatDateKey,
     formatWeekLabel,
+    monthKeyToLabel,
     parseDateKey,
     parseLinkedInDate,
     startOfMonth,
@@ -702,7 +703,7 @@ export const AnalyticsEngine = (() => {
             }
             if (!bucket) {
                 if (!useWeeklyTimeline) {
-                    timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
+                    timeline.push({ key: monthKey, label: monthKeyToLabel(monthKey), value: 0 });
                 }
                 continue;
             }
@@ -724,7 +725,7 @@ export const AnalyticsEngine = (() => {
 
             if (!useMonth || monthTotal === 0) {
                 if (!useWeeklyTimeline) {
-                    timeline.push({ key: monthKey, label: formatMonthLabel(monthKey), value: 0 });
+                    timeline.push({ key: monthKey, label: monthKeyToLabel(monthKey), value: 0 });
                 }
                 continue;
             }
@@ -770,7 +771,7 @@ export const AnalyticsEngine = (() => {
             if (!useWeeklyTimeline) {
                 timeline.push({
                     key: monthKey,
-                    label: formatMonthLabel(monthKey),
+                    label: monthKeyToLabel(monthKey),
                     value: monthTotal,
                 });
             }
@@ -1047,16 +1048,6 @@ export const AnalyticsEngine = (() => {
             trend: null,
             totals: { posts: 0, comments: 0, total: 0 },
         };
-    }
-
-    /**
-     * Format a "YYYY-MM" month key as a human-readable "Mon YYYY" label.
-     * @param {string} monthKey - Month key in "YYYY-MM" format.
-     * @returns {string} Formatted label, e.g. "Jan 2025".
-     */
-    function formatMonthLabel(monthKey) {
-        const [year, month] = monthKey.split("-").map(Number);
-        return `${MONTH_LABELS[month - 1]} ${year}`;
     }
 
     /**

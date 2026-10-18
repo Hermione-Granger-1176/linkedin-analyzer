@@ -1,8 +1,13 @@
 /* LinkedIn Analyzer - Messages parsing worker */
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
-import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
+import { toCsvSource } from "../../shared/csv-source.js";
+import {
+    extractWorkerError,
+    extractWorkerRejection,
+    toErrorMessage,
+} from "../../shared/worker-errors.js";
+import { processCsvSource } from "../cleaning/process-source.js";
 
 import { MessagesAnalytics } from "./analytics.js";
 
@@ -57,19 +62,14 @@ const CONNECTIONS_READ_ERROR = "Unable to read Connections.csv.";
 
 /**
  * Parse messages and connections payload. Each file arrives as the stored
- * upload Blob, read here off the main thread, or as CSV text.
+ * upload Blob, streamed through the cleaner here off the main thread, or as
+ * CSV text.
  * @param {{messagesCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Raw payload
  * @returns {Promise<MessagesProcessedPayload>}
  */
 async function processPayload(payload) {
-    const messagesCsv = await readCsvSource(payload.messagesCsv);
-    // Connections is optional: a file that will not read degrades like one that
-    // will not parse, so the messages still load.
-    const connections = await readOptionalCsvSource(payload.connectionsCsv);
-    const connectionsCsv = connections.text;
-
     const messagesResult = /** @type {CleanedRows<MessageRow>} */ (
-        LinkedInCleaner.process(messagesCsv, "messages")
+        await processCsvSource(payload.messagesCsv, "messages")
     );
     if (!messagesResult.success) {
         return {
@@ -82,13 +82,23 @@ async function processPayload(payload) {
     /** @type {ConnectionRow[]} */
     let connectionsData = [];
     /** @type {string|null} */
-    let connectionError = connections.failed ? CONNECTIONS_READ_ERROR : null;
+    let connectionError = null;
 
-    if (connectionsCsv) {
-        const connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
-            LinkedInCleaner.process(connectionsCsv, "connections")
-        );
-        if (connectionsResult.success) {
+    if (toCsvSource(payload.connectionsCsv)) {
+        /** @type {CleanedRows<ConnectionRow>|null} */
+        let connectionsResult = null;
+        try {
+            connectionsResult = /** @type {CleanedRows<ConnectionRow>} */ (
+                await processCsvSource(payload.connectionsCsv, "connections")
+            );
+        } catch {
+            connectionsResult = null;
+        }
+        if (!connectionsResult) {
+            // Connections is optional: a file that will not read degrades like
+            // one that will not parse, so the messages still load.
+            connectionError = CONNECTIONS_READ_ERROR;
+        } else if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {
             /* v8 ignore next */
@@ -159,21 +169,6 @@ function serializeConnectionState(state) {
 }
 
 /**
- * Convert unknown error values into a message string.
- * @param {unknown} error
- * @returns {string}
- */
-function toErrorMessage(error) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    if (typeof error === "string" && error) {
-        return error;
-    }
-    return "Messages worker runtime failure.";
-}
-
-/**
  * Post a normalized processed error payload.
  * @param {number|string} requestId
  * @param {unknown} error
@@ -184,40 +179,9 @@ function postProcessedError(requestId, error) {
         requestId,
         payload: {
             success: false,
-            error: toErrorMessage(error),
+            error: toErrorMessage(error, "Messages worker runtime failure."),
         },
     });
-}
-
-/**
- * Extract an error-like value from a worker error event.
- * @param {unknown} event
- * @returns {unknown}
- */
-function extractWorkerError(event) {
-    /* v8 ignore next 3 */
-    if (!event || typeof event !== "object") {
-        return undefined;
-    }
-    if ("error" in event && event.error) {
-        return event.error;
-    }
-    if ("message" in event && event.message) {
-        return event.message;
-    }
-    return undefined;
-}
-
-/**
- * Extract rejection reason from a worker unhandledrejection event.
- * @param {unknown} event
- * @returns {unknown}
- */
-function extractWorkerRejection(event) {
-    if (!event || typeof event !== "object" || !("reason" in event)) {
-        return undefined;
-    }
-    return event.reason;
 }
 
 /* v8 ignore next 19 */

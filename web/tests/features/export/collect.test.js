@@ -13,6 +13,10 @@ import {
 } from "../../../src/features/export/collect.js";
 import { loadConnectionsData } from "../../../src/features/export/connections-transport.js";
 import { loadMessagesState } from "../../../src/features/export/messages-transport.js";
+import {
+    ExportRefusal,
+    MESSAGES_TOO_LARGE_FOR_CONTENTS,
+} from "../../../src/features/export/refusal.js";
 import { loadRecentThreads } from "../../../src/features/export/threads-transport.js";
 import { formatShortDate } from "../../../src/features/messages/format.js";
 import {
@@ -23,6 +27,7 @@ import { captureError } from "../../../src/platform/observability/sentry.js";
 import { DataCache } from "../../../src/platform/persistence/data-cache.js";
 import { Storage } from "../../../src/platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../../src/shared/constants.js";
+import { THREADS_EXPORT_MAX_BYTES } from "../../../src/shared/limits.js";
 import { compactEvents } from "../../helpers/message-events.js";
 import { expectFixedError, piiError } from "../../helpers/pii-sentinel.js";
 
@@ -1465,6 +1470,25 @@ describe("collectExportData", () => {
         const [reported, context] = capturedFor("read-export-files");
         expectFixedError(reported, thrown);
         expect(context).toEqual({ module: "pdf-export", operation: "read-export-files" });
+    });
+
+    it("refuses message contents from a messages file over the limit before any worker", async () => {
+        const large = { size: THREADS_EXPORT_MAX_BYTES + 1 };
+        Object.setPrototypeOf(large, Blob.prototype);
+        Storage.getFile.mockImplementation((type) =>
+            Promise.resolve(type === "messages" ? { blob: large } : null),
+        );
+
+        const refused = collectExportData({ includeMessages: true });
+
+        await expect(refused).rejects.toBeInstanceOf(ExportRefusal);
+        await expect(refused).rejects.toThrow(MESSAGES_TOO_LARGE_FOR_CONTENTS);
+        expect(loadMessagesState).not.toHaveBeenCalled();
+        expect(loadRecentThreads).not.toHaveBeenCalled();
+
+        // Without contents the same file exports as usual.
+        await collectExportData({ includeMessages: false });
+        expect(loadMessagesState).toHaveBeenCalled();
     });
 
     it("includes threads only when the user opted in", async () => {

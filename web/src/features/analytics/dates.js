@@ -143,6 +143,25 @@ export function parseLinkedInDate(value) {
 }
 
 /**
+ * Build a "YYYY-MM" key from a Date in local time, so months sort as strings.
+ * @param {Date} date - Date to convert
+ * @returns {string} e.g. "2024-01"
+ */
+export function toMonthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Format a "YYYY-MM" month key as a "Mon YYYY" label for chart axes.
+ * @param {string} key - e.g. "2024-01"
+ * @returns {string} e.g. "Jan 2024"
+ */
+export function monthKeyToLabel(key) {
+    const [year, month] = key.split("-");
+    return `${MONTH_LABELS[Number(month) - 1]} ${year}`;
+}
+
+/**
  * Enumerate inclusive "YYYY-MM" month keys between two keys.
  * @param {string} startKey - First month key, "YYYY-MM"
  * @param {string} endKey - Last month key, "YYYY-MM"

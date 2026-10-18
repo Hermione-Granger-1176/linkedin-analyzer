@@ -94,7 +94,7 @@ The export uses a light warm palette even when the app uses dark mode. The docum
 The confirmation dialog has two independent options. Both are unchecked every time the dialog opens:
 
 - **Name people in the dashboards** adds names to the message dashboards. Aggregate company and position charts do not need this option.
-- **Include message contents** adds the last five messages from the ten most recently messaged contacts. The export includes the contacts' names so each transcript has a heading.
+- **Include message contents** adds the last five messages from the ten most recently messaged contacts. The export includes the contacts' names so each transcript has a heading. It is refused for a `messages.csv` above 60 MiB, which needs more memory than a browser tab can count on; untick it to export everything else.
 
 Message contents remain in the file you download. The browser does not upload or log them. Canceling the dialog or pressing Escape cancels the export and stops its workers.
 
@@ -127,17 +127,21 @@ CSP violation reports use the same-origin `/api/csp-report` endpoint when the de
 
 The browser enforces these independent limits:
 
-| Limit                     | Value   |
-| ------------------------- | ------: |
-| File size before decoding | 80 MiB  |
-| Decoded text per file     | 60 MiB  |
-| Parsed rows per file      | 500,000 |
-| Columns per row           | 256     |
-| Characters per field      | 200,000 |
+| Limit                     | Value     |
+| ------------------------- | --------: |
+| File size before decoding | 128 MiB   |
+| Decoded text per file     | 128 Mi    |
+| Parsed rows per file      | 1,000,000 |
+| Columns per row           | 256       |
+| Characters per field      | 200,000   |
 
-The Clean screen builds Excel workbooks only for files up to 10 MiB and offers the cleaned CSV (for example `Shares_cleaned.csv`) for larger files.
+The Clean screen builds Excel workbooks only for files up to 10 MiB and offers the cleaned CSV (for example `Shares_cleaned.csv`) for larger files. The PDF export takes message contents only from a `messages.csv` up to 60 MiB.
 
-A file above 25 MiB also receives a large-file warning before processing. The warning does not reject the file when it remains under the hard limits.
+Decoded text is counted in characters, and a file never decodes to more characters than it has bytes.
+
+A file above 25 MiB also receives a large-file warning before processing: it can take up to a minute, and may not finish on a phone with little memory. The warning does not reject the file when it remains under the hard limits.
+
+Where the browser cannot start the Clean screen's background worker, it cleans on the page itself and refuses files above 80 MiB, since a larger clean there can freeze the tab.
 
 The CLI uses a 128 MiB input limit and 1,000,000 row limit by default. See [CLI resource limits](cli.md#set-global-options) for the CLI options.
 

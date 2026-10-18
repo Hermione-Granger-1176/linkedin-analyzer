@@ -113,16 +113,52 @@ import { parseLocalDate, parseLocalDateTime } from "../analytics/dates.js";
 export const MessagesAnalytics = (() => {
     "use strict";
 
-    // normalizeName/normalizeUrl are pure and called millions of times over a
-    // large messages export, but on a small set of recurring contact strings
-    // (you message the same people repeatedly). Memoize string inputs so each
-    // unique value is normalized once; the cap bounds memory if a pathological
-    // export has an unusually large unique set.
+    // The normalizers are pure and called millions of times over a large
+    // messages export, but on a small set of recurring contact strings (you
+    // message the same people repeatedly, and the cleaner shares each repeated
+    // value). Memoize string inputs so each unique value is normalized once; the
+    // cap bounds memory if a pathological export has an unusually large unique set.
     const NORMALIZE_CACHE_LIMIT = 100000;
-    /** @type {Map<string, string>} */
-    const nameNormalizeCache = new Map();
-    /** @type {Map<string, string>} */
-    const urlNormalizeCache = new Map();
+
+    /**
+     * Wrap a pure normalizer so each distinct string input is computed once.
+     * The cache empties when it reaches its cap, so a run of unique values
+     * cannot grow it without bound or leave it full of stale entries.
+     * @template T
+     * @param {(value: unknown) => T} compute - Pure normalizer
+     * @returns {(value: unknown) => T}
+     */
+    function memoizeStrings(compute) {
+        /** @type {Map<string, T>} */
+        const cache = new Map();
+        return (value) => {
+            if (typeof value !== "string") {
+                return compute(value);
+            }
+            let result = cache.get(value);
+            if (result === undefined) {
+                result = compute(value);
+                // Keep the cache bounded when normalization receives many unique values.
+                /* v8 ignore next 3 */
+                if (cache.size >= NORMALIZE_CACHE_LIMIT) {
+                    cache.clear();
+                }
+                cache.set(value, result);
+            }
+            return result;
+        };
+    }
+
+    const normalizeName = memoizeStrings(computeNormalizedName);
+    const normalizeUrl = memoizeStrings(computeNormalizedUrl);
+    const normalizeUrlList = memoizeStrings(computeNormalizedUrlList);
+    const singleRecipientName = memoizeStrings((value) => {
+        const text = cleanText(value);
+        return Object.freeze(text ? [text] : []);
+    });
+    const splitRecipientNames = memoizeStrings((value) =>
+        Object.freeze(cleanText(value).split(",").map(part => part.trim()).filter(Boolean))
+    );
 
     /**
      * Build message analytics state from cleaned rows.
@@ -850,45 +886,14 @@ export const MessagesAnalytics = (() => {
      *
      * @param {unknown} value - Raw TO field
      * @param {number} recipientUrlCount - Parsed recipient URL count
-     * @returns {string[]}
+     * @returns {readonly string[]}
      */
     function parseRecipientNames(value, recipientUrlCount) {
-        const text = cleanText(value);
-        if (!text) {
-            return [];
-        }
-
-        if (recipientUrlCount <= 1) {
-            return [text];
-        }
-
-        return text.split(",").map(part => part.trim()).filter(Boolean);
+        return recipientUrlCount <= 1 ? singleRecipientName(value) : splitRecipientNames(value);
     }
 
     /**
-     * Normalize URL values and extract first LinkedIn URL.
-     * @param {unknown} value - Raw URL field
-     * @returns {string}
-     */
-    function normalizeUrl(value) {
-        if (typeof value === "string") {
-            const cached = urlNormalizeCache.get(value);
-            if (cached !== undefined) {
-                return cached;
-            }
-            const computed = computeNormalizedUrl(value);
-            // Keep the cache bounded when normalization receives many unique values.
-            /* v8 ignore next */
-            if (urlNormalizeCache.size < NORMALIZE_CACHE_LIMIT) {
-                urlNormalizeCache.set(value, computed);
-            }
-            return computed;
-        }
-        return computeNormalizedUrl(value);
-    }
-
-    /**
-     * Compute the normalized URL without the memo layer.
+     * Normalize URL values and extract the first LinkedIn URL.
      * @param {unknown} value - Raw URL field
      * @returns {string}
      */
@@ -907,9 +912,9 @@ export const MessagesAnalytics = (() => {
     /**
      * Normalize a URL field containing one or more URLs.
      * @param {unknown} value - Raw URL field
-     * @returns {string[]}
+     * @returns {readonly string[]}
      */
-    function normalizeUrlList(value) {
+    function computeNormalizedUrlList(value) {
         const text = cleanText(value);
         if (!text) {
             return [];
@@ -928,33 +933,11 @@ export const MessagesAnalytics = (() => {
             seen.add(candidate);
             normalized.push(candidate);
         });
-        return normalized;
+        return Object.freeze(normalized);
     }
 
     /**
      * Normalize names for matching.
-     * @param {unknown} value - Raw name
-     * @returns {string}
-     */
-    function normalizeName(value) {
-        if (typeof value === "string") {
-            const cached = nameNormalizeCache.get(value);
-            if (cached !== undefined) {
-                return cached;
-            }
-            const computed = computeNormalizedName(value);
-            // Keep the cache bounded when normalization receives many unique values.
-            /* v8 ignore next */
-            if (nameNormalizeCache.size < NORMALIZE_CACHE_LIMIT) {
-                nameNormalizeCache.set(value, computed);
-            }
-            return computed;
-        }
-        return computeNormalizedName(value);
-    }
-
-    /**
-     * Compute the normalized name without the memo layer.
      * @param {unknown} value - Raw name
      * @returns {string}
      */

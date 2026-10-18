@@ -682,6 +682,40 @@ describe("LinkedInCleaner", () => {
             expect(result.success).toBe(false);
             expect(result.error).toMatch(/too large/i);
         });
+
+        it("detects the type when a quoted field spans the end of the prefix", () => {
+            // Real comments often hold multi-line quoted text, so the 64KB cut
+            // regularly lands inside a quote. Only the header row matters.
+            const lines = ["Date,Link,Message"];
+            let length = lines[0].length;
+            for (let i = 0; length < 64 * 1024 - 300; i += 1) {
+                const line = `2025-01-01 10:00:00,https://linkedin.com/feed/${i},"Line one\nline two"`;
+                lines.push(line);
+                length += line.length + 1;
+            }
+            lines.push(`2025-01-02 10:00:00,https://linkedin.com/feed/x,"${"y".repeat(1000)}"`);
+            const csv = lines.join("\n");
+            const expected = LinkedInCleaner.process(csv, "auto");
+
+            expect(expected.fileType).toBe("comments");
+            expect(streamProcess(csv, 4096)).toEqual(expected);
+        });
+
+        it.each([
+            ["a header row longer than the prefix", `Date,Link,"${"M".repeat(64 * 1024)}"`],
+            ["duplicate headers", "Date,Link,Message,Message"],
+            ["a blank header row", ",,"],
+        ])("leaves %s to full detection", (_label, header) => {
+            const rows = Array.from(
+                { length: 1500 },
+                (_, i) => `2025-01-01 10:00:00,https://linkedin.com/feed/${i},Comment ${i}`,
+            );
+            const csv = [header, ...rows].join("\n");
+            expect(csv.length).toBeGreaterThan(64 * 1024);
+
+            expect(streamProcess(csv, 4096)).toBeNull();
+            expect(LinkedInCleaner.process(csv, "auto").success).toBe(false);
+        });
     });
 });
 
@@ -812,6 +846,35 @@ describe("LinkedInCleaner.createStreamProcessor", () => {
         const text = `${header}${row.repeat(1200)}2025-01-01,"open`;
         expect(text.length).toBeGreaterThan(64 * 1024);
         expect(streamProcess(text, 4096)).toBeNull();
+    });
+
+    it("hands a short row to onRecord with its missing cells empty", () => {
+        const records = [];
+        const processor = LinkedInCleaner.createStreamProcessor((record) => records.push(record));
+        processor.push(
+            "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n2025-01-01,x,y",
+        );
+        expect(processor.finish()?.fileType).toBe("shares");
+        expect(records).toEqual([
+            Object.assign(Object.create(null), {
+                Date: "2025-01-01",
+                ShareLink: "x",
+                ShareCommentary: "y",
+                SharedUrl: "",
+                MediaUrl: "",
+                Visibility: "",
+            }),
+        ]);
+    });
+
+    it("shares one cleaned copy of a value repeated across rows", () => {
+        const header = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility\n";
+        const row = (index) => `2025-01-01 10:00:00 UTC,https://example.test/${index},hi,,,PUBLIC\n`;
+        const result = streamProcess(header + row(1) + row(2), 7);
+        expect(result.cleanedData.map((cleaned) => cleaned.Visibility)).toEqual([
+            "PUBLIC",
+            "PUBLIC",
+        ]);
     });
 
     it("gives up when a later chunk breaks a parser limit", () => {

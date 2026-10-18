@@ -4,14 +4,21 @@ const MIB = 1024 * 1024;
 
 /** @typedef {{maxFileBytes: number, maxCsvChars: number, maxCsvRows: number}} UploadLimits */
 
-/** The limits every production build enforces. */
+/**
+ * The limits every production build enforces. Decoded text never has more
+ * characters than the file has bytes, so the character limit matches the byte
+ * limit rather than adding a second, earlier cut-off.
+ */
 export const PUBLIC_LIMITS = Object.freeze({
-    maxFileBytes: 80 * MIB,
-    maxCsvChars: 60 * MIB,
-    maxCsvRows: 500000,
+    maxFileBytes: 128 * MIB,
+    maxCsvChars: 128 * MIB,
+    maxCsvRows: 1000000,
 });
 
-/** Higher limits for measuring large exports in development and test builds. */
+/**
+ * Limits for measuring large exports in development and test builds. They match
+ * the public limits today; raise them here to measure beyond those first.
+ */
 export const MEASUREMENT_LIMITS = Object.freeze({
     maxFileBytes: 128 * MIB,
     maxCsvChars: 128 * MIB,
@@ -42,6 +49,28 @@ export const MAX_CSV_CHARS = LIMITS.maxCsvChars;
 
 /** Maximum CSV rows the parser accepts. */
 export const MAX_CSV_ROWS = LIMITS.maxCsvRows;
+
+/**
+ * Largest file the Clean screen cleans on the main thread when its worker
+ * cannot start. This keeps the limit from before the public limits rose:
+ * a page-thread clean of a larger file can freeze or crash the tab.
+ */
+export const MAIN_THREAD_MAX_FILE_BYTES = 80 * MIB;
+
+/**
+ * Largest messages file the PDF export takes message contents from. Above it
+ * the bodies cannot be held alongside the analysis within the memory budget,
+ * so the export is refused with a reason and the rest can be exported without
+ * them.
+ */
+export const THREADS_EXPORT_MAX_BYTES = 60 * MIB;
+
+/**
+ * Above this many characters, cleaning on the UI thread could freeze the page,
+ * so a failed worker read falls back to an empty state instead. One limit for
+ * every main-thread fallback, because they all block the same thread.
+ */
+export const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * MIB;
 
 /**
  * Largest file the Clean screen turns into an Excel workbook. The workbook is

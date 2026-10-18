@@ -11,10 +11,6 @@
 
 import { captureError } from "../../platform/observability/sentry.js";
 
-// Above this size, re-parsing on the UI thread could freeze the page. Use one
-// limit for all transports because they share the same main-thread fallback.
-export const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
-
 /**
  * Outcome of a request the caller explicitly cancelled.
  *

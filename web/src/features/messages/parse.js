@@ -10,13 +10,10 @@
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
+import { MAIN_THREAD_FALLBACK_MAX_CHARS } from "../../shared/limits.js";
 import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import { readCsvSource, readOptionalCsvSource } from "../upload/read.js";
-
-// Above this combined CSV size, re-parsing on the UI thread would freeze the
-// page, so the main-thread fallback is skipped in favor of an empty state.
-const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 
 /** @typedef {import("./messages-worker.js").MessagesProcessedPayload} MessagesProcessedPayload */
 /** @typedef {import("./analytics.js").MessageRow} MessageRow */
@@ -29,6 +26,8 @@ const MAIN_THREAD_FALLBACK_MAX_CHARS = 5 * 1024 * 1024;
 /** @type {Worker|null} */
 let parseWorker = null;
 let parseWorkerRequestId = 0;
+/** Requests the current worker has not answered yet. */
+const pendingRequestIds = new Set();
 /** @type {number|null} */
 let parseWorkerTimeoutId = null;
 
@@ -58,6 +57,7 @@ export function terminateWorker() {
     }
     parseWorker.terminate();
     parseWorker = null;
+    pendingRequestIds.clear();
     clearWorkerTimeout();
 }
 
@@ -127,6 +127,7 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
 
     return new Promise((resolve) => {
         clearWorkerTimeout();
+        pendingRequestIds.add(requestId);
         /** @param {MessageEvent} event - Worker message event */
         const handleMessage = (event) => {
             const parsed = parseMessagesWorkerMessage(event.data || {});
@@ -146,6 +147,13 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
                 return;
             }
             finishRequest();
+            // The page keeps the state it was sent, and an idle worker can hold
+            // the parse's garbage for minutes, so let it go once no other
+            // request is still waiting on the same worker. Parses run
+            // concurrently, so a newer one can answer before an older one.
+            if (pendingRequestIds.size === 0) {
+                terminateWorker();
+            }
             resolve(/** @type {MessagesProcessedPayload|null} */ (message.payload) || null);
         };
 
@@ -181,6 +189,7 @@ function processFilesInWorker(messagesCsv, connectionsCsv) {
         };
 
         const finishRequest = () => {
+            pendingRequestIds.delete(requestId);
             removeWorkerListeners();
             clearWorkerTimeout();
         };

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { selectRecentThreads } from "../../../src/features/export/threads.js";
+import {
+    selectRecentThreadRows,
+    selectRecentThreads,
+} from "../../../src/features/export/threads.js";
 
 const SELF_NAME = "Sam Self";
 const SELF_URL = "https://www.linkedin.com/in/sam-self";
@@ -97,6 +100,20 @@ describe("selectRecentThreads", () => {
             "third",
         ]);
         expect(threads[0].lastTimestamp).toBe(new Date("2026-01-03T10:00:00").getTime());
+    });
+
+    it("names each selected message's input row without reading its body", () => {
+        const rows = [
+            message({ name: "ada", conversationId: "c1", date: "2026-01-03 10:00:00", body: "" }),
+            message({ name: "ada", conversationId: "c1", date: "2026-01-01 10:00:00", body: "" }),
+        ];
+
+        const [thread] = selectRecentThreadRows(rows, { messagesPerPerson: 1 });
+
+        expect(thread.messageCount).toBe(2);
+        expect(thread.messages).toEqual([
+            { direction: expect.any(String), timestamp: expect.any(Number), rowIndex: 0 },
+        ]);
     });
 
     it("marks direction from the detected self", () => {

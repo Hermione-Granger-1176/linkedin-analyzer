@@ -25,6 +25,7 @@ import {
     isMissing,
     removeIllegalChars,
 } from "./field-cleaners.js";
+import { createColumnCache } from "./string-pool.js";
 
 /** @typedef {import("./configs.js").FileType} FileType */
 /** @typedef {import("./configs.js").CleanerConfig} CleanerConfig */
@@ -78,7 +79,7 @@ import {
  * One column's cleaning step.
  * @typedef {object} CleaningStep
  * @property {string} name - Column name
- * @property {import("./field-cleaners.js").Cleaner} clean - Cell cleaner
+ * @property {import("./string-pool.js").CellCleaner} clean - Cleans and escapes one cell
  */
 
 /** @typedef {(row: CsvRecord) => CleanedRow|null} RowCleaner */
@@ -94,10 +95,20 @@ const CLEANING_PLANS = Object.freeze(
     Object.fromEntries(
         FILE_TYPES.map((fileType) => [
             fileType,
-            CONFIGS[fileType].columns.map((column) => ({
-                name: column.name,
-                clean: (column.cleaner && CLEANERS[column.cleaner]) || cleanValue,
-            })),
+            CONFIGS[fileType].columns.map((column) => {
+                const clean = (column.cleaner && CLEANERS[column.cleaner]) || cleanValue;
+                return {
+                    name: column.name,
+                    // Strip XML-illegal control characters before formula-escaping so a
+                    // cell like "\u0001=SUM(...)" is both export-safe and still detected
+                    // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
+                    /**
+                     * @param {unknown} value - Raw cell value
+                     * @returns {string} Cleaned, escaped value
+                     */
+                    clean: (value) => escapeFormula(removeIllegalChars(clean(value))),
+                };
+            }),
         ]),
     ),
 );
@@ -369,36 +380,17 @@ export const LinkedInCleaner = (() => {
      * of the text. Returns the first supported type (in FILE_TYPES order) whose
      * required columns are present, or null when no prefix match is found.
      *
-     * Only the rows up to the header are read. The prefix usually ends inside a
-     * row, often inside a quoted message body, and an incremental parse holds
-     * that unfinished row back instead of failing on it the way a whole-text
-     * parse fails on the unmatched quote. A null result falls back to full
-     * multi-type detection in the caller, and the full parse still validates
-     * every row, so a match here only picks the type.
+     * Only the header row is read, so a truncated tail cannot affect the match
+     * and a positive match is reliable; a null result falls back to full
+     * multi-type detection in the caller, which keeps behavior identical.
      * @param {string} csvText - Raw CSV text
      * @returns {FileType|null} Detected file type, or null if unknown from the prefix
      */
     function detectTypeFromPrefix(csvText) {
         const prefix = csvText.slice(0, PREFIX_DETECT_CHARS);
-        /** @type {Map<object, string[][]|null>} */
-        const rowsByOptions = new Map();
         for (const type of FILE_TYPES) {
-            const csvOptions = type === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
-            if (!rowsByOptions.has(csvOptions)) {
-                rowsByOptions.set(csvOptions, readPrefixRows(prefix, csvOptions));
-            }
-            const rows = rowsByOptions.get(csvOptions);
-            const skipRows = Number.isInteger(CONFIGS[type].skipRows)
-                ? /** @type {number} */ (CONFIGS[type].skipRows)
-                : 0;
-            if (!rows || rows.length <= skipRows) {
-                continue;
-            }
-            const headers = normalizeHeaders(rows[skipRows]);
-            if (findDuplicateHeaders(headers).length) {
-                continue;
-            }
-            if (validateColumns(headers, type).valid) {
+            const headers = readPrefixHeader(prefix, type);
+            if (headers && validateColumns(headers, type).valid) {
                 return type;
             }
         }
@@ -406,17 +398,36 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Read the complete rows at the start of a prefix, leaving out the row it
-     * ends inside.
-     * @param {string} prefix - Leading slice of the CSV text
-     * @param {{delimiter: string, quote: string, escape: string|null}} csvOptions - Parser options
-     * @returns {string[][]|null} Complete rows, or null when the prefix will not parse
+     * Read one type's header row from a prefix, the row parseCSV() would use.
+     * The prefix is never finished, so a quoted field cut off at its end is
+     * left open instead of failing the whole prefix with an unmatched quote.
+     * @param {string} prefix - Start of the CSV text
+     * @param {FileType} type - Supported file type
+     * @returns {string[]|null} Normalized headers, or null when none can be used
      */
-    function readPrefixRows(prefix, csvOptions) {
-        /** @type {string[][]} */
-        const rows = [];
-        const parser = createCsvRowParser(csvOptions, (row) => rows.push(row));
-        return parser.push(prefix) ? null : rows;
+    function readPrefixHeader(prefix, type) {
+        const config = CONFIGS[type];
+        const skipRows = Number.isInteger(config.skipRows)
+            ? /** @type {number} */ (config.skipRows)
+            : 0;
+        const csvOptions = type === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
+        /** @type {string[]|null} */
+        let headerRow = null;
+        let rowIndex = 0;
+        const parser = createCsvRowParser(csvOptions, (row) => {
+            if (rowIndex === skipRows) {
+                headerRow = row;
+            }
+            rowIndex += 1;
+        });
+        if (parser.push(prefix) || !headerRow) {
+            return null;
+        }
+        const headers = normalizeHeaders(headerRow);
+        if (headers.every((header) => header === "") || findDuplicateHeaders(headers).length) {
+            return null;
+        }
+        return headers;
     }
 
     /**
@@ -442,13 +453,12 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Build a function that cleans one parsed row for a file type.
+     * Build the check that decides whether a cleaned row is kept.
      * @param {FileType} fileType - Supported file type
-     * @returns {RowCleaner} Cleans a row, returning null when the row is dropped
+     * @returns {(row: CleanedRow) => boolean}
      */
-    function createRowCleaner(fileType) {
+    function createRowFilter(fileType) {
         const config = CONFIGS[fileType];
-        const cleaningPlan = CLEANING_PLANS[fileType];
         const requiredRowColumns = Array.isArray(config.requiredRowColumns)
             ? config.requiredRowColumns
             : config.requiredColumns;
@@ -456,24 +466,63 @@ export const LinkedInCleaner = (() => {
             ? config.dropIfAllMissing
             : [];
 
+        return (row) =>
+            hasRequiredRowValues(row, requiredRowColumns) &&
+            (!dropIfAllMissing.length || hasAnyRowValue(row, dropIfAllMissing));
+    }
+
+    /**
+     * Build a function that cleans one parsed row for a file type.
+     * @param {FileType} fileType - Supported file type
+     * @returns {RowCleaner} Cleans a row, returning null when the row is dropped
+     */
+    function createRowCleaner(fileType) {
+        const steps = CLEANING_PLANS[fileType].map((column) => ({
+            name: column.name,
+            clean: column.clean,
+            cache: createColumnCache(),
+        }));
+        const keepRow = createRowFilter(fileType);
+
         return (row) => {
             /** @type {CleanedRow} */
             const cleanedRow = {};
-            for (const column of cleaningPlan) {
-                const cleanedValue = column.clean(row[column.name]);
-                // Strip XML-illegal control characters before formula-escaping so a
-                // cell like "\u0001=SUM(...)" is both export-safe and still detected
-                // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
-                cleanedRow[column.name] = escapeFormula(removeIllegalChars(cleanedValue));
+            for (const step of steps) {
+                cleanedRow[step.name] = step.cache(row[step.name], step.clean);
             }
+            return keepRow(cleanedRow) ? cleanedRow : null;
+        };
+    }
 
-            if (!hasRequiredRowValues(cleanedRow, requiredRowColumns)) {
-                return null;
+    /**
+     * Build a function that cleans one row of cells straight from the parser,
+     * reading each column by its header position, as `createRowCleaner` would
+     * read the record built from the same cells. Each repeated raw value is
+     * cleaned once and its result shared, and no kept value holds on to the
+     * decoded text.
+     * @param {FileType} fileType - Supported file type
+     * @param {readonly string[]} headers - Normalized header row
+     * @returns {(cells: string[]) => CleanedRow|null} Cleans a row, returning null when the row is dropped
+     */
+    function createCellRowCleaner(fileType, headers) {
+        const steps = CLEANING_PLANS[fileType].map((column) => ({
+            name: column.name,
+            clean: column.clean,
+            index: headers.indexOf(column.name),
+            cache: createColumnCache(),
+        }));
+        const keepRow = createRowFilter(fileType);
+
+        return (cells) => {
+            /** @type {CleanedRow} */
+            const cleanedRow = {};
+            for (const step of steps) {
+                // A record holds "" for a short row and nothing for a column the
+                // header lacks; the cells give the same values.
+                const value = step.index < 0 ? undefined : (cells[step.index] ?? "");
+                cleanedRow[step.name] = step.cache(value, step.clean);
             }
-            if (dropIfAllMissing.length && !hasAnyRowValue(cleanedRow, dropIfAllMissing)) {
-                return null;
-            }
-            return cleanedRow;
+            return keepRow(cleanedRow) ? cleanedRow : null;
         };
     }
 
@@ -686,9 +735,15 @@ export const LinkedInCleaner = (() => {
      * would for a successful file. On any error or ambiguity it returns null,
      * and the caller runs process() on the full text, so failures and their
      * messages stay identical.
+     *
+     * With onRecord, each parsed record goes to it uncleaned, as parseCSV()
+     * would have produced it, and the result carries no cleaned rows. A caller
+     * that needs values the spreadsheet cleaner would change reads them this
+     * way.
+     * @param {((record: CsvRecord) => void)|null} [onRecord] - Receives each parsed record instead of cleaning it
      * @returns {StreamProcessor}
      */
-    function createStreamProcessor() {
+    function createStreamProcessor(onRecord = null) {
         let prefix = "";
         /** @type {FileType|null} */
         let fileType = null;
@@ -699,14 +754,14 @@ export const LinkedInCleaner = (() => {
         let rowIndex = 0;
         /** @type {string[]|null} */
         let headers = null;
-        /** @type {RowCleaner|null} */
-        let cleanRow = null;
+        /** @type {((cells: string[]) => CleanedRow|null)|null} */
+        let cleanCells = null;
         /** @type {CleanedRow[]} */
         const cleanedData = [];
 
         // Mirrors parseCSV(): skip rows, read and check the header, then build
         // and clean one record per non-empty data row.
-        // onRow only runs once startParsing() has set fileType and cleanRow.
+        // onRow only runs once startParsing() has set fileType; the header row sets cleanCells.
         /** @param {string[]} row */
         const onRow = (row) => {
             if (failed) {
@@ -730,6 +785,7 @@ export const LinkedInCleaner = (() => {
                     return;
                 }
                 headers = normalized;
+                cleanCells = createCellRowCleaner(/** @type {FileType} */ (fileType), normalized);
                 return;
             }
             if (isRowEmpty(row)) {
@@ -739,14 +795,20 @@ export const LinkedInCleaner = (() => {
                 failed = true;
                 return;
             }
-            // Null-prototype object, as in parseCSV().
-            /** @type {CsvRecord} */
-            const record = Object.create(null);
-            for (let c = 0; c < headers.length; c += 1) {
-                const value = row[c];
-                record[headers[c]] = value !== undefined ? value : "";
+            if (onRecord) {
+                // Null-prototype object, as in parseCSV().
+                /** @type {CsvRecord} */
+                const record = Object.create(null);
+                for (let c = 0; c < headers.length; c += 1) {
+                    const value = row[c];
+                    record[headers[c]] = value !== undefined ? value : "";
+                }
+                onRecord(record);
+                return;
             }
-            const cleanedRow = /** @type {RowCleaner} */ (cleanRow)(record);
+            const cleanedRow = /** @type {(cells: string[]) => CleanedRow|null} */ (cleanCells)(
+                row,
+            );
             if (cleanedRow) {
                 cleanedData.push(cleanedRow);
             }
@@ -762,7 +824,6 @@ export const LinkedInCleaner = (() => {
             skipRows = Number.isInteger(config.skipRows)
                 ? /** @type {number} */ (config.skipRows)
                 : 0;
-            cleanRow = createRowCleaner(fileType);
             const csvOptions = fileType === "comments" ? CSV_OPTIONS_COMMENTS : CSV_OPTIONS_DEFAULT;
             parser = createCsvRowParser(csvOptions, onRow);
             if (parser.push(prefix)) {

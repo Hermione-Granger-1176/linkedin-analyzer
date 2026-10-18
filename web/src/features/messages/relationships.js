@@ -6,6 +6,7 @@ import { MS_PER_DAY } from "./format.js";
 /** @typedef {import("./analytics.js").MessageState} MessageState */
 /** @typedef {import("./analytics.js").ConnectionState} ConnectionState */
 /** @typedef {import("./analytics.js").Connection} Connection */
+/** @typedef {import("./analytics.js").MessageContact} MessageContact */
 
 /**
  * One contact's message totals inside the selected range.
@@ -142,15 +143,25 @@ export function getSilentConnections(messageState, connectionState) {
  */
 export function getFadingConversations(messageState, connectionState) {
     const now = Date.now();
-    /** @type {FadingConversation[]} */
-    const fading = [];
-
+    // Several message contacts can match one connection (the same name seen
+    // with and without a profile URL), so each connection is judged by its
+    // most recent conversation and listed once.
+    /** @type {Map<Connection, MessageContact>} */
+    const latestByConnection = new Map();
     for (const contact of messageState.contacts.values()) {
         const connection = findMatchingConnection(contact, connectionState);
         if (!connection) {
             continue;
         }
+        const latest = latestByConnection.get(connection);
+        if (!latest || contact.lastTimestamp > latest.lastTimestamp) {
+            latestByConnection.set(connection, contact);
+        }
+    }
 
+    /** @type {FadingConversation[]} */
+    const fading = [];
+    for (const [connection, contact] of latestByConnection) {
         const daysSince = Math.floor((now - contact.lastTimestamp) / MS_PER_DAY);
         if (daysSince < 30) {
             continue;
@@ -186,8 +197,10 @@ function findMatchingConnection(contact, connectionState) {
         return connectionState.byUrl.get(contact.url) || null;
     }
     const nameKey = MessagesAnalytics.normalizeName(contact.name);
-    if (nameKey && connectionState.byName.has(nameKey)) {
-        return connectionState.byName.get(nameKey) || null;
+    const byName = nameKey ? connectionState.byName.get(nameKey) : undefined;
+    // Two different profile URLs are two people who share a name.
+    if (byName && (!contact.url || !byName.url)) {
+        return byName;
     }
     return null;
 }

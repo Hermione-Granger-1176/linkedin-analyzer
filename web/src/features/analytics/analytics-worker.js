@@ -1,13 +1,14 @@
 /* LinkedIn Analyzer - Analytics Web Worker */
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
-import { LinkedInCleaner } from "../cleaning/cleaner.js";
 import {
-    canStreamFileText,
-    readCsvSource,
-    readFileAsText,
-    streamFileText,
-} from "../upload/read.js";
+    extractWorkerError,
+    extractWorkerRejection,
+    toErrorMessage,
+} from "../../shared/worker-errors.js";
+import { LinkedInCleaner } from "../cleaning/cleaner.js";
+import { processCsvSource, streamCleanFile } from "../cleaning/process-source.js";
+import { canStreamFileText, readFileAsText } from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
@@ -21,6 +22,9 @@ import { AnalyticsEngine } from "./activity.js";
 /** @typedef {import("./activity.js").AnalyticsViewPayload} AnalyticsViewPayload */
 /** @typedef {import("./activity.js").HydratedAnalytics} HydratedAnalytics */
 /** @typedef {"shares"|"comments"|"connections"} AnalyticsSourceType */
+
+/** Posted when a failure carries no message of its own. */
+const RUNTIME_FAILURE = "Worker runtime failure.";
 
 /** @type {CleanedRow[]|null} */
 let sharesData = null;
@@ -49,6 +53,12 @@ const READ_PROGRESS_STEP = 0.01;
 // queue so a request after it never waits on a stale read.
 let requestQueue = Promise.resolve();
 let requestEpoch = 0;
+// addFile requests waiting behind the one running. A batch of uploads arrives
+// as several addFile requests at once, so analytics are computed once, by the
+// last of them, rather than after every file.
+let queuedAddFiles = 0;
+// True when the source datasets changed after analytics were last computed.
+let analyticsStale = false;
 /** @type {AbortController|null} */
 let activeRead = null;
 
@@ -100,6 +110,7 @@ function computeAnalytics() {
  */
 function resetAnalyticsState() {
     analytics = null;
+    analyticsStale = false;
     viewCache = new Map();
 }
 
@@ -168,23 +179,6 @@ function postError(requestId, message) {
         requestId,
         payload: { message },
     });
-}
-
-/**
- * Convert unknown error values into a message string.
- * @param {unknown} error
- * @returns {string}
- */
-function toErrorMessage(error) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    /* v8 ignore next 3 */
-    if (typeof error === "string" && error) {
-        return error;
-    }
-    /* v8 ignore next */
-    return "Worker runtime failure.";
 }
 
 /**
@@ -280,18 +274,8 @@ async function readAndProcessUpload(file, jobId, fileName, epoch) {
         };
     }
 
-    let processor = LinkedInCleaner.createStreamProcessor();
     const read = await readUpload(
-        (options) =>
-            streamFileText(file, {
-                ...options,
-                onText: (text) => {
-                    processor.push(text);
-                },
-                onRestart: () => {
-                    processor = LinkedInCleaner.createStreamProcessor();
-                },
-            }),
+        (options) => streamCleanFile(file, options),
         jobId,
         fileName,
         epoch,
@@ -299,9 +283,8 @@ async function readAndProcessUpload(file, jobId, fileName, epoch) {
     if (!read) {
         return null;
     }
-    const streamed = processor.finish();
-    if (streamed) {
-        return { usedFallback: read.usedFallback, processed: streamed };
+    if (read.processed) {
+        return { usedFallback: read.usedFallback, processed: read.processed };
     }
     const whole = await readUpload(
         (options) => readFileAsText(file, options),
@@ -352,9 +335,10 @@ async function handleAddFile(payload) {
             self.postMessage({
                 type: "fileProcessed",
                 payload: {
-                    error: toErrorMessage(error) || "Error reading file. Please try again.",
+                    error: toErrorMessage(error, RUNTIME_FAILURE),
                     jobId,
                     fileName,
+                    analyticsBase: takeAnalyticsBase(jobId, fileName),
                 },
             });
             return;
@@ -370,7 +354,12 @@ async function handleAddFile(payload) {
     if (!processed.success) {
         self.postMessage({
             type: "fileProcessed",
-            payload: { error: processed.error || "Unable to process file.", jobId, fileName },
+            payload: {
+                error: processed.error || "Unable to process file.",
+                jobId,
+                fileName,
+                analyticsBase: takeAnalyticsBase(jobId, fileName),
+            },
         });
         return;
     }
@@ -382,7 +371,6 @@ async function handleAddFile(payload) {
 
     // A successful result always carries the type it was processed as.
     const fileType = /** @type {string} */ (processed.fileType);
-    let analyticsBase = null;
     /** @type {Record<string, () => void>} */
     const updateSourceByType = {
         shares: () => {
@@ -398,21 +386,9 @@ async function handleAddFile(payload) {
     const updateSource = updateSourceByType[fileType];
     if (updateSource) {
         updateSource();
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent: 0.55 },
-        });
-        computeAnalytics();
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent: 0.85 },
-        });
-        analyticsBase = serializeAnalytics(analytics);
-        self.postMessage({
-            type: "progress",
-            payload: { jobId, fileName, percent: 0.95 },
-        });
+        analyticsStale = true;
     }
+    const analyticsBase = takeAnalyticsBase(jobId, fileName);
     self.postMessage({
         type: "fileProcessed",
         payload: {
@@ -428,6 +404,37 @@ async function handleAddFile(payload) {
 }
 
 /**
+ * Recompute analytics for a reply when the datasets changed and no other
+ * upload is queued, so a batch is computed once, at its end. Every addFile
+ * reply calls this, including a failed one, so the batch's last reply always
+ * carries the result even when that file is rejected or holds no analytics.
+ * @param {string|null} jobId - Upload job ID, for progress
+ * @param {string} fileName - Upload file name, for progress
+ * @returns {AnalyticsBase|HydratedAnalytics|null} Analytics to store, or null
+ */
+function takeAnalyticsBase(jobId, fileName) {
+    if (!analyticsStale || queuedAddFiles > 0) {
+        return null;
+    }
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.55 },
+    });
+    computeAnalytics();
+    analyticsStale = false;
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.85 },
+    });
+    const analyticsBase = serializeAnalytics(analytics);
+    self.postMessage({
+        type: "progress",
+        payload: { jobId, fileName, percent: 0.95 },
+    });
+    return analyticsBase;
+}
+
+/**
  * Restore worker source datasets from the stored uploads. Each file arrives as
  * its stored Blob, read here, or as CSV text.
  * @param {{sharesCsv?: Blob|string, commentsCsv?: Blob|string, connectionsCsv?: Blob|string}} payload - Persisted analytics inputs
@@ -437,55 +444,49 @@ async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
     const epoch = requestEpoch;
-    // A stored Blob the browser can no longer read counts as absent, like a
-    // file that fails to parse, so it cannot fail the other types' restore.
-    const readOrSkip = (/** @type {unknown} */ source) => readCsvSource(source).catch(() => "");
-    const sourceCsvByType = {
-        shares: await readOrSkip(sharesCsv),
-        comments: await readOrSkip(commentsCsv),
-        connections: await readOrSkip(connectionsCsv),
-    };
-    // Clear arrived while the stored files were read: keep what it cleared gone.
-    if (epoch !== requestEpoch) {
-        return;
+    // Each source streams through the cleaner in turn, so no file is held as
+    // one string and only one is being read at a time. A Clear aborts the read
+    // in flight.
+    const sourceByType = { shares: sharesCsv, comments: commentsCsv, connections: connectionsCsv };
+    /** @type {Partial<Record<AnalyticsSourceType, CleanedRow[]>>} */
+    const cleanedByType = {};
+    const controller = new AbortController();
+    activeRead = controller;
+    try {
+        for (const type of ANALYTICS_SOURCE_TYPES) {
+            const source = sourceByType[type];
+            if (!source) {
+                continue;
+            }
+            /** @type {import("../cleaning/cleaner.js").ProcessResult|null} */
+            let parsed = null;
+            try {
+                parsed = await processCsvSource(source, type, { signal: controller.signal });
+            } catch {
+                // A stored Blob the browser can no longer read counts as absent,
+                // like a file that fails to parse, so it cannot fail the other
+                // types' restore.
+                parsed = null;
+            }
+            // Clear arrived while the stored files were read: keep what it cleared gone.
+            if (epoch !== requestEpoch) {
+                return;
+            }
+            if (parsed && parsed.success) {
+                cleanedByType[type] = parsed.cleanedData;
+            }
+        }
+    } finally {
+        if (activeRead === controller) {
+            activeRead = null;
+        }
     }
-    /** @type {Record<AnalyticsSourceType, (cleanedData: CleanedRow[]) => void>} */
-    const assignSourceByType = {
-        shares: (cleanedData) => {
-            sharesData = cleanedData;
-        },
-        comments: (cleanedData) => {
-            commentsData = cleanedData;
-        },
-        connections: (cleanedData) => {
-            connectionsData = cleanedData;
-        },
-    };
 
-    sharesData = null;
-    commentsData = null;
-    connectionsData = null;
-
-    // Whether a posting source (shares/comments) loaded with rows. Tracked here
-    // rather than read back off the module fields afterwards because those are
-    // assigned through the indirection above, which control-flow analysis cannot
-    // follow.
-    let hasPostingSource = false;
-    ANALYTICS_SOURCE_TYPES.forEach((type) => {
-        const csvText = sourceCsvByType[type];
-        if (!csvText) {
-            return;
-        }
-
-        const parsed = LinkedInCleaner.process(csvText, type);
-        if (!parsed.success) {
-            return;
-        }
-        assignSourceByType[type](parsed.cleanedData);
-        if ((type === "shares" || type === "comments") && parsed.cleanedData.length > 0) {
-            hasPostingSource = true;
-        }
-    });
+    sharesData = cleanedByType.shares || null;
+    commentsData = cleanedByType.comments || null;
+    connectionsData = cleanedByType.connections || null;
+    // Whether a posting source (shares/comments) loaded with rows.
+    const hasPostingSource = Boolean(sharesData?.length || commentsData?.length);
 
     // restoreFiles only seeds the worker's source datasets so a subsequent
     // addFile recomputes analytics from the full set. The aggregate the dashboard
@@ -525,6 +526,10 @@ function handleInitBase(payload) {
  * @param {PlainObject} filters - Filter parameters from the UI
  */
 function handleView(requestId, filters) {
+    if (analyticsStale) {
+        computeAnalytics();
+        analyticsStale = false;
+    }
     if (!analytics) {
         postError(requestId, "Analytics not ready.");
         return;
@@ -585,6 +590,8 @@ function cancelPendingRequests() {
     // Stale reads may still be settling; they drop their results by epoch,
     // so nothing after the clear has to wait for them.
     requestQueue = Promise.resolve();
+    // The queued addFile requests are skipped, so none of them will count down.
+    queuedAddFiles = 0;
     if (activeRead) {
         activeRead.abort();
     }
@@ -605,7 +612,7 @@ function enqueueRequest(run, requestId) {
         try {
             await run();
         } catch (error) {
-            postError(requestId || 0, toErrorMessage(error));
+            postError(requestId || 0, toErrorMessage(error, RUNTIME_FAILURE));
         }
     });
     return requestQueue;
@@ -641,7 +648,11 @@ function handleMessage(event) {
     switch (message.type) {
         case "addFile": {
             const { payload } = message;
-            return enqueueRequest(() => handleAddFile(payload), 0);
+            queuedAddFiles += 1;
+            return enqueueRequest(() => {
+                queuedAddFiles -= 1;
+                return handleAddFile(payload);
+            }, 0);
         }
         case "restoreFiles": {
             const { payload } = message;
@@ -662,11 +673,11 @@ self.addEventListener("message", handleMessage);
 
 self.addEventListener("error", (event) => {
     /* v8 ignore next */
-    postError(0, toErrorMessage(event && event.error ? event.error : event && event.message));
+    postError(0, toErrorMessage(extractWorkerError(event), RUNTIME_FAILURE));
 });
 
 self.addEventListener("unhandledrejection", (event) => {
-    postError(0, toErrorMessage(event && event.reason));
+    postError(0, toErrorMessage(extractWorkerRejection(event), RUNTIME_FAILURE));
 });
 
 export {

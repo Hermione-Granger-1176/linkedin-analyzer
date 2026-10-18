@@ -64,6 +64,46 @@ function messageBodyText(value) {
 }
 
 /**
+ * Build one export row from a parsed record, or null when the row lacks a
+ * required value. The drop rule is the spreadsheet cleaner's, so the export
+ * sees the same messages the workbook would have.
+ *
+ * With `withBody` false the body still decides whether the row is kept, but
+ * the row carries an empty `CONTENT`, so a caller can hold many rows without
+ * their bodies. A value cache cleans every other repeated value once.
+ * @param {Record<string, unknown>} raw - Parsed record keyed by CSV column name
+ * @param {{withBody?: boolean, cache?: import("../cleaning/string-pool.js").ValueCache|null}} [options] - Body and value handling
+ * @returns {MessageRow|null} Export row
+ */
+export function toExportRow(raw, { withBody = true, cache = null } = {}) {
+    /** @type {MessageRow} */
+    const row = {};
+    for (const column of COLUMNS) {
+        const value = raw[column.name];
+        row[column.name] =
+            cache && column.name !== BODY_COLUMN
+                ? cache(column.name, value, column.read)
+                : column.read(value);
+    }
+    if (!CONFIG.requiredColumns.every((name) => !isMissing(row[name]))) {
+        return null;
+    }
+    if (!withBody) {
+        row[BODY_COLUMN] = "";
+    }
+    return row;
+}
+
+/**
+ * Read one record's message body exactly as `toExportRow` would.
+ * @param {Record<string, unknown>} raw - Parsed record keyed by CSV column name
+ * @returns {string} Message body, verbatim
+ */
+export function exportRowBody(raw) {
+    return messageBodyText(raw[BODY_COLUMN]);
+}
+
+/**
  * Parse a messages CSV for the PDF export, preserving message bodies verbatim.
  * @param {string} csvText - Raw messages CSV text
  * @returns {{success: boolean, rows: MessageRow[], error: string|null}} Parsed rows
@@ -86,14 +126,8 @@ export function parseMessagesForExport(csvText) {
     /** @type {MessageRow[]} */
     const rows = [];
     for (const raw of parsed.data) {
-        /** @type {MessageRow} */
-        const row = {};
-        for (const column of COLUMNS) {
-            row[column.name] = column.read(raw[column.name]);
-        }
-        // Same row-level drop rule the spreadsheet cleaner applies, so the export
-        // sees the same messages the workbook would have.
-        if (CONFIG.requiredColumns.every((name) => !isMissing(row[name]))) {
+        const row = toExportRow(raw);
+        if (row) {
             rows.push(row);
         }
     }

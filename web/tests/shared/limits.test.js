@@ -12,9 +12,9 @@ import {
 describe("upload limits", () => {
     it("enforces the public limits by default", () => {
         expect(PUBLIC_LIMITS).toEqual({
-            maxFileBytes: 80 * 1024 * 1024,
-            maxCsvChars: 60 * 1024 * 1024,
-            maxCsvRows: 500000,
+            maxFileBytes: 128 * 1024 * 1024,
+            maxCsvChars: 128 * 1024 * 1024,
+            maxCsvRows: 1000000,
         });
         expect([MAX_FILE_BYTES, MAX_CSV_CHARS, MAX_CSV_ROWS]).toEqual([
             PUBLIC_LIMITS.maxFileBytes,

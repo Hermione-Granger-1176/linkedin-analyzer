@@ -13,7 +13,9 @@ import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPES } from "../../shared/constants.js";
-import { MAX_CSV_CHARS, MAX_FILE_BYTES } from "../../shared/limits.js";
+import { MAX_FILE_BYTES } from "../../shared/limits.js";
+import { toErrorMessage } from "../../shared/worker-errors.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
@@ -78,6 +80,10 @@ export const UploadPage = (() => {
     ]);
 
     const JOB_TIMEOUT_MS = 45000;
+    // The file types the analytics worker keeps and primes from storage.
+    const ANALYTICS_SOURCE_TYPES = new Set(["shares", "comments", "connections"]);
+    // The prime signature of a stored set with no analytics inputs.
+    const EMPTY_PRIME_SIGNATURE = "-|-|-";
     const LARGE_FILE_WARNING_BYTES = 25 * 1024 * 1024;
 
     /**
@@ -86,15 +92,6 @@ export const UploadPage = (() => {
      */
     function formatRows(count) {
         return `${count} ${count === 1 ? "row" : "rows"}`;
-    }
-
-    /**
-     * @param {unknown} error - Caught value
-     * @param {string} fallback - Message when the error has none
-     * @returns {string}
-     */
-    function toErrorMessage(error, fallback) {
-        return error instanceof Error && error.message ? error.message : fallback;
     }
 
     /** @type {Worker|null} */
@@ -108,6 +105,12 @@ export const UploadPage = (() => {
     // Saves still writing a processed upload. Clear waits for them so a save
     // that began before it cannot write the upload back afterwards.
     const pendingSaves = new Set();
+    // Saves of analytics inputs still writing. A batch's analytics wait for
+    // them, so an aggregate is never stored over an input storage lacks.
+    /** @type {Set<Promise<void>>} */
+    const analyticsInputSaves = new Set();
+    // True once an analytics input in the running batch failed to save.
+    let analyticsInputFailed = false;
     // Bumped by Clear, so a save that began before it skips its analytics,
     // cache and status continuations.
     let clearGeneration = 0;
@@ -117,6 +120,9 @@ export const UploadPage = (() => {
     let initialized = false;
     /** @type {string|null} */
     let lastPrimedSignature = null;
+    // True when the last prime failed to reach the worker, so it does not hold
+    // the whole stored set and a later upload must not record it as primed.
+    let primeFailed = false;
     /** @type {Promise<void>|null} */
     let restorePromise = null;
     let restoredOnce = false;
@@ -219,6 +225,7 @@ export const UploadPage = (() => {
         clearPrimeSchedule();
         pendingPrimePayload = null;
         lastPrimedSignature = null;
+        primeFailed = false;
         initWorker();
         // Re-prime the new worker from cached files so analytics stay accurate after a crash.
         if (!worker) {
@@ -469,16 +476,7 @@ export const UploadPage = (() => {
         if (oversizeFiles.length) {
             const warningMb = Math.round(LARGE_FILE_WARNING_BYTES / (1024 * 1024));
             setHint(
-                `Some files are large (${warningMb}MB+). Processing may take longer than usual.`,
-                false,
-            );
-        }
-
-        const decodedLimitFiles = acceptedFiles.filter((file) => file.size > MAX_CSV_CHARS);
-        if (decodedLimitFiles.length) {
-            const maxTextMb = Math.round(MAX_CSV_CHARS / (1024 * 1024));
-            setHint(
-                `Some files are larger than the ${maxTextMb}MB text limit and may be rejected after decoding.`,
+                `Some files are large (${warningMb}MB+). Processing can take up to a minute and may not finish on a phone with little memory.`,
                 false,
             );
         }
@@ -509,6 +507,8 @@ export const UploadPage = (() => {
         } catch (error) {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
+            // The worker may be missing stored files, so this upload cannot mark them primed.
+            primeFailed = true;
         }
         // Files dropped before a Clear that ran during the priming await went
         // with it; Clear has already reset the overlay and the jobs.
@@ -522,7 +522,6 @@ export const UploadPage = (() => {
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
-            scheduleJobTimeout(jobId, file.name);
             // The worker reads the File itself. Posting a File clones a
             // reference to its bytes, so the page never holds the text; the
             // page keeps the File to store once the worker accepts it.
@@ -550,6 +549,7 @@ export const UploadPage = (() => {
                 setHint(toErrorMessage(error, "Error reading file. Please try again."), true);
             }
         });
+        armRunningJobTimeout();
     }
 
     /**
@@ -567,6 +567,7 @@ export const UploadPage = (() => {
         clearPrimeSchedule();
         pendingPrimePayload = null;
         lastPrimedSignature = null;
+        primeFailed = false;
         if (worker) {
             worker.postMessage({ type: "clear" });
         }
@@ -683,9 +684,22 @@ export const UploadPage = (() => {
         const jobId = payload.jobId || null;
         const rowCount = payload.rowCount || 0;
         const pending = consumePendingFile(pendingFiles, jobId, fileName);
+        // A restart while this reply is saved replaces the worker it describes.
+        const replyWorker = worker;
+        // The worker has moved on to the next queued file.
+        armRunningJobTimeout();
 
         if (!fileType) {
-            setHint(payload.error || "File could not be processed.", true);
+            const generation = clearGeneration;
+            // A reply with no pending job outlived a Clear, so its analytics
+            // describe data that is gone.
+            if (pending) {
+                await persistAnalyticsOnly(payload.analyticsBase);
+            }
+            // Set after the save, whose status update would replace it.
+            if (generation === clearGeneration) {
+                setHint(payload.error || "File could not be processed.", true);
+            }
             completeJob(jobId, fileName);
             return;
         }
@@ -706,11 +720,17 @@ export const UploadPage = (() => {
         );
         pendingSaves.add(save);
         try {
-            await save;
+            const analyticsStored = await save;
             if (generation !== clearGeneration) {
                 return;
             }
-            await syncCacheAfterProcessedFile(fileType, payload.analyticsBase, generation);
+            // Only analytics that reached storage are published, so the screens
+            // never show an aggregate that counts an upload storage lacks.
+            await syncCacheAfterProcessedFile(
+                fileType,
+                analyticsStored ? payload.analyticsBase : null,
+                generation,
+            );
 
             const files = await getStoredFilesSnapshot();
             const fileMap = getFileMap(files);
@@ -725,8 +745,11 @@ export const UploadPage = (() => {
                     : "File loaded successfully.",
                 false,
             );
-            if (fileType === "shares" || fileType === "comments") {
-                scheduleAnalyticsWorkerPrime(fileMap, { priority: "immediate" });
+            if (ANALYTICS_SOURCE_TYPES.has(fileType) && !primeFailed && worker === replyWorker) {
+                // The worker that processed this file already holds it along
+                // with the rest of the stored set, so record that set as primed
+                // instead of having the worker read and parse it all again.
+                lastPrimedSignature = getPrimeSignature(fileMap);
             }
         } catch (error) {
             captureError(error, {
@@ -774,7 +797,7 @@ export const UploadPage = (() => {
      * @param {number} rowCount - Processed row count
      * @param {PlainObject|null|undefined} analyticsBase - Optional analytics aggregate base
      * @param {number} generation - Clear generation the upload was processed under
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>} Whether the analytics were stored with it
      */
     async function persistProcessedFile(
         fileType,
@@ -784,11 +807,100 @@ export const UploadPage = (() => {
         analyticsBase,
         generation,
     ) {
-        await Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+        const fileSave = Storage.saveFile(fileType, { name: fileName, blob, rowCount });
+        if (ANALYTICS_SOURCE_TYPES.has(fileType)) {
+            trackAnalyticsInputSave(fileSave);
+        }
+        try {
+            await fileSave;
+        } catch (error) {
+            // A batch's analytics ride on its last reply. When that file is not
+            // an analytics input, they still describe the files that are stored.
+            if (
+                analyticsBase &&
+                !ANALYTICS_SOURCE_TYPES.has(fileType) &&
+                generation === clearGeneration
+            ) {
+                await persistAnalyticsOnly(analyticsBase);
+            }
+            throw error;
+        }
         if (!analyticsBase || generation !== clearGeneration) {
-            return;
+            return false;
+        }
+        if (!(await analyticsInputsStored()) || generation !== clearGeneration) {
+            return false;
         }
         await Storage.saveAnalytics(analyticsBase);
+        return true;
+    }
+
+    /**
+     * Track the save of an analytics input, so the batch's analytics wait for
+     * it. A failed save leaves the worker holding an input storage lacks, so
+     * the worker is primed again from storage before the next upload.
+     * @param {Promise<unknown>} save - Storage.saveFile promise
+     */
+    function trackAnalyticsInputSave(save) {
+        const settled = save.then(
+            () => {},
+            () => {
+                analyticsInputFailed = true;
+                lastPrimedSignature = null;
+                primeFailed = true;
+            },
+        );
+        analyticsInputSaves.add(settled);
+        settled.then(() => analyticsInputSaves.delete(settled));
+    }
+
+    /**
+     * Wait for the analytics inputs still saving.
+     * @returns {Promise<boolean>} Whether every input in the batch was stored
+     */
+    async function analyticsInputsStored() {
+        await Promise.all(analyticsInputSaves);
+        return !analyticsInputFailed;
+    }
+
+    /**
+     * Store analytics that arrived on a reply whose file is not stored. The
+     * worker computes a batch's analytics on its last reply, which can be a
+     * rejected file, so the files accepted before it still reach the dashboard.
+     * @param {PlainObject|null|undefined} analyticsBase - Analytics aggregate base
+     * @returns {Promise<void>}
+     */
+    async function persistAnalyticsOnly(analyticsBase) {
+        if (!analyticsBase) {
+            return;
+        }
+        const generation = clearGeneration;
+        // An input the aggregate counts did not reach storage, so the stored
+        // analytics stay as they were rather than describe it.
+        if (!(await analyticsInputsStored()) || generation !== clearGeneration) {
+            return;
+        }
+        const save = Storage.saveAnalytics(analyticsBase);
+        // Clear waits for this save, so it cannot write analytics back after the wipe.
+        pendingSaves.add(save);
+        try {
+            await save;
+            if (generation !== clearGeneration) {
+                return;
+            }
+            DataCache.invalidate("insights:");
+            DataCache.set("storage:analyticsBase", analyticsBase);
+            DataCache.notify({ type: "analyticsChanged" });
+            const files = await getStoredFilesSnapshot();
+            if (generation !== clearGeneration) {
+                return;
+            }
+            updateStatus({ fileMap: getFileMap(files), analyticsReady: true });
+        } catch (error) {
+            captureError(error, { module: "upload", operation: "persist-analytics" });
+        } finally {
+            pendingSaves.delete(save);
+        }
     }
 
     /**
@@ -908,13 +1020,23 @@ export const UploadPage = (() => {
         pendingFiles.delete(resolvedJobId);
         clearJobTimeout(resolvedJobId);
         activeJobs.delete(resolvedJobId);
-        // The worker takes jobs one at a time, so a job still waiting on it has
-        // spent its watchdog behind this one. Restart those so each is timed
-        // from when it can start; the job now running still stops a stall.
-        pendingFiles.forEach((entry, waitingJobId) => {
-            scheduleJobTimeout(waitingJobId, entry.fileName);
-        });
+        armRunningJobTimeout();
         checkJobs();
+    }
+
+    /**
+     * Time the job the worker is running. The worker takes jobs one at a time
+     * in the order they were posted, so only the oldest unanswered job is
+     * running; the ones behind it are timed from when they start, and a small
+     * file is not cut off while a large one ahead of it uses its allowance.
+     */
+    function armRunningJobTimeout() {
+        const running = pendingFiles.entries().next();
+        if (running.done || jobTimeouts.has(running.value[0])) {
+            return;
+        }
+        const [jobId, entry] = running.value;
+        scheduleJobTimeout(jobId, entry.file);
     }
 
     /**
@@ -1037,6 +1159,29 @@ export const UploadPage = (() => {
     }
 
     /**
+     * Identify the stored analytics inputs by presence, update time, and row
+     * count, so an unchanged set is not primed twice.
+     * @param {UploadFileMap} fileMap - Stored files map
+     * @returns {string|null} Signature, or null when no analytics input is stored
+     */
+    function getPrimeSignature(fileMap) {
+        const sharesFile = fileMap.shares || null;
+        const commentsFile = fileMap.comments || null;
+        const connectionsFile = fileMap.connections || null;
+        if (!sharesFile && !commentsFile && !connectionsFile) {
+            return null;
+        }
+        /**
+         * @param {import("./state.js").StoredUploadFile|null} file - Stored file, or null
+         * @returns {string} The file's stamp, or "-" when it is missing
+         */
+        const stamp = (file) => (file ? `${file.updatedAt || 0}:${file.rowCount || 0}` : "-");
+        // Connections feeds the network-growth correlation, so a connections-only
+        // change must still invalidate the signature and force a re-prime.
+        return `${stamp(sharesFile)}|${stamp(commentsFile)}|${stamp(connectionsFile)}`;
+    }
+
+    /**
      * Seed worker with existing shares/comments datasets for accurate recompute.
      * Decides whether to prime from file metadata (presence + a row/updatedAt
      * signature); the CSV text itself is loaded from storage only when the prime
@@ -1055,31 +1200,20 @@ export const UploadPage = (() => {
             return undefined;
         }
 
-        const sharesFile = fileMap.shares || null;
-        const commentsFile = fileMap.comments || null;
-        const connectionsFile = fileMap.connections || null;
+        // After a failed prime or save the worker may hold inputs storage lacks,
+        // so even an empty stored set is primed, which clears them.
+        const signature =
+            getPrimeSignature(fileMap) || (primeFailed ? EMPTY_PRIME_SIGNATURE : null);
         // Connections alone are worth priming: the worker retains the dataset so
         // the first later shares/comments upload picks up the already-stored
         // connections for the network-growth correlation without a re-upload.
-        if (!sharesFile && !commentsFile && !connectionsFile) {
+        if (!signature) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
             clearPrimeSchedule();
             return undefined;
         }
 
-        const sharesStamp = sharesFile
-            ? `${sharesFile.updatedAt || 0}:${sharesFile.rowCount || 0}`
-            : "-";
-        const commentsStamp = commentsFile
-            ? `${commentsFile.updatedAt || 0}:${commentsFile.rowCount || 0}`
-            : "-";
-        // Connections feeds the network-growth correlation, so a connections-only
-        // change must still invalidate the signature and force a re-prime.
-        const connectionsStamp = connectionsFile
-            ? `${connectionsFile.updatedAt || 0}:${connectionsFile.rowCount || 0}`
-            : "-";
-        const signature = `${sharesStamp}|${commentsStamp}|${connectionsStamp}`;
         if (signature === lastPrimedSignature) {
             pendingPrimePayload = null;
             clearPrimeSchedule();
@@ -1181,6 +1315,7 @@ export const UploadPage = (() => {
         } catch (error) {
             // Leave lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-load-text" });
+            primeFailed = true;
             return;
         }
         // Posting files read before a Clear would restore them into the worker
@@ -1205,9 +1340,11 @@ export const UploadPage = (() => {
             // serialized chain and stall the awaiting upload) and leave
             // lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-post-message" });
+            primeFailed = true;
             return;
         }
         lastPrimedSignature = signature;
+        primeFailed = false;
     }
 
     /** Clear all queued analytics prime timers and idle callbacks. */
@@ -1241,6 +1378,7 @@ export const UploadPage = (() => {
     /** Hide progress overlay when all active jobs complete. */
     function checkJobs() {
         if (activeJobs.size === 0) {
+            analyticsInputFailed = false;
             UploadProgress.hide();
             RunTracker.finish();
         }
@@ -1253,17 +1391,21 @@ export const UploadPage = (() => {
         pendingFiles.clear();
         clearAllJobTimeouts();
         activeJobs.clear();
+        analyticsInputFailed = false;
         UploadProgress.hide();
         RunTracker.finish();
     }
 
     /**
-     * Start a timeout watchdog for a worker job.
+     * Start a timeout watchdog for a worker job. A large file gets more time, so
+     * a slow device is not cut off partway through a file within the limits.
      * @param {string} jobId - Worker job id
-     * @param {string} fileName - Uploaded file name
+     * @param {File} file - Uploaded file
      */
-    function scheduleJobTimeout(jobId, fileName) {
+    function scheduleJobTimeout(jobId, file) {
         clearJobTimeout(jobId);
+        const fileName = file.name;
+        const budget = Math.max(JOB_TIMEOUT_MS, computeWorkerTimeout(file));
         const timeoutId = window.setTimeout(() => {
             // completeJob() clears this timer when a job settles, including error paths.
             // resetProcessingState() clears all job timers during teardown.
@@ -1279,7 +1421,7 @@ export const UploadPage = (() => {
             resetProcessingState();
             restartWorker();
             setHint(`Processing took too long for ${fileName}. Please retry this file.`, true);
-        }, JOB_TIMEOUT_MS);
+        }, budget);
 
         jobTimeouts.set(jobId, timeoutId);
     }

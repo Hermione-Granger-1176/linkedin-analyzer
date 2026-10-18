@@ -12,11 +12,11 @@
 import { CLEAN_PREVIEW_MAX_ROWS } from "../../app/worker-contracts.js";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
-import { readCsvSource } from "../upload/read.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
 import { buildCleanedCsvBlob } from "./csv-export.js";
 import { ExcelGenerator } from "./excel.js";
+import { processCsvSource } from "./process-source.js";
 
 export const PREVIEW_ROW_LIMIT = CLEAN_PREVIEW_MAX_ROWS;
 
@@ -54,7 +54,7 @@ async function cleanFile({ fileType, source, key }) {
     // Drop the previous file's rows before reading the next one, so two
     // cleaned files are never alive at once.
     held = null;
-    const processed = LinkedInCleaner.process(await readCsvSource(source), fileType);
+    const processed = await processCsvSource(source, fileType);
     if (!processed.success) {
         return { error: processed.error || "Unable to parse file." };
     }

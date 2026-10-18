@@ -306,11 +306,28 @@ async function timeCachedFilterChange(page) {
 }
 
 /**
+ * Settle on whichever comes first: the download, or the app refusing the
+ * export with a visible reason.
+ * @param {Promise<unknown>} download - Pending download event.
+ * @param {Promise<unknown>} refusal - Resolves once the refusal is visible.
+ * @returns {Promise<boolean>} Whether the app refused the export.
+ */
+function downloadOrRefusal(download, refusal) {
+    // The losing side of the race must not surface as an unhandled rejection.
+    download.catch(() => {});
+    refusal.catch(() => {});
+    return Promise.race([download.then(() => false), refusal.then(() => true)]);
+}
+
+/**
  * Run one export the way a user does and wait for its download to start.
  * Excel exports the cleaned messages file from the Clean screen; PDF exports
  * the report with message bodies included, and pdf-summary without them.
+ * Either can be refused for a file too large to build it from, so each
+ * settles on the download or on that refusal, whichever comes first.
  * @param {import("@playwright/test").Page} page - App page with the export loaded.
  * @param {"excel"|"pdf"|"pdf-summary"} kind - Export to run.
+ * @returns {Promise<boolean>} Whether the app refused the export.
  */
 async function runExport(page, kind) {
     const download = page.waitForEvent("download", { timeout: STEP_TIMEOUT_MS });
@@ -325,18 +342,29 @@ async function runExport(page, kind) {
             timeout: STEP_TIMEOUT_MS,
         });
         await page.getByTestId("clean-download-btn").click({ timeout: STEP_TIMEOUT_MS });
-    } else {
-        const trigger = page.locator("#pdfExportBtn");
-        await expect(trigger).toHaveAttribute("aria-disabled", "false", {
-            timeout: STEP_TIMEOUT_MS,
-        });
-        await trigger.click();
-        if (kind === "pdf") {
-            await page.locator("#pdfExportIncludeMessages").check();
-        }
-        await page.locator("#pdfExportConfirmBtn").click();
+        // Only the size refusal counts; a worker timeout or a failed build
+        // shows the same element and must fail the run.
+        const refusal = expect(page.locator("#cleanErrorMessage")).toHaveText(
+            /too large to build an Excel file/,
+            { timeout: STEP_TIMEOUT_MS },
+        );
+        return downloadOrRefusal(download, refusal);
     }
-    await download;
+    const trigger = page.locator("#pdfExportBtn");
+    await expect(trigger).toHaveAttribute("aria-disabled", "false", {
+        timeout: STEP_TIMEOUT_MS,
+    });
+    await trigger.click();
+    if (kind === "pdf") {
+        await page.locator("#pdfExportIncludeMessages").check();
+    }
+    await page.locator("#pdfExportConfirmBtn").click();
+    // A refusal names the option to untick; any other error is a failed run,
+    // which the download wait reports when it times out.
+    const refusal = expect(page.locator("#pdfExportDialogError")).toHaveText(/Untick/, {
+        timeout: STEP_TIMEOUT_MS,
+    });
+    return downloadOrRefusal(download, refusal);
 }
 
 /**
@@ -352,6 +380,7 @@ async function measureRun(options, inputDir) {
         filterMs: Number.NaN,
         peak: { combined: 0, page: 0, workers: 0 },
         exportMs: Number.NaN,
+        exportRefused: false,
         exportPeak: { combined: 0, page: 0, workers: 0 },
         crashed: false,
         error: "",
@@ -395,7 +424,7 @@ async function measureRun(options, inputDir) {
             result.peak = await sampler.takePeak();
             phase = "export";
             const started = performance.now();
-            await runExport(page, options.exportKind);
+            result.exportRefused = await runExport(page, options.exportKind);
             result.exportMs = performance.now() - started;
             await sampler.sample();
         }
@@ -444,7 +473,7 @@ function report(runs, options) {
                 `(page ${megabytes(result.peak.page)}MB, workers ${megabytes(result.peak.workers)}MB) ` +
                 (options.exportKind === "none"
                     ? ""
-                    : `${options.exportKind}=${seconds(result.exportMs)}s ` +
+                    : `${options.exportKind}=${result.exportRefused ? "refused" : `${seconds(result.exportMs)}s`} ` +
                       `export-peak=${megabytes(result.exportPeak.combined)}MB ` +
                       `(page ${megabytes(result.exportPeak.page)}MB) `) +
                 `crashed=${result.crashed ? "yes" : "no"}` +
@@ -471,7 +500,8 @@ function report(runs, options) {
     line("filter", pick(finished, "filterMs"), inMilliseconds);
     line("peak-heap", peaks, inMegabytes);
     if (options.exportKind !== "none") {
-        line(options.exportKind, pick(finished, "exportMs"), inSeconds);
+        const exported = finished.filter((result) => !result.exportRefused);
+        line(options.exportKind, pick(exported, "exportMs"), inSeconds);
         line(
             "export-peak",
             runs.map((result) => result.exportPeak.combined),

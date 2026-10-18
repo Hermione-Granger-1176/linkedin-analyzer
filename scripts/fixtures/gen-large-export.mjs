@@ -255,28 +255,26 @@ function isOutsideRepo(path) {
 }
 
 /**
- * Generate a full synthetic export.
- * @param {{ sizeMb: number, dir: string }} options - Total size in MiB and output directory.
- * @returns {Record<string, { bytes: number, rows: number }>} Bytes and rows per file.
+ * Build the seeded samplers the row writers draw from. Every draw comes from
+ * one generator, so a given size always yields the same files.
+ * @param {() => number} random - Seeded generator returning values in [0, 1).
+ * @param {readonly { name: string, url: string, first: string, last: string }[]} contacts - Contact pool.
+ * @returns {{
+ *   random: () => number,
+ *   pick: <T>(list: readonly T[]) => T,
+ *   pickContact: () => { name: string, url: string, first: string, last: string },
+ *   randomInstant: () => Date,
+ *   randomDate: () => string,
+ *   body: (parts: readonly string[]) => string
+ * }} Samplers.
  */
-export function generateLargeExport({ sizeMb, dir }) {
-    if (!Number.isFinite(sizeMb) || sizeMb <= 0) {
-        throw new Error("size_mb must be a positive number");
-    }
-    const outDir = resolve(dir);
-    if (!isOutsideRepo(canonical(outDir))) {
-        throw new Error(`refusing to write inside the repository: ${outDir}`);
-    }
-    mkdirSync(outDir, { recursive: true });
-
-    const random = mulberry32(Math.round(sizeMb * 1000));
+function createSamplers(random, contacts) {
     /**
      * @template T
      * @param {readonly T[]} list - Choices.
      * @returns {T}
      */
     const pick = (list) => list[Math.floor(random() * list.length)];
-    const contacts = buildContacts(random);
     // A skewed pick, so a few contacts get most of the messages, as in real life.
     const pickContact = () => contacts[Math.floor(random() ** 2.5 * contacts.length)];
     const randomInstant = () =>
@@ -296,16 +294,24 @@ export function generateLargeExport({ sizeMb, dir }) {
         const count = 1 + Math.floor(random() * 3);
         return Array.from({ length: count }, () => pick(parts)).join(" ");
     };
-    /**
-     * @param {keyof typeof FILE_SHARES} file - Output file name.
-     * @returns {number}
-     */
-    const target = (file) => Math.round(sizeMb * MB * FILE_SHARES[file]);
-    /** @type {Record<string, { bytes: number, rows: number }>} */
-    const results = {};
+    return { random, pick, pickContact, randomInstant, randomDate, body };
+}
 
-    results["messages.csv"] = writeUntil(
-        join(outDir, "messages.csv"),
+/**
+ * @typedef {ReturnType<typeof createSamplers>} Samplers
+ * @typedef {{ bytes: number, rows: number }} FileResult
+ */
+
+/**
+ * Write messages.csv.
+ * @param {string} path - Output file.
+ * @param {number} targetBytes - Size to reach.
+ * @param {Samplers} samplers - Seeded samplers.
+ * @returns {FileResult}
+ */
+function writeMessages(path, targetBytes, { random, pickContact, randomDate, body }) {
+    return writeUntil(
+        path,
         csvLine([
             "CONVERSATION ID",
             "FROM",
@@ -316,7 +322,7 @@ export function generateLargeExport({ sizeMb, dir }) {
             "SENDER PROFILE URL",
             "RECIPIENT PROFILE URLS",
         ]),
-        target("messages.csv"),
+        targetBytes,
         () => {
             const contact = pickContact();
             const outgoing = random() < 0.5;
@@ -333,10 +339,20 @@ export function generateLargeExport({ sizeMb, dir }) {
             ]);
         },
     );
+}
 
+/**
+ * Write Connections.csv.
+ * @param {string} path - Output file.
+ * @param {number} targetBytes - Size to reach.
+ * @param {Samplers} samplers - Seeded samplers.
+ * @param {readonly { url: string, first: string, last: string }[]} contacts - Contact pool.
+ * @returns {FileResult}
+ */
+function writeConnections(path, targetBytes, { random, pick, randomInstant }, contacts) {
     let connectionIndex = 0;
-    results["Connections.csv"] = writeUntil(
-        join(outDir, "Connections.csv"),
+    return writeUntil(
+        path,
         'Notes:\n"When exporting your connections, you may notice that some of the email addresses are missing."\n\n' +
             csvLine([
                 "First Name",
@@ -347,7 +363,7 @@ export function generateLargeExport({ sizeMb, dir }) {
                 "Position",
                 "Connected On",
             ]),
-        target("Connections.csv"),
+        targetBytes,
         () => {
             const contact = contacts[connectionIndex % contacts.length];
             connectionIndex += 1;
@@ -364,12 +380,21 @@ export function generateLargeExport({ sizeMb, dir }) {
             ]);
         },
     );
+}
 
+/**
+ * Write Shares.csv.
+ * @param {string} path - Output file.
+ * @param {number} targetBytes - Size to reach.
+ * @param {Samplers} samplers - Seeded samplers.
+ * @returns {FileResult}
+ */
+function writeShares(path, targetBytes, { random, randomDate, body }) {
     let shareIndex = 0;
-    results["Shares.csv"] = writeUntil(
-        join(outDir, "Shares.csv"),
+    return writeUntil(
+        path,
         csvLine(["Date", "ShareLink", "ShareCommentary", "SharedUrl", "MediaUrl", "Visibility"]),
-        target("Shares.csv"),
+        targetBytes,
         () => {
             shareIndex += 1;
             return csvLine([
@@ -382,23 +407,71 @@ export function generateLargeExport({ sizeMb, dir }) {
             ]);
         },
     );
+}
 
+/**
+ * Write Comments.csv.
+ * @param {string} path - Output file.
+ * @param {number} targetBytes - Size to reach.
+ * @param {Samplers} samplers - Seeded samplers.
+ * @returns {FileResult}
+ */
+function writeComments(path, targetBytes, { randomDate, body }) {
     let commentIndex = 0;
-    results["Comments.csv"] = writeUntil(
-        join(outDir, "Comments.csv"),
-        csvLine(["Date", "Link", "Message"]),
-        target("Comments.csv"),
-        () => {
-            commentIndex += 1;
-            return csvLine([
-                `${randomDate()} UTC`,
-                `https://www.linkedin.com/feed/update/urn:li:activity:${commentIndex}`,
-                body(MESSAGE_PARTS),
-            ]);
-        },
-    );
+    return writeUntil(path, csvLine(["Date", "Link", "Message"]), targetBytes, () => {
+        commentIndex += 1;
+        return csvLine([
+            `${randomDate()} UTC`,
+            `https://www.linkedin.com/feed/update/urn:li:activity:${commentIndex}`,
+            body(MESSAGE_PARTS),
+        ]);
+    });
+}
 
-    return results;
+/**
+ * Generate a full synthetic export.
+ * @param {{ sizeMb: number, dir: string }} options - Total size in MiB and output directory.
+ * @returns {Record<string, FileResult>} Bytes and rows per file.
+ */
+export function generateLargeExport({ sizeMb, dir }) {
+    if (!Number.isFinite(sizeMb) || sizeMb <= 0) {
+        throw new Error("size_mb must be a positive number");
+    }
+    const outDir = resolve(dir);
+    if (!isOutsideRepo(canonical(outDir))) {
+        throw new Error(`refusing to write inside the repository: ${outDir}`);
+    }
+    mkdirSync(outDir, { recursive: true });
+
+    const random = mulberry32(Math.round(sizeMb * 1000));
+    const contacts = buildContacts(random);
+    const samplers = createSamplers(random, contacts);
+    /**
+     * @param {keyof typeof FILE_SHARES} file - Output file name.
+     * @returns {number}
+     */
+    const target = (file) => Math.round(sizeMb * MB * FILE_SHARES[file]);
+
+    // Each file draws from the one generator in turn, so the order is part of the output.
+    return {
+        "messages.csv": writeMessages(
+            join(outDir, "messages.csv"),
+            target("messages.csv"),
+            samplers,
+        ),
+        "Connections.csv": writeConnections(
+            join(outDir, "Connections.csv"),
+            target("Connections.csv"),
+            samplers,
+            contacts,
+        ),
+        "Shares.csv": writeShares(join(outDir, "Shares.csv"), target("Shares.csv"), samplers),
+        "Comments.csv": writeComments(
+            join(outDir, "Comments.csv"),
+            target("Comments.csv"),
+            samplers,
+        ),
+    };
 }
 
 /**

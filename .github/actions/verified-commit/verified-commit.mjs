@@ -281,6 +281,106 @@ export function createApiClients({ owner, repo, token, fetchDependencies }) {
 }
 
 /**
+ * Create the fallback branch at the expected head, or force-reset it there.
+ * The race guard handles another run creating the branch between the
+ * existence check and the POST. Only "Reference already exists" 422s are
+ * recovered; all other errors propagate.
+ * @param {ReturnType<typeof createApiClients>} clients - Authenticated API helpers.
+ * @param {string} fallbackBranch - Branch name without the refs/heads/ prefix.
+ * @param {string} expectedHeadSha - Commit the branch must point at.
+ * @returns {Promise<void>}
+ */
+async function resetFallbackBranch(clients, fallbackBranch, expectedHeadSha) {
+    const { owner, repo } = clients;
+    const fullRef = `refs/heads/${fallbackBranch}`;
+    const refsUrl = `https://api.github.com/repos/${owner}/${repo}/git/refs`;
+
+    const matchingRefs = await clients.fetchJson(
+        `https://api.github.com/repos/${owner}/${repo}/git/matching-refs/heads/${fallbackBranch}`,
+    );
+    const branchExists = matchingRefs.some((ref) => ref.ref === fullRef);
+
+    const needsReset =
+        branchExists ||
+        (await clients
+            .fetchJson(refsUrl, {
+                method: "POST",
+                body: JSON.stringify({ ref: fullRef, sha: expectedHeadSha }),
+            })
+            .then(
+                () => false,
+                (error) => {
+                    if (!isRefAlreadyExistsError(error)) {
+                        throw error;
+                    }
+                    return true;
+                },
+            ));
+
+    if (needsReset) {
+        await clients.fetchJson(`${refsUrl}/heads/${fallbackBranch}`, {
+            method: "PATCH",
+            body: JSON.stringify({ sha: expectedHeadSha, force: true }),
+        });
+    }
+}
+
+/**
+ * Reuse the pull request for the fallback branch, reopening it if the branch
+ * reset closed it, or open a new one.
+ * @param {ReturnType<typeof createApiClients>} clients - Authenticated API helpers.
+ * @param {{
+ *   fallbackBranch: string,
+ *   baseBranch: string,
+ *   title: string,
+ *   body: string,
+ *   consoleObj: Console
+ * }} pull - Branch names, PR text, and logger.
+ * @returns {Promise<string>} URL of the pull request.
+ */
+async function openFallbackPullRequest(
+    clients,
+    { fallbackBranch, baseBranch, title, body, consoleObj },
+) {
+    const { owner, repo } = clients;
+    const pullsUrl = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+    pullsUrl.search = new URLSearchParams({
+        state: "all",
+        head: `${owner}:${fallbackBranch}`,
+    }).toString();
+    const reusablePull = selectReusablePull(await clients.fetchJson(pullsUrl.toString()));
+
+    if (reusablePull) {
+        if (reusablePull.state !== "open") {
+            await clients.fetchJson(
+                `https://api.github.com/repos/${owner}/${repo}/pulls/${reusablePull.number}`,
+                { method: "PATCH", body: JSON.stringify({ state: "open" }) },
+            );
+            consoleObj.log(`Reopened PR closed by the branch reset: ${reusablePull.html_url}`);
+        } else {
+            consoleObj.log(`Updated existing PR: ${reusablePull.html_url}`);
+        }
+        return reusablePull.html_url;
+    }
+
+    const pullRequest = await clients.fetchJson(
+        `https://api.github.com/repos/${owner}/${repo}/pulls`,
+        {
+            method: "POST",
+            body: JSON.stringify({
+                title,
+                body,
+                head: fallbackBranch,
+                base: baseBranch,
+            }),
+        },
+    );
+
+    consoleObj.log(`Created PR: ${pullRequest.html_url}`);
+    return pullRequest.html_url;
+}
+
+/**
  * Commit staged changes via the GitHub GraphQL API (verified/signed), falling back to a PR.
  * @param {{
  *   env?: NodeJS.ProcessEnv,
@@ -390,41 +490,7 @@ export async function runVerifiedCommit({
     }
 
     const fallbackBranch = createBranchName(fallbackBranchPrefix, now);
-    const fullRef = `refs/heads/${fallbackBranch}`;
-    const refsUrl = `https://api.github.com/repos/${owner}/${repo}/git/refs`;
-
-    const matchingRefs = await clients.fetchJson(
-        `https://api.github.com/repos/${owner}/${repo}/git/matching-refs/heads/${fallbackBranch}`,
-    );
-    const branchExists = matchingRefs.some((ref) => ref.ref === fullRef);
-
-    // Create or force-reset the fallback branch to the current base.
-    // The race guard handles another run creating the branch between our
-    // existence check and the POST. Only "Reference already exists" 422s
-    // are recovered; all other errors propagate.
-    const needsReset =
-        branchExists ||
-        (await clients
-            .fetchJson(refsUrl, {
-                method: "POST",
-                body: JSON.stringify({ ref: fullRef, sha: expectedHeadSha }),
-            })
-            .then(
-                () => false,
-                (error) => {
-                    if (!isRefAlreadyExistsError(error)) {
-                        throw error;
-                    }
-                    return true;
-                },
-            ));
-
-    if (needsReset) {
-        await clients.fetchJson(`${refsUrl}/heads/${fallbackBranch}`, {
-            method: "PATCH",
-            body: JSON.stringify({ sha: expectedHeadSha, force: true }),
-        });
-    }
+    await resetFallbackBranch(clients, fallbackBranch, expectedHeadSha);
 
     const fallbackCommit = await createCommit(
         fallbackBranch,
@@ -433,43 +499,15 @@ export async function runVerifiedCommit({
     );
     consoleObj.log(`Created verified fallback commit: ${fallbackCommit.url}`);
 
-    const pullsUrl = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
-    pullsUrl.search = new URLSearchParams({
-        state: "all",
-        head: `${owner}:${fallbackBranch}`,
-    }).toString();
-    const reusablePull = selectReusablePull(await clients.fetchJson(pullsUrl.toString()));
-
-    if (reusablePull) {
-        if (reusablePull.state !== "open") {
-            await clients.fetchJson(
-                `https://api.github.com/repos/${owner}/${repo}/pulls/${reusablePull.number}`,
-                { method: "PATCH", body: JSON.stringify({ state: "open" }) },
-            );
-            consoleObj.log(`Reopened PR closed by the branch reset: ${reusablePull.html_url}`);
-        } else {
-            consoleObj.log(`Updated existing PR: ${reusablePull.html_url}`);
-        }
-        setOutput("result-url", reusablePull.html_url);
-        return { changed: true, resultUrl: reusablePull.html_url };
-    }
-
-    const pullRequest = await clients.fetchJson(
-        `https://api.github.com/repos/${owner}/${repo}/pulls`,
-        {
-            method: "POST",
-            body: JSON.stringify({
-                title: prTitle,
-                body: prBody,
-                head: fallbackBranch,
-                base: baseBranch,
-            }),
-        },
-    );
-
-    consoleObj.log(`Created PR: ${pullRequest.html_url}`);
-    setOutput("result-url", pullRequest.html_url);
-    return { changed: true, resultUrl: pullRequest.html_url };
+    const resultUrl = await openFallbackPullRequest(clients, {
+        fallbackBranch,
+        baseBranch,
+        title: prTitle,
+        body: prBody,
+        consoleObj,
+    });
+    setOutput("result-url", resultUrl);
+    return { changed: true, resultUrl };
 }
 
 if (isCliEntrypoint(import.meta.url)) {

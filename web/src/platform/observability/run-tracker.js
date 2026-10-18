@@ -66,8 +66,7 @@ export function sizeBucket(bytes) {
 }
 
 /**
- * Bucket navigator.deviceMemory. Only Chromium browsers expose it; anything
- * else reads as unknown, never as low.
+ * Bucket navigator.deviceMemory. Missing or invalid values return "unknown".
  * @param {unknown} deviceMemory - navigator.deviceMemory
  * @returns {string}
  */
@@ -149,7 +148,7 @@ export function createRunTracker({
         try {
             markers.setItem(key, JSON.stringify(marker));
         } catch {
-            // Storage full or blocked: the run simply goes untracked.
+            // Full or blocked storage prevents tracking this run.
         }
     };
     /** @param {string} key - Marker key */

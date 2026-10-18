@@ -296,7 +296,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Restore upload status from IndexedDB and refresh the file cache on load.
+     * Restore upload status from storage and refresh the file cache on load.
      * Does not prime the worker. That is deferred to the first upload (see
      * processFiles); the dashboard reads the persisted analyticsBase directly.
      * @returns {Promise<void>}
@@ -430,7 +430,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Read CSV files and send them to the worker for processing.
+     * Validate CSV uploads and send them to the worker for processing.
      * @param {File[]} files - Selected files
      * @returns {Promise<void>}
      */
@@ -502,13 +502,12 @@ export const UploadPage = (() => {
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
-            // The worker reads the File itself. Posting a File clones a
-            // reference to its bytes, so the page never holds the text; the
-            // page keeps the File to store once the worker accepts it.
+            // The worker reads the File. Keep it here so it can be saved after
+            // the worker accepts it.
             pendingFiles.set(jobId, { fileName: file.name, file });
             try {
-                // Checked above. A restart during the prime await can null it,
-                // and the throw lands in the catch below, as before.
+                // A worker restart during priming can leave current() null.
+                // Handle that failure in the catch below.
                 /** @type {Worker} */ (workers.current()).postMessage({
                     type: "addFile",
                     payload: {
@@ -586,9 +585,8 @@ export const UploadPage = (() => {
                     return;
                 }
                 const remaining = estimate.quota - estimate.usage;
-                // Scale the threshold to the incoming data (IndexedDB transiently
-                // holds the text twice during a put), but keep a 20MB floor so a
-                // nearly-full quota still warns even for small uploads.
+                // Scale the storage warning threshold to incoming bytes, with a 20 MiB
+                // minimum. Allow space for temporary copies during persistence.
                 const threshold = Math.max(incomingBytes * 2, 20 * 1024 * 1024);
                 if (remaining < threshold) {
                     setHint(
@@ -640,10 +638,9 @@ export const UploadPage = (() => {
                     jobId: payload.jobId || null,
                     fileName: payload.fileName || null,
                 });
-                // A payload-level error reports a single failed job. Complete just
-                // that job (falling back to the first active one) instead of
-                // resetting every in-flight upload. Only a worker-level `error`
-                // event (handleWorkerError) wipes all processing state.
+                // Complete only the job identified by this payload. If its ID and name
+                // are absent, use the sole active job. With multiple active jobs, leave
+                // completion to a later reply or timeout.
                 completeJob(payload.jobId || null, payload.fileName || "");
                 return;
             }
@@ -775,7 +772,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Persist the original upload and its analytics in IndexedDB.
+     * Save the original upload and its analytics through Storage.
      * @param {string} fileType - Processed file type
      * @param {string} fileName - Uploaded file name
      * @param {Blob} blob - The uploaded File
@@ -799,8 +796,8 @@ export const UploadPage = (() => {
         try {
             await fileSave;
         } catch (error) {
-            // A batch's analytics ride on its last reply. When that file is not
-            // an analytics input, they still describe the files that are stored.
+            // A batch's analytics arrive with its last worker reply. They still
+            // describe stored analytics inputs when the final file is another type.
             if (
                 analyticsBase &&
                 !ANALYTICS_SOURCE_TYPES.has(fileType) &&
@@ -938,7 +935,7 @@ export const UploadPage = (() => {
             return;
         }
 
-        // Cache metadata only; the messages/connections text is loaded on demand.
+        // Cache metadata only. Load message and connection Blobs on demand.
         DataCache.set(key, toStoredFileMetadata(match));
     }
 
@@ -1120,12 +1117,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Prime the worker with stored shares/comments before an upload so a new
-     * analytics file recomputes from the full set (a no-op via signature dedup
-     * when already primed). Reads the cached file snapshot, falling back to
-     * storage when the cache isn't populated yet. `restoreState()` is fired but
-     * not awaited in init(), so a fast upload can race ahead of it; loading here
-     * guarantees the prior shares/comments are seeded before the new addFile.
+     * Prime stored analytics inputs before uploading a new file.
+     * Reuse the metadata signature to skip an unchanged set. On a cache miss,
+     * read storage directly because restoreState may still be pending.
      * @returns {Promise<void>}
      */
     async function primeWorkerFromStoredFiles() {
@@ -1137,7 +1131,7 @@ export const UploadPage = (() => {
             cachedFiles = files.map(toStoredFileMetadata);
             DataCache.set("storage:files", cachedFiles);
         }
-        // Await the prime so its restoreFiles is posted (after loading the text
+        // Await the prime so its restoreFiles is posted (after loading the Blobs
         // from storage) before processFiles posts any addFile, preserving the
         // "recompute from the full set" guarantee now that priming is async.
         await scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
@@ -1167,12 +1161,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Seed worker with existing shares/comments datasets for accurate recompute.
-     * Decides whether to prime from file metadata (presence + a row/updatedAt
-     * signature); the CSV text itself is loaded from storage only when the prime
-     * actually fires (see primeAnalyticsWorkerNow). Uses idle scheduling unless
-     * priority is immediate, in which case it returns the prime promise so callers
-     * can await the restoreFiles being posted.
+     * Schedule stored analytics inputs for restoration in the worker.
+     * Compare metadata signatures before loading Blobs. Immediate priority
+     * returns the post promise so the caller can await it before addFile.
      * @param {UploadFileMap} fileMap - Stored files map
      * @param {{priority?: 'idle'|'immediate'}} [options] - Scheduling options
      * @returns {Promise<void>|void}
@@ -1236,13 +1227,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Capture the pending prime payload and queue its restoreFiles post. The
-     * async load + post is serialized through `primeInFlight` so concurrent
-     * primes (e.g. restartWorker's idle prime racing a pre-upload immediate
-     * prime) still emit their restoreFiles in invocation order. Without this a
-     * slow earlier prime could post after a later prime's addFile and revert the
-     * worker to the stored set, breaking the documented FIFO ordering. Callers
-     * await the returned promise to know the post (and any prior one) has run.
+     * Queue a restoreFiles post through primeInFlight.
+     * Serialize asynchronous reads and posts so an earlier prime cannot arrive
+     * after a newer addFile and replace the worker's inputs.
      * @returns {Promise<void>}
      */
     function primeAnalyticsWorkerNow() {
@@ -1268,10 +1255,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Load the stored shares/comments uploads and post them to the worker,
-     * which reads them. Blobs are fetched here (not held in the file cache),
-     * and posting one passes a reference rather than the file's contents. Best-effort: a load failure is logged and skipped. Runs
-     * inside the `primeInFlight` chain so posts stay ordered.
+     * Load stored analytics upload Blobs and post them to the worker.
+     * Run in the primeInFlight chain to preserve post order. Report and skip
+     * read failures so the upload can continue.
      * @param {string} signature - Payload signature recorded once posted
      * @param {number} generation - Clear generation the prime was requested under
      * @returns {Promise<void>}
@@ -1400,10 +1386,8 @@ export const UploadPage = (() => {
                 return;
             }
 
-            // The shared worker is wedged on this job; terminating and restarting
-            // it stops the runaway parse from pinning the CPU and lets later
-            // uploads still be processed. resetProcessingState() first so the
-            // restart starts from a clean slate.
+            // Terminate the timed-out worker so later uploads can proceed.
+            // Reset processing state before creating its replacement.
             resetProcessingState();
             restartWorker();
             setHint(`Processing took too long for ${fileName}. Please retry this file.`, true);

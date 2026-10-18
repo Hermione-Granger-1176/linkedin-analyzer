@@ -1,20 +1,12 @@
 /**
- * Serve one kind of request in a worker.
+ * Serve validated requests in a worker that processes uploaded data.
  *
- * Every worker that holds an upload is handed the user's own text, so every
- * failure inside it is assumed to carry some of it: a row, a name, a profile
- * URL or a message body. Two rules follow. The only failure text that leaves
- * the worker is a fixed string: the request parser's own message for a request
- * it rejects, or the worker's runtime failure literal for anything thrown. And
- * every global failure event is cancelled, so the browser's own reporting,
- * which writes the original message to the console, never runs.
+ * Post fixed parser or runtime failure messages. Cancel global failure
+ * events to prevent the browser from logging uploaded values.
  *
- * A global failure is answered under id 0, never under the id of the request
- * being served. Real ids start at 1, so the page can tell a worker that fell
- * over, which says nothing about the file, from one that answered that it
- * could not read it: the export transports fall back to the main thread on the
- * first and give up on the second. Cancelling the event also stops it reaching
- * the page as an `error` event on the Worker, so this reply is the only signal.
+ * Global failures use ID 0. Request IDs start at 1, allowing the export
+ * transport to distinguish a worker failure that permits fallback from
+ * a parse failure for a specific request.
  */
 
 /** @typedef {import("../app/worker-contracts.ts").RequestId} RequestId */

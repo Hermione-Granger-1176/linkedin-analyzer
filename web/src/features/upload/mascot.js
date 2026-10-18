@@ -1,15 +1,9 @@
 /**
- * Pip catching what you drop.
+ * Control the decorative upload catcher pose.
  *
- * He is out of the page until a file is dragged over the drop zone, comes up
- * behind its bottom edge with his arms out while the file is still in the air,
- * and hugs the page once it lands. The drawing and both arm poses live in
- * index.html; all this owns is which pose is showing and for how long.
- *
- * He is decoration, so a visitor who asked for reduced motion gets the drawing
- * standing still during the drag and nothing at all on the drop. The stylesheet
- * switches the moves off on the same preference, so the two agree even if one
- * of them is reached on its own.
+ * Show the ready pose during a drag and the catch pose after a drop.
+ * index.html contains the drawing, and CSS supplies its animation.
+ * With reduced motion, show a still pose during the drag and skip the catch.
  */
 
 import { playOneShot, prefersReducedMotion } from "../../shared/ui/motion.js";
@@ -82,8 +76,8 @@ export function playCatch() {
         return;
     }
 
-    // A drop can take the screen out from under him, so the timer playOneShot
-    // hangs the moment on is what puts him away again.
+    // The drop can navigate away, so the timer removes the pose even when
+    // the drawing is hidden.
     catchTimer = playOneShot({
         element: catcher,
         durationMs: CATCH_LIFETIME_MS,

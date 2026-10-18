@@ -1,19 +1,13 @@
-"""Thin, dependency-injected wrappers around the ``gh`` and ``git`` CLIs.
+"""Share subprocess handling for GitHub and Git commands.
 
-Every public function accepts ``run_fn`` so tests can inject a fake subprocess
-runner and exercise the logic without touching the network or a real
-repository. Keeping the GitHub plumbing here means the PR and CI helpers share
-one place for repository and pull-request detection, timeouts, and retries.
+Public functions accept ``run_fn`` so tests can supply a subprocess runner
+without using the network or a real repository. Callers share repository and PR
+detection, timeouts, and the retry policy in ``scripts.lib.gh_policy``.
 
-``gh api`` has no built-in retry and treats a single 5xx, network blip, or
-rate-limit response as a hard non-zero exit. Per GitHub's API guidance the
-shared policy in ``scripts.lib.gh_policy`` retries only transient
-infrastructure errors (HTTP 500, 502, 503, and 504 plus network and timeout
-failures) with bounded exponential backoff, and fails fast on rate limits
-rather than hammering the API (which can get an integration banned). HTTP 501
-is treated as fatal, since "Not Implemented" never clears on a retry.
-Non-idempotent mutations (posting a reply) opt out of retries so a lost
-response never double-posts.
+Idempotent calls retry HTTP 500, 502, 503, and 504 responses, network failures,
+and timeouts with bounded exponential backoff. Rate limits and other failures,
+including HTTP 501, stop immediately. Non-idempotent operations disable retries
+to avoid duplicate writes after a lost response.
 """
 
 from __future__ import annotations

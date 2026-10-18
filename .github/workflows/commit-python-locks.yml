@@ -236,7 +236,6 @@ jobs:
           pr-title: "Refresh Python lock file"
           pr-body: |
             ## Summary
-            - Type: CI maintenance
             - Refresh `uv.lock` to match the Dependabot Python update
             - Keep Python installs reproducible in local and CI workflows
           pathspec: ${{ env.LOCK_FILE_PATHSPEC }}
@@ -257,7 +256,6 @@ jobs:
           pr-title: "Refresh Python lock file"
           pr-body: |
             ## Summary
-            - Type: CI maintenance
             - Refresh `uv.lock` to match the Dependabot Python update
             - Keep Python installs reproducible in local and CI workflows
           pathspec: ${{ env.LOCK_FILE_PATHSPEC }}

@@ -61,11 +61,8 @@ function writeSegments(view, offset, segments) {
 }
 
 /**
- * Build a TrueType file carrying one table and nothing else.
- *
- * Hand-built rather than borrowed from a real face: the paths worth testing
- * here are the ones a real face never takes, and the shipped files cover the
- * one it does.
+ * Build a minimal TrueType file with synthetic subtables.
+ * Use synthetic data to exercise malformed and unsupported table formats.
  * @param {Array<{format: number, segments?: Array<[number, number]>}>} subtables - Subtables to write
  * @param {string} [tag] - Table tag, so a file with no cmap at all can be built
  * @returns {ArrayBuffer} Font bytes
@@ -343,11 +340,8 @@ describe("registerPdfFonts", () => {
     });
 
     it("stops reading a character map whose segment ends before it starts", async () => {
-        // A distinct guard from the ordering one above, and the only one of the
-        // three with nothing behind it. A segment that ends before it starts
-        // covers nothing either way, so the reading has to stop rather than
-        // carry on into the segments after it, which a corrupt table has given
-        // no reason to trust.
+        // A segment whose end precedes its start invalidates the remaining table.
+        // Do not claim coverage from segments after it.
         serveFont(
             buildFontFile([
                 {
@@ -364,10 +358,9 @@ describe("registerPdfFonts", () => {
         await registerPdfFonts(createDocStub());
         const coverage = readDrawableCoverage();
 
-        // A to C, read before the reading stopped. The backwards segment covers
-        // nothing whether or not the guard is there, so the segment after it is
-        // what tells the two apart: without the guard its lowercase range is
-        // claimed on the strength of a table already known to be broken.
+        // Keep the A-C range read before the invalid segment. The following
+        // lowercase range must be absent, which distinguishes an early stop
+        // from ignoring the invalid segment.
         expect(coverage.has("A".codePointAt(0))).toBe(true);
         expect(coverage.has("a".codePointAt(0))).toBe(false);
     });
@@ -390,9 +383,8 @@ describe("registerPdfFonts", () => {
     });
 
     it("falls back to Helvetica when a face is too short to read", async () => {
-        // Read before anything is registered, so a file that is not a font goes
-        // the way a file that never arrived does: a document drawn with bytes
-        // this cannot walk would not be much of a document either.
+        // Read font coverage before registration so invalid bytes select the
+        // Helvetica fallback without partial registration.
         serveFont(new Uint8Array([1, 2, 3]).buffer);
         const doc = createDocStub();
 

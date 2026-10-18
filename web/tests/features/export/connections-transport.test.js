@@ -170,17 +170,14 @@ describe("loadConnectionsData", () => {
     });
 
     it("returns nothing on the main thread when the file holds no rows", async () => {
-        // The cleaner reads a connections export with only its header quite
-        // happily, so an empty result is not a parse failure and has to be
-        // checked for on its own.
+        // Empty cleaned results are valid parse results. Check for zero rows separately.
         harness.uninstall();
 
         expect(await loadConnectionsData(EMPTY_CONNECTIONS_CSV)).toBeNull();
     });
 
     it("refuses the main-thread fallback for very large exports", async () => {
-        // Re-parsing this on the UI thread would freeze the page, which is the
-        // whole reason this transport exists.
+        // Keep parsing above the fallback size limit off the UI thread.
         harness.uninstall();
         const huge = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
 
@@ -228,15 +225,8 @@ describe("loadConnectionsData", () => {
     });
 
     it("falls back when a failure envelope names no request it was given", async () => {
-        // The worker answers under the request's own id when it read the request
-        // and the parse is what failed, and under id zero when it fell over
-        // before or outside of that. Only the first is evidence about the file.
-        // This one never touched the CSV, so the small export is still parsed
-        // here rather than dropped, which is what the test above pins for a
-        // failure the worker did attribute to its request.
-        //
-        // It settles at once either way: no timer is advanced, so a request left
-        // to sit out its watchdog fails this test.
+        // An unknown request id does not establish a parse failure for this file.
+        // Permit the small-file fallback and settle without advancing the timer.
         vi.useFakeTimers();
         const pending = loadConnectionsData(CONNECTIONS_CSV);
         replyToRequest({ success: false, error: "invalid request" }, 99);

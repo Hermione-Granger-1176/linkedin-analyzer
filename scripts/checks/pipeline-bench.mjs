@@ -1,19 +1,20 @@
 /*
- * End-to-end pipeline timing: read -> decode -> clean -> analytics, mirroring
- * the two worker flows on the real export. This is the headline regression
- * anchor for "upload -> analytics generation" speed.
+ * Time decoding, cleaning, and analysis-state construction for a real export.
+ * Read the source bytes once before timing, then report stage medians across
+ * the configured number of runs.
  *
- *   Insights  (analytics-worker): clean shares+comments -> AnalyticsEngine
- *             .compute -> .buildView(defaultFilters) -> .generateInsights
- *   Messages  (messages-worker):  clean messages+connections ->
- *             MessagesAnalytics.buildMessageState + .buildConnectionState
+ * The Insights stages clean shares and comments, then call AnalyticsEngine's
+ * compute, buildView, and generateInsights methods. The Messages stages clean
+ * messages and connections, then call MessagesAnalytics.buildMessageState and
+ * MessagesAnalytics.buildConnectionState.
  *
- * Decode mirrors upload.js (stream byte-buffer for >=5MB, else single decode).
+ * Files of at least 5 MiB use chunk preparation and concatenation before
+ * decodeBytes. This benchmark excludes disk reads, browser upload handling,
+ * worker startup and messaging, and rendering.
  *
- * Usage (prefer the Makefile):
+ * Usage:
  *   make bench                 # 5 runs (median)
  *   make bench runs=11
- *   node scripts/checks/pipeline-bench.mjs [runs]
  *
  * Requires your private LinkedIn export in data/input (never committed). The
  * script skips cleanly when those files are absent.
@@ -61,8 +62,8 @@ const DEFAULT_FILTERS = {
     shareType: "all",
 };
 
-// Large files include the production stream-concatenation cost, then both paths
-// call the production upload decoder so benchmark semantics cannot drift.
+// Include chunk preparation and concatenation for files of at least 5 MiB.
+// Both paths use the production decodeBytes function.
 function decodeNew(bytes) {
     let decodeInput = bytes;
     if (bytes.length >= STREAM_THRESHOLD) {
@@ -85,7 +86,7 @@ function median(times) {
     return s[Math.floor(s.length / 2)];
 }
 
-// Pre-load raw bytes once (the "file is on disk" starting point).
+// Read the source bytes once before timing any stages.
 const raw = {
     shares: await load("Shares.csv"),
     comments: await load("Comments.csv"),

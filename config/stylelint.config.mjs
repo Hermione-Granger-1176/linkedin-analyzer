@@ -1,11 +1,7 @@
 export default {
-    // Relative to config/, not to the repository root. Stylelint resolves
-    // ignoreFiles against the basedir, and `--config config/stylelint.config.mjs`
-    // with no `--config-basedir` makes that this file's own directory, so every
-    // pattern has to climb out of config/ first. Written root-relative, as they
-    // were, they resolved to config/node_modules, config/coverage and so on:
-    // the whole list matched nothing, and a local `make test-js` before
-    // `make lint-css` linted the coverage report.
+    // Stylelint resolves ignoreFiles relative to this config directory.
+    // Each pattern needs ../ to match repository directories. Without it,
+    // coverage reports and other generated files would be linted.
     ignoreFiles: [
         "../node_modules/**",
         "../.venv/**",

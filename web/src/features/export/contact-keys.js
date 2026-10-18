@@ -1,19 +1,15 @@
 /**
  * Self-detection tiebreak keys for the PDF export.
  *
- * No DOM, no storage, no worker globals, so the thread selection worker and
- * its transport's main-thread fallback share one copy of the arithmetic rather
- * than each keeping their own and drifting apart, exactly as they already
- * share `messages-parse.js`.
+ * The thread worker and main-thread fallback share this module. It has no DOM,
+ * storage, or worker-global dependencies.
  *
- * Used only as a self-detection tiebreak: an export holding one conversation
- * cannot say which of its two people is the account owner, but the account owner
- * does not appear in the connections list. A missing or unreadable connections
- * file leaves the tie unresolved.
+ * A single conversation cannot identify which participant owns the account.
+ * The owner is absent from the connections list, which can resolve that tie.
+ * A missing or unreadable connections file leaves it unresolved.
  *
- * Parsed rather than cleaned, unlike the connections dashboard: the cleaner
- * drops a row with no connection date, and somebody you are connected to is
- * still not you whether or not the export recorded when it happened.
+ * Use parsed rows because the cleaner drops rows without connection dates.
+ * Those rows can still identify participants who are not the account owner.
  */
 
 import { toCsvSource } from "../../shared/csv-source.js";

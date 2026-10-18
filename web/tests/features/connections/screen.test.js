@@ -346,13 +346,13 @@ describe("ConnectionsPage", () => {
         ConnectionsPage.init();
         await ConnectionsPage.onRouteChange({});
 
-        // Show tooltip first
+
         SketchCharts.getItemAt.mockReturnValue({ tooltip: "May: 2" });
         const canvas = document.getElementById("connectionGrowthChart");
         canvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10 }));
         expect(document.getElementById("chartTooltip").hidden).toBe(false);
 
-        // Now trigger mouseleave
+
         canvas.dispatchEvent(new MouseEvent("mouseleave"));
         expect(document.getElementById("chartTooltip").hidden).toBe(true);
     });
@@ -657,7 +657,7 @@ describe("ConnectionsPage", () => {
         await ConnectionsPage.onRouteChange({});
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Worker sends an empty result → hasData=false, dataReady=true
+        // An empty worker result sets hasData to false and dataReady to true.
         const processedId = workerInstance.postMessage.mock.calls[0][0].requestId;
         workerInstance.listeners.message[0]({
             data: {
@@ -671,7 +671,7 @@ describe("ConnectionsPage", () => {
             },
         });
 
-        // Second route change: dataReady=true, hasData=false → hits line 94
+        // Change the route with dataReady true and hasData false.
         AppRouter.getCurrentRoute.mockReturnValue({ name: "connections", params: {} });
         await ConnectionsPage.onRouteChange({});
 

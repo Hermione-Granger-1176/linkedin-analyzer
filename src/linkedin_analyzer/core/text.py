@@ -96,7 +96,7 @@ def is_missing(value: object) -> bool:
 def clean_shares_commentary(value: object) -> str:
     r"""Clean ShareCommentary field from LinkedIn Shares export.
 
-    Handles the double-double quote escaping pattern used in Shares.csv:
+    Handles the doubled-quote escaping pattern used in Shares.csv:
     - Removes leading/trailing quotes
     - Converts CSV line break patterns ("\\n") to actual newlines
     - Converts escaped quotes ("") to single quotes (")
@@ -130,7 +130,7 @@ def clean_comments_message(value: object) -> str:
 
     Handles the backslash-escaped quote pattern used in Comments.csv:
     - Converts backslash-escaped quotes (\\") to regular quotes (")
-    - Handles any double-double quote escaping as fallback
+    - Handles any doubled-quote escaping as fallback
     - Preserves line breaks
 
     Args:
@@ -147,7 +147,7 @@ def clean_messages_content(value: object) -> str:
 
     Handles common quote escaping patterns:
     - Converts backslash-escaped quotes (\\") to regular quotes (")
-    - Converts double-double quotes ("") to regular quotes (")
+    - Converts doubled quotes ("") to regular quotes (")
     - Preserves line breaks and unicode characters
 
     Args:

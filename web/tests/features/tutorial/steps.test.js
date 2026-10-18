@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { TutorialMiniTips, TutorialSteps } from "../../../src/features/tutorial/steps.js";
 
-// ---------------------------------------------------------------------------
+
 // Expected routes
-// ---------------------------------------------------------------------------
+
 
 const EXPECTED_ROUTES = ["home", "clean", "analytics", "connections", "messages", "insights"];
 
-// ---------------------------------------------------------------------------
+
 // Shape validators
-// ---------------------------------------------------------------------------
+
 
 /**
  * Assert that a single tutorial step has the required shape.
@@ -64,9 +64,9 @@ function assertMiniTipShape(tip, route) {
     expect(tip.body.length).toBeGreaterThan(0);
 }
 
-// ---------------------------------------------------------------------------
+
 // TutorialSteps, module-level
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialSteps", () => {
     it("is importable without error", () => {
@@ -109,9 +109,9 @@ describe("TutorialSteps", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialSteps, per-route entry counts
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialSteps entry counts", () => {
     it("home has 6 steps", () => {
@@ -139,9 +139,9 @@ describe("TutorialSteps entry counts", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialSteps, per-route shape checks
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialSteps step shapes", () => {
     for (const route of EXPECTED_ROUTES) {
@@ -163,9 +163,9 @@ describe("TutorialSteps step shapes", () => {
     }
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialSteps, spot-check known step content
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialSteps known content", () => {
     it("home first step is the welcome step", () => {
@@ -212,9 +212,9 @@ describe("TutorialSteps known content", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialSteps, the shared Save as PDF step
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialSteps Save as PDF step", () => {
     const PDF_STEP_ROUTES = ["home", "analytics"];
@@ -266,9 +266,9 @@ describe("TutorialSteps Save as PDF step", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialMiniTips, module-level
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialMiniTips", () => {
     it("is importable without error", () => {
@@ -314,9 +314,9 @@ describe("TutorialMiniTips", () => {
     });
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialMiniTips, per-route shape checks
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialMiniTips step shapes", () => {
     for (const route of EXPECTED_ROUTES) {
@@ -342,9 +342,9 @@ describe("TutorialMiniTips step shapes", () => {
     }
 });
 
-// ---------------------------------------------------------------------------
+
 // TutorialMiniTips, spot-check known tip content
-// ---------------------------------------------------------------------------
+
 
 describe("TutorialMiniTips known content", () => {
     it("home tip targets the upload hint", () => {

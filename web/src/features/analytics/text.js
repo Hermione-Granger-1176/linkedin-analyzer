@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics text normalization and topic extraction */
+/* LinkedIn Analyzer: Analytics text normalization and topic extraction */
 
 const STOP_WORDS = new Set([
     "the",

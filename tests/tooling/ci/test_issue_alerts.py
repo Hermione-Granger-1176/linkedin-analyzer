@@ -238,7 +238,7 @@ def test_sync_alert_issue_is_a_noop_when_recovery_finds_no_issue() -> None:
 
 
 def test_sync_alert_issue_ensures_the_label_before_looking_it_up() -> None:
-    """Recovering a repository that never failed cannot trip over a missing label."""
+    """Recovery succeeds when no previous alert created the label."""
     runner = FakeGh(
         [
             (has("label", "create"), completed_process(0, "")),

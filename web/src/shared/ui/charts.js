@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Hand-drawn Charts (Optimized) */
+/* Hand-drawn canvas charts. */
 
 import rough from "roughjs/bundled/rough.esm.js";
 

@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
-"""Audit the GitHub repository settings the release and review flow depends on.
+"""Audit GitHub repository settings used by releases and reviews.
 
-Branch protection, Actions policy, environment protection, release tag rules,
-and secret scanning are configured in the GitHub web UI, so they are the part
-of this repository that no test, lint, or review can see. They drift silently:
-a required check renamed out of the protection list, or push protection
-switched off, changes nothing locally and shows up only the next time it was
-supposed to stop something.
+Read branch protection, Actions policy, environments, release-tag rules, and
+secret-scanning settings from GitHub. Report differences from the expected
+configuration. Local source checks cannot establish those remote settings.
 
-This audit reads those settings back and reports the drift as a list. Reading
-branch protection, Actions policy, environment protection, and rulesets needs
-``administration: read`` and listing secrets needs ``secrets: read``, and
-``GITHUB_TOKEN`` can grant neither. Neither writeback App carries them either,
-deliberately, so ``audit-repo-settings.yml`` runs this on a third read-only App
-instead. It stays runnable by hand against a maintainer's own credentials,
-which is the faster way to check a setting you changed.
+The audit requires ``administration: read`` and ``secrets: read``. The scheduled
+workflow uses a separate audit App because GITHUB_TOKEN and the writeback Apps
+lack those permissions. Maintainers can also run the audit with their own
+credentials.
 
-The audit is deliberately fail-closed. A setting it cannot read is never
-reported as correct: an unreadable response ends the run with EXIT_CHECK_FAILED
-instead of an empty finding list.
+An unreadable setting ends the run with EXIT_CHECK_FAILED. It must not produce
+an empty finding list that could be mistaken for a successful audit.
 """
 
 from __future__ import annotations
@@ -183,12 +176,9 @@ def _fetch_protection(
 ) -> dict[str, object] | None:
     """Fetch branch protection, returning None when the branch has none.
 
-    A branch that exists but is unprotected answers with a 404, and so does a
-    branch that does not exist at all. Only the first is drift, and it is the
-    single worst drift this audit can find, so it becomes a finding. The second
-    means the audit was pointed somewhere wrong and must fail closed. GitHub
-    separates them by message and not by status, so the message is what is
-    matched, and anything else propagates.
+    GitHub returns HTTP 404 for both an unprotected branch and a missing branch.
+    The response message distinguishes them. An unprotected branch becomes a
+    finding. A missing branch or another error fails the check.
     """
     try:
         return _fetch_object(
@@ -407,15 +397,13 @@ def enabled_security_features(repository: dict[str, object]) -> set[str]:
 def extract_required_checks(protection: dict[str, object]) -> set[str]:
     """Return the required status check names from a branch protection payload.
 
-    GitHub reports the same list twice, as plain ``contexts`` and as ``checks``
-    entries pinned to an app id. Both are read so a repository configured
-    through either the old or the new API audits the same.
+    Read names from both the ``contexts`` list and the ``context`` fields in
+    the ``checks`` list. Ignore either field if it is not a list, while keeping
+    valid names from the other field. This avoids treating dictionary keys as
+    required check names.
 
-    Each must be a list before it is read. Iterating a dict yields its keys, so
-    a payload of the wrong shape would otherwise hand back check names that were
-    never actually required, which is the one direction this audit must never
-    fail in. Anything that is not a list contributes nothing, leaving every
-    expected check reported as missing.
+    Return an empty set if ``required_status_checks`` is missing or is not a
+    dictionary. The caller then reports every expected check as missing.
     """
     required = protection.get("required_status_checks")
     if not isinstance(required, dict):
@@ -717,16 +705,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def report_checked(reached_verdict: bool, *, env: Mapping[str, str] | None = None) -> None:
-    """Record whether the audit reached a verdict, for the calling workflow.
+    """Record whether the audit reached a verdict for the calling workflow.
 
-    The alert jobs pick between "settings drifted" and "the audit could not read
-    them" on this one bit, and it cannot travel as an exit code: `make` rewrites
-    every failing recipe's status to 2, so drift and an unreadable response
-    arrive identical to the workflow shell. This mirrors the same output in
-    ``scripts.ci.schedule_watchdog`` for the same reason.
-
-    Outside GitHub Actions the variable is unset and nothing is written, so the
-    everyday `make ci-audit-repo-settings` is unaffected.
+    Make converts failing recipe statuses to 2, so exit codes cannot distinguish
+    configuration drift from an API failure. The workflow reads this output to
+    select the alert type. Nothing is written outside GitHub Actions.
     """
     path = (os.environ if env is None else env).get(GITHUB_OUTPUT_ENV)
     if not path:

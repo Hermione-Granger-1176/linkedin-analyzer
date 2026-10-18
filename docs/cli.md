@@ -2,17 +2,17 @@
 
 `linkedin-analyzer` reads a LinkedIn CSV export and writes a formatted Excel workbook. The package supports Python 3.12 and newer.
 
-## Install the package
+## Installation
 
-Install the published package with:
+The published package is available from PyPI:
 
 ```bash
 pip install linkedin-analyzer
 ```
 
-For a repository checkout, run `make setup`, then use `make run-cli args="..."`. The Make target uses the repository virtual environment. Run `make install` when you need to refresh only the Python environment.
+In a repository checkout, `make setup` installs the development environment and `make run-cli args="..."` invokes its CLI. `make install` refreshes the Python environment alone. [Clean an export](getting-started.md) gives the first-run procedure.
 
-## Run a command
+## Commands
 
 Each single-file command reads one CSV and writes one workbook:
 
@@ -23,15 +23,15 @@ Each single-file command reads one CSV and writes one workbook:
 | `linkedin-analyzer messages`    | `data/input/messages.csv`    | `data/output/Messages.xlsx`    |
 | `linkedin-analyzer connections` | `data/input/Connections.csv` | `data/output/Connections.xlsx` |
 
-Run all four cleaners with:
+The `all` command runs all four cleaners:
 
 ```bash
 linkedin-analyzer all
 ```
 
-`all` returns exit code 1 when any file is missing or fails to process. Pass `--skip-missing` to skip only files that do not exist. A file that exists but is malformed still fails the run.
+`all` returns exit code 1 when any file is missing or fails to process. `--skip-missing` skips files that do not exist. A malformed file still fails the run.
 
-## Set input and output paths
+## Input and output paths
 
 Single-file commands accept `--input` and `--output`:
 
@@ -54,7 +54,7 @@ linkedin-analyzer all \
 
 ## Set global options
 
-Put global options before the command name.
+Global options precede the command name.
 
 | Option              | Default         | Description                                                                                |
 | ------------------- | --------------- | ------------------------------------------------------------------------------------------ |
@@ -79,9 +79,9 @@ The environment variables `LOG_LEVEL`, `LOG_FORMAT`, `LINKEDIN_ANALYZER_MAX_INPU
 
 When `--encoding` is omitted, the CLI tries BOM-aware UTF-8 and then applies the browser-compatible WHATWG Windows-1252 mapping to the fallback bytes. An explicit encoding is passed through unchanged, so `iso-8859-1` preserves its C1 code points instead of applying that mapping.
 
-## Set the data directory
+## Data directory
 
-Set `LINKEDIN_ANALYZER_DATA_DIR` to change the base directory used by the default paths:
+`LINKEDIN_ANALYZER_DATA_DIR` sets the base directory for default paths:
 
 ```bash
 LINKEDIN_ANALYZER_DATA_DIR=/srv/linkedin-data linkedin-analyzer all
@@ -89,7 +89,7 @@ LINKEDIN_ANALYZER_DATA_DIR=/srv/linkedin-data linkedin-analyzer all
 
 The CLI then reads from `/srv/linkedin-data/input/` and writes to `/srv/linkedin-data/output/`. Explicit `--input` and `--output` paths take precedence over the base directory.
 
-## Read the logs
+## Logs and exit codes
 
 Text logs use this shape:
 
@@ -101,7 +101,7 @@ JSON logs contain `timestamp`, `level`, `logger`, and `message`. Error records c
 
 The process returns 0 when the requested operation succeeds, 1 for a processing error, and 130 when the user interrupts it with Ctrl-C. Running the CLI without a command prints help and returns 0.
 
-## Use the Python API
+## Python API
 
 The package exports four cleaning functions and their configuration types:
 
@@ -122,6 +122,6 @@ The functions are `clean_shares`, `clean_comments`, `clean_messages`, and `clean
 
 The package also exports `CleanerConfig`, `ColumnConfig`, the four cleaner configuration types, and `__version__`. The package includes `py.typed` for type checker support.
 
-## Read the data rules
+## Related reference
 
 See [data formats](data-formats.md) for required columns, output columns, row filtering, encoding behavior, formula escaping, date conversion, and workbook formatting.

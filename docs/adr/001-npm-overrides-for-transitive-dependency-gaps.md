@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-01 **Status:** Superseded **Resolved:** 2026-06-06 **Deciders:** Aditya Kumar Darak
 
-This decision is superseded because both upstream dependency gaps have been resolved and the temporary overrides have been removed. The generic override checker remains available for any future overrides.
+Upstream resolved both dependency gaps on June 6, 2026, and the project removed these temporary overrides. The generic override checker remains available for later overrides. This record describes the dependency tree at that time.
 
 ## Context
 
@@ -36,20 +36,20 @@ Add two entries to `package.json` overrides:
 
 **Pros:**
 
-- npm's built-in, first-class mechanism for exactly this use case.
-- Zero code changes; same runtime behavior.
+- npm supports overrides without a separate dependency-management tool.
+- No application code changes or intended runtime changes.
 - Fixes the CVE and the peer-dep conflict immediately.
-- Removable the day upstream publishes a fix (one-line deletion each).
+- Each override can be removed once upstream dependency ranges accept a compatible fix.
 - Already used in this project for the same `serialize-javascript` issue.
 
 **Cons:**
 
 - Overrides must be reviewed when upstream packages release new versions.
-- Easy to forget they exist if not documented (this ADR addresses that).
+- Removal requires checking the upstream dependency ranges. This ADR records those conditions.
 
 ### Option B: Replace vite-plugin-pwa with a custom Vite plugin
 
-Write ~50 lines of custom code that builds the service worker and injects the precache manifest.
+Write a custom plugin that builds the service worker and injects the precache manifest.
 
 **Pros:**
 
@@ -58,7 +58,7 @@ Write ~50 lines of custom code that builds the service worker and injects the pr
 
 **Cons:**
 
-- We own the code; nobody else audits it.
+- Maintainers must review and maintain the custom plugin.
 - Must be maintained when Vite's plugin API or workbox module structure changes.
 - Loses community-maintained edge-case handling.
 - Higher long-term maintenance burden for a temporary upstream gap.
@@ -73,9 +73,9 @@ Fork the repo, update the peer dep, install from our fork.
 
 **Cons:**
 
-- Git-based npm dependencies are fragile (build from source required).
+- Git-based npm dependencies require building the package from source.
 - Must track upstream and rebase our fork.
-- More moving parts than an override for the same result.
+- Maintainers must manage the fork in addition to the dependency override policy.
 
 ### Option D: Defer vite 8 upgrade
 
@@ -94,7 +94,7 @@ Keep vite at v7 in this PR; bump only eslint, jsdom, and typescript.
 
 **Option A: npm overrides.**
 
-The overrides were temporary bridges while upstream caught up. They required zero code changes, fixed the security vulnerability, and carried the lowest maintenance burden.
+The temporary overrides addressed the vulnerability and peer dependency conflict without application code changes. They required less maintenance than a custom plugin or fork.
 
 ## Resolution
 
@@ -105,7 +105,7 @@ Both removal conditions are now satisfied:
 
 ## Consequences
 
-- `package.json` no longer contains an `overrides` field.
+- Removing these overrides removed the `overrides` field from `package.json` at the time of resolution.
 - `make check-overrides` exits successfully when no overrides are configured and remains available as a generic policy check.
 - Future overrides require their own documented rationale and removal criteria.
 

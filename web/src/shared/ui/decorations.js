@@ -75,13 +75,9 @@ function handleResize() {
 }
 
 /**
- * Draw the background decorations and keep them in step with the theme and the
- * viewport. The colors and the fill-versus-outline treatment both come from the
- * active theme, so a toggle has to repaint the canvas or the doodles keep the
- * palette they were born with, and the canvas is sized to the window, so a
- * resize has to repaint it or the doodles stay at the old size, stretched.
- * Registering the same listener twice is ignored, so calling this more than once
- * never stacks up redraws.
+ * Draw theme-colored background decorations and register update listeners.
+ * Redraw on theme changes and viewport resize. Repeated initialization
+ * does not add duplicate listeners.
  */
 export function initDecorations() {
     document.addEventListener("themechange", draw);

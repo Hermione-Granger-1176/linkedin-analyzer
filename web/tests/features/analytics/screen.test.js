@@ -705,13 +705,13 @@ describe("AnalyticsPage", () => {
         AnalyticsPage.init();
         await AnalyticsPage.onRouteChange({});
 
-        // Show tooltip first
+
         SketchCharts.getItemAt.mockReturnValue({ type: "topic", tooltip: "Topic: AI", key: "AI" });
         const canvas = document.getElementById("topicsChart");
         canvas.dispatchEvent(new MouseEvent("mousemove", { clientX: 20, clientY: 20 }));
         expect(document.getElementById("chartTooltip").hidden).toBe(false);
 
-        // Now trigger mouseleave
+
         canvas.dispatchEvent(new MouseEvent("mouseleave"));
         expect(document.getElementById("chartTooltip").hidden).toBe(true);
     });
@@ -813,12 +813,8 @@ describe("AnalyticsPage", () => {
     });
 
     it("week chart click case is covered by month click test", () => {
-        // The week code path in handleChartClick (src/analytics-ui.js lines 748-752)
-        // is structurally identical to the month case and shares the same
-        // syncRouteFromFilters() call. Coverage for that branch is achieved by
-        // the 'updates route params when chart interactions toggle filters' test
-        // which exercises the same post-switch code path. This test records that
-        // the week uses monthKey to set monthFocus.
+        // The weekly click uses monthKey for monthFocus and shares route
+        // synchronization with the monthly click.
         const weekItem = { type: "week", key: "week-4", monthKey: "2024-03" };
         expect(weekItem.monthKey || weekItem.key).toBe("2024-03");
     });
@@ -924,13 +920,10 @@ describe("AnalyticsPage", () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
-        // onRouteChange sets isApplyingRouteParams during applyFiltersFromRoute
-        // The guard on line 903-905 prevents double-writing during route application.
-        // We verify no extra setParams call happens when filters are applied from route.
+        // Applying route filters must not write those filters back to the router.
         AppRouter.setParams.mockClear();
         await AnalyticsPage.onRouteChange({ range: "3m" });
-        // During onRouteChange, syncRouteFromFilters is called but isApplyingRouteParams=true
-        // so the early return (line 904) prevents setParams from being called
+        // isApplyingRouteParams prevents setParams during route application.
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 

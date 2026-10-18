@@ -200,9 +200,9 @@ describe("UploadPage", () => {
         hideCatcher();
     });
 
-    // -------------------------------------------------------------------------
-    // Existing tests (preserved exactly)
-    // -------------------------------------------------------------------------
+
+
+
 
     it("shows error hint for non-CSV uploads", async () => {
         UploadPage.init();
@@ -889,11 +889,11 @@ describe("UploadPage", () => {
         expect(navigator.storage.persist).toHaveBeenCalledTimes(1);
     });
 
-    // -------------------------------------------------------------------------
-    // New tests, uncovered paths
-    // -------------------------------------------------------------------------
 
-    // --- Worker error event (handleWorkerError) ------------------------------
+
+
+
+
 
     it("shows error hint and resets processing state on worker error event", async () => {
         UploadPage.init();
@@ -995,7 +995,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain("keeps failing");
     });
 
-    // --- Worker message type 'error' (handleWorkerMessage error branch) ------
+
 
     it("handles error message type from worker without jobId (does not reset all state)", async () => {
         UploadPage.init();
@@ -1065,7 +1065,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- Worker message type 'restored' (no-op branch) ----------------------
+
 
     it("silently handles restored message type from worker", async () => {
         UploadPage.init();
@@ -1077,7 +1077,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toBeDefined();
     });
 
-    // --- Worker message: fileProcessed with no fileType (error path) --------
+
 
     it("shows error hint when fileProcessed payload has no fileType", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -1411,7 +1411,7 @@ describe("UploadPage", () => {
         });
     });
 
-    // --- Progress message handling -------------------------------------------
+
 
     it("updates progress bar on progress message from worker", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -1465,7 +1465,7 @@ describe("UploadPage", () => {
             data: { type: "progress", payload: { percent: 0.3 } },
         });
 
-        // Nothing should explode
+
         expect(document.getElementById("progressOverlay")).toBeTruthy();
     });
 
@@ -1477,11 +1477,11 @@ describe("UploadPage", () => {
             data: { type: "progress", payload: {} },
         });
 
-        // No throw, no change
+
         expect(document.getElementById("progressOverlay")).toBeTruthy();
     });
 
-    // --- animateProgressTo / drawProgressBar (canvas drawing) ----------------
+
 
     it("draws progress bar on canvas during animation", async () => {
         UploadPage.init();
@@ -1572,7 +1572,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- scheduleAnalyticsWorkerPrime with priority: 'immediate' ------------
+
 
     it("primes analytics worker immediately when shares file is processed", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -1631,7 +1631,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- scheduleAnalyticsWorkerPrime idle path (setTimeout fallback) -------
+
 
     it("schedules prime via setTimeout when requestIdleCallback is unavailable", async () => {
         // The idle prime path now runs only on a worker restart (the page load no
@@ -1682,7 +1682,7 @@ describe("UploadPage", () => {
         vi.useRealTimers();
     });
 
-    // --- scheduleAnalyticsWorkerPrime via requestIdleCallback ----------------
+
 
     it("schedules prime via requestIdleCallback when available", async () => {
         // The idle prime path now runs only on a worker restart. Use a deferred
@@ -1734,7 +1734,7 @@ describe("UploadPage", () => {
         expect(restoreCall).toBeTruthy();
     });
 
-    // --- scheduleAnalyticsWorkerPrime: same signature → no re-prime ----------
+
 
     it("does not re-prime worker when signature is unchanged", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -2502,7 +2502,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- Job timeout watchdog ------------------------------------------------
+
 
     it("restarts the worker and shows timeout hint when job times out", async () => {
         // Use fake timers to control the 45-second job timeout.
@@ -2650,7 +2650,7 @@ describe("UploadPage", () => {
         vi.useRealTimers();
     });
 
-    // --- restoreState: files already in IDB on load --------------------------
+
 
     it("restores file status from storage on load and enables analytics button", async () => {
         Storage.getAllFiles.mockResolvedValue([
@@ -2693,7 +2693,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("openAnalyticsBtn").disabled).toBe(true);
     });
 
-    // --- onRouteChange after initialization ----------------------------------
+
 
     it("onRouteChange syncs from cache when already initialized and restored", async () => {
         Storage.getAllFiles.mockResolvedValue([
@@ -2736,11 +2736,11 @@ describe("UploadPage", () => {
         UploadPage.init();
         UploadPage.onRouteChange();
         await new Promise((resolve) => setTimeout(resolve, 0));
-        // Should not throw
+
         expect(document.getElementById("uploadHint")).toBeTruthy();
     });
 
-    // --- openAnalyticsBtn navigates to analytics route ----------------------
+
 
     it("openAnalyticsBtn navigates to analytics when enabled", async () => {
         Storage.getAllFiles.mockResolvedValue([
@@ -2769,7 +2769,7 @@ describe("UploadPage", () => {
         expect(AppRouter.navigate).not.toHaveBeenCalled();
     });
 
-    // --- Drop zone keyboard (Enter / Space) ----------------------------------
+
 
     it("drop zone keydown Enter triggers file input click", async () => {
         UploadPage.init();
@@ -2801,7 +2801,7 @@ describe("UploadPage", () => {
         expect(clickSpy).toHaveBeenCalled();
     });
 
-    // --- Multiple CSV files at once -----------------------------------------
+
 
     it("processes multiple CSV files dropped at once", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -2843,9 +2843,9 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- FileReader error branch ---------------------------------------------
 
-    // --- oversize file warning -----------------------------------------------
+
+
 
     it("warns about large files (>25MB) but still processes them", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -2881,7 +2881,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- No worker available: shows error hint --------------------------------
+
 
     it("shows hint when worker is unavailable during file upload", async () => {
         // Disable Worker so initWorker() sets worker = null
@@ -2917,7 +2917,7 @@ describe("UploadPage", () => {
         globalThis.Worker = savedWorker;
     });
 
-    // --- updateStatus hint state matrix --------------------------------------
+
 
     it('shows "Files loaded. Open Messages tab" hint when only messages file present', async () => {
         Storage.getAllFiles.mockResolvedValue([
@@ -2957,7 +2957,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain("Analytics are ready");
     });
 
-    // --- offline banner -------------------------------------------------------
+
 
     it("shows offline banner when navigator.onLine is false", async () => {
         Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
@@ -2970,7 +2970,7 @@ describe("UploadPage", () => {
 
         expect(document.getElementById("offlineBanner").hidden).toBe(false);
 
-        // Restore
+
         Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
     });
 
@@ -2984,7 +2984,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("offlineBanner").hidden).toBe(true);
     });
 
-    // --- syncStatusFromCache fallback to restoreState ------------------------
+
 
     it("onRouteChange falls back to restoreState when cache is missing analyticsBase", async () => {
         Storage.getAllFiles.mockResolvedValue([
@@ -3014,7 +3014,7 @@ describe("UploadPage", () => {
         ).toBe(true);
     });
 
-    // --- Session cleanup promise awareness -----------------------------------
+
 
     it("waits for session cleanup promise on window before restoring", async () => {
         let resolveCleanup;
@@ -3038,7 +3038,7 @@ describe("UploadPage", () => {
         delete window.__linkedinAnalyzerSessionCleanupPromise;
     });
 
-    // --- drawProgressBar: no-ops when canvas has no dimensions ---------------
+
 
     it("drawProgressBar does not throw when canvas has zero dimensions", async () => {
         // Replace canvas with one that returns zero bounds
@@ -3077,17 +3077,17 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // --- window resize redraws progress bar ----------------------------------
+
 
     it("redraws progress bar on window resize", async () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Should not throw
+
         window.dispatchEvent(new Event("resize"));
     });
 
-    // --- init() is idempotent ------------------------------------------------
+
 
     it("init() is idempotent, calling twice does not duplicate listeners", async () => {
         UploadPage.init();
@@ -3100,7 +3100,7 @@ describe("UploadPage", () => {
         expect(Storage.clearAll).toHaveBeenCalledTimes(1);
     });
 
-    // --- file with .csv extension but no MIME type ---------------------------
+
 
     it("accepts file with csv extension even when MIME type is empty", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3138,7 +3138,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- Drop with null dataTransfer -----------------------------------------
+
 
     it("does not throw when drop zone receives a file with no dataTransfer", () => {
         UploadPage.init();
@@ -3147,13 +3147,13 @@ describe("UploadPage", () => {
         Object.defineProperty(dropEvt, "dataTransfer", { value: null });
         Object.defineProperty(dropEvt, "preventDefault", { value: vi.fn() });
 
-        // Should not throw
+
         expect(() => {
             document.getElementById("multiDropZone").dispatchEvent(dropEvt);
         }).not.toThrow();
     });
 
-    // --- startProgressCrawl runs while jobs are active ----------------------
+
 
     it("startProgressCrawl advances progress while a job is active", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3209,7 +3209,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- Worker constructor throws (line 111-112) ----------------------------
+
 
     it("shows server hint when Worker constructor throws and a file is uploaded", async () => {
         const originalWorker = globalThis.Worker;
@@ -3242,7 +3242,7 @@ describe("UploadPage", () => {
         globalThis.Worker = originalWorker;
     });
 
-    // --- restoreState rejects (line 184) -------------------------------------
+
 
     it("shows restore error hint when restoreState promise rejects", async () => {
         Storage.getAllFiles.mockRejectedValue(new Error("IDB fail"));
@@ -3253,7 +3253,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toContain("Unable to restore");
     });
 
-    // --- Session.waitForCleanup rejection handling ---------------------------
+
 
     it("does not throw when session cleanup promise rejects", async () => {
         const rejectingPromise = Promise.reject(new Error("cleanup fail"));
@@ -3266,12 +3266,12 @@ describe("UploadPage", () => {
 
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
-        // No uncaught exception = pass
+
 
         delete window.__linkedinAnalyzerSessionCleanupPromise;
     });
 
-    // --- warnIfStorageLow with null estimate (line 329) ----------------------
+
 
     it("does not show low storage hint when estimate returns null", async () => {
         navigator.storage = {
@@ -3311,7 +3311,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- handleFileProcessedMessage catch (line 432) -------------------------
+
 
     it("shows save error hint when Storage.saveFile rejects", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3405,7 +3405,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- encoding fallback (UTF-8 -> windows-1252) ---------------------------
+
 
     it("posts the File to the worker and shows the fallback hint the worker reports", async () => {
         UploadPage.init();
@@ -3462,7 +3462,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").classList.contains("is-error")).toBe(true);
     });
 
-    // --- consumePendingFile by fileName (lines 564-568) ----------------------
+
 
     it("matches pending file by fileName when jobId is null", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3512,7 +3512,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- clearAllJobTimeouts with active timeouts (lines 904-909) ------------
+
 
     it("clears active job timeouts when worker error occurs during processing", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3557,7 +3557,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- getStoredFilesSnapshot cache hit (line 542) -------------------------
+
 
     it("uses cached files snapshot when available in DataCache", async () => {
         const cachedFiles = [{ type: "shares", name: "Shares.csv", rowCount: 3, updatedAt: 500 }];
@@ -3584,7 +3584,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint").textContent).toBeTruthy();
     });
 
-    // --- window-level dragover and drop handlers (lines 130-131) -------------
+
 
     it("window dragover and drop events are handled without errors", () => {
         UploadPage.init();
@@ -3601,7 +3601,7 @@ describe("UploadPage", () => {
         expect(preventSpy2).toHaveBeenCalled();
     });
 
-    // --- startProgressCrawl stale session check (lines 997-999) -------------
+
 
     it("startProgressCrawl stops when session ID changes", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3647,14 +3647,14 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // No infinite loop = pass
+
         if (triggerLoad) {
             triggerLoad();
         }
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- scheduleAnalyticsWorkerPrime immediate path (lines 790-792) ---------
+
     // Covers the case where no prior prime was scheduled (empty signature),
     // and an immediate-priority prime fires clearPrimeSchedule + primeNow.
 
@@ -3721,7 +3721,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- clearPrimeSchedule with active timer (lines 831-832) ----------------
+
     // Schedule a prime via setTimeout, then trigger immediate which clears it.
 
     it("clears active prime timer when immediate prime is triggered", async () => {
@@ -3825,7 +3825,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- animateProgressTo stale session check (lines 955-957) ---------------
+
 
     it("animateProgressTo stops when session ID changes mid-animation", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -3942,7 +3942,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- init() with missing DOM elements (lines 80, 91, 92) -----------------
+
 
     it("init() returns early when required DOM elements are missing", async () => {
         document.body.innerHTML = "";
@@ -3955,10 +3955,10 @@ describe("UploadPage", () => {
         // UploadPage was loaded with valid DOM, but let's test onRouteChange
         // when not yet initialized, triggering init() which finds the DOM
         UploadPage.onRouteChange();
-        // No exception = pass
+
     });
 
-    // --- syncStatusFromCache with full cache (lines 228, 748) ----------------
+
 
     it("syncStatusFromCache shows analytics-ready state from full cache", async () => {
         // First, init and restore state
@@ -3996,7 +3996,7 @@ describe("UploadPage", () => {
         expect(document.getElementById("openAnalyticsBtn").disabled).toBe(false);
     });
 
-    // --- getStoredFilesSnapshot cache hit (line 542) -------------------------
+
 
     it("getStoredFilesSnapshot uses DataCache when files are cached", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4059,7 +4059,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- job timeout callback when job already complete (line 877) -----------
+
 
     it("job timeout callback returns early when job was already completed", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4113,7 +4113,7 @@ describe("UploadPage", () => {
         // Advance fake time past the job timeout (45 seconds)
         vi.advanceTimersByTime(50000);
 
-        // The timeout callback fires, but the job is already done → early return at line 877
+        // The timeout callback fires, but the job is already done → early return
         // No error should occur
         await vi.runAllTimersAsync();
 
@@ -4121,7 +4121,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- line 118: dropZone click triggers fileInput.click() ------------------
+
 
     it("clicking the drop zone triggers file input click", async () => {
         UploadPage.init();
@@ -4139,7 +4139,7 @@ describe("UploadPage", () => {
         expect(clicked).toBe(true);
     });
 
-    // --- line 135: openAnalyticsBtn disabled guard ----------------------------
+
     // jsdom does not fire click events on disabled buttons, so dispatch the
     // event directly on the element using a non-trusted Event to bypass that.
 
@@ -4155,11 +4155,11 @@ describe("UploadPage", () => {
         btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // navigate should NOT have been called (early return on line 135)
+        // navigate should NOT have been called (early return)
         expect(AppRouter.navigate).not.toHaveBeenCalled();
     });
 
-    // --- Session.waitForCleanup rejection handling ---------------------------
+
     // Set a rejecting session cleanup promise before the module is imported so
     // Session.waitForCleanup() swallows it and restoreState continues.
 
@@ -4182,11 +4182,11 @@ describe("UploadPage", () => {
         // Should still render a hint (no unhandled rejection)
         expect(document.getElementById("uploadHint")).toBeTruthy();
 
-        // Clean up
+
         delete window.__linkedinAnalyzerSessionCleanupPromise;
     });
 
-    // --- line 212: updateOfflineBanner early return when element missing ------
+
     // Remove offlineBanner from DOM BEFORE the window 'offline' event fires so
     // elements.offlineBanner is null, hitting the early-return on line 212.
 
@@ -4213,10 +4213,10 @@ describe("UploadPage", () => {
 
         // Fire offline event, should not throw even though element is gone
         window.dispatchEvent(new Event("offline"));
-        // No assertion needed, absence of error is the pass condition
+
     });
 
-    // --- line 391: default case in worker message switch ----------------------
+
 
     it("handleWorkerMessage ignores unknown message types", async () => {
         UploadPage.init();
@@ -4231,9 +4231,9 @@ describe("UploadPage", () => {
         expect(document.getElementById("uploadHint")).toBeTruthy();
     });
 
-    // --- line 513: syncTypeSpecificFileCache returns when file not found ------
+
     // Upload a 'messages' file but Storage.getAllFiles returns NO messages file
-    // so files.find(…) returns undefined, hitting the early return at line 512-513.
+    // so files.find(…) returns undefined, hitting the early return .
 
     it("syncTypeSpecificFileCache returns early when file type not in stored files", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4284,7 +4284,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- lines 555-557: consumePendingFile by jobId ---------------------------
+
     // Capture the jobId from the worker postMessage and echo it back so that
     // pendingFiles.has(jobId) is true, covering the jobId-lookup branch.
 
@@ -4323,7 +4323,7 @@ describe("UploadPage", () => {
         expect(addFileCall).toBeTruthy();
         const jobId = addFileCall[0].payload.jobId;
 
-        // Worker echoes back with the same jobId → hits lines 555-557
+        // Match the worker reply to the pending upload by jobId.
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -4343,7 +4343,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- line 561: consumePendingFile returns null when fileName is empty -----
+
     // Send a 'fileProcessed' message where jobId is null AND fileName is ''
     // so both the jobId branch and the fileName-loop are skipped.
 
@@ -4351,9 +4351,7 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // No pending files, jobId null, fileName ''
-        // handleFileProcessedMessage → consumePendingFile(null,'') → line 560-561 → null
-        // → completeJob branch at line 412-414 runs, no error
+        // Process a reply with no pending upload, job ID, or file name.
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -4366,11 +4364,11 @@ describe("UploadPage", () => {
             },
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
-        // No crash = pass
+
         expect(document.getElementById("uploadHint")).toBeTruthy();
     });
 
-    // --- resolveJobId / resolvePendingJobIdByFileName ------------------------
+
     // Upload a file so pendingFiles has an entry, then send a 'fileProcessed'
     // with jobId=null but fileName matching the pending entry.
 
@@ -4415,7 +4413,7 @@ describe("UploadPage", () => {
 
         // Worker sends fileProcessed with jobId=null but matching fileName
         // pendingFiles still has the entry (readAsText hasn't completed yet),
-        // so resolvePendingJobIdByFileName finds it (lines 630-631)
+        // so resolvePendingJobIdByFileName finds it
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -4436,7 +4434,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- line 655: updateFileStatus early return when elements are missing ----
+
     // Remove all .file-status-item elements so STATUS_ITEMS has null item/label
     // references; updateFileStatus should return early without throwing.
 
@@ -4461,10 +4459,10 @@ describe("UploadPage", () => {
         // init() and updateStatus() should not throw even with null item/label
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 20));
-        // No crash = pass
+
     });
 
-    // --- primeAnalyticsWorkerNow guard: no worker → early return -------------
+
 
     it("primeAnalyticsWorkerNow returns early when worker is null", async () => {
         // Force Worker constructor to throw so worker stays null
@@ -4489,12 +4487,11 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // No worker → scheduleAnalyticsWorkerPrime returns early at line 763
-        // (no crash = pass; line 816 would be hit if somehow payload existed)
+        // Initialization tolerates an unavailable worker.
         globalThis.Worker = savedWorker;
     });
 
-    // --- lines 831-832: clearPrimeSchedule clears active setTimeout -----------
+
     // Use fake timers so the setTimeout is pending when clearPrimeSchedule runs.
 
     it("clearPrimeSchedule cancels a pending setTimeout prime", async () => {
@@ -4548,7 +4545,7 @@ describe("UploadPage", () => {
         vi.useRealTimers();
     });
 
-    // --- line 835: clearPrimeSchedule cancels a pending requestIdleCallback ---
+
 
     it("clearPrimeSchedule cancels a pending idle callback prime", async () => {
         setupUploadDom();
@@ -4590,7 +4587,7 @@ describe("UploadPage", () => {
         cancelIdleSpy.mockRestore();
     });
 
-    // --- lines 935, 956-957: stale session in hideProgressOverlay / animateProgressTo ---
+
     // Start two overlapping uploads so the first session becomes stale while
     // animateProgressTo is running, triggering the stale-session early exit.
 
@@ -4639,7 +4636,7 @@ describe("UploadPage", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         // Complete file1, hideProgressOverlay tries to animate but session is now 2
-        // so the callback at line 935 checks sessionId !== progressSessionId → return
+        // so the callback  checks sessionId !== progressSessionId → return
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -4657,7 +4654,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- lines 998-999: startProgressCrawl returns early when session stale ---
+
 
     it("startProgressCrawl stops when session ID changes", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4702,8 +4699,8 @@ describe("UploadPage", () => {
         input.dispatchEvent(new Event("change"));
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // crawl() at lines 997-999 will see sessionId !== progressSessionId → return
-        // No infinite loop = pass
+        // crawl()  will see sessionId !== progressSessionId → return
+
         if (resolvers[0]) {
             resolvers[0]();
         }
@@ -4713,7 +4710,7 @@ describe("UploadPage", () => {
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- lines 1003-1004: startProgressCrawl exits when no active jobs --------
+
 
     it("startProgressCrawl exits when activeJobs is empty", async () => {
         const originalFileReader = globalThis.FileReader;
@@ -4762,12 +4759,12 @@ describe("UploadPage", () => {
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // No infinite loop = pass.
+
         expect(document.getElementById("progressOverlay")).toBeTruthy();
         globalThis.FileReader = originalFileReader;
     });
 
-    // --- line 1035: drawProgressBar returns early when canvas is null ---------
+
 
     it("drawProgressBar returns early when progressCanvas element is missing", async () => {
         // Remove canvas before module init so elements.progressCanvas is null
@@ -4787,14 +4784,14 @@ describe("UploadPage", () => {
         Storage.getAnalytics.mockResolvedValue(null);
         DataCache.get.mockImplementation(() => null);
 
-        // init() → restoreState() → updateStatus() → drawProgressBar(0)
-        // Since canvas is null, line 1035 returns immediately without error
+        // Initialize without a progress canvas. Progress drawing must tolerate
+        // the missing element.
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 20));
-        // No crash = pass
+
     });
 
-    // --- init/restore guards --------------------------------------------------
+
 
     it("warns when browser storage is unavailable at init", async () => {
         Storage.isAvailable = false;

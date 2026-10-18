@@ -1,22 +1,11 @@
 /**
- * Save as PDF orchestrator.
+ * Manage the Save as PDF button, confirmation dialog, and export run.
  *
- * Owns the global export button and its confirmation dialog, and runs the
- * export: jsPDF and the export's own modules are imported lazily so they stay
- * out of the initial bundle, the palette and fonts are gathered, the layout
- * engine draws the document, and the result is downloaded through the same
- * anchor/object-URL dance the Excel export uses.
+ * Load jsPDF and the export runtime on demand. Collect data, register fonts,
+ * render the document, and download it through a temporary object URL.
  *
- * The button is on every screen, so this module is on every page load and holds
- * only what that costs: the dialog and an availability check. Everything a run
- * needs is behind the dynamic
- * import in `loadExportRuntime`.
- *
- * Contact names, and message bodies, can end up inside the downloaded file, each
- * by its own explicit opt-in. Nothing about either is ever logged, reported or
- * sent anywhere: every catch on this path discards the value it caught and
- * reports a freshly built error, so no user text can reach the telemetry SDK
- * even before it scrubs an event.
+ * Names and message contents require separate opt-ins. Discard caught values
+ * and report fixed errors because failures may contain uploaded data.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
@@ -165,13 +154,9 @@ export const PdfExport = (() => {
     }
 
     /**
-     * Enable or disable the trigger, with a reason a screen reader can read.
-     *
-     * `aria-disabled` rather than the `disabled` property: a natively disabled
-     * button leaves the tab order entirely, so the reason for it being
-     * unavailable - which lives on the button - can never be reached by the
-     * people who most need it. The button stays focusable and `open()` refuses
-     * to act on it instead.
+     * Update export availability and its accessible explanation.
+     * Keep the button focusable with aria-disabled so keyboard users can read
+     * why it is unavailable. open() checks availability before opening the dialog.
      * @returns {Promise<void>}
      */
     async function refreshAvailability() {
@@ -256,12 +241,9 @@ export const PdfExport = (() => {
     }
 
     /**
-     * Report whether a recorded node is still worth handing focus back to.
-     *
-     * Every element has a .focus, including <body> - which browsers that do not
-     * focus a clicked button leave as the activeElement open() recorded, and
-     * which focus() silently refuses. Testing for it dropped the user at the top
-     * of the page instead of back on the button they came from.
+     * Check whether focus can return to the recorded element.
+     * Exclude body, which may remain active after a pointer click and does not
+     * provide a useful focus destination.
      * @param {HTMLElement|null} node - Node recorded when the dialog opened
      * @returns {node is HTMLElement} True when focusing it would land somewhere useful
      */
@@ -272,14 +254,9 @@ export const PdfExport = (() => {
     }
 
     /**
-     * Abandon the running export and put the dialog back in its resting state.
-     *
-     * Every worker the export can be in is ended, since bumping the token alone
-     * would stop the result being used but leave a worker running, and holding
-     * the user's whole export, until it answered. Only when the run had got as
-     * far as fetching the modules they live in: a cancellation before or during
-     * that fetch has no worker to end, and pulling the chunk down to call four
-     * no-ops would spend exactly the download the boundary exists to avoid.
+     * Cancel the active export and reset the dialog.
+     * Terminate workers only if their runtime is already loaded. Cancelling
+     * before the runtime arrives must not fetch it solely for cleanup.
      */
     function cancelGeneration() {
         generationToken += 1;
@@ -360,15 +337,9 @@ export const PdfExport = (() => {
     }
 
     /**
-     * Toggle the dialog's busy state.
-     *
-     * Cancel stays enabled throughout. Disabling every control would leave the
-     * dialog with nothing matching `FOCUSABLE_SELECTOR`, and `handleKeydown`
-     * gives up on trapping Tab when there is nothing to trap - so focus would
-     * walk out of an `aria-modal` dialog into the page behind it, during the
-     * dialog's longest-lived state. Generation progress is announced through a
-     * polite live region rather than through the disabled button's label, which
-     * assistive technology is not obliged to re-read.
+     * Set the dialog's busy state while keeping Cancel enabled.
+     * Cancel provides a focus target for the Tab trap. Announce progress through
+     * the live region because a disabled button's label may not be reread.
      * @param {boolean} busy - Whether an export is running
      */
     function setBusy(busy) {
@@ -416,8 +387,8 @@ export const PdfExport = (() => {
             document.body.appendChild(link);
             link.click();
         } finally {
-            // A browser that refuses the synthetic click still leaves the anchor
-            // in the document and the object URL holding the whole PDF in memory.
+            // Remove the temporary link and release its object URL even if
+            // clicking the link fails.
             if (link.parentNode) {
                 link.remove();
             }
@@ -504,7 +475,7 @@ export const PdfExport = (() => {
             runtime.renderPdfDocument(doc, data, { palette, fonts });
             download(doc.output("blob"), buildFilename(generatedAt));
 
-            // Clearing busy first is load-bearing: close() cancels a generation
+            // Clear busy before close(), which cancels a generation
             // it still believes is running, so the other order would terminate
             // both workers and bump the token for a run that completed download,
             // making the finally below skip hiding its own overlay.
@@ -542,9 +513,8 @@ export const PdfExport = (() => {
             }
         }
 
-        // Outside the try, and only for a run that got as far as downloading:
-        // the moment marks a file the user actually has, and decoration that
-        // threw inside the try would be reported to them as a failed export.
+        // Celebrate after triggering the download. Keep this outside the catch
+        // so a celebration error does not mark the export as failed.
         if (downloaded) {
             celebrateStaple();
         }

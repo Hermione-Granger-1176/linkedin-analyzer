@@ -560,8 +560,7 @@ describe("MessagesAnalytics", () => {
     });
 
     it("parseDateOnly returns null when date string has wrong format", () => {
-        // Test the false branch where match fails (line 489 is the NaN path,
-        // line 484-486 is the no-match path - both return null)
+        // Reject dates outside the required YYYY-MM-DD format.
         expect(MessagesAnalytics.parseDateOnly("2025/01/01")).toBeNull();
         expect(MessagesAnalytics.parseDateOnly("01-01-2025")).toBeNull();
     });

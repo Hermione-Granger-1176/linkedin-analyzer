@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """Report workspace health for ``make status``.
 
-This backs the ``status`` Make target. It must run before ``make setup`` has
-provisioned a virtual environment, so it imports only the standard library and
-shells out (git, uv, npm, and the venv helper) exactly like the previous inline
-shell recipe, guarding each call on availability.
-
-The sections mirror that recipe: Git, Python plus lock currency, Node plus lock
-currency, the web build output, and the pull-request overview.
+Use the standard library so the command works before environment setup.
+Check tool availability before invoking Git, uv, npm, or the PR helper.
+Report Git state, Python and Node dependencies and locks, the web build,
+and the current pull request.
 """
 
 from __future__ import annotations
@@ -51,13 +48,10 @@ def _succeeds(
     run_fn: Runner,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str] | None:
-    """Return the completed process, or ``None`` when the tool cannot launch.
+    """Return the completed process, or None if the tool cannot launch.
 
-    Mirrors the shell ``cmd >/dev/null 2>&1 && ... || ...`` idiom, where a
-    command that cannot even launch (missing, not executable, wrong format)
-    counts as a plain failure. ``OSError`` covers every such launch error. Every
-    subprocess in this module routes through here so no launch failure can hard
-    fail ``make status``.
+    Catch OSError so missing, non-executable, or invalid executables become status
+    results rather than exceptions that stop the workspace report.
     """
     try:
         return run_fn(cmd, cwd=cwd, env=env)

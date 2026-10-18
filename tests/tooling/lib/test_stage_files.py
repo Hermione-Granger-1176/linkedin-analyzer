@@ -42,7 +42,7 @@ def test_collect_paths_preserves_spaced_legacy_value_when_it_is_one_path() -> No
 
 
 def test_collect_paths_trims_outer_whitespace_before_exact_probe() -> None:
-    """Outer list whitespace is ignored before deciding whether files names one path."""
+    """The exact-path probe receives STAGE_FILES without outer whitespace."""
     expected = "one file.txt"
     probed: list[str] = []
 

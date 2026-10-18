@@ -33,11 +33,9 @@
 /**
  * Build the Save as PDF step for a route.
  *
- * The export button is one fixed control beside the theme toggle, reachable
- * from every screen, so every route that introduces it points at the same
- * target with the same placement and navigation flags. Only the wording
- * changes, and the fallback each route falls back to when the button is not
- * rendered yet.
+ * The export button is shared across routes, so each step uses the same target,
+ * placement, and navigation settings. Each route supplies its own wording and
+ * a fallback target for when the button is not rendered yet.
  * @param {{route: string, title: string, body: string, fallbackTarget: string}} config - Route-specific wording and fallback
  * @returns {TutorialStep} Tutorial step
  */

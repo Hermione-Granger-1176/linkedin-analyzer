@@ -50,13 +50,8 @@ const WORKER_CONNECTIONS_PAYLOAD = Object.freeze({
 
 const harness = createWorkerHarness();
 
-// The mechanism the three export transports share is exercised through them
-// everywhere else in the suite, one transport per file. What no single-transport
-// file can see is whether the state behind it is per transport or shared between
-// them, and that is the whole reason the export owns these workers rather than
-// borrowing the screens': a screen keeps its worker, its watchdog and its
-// request counter in module scope, so two users of one set clear each other's.
-// Made module-level inside the factory, the rest of the suite would still pass.
+// Create two transports to check that workers, timeouts, and request IDs
+// are independent. Tests of one transport cannot detect shared factory state.
 describe("transports built on the shared worker mechanism", () => {
     beforeEach(() => {
         vi.clearAllMocks();

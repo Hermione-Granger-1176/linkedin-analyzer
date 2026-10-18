@@ -132,7 +132,7 @@ Scripts are part of the Python coverage target. A new Python script needs tests 
 1. `src/linkedin_analyzer/cli.py` parses global options and dispatches a command.
 2. A file-specific cleaner builds a `CleanerConfig`.
 3. `core/cleaner.py` checks file limits, reads and decodes the CSV, validates headers, drops invalid rows, and applies column cleaners.
-4. `core/text.py` removes unsafe or invalid cell content before `core/excel.py` formats the workbook.
+4. `core/text.py` prefixes formula-like strings with an apostrophe and removes control characters that XML forbids before `core/excel.py` formats the workbook.
 5. The writer replaces the destination atomically after the workbook is complete.
 
 See [data formats](data-formats.md) for the shared cleaning rules and [web architecture](web-architecture.md) for the browser design decisions.

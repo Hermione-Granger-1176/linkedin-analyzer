@@ -41,7 +41,7 @@ MESSAGES_COLUMNS: tuple[ColumnConfig, ...] = (
 class MessagesCleanerConfig(CleanerConfig):
     """Configuration for Messages CSV cleaner.
 
-    Provides sensible defaults for cleaning LinkedIn Messages export files.
+    Defines the columns, validation rules, and output name for messages.csv.
     """
 
     input_path: Path = DEFAULT_INPUT

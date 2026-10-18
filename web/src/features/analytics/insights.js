@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics insight generation */
+/* LinkedIn Analyzer: Analytics insight generation */
 
 import { DAY_LABELS } from "./constants.js";
 

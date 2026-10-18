@@ -45,7 +45,7 @@ def failing_runner(_command: Sequence[str]) -> subprocess.CompletedProcess[str]:
 
 
 DEVELOPMENT_DOC = Path(__file__).resolve().parents[3] / "docs" / "development.md"
-DOC_TABLE_HEADING = "### Which jobs a change pays for"
+DOC_TABLE_HEADING = "### Which jobs run for a change"
 DOC_TABLE_AREAS = {
     "Python": PYTHON_ONLY,
     "Web": WEB_ONLY,

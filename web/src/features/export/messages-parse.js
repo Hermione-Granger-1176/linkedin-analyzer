@@ -1,16 +1,9 @@
 /**
- * Messages parsing for the PDF export.
+ * Parse messages for the PDF without changing their bodies.
  *
- * `LinkedInCleaner` exists to make a workbook safe: it quote-prefixes anything a
- * spreadsheet would evaluate as a formula, strips XML-illegal control characters
- * and trims every cell. None of that applies to a programmatically drawn PDF,
- * and all of it corrupts ordinary messages - "+1, that works for me" comes back
- * as "'+1, that works for me".
- *
- * So the export reuses the same CSV parser and the same date, name and URL
- * normalizers, and leaves `CONTENT` exactly as the parser produced it. The Excel
- * path keeps the full spreadsheet-oriented cleaner, which genuinely needs the
- * escaping.
+ * Reuse CSV parsing and date, name, and URL normalization. Keep CONTENT exactly
+ * as the parser produced it. Spreadsheet cleaning would prefix an apostrophe
+ * to ordinary messages such as "+1, that works for me" and trim their whitespace.
  */
 
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
@@ -43,14 +36,10 @@ const COLUMNS = Object.freeze(
  */
 
 /**
- * Take the message body exactly as the CSV tokenizer produced it.
- *
- * `parseCsvRows` is the single decoding layer: it already collapses the doubled
- * quotes the CSV format uses to escape a literal quote, and it treats backslash
- * as an ordinary character for messages (`CSV_OPTIONS_DEFAULT` sets
- * `escape: null`). A second unescaping pass here would re-decode already-decoded
- * text and corrupt bodies that legitimately contain adjacent quotes, so there
- * isn't one.
+ * Return the message body exactly as the CSV parser decoded it.
+ * parseCsvRows already decodes doubled CSV quotes. CSV_OPTIONS_DEFAULT treats
+ * backslashes as ordinary characters, so another unescaping pass would corrupt
+ * bodies that contain adjacent quotes or backslashes.
  * @param {unknown} value - Parsed CONTENT cell
  * @returns {string} Message body, verbatim
  */

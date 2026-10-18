@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Analytics Web Worker */
+/* LinkedIn Analyzer: Analytics Web Worker */
 
 import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.ts";
 import {
@@ -328,7 +328,7 @@ async function handleAddFile(payload) {
             // accepts any Blob, and the name only ever labels an error.
             result = await readAndProcessUpload(/** @type {File} */ (file), jobId, fileName, epoch);
         } catch (error) {
-            // A failure in a read a clear has since abandoned is nobody's to see.
+            // Discard a read failure when Clear has already abandoned the request.
             if (epoch !== requestEpoch) {
                 return;
             }
@@ -444,9 +444,8 @@ async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
     const epoch = requestEpoch;
-    // Each source streams through the cleaner in turn, so no file is held as
-    // one string and only one is being read at a time. A Clear aborts the read
-    // in flight.
+    // Read sources in sequence. processCsvSource streams stored Blobs when
+    // possible and falls back to whole-text cleaning. Clear aborts the active read.
     const sourceByType = { shares: sharesCsv, comments: commentsCsv, connections: connectionsCsv };
     /** @type {Partial<Record<AnalyticsSourceType, CleanedRow[]>>} */
     const cleanedByType = {};
@@ -468,7 +467,7 @@ async function handleRestoreFiles(payload) {
                 // types' restore.
                 parsed = null;
             }
-            // Clear arrived while the stored files were read: keep what it cleared gone.
+            // Do not restore data after Clear arrives during the read.
             if (epoch !== requestEpoch) {
                 return;
             }
@@ -488,13 +487,9 @@ async function handleRestoreFiles(payload) {
     // Whether a posting source (shares/comments) loaded with rows.
     const hasPostingSource = Boolean(sharesData?.length || commentsData?.length);
 
-    // restoreFiles only seeds the worker's source datasets so a subsequent
-    // addFile recomputes analytics from the full set. The aggregate the dashboard
-    // reads is always produced and persisted by handleAddFile; the only signal
-    // this path emits (the "restored" hasData) is whether any posting source
-    // loaded. Computing the full analytics aggregate here would be discarded
-    // (never persisted or queried), so it is skipped. The stale aggregate is
-    // cleared so nothing reads an out-of-date view between seed and recompute.
+    // Seed source datasets for the next addFile request. handleAddFile computes
+    // and persists the dashboard aggregate. Clear the old aggregate so a view
+    // cannot read it between restoration and recomputation.
     resetAnalyticsState();
 
     self.postMessage({

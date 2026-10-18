@@ -37,18 +37,15 @@ function spawnSplat(event, button) {
     splat.className = "pip-splat";
     splat.setAttribute("aria-hidden", "true");
     splat.innerHTML = `<svg viewBox="0 0 26 26"><path d="${SPLAT_PATH}"></path></svg>`;
-    // A click the keyboard raised carries no pointer position and reports 0,0,
-    // which would drop the splat off in the button's top left corner. There is
-    // no place the visitor aimed at, so the middle of the button it is.
+    // Keyboard clicks report coordinates 0,0. Center the splat on the button
+    // because those clicks have no pointer position.
     const fromKeyboard = event.detail === 0;
     const x = fromKeyboard ? rect.width / 2 : event.clientX - rect.left;
     const y = fromKeyboard ? rect.height / 2 : event.clientY - rect.top;
     splat.style.left = `${x}px`;
     splat.style.top = `${y}px`;
-    // A route button hides its own screen on the way out, and an animation in a
-    // display:none subtree never ends, so the splat would sit there for good.
-    // The backstop clears it either way, and a splat that did get to finish
-    // takes its own backstop off on the way out.
+    // Hidden screens do not emit animationend. The timeout removes the splat
+    // even after navigation. A completed animation cancels that timeout.
     const backstop = window.setTimeout(() => splat.remove(), SPLAT_LIFETIME_MS);
     splat.addEventListener(
         "animationend",
@@ -100,8 +97,8 @@ function playMoment(moment) {
             previousTimer: momentTimers.get(id),
             apply: () => pose.classList.add(activeClass),
             reset: () => pose.classList.remove(activeClass),
-            // The id it was filed under is spent, and clearing a spent timer id
-            // could land on whatever the environment handed out next.
+            // Clear the stored timer ID after it fires so a later call cannot
+            // cancel a timer that reuses that ID.
             done: () => momentTimers.delete(id),
         }),
     );
@@ -147,10 +144,8 @@ export function initMascot() {
     }
     initialized = true;
     document.addEventListener("click", handleClick);
-    // Reading the wipe off the app-wide notification keeps the moment out of the
-    // upload flow entirely: the sweep starts after the clearing is already done,
-    // and a listener that threw would be caught and reported by the notifier
-    // rather than left to break the clear.
+    // Start the eraser animation after storage announces a completed clear.
+    // The notifier handles listener failures so decoration cannot fail the clear.
     DataCache.subscribe((/** @type {{type?: unknown}} */ event) => {
         if (event.type === STORAGE_CLEARED) {
             celebrateClear();

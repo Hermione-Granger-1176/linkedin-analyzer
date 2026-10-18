@@ -10,7 +10,7 @@ from scripts.ci import run_security_audit
 
 
 def write_text(path: Path, content: str) -> None:
-    """Write text."""
+    """Write UTF-8 test content and create parent directories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
@@ -18,7 +18,7 @@ def write_text(path: Path, content: str) -> None:
 def test_resolve_requirements_file_accepts_relative_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test resolve requirements file accepts relative path."""
+    """Resolve a requirements file relative to the repository."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -31,7 +31,7 @@ def test_resolve_requirements_file_accepts_relative_path(
 
 
 def test_resolve_requirements_file_accepts_absolute_path(tmp_path: Path) -> None:
-    """Test resolve requirements file accepts absolute path."""
+    """Accept an absolute requirements file path."""
     requirements_file = tmp_path / "requirements.txt"
     write_text(requirements_file, "pkg==1.0\n")
 
@@ -39,7 +39,7 @@ def test_resolve_requirements_file_accepts_absolute_path(tmp_path: Path) -> None
 
 
 def test_resolve_requirements_file_rejects_missing_file(tmp_path: Path) -> None:
-    """Test resolve requirements file rejects missing file."""
+    """Reject a requirements file that does not exist."""
     with pytest.raises(
         FileNotFoundError,
         match="Python security requirements file not found",
@@ -48,7 +48,7 @@ def test_resolve_requirements_file_rejects_missing_file(tmp_path: Path) -> None:
 
 
 def test_resolve_requirements_file_rejects_symlink(tmp_path: Path) -> None:
-    """Test resolve requirements file rejects symlinks."""
+    """Reject symlinked requirements files."""
     target = tmp_path / "target.txt"
     write_text(target, "pkg==1.0\n")
     requirements_file = tmp_path / "requirements.txt"
@@ -61,7 +61,7 @@ def test_resolve_requirements_file_rejects_symlink(tmp_path: Path) -> None:
 def test_relative_path_returns_repo_relative(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test relative path returns repo relative."""
+    """Render a path relative to the repository root."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -75,7 +75,7 @@ def test_relative_path_returns_repo_relative(
 def test_relative_path_falls_back_to_original_outside_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test relative path falls back to original outside repo."""
+    """Keep the original path when it is outside the repository."""
     repo_root = tmp_path / "repo"
     requirements_file = tmp_path / "elsewhere" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -85,7 +85,7 @@ def test_relative_path_falls_back_to_original_outside_repo(
 
 
 def test_run_pip_audit_parses_valid_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test run pip audit parses valid output."""
+    """Parse a valid pip-audit report."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -140,7 +140,7 @@ def test_run_pip_audit_rejects_subprocess_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test run pip audit rejects subprocess failures."""
+    """Report a failed pip-audit subprocess."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -160,7 +160,7 @@ def test_run_pip_audit_rejects_subprocess_failures(
 
 
 def test_run_pip_audit_raises_on_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test run pip audit raises on timeout."""
+    """Report a pip-audit subprocess timeout."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -178,7 +178,7 @@ def test_run_pip_audit_raises_on_timeout(tmp_path: Path, monkeypatch: pytest.Mon
 def test_run_pip_audit_rejects_invalid_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test run pip audit rejects invalid json."""
+    """Reject pip-audit output that is not valid JSON."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -237,7 +237,7 @@ def test_subprocess_error_detail_normalizes_and_bounds_output() -> None:
 def test_run_pip_audit_rejects_invalid_dependency_shape(
     payload: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test run pip audit rejects invalid dependency shape."""
+    """Reject malformed dependency entries in the audit report."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -260,7 +260,7 @@ def test_run_pip_audit_rejects_invalid_dependency_shape(
 def test_audit_python_dependencies_reports_unused_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test audit python dependencies reports unused exception."""
+    """Report an exception that matches no finding."""
     exceptions = (
         run_security_audit.VulnerabilityExceptionEntry(
             vulnerability_id="CVE-2026-4539",
@@ -285,7 +285,7 @@ def test_audit_python_dependencies_reports_unused_exception(
 def test_audit_python_dependencies_allows_reviewed_unfixed_vulnerability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test audit python dependencies allows reviewed unfixed vulnerability."""
+    """Accept a reviewed exception while no fix is available."""
     exceptions = (
         run_security_audit.VulnerabilityExceptionEntry(
             vulnerability_id="GHSA-5239-wwwm-4pmq",
@@ -353,7 +353,7 @@ def test_audit_python_dependencies_matches_ids_case_insensitively(
 def test_audit_python_dependencies_rejects_ambiguous_exceptions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test audit python dependencies rejects multiple matching exceptions."""
+    """Reject multiple exceptions for the same finding."""
     exceptions = (
         run_security_audit.VulnerabilityExceptionEntry(
             vulnerability_id="CVE-2026-4539",
@@ -396,7 +396,7 @@ def test_audit_python_dependencies_rejects_ambiguous_exceptions(
 def test_audit_python_dependencies_rejects_exception_when_fix_exists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test audit python dependencies rejects exception when fix exists."""
+    """Reject an exception when a fix is available."""
     exceptions = (
         run_security_audit.VulnerabilityExceptionEntry(
             vulnerability_id="CVE-2026-4539",
@@ -433,7 +433,7 @@ def test_audit_python_dependencies_rejects_exception_when_fix_exists(
 def test_audit_python_dependencies_rejects_expired_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test audit python dependencies rejects expired exception."""
+    """Reject an expired audit exception."""
     exceptions = (
         run_security_audit.VulnerabilityExceptionEntry(
             vulnerability_id="CVE-2026-4539",
@@ -469,7 +469,7 @@ def test_audit_python_dependencies_rejects_expired_exception(
 def test_audit_python_dependencies_rejects_unreviewed_vulnerability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test audit python dependencies rejects unreviewed vulnerability."""
+    """Report a vulnerability without a reviewed exception."""
     findings = (
         run_security_audit.VulnerabilityFinding(
             vulnerability_id="CVE-2026-4539",
@@ -651,7 +651,7 @@ def test_main_reports_success_with_reviewed_exceptions(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Test main reports success with reviewed exceptions."""
+    """Report success when every finding has a valid exception."""
     requirements_file = tmp_path / "requirements.txt"
     write_text(requirements_file, "pygments==2.19.2\n")
     exception = run_security_audit.VulnerabilityExceptionEntry(
@@ -691,7 +691,7 @@ def test_main_reports_errors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Test main reports errors."""
+    """Print audit errors and return a non-zero status."""
     requirements_file = tmp_path / "requirements.txt"
     write_text(requirements_file, "pkg==1.0\n")
     monkeypatch.setattr(

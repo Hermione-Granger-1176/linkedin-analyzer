@@ -39,7 +39,7 @@ SHARES_COLUMNS: tuple[ColumnConfig, ...] = (
 class SharesCleanerConfig(CleanerConfig):
     """Configuration for Shares CSV cleaner.
 
-    Provides sensible defaults for cleaning LinkedIn Shares export files.
+    Defines the columns, validation rules, and output name for Shares.csv.
     """
 
     input_path: Path = DEFAULT_INPUT

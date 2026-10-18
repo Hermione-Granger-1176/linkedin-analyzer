@@ -1,21 +1,10 @@
 /**
- * Text safety for the PDF export: keep what the document's fonts can draw, and
- * show where the rest was.
+ * Replace text the PDF fonts cannot draw with a visible placeholder.
  *
- * The handwritten faces the export embeds are Latin, and jsPDF omits a
- * character they have no glyph for. "Ňuňo Smith" reached the page as "uo Smith"
- * and "田中 Fernández-Hall" as " Fernández-Hall": names damaged with nothing on
- * the page to say they had been. A face with wider coverage would add megabytes
- * to an app that fetches 225 KB of fonts only when an export runs, so the loss is
- * made visible instead. A reader who can see that a name is broken can go and
- * find it; a reader shown a quietly wrong name cannot.
- *
- * The core-font fallback needs the same pass for a different reason. jsPDF
- * writes a core-font string as WinAnsi bytes, and one character outside that
- * encoding turns the whole string into UTF-16 mojibake, so the same name printed
- * as "u0N-   F e r n á n d e z - H a l l". There one unsupported character costs
- * the rest of the line too, which is why the fallback declares its own narrower
- * coverage rather than skipping this.
+ * The embedded handwritten fonts omit unsupported characters. Without a
+ * placeholder, a name can lose characters without any indication. The Helvetica
+ * fallback also needs this pass because characters outside WinAnsi can corrupt
+ * the rest of a line. Each font path supplies its supported code points.
  */
 
 // Drawn in place of each run of characters the fonts cannot show. A question
@@ -94,14 +83,9 @@ function isPlainObject(value) {
 }
 
 /**
- * Sanitize every string in a document model, leaving its shape alone.
- *
- * One pass over the finished model rather than a call at each site: names,
- * companies, positions, topics, stat values and message bodies enter the
- * document from five different collectors, and the defect this exists to stop is
- * exactly the one where the sixth is added and nobody remembers. Numbers, dates
- * and anything else carrying behavior of its own are handed straight back, so
- * only literals and arrays are rebuilt.
+ * Sanitize strings throughout the completed document model.
+ * Rebuild plain objects and arrays so every collector receives the same text
+ * handling. Preserve numbers, dates, and other non-plain values.
  * @template T
  * @param {T} value - Document model, or any part of one
  * @param {Set<number>} coverage - Code points the document's fonts can draw

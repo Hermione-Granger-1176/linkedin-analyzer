@@ -8,10 +8,7 @@ const CHEER_MS = 1700;
 const STAPLE_MS = 1700;
 const ERASER_MS = 1700;
 
-/* mascot.js binds a click listener on the document for the life of the page,
-   and the document outlives every test in this file. Recording what gets bound
-   lets afterEach hand the next test a clean document rather than one carrying
-   the previous tests' splats. */
+/* Record document listeners so teardown removes them between tests. */
 const boundListeners = [];
 /** @type {Map<EventTarget, Function>} */
 const realAddEventListener = new Map();

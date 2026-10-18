@@ -335,21 +335,18 @@ export const ConnectionsPage = (() => {
     }
 
     /**
-     * Load the connections file from DataCache or IndexedDB.
+     * Load the connections file from storage and refresh its cached metadata.
      * @returns {Promise<StoredUploadFile|null>} The stored file record or null
      */
     async function loadConnectionsFile() {
         const cacheKey = "storage:file:connections";
 
-        // The cache holds metadata only, so always load the record (with its
-        // Blob) from storage when parsing. The worker reads the Blob, so the
-        // page never holds the file text.
+        // The cache holds metadata only. Load the stored Blob for parsing.
         const file = normalizeConnectionsFile(await Storage.getFile("connections"), "storage");
         if (file && !file.blob) {
-            // Metadata exists but the file record is gone (cleared in another
-            // tab / degraded persistence). Treat it as a load failure so the
-            // catch shows the storage-error UI, matching clean/messages, rather
-            // than the "not uploaded" empty state.
+            // Metadata exists but the upload is missing, for example after a
+            // clear in another tab or a persistence failure. Throw so the caller
+            // shows the storage-error UI instead of the "not uploaded" state.
             throw new Error("Stored connections file record is missing.");
         }
         if (file) {

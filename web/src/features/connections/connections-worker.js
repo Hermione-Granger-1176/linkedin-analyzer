@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Connections parsing & analytics worker */
+/* LinkedIn Analyzer: Connections parsing & analytics worker */
 
 import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.ts";
 import { serveWorker } from "../../shared/worker-entry.js";
@@ -17,8 +17,8 @@ import { buildGrowthTimeline, computeStats } from "./view.js";
  * time-range filter and build company and position summaries without another
  * worker round-trip.
  *
- * A stored upload streams through the cleaner, so the whole file is never held
- * as one string.
+ * A stored upload uses the streaming cleaner when it can finish. Otherwise,
+ * processCsvSource reads it as one string and uses the whole-text cleaner.
  *
  * @param {unknown} connectionsCsv - Stored upload Blob or raw CSV text from the Connections export
  * @returns {Promise<{success: boolean, analytics?: Readonly<ConnectionsAnalytics>,

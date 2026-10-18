@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
 """Render the Python and JavaScript coverage totals as one markdown table.
 
-Both suites already enforce their own floors and fail the build below them, so
-this adds no gate. What it adds is the number itself, on the run page, where
-noticing a slow slide from 99.4% to 99.1% does not require opening a log and
-scrolling to the end of a test run.
+The suites enforce their coverage thresholds. This module displays their totals
+on the workflow run page without adding another pass or fail condition.
 
-The two suites report through different tools, so the counts come from each
-one's own machine-readable output: ``.artifacts/coverage/python-coverage.json``
-from pytest-cov and ``coverage/coverage-summary.json`` from Vitest. Percentages
-are recomputed from the covered and total counts rather than read from the
-reports, so the percentage in a row can never disagree with the two numbers
-beside it.
+Counts come from pytest-cov's ``.artifacts/coverage/python-coverage.json`` and
+Vitest's ``coverage/coverage-summary.json``. The summary calculates percentages
+from covered and total counts so each row uses consistent values.
 
-A report that is absent becomes a note rather than an error, because the summary
-step runs even when the suite that writes it failed first. A report that is
-present but unreadable is still an error: that means something broke.
+A missing report produces a note because the summary runs even after test
+failures. A report that exists but cannot be read produces an error.
 """
 
 from __future__ import annotations
@@ -69,7 +63,7 @@ class CoverageMetric:
 
     @property
     def percent(self) -> float:
-        """Return the covered percentage, calling nothing-to-cover complete."""
+        """Return the covered percentage, or 100 when the total is zero."""
         if self.total == 0:
             return 100.0
         return self.covered / self.total * 100

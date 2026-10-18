@@ -361,15 +361,8 @@ describe("loadMessagesState", () => {
     });
 
     it("falls back when a failure envelope names no request it was given", async () => {
-        // The worker answers under the request's own id when it read the request
-        // and the parse is what failed, and under id zero when it fell over
-        // before or outside of that. Only the first is evidence about the file.
-        // This one never touched the CSV, so the small export is still parsed
-        // here rather than dropped, which is what the test above pins for a
-        // failure the worker did attribute to its request.
-        //
-        // It settles at once either way: no timer is advanced, so a request left
-        // to sit out its watchdog fails this test.
+        // An unknown request id does not establish a parse failure for this file.
+        // Permit the small-file fallback and settle without advancing the timer.
         vi.useFakeTimers();
         const pending = loadMessagesState(MESSAGES_CSV, "");
         replyToRequest({ success: false, error: "invalid request" }, 99);
@@ -574,14 +567,8 @@ describe("loadMessagesState", () => {
     });
 
     it("leaves the worker alone for a request that was cancelled, not answered", async () => {
-        // A cancelled request must not terminate on its way out: whoever
-        // cancelled it owns the worker, and here that is a newer request still
-        // waiting on the very same one.
-        //
-        // The order matters. The test above lets both requests settle before
-        // either promise is awaited, so terminating on the cancelled path would
-        // pass it. This drains the cancelled one first, while the newer request
-        // is genuinely in flight, and only then answers it.
+        // Await the cancelled request before replying to the newer request.
+        // The cancelled request must not terminate the worker the newer one uses.
         const cancelled = loadMessagesState(MESSAGES_CSV, "");
         const worker = harness.instance;
         const pending = loadMessagesState(MESSAGES_CSV, "");

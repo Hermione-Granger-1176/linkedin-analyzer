@@ -1,10 +1,8 @@
 """Cover the GitHub repository settings audit.
 
-The audit exists because these settings live outside the repository, so nothing
-else in this project can notice them changing. The tests therefore care most
-about the two ways it could go quiet: reporting a setting as correct when the
-payload never actually said so, and treating removed branch protection (the
-worst drift there is) as a failure to look rather than a finding.
+Check expected settings, malformed API responses, and missing protection.
+Distinguish settings drift from failures that prevent the audit from reading
+the settings.
 """
 
 from __future__ import annotations
@@ -186,7 +184,7 @@ def _audit(**kwargs: object) -> list[str]:
 
 
 def test_the_expected_configuration_produces_no_findings() -> None:
-    """The live repository passes this audit, so the constants describe reality."""
+    """The expected repository fixture produces no findings."""
     assert _audit() == []
 
 
@@ -362,7 +360,7 @@ def test_a_field_only_a_writing_token_can_read_is_not_judged(field: str) -> None
 
 
 def test_a_disabled_security_feature_is_reported_by_name() -> None:
-    """Turning one off is a single click in the web UI and invisible everywhere else."""
+    """Report disabled repository security settings."""
     features = {name: {"status": "enabled"} for name in repo_audit.EXPECTED_SECURITY_FEATURES}
     features["secret_scanning_push_protection"] = {"status": "disabled"}
     findings = _audit(repository=_repository(security_and_analysis=features))
@@ -835,7 +833,7 @@ def test_a_response_that_is_not_an_object_fails_the_audit(kwargs: object, messag
 
 
 def test_every_drifted_setting_is_reported_in_one_pass() -> None:
-    """One run has to name all of them; fixing them one round trip at a time is worse."""
+    """Report all missing secrets in the same audit result."""
     findings = _audit(
         repository=_repository(default_branch="master"),
         protection=_protection(required_signatures={"enabled": False}),
@@ -867,7 +865,7 @@ def _patch_audit(monkeypatch: pytest.MonkeyPatch, result: object) -> None:
 def test_a_clean_audit_exits_healthy(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The healthy path has to stay distinguishable from the other two codes."""
+    """Return a distinct exit status for a report with no findings."""
     _patch_audit(monkeypatch, [])
     assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_HEALTHY
     assert "match expectations" in capsys.readouterr().out
@@ -896,7 +894,7 @@ def test_a_failure_to_look_exits_differently_from_drift(
 def test_the_repository_is_resolved_when_none_is_given(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The everyday invocation passes no repo at all."""
+    """Detect the repository when the caller omits it."""
     _patch_audit(monkeypatch, [])
     monkeypatch.setattr(repo_audit.gh_runner, "resolve_repo", lambda: REPO)
     assert repo_audit.main([]) == repo_audit.EXIT_HEALTHY

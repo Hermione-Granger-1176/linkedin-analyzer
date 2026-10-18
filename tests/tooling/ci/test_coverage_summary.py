@@ -1,9 +1,7 @@
 """Cover the coverage summary renderer.
 
-The summary is read, not acted on, so the risk is not that it fails but that it
-quietly reports the wrong number: a stale report, a count read from the wrong
-key, or a percentage that disagrees with the counts printed beside it. These
-tests pin the numbers, and pin the one place a missing report is tolerated.
+Check report totals, percentage calculations, and missing-report handling.
+The rendered percentages must agree with their displayed counts.
 """
 
 from __future__ import annotations
@@ -79,7 +77,7 @@ def test_python_totals_are_read_from_the_pytest_cov_keys(tmp_path: Path) -> None
 
 
 def test_js_totals_are_read_for_every_reported_metric(tmp_path: Path) -> None:
-    """Dropping one would quietly narrow what the summary reports."""
+    """Include every configured coverage source in the summary."""
     metrics = coverage_summary.read_js_metrics(_js_report(tmp_path))
     assert [m.metric for m in metrics] == list(coverage_summary.JS_METRICS)
     assert [(m.covered, m.total) for m in metrics] == [

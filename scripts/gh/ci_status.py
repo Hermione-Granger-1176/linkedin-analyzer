@@ -1,7 +1,7 @@
-"""CI run inspection: find the current branch's latest run and its failures.
+"""Inspect the current branch's latest CI run and failed-step logs.
 
-Replaces the manual ``gh run list`` -> ``gh run view --log-failed`` dance with
-a single command that prints only what is needed to triage a red run.
+The Make targets use this module to locate a run and print its relevant logs.
+Successful and running jobs produce status summaries instead of failure logs.
 """
 
 from __future__ import annotations

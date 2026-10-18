@@ -1,21 +1,14 @@
 #!/usr/bin/env python3
-"""Stage files for ``make stage`` without letting a shell parse any path.
+"""Stage files for ``make stage`` without shell interpretation of paths.
 
-The old recipe ran ``git add -- $(files)`` with the value interpolated straight
-into the shell, so a path was subject to word splitting, globbing, and shell
-syntax; a value containing ``;`` could start another command instead of naming
-a file. This helper reads paths from the environment and hands them to
-``git add`` as separate argv entries with ``shell=False``, so shell
-metacharacters in a filename stay inert.
+Read paths from environment variables and pass each as a separate ``git add``
+argument with ``shell=False``. Spaces and shell metacharacters remain literal.
 
-The Makefile forwards two optional inputs:
+``STAGE_FILE`` supplies one exact path. ``STAGE_FILES`` supplies a whitespace-
+separated list, except when its complete value names one existing or tracked
+path. That exception preserves legacy calls with spaces in one path.
 
-- ``STAGE_FILE``: exactly one path, kept intact even when it contains spaces.
-- ``STAGE_FILES``: a whitespace-separated list, unless its complete value names
-  one existing or tracked path (which preserves legacy spaced-path calls).
-
-At least one must be non-empty; otherwise a usage message is printed and the
-command exits non-zero.
+If both inputs are empty, print usage and return a nonzero exit code.
 """
 
 from __future__ import annotations

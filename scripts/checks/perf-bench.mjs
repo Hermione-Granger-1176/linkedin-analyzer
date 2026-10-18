@@ -1,23 +1,19 @@
 /*
- * Perf + correctness check for the upload read/decode layer.
+ * Compare legacy decoding with decodeBytes and time CSV cleaning.
  *
- * The cleaning parser (cleaner.js) is untouched here, so this isolates the file
- * read/decode hot path in upload.js.
- *   - Stream path (files >= 5MB, i.e. messages.csv): OLD did incremental
- *     TextDecoder({stream:true}); NEW buffers raw byte chunks -> concat -> a
- *     single strict TextDecoder("utf-8", {fatal:true}) decode.
- *   - Reader path (<5MB): OLD did a single non-fatal utf-8 decode; NEW uses the
- *     same strict fatal decode. Both NEW paths fall back to windows-1252 only on
- *     a genuine decode error (no U+FFFD heuristic).
+ * For files of at least 5 MiB, compare a legacy incremental TextDecoder with
+ * concatChunks followed by decodeBytes. The legacy decoder passes each chunk
+ * to decoder.decode(chunk, { stream: true }). For smaller files, compare a
+ * single non-fatal UTF-8 decode with decodeBytes. The production decodeBytes
+ * function tries strict UTF-8 and falls back to Windows-1252 on a decode error.
  *
- * It (a) asserts the new decode yields byte-identical text to the old without a
- * fallback, and (b) times read+decode and clean per file, taking the median over
- * N runs.
+ * The check requires matching decoded text, no encoding fallback, and successful
+ * cleaning. It reports median times for both decoders and the cleaner. File
+ * reads and chunk preparation happen before timing.
  *
- * Usage (prefer the Makefile):
+ * Usage:
  *   make bench-decode          # 5 runs (median)
  *   make bench-decode runs=11
- *   node scripts/checks/perf-bench.mjs [runs]
  *
  * Requires your private LinkedIn export in data/input (never committed). The
  * script skips cleanly when those files are absent.
@@ -64,7 +60,7 @@ function chunkize(bytes) {
     return out;
 }
 
-// OLD stream decode: incremental, mirrors the pre-rewrite readFileAsTextStream.
+// Decode chunks incrementally with the legacy non-fatal UTF-8 decoder.
 function decodeOldStream(chunks) {
     const decoder = new TextDecoder("utf-8");
     let text = "";
@@ -75,12 +71,12 @@ function decodeOldStream(chunks) {
     return text;
 }
 
-// NEW stream decode: buffer bytes, then call the production upload decoder.
+// Concatenate chunks, then call the production upload decoder.
 function decodeNewStream(chunks, totalBytes) {
     return decodeBytes(concatChunks(chunks, totalBytes), "benchmark.csv");
 }
 
-// Reader path: OLD = single utf-8 decode; NEW = production decodeBytes.
+// Compare one non-fatal UTF-8 decode with the production decodeBytes function.
 function decodeOldReader(bytes) {
     return new TextDecoder("utf-8").decode(bytes);
 }

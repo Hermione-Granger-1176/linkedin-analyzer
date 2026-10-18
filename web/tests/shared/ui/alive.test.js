@@ -29,11 +29,8 @@ let frames = [];
 /** @type {typeof window.requestAnimationFrame} */
 let realRequestAnimationFrame;
 
-/* alive.js binds for the life of the page, and window and document outlive every
-   test in this file. Recording what gets bound lets afterEach hand the next test
-   a clean pair of globals, instead of one carrying four tests' worth of eyes.
-   The options go in the record too: a capture-phase listener only comes off
-   again when it is removed with the same options it was added with. */
+/* Record listeners so teardown removes them from the shared globals.
+Keep listener options because removal must match the capture setting. */
 const boundListeners = [];
 /** @type {Map<EventTarget, Function>} */
 const realAddEventListener = new Map();

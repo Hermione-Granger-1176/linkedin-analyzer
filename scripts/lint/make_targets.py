@@ -43,15 +43,15 @@ SHELL_CONTROL_FLOW_PATTERN = re.compile(r"^(?:if|for|while|case)\b")
 RECIPE_PREFIX_PATTERN = re.compile(r"^[@\-+]+")
 
 # Targets whose recipes may keep inline shell control flow. Every entry is
-# argument assembly or git plumbing, not logic that belongs in scripts/, and the
-# list is a ratchet: ``test_control_flow_allowlist_has_no_unused_entries`` fails
-# if a target is fixed and left behind here.
+# argument assembly or Git operations. Other logic belongs in scripts/.
+# ``test_control_flow_allowlist_has_no_unused_entries`` fails when a target no
+# longer needs an exception but remains in this list.
 #
 # Several of these exist *because* of the free-text rule. An optional flag whose
 # value is prose cannot be added with ``$(if $(COMMENT),--comment "$$COMMENT")``,
 # since a Make conditional expands the value and would run ``$(shell ...)`` inside
 # it. Testing in the recipe's shell is the only safe way to append the flag, so
-# the branch is mandatory rather than lazy. See docs/development.md.
+# the branch is required to avoid expanding prose. See docs/development.md.
 CONTROL_FLOW_ALLOWLIST = frozenset(
     {
         "branch",  # pull only when the base branch has an upstream

@@ -1,24 +1,21 @@
 /**
  * Clean each repeated cell value once and store the result once.
  *
- * Most of the memory a worker spends on a file's rows is the cell strings, and
- * many cells repeat: the same names, profile URLs, conversation ids and folder
- * appear on row after row. Looking a raw value up before cleaning it means a
- * repeat skips the cleaning work and shares the one cleaned copy, so the rows
- * get smaller and the clean gets faster.
+ * Names, profile URLs, conversation IDs, and folders repeat across rows.
+ * Looking up raw values before cleaning lets repeated cells share one cleaned
+ * string and skip repeated cleaning work.
  *
- * Some columns almost never repeat, such as dates and message bodies, and
- * looking every one of them up costs time and saves nothing. So each column
- * checks every window of values and stops caching once a window is nearly all
- * new, which also catches a column that repeats at first and not after.
+ * Dates and message bodies rarely repeat. Each column checks windows of values
+ * and stops caching when a window contains mostly distinct values. This also
+ * handles columns whose values stop repeating partway through a file.
  *
  * A cached value is stored as a copy. A value sliced out of a decoded chunk
  * can keep that whole chunk alive, and one cached slice per distinct value
  * would hold most of the file's text. Values that are not cached are left
- * as they are: copying them measured slower and larger.
+ * as they are because copying them increased time and memory in measurements.
  */
 
-/** Values in each window a column checks to decide whether caching pays. */
+/** Number of values sampled per column before checking the distinct-value share. */
 const SAMPLE_SIZE = 4096;
 
 /** A column whose window was at least this share new values stops caching. */

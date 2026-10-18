@@ -1,8 +1,6 @@
-"""Command-line dispatcher for the GitHub PR/CI helpers.
+"""Dispatch the GitHub PR and CI helper commands used by Make targets.
 
-Run as ``python -m scripts.gh.cli <command>``. The Makefile wraps each command
-in a thin target, and ``<command> --help`` documents its options, so an agent
-can discover all commands without re-deriving any ``gh`` plumbing.
+Use ``make help-pr`` and ``make help-actions`` to find the supported commands.
 """
 
 from __future__ import annotations
@@ -225,11 +223,10 @@ def _handle_comment(args: argparse.Namespace) -> int:
 
 
 def _handle_edit_pr(args: argparse.Namespace) -> int:
-    """Edit a pull request's title and/or body.
+    """Edit a pull request's title, body, or both.
 
-    The body file is forwarded to ``gh pr edit --body-file`` rather than read
-    here, so gh reads it itself and a large body never has to fit in the
-    argument list.
+    Forward the body file to ``gh pr edit --body-file`` so large bodies do not need
+    to fit in the argument list.
     """
     pr_review.edit_pr(args.pr, title=args.title, body=args.body, body_file=args.body_file)
     print("Edited the PR")

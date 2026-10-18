@@ -1,5 +1,5 @@
 name: CI setup
-description: Set up exact toolchains and restore strictly keyed workspace dependencies.
+description: Set up toolchains and restore dependency caches.
 
 inputs:
   python-version:

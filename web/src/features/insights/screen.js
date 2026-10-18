@@ -292,7 +292,7 @@ export const InsightsPage = (() => {
         state.currentViewRange = null;
     }
 
-    /** Load analytics base from IndexedDB and send to worker. */
+    /** Load the analytics base and send it to the worker. */
     async function loadBase() {
         showInsightsLoading(true);
 
@@ -495,24 +495,9 @@ export const InsightsPage = (() => {
             timeRange: state.filters.timeRange,
             insights: state.currentInsights ? state.currentInsights.insights || [] : [],
             tip: state.currentInsights ? state.currentInsights.tip || null : null,
-            // Withheld when it was built at a range the snapshot is no longer
-            // describing, so the export falls back to its own worker run rather
-            // than plotting one range under the caption of another.
-            //
-            // Reachable only when something publishes between the filter
-            // changing and the view for it arriving. The worker's own handler
-            // never can, since it assigns currentViewRange three lines before it
-            // renders. The one other publisher is loadOutreach, which fires once
-            // per open latch, so the window is exactly as long as that latch is
-            // open: on a first entry, after onRouteLeave clears it, and after a
-            // failed read reopens it for a retry. A successful read closes it
-            // for the rest of the visit, which is why a range change usually
-            // finds nothing here to race.
-            //
-            // Both open-latch cases put a stale view in reach. Returning at a
-            // different range leaves the last visit's view on hand while the
-            // worker answers, and a range change while the read is still in
-            // flight lands in front of the publish it has yet to make.
+            // Withhold a view whose range differs from the snapshot range. An outreach
+            // read can publish while a new worker view is pending, including after
+            // route reentry or a failed read. The export then recomputes the view.
             view: state.currentViewRange === state.filters.timeRange ? state.currentView : null,
             networkGrowth: state.networkGrowth,
             outreach: state.outreach,

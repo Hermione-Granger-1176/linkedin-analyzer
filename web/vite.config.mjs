@@ -43,7 +43,8 @@ export default defineConfig({
                     if (!output) {
                         return;
                     }
-                    // Vite 8 renamed this service-worker option, but the current PWA plugin still supplies the deprecated property.
+                    // The PWA plugin still sets inlineDynamicImports. Disable code
+                    // splitting with codeSplitting instead.
                     const outputs = Array.isArray(output) ? output : [output];
                     for (const outputOptions of outputs) {
                         delete outputOptions.inlineDynamicImports;

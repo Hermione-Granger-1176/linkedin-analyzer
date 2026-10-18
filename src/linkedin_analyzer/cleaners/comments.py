@@ -40,7 +40,7 @@ COMMENTS_CSV_KWARGS: Mapping[str, object] = MappingProxyType({"escapechar": "\\"
 class CommentsCleanerConfig(CleanerConfig):
     """Configuration for Comments CSV cleaner.
 
-    Provides sensible defaults for cleaning LinkedIn Comments export files.
+    Defines the columns, validation rules, and output name for Comments.csv.
     """
 
     input_path: Path = DEFAULT_INPUT

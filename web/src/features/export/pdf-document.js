@@ -1,15 +1,12 @@
 /**
  * A4 layout engine for the PDF export.
  *
- * The document is not a screenshot: it is measured and drawn from scratch. Text
- * is wrapped into rows first, rows are grouped into blocks, and blocks are then
- * placed onto pages. A block that asks to be kept together never straddles a
- * page break unless it is taller than a page, in which case it flows row by row
- * so an unusually long message wraps rather than looping forever.
+ * Wrap text into rows, group rows into blocks, and place blocks on pages.
+ * Blocks marked to stay together move to the next page when needed. Blocks
+ * taller than a page split by row so long messages can span pages.
  *
- * Sections that mirror a screen of the site are dashboards. The first follows
- * the title on page one and every later one opens a page of its own, so a reader
- * leafing through the file finds the same divisions they navigate on screen.
+ * Dashboard sections correspond to app screens. The first follows the title
+ * on page one. Each later dashboard starts on a new page.
  */
 
 import {
@@ -54,10 +51,8 @@ const STAT_COLUMNS = 2;
 const STAT_GAP = 5;
 const STAT_TILE_HEIGHT = 19;
 
-// Tiles per row for a dashboard's stat grid, by how many tiles there are. A
-// fixed three drew four stats as 3 + 1, leaving two thirds of the second row
-// blank; each entry here divides its own count exactly, so every row a grid
-// opens is a full one. Past six tiles the grid goes back to three a row.
+// Select columns by tile count to avoid partially filled rows for up to six
+// tiles. Larger grids use three columns.
 const DASHBOARD_STAT_COLUMNS = Object.freeze([1, 2, 3, 2, 5, 3]);
 const DEFAULT_DASHBOARD_STAT_COLUMNS = 3;
 
@@ -146,14 +141,9 @@ export function formatLongDate(value) {
 }
 
 /**
- * Room the next block that has any rows actually needs on this page.
- *
- * A block that moves whole needs all of it: reserving one row of a
- * `keepTogether` block reserves nothing, since the block cannot start in the
- * space that row was granted. A 6.4mm reservation against a 66mm list is how
- * "Fading conversations" came to sit alone at the foot of a page with its ten
- * rows overleaf. A block that flows row by row still only needs its first row,
- * because that is all of it that has to share the page.
+ * Calculate the height needed to start the next non-empty block.
+ * Reserve the full height of a keepTogether block that fits on one page.
+ * For a block that can split, reserve only its first row.
  * @param {Block[]} blocks - Blocks in document order
  * @param {number} from - Index to start looking from
  * @param {number} usableHeight - Height available on one page
@@ -172,23 +162,13 @@ function leadingRequirement(blocks, from, usableHeight) {
 }
 
 /**
- * Place measured blocks onto pages.
+ * Place measured blocks within each page's usable height.
+ * Move keepTogether blocks intact when they fit a page. Split taller blocks
+ * by row and drop any row taller than the usable area.
  *
- * Pure: it only reads row heights, so it can be exercised without a document.
- * A `keepTogether` block that fits within a page moves to the next page rather
- * than splitting; anything taller flows row by row. Every placed row ends inside
- * the usable area: a row that could not is dropped rather than drawn past it.
- *
- * A block that is both `keepTogether` and `keepWithNext` also reserves
- * the room whatever follows it needs to start here: all of a block that moves
- * whole, the first row of one that flows. On the row-by-row path the flag does
- * not apply. A heading is only a heading if something comes after it on the same
- * page; without this, "All time", a person's name and every chart title were
- * routinely left alone at the foot of a page with their content overleaf.
- *
- * `pageBreakBefore` opens a dashboard on fresh paper. It is honoured only once
- * the page has something on it, so a run of empty sections cannot leave blank
- * sheets behind.
+ * A keepTogether block with keepWithNext also reserves the height needed to
+ * start the next block. Ignore that flag on the row-by-row path. Honor
+ * pageBreakBefore only on a non-empty page to avoid blank pages.
  * @param {Block[]} blocks - Blocks in document order
  * @param {number} usableHeight - Height available on one page
  * @returns {Segment[][]} Placed segments per page
@@ -305,12 +285,8 @@ export function createPainter(doc, palette, fonts) {
     };
 
     /**
-     * Measure one line of text.
-     *
-     * Wrapping answers "how many lines", which is the wrong question for a
-     * label that has to be cut to a width or kept inside a plot: both need the
-     * width of the string itself, and a wrap point is a word boundary rather
-     * than the place the room ran out.
+     * Measure a line of text for truncation and plot placement.
+     * Use its actual width because wrapping reports word boundaries.
      * @param {string} text - Line text
      * @param {string} family - Registered family name
      * @param {number} size - Font size in points
@@ -453,7 +429,7 @@ function bodyRows(painter, lines, size, leadIn = 0) {
 }
 
 /**
- * Build the chrome painter a tinted card with an accent rule uses.
+ * Build the background and accent-rule painter for a tinted card.
  * @param {Painter} painter - Drawing helpers
  * @param {Rgb} tint - Card fill
  * @param {Rgb} rule - Left rule color
@@ -684,11 +660,9 @@ function buildTipBlock(painter, tip) {
 }
 
 /**
- * Fit a stat's value to its tile, stepping the size down before truncating.
- *
- * All-time values are short numbers, but a dashboard tile carries whatever the
- * data says: "Top company" is a company name, and at the headline size a long
- * one ran off the tile and across its neighbour.
+ * Fit a stat value inside its tile.
+ * Reduce font size before truncating so long company names cannot overlap
+ * adjacent tiles.
  * @param {Painter} painter - Drawing helpers
  * @param {string|null|undefined} value - Stat value
  * @param {number} width - Width available inside the tile
@@ -838,11 +812,8 @@ function buildThreadHeaderBlock(painter, thread) {
 }
 
 /**
- * Resolve the chip a message's direction is drawn with.
- *
- * A one-conversation export gives the selector no way to tell the account owner
- * from the other person, and it says so rather than guessing; a neutral chip is
- * how that reads on the page.
+ * Choose styling for a message-direction chip.
+ * Use a neutral chip when account-owner detection leaves direction unknown.
  * @param {Palette} palette - Palette from readPdfPalette()
  * @param {'sent'|'received'|'unknown'} direction - Message direction
  * @returns {{rule: Rgb, fill: Rgb, label: string}} Chip styling
@@ -961,11 +932,7 @@ function buildEmptyBlock(painter) {
 }
 
 /**
- * The chart builders a dashboard may name, keyed by the `type` it asks for.
- *
- * Data collection decides what a dashboard contains and the layout engine
- * decides how it is drawn, so a new chart on a screen becomes one more entry in
- * a dashboard's `charts` array rather than another branch down here.
+ * Chart builders indexed by the document model's type field.
  */
 const CHART_BUILDERS =
     /** @type {Readonly<Record<string, (painter: Painter, chart: Chart) => Block[]>>} */ (
@@ -978,15 +945,8 @@ const CHART_BUILDERS =
     );
 
 /**
- * Report whether a chart has anything to plot.
- *
- * A chart with no data is dropped rather than drawn as empty axes: on screen an
- * empty chart is a placeholder inviting an upload, and on a page the reader has
- * already exported there is nothing to invite.
- *
- * A heatmap is measured by its cells rather than by its rows: the analytics
- * worker always hands over a full week of hours, so a length test would call a
- * week with no activity in it data.
+ * Check whether a chart contains data to plot.
+ * For heatmaps, inspect cell values because an empty week still has seven rows.
  * @param {Chart} chart - Chart configuration from the document model
  * @returns {boolean} True when the chart carries data
  */
@@ -1004,11 +964,8 @@ function hasChartData(chart) {
 }
 
 /**
- * Report whether a stat measured anything.
- *
- * A dashboard that found nothing still fills its tiles, with zeroes or with a
- * dash, so the count of stats says nothing about whether there is anything to
- * print.
+ * Check whether a stat contains a measurement.
+ * Zeroes and absence placeholders do not make an empty dashboard printable.
  * @param {Stat} stat - Stat from a dashboard
  * @returns {boolean} True when the value reports something
  */
@@ -1017,12 +974,8 @@ function hasStatValue(stat) {
 }
 
 /**
- * Build one dashboard: its heading, its stat tiles and its charts.
- *
- * Emptiness is decided here rather than by whoever collected the data, so every
- * dashboard answers to the same rule: no chart with data and no stat with a
- * value is nothing to print, and the section does not appear. Without it the
- * messages dashboard printed a page of zeroes.
+ * Build a dashboard's heading, stats, and charts.
+ * Omit the dashboard when no chart contains data and no stat has a value.
  * @param {Painter} painter - Drawing helpers
  * @param {Dashboard} dashboard - Dashboard from the document model
  * @param {boolean} pageBreakBefore - Whether it opens on a fresh page
@@ -1045,19 +998,16 @@ function buildDashboardBlocks(painter, dashboard, pageBreakBefore) {
     }
     for (const chart of charts) {
         const build = CHART_BUILDERS[chart.type];
-        // A type no builder answers to is skipped: the rest of the export is
-        // worth more to the reader than the one chart nobody knows how to draw.
+        // Skip unsupported chart types so the rest of the export can finish.
         if (!build) {
             continue;
         }
         body.push(...build(painter, chart));
     }
 
-    // Everything below the heading says what a page opening on it should be
-    // called, so a dashboard long enough to run over is not read as charts under
-    // no title at all. Carried on the blocks rather than inserted as one:
-    // paginateBlocks stays a pure function of row heights, and the page painter
-    // is the only thing that knows where a page began.
+    // Attach the continuation label to body blocks. The page painter adds it
+    // when pagination places one of those blocks at the start of a page.
+    // paginateBlocks still calculates page breaks from row heights alone.
     const continuation = `${dashboard.title} (continued)`;
     return [heading, ...body.map((block) => ({ ...block, continuation }))];
 }
@@ -1076,11 +1026,9 @@ export function buildBlocks(painter, data) {
 
     const blocks = [buildHeaderBlock(painter, data)];
 
-    // Whatever comes first follows the title on page one; every section after
-    // it opens on its own page, the way each of these is its own screen on the
-    // site. Asked of the blocks already placed rather than of position, so a
-    // dashboard or a section that turned out to be empty does not leave the
-    // title alone on a page of its own.
+    // Put the first non-empty section after the title on page one. Start each
+    // later section on a new page. Check the blocks already added so an empty
+    // section does not leave the title alone on its page.
     for (const dashboard of dashboards) {
         blocks.push(...buildDashboardBlocks(painter, dashboard, blocks.length > 1));
     }
@@ -1121,13 +1069,9 @@ export function buildBlocks(painter, data) {
 }
 
 /**
- * Draw the running head a page that opens mid-dashboard carries.
- *
- * Page chrome rather than a block, drawn into the top margin the way the footer
- * is drawn into the bottom one. A block would have to be placed, and pagination
- * cannot place it: which pages open mid-dashboard is only known once the placing
- * is done. Smaller and quieter than the dashboard's own heading, so the page it
- * continues stays the one that announced the section.
+ * Draw a continuation heading in the top margin.
+ * The page painter knows which dashboard continues only after pagination,
+ * so the heading is page decoration rather than a measured block.
  * @param {Painter} painter - Drawing helpers
  * @param {string} label - Continuation text
  */

@@ -96,9 +96,9 @@ The CLI and browser try UTF-8 first and then use WHATWG Windows-1252 when no exp
 
 ## The app says the last processing run did not finish
 
-The notice appears when an earlier upload started processing and never finished or failed with an error. A browser that runs out of memory can stop a tab without warning, which is most common on phones with large exports. A browser crash or a forced quit looks the same.
+The notice appears when a previous processing run ended without recording success or an error. The browser may have stopped the tab after running out of memory. A browser crash or a forced quit can leave the same marker.
 
-Upload fewer files at once, close other tabs, or use the Python CLI on a computer, which has higher limits. If the notice keeps appearing for the same export on a computer, reproduce it with `make bench-browser input_dir=path` and report the result.
+Upload fewer files at once, close other tabs, or use the Python CLI on a computer. The CLI has [configurable resource limits](cli.md#set-global-options). If the notice keeps appearing for the same export on a computer, reproduce it with `make bench-browser input_dir=path` and report the result.
 
 ## A cleaner reports missing columns
 

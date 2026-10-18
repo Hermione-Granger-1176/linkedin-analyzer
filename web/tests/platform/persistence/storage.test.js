@@ -644,14 +644,13 @@ describe("Storage", () => {
     // pollute the shared connection used by earlier tests.
     describe("v2 to v3 migration", () => {
         it("moves inline CSV text into the text store on upgrade", async () => {
-            // Drop the v3 database left by earlier tests so we can recreate a v2 one.
+            // Delete the current database before recreating a legacy v2 database.
             await new Promise((resolve, reject) => {
                 const request = indexedDB.deleteDatabase("linkedin-analyzer");
                 request.onsuccess = () => resolve();
                 request.onerror = () => reject(request.error);
-                // A blocked delete means a connection is still open, so the v2
-                // database is never rebuilt. Fail loudly instead of resolving
-                // and running the migration assertions against the stale v3 DB.
+                // A blocked delete leaves an open connection and prevents fixture setup.
+                // Reject so migration assertions cannot run against the current database.
                 request.onblocked = () =>
                     reject(new Error("deleteDatabase blocked: a connection is still open"));
             });
@@ -684,11 +683,11 @@ describe("Storage", () => {
                 request.onerror = () => reject(request.error);
             });
 
-            // A fresh Storage module opens at v3 and runs the upgrade migration.
+            // A fresh Storage module opens the current schema and runs the migration.
             vi.resetModules();
             const { Storage: MigratedStorage } = await import("../../../src/platform/persistence/storage.js");
 
-            // getAllFiles returns metadata only, and getFile still returns the text.
+            // getAllFiles returns metadata, and getFile wraps the legacy text as a Blob.
             const all = await MigratedStorage.getAllFiles();
             expect(all).toHaveLength(1);
             expect(all[0].type).toBe("messages");

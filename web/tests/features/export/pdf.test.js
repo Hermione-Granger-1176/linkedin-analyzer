@@ -163,16 +163,10 @@ function ui() {
 }
 
 /**
- * Stand in for the network the chunk the export's own modules live in arrives
- * over.
- *
- * The factory returns the real runtime module, so the export still drives the
- * real modules. The wrapper counts fetches and, when a test passes a gate,
- * holds one open the way a slow or failing connection would. Registered per
- * test rather than for the file because a mock is cached once it has been
- * built, and re-registering is what makes the next fetch a fetch again. The
- * factory reads the latest chunk and gate rather than closing over its own, as
- * a later registration for the same path does not replace an earlier factory.
+ * Mock delivery of the real export runtime and count loads.
+ * An optional promise delays delivery to simulate a slow connection.
+ * Register per test because Vitest caches mock results. The factory reads
+ * the latest module and promise so repeated registrations use current state.
  * @param {Promise<unknown>} [gate] - Settled before the chunk is delivered
  * @returns {{loads: number}} Live count of the fetches since this call
  */
@@ -191,11 +185,8 @@ function interceptRuntimeChunk(gate) {
 }
 
 /**
- * Let every pending continuation run before a negative is asserted.
- *
- * Awaiting a microtask or two proves nothing here: it can leave an abandoned
- * run still queued behind its own await, so "it did not carry on" would read
- * the same as "it has not got there yet".
+ * Let pending continuations run before asserting that a cancelled export stopped.
+ * A few microtasks alone can leave work queued behind another await.
  * @returns {Promise<void>}
  */
 async function runPendingTasks() {
@@ -981,9 +972,8 @@ describe("PdfExport", () => {
         ui().confirm.click();
         await vi.waitFor(() => expect(chunk.loads).toBe(1), SETTLE);
 
-        // The chunk is still on the wire, so there is no worker to end: pulling
-        // it down to call four terminators that have nothing to terminate would
-        // spend exactly the download the boundary is there to save.
+        // Cancelling during the runtime import must not fetch another runtime
+        // solely to terminate workers that do not yet exist.
         expect(() => press("Escape")).not.toThrow();
         expect(ui().backdrop.hidden).toBe(true);
         expect(terminateThreadsWorker).not.toHaveBeenCalled();
@@ -997,8 +987,7 @@ describe("PdfExport", () => {
         await import("../../../src/features/export/pdf-runtime.js");
         await runPendingTasks();
 
-        // Not one step of it, from the empty document onwards: the fonts alone
-        // are a quarter of a megabyte fetched for a file nobody will read.
+        // No collection, font loading, or rendering starts after cancellation.
         expect(jsPDF).not.toHaveBeenCalled();
         expect(readPdfPalette).not.toHaveBeenCalled();
         expect(registerPdfFonts).not.toHaveBeenCalled();

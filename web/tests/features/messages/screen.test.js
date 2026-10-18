@@ -275,9 +275,9 @@ describe("MessagesPage", () => {
         Storage.getFile.mockResolvedValue({ blob: new Blob(["csv-content"]) });
     });
 
-    // -------------------------------------------------------------------------
-    // Existing tests (preserved exactly)
-    // -------------------------------------------------------------------------
+
+
+
 
     it("shows empty state when messages file is missing", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
@@ -472,11 +472,11 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesTip").hidden).toBe(true);
     });
 
-    // -------------------------------------------------------------------------
-    // New tests, uncovered paths
-    // -------------------------------------------------------------------------
 
-    // --- onRouteLeave hides loading overlay -----------------------------------
+
+
+
+
 
     it("onRouteLeave hides the loading overlay", () => {
         MessagesPage.init();
@@ -484,7 +484,7 @@ describe("MessagesPage", () => {
         expect(LoadingOverlay.hide).toHaveBeenCalledWith("messages");
     });
 
-    // --- init() guard: no layout elements ------------------------------------
+
 
     it("does not initialize when layout elements are missing", async () => {
         document.body.innerHTML = "";
@@ -494,7 +494,7 @@ describe("MessagesPage", () => {
         MI.onRouteLeave();
     });
 
-    // --- init() idempotency --------------------------------------------------
+
 
     it("does not reinitialize when called twice", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
@@ -508,7 +508,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesLayout").hidden).toBe(true);
     });
 
-    // --- onRouteChange triggers init() on first call -------------------------
+
 
     it("onRouteChange initializes page when not yet initialized", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
@@ -520,7 +520,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesLayout").hidden).toBe(true);
     });
 
-    // --- renderSilentConnections with real connections -----------------------
+
 
     it("renders silent connections list when connections file is present", async () => {
         const messagesFile = {
@@ -636,7 +636,7 @@ describe("MessagesPage", () => {
         expect(list.innerHTML).toContain("No date");
     });
 
-    // --- renderFadingConversations -------------------------------------------
+
 
     it("renders fading conversations for connected contacts inactive > 30 days", async () => {
         const now = Date.now();
@@ -759,7 +759,7 @@ describe("MessagesPage", () => {
         expect(list.innerHTML).toContain("No fading conversations");
     });
 
-    // --- Export buttons: silent connections & fading conversations -----------
+
 
     it("exports silent connections when data is available", async () => {
         const now = Date.now();
@@ -884,7 +884,7 @@ describe("MessagesPage", () => {
         expect(lastCall[1]).toBe("messages-fading-conversations.xlsx");
     });
 
-    // --- Time-range filter button interaction --------------------------------
+
 
     it("time-range button click updates active state and re-renders", async () => {
         buildDom(); // rebuild DOM fresh with 4 range buttons
@@ -993,7 +993,7 @@ describe("MessagesPage", () => {
         );
     });
 
-    // --- Route range parameter parsing ---------------------------------------
+
 
     it("applies valid range param from route", async () => {
         buildDom();
@@ -1043,7 +1043,7 @@ describe("MessagesPage", () => {
         expect(activeBtn).toBeNull();
     });
 
-    // --- syncRouteRange skips when route is not messages --------------------
+
 
     it("does not sync route params when not on messages route", async () => {
         buildDom();
@@ -1070,7 +1070,7 @@ describe("MessagesPage", () => {
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 
-    // --- compact time-range select (narrow screens) -------------------------
+
 
     it("syncs range into router on select change", async () => {
         Storage.getAllFiles.mockResolvedValue([]);
@@ -1134,7 +1134,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesTimeRangeSelect").value).toBe("3m");
     });
 
-    // --- hydrateMessageState & hydrateConnectionState via worker payload -----
+
 
     it("hydrateMessageState reconstructs Maps and Sets from worker payload", async () => {
         // Simulate a worker returning a pre-serialised messageState payload
@@ -1213,7 +1213,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("topContactsList").innerHTML).toContain("Hydra Test");
     });
 
-    // --- Worker error event --------------------------------------------------
+
 
     it("falls back to main-thread when worker fires error event", async () => {
         let workerErrHandler = null;
@@ -1288,7 +1288,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("topContactsList").innerHTML).toContain("Ada");
     });
 
-    // --- Worker timeout ------------------------------------------------------
+
 
     it("falls back to main-thread when worker times out", async () => {
         vi.useFakeTimers();
@@ -1365,7 +1365,7 @@ describe("MessagesPage", () => {
         vi.useRealTimers();
     });
 
-    // --- Worker unavailable (no Worker global), main-thread path ------------
+
 
     it("parses on main thread when Worker is unavailable", async () => {
         globalThis.Worker = undefined;
@@ -1415,10 +1415,10 @@ describe("MessagesPage", () => {
 
         expect(document.getElementById("topContactsList").innerHTML).toContain("No Worker");
 
-        globalThis.Worker = undefined; // reset
+        globalThis.Worker = undefined;
     });
 
-    // --- Main-thread parse failure (success: false) --------------------------
+
 
     it("shows parse error empty state when main-thread parse fails", async () => {
         globalThis.Worker = undefined;
@@ -1456,7 +1456,7 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
-    // --- Main-thread fallback skipped for very large files -------------------
+
 
     it("skips the main-thread fallback and shows an empty state for very large files", async () => {
         globalThis.Worker = undefined;
@@ -1492,7 +1492,7 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
-    // --- No usable message rows after parse ----------------------------------
+
 
     it("shows empty state when parsed data has no valid rows", async () => {
         globalThis.Worker = undefined;
@@ -1543,7 +1543,7 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
-    // --- updateStats with skippedRows = 0 (plain text, no asterisk) ----------
+
 
     it("updateStats shows plain number when skippedRows is zero", async () => {
         const messagesFile = {
@@ -1623,7 +1623,7 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
-    // --- Stat-asterisk popup toggle & keyboard interactions ------------------
+
 
     it("skipped-row popup toggles on click and closes on Escape", async () => {
         const messagesFile = {
@@ -1652,15 +1652,12 @@ describe("MessagesPage", () => {
         const asterisk = document.querySelector("#msgStatMessages .stat-asterisk");
         const popup = document.querySelector("#msgStatMessages .stat-popup");
 
-        // Click to show
         asterisk.click();
         expect(popup.classList.contains("visible")).toBe(true);
 
-        // Click to hide
         asterisk.click();
         expect(popup.classList.contains("visible")).toBe(false);
 
-        // Show again then Escape to hide
         asterisk.click();
         asterisk.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
         expect(popup.classList.contains("visible")).toBe(false);
@@ -1763,7 +1760,7 @@ describe("MessagesPage", () => {
         expect(popup.classList.contains("visible")).toBe(false);
     });
 
-    // --- Tip text: top + fading branch ---------------------------------------
+
 
     it("tip shows both top contact and fading contact when both exist", async () => {
         const now = Date.now();
@@ -1827,7 +1824,7 @@ describe("MessagesPage", () => {
         expect(tipText).toContain("I would say hello");
     });
 
-    // --- Tip text: only top contact (no fading) ------------------------------
+
 
     it("tip shows only top contact message when no fading contacts", async () => {
         const now = Date.now();
@@ -1885,7 +1882,7 @@ describe("MessagesPage", () => {
         expect(tipText).toContain("I would keep that rhythm going");
     });
 
-    // --- Tip text: only silent connections, no top contact -------------------
+
 
     it("tip shows silent-connections count when no top contact but silent list non-empty", async () => {
         const messagesFile = {
@@ -1940,7 +1937,7 @@ describe("MessagesPage", () => {
         expect(tipText).toContain("I count 1 silent connection.");
     });
 
-    // --- Connections state reuse when signature matches ----------------------
+
 
     it("reuses cached state when data signature is unchanged on second route change", async () => {
         const messagesFile = {
@@ -2097,7 +2094,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("messagesLayout").hidden).toBe(true);
     });
 
-    // --- Connection matching by nameKey (not URL) ----------------------------
+
 
     it("matches fading contact to connection by name key when URL missing", async () => {
         const now = Date.now();
@@ -2156,7 +2153,7 @@ describe("MessagesPage", () => {
         expect(list.innerHTML).toContain("Name Match");
     });
 
-    // --- Connections file with text (loads via Storage.getAllFiles) ----------
+
 
     it("loads files from storage when not in cache", async () => {
         const timestamp = new Date("2024-03-01").getTime();
@@ -2219,7 +2216,7 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
-    // --- Worker postMessage throws (catch path in processFilesInWorker) ------
+
 
     it("falls back to main-thread when worker postMessage throws", async () => {
         const throwingWorker = {
@@ -2275,7 +2272,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("topContactsList").innerHTML).toContain("Throw User");
     });
 
-    // --- connections parse error from main-thread ----------------------------
+
 
     it("records connection parse error when connections CSV fails on main thread", async () => {
         globalThis.Worker = undefined;
@@ -2421,7 +2418,7 @@ describe("MessagesPage", () => {
         globalThis.Worker = undefined;
     });
 
-    // --- Range filter limits visible results --------------------------------
+
 
     it("filters top contacts to the selected time range", async () => {
         buildDom();
@@ -2486,7 +2483,7 @@ describe("MessagesPage", () => {
         expect(list.innerHTML).not.toContain("Old Contact");
     });
 
-    // --- renderContactName with URL (produces <a> tag) ----------------------
+
 
     it("renders contact name as link when URL is present", async () => {
         const timestamp = new Date("2024-06-01").getTime();
@@ -2583,7 +2580,7 @@ describe("MessagesPage", () => {
         expect(html).not.toContain("javascript:");
     });
 
-    // --- hydrateConnectionState: byName fallback when url missing -----------
+
 
     it("hydrateConnectionState populates byName map from connection list", async () => {
         let workerMsgHandler = null;
@@ -2674,7 +2671,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("fadingConversationsList").innerHTML).toContain("Hyd User");
     });
 
-    // --- Export disabled when list is empty ----------------------------------
+
 
     it("export buttons are disabled when lists are empty", async () => {
         const messagesFile = {
@@ -2713,7 +2710,7 @@ describe("MessagesPage", () => {
         expect(document.getElementById("fadingConversationsExportBtn").disabled).toBe(true);
     });
 
-    // --- Worker-initiated path: wrong requestId is ignored ------------------
+
 
     it("ignores worker messages with mismatched requestId", async () => {
         let workerMsgHandler = null;
@@ -2766,7 +2763,7 @@ describe("MessagesPage", () => {
         // No throw = pass
     });
 
-    // --- onRouteChange with empty DOM (coverage for lines 79-80, 94-95) ------
+
 
     it("onRouteChange returns early when DOM elements are missing", async () => {
         document.body.innerHTML = "";
@@ -2775,10 +2772,10 @@ describe("MessagesPage", () => {
         // onRouteChange should call init() which returns early due to missing elements,
         // and then onRouteChange itself returns early, no exception should be thrown.
         MI.onRouteChange({});
-        // passes if no exception is thrown
+
     });
 
-    // --- getTopContactsInRange accumulates count for repeated contactKey ------
+
 
     it("accumulates message count for contacts with multiple events", async () => {
         const latest = new Date("2024-06-15").getTime();
@@ -2829,7 +2826,7 @@ describe("MessagesPage", () => {
         expect(list.innerHTML).toContain("Repeat Contact");
     });
 
-    // --- getSilentConnections sort with multiple silent connections -----------
+
 
     it("sorts silent connections by connectedOnTimestamp", async () => {
         const ts1 = new Date("2022-01-01").getTime();
@@ -2899,7 +2896,7 @@ describe("MessagesPage", () => {
         expect(alphaIdx).toBeLessThan(zetaIdx);
     });
 
-    // --- getFadingConversations sort with multiple fading contacts ------------
+
 
     it("sorts fading conversations by lastTimestamp descending", async () => {
         const now = Date.now();
@@ -2975,7 +2972,7 @@ describe("MessagesPage", () => {
         expect(html.indexOf("New Fader")).toBeLessThan(html.indexOf("Old Fader"));
     });
 
-    // --- getRangeStart returns null for 'all' with actual data ---------------
+
 
     it('getRangeStart returns null for "all" range (shows all contacts)', async () => {
         const latest = new Date("2024-01-15").getTime();
@@ -3109,9 +3106,9 @@ describe("MessagesPage", () => {
         expect(html).not.toContain("No Key User");
     });
 
-    // -------------------------------------------------------------------------
+
     // Additional branch coverage: worker plumbing, hydration fallbacks, exports
-    // -------------------------------------------------------------------------
+
 
     /** Build a fully-populated hydrated messageState payload for one contact. */
     function makeWorkerMessageState(overrides = {}) {

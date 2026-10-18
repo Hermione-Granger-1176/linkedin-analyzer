@@ -1,26 +1,13 @@
 /**
- * Message thread selection for the PDF export.
+ * Select message threads for PDF export without DOM or storage access.
  *
- * Pure: no DOM, no storage, no worker globals. The hydrated messages state the
- * app keeps in memory deliberately discards message text, so the export re-reads
- * the parsed rows and picks out the tail of each recent conversation itself.
+ * Group rows by CONVERSATION ID and resolve correspondents across all rows.
+ * Rows without an ID group by correspondents. Merge conversations only when
+ * their complete correspondent sets match, keeping group threads separate.
  *
- * Grouping is conversation-first, as the export contract requires. Rows are
- * accumulated by `CONVERSATION ID`; each conversation's correspondents are
- * resolved across all of its rows, so a contact who is renamed mid-thread, or
- * who carries a profile URL on one row and not the next, never splits the
- * conversation in two, and a row that names nobody joins its conversation
- * whether it comes first or last. Rows with a blank `CONVERSATION ID` group by
- * their correspondents directly. Conversations are then folded into threads by
- * their whole correspondent set, so a group conversation stays one thread of its
- * own rather than merging into the one-to-one thread of any member.
- *
- * Self-detection is the export's own. `MessagesAnalytics.detectSelfContext`
- * breaks coverage ties by insertion order, which names the sender of a single
- * received message as the account owner and then labels that message as sent.
- * Here a tie means self genuinely cannot be identified, and the export says so:
- * direction becomes "unknown" and every participant of a conversation counts as
- * a correspondent.
+ * Resolve the account owner independently of MessagesAnalytics.detectSelfContext.
+ * A coverage tie leaves direction unknown instead of selecting by insertion
+ * order. In that case, every participant counts as a correspondent.
  */
 
 import { MessagesAnalytics } from "../messages/analytics.js";
@@ -77,20 +64,9 @@ const NO_SELF = Object.freeze({ selfUrls: new Set(), selfNames: new Set() });
  */
 
 /**
- * Extract a row's non-self participants for the export.
- *
- * `MessagesAnalytics.extractParticipantsFromRow` drops anyone named "LinkedIn
- * Member" outright, which is right for analytics - those placeholders belong to
- * different people and must not be counted as one contact - but wrong here. The
- * export promises the last people you messaged, and dropping the placeholder
- * leaves a conversation with no correspondent at all, so `foldIntoThreads`
- * discards it and a recent exchange disappears from the document entirely.
- *
- * So the placeholder is kept when the row carries a `CONVERSATION ID`, which
- * gives it a scope to be anonymous within: `canonicalContactKey` keys it to that
- * conversation, so two unrelated anonymous conversations never merge into one
- * person. Without an id there is no such scope and nothing to attribute the row
- * to, so it is dropped as before.
+ * Extract non-self participants and retain anonymous contacts within a conversation.
+ * Scope LinkedIn Member placeholders by CONVERSATION ID so unrelated anonymous
+ * contacts remain separate. Drop placeholders when there is no ID to scope them.
  * @param {MessageRow} row - Parsed message row
  * @param {SelfContext} context - Self context
  * @param {boolean} keepAnonymous - Whether the row has a conversation to scope anonymity to
@@ -167,11 +143,7 @@ function normalizeLimit(value, fallback) {
 }
 
 /**
- * Take a message body exactly as it was parsed.
- *
- * Deliberately not `cleanText`: trimming a body would eat the leading tab or the
- * trailing blank line the person actually typed, and the export promises the
- * full message.
+ * Return a parsed message body without trimming its whitespace.
  * @param {unknown} value - Parsed CONTENT cell
  * @returns {string} Message body
  */
@@ -180,13 +152,9 @@ function messageBody(value) {
 }
 
 /**
- * Keep only the rows whose date parses, paired with the parsed date.
- *
- * Every pass has to agree on which rows exist. A row with an unreadable date
- * never reaches the PDF, so it must not vote on who the account owner is
- * either: a pile of undated rows could otherwise give a contact wider
- * conversation coverage than the owner and invert the direction chip on the
- * dated messages that do get drawn.
+ * Keep dated rows paired with their parsed dates.
+ * Use this same set for owner detection and PDF selection so undated rows
+ * cannot change direction labels on the included messages.
  * @param {MessageRow[]} rows - Parsed message rows
  * @returns {DatedRow[]} Dated rows, in file order
  */
@@ -315,14 +283,9 @@ function realNameKey(participant) {
 }
 
 /**
- * Report whether one row proves its conversation has more than two people.
- *
- * Counted off the raw fields rather than the parsed participants, because the
- * participant list is exactly what loses this information when a group export
- * carries at most one recipient URL. Splitting on commas can over-count a name
- * that contains one, and that is the safe direction: the only thing this
- * decides is whether a conversation may lend a profile URL to a bare name, and
- * declining to keeps two people apart rather than merging them.
+ * Check raw recipient fields for evidence of a group conversation.
+ * Parsed names can hide multiple recipients when URLs are missing. A comma
+ * inside a name may overcount, which prevents an unsafe alias merge.
  * @param {MessageRow} row - Parsed message row
  * @returns {boolean} True when the row names more than one recipient
  */
@@ -331,19 +294,10 @@ function namesSeveralRecipients(row) {
 }
 
 /**
- * Link a one-to-one conversation's URL-less aliases to that conversation's URL.
- *
- * `buildNameToUrl` can only join a name to a URL when it has seen that exact
- * name carrying that URL. A contact who is renamed mid-thread and whose new name
- * never appears with a profile URL - "Ada Lovelace" with a URL, then "Ada L."
- * without one - therefore stays two identities: the conversation looks like a
- * group of two, and a later conversation under the URL becomes a separate
- * thread, burning two of the ten slots on one person.
- *
- * A conversation whose every row has exactly one correspondent settles it: every
- * alias in it is the same person, so any URL seen there is theirs. Only
- * conversations with a real `CONVERSATION ID` qualify, because a synthesized key
- * is built from the very identities this is trying to reconcile.
+ * Associate URL-less aliases with a one-to-one conversation's profile URL.
+ * Use only conversations with a real CONVERSATION ID, one correspondent per
+ * row, and one profile URL. Synthesized keys depend on the identities being
+ * resolved and cannot establish that aliases refer to one person.
  * @param {DatedRow[]} dated - Dated message rows
  * @param {SelfContext} context - Resolved self context
  * @returns {Map<string, string>} Normalized name to profile URL
@@ -471,11 +425,7 @@ function buildIdentityIndex(dated, nameToUrl) {
 }
 
 /**
- * Pick the identity with the widest conversation coverage, or nothing on a tie.
- *
- * A tie is the case this module refuses to guess at: picking the first one
- * inserted is exactly how a single received message ends up attributed to the
- * wrong person.
+ * Select the identity with the widest conversation coverage. Return null on a tie.
  * @param {Identity[]} candidates - Candidate identities
  * @returns {Identity|null} Winning identity, or null when the top two tie
  */
@@ -498,14 +448,8 @@ function pickWidestCoverage(candidates) {
 }
 
 /**
- * Narrow tied candidates to the ones who are not in the user's connections.
- *
- * Coverage ties whenever the export holds a single conversation, however many
- * messages it has: both people appear in exactly one, and both send and
- * receive, so the message file alone genuinely cannot say which is the account
- * owner. The connections file can. Someone you are connected to is in it; you
- * are never in your own connections, so an identity that appears there is not
- * you.
+ * Remove candidates identified as contacts in the account's connections file.
+ * The account owner does not appear in their own connections.
  * @param {Identity[]} candidates - Tied candidates
  * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
  * @returns {Identity[]} Candidates that no connection matches
@@ -556,23 +500,10 @@ function preferStrangers(candidates, contactKeys) {
 }
 
 /**
- * Resolve the account owner from the identity index.
- *
- * The connections file is consulted first, because it is a fact about the
- * export rather than a heuristic over it: you are never in your own
- * connections, so anybody it names is not the account owner. Consulting it only
- * after the counting had tied meant it was never reached in the cases where the
- * counting confidently reached the wrong answer.
- *
- * What remains is conversation coverage. The account owner is in every
- * conversation and everyone else is in their own, so the widest coverage is the
- * owner, and it decides alone. Requiring the owner to have both sent and
- * received cannot be a filter (an inbox nobody has replied to has an owner who
- * sends nothing), and as a preference it can only ever agree with coverage or
- * overrule a tie the export has no business overruling.
- *
- * A winner that is not unique means self genuinely cannot be identified, and
- * the export says so rather than guessing.
+ * Resolve the account owner from known connections and conversation coverage.
+ * First exclude known contacts when that narrows the candidates. Then select
+ * a unique candidate with the widest coverage. Return null on a tie.
+ * Sent and received counts cannot reliably distinguish the owner.
  * @param {Map<string, Identity>} identities - Identity index
  * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
  * @returns {SelfContext|null} Self context, or null when unidentifiable
@@ -778,18 +709,9 @@ function foldIntoThreads(conversations) {
 }
 
 /**
- * Take the most recent threads without exceeding the promised head count.
- *
- * The limit is a number of *people*, which is what the dialog promises and what
- * bounds how much personal data the file carries. Counting threads instead let
- * one eight-person group conversation plus nine one-to-one threads put
- * seventeen people into a document configured for ten.
- *
- * A thread is taken only when everyone new in it fits the remaining budget, and
- * later threads are still considered: skipping an oversized group does not stop
- * a smaller, older one-to-one thread from being included. A single group larger
- * than the whole budget therefore never appears, which is the honest reading of
- * the promise rather than an edge case to work around.
+ * Select recent threads within the distinct-person limit.
+ * Include a thread only if every new correspondent fits the remaining limit.
+ * Continue after skipping a group so smaller, older threads remain eligible.
  * @template {{correspondents: Map<string, unknown>}} T
  * @param {T[]} threads - Threads, most recent first
  * @param {number} people - Maximum distinct correspondents

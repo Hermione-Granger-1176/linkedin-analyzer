@@ -63,26 +63,20 @@ export const PENDING = Symbol("export-request-pending");
  */
 
 /**
- * Read a reported failure by whether the worker attributed it to this request.
+ * Distinguish a failed parse from a worker failure outside the request.
  *
- * The workers answer under the id they were asked under when they read the
- * request and it was the parse itself that failed, and under id 0 when they
- * fell over before or outside of that: a request the contract parser rejected,
- * a global `error`, an unhandled rejection. Real ids start at 1, so the two
- * cases are always told apart.
+ * A failed parse uses the request's id, which starts at 1. Contract rejection,
+ * a global error, or an unhandled rejection uses id 0.
  *
- * Only the first is evidence about the file, so only the first is FAILED. A
- * worker that never read the request never touched the CSV, and a worker that
- * fell over says nothing about whether the file can be parsed, so both leave
- * the small-export fallback its job.
+ * Return FAILED for a parse failure attributed to this request. Return null
+ * for id 0 so small exports can use the fallback. A failure outside the request
+ * does not establish whether the file can be parsed.
  *
- * The worker entry cancels every global failure event, so a crash reaches the
- * main thread only as that envelope under id 0, never as an `error` event on
- * the Worker object, and the fallback depends on reading id 0 as null.
+ * The worker entry cancels global failure events and sends an id 0 envelope.
+ * The fallback depends on interpreting that envelope as null.
  *
- * The request ends here either way rather than sitting out its watchdog: only
- * one request is ever in flight, and a worker that has reported it cannot
- * answer is not going to answer.
+ * Settle the request immediately after either failure. Only one request is
+ * active, so no other request can own the failure.
  * @param {{requestId: import("../../app/worker-contracts.ts").RequestId}} message - Parsed reply reporting a failure
  * @param {ReplyContext} context - The request's id and error reporter
  * @returns {null|typeof FAILED} FAILED when the worker attributed the failure to this request, null otherwise
@@ -208,7 +202,7 @@ export function createWorkerTransport(config) {
             const finishRequest = () => {
                 clearWorkerTimeout();
                 // handleError can fire after terminate() has already nulled the
-                // handle, so the guard is load-bearing.
+                // handle, so check it before detaching listeners.
                 /* v8 ignore next 3 */
                 if (!worker) {
                     return;

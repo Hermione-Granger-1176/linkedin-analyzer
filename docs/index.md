@@ -25,6 +25,8 @@ The `Makefile` is the only interface for repository setup, checks, tests, web de
 
 Use the [development guide](development.md) for the common path. Use the Makefile help output when you need a target that this index does not list.
 
+The [large-export investigation](large-export-investigation.md) records the October 2026 performance measurements and the limitations of those comparisons.
+
 ## Read the product rules first
 
 The browser app keeps uploaded file contents local, but it can retain them in browser storage so a reload can restore a session. Read [web app privacy](web-app.md#understand-where-the-app-keeps-data) before using the app on a shared computer.

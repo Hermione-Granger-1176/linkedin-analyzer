@@ -30,5 +30,5 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: OS, browser (web), Python/Node versions
+      description: Include your operating system and the browser, Python, or Node.js versions involved.
       placeholder: "macOS 14, Chrome 120"

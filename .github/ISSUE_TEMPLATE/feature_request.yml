@@ -21,4 +21,4 @@ body:
     id: alternatives
     attributes:
       label: Alternatives
-      description: Any alternative solutions considered?
+      description: What alternatives have you considered?

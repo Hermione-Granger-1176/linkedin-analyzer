@@ -1,4 +1,4 @@
-/* LinkedIn Analyzer - Messages parsing worker */
+/* LinkedIn Analyzer: Messages parsing worker */
 
 import { parseMessagesWorkerRequest } from "../../app/worker-contracts.ts";
 import { toCsvSource } from "../../shared/csv-source.js";

@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Run a policy-driven Python dependency security audit for exported requirements.
 
-A bare ``pip-audit --strict`` fails the build on any advisory, including
-triaged transitive ones, with no principled override. This module wraps
-``pip-audit --strict --format json`` with a reviewed-exception policy:
-exceptions expire on a ``review_by`` date, an exception is evicted once a fix
-becomes available (when it was granted only while unfixed), and unused
-exceptions are reported so the allow-list never rots.
+This module applies reviewed exceptions to ``pip-audit --strict --format json``
+results. Exceptions expire on their ``review_by`` date. An exception restricted
+to unfixed findings stops applying when a fix becomes available. Unused
+exceptions produce errors.
 
-``--strict`` semantics are preserved twice over: the flag is always passed, and
-any dependency pip-audit reports as skipped is reported as an audit error.
+The command always includes ``--strict``. Dependencies reported as skipped in
+the JSON output also produce audit errors.
 
 Exceptions live under ``python_vulnerability_exceptions`` in
 ``config/security_audit.json``.

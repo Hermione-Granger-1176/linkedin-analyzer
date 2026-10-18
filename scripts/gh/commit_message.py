@@ -1,11 +1,8 @@
-"""Validate commit messages before they reach ``git commit``.
+"""Reject shell fragments accidentally included in commit messages.
 
-Heredoc-driven commit flows (``make commit <<'EOF' ... EOF``) can
-leak shell fragments into the recorded message when a terminator is mistyped or
-trailing shell is pasted after the closing token. Commit ``b68de52`` captured
-``EOF && make push 2>&1 | tail -3`` inside its message this way. This module
-rejects the obvious shell-leak shapes while keeping false positives unlikely, so
-only clearly shell-shaped lines are flagged.
+A mistyped heredoc terminator can become part of the recorded message. This
+module checks common terminators, quoted heredoc openers, redirects, and pager
+pipes. It limits matches to recognizable shell syntax to reduce false positives.
 """
 
 from __future__ import annotations

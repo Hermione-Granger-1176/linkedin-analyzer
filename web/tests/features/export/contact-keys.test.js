@@ -32,10 +32,8 @@ describe("collectContactKeys", () => {
     });
 
     it("keeps a connection whose export recorded no connection date", () => {
-        // The whole reason this parses rather than cleans. `requiredRowColumns`
-        // drops a row with no "Connected On", which is right for the connections
-        // dashboard and wrong here: somebody you are connected to is still not
-        // you whether or not the export recorded when it happened.
+        // The connections cleaner drops rows without Connected On. Contact-key
+        // matching must still include those rows.
         const csv = connectionsCsv([`Ada,Lovelace,${ADA_URL},,Analytical Engines,Mathematician,`]);
 
         expect(LinkedInCleaner.process(csv, "connections").cleanedData).toHaveLength(0);
@@ -43,8 +41,7 @@ describe("collectContactKeys", () => {
     });
 
     it("keeps a row the cleaner would rewrite for a spreadsheet", () => {
-        // The cleaner quote-prefixes a cell a spreadsheet would evaluate. A key
-        // is looked up by exact value, so a rewritten one matches nobody.
+        // Match the raw name before the cleaner prefixes an apostrophe for spreadsheet export.
         const csv = connectionsCsv([`=Ada,Lovelace,${ADA_URL},,Acme,Engineer,01 Jan 2024`]);
 
         expect(collectContactKeys(csv)).toContain("=ada lovelace");

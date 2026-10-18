@@ -13,7 +13,7 @@ The cleaner matches a file type from its header row. Header names are trimmed, a
 | Messages    | `messages.csv`    | `FROM`, `TO`, `DATE`, `CONTENT`           | The cleaner keeps `FOLDER`, `CONVERSATION ID`, `SENDER PROFILE URL`, and `RECIPIENT PROFILE URLS` when present. |
 | Connections | `Connections.csv` | `First Name`, `Last Name`, `Connected On` | The parser skips the first three rows and keeps `URL`, `Email Address`, `Company`, and `Position` when present. |
 
-The CLI reads UTF-8 with a byte-order mark first. When UTF-8 decoding fails and no explicit encoding was supplied, it retries with WHATWG Windows-1252 and logs a warning. Pass `--encoding` when you know the source encoding or when characters look wrong.
+The CLI reads BOM-aware UTF-8 first. If decoding fails without an explicit encoding, it retries with WHATWG Windows-1252 and logs a warning. The [`--encoding` option](cli.md#set-global-options) disables automatic fallback and selects the input encoding.
 
 ## Output columns
 
@@ -62,6 +62,8 @@ The CLI and browser use the same cleaning rules through separate implementations
 
 ## Resource limits
 
-The CLI defaults to a 128 MiB input file limit and 1,000,000 parsed rows. Set `--max-input-bytes 0` or `--max-rows 0` to disable one limit. The browser accepts files up to 128 MiB, limits decoded text to 128 Mi characters, parses at most 1,000,000 rows, accepts at most 256 columns per row, and limits one field to 200,000 characters.
+The CLI defaults to a 128 MiB input file limit and 1,000,000 parsed rows. `--max-input-bytes 0` disables the file-size limit. `--max-rows 0` disables the row limit.
+
+The browser accepts files up to 128 MiB and 1,000,000 rows. Decoded text is limited to 128 Mi characters per file. Each row can have at most 256 columns, and each field can have at most 200,000 characters.
 
 These limits protect different runtimes. Do not assume that a file accepted by the browser app will be accepted by the CLI, or the reverse.

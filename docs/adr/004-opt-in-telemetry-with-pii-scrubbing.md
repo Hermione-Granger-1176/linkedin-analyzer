@@ -8,14 +8,16 @@ The app's core promise is that file contents stay in the user's browser. Diagnos
 
 ## Decision
 
-Keep diagnostics off until the user explicitly opts in, and scrub aggressively when they do.
+Keep diagnostics off until the user explicitly opts in. With consent, send only the diagnostic fields listed below.
 
-- The Sentry SDK is not initialized until consent is granted through the telemetry banner or footer toggle, and consent can be revoked at any time (`web/src/platform/observability/telemetry.js`, `web/src/platform/observability/sentry.js`). Most visitors never opt in, so the default is no telemetry at all.
-- Layered reduction runs before anything leaves the browser. Error events are rebuilt from a strict schema containing fixed diagnostic identifiers, normalized same-origin JavaScript or service-worker pathnames, nonnegative integer line and column locations, sourcemap debug IDs, and configured environment/release metadata. Performance telemetry is limited to allowlisted nonnegative numeric measures and positive integer counts, buffered and sent as one numeric event each time a nonempty buffer is flushed on page hide. That event may carry one more tag, `effects`, holding the effects tier in use (`lite`, `standard`, or `rich`, see [ADR-009](009-device-tiers-for-effects.md)). The `processing-unfinished` event, sent once when a later visit finds a processing run that did not finish, carries only three allowlisted values: a combined-size bucket, a `navigator.deviceMemory` bucket (`unknown` where the browser does not expose it), and whether one file or several were processed. Any other value drops the event.
+- The browser initializes Sentry only after consent through the telemetry banner or footer toggle. Users can revoke consent at any time. `web/src/platform/observability/telemetry.js` and `web/src/platform/observability/sentry.js` enforce this requirement.
+- Before transmission, the browser rebuilds error events from a fixed schema. Allowed fields are diagnostic identifiers, normalized same-origin script paths, nonnegative integer source locations, sourcemap debug IDs, and configured environment and release metadata.
+- Performance telemetry contains allowlisted nonnegative measurements and positive integer counts. The browser buffers these values and sends one numeric event when a nonempty buffer flushes on page hide. The event may include the `effects` tag with a value of `lite`, `standard`, or `rich`. [ADR-009](009-device-tiers-for-effects.md) defines these tiers.
+- A later visit that detects an unfinished run may send one `processing-unfinished` event. Allowed values are the combined file-size bucket, the `navigator.deviceMemory` bucket, and whether the run processed one file or several. Memory is `unknown` when the browser does not expose it. Any disallowed value causes the browser to discard the event.
 - Raw user-controlled strings are not attached. This includes file contents and names, messages, URLs and queries, DOM text, rejection values, local filesystem paths, arbitrary context, object serialization, breadcrumbs, request/user data, and SDK-added context.
 
 ## Consequences
 
-- Privacy is preserved by default and by construction: with no consent the bundled SDK is not initialized and no diagnostics events are emitted.
-- Error visibility is a lower bound, not a true rate. This blind spot is documented in `docs/operations.md` (Observability blind spot): the absence of events does not mean the absence of errors, and incident severity should not be sized from event counts. Prefer local reproduction with a matching fixture.
+- Without consent, the browser does not initialize Sentry or emit diagnostic events.
+- Diagnostic event counts do not establish the error rate. Missing events do not establish that no errors occurred. [Monitor diagnostics](../operations.md#monitor-diagnostics) explains this limitation. Reproduce incidents locally with matching fixtures before assessing their impact.
 - CSP violation reports (`/api/csp-report`) are the one signal that does not depend on consent. The collector rebuilds them from a bounded violation-metadata allowlist, strips URL queries and fragments, and never attaches uploaded file contents.

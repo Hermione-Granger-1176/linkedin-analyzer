@@ -232,13 +232,10 @@ const BLOB_PROBE_DB = "linkedin-analyzer-blob-probe";
 const BLOB_PROBE_TIMEOUT_MS = 2000;
 
 /**
- * Check whether this browser can store a Blob in IndexedDB and read it back.
- *
- * WebKit can refuse a Blob in an ephemeral session, such as a Safari private
- * window or a Playwright context, and some builds never answer such a write at
- * all. A write that never answers would also hold up every later write to the
- * same store, so the probe runs in its own throwaway database, gives up after
- * a short timeout, and the app stores bytes for the session when it fails.
+ * Probe Blob persistence in a temporary IndexedDB database.
+ * Some WebKit ephemeral sessions reject Blob writes or leave them pending.
+ * Use a separate database and a timeout so the probe cannot block uploads.
+ * Store byte arrays for this session if the probe fails.
  * @param {{idb?: IDBFactory, timeoutMs?: number}} [options] - Overridable for tests
  * @returns {Promise<boolean>}
  */
@@ -259,7 +256,7 @@ export function probeBlobStorage({ idb = indexedDB, timeoutMs = BLOB_PROBE_TIMEO
             try {
                 idb.deleteDatabase(BLOB_PROBE_DB);
             } catch {
-                // The probe database is disposable; leaving it costs nothing.
+                // Ignore cleanup failure for the temporary probe database.
             }
             resolve(supported);
         };
@@ -551,8 +548,8 @@ export const Storage = (() => {
     }
 
     /**
-     * Save an uploaded CSV file record. The original upload is stored as a
-     * Blob, which browsers keep on disk rather than in memory.
+     * Save an uploaded file and its metadata.
+     * Prefer Blob persistence so the browser can manage the file's backing storage.
      * @param {string} type - File type key
      * @param {StoredFileInput & {rowCount: number}} data - File data to persist
      * @returns {Promise<void>}
@@ -597,8 +594,7 @@ export const Storage = (() => {
                 try {
                     await putFileRecord(db, metadata, blob);
                 } catch (error) {
-                    // WebKit refuses Blobs in IndexedDB in an ephemeral session,
-                    // such as a Safari private window, so store the bytes instead.
+                    // If the Blob write fails, retry with its bytes.
                     if (!blob) {
                         throw error;
                     }

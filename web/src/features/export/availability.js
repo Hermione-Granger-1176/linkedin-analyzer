@@ -1,12 +1,8 @@
 /**
- * The stored data an export is built from, and the cheap check over it.
+ * Check stored data for PDF export availability.
  *
- * Split this module out of collect.js because the export button is on every
- * screen. The button needs a cheap availability check on load, while collect.js
- * loads the layout engine, charts, and worker transports only for an export.
- *
- * The dependency runs one way: collect.js reads through these, and nothing here
- * may reach back into the collection graph.
+ * This module stays outside collect.js so the global export button can check
+ * availability without loading the PDF layout, charts, or worker transports.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
@@ -77,12 +73,9 @@ export async function readSafely(read, operation) {
 }
 
 /**
- * Read the analytics base an export computes from, cache first.
- *
- * Shared so the availability check and the collection itself answer the same
- * question the same way: a cached base with no months used to make the button
- * read the stored one and say yes, while collection gave up without looking and
- * exported nothing.
+ * Read the analytics base, preferring a populated cache entry.
+ * The availability check and collection use this same lookup so they agree
+ * when the cache is empty but storage contains analytics.
  * @returns {Promise<StoredAnalytics|null>} Analytics base carrying months, or null
  */
 export async function readAnalyticsBase() {
@@ -97,11 +90,8 @@ export async function readAnalyticsBase() {
 }
 
 /**
- * Read the persisted outreach summary, treating a storage failure as absent.
- *
- * Shared with the collection itself for the same reason the analytics base is:
- * one statement of where the summary comes from, and of what it is reported as
- * when the read fails.
+ * Read the persisted outreach summary. A storage failure returns null.
+ * The availability check and collection share this lookup.
  * @returns {Promise<OutreachSummary|null>} Outreach summary, or null
  */
 export function readOutreach() {
@@ -113,12 +103,9 @@ export function readOutreach() {
 }
 
 /**
- * Report whether a published snapshot holds anything the document would show.
- *
- * Insight cards are not the only thing on the Insights screen: a range can
- * produce no cards while the all-time stats below them are still populated.
- * Testing the cards alone would send that screen down the cold path and export
- * the default range instead of the one the user has selected.
+ * Check whether a published Insights snapshot contains exportable content.
+ * All-time stats count even when the selected range produces no insight cards.
+ * Reusing that snapshot preserves the selected range.
  * @param {InsightsSnapshot|null|undefined} snapshot - Published Insights snapshot
  * @returns {snapshot is InsightsSnapshot} True when the snapshot carries content
  */
@@ -133,11 +120,8 @@ export function hasSnapshotContent(snapshot) {
 }
 
 /**
- * Check whether there is anything worth exporting.
- *
- * Used to disable the export button before the user opens the dialog, so it is
- * deliberately cheap: caches first, one small storage read otherwise, and no
- * part of the export's own machinery loaded to answer it.
+ * Check whether stored data can produce a PDF.
+ * Read caches first, then storage as needed, without loading the export modules.
  * @returns {Promise<boolean>} True when a PDF would contain something
  */
 export async function hasExportableData() {
@@ -153,14 +137,9 @@ export async function hasExportableData() {
     if (await readOutreach()) {
         return true;
     }
-    // A connections or messages export produces a dashboard of its own without
-    // ever reaching the analytics base, which only shares and comments fill. The
-    // read is metadata only, so this stays as cheap as the checks above it.
-    //
-    // A row count rather than mere presence: an upload that stored no rows, or a
-    // record whose text has since gone, is a file the dashboards will find
-    // nothing in, and enabling the button for it promises a document that comes
-    // back empty.
+    // Connections and messages can provide dashboard data without shares or
+    // comments in the analytics base. Read their metadata and require a positive
+    // row count to exclude uploads that produced no rows.
     const files = await readSafely(() => Storage.getAllFiles(), "load-file-metadata");
     return (
         Array.isArray(files) &&

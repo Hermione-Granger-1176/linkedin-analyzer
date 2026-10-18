@@ -15,6 +15,7 @@ import { Storage } from "../../platform/persistence/storage.js";
 import { FILE_TYPES } from "../../shared/constants.js";
 import { MAX_FILE_BYTES } from "../../shared/limits.js";
 import { toErrorMessage } from "../../shared/worker-errors.js";
+import { computeWorkerTimeout } from "../../shared/worker-timeout.js";
 
 import { isQuotaExceededError } from "./decode.js";
 import { consumePendingFile, createJobId, resolveJobId } from "./jobs.js";
@@ -111,6 +112,9 @@ export const UploadPage = (() => {
     let initialized = false;
     /** @type {string|null} */
     let lastPrimedSignature = null;
+    // True when the last prime failed to reach the worker, so it does not hold
+    // the whole stored set and a later upload must not record it as primed.
+    let primeFailed = false;
     /** @type {Promise<void>|null} */
     let restorePromise = null;
     let restoredOnce = false;
@@ -213,6 +217,7 @@ export const UploadPage = (() => {
         clearPrimeSchedule();
         pendingPrimePayload = null;
         lastPrimedSignature = null;
+        primeFailed = false;
         initWorker();
         // Re-prime the new worker from cached files so analytics stay accurate after a crash.
         if (!worker) {
@@ -507,7 +512,7 @@ export const UploadPage = (() => {
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
-            scheduleJobTimeout(jobId, file.name);
+            scheduleJobTimeout(jobId, file);
             // The worker reads the File itself. Posting a File clones a
             // reference to its bytes, so the page never holds the text; the
             // page keeps the File to store once the worker accepts it.
@@ -552,6 +557,7 @@ export const UploadPage = (() => {
         clearPrimeSchedule();
         pendingPrimePayload = null;
         lastPrimedSignature = null;
+        primeFailed = false;
         if (worker) {
             worker.postMessage({ type: "clear" });
         }
@@ -671,13 +677,16 @@ export const UploadPage = (() => {
 
         if (!fileType) {
             setHint(payload.error || "File could not be processed.", true);
-            await persistAnalyticsOnly(payload.analyticsBase);
+            // A reply with no pending job outlived a Clear, so its analytics
+            // describe data that is gone.
+            if (pending) {
+                await persistAnalyticsOnly(payload.analyticsBase);
+            }
             completeJob(jobId, fileName);
             return;
         }
 
         if (!pending) {
-            await persistAnalyticsOnly(payload.analyticsBase);
             completeJob(jobId, fileName);
             return;
         }
@@ -712,7 +721,7 @@ export const UploadPage = (() => {
                     : "File loaded successfully.",
                 false,
             );
-            if (ANALYTICS_SOURCE_TYPES.has(fileType)) {
+            if (ANALYTICS_SOURCE_TYPES.has(fileType) && !primeFailed) {
                 // The worker that processed this file already holds it along
                 // with the rest of the stored set, so record that set as primed
                 // instead of having the worker read and parse it all again.
@@ -792,15 +801,27 @@ export const UploadPage = (() => {
         if (!analyticsBase) {
             return;
         }
+        const generation = clearGeneration;
+        const save = Storage.saveAnalytics(analyticsBase);
+        // Clear waits for this save, so it cannot write analytics back after the wipe.
+        pendingSaves.add(save);
         try {
-            await Storage.saveAnalytics(analyticsBase);
+            await save;
+            if (generation !== clearGeneration) {
+                return;
+            }
             DataCache.invalidate("insights:");
             DataCache.set("storage:analyticsBase", analyticsBase);
             DataCache.notify({ type: "analyticsChanged" });
             const files = await getStoredFilesSnapshot();
+            if (generation !== clearGeneration) {
+                return;
+            }
             updateStatus({ fileMap: getFileMap(files), analyticsReady: true });
         } catch (error) {
             captureError(error, { module: "upload", operation: "persist-analytics" });
+        } finally {
+            pendingSaves.delete(save);
         }
     }
 
@@ -925,7 +946,7 @@ export const UploadPage = (() => {
         // spent its watchdog behind this one. Restart those so each is timed
         // from when it can start; the job now running still stops a stall.
         pendingFiles.forEach((entry, waitingJobId) => {
-            scheduleJobTimeout(waitingJobId, entry.fileName);
+            scheduleJobTimeout(waitingJobId, entry.file);
         });
         checkJobs();
     }
@@ -1203,6 +1224,7 @@ export const UploadPage = (() => {
         } catch (error) {
             // Leave lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-load-text" });
+            primeFailed = true;
             return;
         }
         // Posting files read before a Clear would restore them into the worker
@@ -1227,9 +1249,11 @@ export const UploadPage = (() => {
             // serialized chain and stall the awaiting upload) and leave
             // lastPrimedSignature unchanged so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-post-message" });
+            primeFailed = true;
             return;
         }
         lastPrimedSignature = signature;
+        primeFailed = false;
     }
 
     /** Clear all queued analytics prime timers and idle callbacks. */
@@ -1280,12 +1304,15 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Start a timeout watchdog for a worker job.
+     * Start a timeout watchdog for a worker job. A large file gets more time, so
+     * a slow device is not cut off partway through a file within the limits.
      * @param {string} jobId - Worker job id
-     * @param {string} fileName - Uploaded file name
+     * @param {File} file - Uploaded file
      */
-    function scheduleJobTimeout(jobId, fileName) {
+    function scheduleJobTimeout(jobId, file) {
         clearJobTimeout(jobId);
+        const fileName = file.name;
+        const budget = Math.max(JOB_TIMEOUT_MS, computeWorkerTimeout(file));
         const timeoutId = window.setTimeout(() => {
             // completeJob() clears this timer when a job settles, including error paths.
             // resetProcessingState() clears all job timers during teardown.
@@ -1301,7 +1328,7 @@ export const UploadPage = (() => {
             resetProcessingState();
             restartWorker();
             setHint(`Processing took too long for ${fileName}. Please retry this file.`, true);
-        }, JOB_TIMEOUT_MS);
+        }, budget);
 
         jobTimeouts.set(jobId, timeoutId);
     }

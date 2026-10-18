@@ -107,6 +107,7 @@ const DIAGNOSTIC_TAG_VALUES = Object.freeze({
         "parse-file",
         "parse-stored-file",
         "parse-stored-file-map",
+        "persist-analytics",
         "persist-outreach",
         "persist-processed-file",
         "prime-before-upload",

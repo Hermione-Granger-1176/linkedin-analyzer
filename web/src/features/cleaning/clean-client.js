@@ -104,7 +104,6 @@ function onError(event) {
     terminateCleanWorker();
 }
 
-/**
 /** @returns {CleanReply} */
 function cancelled() {
     return { ...failure(null), cancelled: true };

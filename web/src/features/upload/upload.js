@@ -1308,7 +1308,7 @@ export const UploadPage = (() => {
         // Async storage reads can outlive worker teardown. Recheck before posting.
         const worker = workers.current();
         /* v8 ignore next 3 */
-        if (!workers.current()) {
+        if (!worker) {
             return;
         }
         try {

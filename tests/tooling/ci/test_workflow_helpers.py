@@ -191,3 +191,26 @@ def test_main_surfaces_context_validation_failures() -> None:
                 "feature/unsafe",
             ]
         )
+
+
+def test_append_github_output_appends_lines_to_the_step_output_file(tmp_path: Path) -> None:
+    """Each line lands in the file named by GITHUB_OUTPUT, after what was already there."""
+    output = tmp_path / "output"
+    output.write_text("existing=1\n", encoding="utf-8")
+    env = {workflow_helpers.GITHUB_OUTPUT_ENV: str(output)}
+
+    workflow_helpers.append_github_output(["a=1", "b=2"], env=env)
+
+    assert output.read_text(encoding="utf-8") == "existing=1\na=1\nb=2\n"
+
+
+def test_append_github_output_writes_nothing_outside_actions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without GITHUB_OUTPUT there is no file to write and no error."""
+    monkeypatch.delenv(workflow_helpers.GITHUB_OUTPUT_ENV, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    workflow_helpers.append_github_output(["a=1"])
+
+    assert list(tmp_path.iterdir()) == []

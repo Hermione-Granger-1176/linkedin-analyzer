@@ -17,17 +17,12 @@ an empty finding list that could be mistaken for a successful audit.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING
 
+from scripts.ci.workflow_helpers import report_checked
 from scripts.gh import gh_runner
 from scripts.gh.gh_runner import GhError
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 # Exit codes, matching ``scripts.ci.schedule_watchdog`` so a caller can tell
 # "the audit ran and found drift" apart from "the audit could not look". Note
@@ -36,9 +31,6 @@ if TYPE_CHECKING:
 EXIT_HEALTHY = 0
 EXIT_DRIFT_FOUND = 1
 EXIT_CHECK_FAILED = 2
-
-GITHUB_OUTPUT_ENV = "GITHUB_OUTPUT"
-CHECKED_OUTPUT = "checked"
 
 # Every check that must pass before a pull request can merge into main. The
 # `CI result` aggregate already covers every job inside the CI workflow, so
@@ -758,21 +750,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--default-branch", default="main", help="Protected branch to audit (default: main)"
     )
     return parser
-
-
-def report_checked(reached_verdict: bool, *, env: Mapping[str, str] | None = None) -> None:
-    """Record whether the audit reached a verdict for the calling workflow.
-
-    Make converts failing recipe statuses to 2, so exit codes cannot distinguish
-    configuration drift from an API failure. The workflow reads this output to
-    select the alert type. Nothing is written outside GitHub Actions.
-    """
-    path = (os.environ if env is None else env).get(GITHUB_OUTPUT_ENV)
-    if not path:
-        return
-    value = "true" if reached_verdict else "false"
-    with Path(path).open("a", encoding="utf-8") as handle:
-        handle.write(f"{CHECKED_OUTPUT}={value}\n")
 
 
 def main(argv: list[str] | None = None) -> int:

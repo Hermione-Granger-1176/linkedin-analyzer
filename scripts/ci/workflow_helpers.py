@@ -12,11 +12,40 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
+GITHUB_OUTPUT_ENV = "GITHUB_OUTPUT"
+CHECKED_OUTPUT = "checked"
 LOCK_ARTIFACT_REQUIRED_FILES = {"uv-lock": Path("uv.lock")}
 PULL_REQUEST_NUMBER_PATTERN = re.compile(r"[1-9][0-9]*")
 COMMIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 DEPENDABOT_UV_REF_PATTERN = re.compile(r"dependabot/uv/[A-Za-z0-9._/-]+")
+
+
+def append_github_output(lines: Iterable[str], *, env: Mapping[str, str] | None = None) -> None:
+    """Append ``name=value`` lines to the step output file when running in GitHub Actions.
+
+    Write nothing outside Actions, where ``GITHUB_OUTPUT`` is unset.
+    """
+    path = (os.environ if env is None else env).get(GITHUB_OUTPUT_ENV)
+    if not path:
+        return
+    with Path(path).open("a", encoding="utf-8") as handle:
+        handle.writelines(f"{line}\n" for line in lines)
+
+
+def report_checked(reached_verdict: bool, *, env: Mapping[str, str] | None = None) -> None:
+    """Record whether a check reached a verdict, for the calling workflow to read.
+
+    Make converts failing recipe statuses to 2, so exit codes cannot distinguish
+    a finding from a failure to look. The workflow reads this output to select the
+    alert type.
+    """
+    value = "true" if reached_verdict else "false"
+    append_github_output([f"{CHECKED_OUTPUT}={value}"], env=env)
 
 
 def reject_unsafe_entries(root: Path) -> None:

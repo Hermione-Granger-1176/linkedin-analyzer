@@ -23,7 +23,8 @@ import os
 import subprocess
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+
+from scripts.ci.workflow_helpers import append_github_output
 
 # A runner takes the git command vector and returns the completed process.
 # Injectable so tests never touch a real repository.
@@ -38,8 +39,6 @@ PYTHON_ONLY = frozenset({PYTHON_AREA})
 WEB_ONLY = frozenset({WEB_AREA})
 BOTH_AREAS = frozenset(AREAS)
 NO_AREA: frozenset[str] = frozenset()
-
-GITHUB_OUTPUT_ENV = "GITHUB_OUTPUT"
 
 TRUE = "true"
 FALSE = "false"
@@ -238,15 +237,6 @@ def _report_areas(areas: frozenset[str], paths: list[str] | None) -> None:
         print(line)
 
 
-def _write_github_output(areas: frozenset[str], env: Mapping[str, str]) -> None:
-    """Publish the area flags as job outputs when running inside GitHub Actions."""
-    output_path = env.get(GITHUB_OUTPUT_ENV)
-    if not output_path:
-        return
-    with Path(output_path).open("a", encoding="utf-8") as handle:
-        handle.writelines(f"{line}\n" for line in _area_flags(areas))
-
-
 def active_areas(env: Mapping[str, str]) -> frozenset[str]:
     """Return the areas the detection job reported as changed."""
     return frozenset(area for area, variable in AREA_VARIABLES.items() if env.get(variable) == TRUE)
@@ -268,7 +258,7 @@ def _handle_changed_areas(args: argparse.Namespace, env: Mapping[str, str]) -> i
     """Classify a diff into CI areas and publish the result."""
     areas, paths = resolve_areas(args.base, args.head, merge_base=args.merge_base)
     _report_areas(areas, paths)
-    _write_github_output(areas, env)
+    append_github_output(_area_flags(areas), env=env)
     return 0
 
 

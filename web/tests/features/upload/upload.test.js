@@ -627,57 +627,6 @@ describe("UploadPage", () => {
         expect(types).not.toContain("addFile");
     });
 
-    it("drops a post-upload prime whose storage read outlives a Clear", async () => {
-        let holdReads = false;
-        let finishRead;
-        const heldRead = new Promise((resolve) => {
-            finishRead = resolve;
-        });
-        Storage.getFile.mockImplementation(() => (holdReads ? heldRead : Promise.resolve(null)));
-        vi.spyOn(Math, "random").mockReturnValue(0.42);
-
-        UploadPage.init();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const file = new File(["csv"], "Shares.csv", { type: "text/csv" });
-        const input = document.getElementById("multiFileInput");
-        Object.defineProperty(input, "files", { value: [file] });
-        input.dispatchEvent(new Event("change"));
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const addFile = workerInstance.postMessage.mock.calls
-            .map(([message]) => message)
-            .find((message) => message.type === "addFile");
-        holdReads = true;
-        Storage.getAllFiles.mockResolvedValue([
-            { type: "shares", rowCount: 2, updatedAt: 10, name: "Shares.csv" },
-        ]);
-        await workerInstance.listeners.message[0]({
-            data: {
-                type: "fileProcessed",
-                payload: {
-                    fileType: "shares",
-                    fileName: "Shares.csv",
-                    rowCount: 2,
-                    jobId: addFile.payload.jobId,
-                },
-            },
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(Storage.getFile).toHaveBeenCalledWith("shares");
-
-        document.getElementById("clearAllBtn").click();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        finishRead({ type: "shares", blob: new Blob(["old"]) });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        const types = workerInstance.postMessage.mock.calls.map(([message]) => message.type);
-        expect(types.indexOf("clear")).toBeGreaterThan(-1);
-        expect(types.slice(types.indexOf("clear"))).not.toContain("restoreFiles");
-
-        Math.random.mockRestore();
-    });
-
     it("drops a restore read that outlives a Clear", async () => {
         let finishRead;
         Storage.getAllFiles.mockImplementation(

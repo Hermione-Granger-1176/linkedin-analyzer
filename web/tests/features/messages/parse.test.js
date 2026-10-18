@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { processFiles } from "../../../src/features/messages/parse.js";
+import { processFiles as processOnPage } from "../../../src/features/messages/parse.js";
 
 vi.mock("../../../src/platform/observability/sentry.js", () => ({
     captureError: vi.fn(),
@@ -29,7 +29,7 @@ describe("processFiles main-thread fallback", () => {
             this.onerror();
         });
 
-        const result = await processFiles(MESSAGES_CSV, new Blob(["connections"]));
+        const result = await processOnPage(MESSAGES_CSV, new Blob(["connections"]));
 
         expect(result.success).toBe(true);
         expect(result.totalInputRows).toBe(1);
@@ -43,7 +43,7 @@ describe("processFiles main-thread fallback", () => {
             this.onerror();
         });
 
-        expect(await processFiles(new Blob(["messages"]), "")).toEqual({
+        expect(await processOnPage(new Blob(["messages"]), "")).toEqual({
             success: false,
             error: "Unable to read messages.csv.",
         });

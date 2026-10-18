@@ -1,6 +1,6 @@
 /* LinkedIn Analyzer - Analytics Web Worker */
 
-import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.js";
+import { parseAnalyticsWorkerRequest } from "../../app/worker-contracts.ts";
 import {
     extractWorkerError,
     extractWorkerRejection,
@@ -12,8 +12,8 @@ import { canStreamFileText, readFileAsText } from "../upload/read.js";
 
 import { AnalyticsEngine } from "./activity.js";
 
-/** @typedef {import("../../app/worker-contracts.js").PlainObject} PlainObject */
-/** @typedef {import("../../app/worker-contracts.js").RequestId} RequestId */
+/** @typedef {import("../../app/worker-contracts.ts").PlainObject} PlainObject */
+/** @typedef {import("../../app/worker-contracts.ts").RequestId} RequestId */
 /** @typedef {import("../cleaning/cleaner.js").CleanedRow} CleanedRow */
 /** @typedef {import("../cleaning/cleaner.js").ProcessResult} ProcessResult */
 /** @typedef {import("./activity.js").AnalyticsBase} AnalyticsBase */
@@ -305,7 +305,7 @@ async function readAndProcessUpload(file, jobId, fileName, epoch) {
  * Process an uploaded CSV file: read, parse, clean, recompute analytics, and
  * reply. The page posts the File so the read happens here, off the main
  * thread, and stores that File itself, so the reply carries no text.
- * @param {import("../../app/worker-contracts.js").AddFilePayload} payload - File and name
+ * @param {import("../../app/worker-contracts.ts").AddFilePayload} payload - File and name
  * @returns {Promise<void>}
  */
 async function handleAddFile(payload) {
@@ -522,7 +522,7 @@ function handleInitBase(payload) {
 
 /**
  * Build a filtered analytics view and post it back, using cache when available.
- * @param {import("../../app/worker-contracts.js").RequestId} requestId - Caller-assigned request identifier for deduplication
+ * @param {import("../../app/worker-contracts.ts").RequestId} requestId - Caller-assigned request identifier for deduplication
  * @param {PlainObject} filters - Filter parameters from the UI
  */
 function handleView(requestId, filters) {

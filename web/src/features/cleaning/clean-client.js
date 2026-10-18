@@ -8,7 +8,7 @@
  * instead. Clearing stored data drops the worker and the rows it holds.
  */
 
-import { parseCleaningWorkerMessage } from "../../app/worker-contracts.js";
+import { parseCleaningWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { MAIN_THREAD_MAX_FILE_BYTES } from "../../shared/limits.js";
@@ -24,7 +24,7 @@ const CLEAN_TIMEOUT = "Cleaning took too long. Try again.";
 const MAIN_THREAD_TOO_LARGE =
     "This file is too large to clean without background workers. Open this page from a local server.";
 
-/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
+/** @typedef {import("../../app/worker-contracts.ts").CleaningRequestPayload} CleaningRequestPayload */
 /** @typedef {{success: boolean, error: string|null, rowCount: number, previewRows: string[][], blob: Blob|null, cancelled?: boolean}} CleanReply */
 
 let requestCount = 0;

@@ -8,7 +8,7 @@
  * browser's own error reporting.
  */
 
-import { parseThreadsWorkerRequest } from "../../app/worker-contracts.js";
+import { parseThreadsWorkerRequest } from "../../app/worker-contracts.ts";
 import { toCsvSource } from "../../shared/csv-source.js";
 import { serveWorker } from "../../shared/worker-entry.js";
 import { streamCleanFile } from "../cleaning/process-source.js";

@@ -9,7 +9,7 @@
  * cleaned data.
  */
 
-import { CLEAN_PREVIEW_MAX_ROWS } from "../../app/worker-contracts.js";
+import { CLEAN_PREVIEW_MAX_ROWS } from "../../app/worker-contracts.ts";
 import { csvSourceSize } from "../../shared/csv-source.js";
 import { EXCEL_EXPORT_MAX_BYTES } from "../../shared/limits.js";
 
@@ -21,8 +21,8 @@ import { processCsvSource } from "./process-source.js";
 export const PREVIEW_ROW_LIMIT = CLEAN_PREVIEW_MAX_ROWS;
 
 /** @typedef {import("./cleaner.js").CleanedRow} CleanedRow */
-/** @typedef {import("../../app/worker-contracts.js").CleaningRequestPayload} CleaningRequestPayload */
-/** @typedef {import("../../app/worker-contracts.js").CleanedPayload} CleanedPayload */
+/** @typedef {import("../../app/worker-contracts.ts").CleaningRequestPayload} CleaningRequestPayload */
+/** @typedef {import("../../app/worker-contracts.ts").CleanedPayload} CleanedPayload */
 
 /**
  * Cleaned rows of the last file, kept for a later download of the same upload.

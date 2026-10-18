@@ -19,7 +19,8 @@ Keep code, tests, docs, and repository automation consistent with the names alre
 - Run Prettier and ESLint through `make format-js-check` and `make lint-js`.
 - Use explicit semicolons in JavaScript.
 - Group imports by standard library, third-party, and local modules.
-- Use four spaces in Python, JavaScript, CSS, and HTML. Use two spaces in JSON and YAML.
+- Use four spaces in Python, JavaScript, TypeScript, CSS, and HTML. Use two spaces in JSON and YAML.
+- Web code is JavaScript checked through JSDoc types. Shared contracts that many modules import live in TypeScript (`web/src/app/worker-contracts.ts`), imported with the `.ts` extension, and keep JSDoc for descriptions only.
 - Keep Markdown paragraphs on one line. Use `make align-tables-check` for Markdown tables.
 - Follow `.editorconfig` for line endings, final newlines, character encoding, and trailing whitespace.
 

@@ -1,6 +1,6 @@
 /* LinkedIn Analyzer - Clean screen worker: preview, Excel, and CSV builds */
 
-import { parseCleaningWorkerRequest } from "../../app/worker-contracts.js";
+import { parseCleaningWorkerRequest } from "../../app/worker-contracts.ts";
 import { serveWorker } from "../../shared/worker-entry.js";
 
 import { runCleanJob } from "./clean-job.js";

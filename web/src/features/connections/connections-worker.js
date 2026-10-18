@@ -1,6 +1,6 @@
 /* LinkedIn Analyzer - Connections parsing & analytics worker */
 
-import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.js";
+import { parseConnectionsWorkerRequest } from "../../app/worker-contracts.ts";
 import { serveWorker } from "../../shared/worker-entry.js";
 import { processCsvSource } from "../cleaning/process-source.js";
 
@@ -49,7 +49,7 @@ async function processConnections(connectionsCsv) {
 
 /**
  * Post a worker error payload carrying fixed text.
- * @param {import("../../app/worker-contracts.js").RequestId} requestId - Request id being answered
+ * @param {import("../../app/worker-contracts.ts").RequestId} requestId - Request id being answered
  * @param {string} message - Fixed failure text
  */
 function postWorkerError(requestId, message) {

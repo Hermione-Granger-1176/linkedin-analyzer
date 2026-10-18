@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "checkJs": true,
     "noEmit": true,
     "target": "ES2022",
@@ -15,6 +16,6 @@
       "roughjs/bundled/rough.esm.js": ["../node_modules/roughjs/bundled/rough.d.ts"]
     }
   },
-  "include": ["../web/src/**/*.js", "../web/e2e/**/*.js"],
+  "include": ["../web/src/**/*.js", "../web/src/**/*.ts", "../web/e2e/**/*.js"],
   "exclude": ["../web/dist/**", "../coverage/**", "../node_modules/**"]
 }

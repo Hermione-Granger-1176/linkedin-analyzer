@@ -17,7 +17,7 @@
  * the page as an `error` event on the Worker, so this reply is the only signal.
  */
 
-/** @typedef {import("../app/worker-contracts.js").RequestId} RequestId */
+/** @typedef {import("../app/worker-contracts.ts").RequestId} RequestId */
 
 /** Id a global failure is answered under; no request is ever posted with it. */
 export const GLOBAL_FAILURE_ID = 0;
@@ -26,7 +26,7 @@ export const GLOBAL_FAILURE_ID = 0;
  * @template {{requestId: RequestId}} Request
  * @typedef {object} WorkerService
  * @property {string} requestType - Message type the worker answers; other messages are ignored
- * @property {(message: unknown) => import("../app/worker-contracts.js").RequestParseResult<Request>} parse - Request parser
+ * @property {(message: unknown) => import("../app/worker-contracts.ts").RequestParseResult<Request>} parse - Request parser
  * @property {(request: Request) => Promise<void>} handle - Serves a valid request and posts its reply
  * @property {(requestId: RequestId, error: string) => void} postFailure - Posts a failure reply carrying fixed text
  * @property {string} runtimeFailure - Fixed text for anything thrown

@@ -11,6 +11,7 @@ import { Session } from "../../platform/persistence/session.js";
 import { DomEvents } from "../../shared/dom-events.js";
 import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-tooltip.js";
 import { SketchCharts } from "../../shared/ui/charts.js";
+import { setEmptyStateText } from "../../shared/ui/empty-state.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { prefersReducedMotion } from "../../shared/ui/motion.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
@@ -968,15 +969,7 @@ export const AnalyticsPage = (() => {
      * @param {string} message - The description text for the empty state.
      */
     function setEmptyState(title, message) {
-        const heading = elements.analyticsEmpty.querySelector("h2");
-        const text = elements.analyticsEmpty.querySelector("p");
-
-        if (heading) {
-            heading.textContent = title;
-        }
-        if (text) {
-            text.textContent = message;
-        }
+        setEmptyStateText(elements.analyticsEmpty, title, message);
 
         elements.analyticsEmpty.hidden = false;
         elements.analyticsGrid.hidden = true;

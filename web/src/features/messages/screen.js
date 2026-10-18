@@ -7,6 +7,7 @@ import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
+import { setEmptyStateText } from "../../shared/ui/empty-state.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
 import { ExcelGenerator } from "../cleaning/excel.js";
@@ -973,14 +974,7 @@ export const MessagesPage = (() => {
         if (!messagesEmpty || !messagesLayout) {
             return;
         }
-        const heading = messagesEmpty.querySelector("h2");
-        const text = messagesEmpty.querySelector("p");
-        if (heading) {
-            heading.textContent = title;
-        }
-        if (text) {
-            text.textContent = message;
-        }
+        setEmptyStateText(messagesEmpty, title, message);
         messagesEmpty.hidden = false;
         messagesLayout.hidden = true;
         if (elements.messagesTip) {

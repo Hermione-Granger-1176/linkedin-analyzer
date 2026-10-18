@@ -17,6 +17,7 @@ import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { hideChartTooltip, showChartTooltip } from "../../shared/ui/chart-tooltip.js";
 import { SketchCharts } from "../../shared/ui/charts.js";
+import { setEmptyStateText } from "../../shared/ui/empty-state.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
 import { createWorkerHandle } from "../../shared/worker-handle.js";
@@ -698,18 +699,7 @@ export const ConnectionsPage = (() => {
      * @param {string} message - The description text for the empty state
      */
     function setEmptyState(title, message) {
-        const heading = elements.connectionsEmpty.querySelector("h2");
-        const text = elements.connectionsEmpty.querySelector("p");
-
-        // The static shell includes both nodes. Keep the guards for incomplete DOM setup.
-        /* v8 ignore next */
-        if (heading) {
-            heading.textContent = title;
-        }
-        /* v8 ignore next */
-        if (text) {
-            text.textContent = message;
-        }
+        setEmptyStateText(elements.connectionsEmpty, title, message);
 
         elements.connectionsEmpty.hidden = false;
         elements.connectionsGrid.hidden = true;

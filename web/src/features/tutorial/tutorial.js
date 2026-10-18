@@ -709,6 +709,41 @@ export const Tutorial = (() => {
     }
 
     /**
+     * Frame the highlight target with the spotlight, or hide the spotlight
+     * when the step has no target.
+     * @param {HTMLElement} spotlight - Spotlight element
+     * @param {Element|null} target - Highlight target
+     * @param {number} viewportWidth - Viewport width
+     * @param {number} viewportHeight - Viewport height
+     * @returns {DOMRect|null} The target's rectangle, or null without a target
+     */
+    function positionSpotlight(spotlight, target, viewportWidth, viewportHeight) {
+        if (!target) {
+            spotlight.style.display = "none";
+            return null;
+        }
+        const targetRect = target.getBoundingClientRect();
+        const spotlightPadding = 8;
+        const x = Math.max(EDGE_PADDING, targetRect.left - spotlightPadding);
+        const y = Math.max(EDGE_PADDING, targetRect.top - spotlightPadding);
+        const width = Math.max(
+            44,
+            Math.min(viewportWidth - EDGE_PADDING * 2, targetRect.width + spotlightPadding * 2),
+        );
+        const height = Math.max(
+            34,
+            Math.min(viewportHeight - EDGE_PADDING * 2, targetRect.height + spotlightPadding * 2),
+        );
+
+        spotlight.style.display = "block";
+        spotlight.style.left = `${x}px`;
+        spotlight.style.top = `${y}px`;
+        spotlight.style.width = `${width}px`;
+        spotlight.style.height = `${height}px`;
+        return targetRect;
+    }
+
+    /**
      * Position spotlight, popover, and pointer.
      * @param {Element|null} target - Highlight target
      * @param {TutorialStep} step - Step config
@@ -723,32 +758,7 @@ export const Tutorial = (() => {
         const viewportHeight = window.innerHeight;
         const placement = String((step && step.placement) || "auto").toLowerCase();
 
-        let targetRect = null;
-        if (target) {
-            targetRect = target.getBoundingClientRect();
-            const spotlightPadding = 8;
-            const x = Math.max(EDGE_PADDING, targetRect.left - spotlightPadding);
-            const y = Math.max(EDGE_PADDING, targetRect.top - spotlightPadding);
-            const width = Math.max(
-                44,
-                Math.min(viewportWidth - EDGE_PADDING * 2, targetRect.width + spotlightPadding * 2),
-            );
-            const height = Math.max(
-                34,
-                Math.min(
-                    viewportHeight - EDGE_PADDING * 2,
-                    targetRect.height + spotlightPadding * 2,
-                ),
-            );
-
-            ui.spotlight.style.display = "block";
-            ui.spotlight.style.left = `${x}px`;
-            ui.spotlight.style.top = `${y}px`;
-            ui.spotlight.style.width = `${width}px`;
-            ui.spotlight.style.height = `${height}px`;
-        } else {
-            ui.spotlight.style.display = "none";
-        }
+        const targetRect = positionSpotlight(ui.spotlight, target, viewportWidth, viewportHeight);
 
         ui.popover.style.maxWidth = `${Math.min(420, viewportWidth - EDGE_PADDING * 2)}px`;
         ui.popover.style.left = "0px";

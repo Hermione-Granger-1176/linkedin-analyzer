@@ -200,8 +200,8 @@ export const MessagesPage = (() => {
 
             if (!messagesFile || !connectionsFile) {
                 if (!files) {
-                    // Cache metadata only; messages/connections text is loaded on
-                    // demand below so the large messages export isn't held in memory.
+                    // Cache metadata only. Read an upload when the Messages
+                    // page needs to parse it.
                     files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
                     DataCache.set("storage:files", files);
                 }
@@ -285,8 +285,8 @@ export const MessagesPage = (() => {
 
             await nextFrame();
 
-            // Load the stored uploads on demand (caches hold metadata only). The
-            // worker reads each Blob, so the page never holds the file text.
+            // Load uploads on demand. Workers read the Blobs. The small-file
+            // fallback reads text on the page when the worker cannot answer.
             const [messagesStored, connectionsStored] = await Promise.all([
                 Storage.getFile("messages"),
                 connectionsFile ? Storage.getFile("connections") : Promise.resolve(null),

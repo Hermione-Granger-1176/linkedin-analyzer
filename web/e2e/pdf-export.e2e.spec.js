@@ -265,8 +265,7 @@ test("the names opt-in gates the lists but not the counts", async ({ page }, tes
 
     expect(text).toContain("Messages in range");
     expect(text).toContain("Fading conversations");
-    // The stat tile keeps its count; the list that would name people is absent,
-    // and so is every name it would have carried.
+    // The stat tile keeps its count. Contact lists and their names are absent.
     expect(text).not.toContain("Top contacts");
     expect(text).not.toContain("Silent connections");
     expect(text).not.toContain("Ada Lovelace");
@@ -276,10 +275,9 @@ test("the names opt-in gates the lists but not the counts", async ({ page }, tes
 test("message contents name their contacts even with the names box unticked", async ({
     page,
 }, testInfo) => {
-    // The two opt-ins are not one promise about names. A transcript is headed by
-    // the person it is with, so ticking message contents puts that contact in
-    // the file whatever the names box says; the dialog and the docs say so, and
-    // this is what holds them to it.
+    // Message transcripts include the correspondent's name as a heading. The
+    // message-content option includes that name independently of the
+    // dashboard-name option.
     await page.route("**/fonts/*.ttf", (route) => route.abort());
 
     await uploadFiles(page, [SHARES_CSV, CONNECTIONS_CSV, MESSAGE_THREADS_CSV]);
@@ -301,10 +299,10 @@ test("message contents name their contacts even with the names box unticked", as
     await download.saveAs(outputPath);
     const text = extractPdfText(fs.readFileSync(outputPath));
 
-    // The transcript, and therefore its correspondent, is in.
+    // The transcript includes the correspondent's name.
     expect(text).toContain("Recent conversations");
     expect(text).toContain("Ada Lovelace");
-    // The dashboard lists that name people are still out.
+    // Dashboard contact lists remain absent.
     expect(text).not.toContain("Top contacts");
     expect(text).not.toContain("Silent connections");
 });

@@ -733,10 +733,10 @@ function buildMessagesDashboard(state, includeNames) {
 /**
  * Read the stored exports the dashboards and the thread section are built from.
  *
- * One read each, shared by every consumer below. Each is the stored upload
- * Blob, which the workers read, so the page never holds the file text. A
- * record whose `blob` getter throws is treated as absent rather than allowed
- * to abort the export.
+ * Read each stored upload Blob once and share it with the export builders.
+ * Workers read the Blobs off the main thread. The small-export fallback reads
+ * text on the page. Treat a record whose `blob` getter throws as absent so it
+ * does not abort the export.
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<{messagesCsv: Blob|string, connectionsCsv: Blob|string}>} Stored uploads, or empty strings
  */

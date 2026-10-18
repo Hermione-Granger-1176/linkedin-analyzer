@@ -397,15 +397,13 @@ def enabled_security_features(repository: dict[str, object]) -> set[str]:
 def extract_required_checks(protection: dict[str, object]) -> set[str]:
     """Return the required status check names from a branch protection payload.
 
-    GitHub reports the same list twice, as plain ``contexts`` and as ``checks``
-    entries pinned to an app id. Both are read so a repository configured
-    through either the old or the new API audits the same.
+    Read names from both the ``contexts`` list and the ``context`` fields in
+    the ``checks`` list. Ignore either field if it is not a list, while keeping
+    valid names from the other field. This avoids treating dictionary keys as
+    required check names.
 
-    Each must be a list before it is read. Iterating a dict yields its keys, so
-    a payload of the wrong shape would otherwise hand back check names that were
-    never actually required, which is the one direction this audit must never
-    fail in. Anything that is not a list contributes nothing, leaving every
-    expected check reported as missing.
+    Return an empty set if ``required_status_checks`` is missing or is not a
+    dictionary. The caller then reports every expected check as missing.
     """
     required = protection.get("required_status_checks")
     if not isinstance(required, dict):

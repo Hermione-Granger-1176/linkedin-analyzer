@@ -387,8 +387,8 @@ export const PdfExport = (() => {
             document.body.appendChild(link);
             link.click();
         } finally {
-            // A browser that refuses the synthetic click still leaves the anchor
-            // in the document and the object URL holding the whole PDF in memory.
+            // Remove the temporary link and release its object URL even if
+            // clicking the link fails.
             if (link.parentNode) {
                 link.remove();
             }
@@ -513,9 +513,8 @@ export const PdfExport = (() => {
             }
         }
 
-        // Outside the try, and only for a run that got as far as downloading:
-        // the moment marks a file the user actually has, and decoration that
-        // threw inside the try would be reported to them as a failed export.
+        // Celebrate after triggering the download. Keep this outside the catch
+        // so a celebration error does not mark the export as failed.
         if (downloaded) {
             celebrateStaple();
         }

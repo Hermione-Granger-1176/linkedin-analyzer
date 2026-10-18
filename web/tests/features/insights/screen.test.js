@@ -693,7 +693,7 @@ describe("InsightsPage", () => {
             data: { type: "init", payload: { hasData: false } },
         });
 
-        // Second route change: analyticsReady=true, hasData=false → line 78
+        // Change the route while analytics is ready and no data is available.
         AppRouter.getCurrentRoute.mockReturnValue({ name: "insights", params: {} });
         await InsightsPage.onRouteChange({});
 

@@ -444,9 +444,8 @@ async function handleRestoreFiles(payload) {
     const { sharesCsv = "", commentsCsv = "", connectionsCsv = "" } = payload || {};
 
     const epoch = requestEpoch;
-    // Each source streams through the cleaner in turn, so no file is held as
-    // one string and only one is being read at a time. A Clear aborts the read
-    // in flight.
+    // Read sources in sequence. processCsvSource streams stored Blobs when
+    // possible and falls back to whole-text cleaning. Clear aborts the active read.
     const sourceByType = { shares: sharesCsv, comments: commentsCsv, connections: connectionsCsv };
     /** @type {Partial<Record<AnalyticsSourceType, CleanedRow[]>>} */
     const cleanedByType = {};

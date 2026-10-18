@@ -6,8 +6,7 @@ const { expect, test } = require("@playwright/test");
 
 const { uploadFiles, waitForLoadedStatus } = require("./helpers/upload.js");
 
-// Large enough that a browser storing it as a Blob has to keep it on disk
-// rather than inline, which is where WebKit has lost IndexedDB Blobs before.
+// A 40 MiB export exercises persistence of a large upload across a reload.
 const EXPORT_SIZE_MB = 40;
 const LOAD_TIMEOUT_MS = 90000;
 
@@ -59,7 +58,7 @@ function readStoredBlobSizes(page) {
                             Object.fromEntries(
                                 request.result.map((record) => [
                                     record.type,
-                                    // WebKit stores the bytes in an ephemeral session.
+                                    // Accept Blob.size or the ArrayBuffer fallback's byteLength.
                                     record.blob.size ?? record.blob.byteLength,
                                 ]),
                             ),
@@ -78,13 +77,13 @@ test("keeps a large upload as a Blob that survives a reload", async ({ page }) =
 
     await page.reload();
 
-    // The stored record is the original file, byte for byte.
+    // Each stored record has the same byte size as the original upload.
     expect(await readStoredBlobSizes(page)).toEqual({
         messages: fs.statSync(messagesCsv).size,
         connections: fs.statSync(connectionsCsv).size,
     });
 
-    // And the Messages screen reads it back from storage after the reload.
+    // The Messages screen reads the upload from storage after the reload.
     await page.goto("/#messages");
     await expect(page.locator("#messagesLayout")).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
     await expect(page.locator("#messagesEmpty")).toBeHidden();

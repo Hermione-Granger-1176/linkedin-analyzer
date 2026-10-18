@@ -11,9 +11,8 @@
  * The web modules load through Vite in `measurement` mode, so a 100 MB export
  * passes the raised upload limits the same way it does in `make bench-browser`.
  *
- * Usage (prefer the Makefile):
+ * Usage:
  *   make audit-state [input_dir=path] [strict=1]
- *   node --expose-gc scripts/checks/state-audit.mjs [--input-dir path] [--strict]
  */
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";

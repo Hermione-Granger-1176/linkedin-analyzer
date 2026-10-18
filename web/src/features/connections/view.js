@@ -87,10 +87,8 @@ export const RANGE_KEYS = Object.freeze([...Object.keys(RANGE_DAYS), "all"]);
 
 const TOP_N = 10;
 
-// Distinct "Connected On" values number about one per day of the network's
-// life, while a file holds tens of thousands of rows, and each row's date is
-// read by the timeline, the stats and the row normalization. Parse each value
-// once; the cap only guards against a file of nonsense values.
+// Cache parsed timestamps for repeated date values. Clear the cache at the
+// cap to bound memory use for files with many distinct dates.
 const DATE_CACHE_LIMIT = 100000;
 /** @type {Map<string, number|null>} */
 const connectedOnTimes = new Map();

@@ -19,17 +19,13 @@ import { parseLocalDate, parseLocalDateTime } from "../analytics/dates.js";
 export const MessagesAnalytics = (() => {
     "use strict";
 
-    // The normalizers are pure and called millions of times over a large
-    // messages export, but on a small set of recurring contact strings (you
-    // message the same people repeatedly, and the cleaner shares each repeated
-    // value). Memoize string inputs so each unique value is normalized once; the
-    // cap bounds memory if a pathological export has an unusually large unique set.
+    // Memoize repeated contact strings. Clear the cache at its cap to bound
+    // memory when an export contains many distinct values.
     const NORMALIZE_CACHE_LIMIT = 100000;
 
     /**
-     * Wrap a pure normalizer so each distinct string input is computed once.
-     * The cache empties when it reaches its cap, so a run of unique values
-     * cannot grow it without bound or leave it full of stale entries.
+     * Cache a pure normalizer's results for string inputs. Clear the cache when
+     * it reaches its cap. Compute non-string inputs on every call.
      * @template T
      * @param {(value: unknown) => T} compute - Pure normalizer
      * @returns {(value: unknown) => T}

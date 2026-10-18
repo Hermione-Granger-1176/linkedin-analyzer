@@ -773,16 +773,13 @@ describe("buildBlocks", () => {
         const sections = blocks.filter((block) => block.kind === "section");
 
         expect(blocks.map((block) => block.kind)).not.toContain("list");
-        // One section, and it opens on page one: the dashboard that had nothing
-        // to say does not cost the one after it a page break either.
+        // The empty dashboard adds no section or page break.
         expect(sections).toHaveLength(1);
         expect(sections[0].pageBreakBefore).toBe(false);
     });
 
     it("gives the title company when the first section is not a dashboard", () => {
-        // The rule the dashboards answer to governs the sections after them too.
-        // Asked unconditionally, "Your insights" broke to page two and left an
-        // export with no dashboard printing a page holding nothing but a title.
+        // Keep the first section on page one when no dashboards precede it.
         const doc = createDocStub();
         const pages = paginateBlocks(
             buildBlocks(createPainter(doc, palette, fonts), { ...SAMPLE, dashboards: [] }),

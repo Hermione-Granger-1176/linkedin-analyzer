@@ -292,7 +292,7 @@ export const InsightsPage = (() => {
         state.currentViewRange = null;
     }
 
-    /** Load analytics base from IndexedDB and send to worker. */
+    /** Load the analytics base and send it to the worker. */
     async function loadBase() {
         showInsightsLoading(true);
 

@@ -137,14 +137,9 @@ export async function hasExportableData() {
     if (await readOutreach()) {
         return true;
     }
-    // A connections or messages export produces a dashboard of its own without
-    // ever reaching the analytics base, which only shares and comments fill. The
-    // read is metadata only, so this stays as cheap as the checks above it.
-    //
-    // A row count rather than mere presence: an upload that stored no rows, or a
-    // record whose text has since gone, is a file the dashboards will find
-    // nothing in, and enabling the button for it promises a document that comes
-    // back empty.
+    // Connections and messages can provide dashboard data without shares or
+    // comments in the analytics base. Read their metadata and require a positive
+    // row count to exclude uploads that produced no rows.
     const files = await readSafely(() => Storage.getAllFiles(), "load-file-metadata");
     return (
         Array.isArray(files) &&

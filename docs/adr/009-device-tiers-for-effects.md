@@ -16,7 +16,7 @@ The module reads the following signals. A signal the browser does not expose rem
 - `navigator.deviceMemory` for approximate RAM. Only Chromium browsers expose it.
 - `navigator.connection.saveData` for the data-saver setting.
 - `matchMedia("(pointer: coarse)")` for touch-first devices.
-- Accelerated WebGL: a `webgl2` context, falling back to `webgl`, requested with `failIfMajorPerformanceCaveat: true` and released at once with `WEBGL_lose_context`. A refusal means software rendering, a blocklisted driver, WebGL turned off, or no GPU, and reads as "accelerated WebGL unavailable", not "no GPU".
+- Accelerated WebGL: a `webgl2` context, falling back to `webgl`, requested with `failIfMajorPerformanceCaveat: true`. The probe calls `loseContext()` when the `WEBGL_lose_context` extension is available. A failed probe reads as "accelerated WebGL unavailable" and does not establish that the device has no GPU.
 
 Tiers and thresholds:
 
@@ -47,5 +47,5 @@ Rules every feature follows:
 
 ## Validation
 
-- `web/tests/platform/device/capabilities.test.js` covers every branch of the tier mapping, including every signal missing, that a device that cannot reach Rich skips the WebGL probe, and that Save-Data leaves the processing signals unchanged.
+- `web/tests/platform/device/capabilities.test.js` covers every tier mapping branch. It also checks the all-signals-missing case, verifies that devices that cannot reach the `rich` tier skip the WebGL probe, and confirms that Save-Data leaves processing signals unchanged.
 - `web/e2e/effects-tier.e2e.spec.js` checks that a Chromium run with `--disable-gpu` gets no higher than `standard`, and that Save-Data gets `lite`, creates no WebGL context, and runs no animation other than `transform` or `opacity` and no CSS or SVG filter.

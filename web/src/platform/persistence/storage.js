@@ -594,8 +594,7 @@ export const Storage = (() => {
                 try {
                     await putFileRecord(db, metadata, blob);
                 } catch (error) {
-                    // WebKit refuses Blobs in IndexedDB in an ephemeral session,
-                    // such as a Safari private window, so store the bytes instead.
+                    // If the Blob write fails, retry with its bytes.
                     if (!blob) {
                         throw error;
                     }

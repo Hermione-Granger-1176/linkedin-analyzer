@@ -998,19 +998,16 @@ function buildDashboardBlocks(painter, dashboard, pageBreakBefore) {
     }
     for (const chart of charts) {
         const build = CHART_BUILDERS[chart.type];
-        // A type no builder answers to is skipped: the rest of the export is
-        // worth more to the reader than the one chart nobody knows how to draw.
+        // Skip unsupported chart types so the rest of the export can finish.
         if (!build) {
             continue;
         }
         body.push(...build(painter, chart));
     }
 
-    // Everything below the heading says what a page opening on it should be
-    // called, so a dashboard long enough to run over is not read as charts under
-    // no title at all. Carried on the blocks rather than inserted as one:
-    // paginateBlocks stays a pure function of row heights, and the page painter
-    // is the only thing that knows where a page began.
+    // Attach the continuation label to body blocks. The page painter adds it
+    // when pagination places one of those blocks at the start of a page.
+    // paginateBlocks still calculates page breaks from row heights alone.
     const continuation = `${dashboard.title} (continued)`;
     return [heading, ...body.map((block) => ({ ...block, continuation }))];
 }
@@ -1029,11 +1026,9 @@ export function buildBlocks(painter, data) {
 
     const blocks = [buildHeaderBlock(painter, data)];
 
-    // Whatever comes first follows the title on page one; every section after
-    // it opens on its own page, the way each of these is its own screen on the
-    // site. Asked of the blocks already placed rather than of position, so a
-    // dashboard or a section that turned out to be empty does not leave the
-    // title alone on a page of its own.
+    // Put the first non-empty section after the title on page one. Start each
+    // later section on a new page. Check the blocks already added so an empty
+    // section does not leave the title alone on its page.
     for (const dashboard of dashboards) {
         blocks.push(...buildDashboardBlocks(painter, dashboard, blocks.length > 1));
     }

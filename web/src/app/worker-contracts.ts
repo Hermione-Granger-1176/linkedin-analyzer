@@ -856,10 +856,8 @@ export function parseStoredUploadFile(file: unknown): ParseResult<StoredUploadFi
 }
 
 /**
- * Strip the stored upload from a file record, keeping only the metadata the
- * in-memory caches need (status, counts, dataset signatures). The upload stays
- * in IndexedDB as a Blob that workers read on demand, so large exports aren't
- * retained in memory across the whole session.
+ * Return file metadata without the upload Blob. In-memory caches use these
+ * fields for status, counts, and dataset signatures.
  * @param file - Stored file record
  */
 export function toStoredFileMetadata(

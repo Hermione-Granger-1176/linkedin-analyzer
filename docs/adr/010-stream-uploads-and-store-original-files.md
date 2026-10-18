@@ -6,7 +6,7 @@
 
 The web app read each upload into one decoded string on the page, handed that string to a worker, and stored the same string in IndexedDB. A 100 MB export therefore held several full copies of its text at once: the page's read, the copy the worker parsed, the copy it sent back for storage, and the copy every screen and export read back from storage. Each copy of decoded text costs about twice the file size in JavaScript heap, so the copies, not the analysis, set the peak memory and decided whether a phone could finish.
 
-A `File` is a reference to bytes the browser already holds. Posting it to a worker clones the reference, not the bytes, and a stored `Blob` lives in the browser's storage rather than in JavaScript heap. A worker can stream either one.
+A worker can receive a `File` through structured cloning and stream its contents without the page first decoding the upload into one string. IndexedDB can store the original file as a `Blob`, so the app does not need to retain that decoded string for later reads. The [File API](https://www.w3.org/TR/FileAPI/#file-section) defines serialization of a `File` but does not guarantee whether the browser copies its bytes.
 
 ## Decision
 
@@ -25,7 +25,7 @@ ADR-003 specified stored CSV text. The app now stores the original file bytes as
 
 ## Consequences
 
-- The page's share of a 100 MB upload drops from several copies of the text to none, and stored data costs browser storage rather than JavaScript heap.
+- The page no longer retains several full copies of an upload's decoded text. Later reads use the stored `Blob` instead.
 - Reading a stored file is asynchronous everywhere, including the main-thread fallbacks used when Workers are unavailable. Those fallbacks keep their size ceilings and read the `Blob` only below them.
 - The stored record is the file as uploaded, so a future change to decoding or cleaning applies to stored uploads too, rather than to text decoded by an older build.
 - Safari has had bugs storing large `Blob` records in IndexedDB. `web/e2e/stored-upload.e2e.spec.js` stores and re-reads a 40 MB export in every Playwright project, including WebKit. Playwright's WebKit is built from WebKit sources but is not the Safari app, so a pass is evidence, not proof, for Safari and iPhones.

@@ -6,10 +6,10 @@
  * processing path reads the tier, so Save-Data or reduced motion cannot change
  * how files are handled.
  *
- * The device decides the tier on its own; there is no visitor setting for it.
+ * The app picks the tier from device signals. There is no visitor setting.
  *
- * A missing API reads as unknown, never as low: Safari and Firefox do not
- * expose deviceMemory, and that must not push them into the lite tier.
+ * A missing API reads as unknown. A missing deviceMemory value does not force
+ * the lite tier.
  */
 
 export const EFFECTS_TIERS = Object.freeze(["lite", "standard", "rich"]);
@@ -42,11 +42,9 @@ function positiveNumber(value) {
 }
 
 /**
- * Probe for a WebGL context that the browser will give without a major
- * performance penalty. A null result means software rendering, a blocklisted
- * driver, WebGL turned off, or no GPU; it reads as "accelerated WebGL
- * unavailable", not as "no GPU". A successful context is released at once so
- * the probe holds no graphics memory.
+ * Request a WebGL context with failIfMajorPerformanceCaveat. A failed probe
+ * does not establish that the device has no GPU. Call loseContext() when the
+ * WEBGL_lose_context extension is available.
  * @param {() => HTMLCanvasElement|OffscreenCanvas|null} createCanvas - Canvas factory
  * @returns {boolean}
  */

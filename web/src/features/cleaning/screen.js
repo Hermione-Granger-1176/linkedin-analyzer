@@ -157,7 +157,7 @@ export const CleanPage = (() => {
     }
 
     /**
-     * Load stored files from IndexedDB into local state.
+     * Load stored file metadata into local state.
      */
     async function loadFiles() {
         await Session.waitForCleanup();
@@ -166,8 +166,8 @@ export const CleanPage = (() => {
             DataCache.get("storage:files") || null
         );
         if (!files) {
-            // Cache metadata only. Load the selected upload Blob on demand in
-            // renderPreview so large exports aren't kept in memory.
+            // Keep upload Blobs out of the page's metadata cache. Load the
+            // selected Blob on demand in renderPreview and pass it to the worker.
             files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
             DataCache.set("storage:files", files);
         }

@@ -296,7 +296,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Restore upload status from IndexedDB and refresh the file cache on load.
+     * Restore upload status from storage and refresh the file cache on load.
      * Does not prime the worker. That is deferred to the first upload (see
      * processFiles); the dashboard reads the persisted analyticsBase directly.
      * @returns {Promise<void>}
@@ -430,7 +430,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Read CSV files and send them to the worker for processing.
+     * Validate CSV uploads and send them to the worker for processing.
      * @param {File[]} files - Selected files
      * @returns {Promise<void>}
      */
@@ -502,13 +502,12 @@ export const UploadPage = (() => {
         acceptedFiles.forEach((file) => {
             const jobId = createJobId(file);
             activeJobs.add(jobId);
-            // The worker reads the File itself. Posting a File clones a
-            // reference to its bytes, so the page never holds the text; the
-            // page keeps the File to store once the worker accepts it.
+            // The worker reads the File. Keep it here so it can be saved after
+            // the worker accepts it.
             pendingFiles.set(jobId, { fileName: file.name, file });
             try {
-                // Checked above. A restart during the prime await can null it,
-                // and the throw lands in the catch below, as before.
+                // A worker restart during priming can leave current() null.
+                // Handle that failure in the catch below.
                 /** @type {Worker} */ (workers.current()).postMessage({
                     type: "addFile",
                     payload: {
@@ -773,7 +772,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Persist the original upload and its analytics in IndexedDB.
+     * Save the original upload and its analytics through Storage.
      * @param {string} fileType - Processed file type
      * @param {string} fileName - Uploaded file name
      * @param {Blob} blob - The uploaded File
@@ -797,8 +796,8 @@ export const UploadPage = (() => {
         try {
             await fileSave;
         } catch (error) {
-            // A batch's analytics ride on its last reply. When that file is not
-            // an analytics input, they still describe the files that are stored.
+            // A batch's analytics arrive with its last worker reply. They still
+            // describe stored analytics inputs when the final file is another type.
             if (
                 analyticsBase &&
                 !ANALYTICS_SOURCE_TYPES.has(fileType) &&

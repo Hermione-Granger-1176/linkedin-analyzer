@@ -4323,7 +4323,7 @@ describe("UploadPage", () => {
         expect(addFileCall).toBeTruthy();
         const jobId = addFileCall[0].payload.jobId;
 
-        // Worker echoes back with the same jobId → hits lines 555-557
+        // Match the worker reply to the pending upload by jobId.
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -4351,9 +4351,7 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // No pending files, jobId null, fileName ''
-        // handleFileProcessedMessage → consumePendingFile(null,'') → line 560-561 → null
-        // → completeJob branch  runs, no error
+        // Process a reply with no pending upload, job ID, or file name.
         await workerInstance.listeners.message[0]({
             data: {
                 type: "fileProcessed",
@@ -4489,8 +4487,7 @@ describe("UploadPage", () => {
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // No worker → scheduleAnalyticsWorkerPrime returns early
-        // (no crash = pass; line 816 would be hit if somehow payload existed)
+        // Initialization tolerates an unavailable worker.
         globalThis.Worker = savedWorker;
     });
 
@@ -4787,8 +4784,8 @@ describe("UploadPage", () => {
         Storage.getAnalytics.mockResolvedValue(null);
         DataCache.get.mockImplementation(() => null);
 
-        // init() → restoreState() → updateStatus() → drawProgressBar(0)
-        // Since canvas is null, line 1035 returns immediately without error
+        // Initialize without a progress canvas. Progress drawing must tolerate
+        // the missing element.
         UploadPage.init();
         await new Promise((resolve) => setTimeout(resolve, 20));
 

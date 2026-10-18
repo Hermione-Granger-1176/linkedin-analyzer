@@ -170,17 +170,14 @@ describe("loadConnectionsData", () => {
     });
 
     it("returns nothing on the main thread when the file holds no rows", async () => {
-        // The cleaner reads a connections export with only its header quite
-        // happily, so an empty result is not a parse failure and has to be
-        // checked for on its own.
+        // Empty cleaned results are valid parse results. Check for zero rows separately.
         harness.uninstall();
 
         expect(await loadConnectionsData(EMPTY_CONNECTIONS_CSV)).toBeNull();
     });
 
     it("refuses the main-thread fallback for very large exports", async () => {
-        // Re-parsing this on the UI thread would freeze the page, which is the
-        // whole reason this transport exists.
+        // Keep parsing above the fallback size limit off the UI thread.
         harness.uninstall();
         const huge = `${CONNECTIONS_CSV}\n${"# padding\n".repeat(600000)}`;
 

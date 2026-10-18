@@ -18,8 +18,8 @@ export function markActiveRange(buttons, select, range) {
 }
 
 /**
- * The router calls a range filter makes, injected so this module stays below
- * the app layer.
+ * Router methods for reading the active route and updating its parameters.
+ * The caller supplies them so this module does not import the app router.
  * @typedef {object} RangeRouter
  * @property {() => {name: string}|null} getCurrentRoute - The active route
  * @property {(params: Record<string, string>, options: {replaceHistory: boolean}) => void} setParams - Replace the active route's params
@@ -27,7 +27,7 @@ export function markActiveRange(buttons, select, range) {
 
 /**
  * @typedef {object} RangeFilterOptions
- * @property {Iterable<string>} ranges - Every range key the screen answers to
+ * @property {Iterable<string>} ranges - Supported range keys
  * @property {string} fallback - Range for an unknown value, and the reset target
  * @property {Iterable<Element>} buttons - Time range buttons, each with a data-range value
  * @property {HTMLSelectElement|null} select - Compact range select, when the screen has one
@@ -46,9 +46,8 @@ export function markActiveRange(buttons, select, range) {
 /**
  * Wire a screen's range buttons, compact select, and reset button.
  *
- * The four range screens each carried this wiring, the parse, and the route
- * write. Ranges read from the route go through `parse` and `show` only, so
- * applying the route never writes the route back.
+ * When applying route state, call `parse` and `show` to avoid writing the route
+ * back.
  * @param {RangeFilterOptions} options - Controls, ranges, and what a choice does
  * @returns {RangeFilter}
  */

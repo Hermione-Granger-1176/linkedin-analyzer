@@ -66,8 +66,7 @@ export function sizeBucket(bytes) {
 }
 
 /**
- * Bucket navigator.deviceMemory. Only Chromium browsers expose it; anything
- * else reads as unknown, never as low.
+ * Bucket navigator.deviceMemory. Missing or invalid values return "unknown".
  * @param {unknown} deviceMemory - navigator.deviceMemory
  * @returns {string}
  */

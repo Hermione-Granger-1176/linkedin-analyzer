@@ -1,7 +1,7 @@
 {
   "name": "linkedin-analyzer-web",
   "version": "0.5.0",
-  "description": "Web interface for LinkedIn CSV data cleaner and analyzer",
+  "description": "Web app for cleaning and analyzing LinkedIn CSV exports",
   "author": "Aditya Kumar Darak",
   "license": "MIT",
   "private": true,

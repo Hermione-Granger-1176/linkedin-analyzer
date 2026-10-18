@@ -143,12 +143,8 @@ export function pickLabelIndices(count, width) {
     for (let index = 0; index < count; index += every) {
         kept.add(index);
     }
-    // The final point anchors where the series ends, so it is always labeled,
-    // evicting the one before it when the step left the two too close to sit
-    // side by side. Measured in millimetres, like the spacing every other pair
-    // gets: over ten years of months the last two indices were six steps apart
-    // and still only 8mm, which printed "Dec 2025" and "Jun 2026" over each
-    // other as "Dec 202Jun 2026".
+    // Always label the final point. If it sits too close to the previous label,
+    // remove the previous label. Measure spacing in millimetres, not indices.
     const last = count - 1;
     if (!kept.has(last)) {
         const previous = last - (last % every);
@@ -308,11 +304,9 @@ export function buildLineChartBlocks(painter, config) {
 
             drawValueAxis(painter, area, gridlines);
 
-            // The gridline is broken behind each value label rather than the
-            // label moved off it: nudged clear of one rule a number only lands
-            // nearer the next, and it has to stay over the dot it belongs to.
-            // Knocked out before the area is filled, so a label that falls
-            // inside the fill is covered by it instead of left in a white box.
+            // Erase the gridline behind each value label so the label stays
+            // above its point. Draw the filled area next to cover any background
+            // rectangle inside the fill.
             placed.forEach(({ x: pointX, y: pointY, valueLabel }) => {
                 if (!valueLabel) {
                     return;
@@ -328,9 +322,8 @@ export function buildLineChartBlocks(painter, config) {
                 );
             });
 
-            // One point has no span to fill or to connect along, and is left to
-            // the dot below; two coordinates are the least a polygon or a
-            // polyline can be built from.
+            // Draw a line and filled area only when at least two points exist.
+            // A single point is drawn as a dot below.
             if (placed.length > 1) {
                 const spine = placed.map(({ x: pointX, y: pointY }) => ({ x: pointX, y: pointY }));
                 painter.polygon(

@@ -1652,15 +1652,12 @@ describe("MessagesPage", () => {
         const asterisk = document.querySelector("#msgStatMessages .stat-asterisk");
         const popup = document.querySelector("#msgStatMessages .stat-popup");
 
-        // Click to show
         asterisk.click();
         expect(popup.classList.contains("visible")).toBe(true);
 
-        // Click to hide
         asterisk.click();
         expect(popup.classList.contains("visible")).toBe(false);
 
-        // Show again then Escape to hide
         asterisk.click();
         asterisk.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
         expect(popup.classList.contains("visible")).toBe(false);

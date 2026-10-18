@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "linkedin-analyzer"
 dynamic = ["version"]
-description = "Clean and export LinkedIn CSV data exports to Excel"
+description = "Clean LinkedIn CSV exports and save them as Excel workbooks"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"

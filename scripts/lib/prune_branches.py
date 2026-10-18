@@ -120,6 +120,52 @@ def merge_tree_error_detail(result: subprocess.CompletedProcess[str]) -> str:
     return ""
 
 
+def _resolve_base_tree(base: str, *, runner: GitRunner) -> str | None:
+    """Return the base tree id, or print why the prune cannot run and return None."""
+    # Resolve the base before probing for merge-tree support. Both fail the same
+    # way on an old git and on a missing base, so checking capability first would
+    # blame the git version for what is really an unresolvable ref.
+    try:
+        tree = base_tree(base, runner=runner)
+    except RuntimeError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return None
+
+    merge_tree_check = merge_tree_result(base, base, runner=runner)
+    if merge_tree_check.returncode != 0:
+        detail = merge_tree_error_detail(merge_tree_check)
+        if detail:
+            print(f"ERROR: git merge-tree --write-tree failed: {detail}", file=sys.stderr)
+        else:
+            print(MERGE_TREE_HINT, file=sys.stderr)
+        return None
+    return tree
+
+
+def _print_branches(heading: str, branches: Sequence[str]) -> None:
+    """Print a heading followed by one indented branch name per line."""
+    print(heading)
+    for branch in branches:
+        print(f"  {branch}")
+
+
+def _delete_branches(branches: Sequence[str], *, runner: GitRunner) -> int:
+    """Force-delete each branch and return the exit code.
+
+    Deletion is the destructive step, so a refusal stops the run rather than
+    continuing down the list. git explains itself on stderr, which the caller
+    needs to see to know whether anything was actually removed.
+    """
+    for branch in branches:
+        result = runner(["branch", "-D", branch])
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip() or "git reported no detail"
+            print(f"ERROR: cannot delete {branch}: {detail}", file=sys.stderr)
+            return 1
+        print(result.stdout.strip() or f"Deleted branch {branch}")
+    return 0
+
+
 def main(
     arguments: Sequence[str] | None = None,
     *,
@@ -131,54 +177,28 @@ def main(
     env = os.environ if environ is None else environ
     base, branches = candidate_branches(env, runner=runner)
 
-    # Resolve the base before probing for merge-tree support. Both fail the same
-    # way on an old git and on a missing base, so checking capability first would
-    # blame the git version for what is really an unresolvable ref.
-    try:
-        tree = base_tree(base, runner=runner)
-    except RuntimeError as error:
-        print(f"ERROR: {error}", file=sys.stderr)
-        return 1
-
-    merge_tree_check = merge_tree_result(base, base, runner=runner)
-    if merge_tree_check.returncode != 0:
-        detail = merge_tree_error_detail(merge_tree_check)
-        if detail:
-            print(f"ERROR: git merge-tree --write-tree failed: {detail}", file=sys.stderr)
-        else:
-            print(MERGE_TREE_HINT, file=sys.stderr)
+    tree = _resolve_base_tree(base, runner=runner)
+    if tree is None:
         return 1
 
     contained, unique = classify(base, branches, tree, runner=runner)
 
     if unique:
-        print(f"Branches holding content not in {base} (kept, review before deleting):")
-        for branch in unique:
-            print(f"  {branch}")
+        _print_branches(
+            f"Branches holding content not in {base} (kept, review before deleting):", unique
+        )
 
     if not contained:
         print(f"No local branches are fully contained in {base}.")
         return 0
 
-    print(f"Branches fully contained in {base} (safe to prune):")
-    for branch in contained:
-        print(f"  {branch}")
+    _print_branches(f"Branches fully contained in {base} (safe to prune):", contained)
 
     if env.get("PRUNE_CONFIRM") != "1":
         print("Dry run only. Re-run with confirm=1 to delete them.")
         return 0
 
-    # Deletion is the destructive step, so a refusal stops the run rather than
-    # continuing down the list. git explains itself on stderr, which the caller
-    # needs to see to know whether anything was actually removed.
-    for branch in contained:
-        result = runner(["branch", "-D", branch])
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip() or "git reported no detail"
-            print(f"ERROR: cannot delete {branch}: {detail}", file=sys.stderr)
-            return 1
-        print(result.stdout.strip() or f"Deleted branch {branch}")
-    return 0
+    return _delete_branches(contained, runner=runner)
 
 
 if __name__ == "__main__":

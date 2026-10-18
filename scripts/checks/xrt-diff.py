@@ -174,28 +174,33 @@ def _print_result(type_name: str, result: ComparisonResult) -> None:
             print(f"{type_name:<12} DETAIL     kind={kind} row={row} column={column}")
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Compare every configured type and return nonzero for differences or errors."""
-    args = parse_args(argv)
+def _missing_inputs(xlsx_dir: Path, json_dir: Path) -> dict[str, tuple[bool, bool]]:
+    """Return, for each type with a missing input, whether its xlsx and JSON are missing."""
     missing_by_type = {
         type_name: (
-            not (args.xlsx_dir / xlsx_name).is_file(),
-            not (args.json_dir / f"{type_name}.json").is_file(),
+            not (xlsx_dir / xlsx_name).is_file(),
+            not (json_dir / f"{type_name}.json").is_file(),
         )
         for type_name, xlsx_name in TYPES.items()
     }
-    missing_count = sum(sum(missing) for missing in missing_by_type.values())
-    if missing_count:
-        for type_name, (missing_xlsx, missing_json) in missing_by_type.items():
-            if missing_xlsx or missing_json:
-                print(
-                    f"{type_name:<12} MISSING    python-inputs={int(missing_xlsx)} "
-                    f"web-inputs={int(missing_json)}"
-                )
-        status = "FAILED" if args.strict else "SKIPPED"
-        print(f"RESULT       {status:<10} missing-inputs={missing_count}")
-        return 1 if args.strict else 0
+    return {name: missing for name, missing in missing_by_type.items() if any(missing)}
 
+
+def _report_missing_inputs(missing: dict[str, tuple[bool, bool]], *, strict: bool) -> int:
+    """Print the missing inputs and return the exit code, which only strict mode fails."""
+    for type_name, (missing_xlsx, missing_json) in missing.items():
+        print(
+            f"{type_name:<12} MISSING    python-inputs={int(missing_xlsx)} "
+            f"web-inputs={int(missing_json)}"
+        )
+    missing_count = sum(sum(flags) for flags in missing.values())
+    status = "FAILED" if strict else "SKIPPED"
+    print(f"RESULT       {status:<10} missing-inputs={missing_count}")
+    return 1 if strict else 0
+
+
+def _compare_all(xlsx_dir: Path, json_dir: Path) -> dict[str, int]:
+    """Compare every type, print one line per type, and return the summed counts."""
     totals = {
         "differing": 0,
         "errors": 0,
@@ -206,10 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     for type_name, xlsx_name in TYPES.items():
         try:
-            result = compare_type(
-                args.xlsx_dir / xlsx_name,
-                args.json_dir / f"{type_name}.json",
-            )
+            result = compare_type(xlsx_dir / xlsx_name, json_dir / f"{type_name}.json")
         except Exception:
             totals["errors"] += 1
             print(f"{type_name:<12} ERROR      comparison-failures=1")
@@ -222,7 +224,11 @@ def main(argv: list[str] | None = None) -> int:
         totals["mismatched_cells"] += result.mismatched_cells
         totals["extra_python_rows"] += result.extra_python_rows
         totals["extra_web_rows"] += result.extra_web_rows
+    return totals
 
+
+def _print_summary(totals: dict[str, int]) -> int:
+    """Print the closing RESULT line and return the exit code."""
     failed = totals["differing"] > 0 or totals["errors"] > 0
     status = "FAILED" if failed else "IDENTICAL"
     print(
@@ -233,6 +239,15 @@ def main(argv: list[str] | None = None) -> int:
         f"extra-web-rows={totals['extra_web_rows']}"
     )
     return 1 if failed else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Compare every configured type and return nonzero for differences or errors."""
+    args = parse_args(argv)
+    missing = _missing_inputs(args.xlsx_dir, args.json_dir)
+    if missing:
+        return _report_missing_inputs(missing, strict=args.strict)
+    return _print_summary(_compare_all(args.xlsx_dir, args.json_dir))
 
 
 if __name__ == "__main__":

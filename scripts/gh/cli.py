@@ -28,6 +28,60 @@ def _add_body_options(parser: argparse.ArgumentParser, *, required: bool = True)
     )
 
 
+def _add_pr_option(parser: argparse.ArgumentParser) -> None:
+    """Add ``--pr``, which defaults to the PR for the current branch."""
+    parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+
+
+def _add_thread_option(parser: argparse.ArgumentParser) -> None:
+    """Add the required ``--thread`` id of a review thread."""
+    parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
+
+
+def _add_json_option(parser: argparse.ArgumentParser) -> None:
+    """Add ``--json``, which switches the output to machine-readable JSON."""
+    parser.add_argument(
+        "--json", action="store_true", dest="as_json", help="Emit machine-readable JSON"
+    )
+
+
+def _add_watch_options(parser: argparse.ArgumentParser) -> None:
+    """Add the polling and Copilot options of the ``watch`` command."""
+    _add_pr_option(parser)
+    parser.add_argument("--interval", type=float, default=45.0, help="Poll interval in seconds")
+    parser.add_argument("--max-polls", type=int, default=40, help="Maximum poll count")
+    parser.add_argument(
+        "--expected-checks",
+        type=int,
+        default=pr_watch.DEFAULT_EXPECTED_CHECKS,
+        help="Minimum expected check count",
+    )
+    parser.add_argument(
+        "--checks-only",
+        action="store_true",
+        help="Wait for checks without waiting for a Copilot review",
+    )
+    parser.add_argument(
+        "--request-copilot",
+        action="store_true",
+        help="Request Copilot after capturing the review baseline",
+    )
+
+
+def _read_text_option(path: str, option: str) -> str:
+    """Return the text in ``path``, or stdin when ``path`` is ``-``.
+
+    Raises:
+        GhError: If the file cannot be read. The message names ``option``.
+    """
+    if path == "-":
+        return sys.stdin.read()
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise GhError(f"Could not read {option} {path}: {exc}") from exc
+
+
 def _body_text(args: argparse.Namespace) -> str:
     """Return the body text from ``--body`` or ``--body-file`` (``-`` reads stdin).
 
@@ -37,12 +91,7 @@ def _body_text(args: argparse.Namespace) -> str:
             and they must forward the raw values rather than call this.
     """
     if args.body_file is not None:
-        if args.body_file == "-":
-            return sys.stdin.read()
-        try:
-            return Path(args.body_file).read_text(encoding="utf-8")
-        except OSError as exc:
-            raise GhError(f"Could not read --body-file {args.body_file}: {exc}") from exc
+        return _read_text_option(args.body_file, "--body-file")
     if args.body is None:
         raise GhError("Provide a body with --body or --body-file.")
     return str(args.body)
@@ -55,34 +104,30 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     list_parser = subparsers.add_parser("list", help="List pull-request review threads")
-    list_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    _add_pr_option(list_parser)
     list_parser.add_argument(
         "--all", action="store_true", dest="include_resolved", help="Include resolved threads"
     )
-    list_parser.add_argument(
-        "--json", action="store_true", dest="as_json", help="Emit machine-readable JSON"
-    )
+    _add_json_option(list_parser)
 
     reply_parser = subparsers.add_parser("reply", help="Reply to a review thread by id")
-    reply_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
+    _add_thread_option(reply_parser)
     _add_body_options(reply_parser)
 
     resolve_parser = subparsers.add_parser("resolve", help="Resolve a review thread by id")
-    resolve_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
+    _add_thread_option(resolve_parser)
 
     address_parser = subparsers.add_parser(
         "address", help="Reply to and resolve a review thread in one step"
     )
-    address_parser.add_argument("--thread", required=True, help="Thread id (PRRT_...)")
+    _add_thread_option(address_parser)
     _add_body_options(address_parser)
 
     list_comments_parser = subparsers.add_parser(
         "list-comments", help="List individual review comments with node ids"
     )
-    list_comments_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
-    list_comments_parser.add_argument(
-        "--json", action="store_true", dest="as_json", help="Emit machine-readable JSON"
-    )
+    _add_pr_option(list_comments_parser)
+    _add_json_option(list_comments_parser)
 
     delete_comment_parser = subparsers.add_parser(
         "delete-comment", help="Delete a review comment by its node id"
@@ -92,21 +137,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     comment_parser = subparsers.add_parser("comment", help="Add a PR-level comment")
-    comment_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    _add_pr_option(comment_parser)
     _add_body_options(comment_parser)
 
     edit_pr_parser = subparsers.add_parser("edit-pr", help="Edit a PR title and/or body")
-    edit_pr_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    _add_pr_option(edit_pr_parser)
     edit_pr_parser.add_argument("--title", help="New PR title")
     _add_body_options(edit_pr_parser, required=False)
 
     copilot_parser = subparsers.add_parser(
         "copilot-review", help="Request a Copilot code review on the PR"
     )
-    copilot_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    _add_pr_option(copilot_parser)
 
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
-    summary_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
+    _add_pr_option(summary_parser)
 
     issue_summary_parser = subparsers.add_parser("issue-summary", help="One-screen issue overview")
     issue_summary_parser.add_argument("--issue", type=int, required=True, help="Issue number")
@@ -125,35 +170,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "watch",
         help="Observe the Copilot review and successful checks",
     )
-    watch_parser.add_argument("--pr", type=int, help="PR number (default: current branch)")
-    watch_parser.add_argument(
-        "--interval",
-        type=float,
-        default=45.0,
-        help="Poll interval in seconds",
-    )
-    watch_parser.add_argument(
-        "--max-polls",
-        type=int,
-        default=40,
-        help="Maximum poll count",
-    )
-    watch_parser.add_argument(
-        "--expected-checks",
-        type=int,
-        default=pr_watch.DEFAULT_EXPECTED_CHECKS,
-        help="Minimum expected check count",
-    )
-    watch_parser.add_argument(
-        "--checks-only",
-        action="store_true",
-        help="Wait for checks without waiting for a Copilot review",
-    )
-    watch_parser.add_argument(
-        "--request-copilot",
-        action="store_true",
-        help="Request Copilot after capturing the review baseline",
-    )
+    _add_watch_options(watch_parser)
 
     ci_parser = subparsers.add_parser(
         "ci-failures", help="Show failed-step logs for the latest run"
@@ -259,13 +276,7 @@ def _handle_check_commit_message(args: argparse.Namespace) -> int:
     module entry point prints it as a plain message and exits non-zero, the same
     way every other command reports a refusal.
     """
-    if args.message_file == "-":
-        message = sys.stdin.read()
-    else:
-        try:
-            message = Path(args.message_file).read_text(encoding="utf-8")
-        except OSError as exc:
-            raise GhError(f"Could not read --message-file {args.message_file}: {exc}") from exc
+    message = _read_text_option(args.message_file, "--message-file")
     try:
         commit_message.validate_commit_message(message)
     except ValueError as exc:

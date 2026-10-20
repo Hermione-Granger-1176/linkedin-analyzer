@@ -543,13 +543,72 @@ def test_create_fallback_checks_a_fork_branch_and_qualifies_its_head(
                 json_response({"commit": {"sha": "abc"}}),
             ),
             (
-                rest("POST", "repos/org/project/pulls", "head=alice:feature", "base=main"),
+                rest(
+                    "POST",
+                    "repos/org/project/pulls",
+                    "head=alice:feature",
+                    "head_repo=project",
+                    "base=main",
+                ),
                 json_response({"html_url": "https://example/pull/9"}),
             ),
         ]
     )
 
     assert pr_commands.create_pr(title="T", base="main", run_fn=runner) == 0
+
+
+def test_create_fallback_names_the_source_repository_inside_one_organization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fork inside the same organization needs head_repo, which names its repository."""
+    monkeypatch.setenv("GH_REPO", "org/project")
+    runner = FakeGh(
+        [
+            *sandbox_routes("org/project-fork"),
+            (_pushed, completed_process(0, "abc\n")),
+            (has("rev-parse"), completed_process(0, "feature\n")),
+            (
+                rest("GET", "repos/org/project-fork/branches/feature"),
+                json_response({"commit": {"sha": "abc"}}),
+            ),
+            (
+                rest(
+                    "POST",
+                    "repos/org/project/pulls",
+                    "head=org:feature",
+                    "head_repo=project-fork",
+                ),
+                json_response({"html_url": "https://example/pull/9"}),
+            ),
+        ]
+    )
+
+    assert pr_commands.create_pr(title="T", base="main", run_fn=runner) == 0
+    posts = [call for call in runner.calls if "--method" in call and "POST" in call]
+    assert len(posts) == 1
+
+
+def test_create_fallback_sends_no_head_repo_within_one_repository() -> None:
+    """A same-repository PR needs no head_repo."""
+    runner = FakeGh(
+        [
+            *sandbox_routes("o/r"),
+            (_pushed, completed_process(0, "abc\n")),
+            (has("rev-parse"), completed_process(0, "feature\n")),
+            (
+                rest("GET", "repos/o/r/branches/feature"),
+                json_response({"commit": {"sha": "abc"}}),
+            ),
+            (
+                rest("POST", "repos/o/r/pulls", "head=feature"),
+                json_response({"html_url": "https://example/pull/9"}),
+            ),
+        ]
+    )
+
+    assert pr_commands.create_pr(title="T", base="main", run_fn=runner) == 0
+    assert not any(arg.startswith("head_repo=") for call in runner.calls for arg in call)
 
 
 def test_checkout_fallback_prefixes_a_fork_branch_and_records_its_pr() -> None:

@@ -148,12 +148,12 @@ def create_pr(
             if title is not None
             else _filled_text(slug, target, head, branch, run_fn=run_fn)
         )
-        pull = gh_runner.rest(
-            f"repos/{slug}/pulls",
-            method="POST",
-            fields={"title": pr_title, "head": head, "base": target, "body": pr_body},
-            run_fn=run_fn,
-        )
+        fields = {"title": pr_title, "head": head, "base": target, "body": pr_body}
+        if not gh_runner.same_repo(source, slug):
+            # GitHub needs the source repository's name when a cross-repository
+            # PR stays inside one organization, where the owner prefix is not enough.
+            fields["head_repo"] = source.split("/")[1]
+        pull = gh_runner.rest(f"repos/{slug}/pulls", method="POST", fields=fields, run_fn=run_fn)
         print(pull.get("html_url") if isinstance(pull, dict) else "Created pull request")
         return 0
 

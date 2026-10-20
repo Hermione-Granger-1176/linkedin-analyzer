@@ -694,20 +694,45 @@ def _recorded_pr_number(branch: str, slug: str, *, run_fn: RunFunction | None) -
     return int(value)
 
 
+def _tracked_head(branch: str, *, run_fn: RunFunction | None) -> tuple[str, str] | None:
+    """Return the ``(owner, branch)`` a local ``branch`` tracks on GitHub, if it tracks one.
+
+    A local branch may be named differently from its upstream, such as
+    ``review-copy`` tracking ``origin/feature``. Only a GitHub remote and a
+    ``refs/heads/`` merge ref count: ``.`` tracks a local branch, and a
+    ``refs/pull/<n>/head`` ref is a read-only PR checkout, not a head branch.
+    """
+    remote = _git_config_value(f"branch.{branch}.remote", run_fn=run_fn)
+    merge = _git_config_value(f"branch.{branch}.merge", run_fn=run_fn)
+    if not remote or remote == "." or not merge or not merge.startswith("refs/heads/"):
+        return None
+    tracked = _repo_from_remote(remote=remote, run_fn=run_fn)
+    if not tracked:
+        return None
+    return tracked.split("/")[0], merge.removeprefix("refs/heads/")
+
+
 def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
     """Find the PR whose head is the current branch through the REST API.
 
     Like ``gh pr view``, an open PR wins. Otherwise the newest closed or merged
     one counts, so a branch merged through the fallback still finds its PR. A
     recorded PR that is no longer open yields to a newer open PR on its head.
+    Without a recorded PR, the upstream the branch tracks is tried first, then
+    origin's owner with the local name, which covers a branch that has not been
+    pushed with ``-u`` yet.
     """
     branch = current_branch(run_fn=run_fn)
     slug = resolve_repo(run_fn=run_fn)
     recorded = _recorded_pr_number(branch, slug, run_fn=run_fn)
     # The branch lives in origin, which is a fork when GH_REPO names upstream.
     owner = checkout_repo(slug, run_fn=run_fn).split("/")[0]
-    head_branch = branch
-    if recorded is not None:
+    heads = [(owner, branch)]
+    if recorded is None:
+        tracked = _tracked_head(branch, run_fn=run_fn)
+        if tracked is not None and tracked != heads[0]:
+            heads.insert(0, tracked)
+    else:
         pull = as_object(rest(f"repos/{slug}/pulls/{recorded}", run_fn=run_fn))
         if pull.get("state") == "open":
             return recorded
@@ -715,18 +740,19 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
         head = as_object(pull.get("head"))
         head_owner = as_object(as_object(head.get("repo")).get("owner")).get("login")
         owner = str(head_owner or str(head.get("label") or "").partition(":")[0] or owner)
-        head_branch = str(head.get("ref") or branch)
-    for state in ("open", "closed"):
-        pulls = rest(
-            f"repos/{slug}/pulls",
-            fields={"head": f"{owner}:{head_branch}", "state": state},
-            run_fn=run_fn,
-        )
-        if isinstance(pulls, list) and pulls:
-            try:
-                return int(pulls[0]["number"])
-            except (KeyError, TypeError, ValueError) as exc:
-                raise GhError("Could not read PR number from the pull request list.") from exc
+        heads = [(owner, str(head.get("ref") or branch))]
+    for head_owner_name, head_branch in heads:
+        for state in ("open", "closed"):
+            pulls = rest(
+                f"repos/{slug}/pulls",
+                fields={"head": f"{head_owner_name}:{head_branch}", "state": state},
+                run_fn=run_fn,
+            )
+            if isinstance(pulls, list) and pulls:
+                try:
+                    return int(pulls[0]["number"])
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise GhError("Could not read PR number from the pull request list.") from exc
     if recorded is not None:
         return recorded
     raise GhError("No pull request found for the current branch.")

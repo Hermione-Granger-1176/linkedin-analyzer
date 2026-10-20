@@ -1,22 +1,38 @@
 """Pull-request review-thread operations built on the GraphQL API.
 
-The listing prints each thread's node id (``PRRT_…``), and replies/resolves key
+The listing prints each thread's node id (``PRRT_...``), and replies/resolves key
 off that id via ``addPullRequestReviewThreadReply`` and ``resolveReviewThread``.
 This avoids the extra lookup the old REST flow needed to turn a thread into a
 numeric comment ``databaseId``.
+
+When the environment blocks GraphQL, every operation here falls back to the REST
+API. REST has no thread node id, so a thread is identified by the numeric id of
+its first comment, and reply, resolve, and delete accept that number in place of
+the node id. A node id still goes through GraphQL, and fails with a pointer to
+the numeric id when GraphQL is unavailable.
 """
 
 from __future__ import annotations
 
+import re
+import sys
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import gh_runner
-from .gh_runner import GhError, GhRateLimitError, RunFunction
+from . import gh_runner, pr_rest
+from .gh_runner import GhError, GhGraphqlUnavailableError, GhRateLimitError, RunFunction
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
+
+# A REST comment id is plain digits; a GraphQL node id (``PRRT_...``) never is.
+_NUMERIC_ID = re.compile(r"[0-9]+")
+
+# Fields requested from ``gh pr view --json`` for the summary, and requested from
+# the REST fallback in the same shape.
+_SUMMARY_FIELDS = "number,title,state,url,statusCheckRollup"
 
 _THREADS_QUERY = """
 query($owner: String!, $name: String!, $pr: Int!, $after: String) {
@@ -117,7 +133,7 @@ def _review_threads(data: Any) -> dict[str, Any]:
     Raises:
         GhError: If the payload has no repository or pull request. An invalid or
             inaccessible PR returns ``pullRequest: null`` (with no ``errors``
-            array), which would otherwise raise an opaque ``TypeError``.
+            array), which would otherwise surface as an opaque ``TypeError``.
     """
     repository = data.get("repository") if isinstance(data, dict) else None
     pull_request = repository.get("pullRequest") if isinstance(repository, dict) else None
@@ -137,42 +153,42 @@ def _review_thread_nodes(connection: dict[str, Any]) -> list[Any]:
     return nodes
 
 
-def _parse_thread_node(node: Any) -> ReviewThread:
-    """Convert one ``reviewThreads.nodes`` entry into a ``ReviewThread``."""
-    if not isinstance(node, dict):
-        raise GhError("Unexpected review thread node shape in GraphQL response.")
-    thread_id = node.get("id")
-    if not thread_id:
-        raise GhError("Review thread node missing id in GraphQL response.")
-    raw_comments = node.get("comments")
-    if raw_comments is not None and not isinstance(raw_comments, dict):
-        raise GhError("Unexpected review thread comments shape in GraphQL response.")
-    comments = [] if raw_comments is None else raw_comments.get("nodes")
-    if not isinstance(comments, list):
-        raise GhError("Unexpected review thread comments nodes shape in GraphQL response.")
-    first = comments[0] if comments else {}
-    if not isinstance(first, dict):
-        raise GhError("Unexpected review thread comment node shape in GraphQL response.")
-    author = first.get("author")
-    if author is not None and not isinstance(author, dict):
-        raise GhError("Unexpected review comment author shape in GraphQL response.")
-    author = author or {}
-    return ReviewThread(
-        thread_id=str(thread_id),
-        state="resolved" if node.get("isResolved") else "open",
-        path=str(node.get("path") or ""),
-        line=node.get("line"),
-        author=str(author.get("login") or "unknown"),
-        body=str(first.get("body") or ""),
-        url=str(first.get("url") or ""),
-    )
-
-
 def _parse_nodes(nodes: Any) -> list[ReviewThread]:
     """Convert ``reviewThreads.nodes`` entries into ``ReviewThread`` objects."""
     if not isinstance(nodes, list):
         raise GhError("Unexpected reviewThreads.nodes shape in GraphQL response.")
-    return [_parse_thread_node(node) for node in nodes]
+    threads: list[ReviewThread] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise GhError("Unexpected review thread node shape in GraphQL response.")
+        thread_id = node.get("id")
+        if not thread_id:
+            raise GhError("Review thread node missing id in GraphQL response.")
+        raw_comments = node.get("comments")
+        if raw_comments is not None and not isinstance(raw_comments, dict):
+            raise GhError("Unexpected review thread comments shape in GraphQL response.")
+        comments = [] if raw_comments is None else raw_comments.get("nodes")
+        if not isinstance(comments, list):
+            raise GhError("Unexpected review thread comments nodes shape in GraphQL response.")
+        first = comments[0] if comments else {}
+        if not isinstance(first, dict):
+            raise GhError("Unexpected review thread comment node shape in GraphQL response.")
+        author = first.get("author")
+        if author is not None and not isinstance(author, dict):
+            raise GhError("Unexpected review comment author shape in GraphQL response.")
+        author = author or {}
+        threads.append(
+            ReviewThread(
+                thread_id=str(thread_id),
+                state="resolved" if node.get("isResolved") else "open",
+                path=str(node.get("path") or ""),
+                line=node.get("line"),
+                author=str(author.get("login") or "unknown"),
+                body=str(first.get("body") or ""),
+                url=str(first.get("url") or ""),
+            )
+        )
+    return threads
 
 
 def parse_threads(data: Any) -> list[ReviewThread]:
@@ -192,8 +208,8 @@ def _page_has_next(page_info: dict[str, Any], message: str) -> bool:
     """Return ``pageInfo.hasNextPage`` as a bool, raising on a malformed value.
 
     The GraphQL ``PageInfo.hasNextPage`` field is non-null, so a valid response
-    always carries it. A missing or non-boolean value is malformed and raises
-    ``GhError`` rather than silently truncating pagination.
+    always carries it. A missing or non-boolean value is therefore malformed and
+    surfaces as ``GhError`` rather than silently truncating pagination.
     """
     has_next = page_info.get("hasNextPage")
     if not isinstance(has_next, bool):
@@ -206,8 +222,8 @@ def _require_end_cursor(page_info: dict[str, Any], message: str) -> str:
 
     Only call this after ``_page_has_next`` has confirmed ``hasNextPage`` is true,
     since pagination must then continue from this cursor. A missing, non-string,
-    or empty ``endCursor`` is malformed and raises a clear error instead of being
-    forwarded into the next query as an invalid value.
+    or empty ``endCursor`` is malformed and surfaces as a clear error instead of
+    being forwarded into the next query as a confusing value.
     """
     after = page_info.get("endCursor")
     if not isinstance(after, str) or not after:
@@ -243,6 +259,77 @@ def _review_thread_pages(
         )
 
 
+def _graphql_threads(
+    owner: str, name: str, pr: int, *, run_fn: RunFunction | None = None
+) -> list[ReviewThread]:
+    """Return every review thread on ``pr`` through GraphQL."""
+    threads: list[ReviewThread] = []
+    for connection in _review_thread_pages(
+        _THREADS_QUERY, owner=owner, name=name, pr=pr, run_fn=run_fn
+    ):
+        threads.extend(_parse_nodes(_review_thread_nodes(connection)))
+    return threads
+
+
+def _is_rest_id(identifier: str) -> bool:
+    """Return whether ``identifier`` is a numeric REST comment id (not a GraphQL node id)."""
+    return _NUMERIC_ID.fullmatch(identifier) is not None
+
+
+def _rest_login(user: Any) -> str:
+    """Return a REST user's login (``unknown`` when the account is missing)."""
+    login = user.get("login") if isinstance(user, dict) else None
+    return str(login or "unknown")
+
+
+def _rest_review_comments(
+    slug: str, pr: int, *, run_fn: RunFunction | None
+) -> list[dict[str, Any]]:
+    """Return every review comment on ``pr`` as REST objects."""
+    comments = gh_runner.rest_pages(f"repos/{slug}/pulls/{pr}/comments", run_fn=run_fn)
+    if any("id" not in comment for comment in comments):
+        raise GhError("A review comment in the REST response has no id.")
+    return comments
+
+
+def _rest_threads(
+    owner: str, name: str, pr: int, *, run_fn: RunFunction | None = None
+) -> list[ReviewThread]:
+    """Return every review thread on ``pr`` through the REST thread route.
+
+    The route lists each thread's state and the ids of its comments. A thread
+    has no node id here, so its first comment's numeric id stands in for one.
+    """
+    slug = f"{owner}/{name}"
+    # This route ignores per_page and page and returns every thread at once.
+    raw_threads = gh_runner.rest(f"repos/{slug}/pulls/{pr}/ccr/review_threads", run_fn=run_fn)
+    if not isinstance(raw_threads, list):
+        raise GhError("Unexpected review threads shape in REST response.")
+    if not raw_threads:
+        return []
+    comments = {
+        comment["id"]: comment for comment in _rest_review_comments(slug, pr, run_fn=run_fn)
+    }
+    threads: list[ReviewThread] = []
+    for raw in raw_threads:
+        ids = raw.get("comment_ids") if isinstance(raw, dict) else None
+        if not isinstance(ids, list) or not ids:
+            raise GhError("Review thread in REST response has no comment ids.")
+        first = comments.get(ids[0], {})
+        threads.append(
+            ReviewThread(
+                thread_id=str(ids[0]),
+                state="resolved" if raw.get("resolved") else "open",
+                path=str(raw.get("path") or ""),
+                line=raw.get("line"),
+                author=_rest_login(first.get("user")),
+                body=str(first.get("body") or ""),
+                url=str(first.get("html_url") or ""),
+            )
+        )
+    return threads
+
+
 def list_threads(
     pr: int | None = None,
     *,
@@ -253,48 +340,99 @@ def list_threads(
 
     Pages through ``reviewThreads`` so a PR with more than 100 threads is
     reported in full instead of being silently truncated at the first page.
+    Falls back to the REST thread route when GraphQL is unavailable.
     """
     owner, name = _owner_name(run_fn=run_fn)
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
 
-    threads: list[ReviewThread] = []
-    for connection in _review_thread_pages(
-        _THREADS_QUERY, owner=owner, name=name, pr=pr, run_fn=run_fn
-    ):
-        threads.extend(_parse_nodes(_review_thread_nodes(connection)))
+    threads = gh_runner.with_rest_fallback(
+        lambda: _graphql_threads(owner, name, pr, run_fn=run_fn),
+        lambda: _rest_threads(owner, name, pr, run_fn=run_fn),
+    )
 
     if include_resolved:
         return threads
     return [thread for thread in threads if thread.state == "open"]
 
 
-def reply_to_thread(thread_id: str, body: str, *, run_fn: RunFunction | None = None) -> None:
-    """Reply to a review thread by its node id.
+def _graphql_only(action: str, listing: str, call: Callable[[], object]) -> None:
+    """Run a GraphQL-only ``call``, explaining the numeric-id route if GraphQL is blocked.
+
+    ``listing`` names the ``make`` target that prints the right numeric ids: the
+    thread listing holds only each thread's first comment, so it cannot name a reply.
+    """
+    try:
+        call()
+    except GhGraphqlUnavailableError as exc:
+        raise GhError(
+            f"Cannot {action} by node id because GitHub GraphQL is unavailable here. "
+            f"Use the numeric id that `make {listing}` prints instead."
+        ) from exc
+
+
+def reply_to_thread(
+    thread_id: str, body: str, *, pr: int | None = None, run_fn: RunFunction | None = None
+) -> None:
+    """Reply to a review thread by its node id, or by its first comment's numeric id.
 
     Posting a reply is not idempotent, so it does not auto-retry: a lost
     response after a successful write would otherwise double-post the comment.
+    A numeric id replies through REST on ``pr`` (the current branch's PR when
+    omitted).
     """
-    gh_runner.graphql(
-        _REPLY_MUTATION,
-        variables={"thread": thread_id, "body": body},
-        run_fn=run_fn,
-        retries=0,
+    if _is_rest_id(thread_id):
+        slug, pr = gh_runner.resolve_repo_and_pr(pr, run_fn=run_fn)
+        gh_runner.rest(
+            f"repos/{slug}/pulls/{pr}/comments/{thread_id}/replies",
+            method="POST",
+            fields={"body": body},
+            run_fn=run_fn,
+        )
+        return
+    _graphql_only(
+        "reply to a thread",
+        "pr-review-comments",
+        lambda: gh_runner.graphql(
+            _REPLY_MUTATION,
+            variables={"thread": thread_id, "body": body},
+            run_fn=run_fn,
+            retries=0,
+        ),
     )
 
 
-def resolve_thread(thread_id: str, *, run_fn: RunFunction | None = None) -> None:
-    """Resolve a review thread by its node id (idempotent, so retries apply)."""
-    gh_runner.graphql(
-        _RESOLVE_MUTATION,
-        variables={"thread": thread_id},
-        run_fn=run_fn,
+def resolve_thread(
+    thread_id: str, *, pr: int | None = None, run_fn: RunFunction | None = None
+) -> None:
+    """Resolve a review thread by its node id or first comment's numeric id.
+
+    Resolving is idempotent, so retries apply. A numeric id resolves through the
+    REST thread route on ``pr`` (the current branch's PR when omitted).
+    """
+    if _is_rest_id(thread_id):
+        slug, pr = gh_runner.resolve_repo_and_pr(pr, run_fn=run_fn)
+        gh_runner.rest(
+            f"repos/{slug}/pulls/{pr}/ccr/comments/{thread_id}/resolve",
+            method="POST",
+            run_fn=run_fn,
+            retries=gh_runner.DEFAULT_RETRIES,
+        )
+        return
+    _graphql_only(
+        "resolve a thread",
+        "pr-review-comments",
+        lambda: gh_runner.graphql(
+            _RESOLVE_MUTATION, variables={"thread": thread_id}, run_fn=run_fn
+        ),
     )
 
 
-def address_thread(thread_id: str, body: str, *, run_fn: RunFunction | None = None) -> None:
+def address_thread(
+    thread_id: str, body: str, *, pr: int | None = None, run_fn: RunFunction | None = None
+) -> None:
     """Reply to a review thread and then resolve it, in that order."""
-    reply_to_thread(thread_id, body, run_fn=run_fn)
-    resolve_thread(thread_id, run_fn=run_fn)
+    reply_to_thread(thread_id, body, pr=pr, run_fn=run_fn)
+    resolve_thread(thread_id, pr=pr, run_fn=run_fn)
 
 
 @dataclass(frozen=True)
@@ -333,58 +471,6 @@ def _parse_comment_nodes(nodes: Any) -> list[ReviewComment]:
     return comments
 
 
-def _thread_comments_page(
-    thread_id: str, after: str, *, run_fn: RunFunction | None
-) -> dict[str, Any]:
-    """Fetch and validate the page of a thread's comments that follows ``after``."""
-    result = gh_runner.graphql(
-        _THREAD_COMMENTS_QUERY,
-        variables={"thread": thread_id, "after": after},
-        run_fn=run_fn,
-    )
-    if not isinstance(result, dict):
-        raise GhError(
-            f"Unexpected review thread response shape for {thread_id} "
-            "in GraphQL response: expected a mapping."
-        )
-    node = result.get("node")
-    if not isinstance(node, dict) or "comments" not in node:
-        raise GhError(f"Review thread {thread_id} not found or inaccessible in GraphQL response.")
-    connection = node["comments"]
-    if not isinstance(connection, dict):
-        raise GhError(
-            f"Unexpected review thread comments shape for {thread_id} in GraphQL response."
-        )
-    return connection
-
-
-def _remaining_thread_comments(
-    thread_id: str, page_info: dict[str, Any], *, run_fn: RunFunction | None = None
-) -> list[ReviewComment]:
-    """Page a single thread's comments beyond the first 100 already collected."""
-    if not isinstance(page_info, dict):
-        raise GhError(
-            f"Unexpected review thread pageInfo shape for {thread_id} in GraphQL response."
-        )
-    comments: list[ReviewComment] = []
-    while _page_has_next(
-        page_info,
-        f"Unexpected review thread pageInfo.hasNextPage shape for {thread_id} in GraphQL response.",
-    ):
-        after = _require_end_cursor(
-            page_info,
-            f"Unexpected review thread pageInfo.endCursor shape for {thread_id} "
-            "in GraphQL response.",
-        )
-        connection = _thread_comments_page(thread_id, after, run_fn=run_fn)
-        comments.extend(_parse_comment_nodes(connection.get("nodes")))
-        page_info = _page_info(
-            connection,
-            f"Unexpected review thread pageInfo shape for {thread_id} in GraphQL response.",
-        )
-    return comments
-
-
 def _thread_comments_connection(node: Any) -> tuple[str, dict[str, Any]]:
     """Return ``(thread_id, comments)`` from a review-thread node."""
     if not isinstance(node, dict):
@@ -398,20 +484,59 @@ def _thread_comments_connection(node: Any) -> tuple[str, dict[str, Any]]:
     return str(node_id), thread_comments
 
 
-def list_comments(
-    pr: int | None = None, *, run_fn: RunFunction | None = None
+def _remaining_thread_comments(
+    thread_id: str, page_info: dict[str, Any], *, run_fn: RunFunction | None = None
 ) -> list[ReviewComment]:
-    """Return every individual review comment on ``pr`` (auto-detected when omitted).
+    """Page a single thread's comments beyond the first 100 already collected."""
+    if not isinstance(page_info, dict):
+        raise GhError(
+            f"Unexpected review thread pageInfo shape for {thread_id} in GraphQL response."
+        )
+    comments: list[ReviewComment] = []
+    while True:
+        if not _page_has_next(
+            page_info,
+            f"Unexpected review thread pageInfo.hasNextPage shape for {thread_id} "
+            "in GraphQL response.",
+        ):
+            break
+        after = _require_end_cursor(
+            page_info,
+            f"Unexpected review thread pageInfo.endCursor shape for {thread_id} "
+            "in GraphQL response.",
+        )
+        result = gh_runner.graphql(
+            _THREAD_COMMENTS_QUERY,
+            variables={"thread": thread_id, "after": after},
+            run_fn=run_fn,
+        )
+        if not isinstance(result, dict):
+            raise GhError(
+                f"Unexpected review thread response shape for {thread_id} "
+                "in GraphQL response: expected a mapping."
+            )
+        node = result.get("node")
+        if not isinstance(node, dict) or "comments" not in node:
+            raise GhError(
+                f"Review thread {thread_id} not found or inaccessible in GraphQL response."
+            )
+        connection = node["comments"]
+        if not isinstance(connection, dict):
+            raise GhError(
+                f"Unexpected review thread comments shape for {thread_id} in GraphQL response."
+            )
+        comments.extend(_parse_comment_nodes(connection.get("nodes")))
+        page_info = _page_info(
+            connection,
+            f"Unexpected review thread pageInfo shape for {thread_id} in GraphQL response.",
+        )
+    return comments
 
-    Unlike ``list_threads`` (which keeps only each thread's first comment for a
-    summary view), this flattens all comments so a specific reply can be
-    targeted by its node id, e.g. to delete a stray one. Both the thread list
-    and each thread's comments are fully paginated, so "every" is literal even
-    past the 100-per-page GraphQL caps.
-    """
-    owner, name = _owner_name(run_fn=run_fn)
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
 
+def _graphql_comments(
+    owner: str, name: str, pr: int, *, run_fn: RunFunction | None = None
+) -> list[ReviewComment]:
+    """Return every review comment on ``pr`` through GraphQL."""
     comments: list[ReviewComment] = []
     for connection in _review_thread_pages(
         _COMMENTS_QUERY, owner=owner, name=name, pr=pr, run_fn=run_fn
@@ -427,18 +552,85 @@ def list_comments(
     return comments
 
 
+def _rest_comments(
+    owner: str, name: str, pr: int, *, run_fn: RunFunction | None = None
+) -> list[ReviewComment]:
+    """Return every review comment on ``pr`` through REST, keyed by numeric id."""
+    return [
+        ReviewComment(
+            comment_id=str(comment["id"]),
+            author=_rest_login(comment.get("user")),
+            body=str(comment.get("body") or ""),
+            url=str(comment.get("html_url") or ""),
+        )
+        for comment in _rest_review_comments(f"{owner}/{name}", pr, run_fn=run_fn)
+    ]
+
+
+def list_comments(
+    pr: int | None = None, *, run_fn: RunFunction | None = None
+) -> list[ReviewComment]:
+    """Return every individual review comment on ``pr`` (auto-detected when omitted).
+
+    Unlike ``list_threads`` (which keeps only each thread's first comment for a
+    summary view), this flattens all comments so a specific reply can be
+    targeted by its node id, e.g. to delete a stray one. Both the thread list
+    and each thread's comments are fully paginated, so "every" is literal even
+    past the 100-per-page GraphQL caps. When GraphQL is unavailable the ids are
+    the numeric REST ids that ``delete_review_comment`` also accepts.
+    """
+    owner, name = _owner_name(run_fn=run_fn)
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
+    return gh_runner.with_rest_fallback(
+        lambda: _graphql_comments(owner, name, pr, run_fn=run_fn),
+        lambda: _rest_comments(owner, name, pr, run_fn=run_fn),
+    )
+
+
 def delete_review_comment(comment_id: str, *, run_fn: RunFunction | None = None) -> None:
-    """Delete a single review comment by its node id.
+    """Delete a single review comment by its node id or numeric REST id.
 
     Deletion is destructive and not idempotent (a retry would error on the
     already-removed comment), so it does not auto-retry.
     """
-    gh_runner.graphql(
-        _DELETE_COMMENT_MUTATION,
-        variables={"comment": comment_id},
-        run_fn=run_fn,
-        retries=0,
+    if _is_rest_id(comment_id):
+        slug = gh_runner.resolve_repo(run_fn=run_fn)
+        gh_runner.rest(f"repos/{slug}/pulls/comments/{comment_id}", method="DELETE", run_fn=run_fn)
+        return
+    _graphql_only(
+        "delete a comment",
+        "pr-comments-list",
+        lambda: gh_runner.graphql(
+            _DELETE_COMMENT_MUTATION,
+            variables={"comment": comment_id},
+            run_fn=run_fn,
+            retries=0,
+        ),
     )
+
+
+def comment_on_pr(pr: int | None, body: str, *, run_fn: RunFunction | None = None) -> None:
+    """Post a PR-level comment on the current branch's PR or the given PR."""
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
+
+    def post_with_gh() -> None:
+        gh_runner.run_gh(["pr", "comment", str(pr), "--body", body], run_fn=run_fn, retries=0)
+
+    def post_with_rest() -> None:
+        slug = gh_runner.resolve_repo(run_fn=run_fn)
+        gh_runner.rest(
+            f"repos/{slug}/issues/{pr}/comments",
+            method="POST",
+            fields={"body": body},
+            run_fn=run_fn,
+        )
+
+    gh_runner.with_rest_fallback(post_with_gh, post_with_rest)
+
+
+def _first_line(body: str) -> str:
+    """Return the first line of a comment body, or an empty string for an empty body."""
+    return body.splitlines()[0] if body else ""
 
 
 def format_comments(comments: list[ReviewComment]) -> str:
@@ -447,8 +639,9 @@ def format_comments(comments: list[ReviewComment]) -> str:
         return "No review comments."
     blocks: list[str] = []
     for comment in comments:
-        first_line = comment.body.splitlines()[0] if comment.body else ""
-        blocks.append(f"comment={comment.comment_id}  @{comment.author}: {first_line}")
+        blocks.append(
+            f"comment={comment.comment_id}  @{comment.author}: {_first_line(comment.body)}"
+        )
     return "\n".join(blocks)
 
 
@@ -461,20 +654,21 @@ def format_threads(threads: list[ReviewThread]) -> str:
         location = thread.path or "(no path)"
         if thread.line is not None:
             location = f"{location}:{thread.line}"
-        first_line = thread.body.splitlines()[0] if thread.body else ""
         blocks.append(
             f"thread={thread.thread_id}  state={thread.state}  path={location}\n"
-            f"  @{thread.author}: {first_line}"
+            f"  @{thread.author}: {_first_line(thread.body)}"
         )
     return "\n".join(blocks)
 
 
 def pr_summary(pr: int | None = None, *, run_fn: RunFunction | None = None) -> str:
     """Return a one-screen overview: PR meta, CI rollup, and open threads."""
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
-    meta = gh_runner.gh_json(
-        ["pr", "view", str(pr), "--json", "number,title,state,url,statusCheckRollup"],
-        run_fn=run_fn,
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
+    meta = gh_runner.with_rest_fallback(
+        lambda: gh_runner.gh_json(
+            ["pr", "view", str(pr), "--json", _SUMMARY_FIELDS], run_fn=run_fn
+        ),
+        lambda: pr_rest.pr_view(pr, _SUMMARY_FIELDS.split(","), run_fn=run_fn),
     )
     if not isinstance(meta, dict):
         raise GhError(f"Unexpected PR view response shape for PR {pr}.")
@@ -491,39 +685,51 @@ def pr_summary(pr: int | None = None, *, run_fn: RunFunction | None = None) -> s
     return "\n".join(lines)
 
 
-_COPILOT_REVIEWER = "@copilot"
-
-
+# Copilot only reviews a pull request on creation and does not auto-rerun on
+# later pushes, so re-requesting it is part of the review-feedback loop. Use the
+# ``@copilot`` shorthand: the literal ``copilot-pull-request-reviewer[bot]`` login
+# does not resolve through the gh API.
 def request_copilot_review(pr: int | None = None, *, run_fn: RunFunction | None = None) -> None:
     """Request a GitHub Copilot code review on the pull request.
 
-    Also used to re-request Copilot after addressing review feedback, since it
-    does not automatically re-review new pushes. The mutation is not retried so
-    a transient failure never double-requests a review. Raises ``GhError`` if
-    the request fails (for example, if Copilot code review is not enabled for
-    the repository).
+    This re-requests Copilot after addressing review feedback, since it does not
+    automatically re-review new pushes. Raises ``GhError`` if the request fails
+    (for example, if Copilot code review is not enabled for the repository).
     """
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
-    try:
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
+
+    def request_with_gh() -> None:
         gh_runner.run_gh(
-            ["pr", "edit", str(pr), "--add-reviewer", _COPILOT_REVIEWER],
+            ["pr", "edit", str(pr), "--add-reviewer", pr_rest.COPILOT_REVIEWER],
             run_fn=run_fn,
             retries=0,
         )
+
+    def request_with_rest() -> None:
+        slug = gh_runner.resolve_repo(run_fn=run_fn)
+        gh_runner.rest(
+            f"repos/{slug}/pulls/{pr}/requested_reviewers",
+            method="POST",
+            fields={"reviewers": [pr_rest.COPILOT_REST_REVIEWER]},
+            run_fn=run_fn,
+        )
+
+    try:
+        gh_runner.with_rest_fallback(request_with_gh, request_with_rest)
     except GhRateLimitError:
         raise
     except GhError as exc:
         raise GhError(f"Failed to request Copilot review on PR #{pr}: {exc}") from exc
 
 
-def comment_on_pr(pr: int | None, body: str, *, run_fn: RunFunction | None = None) -> None:
-    """Post a PR-level comment (on the current branch's PR when ``pr`` is omitted).
-
-    Commenting is not idempotent, so it does not auto-retry: a lost response
-    after a successful write would otherwise double-post the comment.
-    """
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
-    gh_runner.run_gh(["pr", "comment", str(pr), "--body", body], run_fn=run_fn, retries=0)
+def _read_body_file(body_file: str, stdin_text: str | None) -> str:
+    """Return the text of ``body_file`` (``-`` means the standard input already read)."""
+    if body_file == "-":
+        return stdin_text or ""
+    try:
+        return Path(body_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise GhError(f"Could not read body file {body_file}: {exc}") from exc
 
 
 def edit_pr(
@@ -536,11 +742,13 @@ def edit_pr(
 ) -> None:
     """Edit a pull request's title and/or body (current branch when ``pr`` is omitted).
 
-    ``body_file`` is forwarded straight to ``gh pr edit --body-file`` (``-`` reads
-    stdin) so gh reads the file itself, which avoids an "argument list too long"
-    failure for a large body. ``body`` is a small inline string forwarded as
-    ``--body``. Raises ``GhError`` when no title, body, or body file is supplied,
-    since gh would then open an interactive editor.
+    ``body_file`` is forwarded straight to ``gh pr edit --body-file`` so gh reads
+    the file itself, which avoids an "argument list too long" failure for a
+    large body. ``-`` means standard input: it is read once here and piped to
+    gh, so the REST fallback still has the text if GraphQL turns out to be
+    unavailable. ``body`` is a small inline string forwarded as ``--body``.
+    Raises ``GhError`` when no title, body, or body file is supplied, since gh
+    would then open an interactive editor.
 
     The pull request is resolved here rather than left to gh's own branch
     lookup, matching every other PR-scoped helper in this module and giving one
@@ -548,7 +756,8 @@ def edit_pr(
     """
     if title is None and body is None and body_file is None:
         raise GhError("Provide a title, body, or body file to edit.")
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    stdin_text = sys.stdin.read() if body_file == "-" else None
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
     args = ["pr", "edit", str(pr)]
     if title is not None:
         args += ["--title", title]
@@ -556,7 +765,21 @@ def edit_pr(
         args += ["--body-file", body_file]
     elif body is not None:
         args += ["--body", body]
-    gh_runner.run_gh(args, run_fn=run_fn)
+
+    def edit_with_rest() -> None:
+        slug = gh_runner.resolve_repo(run_fn=run_fn)
+        fields: dict[str, object] = {}
+        if title is not None:
+            fields["title"] = title
+        if body_file is not None:
+            fields["body"] = _read_body_file(body_file, stdin_text)
+        elif body is not None:
+            fields["body"] = body
+        gh_runner.rest(f"repos/{slug}/pulls/{pr}", method="PATCH", fields=fields, run_fn=run_fn)
+
+    gh_runner.with_rest_fallback(
+        lambda: gh_runner.run_gh(args, run_fn=run_fn, stdin_text=stdin_text), edit_with_rest
+    )
 
 
 def rollup_summary(rollup: list[dict[str, Any]]) -> str:

@@ -290,6 +290,20 @@ make pr-review-comments
 make pr-address thread=PRRT_... < response.md
 ```
 
+The `make pr-*` and `make issue-*` targets try GraphQL first. If the environment refuses GraphQL, as Claude Code cloud sessions do, the targets switch to the REST API for the rest of the run. [ADR-012](adr/012-graphql-first-rest-fallback.md) explains the design. In REST mode, these differences apply:
+
+- Review threads have no node id. `make pr-review-comments` prints each thread as `thread=<id>`, where the id is the number of the thread's first comment. Pass that number to `make pr-reply`, `make pr-resolve`, or `make pr-address`, and add `pr_num=N` when the PR is not on the current branch.
+- `make pr-comments-list` prints numeric comment ids. Pass one to `make pr-comment-delete comment_id=<id>`.
+- A `PRRT_` or `PRRC_` node id needs GraphQL. The target fails and names the numeric id to use instead.
+- List, view, and checks output is tab-separated and close to the `gh` output, not identical.
+- `make pr-create` does not push. Run `make push` first, or the target stops because the branch on GitHub is missing or behind your local `HEAD`.
+- `make pr-merge` and `make pr-close` delete the remote branch but leave your local checkout alone.
+- `make pr-merge` refuses a PR that GitHub does not report as mergeable, because the REST merge has no admin switch and would otherwise bypass branch protection for an administrator. Use `make pr-merge-admin` to merge past protection on purpose.
+- `make issue-develop` creates and checks out the branch but cannot link it to the issue.
+- The targets choose the repository from `GH_REPO` first, then from the default that `gh repo set-default` stored, then from `origin`. If gh stored a default these targets cannot read, they stop instead of using `origin`.
+- With the selected repository different from `origin`, such as upstream from a fork, the targets read and write the selected repository but push and fetch branches through `origin`. `make pr-create` opens the PR from the fork branch. `make pr-checkout` and `make issue-develop` refuse, because their fetches would come from the wrong repository. They also refuse when `origin` is not a GitHub repository.
+- `make issue-list` with `SEARCH` needs the `search/issues` endpoint, which cloud sessions block. The other filters work.
+
 Run `make pr-watch` to observe the current Copilot review and wait for CI checks to finish. The watcher does not request another review by default.
 
 After pushing a correction, run `make pr-watch request=1` to request and wait for a fresh review. To watch CI checks alone, run `make pr-watch checks_only=1`. Use `make pr-copilot-review` to request a review without waiting for it.

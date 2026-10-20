@@ -720,7 +720,7 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
     recorded PR that is no longer open yields to a newer open PR on its head.
     Without a recorded PR, the upstream the branch tracks is tried first, then
     origin's owner with the local name, which covers a branch that has not been
-    pushed with ``-u`` yet.
+    pushed with ``-u`` yet. An open PR on either head beats a closed one.
     """
     branch = current_branch(run_fn=run_fn)
     slug = resolve_repo(run_fn=run_fn)
@@ -741,8 +741,10 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
         head_owner = as_object(as_object(head.get("repo")).get("owner")).get("login")
         owner = str(head_owner or str(head.get("label") or "").partition(":")[0] or owner)
         heads = [(owner, str(head.get("ref") or branch))]
-    for head_owner_name, head_branch in heads:
-        for state in ("open", "closed"):
+    # Every candidate head is searched for an open PR before any closed one, so a
+    # closed PR on a tracked branch never hides an open PR on the local name.
+    for state in ("open", "closed"):
+        for head_owner_name, head_branch in heads:
             pulls = rest(
                 f"repos/{slug}/pulls",
                 fields={"head": f"{head_owner_name}:{head_branch}", "state": state},

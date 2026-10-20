@@ -879,6 +879,38 @@ def test_current_pr_number_fallback_tries_the_local_name_after_the_tracked_head(
     assert gh_runner.current_pr_number(run_fn=runner) == 99
 
 
+def test_current_pr_number_fallback_prefers_an_open_local_pr_over_a_closed_tracked_one() -> None:
+    """A branch still tracking main finds its own open PR, not main's old closed one."""
+    runner = _tracking_runner(
+        {"branch.review-copy.remote": "origin", "branch.review-copy.merge": "refs/heads/main"}
+    )
+    runner.routes[0:0] = [
+        (rest("GET", "repos/octo/Hello/pulls", "head=octo:main", "state=open"), json_response([])),
+        (
+            rest("GET", "repos/octo/Hello/pulls", "head=octo:main", "state=closed"),
+            json_response([{"number": 3}]),
+        ),
+    ]
+
+    assert gh_runner.current_pr_number(run_fn=runner) == 99
+
+
+def test_current_pr_number_fallback_uses_a_closed_tracked_pr_when_nothing_is_open() -> None:
+    """With no open PR on any head, the tracked head's newest closed PR is used."""
+    runner = _tracking_runner(
+        {"branch.review-copy.remote": "origin", "branch.review-copy.merge": "refs/heads/feature"}
+    )
+    runner.routes[0:0] = [
+        (rest("GET", "repos/octo/Hello/pulls", "state=open"), json_response([])),
+        (
+            rest("GET", "repos/octo/Hello/pulls", "head=octo:feature", "state=closed"),
+            json_response([{"number": 3}]),
+        ),
+    ]
+
+    assert gh_runner.current_pr_number(run_fn=runner) == 3
+
+
 def test_current_pr_number_fallback_prefers_a_recorded_pr_over_the_tracked_upstream() -> None:
     """A PR recorded by a REST checkout wins, so tracking never overrides it."""
     runner = FakeGh(

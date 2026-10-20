@@ -2,11 +2,12 @@
 
 import { AppRouter } from "../../app/router.js";
 import { parseStoredUploadFile, toStoredFileMetadata } from "../../app/worker-contracts.ts";
-import { markPerformance, measurePerformance, nextFrame } from "../../platform/observability/perf.js";
+import { nextFrame, startPerformanceSpan } from "../../platform/observability/perf.js";
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
+import { setEmptyStateText } from "../../shared/ui/empty-state.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
 import { ExcelGenerator } from "../cleaning/excel.js";
@@ -178,195 +179,211 @@ export const MessagesPage = (() => {
         updateExportButtonStates();
     }
 
+    /** Render the current state, then hide the loading overlay. */
+    function renderAndFinish() {
+        const endRender = startPerformanceSpan("messages:render");
+        renderView();
+        endRender();
+        showMessagesLoading(false);
+    }
+
+    /**
+     * Drop the computed state and show why the page has nothing to analyze.
+     * @param {string} signature - Dataset signature to remember, so the same data is not reloaded
+     * @param {string} title - Empty state title
+     * @param {string} message - Empty state explanation
+     */
+    function showUnavailable(signature, title, message) {
+        clearComputedState();
+        state.loadedSignature = signature;
+        setEmptyState(title, message);
+        showMessagesLoading(false);
+    }
+
+    /**
+     * Find the stored messages and connections file metadata, from the cache
+     * when it has them and from storage otherwise.
+     * @returns {Promise<{messagesFile: StoredUploadFile|null, connectionsFile: StoredUploadFile|null}>}
+     */
+    async function resolveStoredFiles() {
+        let messagesFile = normalizeStoredFile(
+            DataCache.get("storage:file:messages") || null,
+            "messages",
+        );
+        let connectionsFile = normalizeStoredFile(
+            DataCache.get("storage:file:connections") || null,
+            "connections",
+        );
+        let files = /** @type {CachedFileMetadata[]|null} */ (
+            DataCache.get("storage:files") || null
+        );
+
+        if (!messagesFile || !connectionsFile) {
+            if (!files) {
+                // Cache metadata only. Read an upload when the Messages
+                // page needs to parse it.
+                files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
+                DataCache.set("storage:files", files);
+            }
+            if (!messagesFile) {
+                messagesFile = normalizeStoredFile(
+                    files.find((file) => file.type === "messages") || null,
+                    "messages",
+                );
+                if (messagesFile) {
+                    DataCache.set("storage:file:messages", toStoredFileMetadata(messagesFile));
+                }
+            }
+            if (!connectionsFile) {
+                connectionsFile = normalizeStoredFile(
+                    files.find((file) => file.type === "connections") || null,
+                    "connections",
+                );
+                if (connectionsFile) {
+                    DataCache.set("storage:file:connections", toStoredFileMetadata(connectionsFile));
+                }
+            }
+        }
+        return { messagesFile, connectionsFile };
+    }
+
+    /**
+     * Show the state computed for this dataset earlier in the session.
+     * @param {CachedMessagesState} cachedState - Cached page state
+     * @param {string} signature - Dataset signature
+     */
+    function applyCachedState(cachedState, signature) {
+        state.messageState = cachedState.messageState;
+        state.connectionState = cachedState.connectionState;
+        state.connectionLoadError = cachedState.connectionLoadError;
+        state.hasConnectionsFile = cachedState.hasConnectionsFile;
+        state.totalInputRows = Number.isFinite(cachedState.totalInputRows)
+            ? cachedState.totalInputRows
+            : 0;
+        state.loadedSignature = signature;
+    }
+
+    /**
+     * Read the uploads the worker will parse. Workers read the Blobs. The
+     * small-file fallback reads text on the page when the worker cannot answer.
+     * @param {boolean} hasConnectionsFile - Whether connections metadata exists
+     * @returns {Promise<{messagesBlob: Blob, connectionsBlob: Blob|null, connectionsFileMissing: boolean}>}
+     */
+    async function readUploads(hasConnectionsFile) {
+        const [messagesStored, connectionsStored] = await Promise.all([
+            Storage.getFile("messages"),
+            hasConnectionsFile ? Storage.getFile("connections") : Promise.resolve(null),
+        ]);
+        const messagesBlob = messagesStored ? messagesStored.blob : null;
+        if (!messagesBlob) {
+            // The metadata says messages.csv exists but its contents are
+            // gone (cleared in another tab or degraded persistence). Treat
+            // the missing payload as a load failure so the UI enters the
+            // storage-error path instead of a misleading "parsing error".
+            throw new Error("Stored messages file record is missing.");
+        }
+        const connectionsBlob = connectionsStored ? connectionsStored.blob : null;
+        // Connections is optional, but if its metadata is present while the
+        // file record is missing, flag it as a load error rather than
+        // silently dropping the connections insights.
+        const connectionsFileMissing = hasConnectionsFile && !connectionsBlob;
+        return { messagesBlob, connectionsBlob, connectionsFileMissing };
+    }
+
+    /**
+     * Parse the stored uploads, then show the result.
+     * @param {string} signature - Dataset signature
+     * @param {boolean} hasConnectionsFile - Whether connections metadata exists
+     */
+    async function parseAndRender(signature, hasConnectionsFile) {
+        const { messagesBlob, connectionsBlob, connectionsFileMissing } =
+            await readUploads(hasConnectionsFile);
+
+        const endParse = startPerformanceSpan("messages:worker-parse");
+        const processed = await processFiles(messagesBlob, connectionsBlob);
+        endParse();
+
+        if (!processed.success) {
+            showUnavailable(
+                signature,
+                "Messages parsing error",
+                processed.error || "Unable to parse messages.csv. Re-upload the file and try again.",
+            );
+            return;
+        }
+
+        const messagesData = processed.messagesData || [];
+        state.totalInputRows = Number.isFinite(processed.totalInputRows)
+            ? /** @type {number} */ (processed.totalInputRows)
+            : messagesData.length;
+        if (processed.messageState) {
+            state.messageState = hydrateMessageState(processed.messageState);
+        } else {
+            state.messageState = buildMessageState(messagesData);
+        }
+        if (!state.messageState.events.timestamps.length) {
+            showUnavailable(
+                signature,
+                "No usable message rows",
+                "The file loaded, but no valid message rows were found for analysis.",
+            );
+            return;
+        }
+        // Persist only once the dataset is confirmed usable, so an empty
+        // parse can't overwrite a previously valid stored outreach summary.
+        persistOutreach(state.messageState.outreach);
+
+        if (processed.connectionState) {
+            state.connectionState = hydrateConnectionState(processed.connectionState);
+        } else {
+            state.connectionState = buildConnectionState(processed.connectionsData || []);
+        }
+        state.connectionLoadError =
+            processed.connectionError ||
+            (connectionsFileMissing
+                ? "Unable to load Connections.csv. Re-upload the file and try again."
+                : null);
+
+        state.loadedSignature = signature;
+        cacheComputedState(signature);
+        renderAndFinish();
+    }
+
     /** Load messages and connections files from IndexedDB. */
     async function loadData() {
         showMessagesLoading(true);
-        markPerformance("messages:idb-read:start");
+        const endIdbRead = startPerformanceSpan("messages:idb-read");
 
         try {
             await Session.waitForCleanup();
-
-            let messagesFile = normalizeStoredFile(
-                DataCache.get("storage:file:messages") || null,
-                "messages",
-            );
-            let connectionsFile = normalizeStoredFile(
-                DataCache.get("storage:file:connections") || null,
-                "connections",
-            );
-            let files = /** @type {CachedFileMetadata[]|null} */ (
-                DataCache.get("storage:files") || null
-            );
-
-            if (!messagesFile || !connectionsFile) {
-                if (!files) {
-                    // Cache metadata only. Read an upload when the Messages
-                    // page needs to parse it.
-                    files = (await Storage.getAllFiles()).map(toStoredFileMetadata);
-                    DataCache.set("storage:files", files);
-                }
-                if (!messagesFile) {
-                    messagesFile = normalizeStoredFile(
-                        files.find((file) => file.type === "messages") || null,
-                        "messages",
-                    );
-                    if (messagesFile) {
-                        DataCache.set("storage:file:messages", toStoredFileMetadata(messagesFile));
-                    }
-                }
-                if (!connectionsFile) {
-                    connectionsFile = normalizeStoredFile(
-                        files.find((file) => file.type === "connections") || null,
-                        "connections",
-                    );
-                    if (connectionsFile) {
-                        DataCache.set(
-                            "storage:file:connections",
-                            toStoredFileMetadata(connectionsFile),
-                        );
-                    }
-                }
-            }
-
-            markPerformance("messages:idb-read:end");
-            measurePerformance(
-                "messages:idb-read",
-                "messages:idb-read:start",
-                "messages:idb-read:end",
-            );
+            const { messagesFile, connectionsFile } = await resolveStoredFiles();
+            endIdbRead();
             state.hasConnectionsFile = Boolean(connectionsFile);
 
             const signature = buildDataSignature(messagesFile, connectionsFile);
             if (signature === state.loadedSignature && state.messageState) {
-                markPerformance("messages:render:start");
-                renderView();
-                markPerformance("messages:render:end");
-                measurePerformance(
-                    "messages:render",
-                    "messages:render:start",
-                    "messages:render:end",
-                );
-                showMessagesLoading(false);
+                renderAndFinish();
                 return;
             }
 
             if (!messagesFile) {
-                clearComputedState();
-                state.loadedSignature = signature;
-                setEmptyState(
+                showUnavailable(
+                    signature,
                     "No messages data available yet",
                     "Upload messages.csv on the Home page to unlock messaging insights.",
                 );
-                showMessagesLoading(false);
                 return;
             }
 
             const cachedState = getCachedState(signature);
             if (cachedState) {
-                state.messageState = cachedState.messageState;
-                state.connectionState = cachedState.connectionState;
-                state.connectionLoadError = cachedState.connectionLoadError;
-                state.hasConnectionsFile = cachedState.hasConnectionsFile;
-                state.totalInputRows = Number.isFinite(cachedState.totalInputRows)
-                    ? cachedState.totalInputRows
-                    : 0;
-                state.loadedSignature = signature;
-                markPerformance("messages:render:start");
-                renderView();
-                markPerformance("messages:render:end");
-                measurePerformance(
-                    "messages:render",
-                    "messages:render:start",
-                    "messages:render:end",
-                );
-                showMessagesLoading(false);
+                applyCachedState(cachedState, signature);
+                renderAndFinish();
                 return;
             }
 
             await nextFrame();
-
-            // Load uploads on demand. Workers read the Blobs. The small-file
-            // fallback reads text on the page when the worker cannot answer.
-            const [messagesStored, connectionsStored] = await Promise.all([
-                Storage.getFile("messages"),
-                connectionsFile ? Storage.getFile("connections") : Promise.resolve(null),
-            ]);
-            const messagesBlob = messagesStored ? messagesStored.blob : null;
-            if (!messagesBlob) {
-                // The metadata says messages.csv exists but its contents are
-                // gone (cleared in another tab or degraded persistence). Treat
-                // the missing payload as a load failure so the UI enters the
-                // storage-error path instead of a misleading "parsing error".
-                throw new Error("Stored messages file record is missing.");
-            }
-            const connectionsBlob = connectionsStored ? connectionsStored.blob : null;
-            // Connections is optional, but if its metadata is present while the
-            // file record is missing, flag it as a load error rather than
-            // silently dropping the connections insights.
-            const connectionsFileMissing = Boolean(connectionsFile) && !connectionsBlob;
-
-            markPerformance("messages:worker-parse:start");
-            const processed = await processFiles(messagesBlob, connectionsBlob);
-            markPerformance("messages:worker-parse:end");
-            measurePerformance(
-                "messages:worker-parse",
-                "messages:worker-parse:start",
-                "messages:worker-parse:end",
-            );
-
-            if (!processed.success) {
-                clearComputedState();
-                state.loadedSignature = signature;
-                setEmptyState(
-                    "Messages parsing error",
-                    processed.error ||
-                        "Unable to parse messages.csv. Re-upload the file and try again.",
-                );
-                showMessagesLoading(false);
-                return;
-            }
-
-            const messagesData = processed.messagesData || [];
-            state.totalInputRows = Number.isFinite(processed.totalInputRows)
-                ? /** @type {number} */ (processed.totalInputRows)
-                : messagesData.length;
-            if (processed.messageState) {
-                state.messageState = hydrateMessageState(processed.messageState);
-            } else {
-                state.messageState = buildMessageState(messagesData);
-            }
-            if (!state.messageState.events.timestamps.length) {
-                clearComputedState();
-                state.loadedSignature = signature;
-                setEmptyState(
-                    "No usable message rows",
-                    "The file loaded, but no valid message rows were found for analysis.",
-                );
-                showMessagesLoading(false);
-                return;
-            }
-            // Persist only once the dataset is confirmed usable, so an empty
-            // parse can't overwrite a previously valid stored outreach summary.
-            persistOutreach(state.messageState.outreach);
-
-            if (processed.connectionState) {
-                state.connectionState = hydrateConnectionState(processed.connectionState);
-            } else {
-                state.connectionState = buildConnectionState(processed.connectionsData || []);
-            }
-            state.connectionLoadError =
-                processed.connectionError ||
-                (connectionsFileMissing
-                    ? "Unable to load Connections.csv. Re-upload the file and try again."
-                    : null);
-
-            state.loadedSignature = signature;
-            cacheComputedState(signature);
-            markPerformance("messages:render:start");
-            renderView();
-            markPerformance("messages:render:end");
-            measurePerformance("messages:render", "messages:render:start", "messages:render:end");
-            showMessagesLoading(false);
+            await parseAndRender(signature, Boolean(connectionsFile));
         } catch (error) {
             captureError(error, {
                 module: "messages-insights",
@@ -454,14 +471,9 @@ export const MessagesPage = (() => {
      * @returns {MessageState}
      */
     function buildMessageState(rows) {
-        markPerformance("messages:build-state:start");
+        const endBuild = startPerformanceSpan("messages:build-state");
         const result = MessagesAnalytics.buildMessageState(rows);
-        markPerformance("messages:build-state:end");
-        measurePerformance(
-            "messages:build-state",
-            "messages:build-state:start",
-            "messages:build-state:end",
-        );
+        endBuild();
         return result;
     }
 
@@ -471,14 +483,9 @@ export const MessagesPage = (() => {
      * @returns {ConnectionState}
      */
     function buildConnectionState(rows) {
-        markPerformance("messages:build-connections:start");
+        const endBuild = startPerformanceSpan("messages:build-connections");
         const result = MessagesAnalytics.buildConnectionState(rows);
-        markPerformance("messages:build-connections:end");
-        measurePerformance(
-            "messages:build-connections",
-            "messages:build-connections:start",
-            "messages:build-connections:end",
-        );
+        endBuild();
         return result;
     }
 
@@ -543,6 +550,33 @@ export const MessagesPage = (() => {
     }
 
     /**
+     * Fill a list with message items, or with the reason it has none.
+     * @template T
+     * @param {HTMLElement} listElement - List to fill
+     * @param {T[]} items - Items to show
+     * @param {object} options - What to show for each state
+     * @param {string|null} options.unavailableReason - Why the list cannot be built, shown instead of items
+     * @param {string} options.emptyMessage - Shown when there are no items
+     * @param {(item: T) => {name: string, url: string, meta: string, value: string}} options.toItem - Maps an item to its row
+     */
+    function renderItemList(listElement, items, { unavailableReason, emptyMessage, toItem }) {
+        if (unavailableReason) {
+            renderEmptyList(listElement, unavailableReason);
+            return;
+        }
+        if (!items.length) {
+            renderEmptyList(listElement, emptyMessage);
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        items.forEach((item) => {
+            fragment.appendChild(createMessageItem(toItem(item)));
+        });
+        listElement.replaceChildren(fragment);
+    }
+
+    /**
      * Render top contacts list.
      * @param {RangeContact[]} items - Top contacts
      */
@@ -553,23 +587,16 @@ export const MessagesPage = (() => {
         if (!listElement) {
             return;
         }
-        if (!items.length) {
-            renderEmptyList(listElement, "No conversations in this range yet.");
-            return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        items.forEach((item) => {
-            fragment.appendChild(
-                createMessageItem({
-                    name: item.name,
-                    url: item.url,
-                    meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
-                    value: `${item.count} msgs`,
-                }),
-            );
+        renderItemList(listElement, items, {
+            unavailableReason: null,
+            emptyMessage: "No conversations in this range yet.",
+            toItem: (item) => ({
+                name: item.name,
+                url: item.url,
+                meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
+                value: `${item.count} msgs`,
+            }),
         });
-        listElement.replaceChildren(fragment);
     }
 
     /**
@@ -583,36 +610,22 @@ export const MessagesPage = (() => {
         if (!listElement) {
             return;
         }
-        const unavailableReason = getConnectionsUnavailableMessage("silent");
-        if (unavailableReason) {
-            renderEmptyList(listElement, unavailableReason);
-            return;
-        }
-
-        if (!items.length) {
-            renderEmptyList(
-                listElement,
-                "Great job. Every connection has at least one message.",
-            );
-            return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        items.forEach((item) => {
-            const roleMeta = [item.position, item.company].filter(Boolean).join(" @ ");
-            const connectedOn = item.connectedOnTimestamp
-                ? formatShortDate(item.connectedOnTimestamp)
-                : "No date";
-            fragment.appendChild(
-                createMessageItem({
+        renderItemList(listElement, items, {
+            unavailableReason: getConnectionsUnavailableMessage("silent"),
+            emptyMessage: "Great job. Every connection has at least one message.",
+            toItem: (item) => {
+                const roleMeta = [item.position, item.company].filter(Boolean).join(" @ ");
+                const connectedOn = item.connectedOnTimestamp
+                    ? formatShortDate(item.connectedOnTimestamp)
+                    : "No date";
+                return {
                     name: item.name,
                     url: item.url,
                     meta: roleMeta || "No role info",
                     value: connectedOn,
-                }),
-            );
+                };
+            },
         });
-        listElement.replaceChildren(fragment);
     }
 
     /**
@@ -626,32 +639,85 @@ export const MessagesPage = (() => {
         if (!listElement) {
             return;
         }
-        const unavailableReason = getConnectionsUnavailableMessage("fading");
-        if (unavailableReason) {
-            renderEmptyList(listElement, unavailableReason);
-            return;
-        }
-
-        if (!items.length) {
-            renderEmptyList(
-                listElement,
-                "No fading conversations in your connected network.",
-            );
-            return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        items.forEach((item) => {
-            fragment.appendChild(
-                createMessageItem({
-                    name: item.name,
-                    url: item.url,
-                    meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
-                    value: `${item.daysSince} days`,
-                }),
-            );
+        renderItemList(listElement, items, {
+            unavailableReason: getConnectionsUnavailableMessage("fading"),
+            emptyMessage: "No fading conversations in your connected network.",
+            toItem: (item) => ({
+                name: item.name,
+                url: item.url,
+                meta: `Last message: ${formatShortDate(item.lastTimestamp)}`,
+                value: `${item.daysSince} days`,
+            }),
         });
-        listElement.replaceChildren(fragment);
+    }
+
+    /**
+     * Add the asterisk and popup that explain how many rows the analysis left out.
+     * @param {HTMLElement} container - Stat value to append the note to
+     * @param {Element|null} card - Stat card to mark while the popup is open
+     * @param {string} message - Popup text
+     */
+    function attachSkippedRowsNote(container, card, message) {
+        const popupId = "msgSkippedPopup";
+
+        const asterisk = document.createElement("span");
+        asterisk.className = "stat-asterisk";
+        asterisk.setAttribute("role", "button");
+        asterisk.setAttribute("tabindex", "0");
+        asterisk.setAttribute("aria-label", "Show excluded row details");
+        asterisk.setAttribute("aria-describedby", popupId);
+        asterisk.textContent = "*";
+
+        const popup = document.createElement("span");
+        popup.className = "stat-popup";
+        popup.setAttribute("role", "tooltip");
+        popup.id = popupId;
+        popup.setAttribute("aria-hidden", "true");
+        popup.textContent = message;
+
+        container.appendChild(asterisk);
+        container.appendChild(popup);
+
+        function showPopup() {
+            popup.classList.add("visible");
+            popup.setAttribute("aria-hidden", "false");
+            if (card) {
+                card.classList.add("popup-active");
+            }
+        }
+        function hidePopup() {
+            popup.classList.remove("visible");
+            popup.setAttribute("aria-hidden", "true");
+            if (card) {
+                card.classList.remove("popup-active");
+            }
+        }
+        function togglePopup() {
+            if (popup.classList.contains("visible")) {
+                hidePopup();
+            } else {
+                showPopup();
+            }
+        }
+
+        asterisk.addEventListener("mouseenter", showPopup);
+        asterisk.addEventListener("mouseleave", hidePopup);
+        asterisk.addEventListener("click", togglePopup);
+        asterisk.addEventListener("keydown", (e) => {
+            switch (e.key) {
+                case "Escape":
+                    hidePopup();
+                    break;
+                case "Enter":
+                case " ":
+                    e.preventDefault();
+                    togglePopup();
+                    break;
+                default:
+                    break;
+            }
+        });
+        asterisk.addEventListener("focusout", hidePopup);
     }
 
     /**
@@ -685,67 +751,11 @@ export const MessagesPage = (() => {
         );
 
         if (skipped > 0) {
-            const popupId = "msgSkippedPopup";
-            const msg = `${skipped} of ${state.totalInputRows} cleaned rows were excluded from analysis (self-messages, anonymous contacts, or unparseable dates)`;
-
-            const asterisk = document.createElement("span");
-            asterisk.className = "stat-asterisk";
-            asterisk.setAttribute("role", "button");
-            asterisk.setAttribute("tabindex", "0");
-            asterisk.setAttribute("aria-label", "Show excluded row details");
-            asterisk.setAttribute("aria-describedby", popupId);
-            asterisk.textContent = "*";
-
-            const popup = document.createElement("span");
-            popup.className = "stat-popup";
-            popup.setAttribute("role", "tooltip");
-            popup.id = popupId;
-            popup.setAttribute("aria-hidden", "true");
-            popup.textContent = msg;
-
-            msgStatMessages.appendChild(asterisk);
-            msgStatMessages.appendChild(popup);
-
-            function showPopup() {
-                popup.classList.add("visible");
-                popup.setAttribute("aria-hidden", "false");
-                if (card) {
-                    card.classList.add("popup-active");
-                }
-            }
-            function hidePopup() {
-                popup.classList.remove("visible");
-                popup.setAttribute("aria-hidden", "true");
-                if (card) {
-                    card.classList.remove("popup-active");
-                }
-            }
-            function togglePopup() {
-                if (popup.classList.contains("visible")) {
-                    hidePopup();
-                } else {
-                    showPopup();
-                }
-            }
-
-            asterisk.addEventListener("mouseenter", showPopup);
-            asterisk.addEventListener("mouseleave", hidePopup);
-            asterisk.addEventListener("click", togglePopup);
-            asterisk.addEventListener("keydown", (e) => {
-                switch (e.key) {
-                    case "Escape":
-                        hidePopup();
-                        break;
-                    case "Enter":
-                    case " ":
-                        e.preventDefault();
-                        togglePopup();
-                        break;
-                    default:
-                        break;
-                }
-            });
-            asterisk.addEventListener("focusout", hidePopup);
+            attachSkippedRowsNote(
+                msgStatMessages,
+                card,
+                `${skipped} of ${state.totalInputRows} cleaned rows were excluded from analysis (self-messages, anonymous contacts, or unparseable dates)`,
+            );
         }
         msgStatContacts.textContent = String(topSummary.totalPeople);
         msgStatConnected.textContent = String(totalConnections);
@@ -930,20 +940,16 @@ export const MessagesPage = (() => {
             ExcelGenerator && typeof ExcelGenerator.downloadFromSpec === "function",
         );
 
-        if (elements.topContactsExportBtn) {
-            elements.topContactsExportBtn.disabled = !(
-                exportReady && state.currentLists.topContacts.length
-            );
-        }
-        if (elements.silentConnectionsExportBtn) {
-            elements.silentConnectionsExportBtn.disabled = !(
-                exportReady && state.currentLists.silentConnections.length
-            );
-        }
-        if (elements.fadingConversationsExportBtn) {
-            elements.fadingConversationsExportBtn.disabled = !(
-                exportReady && state.currentLists.fadingConversations.length
-            );
+        /** @type {Array<[HTMLButtonElement|null, unknown[]]>} */
+        const buttons = [
+            [elements.topContactsExportBtn, state.currentLists.topContacts],
+            [elements.silentConnectionsExportBtn, state.currentLists.silentConnections],
+            [elements.fadingConversationsExportBtn, state.currentLists.fadingConversations],
+        ];
+        for (const [button, list] of buttons) {
+            if (button) {
+                button.disabled = !(exportReady && list.length);
+            }
         }
     }
 
@@ -968,14 +974,7 @@ export const MessagesPage = (() => {
         if (!messagesEmpty || !messagesLayout) {
             return;
         }
-        const heading = messagesEmpty.querySelector("h2");
-        const text = messagesEmpty.querySelector("p");
-        if (heading) {
-            heading.textContent = title;
-        }
-        if (text) {
-            text.textContent = message;
-        }
+        setEmptyStateText(messagesEmpty, title, message);
         messagesEmpty.hidden = false;
         messagesLayout.hidden = true;
         if (elements.messagesTip) {

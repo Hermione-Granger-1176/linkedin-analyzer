@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from scripts import lint
 from scripts.lint import check_doc_commands, make_targets
 
 if TYPE_CHECKING:
@@ -261,7 +262,7 @@ def test_resolve_requested_paths_rejects_a_target_that_resolves_outside_the_work
 ) -> None:
     """Re-check the resolved location, so a symlink planted after the guard still fails.
 
-    Every escape reachable today is already caught by ``_contains_symlink``, so
+    Every escape reachable today is already caught by ``contains_symlink``, so
     this containment check is defence in depth against a symlink created between
     the guard and the resolve. That race cannot be produced from real filesystem
     state inside a test, so the guard is stubbed out to stand in for losing it.
@@ -272,7 +273,7 @@ def test_resolve_requested_paths_rejects_a_target_that_resolves_outside_the_work
     outside = tmp_path / "outside.md"
     write_text(outside, "# Outside\n")
     (root / "linked.md").symlink_to(outside)
-    monkeypatch.setattr(check_doc_commands, "_contains_symlink", lambda _path, _root: False)
+    monkeypatch.setattr(lint, "contains_symlink", lambda _path, _root: False)
 
     resolved, errors = check_doc_commands.resolve_requested_paths(["linked.md"], root)
 

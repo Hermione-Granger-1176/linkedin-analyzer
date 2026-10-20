@@ -253,6 +253,81 @@ async function cleanupRows(generatedFiles) {
 }
 
 /**
+ * Stage one ref's cleaned rows into a private output directory.
+ * @param {string} ref - Ref to stage
+ * @param {object} options - Input, repository, and temporary directories
+ * @param {string} outputDir - Private directory that receives the rows
+ * @param {string[]} generatedFiles - Collects every row file written
+ * @param {(line: string) => void} writeLine - Sanitized line writer
+ * @returns {Promise<{ exitCode: number, retainRows: boolean }>}
+ */
+async function stageRows(ref, options, outputDir, generatedFiles, writeLine) {
+    await ensurePrivateOutputDirectory(outputDir);
+    const results = await runVariant(ref, options, outputDir, generatedFiles);
+    let errors = 0;
+
+    for (const type of Object.keys(FILES)) {
+        const result = results[type];
+        const status = result.error ? "ERROR" : "STAGED";
+        if (result.error) {
+            errors += 1;
+        }
+        writeLine(`${type.padEnd(12)} ${status.padEnd(10)} rows=${result.rows}`);
+    }
+
+    const failed = errors > 0;
+    const status = failed ? "FAILED" : "STAGED";
+    writeLine(
+        `RESULT       ${status.padEnd(10)} types=${Object.keys(FILES).length} errors=${errors}`,
+    );
+    if (!failed) {
+        writeLine(`ROWS         RETAINED   files=${generatedFiles.length}`);
+    }
+    return { exitCode: failed ? 1 : 0, retainRows: !failed };
+}
+
+/**
+ * Compare the cleaned output of two refs by digest.
+ * @param {string} oldRef - Baseline ref
+ * @param {string} newRef - Ref under test
+ * @param {object} options - Input, repository, and temporary directories
+ * @param {string[]} generatedFiles - Collects every row file written
+ * @param {(line: string) => void} writeLine - Sanitized line writer
+ * @returns {Promise<number>} Exit code
+ */
+async function compareRefs(oldRef, newRef, options, generatedFiles, writeLine) {
+    const oldResults = await runVariant(oldRef, options, null, generatedFiles);
+    const newResults = await runVariant(newRef, options, null, generatedFiles);
+    let differing = 0;
+    let errors = 0;
+
+    for (const type of Object.keys(FILES)) {
+        const oldResult = oldResults[type];
+        const newResult = newResults[type];
+        let status;
+        if (oldResult.error || newResult.error) {
+            status = "ERROR";
+            errors += 1;
+        } else if (oldResult.digest === newResult.digest) {
+            status = "IDENTICAL";
+        } else {
+            status = "DIFFERS";
+            differing += 1;
+        }
+        writeLine(
+            `${type.padEnd(12)} ${status.padEnd(10)} old-rows=${oldResult.rows} new-rows=${newResult.rows}`,
+        );
+    }
+
+    const failed = differing > 0 || errors > 0;
+    const status = failed ? "FAILED" : "IDENTICAL";
+    writeLine(
+        `RESULT       ${status.padEnd(10)} types=${Object.keys(FILES).length} differing=${differing} errors=${errors}`,
+    );
+    return failed ? 1 : 0;
+}
+
+/**
  * Run a two-ref comparison or single-ref private row staging.
  * @param {object} providedOptions - Configurable refs, directories, and strict mode
  * @param {(line: string) => void} writeLine - Sanitized line writer
@@ -283,59 +358,11 @@ export async function runCleanerDiff(providedOptions = {}, writeLine = console.l
             writeLine(`RESULT       ${status.padEnd(10)} missing-inputs=${missingCount}`);
             exitCode = strict ? 1 : 0;
         } else if (outputDir !== null) {
-            await ensurePrivateOutputDirectory(outputDir);
-            const results = await runVariant(ref, options, outputDir, generatedFiles);
-            let errors = 0;
-
-            for (const type of Object.keys(FILES)) {
-                const result = results[type];
-                const status = result.error ? "ERROR" : "STAGED";
-                if (result.error) {
-                    errors += 1;
-                }
-                writeLine(`${type.padEnd(12)} ${status.padEnd(10)} rows=${result.rows}`);
-            }
-
-            const failed = errors > 0;
-            const status = failed ? "FAILED" : "STAGED";
-            writeLine(
-                `RESULT       ${status.padEnd(10)} types=${Object.keys(FILES).length} errors=${errors}`,
-            );
-            if (!failed) {
-                retainSuccessfulRows = true;
-                writeLine(`ROWS         RETAINED   files=${generatedFiles.length}`);
-            }
-            exitCode = failed ? 1 : 0;
+            const staged = await stageRows(ref, options, outputDir, generatedFiles, writeLine);
+            exitCode = staged.exitCode;
+            retainSuccessfulRows = staged.retainRows;
         } else {
-            const oldResults = await runVariant(oldRef, options, null, generatedFiles);
-            const newResults = await runVariant(newRef, options, null, generatedFiles);
-            let differing = 0;
-            let errors = 0;
-
-            for (const type of Object.keys(FILES)) {
-                const oldResult = oldResults[type];
-                const newResult = newResults[type];
-                let status;
-                if (oldResult.error || newResult.error) {
-                    status = "ERROR";
-                    errors += 1;
-                } else if (oldResult.digest === newResult.digest) {
-                    status = "IDENTICAL";
-                } else {
-                    status = "DIFFERS";
-                    differing += 1;
-                }
-                writeLine(
-                    `${type.padEnd(12)} ${status.padEnd(10)} old-rows=${oldResult.rows} new-rows=${newResult.rows}`,
-                );
-            }
-
-            const failed = differing > 0 || errors > 0;
-            const status = failed ? "FAILED" : "IDENTICAL";
-            writeLine(
-                `RESULT       ${status.padEnd(10)} types=${Object.keys(FILES).length} differing=${differing} errors=${errors}`,
-            );
-            exitCode = failed ? 1 : 0;
+            exitCode = await compareRefs(oldRef, newRef, options, generatedFiles, writeLine);
         }
     } catch {
         writeLine("RESULT       FAILED     comparison-errors=1");

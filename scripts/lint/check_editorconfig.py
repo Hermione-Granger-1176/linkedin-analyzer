@@ -8,11 +8,13 @@ import fnmatch
 import sys
 from dataclasses import dataclass
 from functools import cache
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from scripts import REPO_ROOT
-from scripts.lint import contains_symlink as _contains_symlink
-from scripts.lint import iter_lint_paths
+from scripts.lint import iter_lint_paths, resolve_repo_files
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 EDITORCONFIG_FILE = REPO_ROOT / ".editorconfig"
 BINARY_SUFFIXES = {
@@ -176,16 +178,8 @@ def _leading_whitespace(line: str) -> str:
     return line[: len(line) - len(line.lstrip(" \t"))]
 
 
-def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list[str]:
-    """Return all supported EditorConfig violations for one file."""
-    try:
-        text = _decode_text_file(path)
-    except UnicodeDecodeError as exc:
-        return [f"{relative_path}: not valid UTF-8 text ({exc.reason})"]
-
-    if text is None:
-        return []
-
+def _file_violations(text: str, relative_path: str, settings: dict[str, str]) -> list[str]:
+    """Return the line-ending and final-newline violations for a whole file."""
     violations: list[str] = []
     if settings.get("end_of_line") == "lf" and "\r" in text:
         violations.append(f"{relative_path}: expected LF line endings")
@@ -197,12 +191,16 @@ def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list
             violations.append(f"{relative_path}: missing final newline")
         case "false" if has_final_newline:
             violations.append(f"{relative_path}: unexpected final newline")
+    return violations
 
-    lines = text.splitlines()
+
+def _line_violations(text: str, relative_path: str, settings: dict[str, str]) -> list[str]:
+    """Return the trailing-whitespace and indentation violations line by line."""
+    violations: list[str] = []
     trim_trailing_whitespace = settings.get("trim_trailing_whitespace") == "true"
     indent_style = settings.get("indent_style")
 
-    for line_number, line in enumerate(lines, start=1):
+    for line_number, line in enumerate(text.splitlines(), start=1):
         if trim_trailing_whitespace and line.rstrip(" \t") != line:
             violations.append(f"{relative_path}:{line_number}: trailing whitespace")
 
@@ -215,8 +213,23 @@ def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list
                 violations.append(f"{relative_path}:{line_number}: tab used for indentation")
             case "tab" if leading and not leading.startswith("\t"):
                 violations.append(f"{relative_path}:{line_number}: spaces used for indentation")
-
     return violations
+
+
+def check_file(path: Path, relative_path: str, settings: dict[str, str]) -> list[str]:
+    """Return all supported EditorConfig violations for one file."""
+    try:
+        text = _decode_text_file(path)
+    except UnicodeDecodeError as exc:
+        return [f"{relative_path}: not valid UTF-8 text ({exc.reason})"]
+
+    if text is None:
+        return []
+
+    return [
+        *_file_violations(text, relative_path, settings),
+        *_line_violations(text, relative_path, settings),
+    ]
 
 
 def run_check(paths: list[Path] | None = None, root: Path | None = None) -> list[str]:
@@ -250,41 +263,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path], list[str]]:
     """Resolve safe repository-relative file paths and return validation errors."""
-    resolved_paths: list[Path] = []
-    errors: list[str] = []
-
-    for raw in raw_paths:
-        relative = Path(raw)
-        if relative.is_absolute() or ".." in relative.parts:
-            errors.append(f"{raw}: path must stay within the repository")
-            continue
-
-        candidate = root / relative
-        if _contains_symlink(candidate, root):
-            errors.append(f"{raw}: symbolic links are not supported")
-            continue
-
-        try:
-            resolved = candidate.resolve(strict=True)
-        except FileNotFoundError:
-            errors.append(f"{raw}: path does not exist")
-            continue
-        except OSError:
-            errors.append(f"{raw}: path could not be accessed")
-            continue
-
-        try:
-            resolved.relative_to(root.resolve())
-        except ValueError:
-            errors.append(f"{raw}: path resolves outside the repository")
-            continue
-
-        if not resolved.is_file():
-            errors.append(f"{raw}: path does not exist or is not a file")
-            continue
-        resolved_paths.append(resolved)
-
-    return resolved_paths, errors
+    return resolve_repo_files(raw_paths, root)
 
 
 def print_failures(messages: list[str]) -> None:

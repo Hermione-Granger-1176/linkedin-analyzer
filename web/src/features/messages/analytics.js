@@ -16,6 +16,21 @@ import { parseLocalDate, parseLocalDateTime } from "../analytics/dates.js";
 /** @typedef {import("./model.ts").ParticipantStats} ParticipantStats */
 /** @typedef {import("./model.ts").RoleCountField} RoleCountField */
 
+/**
+ * Accumulator that folds participants into contacts and an event log.
+ * @typedef {object} ContactBook
+ * @property {(contact: Participant, timestamp: number) => void} record - Fold one participant of one message in
+ * @property {() => Pick<MessageState, "contacts" | "events" | "talkedNameKeys" | "talkedUrlKeys">} snapshot - Read the accumulated state
+ */
+
+/**
+ * Accumulator for the outreach funnel.
+ * @typedef {object} OutreachTracker
+ * @property {(row: MessageRow, conversationKey: string, timestamp: number, context: SelfContext) => boolean} recordSender - Count a message by its sender and return whether the sender is self
+ * @property {(contact: Participant) => void} recordRecipient - Mark a recipient of a self-sent message as outreach
+ * @property {() => OutreachSummary} summarize - Summarize the funnel
+ */
+
 export const MessagesAnalytics = (() => {
     "use strict";
 
@@ -63,27 +78,44 @@ export const MessagesAnalytics = (() => {
     );
 
     /**
-     * Build message analytics state from cleaned rows.
-     * @param {MessageRow[]} rows - Cleaned message rows
-     * @returns {MessageState}
+     * Run `work` between performance marks, then measure the span. Skip each
+     * step the runtime does not support, so a missing Performance API never
+     * stops the work. Unlike the page's own helpers this reports nothing to
+     * telemetry, because this module also runs in a worker.
+     * @template T
+     * @param {string} name - Measure name; its marks are `${name}:start` and `${name}:end`
+     * @param {() => T} work - Work to time
+     * @returns {T} Whatever `work` returns
      */
-    function buildMessageState(rows) {
-        const safeRows = Array.isArray(rows) ? rows : [];
+    function measureSpan(name, work) {
+        const start = `${name}:start`;
+        const end = `${name}:end`;
         if (typeof performance !== "undefined" && typeof performance.mark === "function") {
-            performance.mark("messages:detect-self:start");
+            performance.mark(start);
         }
-        const context = detectSelfContext(safeRows);
+        const result = work();
         if (typeof performance !== "undefined" && typeof performance.mark === "function") {
-            performance.mark("messages:detect-self:end");
+            performance.mark(end);
         }
         if (typeof performance !== "undefined" && typeof performance.measure === "function") {
             try {
-                performance.measure("messages:detect-self", "messages:detect-self:start", "messages:detect-self:end");
+                performance.measure(name, start, end);
             } catch {
                 // Ignore missing marks to keep instrumentation resilient.
             }
         }
+        return result;
+    }
 
+    /**
+     * Create the accumulator that folds participants into contacts.
+     *
+     * Events are stored as columns, one entry per participant per row: a contact
+     * ID and a timestamp. A contact keeps its ID when it is promoted from a
+     * name: key to a url: key, so earlier events follow the merge.
+     * @returns {ContactBook}
+     */
+    function createContactBook() {
         /** @type {Map<string, MessageContact>} */
         const contacts = new Map();
         // Maps a normalized contact name to the key its entry is currently stored
@@ -91,22 +123,156 @@ export const MessagesAnalytics = (() => {
         // folds into one contact instead of splitting across a url: and a name: key.
         /** @type {Map<string, string>} */
         const nameToKey = new Map();
-        // Events are stored as columns, one entry per participant per row: a
-        // contact ID and a timestamp. A contact keeps its ID when it is promoted
-        // from a name: key to a url: key, so earlier events follow the merge.
         /** @type {Map<MessageContact, number>} */
         const contactIds = new Map();
         /** @type {string[]} */
         const contactKeys = [];
         const eventContactIds = createGrowableColumn(Int32Array);
         const eventTimestamps = createGrowableColumn(Float64Array);
-        const rowTimestamps = createGrowableColumn(Float64Array);
         /** @type {Set<string>} */
         const talkedNameKeys = new Set();
         /** @type {Set<string>} */
         const talkedUrlKeys = new Set();
-        // Outreach-funnel accumulators, filled in the same pass as the contact
-        // aggregates so large exports are not iterated (and re-parsed) twice.
+
+        /**
+         * Find the stored contact a participant belongs to.
+         *
+         * No direct hit: the same person may already be stored under their name
+         * (no URL yet) or under a URL (seen with one before). Reconcile via the
+         * name index so their message counts merge into one entry. A stored
+         * contact with a different URL is a different person who shares the
+         * name, so it is never merged.
+         * @param {Participant} contact - Participant being recorded
+         * @param {string} contactKey - Key built from the participant
+         * @param {string} mergeNameKey - Normalized name to merge on, or ""
+         * @returns {MessageContact|undefined}
+         */
+        function findStoredContact(contact, contactKey, mergeNameKey) {
+            const direct = contacts.get(contactKey);
+            if (direct || !mergeNameKey) {
+                return direct;
+            }
+            const mappedKey = nameToKey.get(mergeNameKey);
+            const mapped = mappedKey ? contacts.get(mappedKey) : undefined;
+            if (mapped && !contact.url) {
+                return mapped;
+            }
+            if (mapped && !mapped.url) {
+                // Promote a name-only entry to the stronger URL key so
+                // later URL-bearing rows find it directly.
+                contacts.delete(mapped.key);
+                mapped.key = contactKey;
+                contacts.set(contactKey, mapped);
+                contactKeys[/** @type {number} */ (contactIds.get(mapped))] = contactKey;
+                return mapped;
+            }
+            return undefined;
+        }
+
+        /**
+         * Count one more message with a stored contact, keeping its best URL and name.
+         * @param {MessageContact} existing - Stored contact
+         * @param {Participant} contact - Participant on this row
+         * @param {number} timestamp - Message time
+         */
+        function mergeInto(existing, contact, timestamp) {
+            existing.count += 1;
+            existing.lastTimestamp = Math.max(existing.lastTimestamp, timestamp);
+            if (!existing.url && contact.url) {
+                existing.url = contact.url;
+            }
+            /* v8 ignore next */
+            if (contact.name && !isAnonymousName(contact.name)) {
+                existing.name = contact.name;
+            }
+        }
+
+        /**
+         * Store a participant seen for the first time.
+         * @param {string} contactKey - Key built from the participant
+         * @param {Participant} contact - Participant on this row
+         * @param {number} timestamp - Message time
+         * @returns {MessageContact} The new entry
+         */
+        function insert(contactKey, contact, timestamp) {
+            const created = {
+                key: contactKey,
+                // sanitizeParticipant supplies a name. Keep "Unknown" for malformed data.
+                /* v8 ignore next */
+                name: contact.name || "Unknown",
+                url: contact.url,
+                count: 1,
+                lastTimestamp: timestamp
+            };
+            contacts.set(contactKey, created);
+            contactIds.set(created, contactKeys.length);
+            contactKeys.push(contactKey);
+            return created;
+        }
+
+        /**
+         * Fold one participant of one message into the contacts and the event columns.
+         * @param {Participant} contact - Sanitized participant
+         * @param {number} timestamp - Message time
+         */
+        function record(contact, timestamp) {
+            // Only non-anonymous names are safe to merge on: "LinkedIn Member"
+            // placeholders belong to different people and must not collapse.
+            // sanitizeParticipant supplies a real name or "Unknown". Keep the
+            // empty branch and anonymity checks for malformed participant data.
+            /* v8 ignore next 4 */
+            const mergeNameKey =
+                contact.name && !isAnonymousName(contact.name)
+                    ? normalizeName(contact.name)
+                    : "";
+            const contactKey = buildContactKey(contact);
+            const found = findStoredContact(contact, contactKey, mergeNameKey);
+            if (found) {
+                mergeInto(found, contact, timestamp);
+            }
+            const existing = found || insert(contactKey, contact, timestamp);
+
+            // Sanitized participants normally produce both keys. Keep these
+            // branches for malformed participant data.
+            /* v8 ignore next */
+            if (mergeNameKey) {
+                nameToKey.set(mergeNameKey, existing.key);
+            }
+
+            const nameKey = normalizeName(contact.name);
+            /* v8 ignore next */
+            if (nameKey) {
+                talkedNameKeys.add(nameKey);
+            }
+            if (contact.url) {
+                talkedUrlKeys.add(contact.url);
+            }
+
+            eventContactIds.push(/** @type {number} */ (contactIds.get(existing)));
+            eventTimestamps.push(timestamp);
+        }
+
+        return {
+            record,
+            snapshot: () => ({
+                contacts,
+                events: {
+                    contactKeys,
+                    contactIds: eventContactIds.toArray(),
+                    timestamps: eventTimestamps.toArray(),
+                },
+                talkedNameKeys,
+                talkedUrlKeys,
+            }),
+        };
+    }
+
+    /**
+     * Create the accumulator for the outreach funnel, filled in the same pass as
+     * the contact aggregates so large exports are not iterated (and re-parsed) twice.
+     * @returns {OutreachTracker}
+     */
+    function createOutreachTracker() {
         /** @type {Map<string, ConversationAggregate>} */
         const conversations = new Map();
         /** @type {Map<string, {sent: number, received: number}>} */
@@ -114,19 +280,18 @@ export const MessagesAnalytics = (() => {
         let sentMessages = 0;
         let receivedMessages = 0;
 
-        let latestTimestamp = 0;
-        let skippedRows = 0;
-        safeRows.forEach((row, index) => {
-            const date = parseDateTime(row.DATE);
-            if (!date) {
-                skippedRows += 1;
-                return;
-            }
-            const timestamp = date.getTime();
-
-            // Outreach tracking runs before the participant filter so that
-            // self-sent messages whose only recipients are self/anonymous still
-            // count toward sent totals and conversation initiation.
+        /**
+         * Count a message and its conversation by who sent it. Runs before the
+         * participant filter so that self-sent messages whose only recipients
+         * are self/anonymous still count toward sent totals and conversation
+         * initiation.
+         * @param {MessageRow} row - Message row
+         * @param {string} conversationKey - Conversation identifier
+         * @param {number} timestamp - Message time
+         * @param {SelfContext} context - Self context
+         * @returns {boolean} Whether the sender is the detected self
+         */
+        function recordSender(row, conversationKey, timestamp, context) {
             // Pass the raw sender fields straight to the helpers; each normalizes
             // once internally, so pre-normalizing here would repeat the work.
             const senderIsSelf = isSelfContact(row.FROM, row["SENDER PROFILE URL"], context);
@@ -143,7 +308,7 @@ export const MessagesAnalytics = (() => {
             } else if (hasRealSender) {
                 receivedMessages += 1;
             }
-            trackConversation(conversations, buildConversationKey(row, index), {
+            trackConversation(conversations, conversationKey, {
                 timestamp,
                 senderIsSelf,
                 hasSender: hasRealSender
@@ -151,6 +316,54 @@ export const MessagesAnalytics = (() => {
             if (senderContact) {
                 markOutreachContact(contactStats, senderContact, "received");
             }
+            return senderIsSelf;
+        }
+
+        /**
+         * Mark a recipient of a self-sent message as outreach.
+         * @param {Participant} contact - Non-self participant of the row
+         */
+        function recordRecipient(contact) {
+            markOutreachContact(contactStats, contact, "sent");
+        }
+
+        /** @returns {OutreachSummary} The funnel totals so far */
+        function summarize() {
+            return summarizeOutreach(conversations, contactStats, sentMessages, receivedMessages);
+        }
+
+        return { recordSender, recordRecipient, summarize };
+    }
+
+    /**
+     * Build message analytics state from cleaned rows.
+     * @param {MessageRow[]} rows - Cleaned message rows
+     * @returns {MessageState}
+     */
+    function buildMessageState(rows) {
+        const safeRows = Array.isArray(rows) ? rows : [];
+        const context = measureSpan("messages:detect-self", () => detectSelfContext(safeRows));
+
+        const book = createContactBook();
+        const outreach = createOutreachTracker();
+        const rowTimestamps = createGrowableColumn(Float64Array);
+
+        let latestTimestamp = 0;
+        let skippedRows = 0;
+        safeRows.forEach((row, index) => {
+            const date = parseDateTime(row.DATE);
+            if (!date) {
+                skippedRows += 1;
+                return;
+            }
+            const timestamp = date.getTime();
+
+            const senderIsSelf = outreach.recordSender(
+                row,
+                buildConversationKey(row, index),
+                timestamp,
+                context
+            );
 
             const participants = extractParticipantsFromRow(row, context);
             if (!participants.length) {
@@ -161,107 +374,27 @@ export const MessagesAnalytics = (() => {
             rowTimestamps.push(timestamp);
 
             participants.forEach(contact => {
-                // Only non-anonymous names are safe to merge on: "LinkedIn Member"
-                // placeholders belong to different people and must not collapse.
-                // sanitizeParticipant supplies a real name or "Unknown". Keep the
-                // empty branch and anonymity checks for malformed participant data.
-                /* v8 ignore next 4 */
-                const mergeNameKey =
-                    contact.name && !isAnonymousName(contact.name)
-                        ? normalizeName(contact.name)
-                        : "";
-                let contactKey = buildContactKey(contact);
-                let existing = contacts.get(contactKey);
-
-                // No direct hit: the same person may already be stored under their
-                // name (no URL yet) or under a URL (seen with one before). Reconcile
-                // via the name index so their message counts merge into one entry.
-                // A stored contact with a different URL is a different person who
-                // shares the name, so it is never merged.
-                if (!existing && mergeNameKey) {
-                    const mappedKey = nameToKey.get(mergeNameKey);
-                    const mapped = mappedKey ? contacts.get(mappedKey) : undefined;
-                    if (mapped && !contact.url) {
-                        existing = mapped;
-                        contactKey = mapped.key;
-                    } else if (mapped && !mapped.url) {
-                        // Promote a name-only entry to the stronger URL key so
-                        // later URL-bearing rows find it directly.
-                        existing = mapped;
-                        contacts.delete(mapped.key);
-                        existing.key = contactKey;
-                        contacts.set(contactKey, existing);
-                        contactKeys[/** @type {number} */ (contactIds.get(existing))] = contactKey;
-                    }
-                }
-
-                if (existing) {
-                    existing.count += 1;
-                    existing.lastTimestamp = Math.max(existing.lastTimestamp, timestamp);
-                    if (!existing.url && contact.url) {
-                        existing.url = contact.url;
-                    }
-                    /* v8 ignore next */
-                    if (contact.name && !isAnonymousName(contact.name)) {
-                        existing.name = contact.name;
-                    }
-                } else {
-                    existing = {
-                        key: contactKey,
-                        // sanitizeParticipant supplies a name. Keep "Unknown" for malformed data.
-                        /* v8 ignore next */
-                        name: contact.name || "Unknown",
-                        url: contact.url,
-                        count: 1,
-                        lastTimestamp: timestamp
-                    };
-                    contacts.set(contactKey, existing);
-                    contactIds.set(existing, contactKeys.length);
-                    contactKeys.push(contactKey);
-                }
-
-                // Sanitized participants normally produce both keys. Keep these
-                // branches for malformed participant data.
-                /* v8 ignore next */
-                if (mergeNameKey) {
-                    nameToKey.set(mergeNameKey, existing.key);
-                }
-
-                const nameKey = normalizeName(contact.name);
-                /* v8 ignore next */
-                if (nameKey) {
-                    talkedNameKeys.add(nameKey);
-                }
-                if (contact.url) {
-                    talkedUrlKeys.add(contact.url);
-                }
-
-                eventContactIds.push(/** @type {number} */ (contactIds.get(existing)));
-                eventTimestamps.push(timestamp);
-
+                book.record(contact, timestamp);
                 // For a self-sent row the sender is self, so the non-self
                 // participants are exactly its recipients, so mark each as outreach.
                 if (senderIsSelf) {
-                    markOutreachContact(contactStats, contact, "sent");
+                    outreach.recordRecipient(contact);
                 }
             });
 
             latestTimestamp = Math.max(latestTimestamp, timestamp);
         });
 
+        const { contacts, events, talkedNameKeys, talkedUrlKeys } = book.snapshot();
         return {
             contacts,
-            events: {
-                contactKeys,
-                contactIds: eventContactIds.toArray(),
-                timestamps: eventTimestamps.toArray(),
-            },
+            events,
             rowTimestamps: rowTimestamps.toArray(),
             skippedRows,
             talkedNameKeys,
             talkedUrlKeys,
             latestTimestamp,
-            outreach: summarizeOutreach(conversations, contactStats, sentMessages, receivedMessages)
+            outreach: outreach.summarize()
         };
     }
 

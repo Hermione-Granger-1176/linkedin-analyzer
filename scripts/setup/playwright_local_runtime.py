@@ -382,8 +382,8 @@ def normalize_shell_lines(output: str) -> list[str]:
     return lines
 
 
-def parse_dependency_seeds(output: str) -> tuple[str, ...]:
-    """Extract safe package names from Playwright's dependency dry-run report."""
+def _apt_install_seeds(output: str) -> list[str]:
+    """Return the package names on the report's ``apt-get install`` command lines."""
     packages: list[str] = []
     for line in normalize_shell_lines(output):
         if "apt-get" not in line:
@@ -404,9 +404,14 @@ def parse_dependency_seeds(output: str) -> tuple[str, ...]:
             if PACKAGE_NAME_RE.fullmatch(token) is None:
                 raise fail("invalid package name in Playwright's dependency dry-run output")
             packages.append(token)
-    if packages:
-        return tuple(sorted(set(packages)))
+    return packages
 
+
+def _missing_dependency_list_seeds(output: str) -> tuple[str, ...]:
+    """Return the package names in a "Missing system dependencies (N):" list.
+
+    Return an empty tuple when the report says every dependency is installed.
+    """
     lines = output.splitlines()
     header_index = next(
         (
@@ -423,6 +428,7 @@ def parse_dependency_seeds(output: str) -> tuple[str, ...]:
     header = re.fullmatch(r"Missing system dependencies \((\d+)\):", lines[header_index].strip())
     assert header is not None
     expected_count = int(header.group(1))
+    packages: list[str] = []
     for line in lines[header_index + 1 :]:
         if not line.startswith((" ", "\t")):
             break
@@ -433,6 +439,14 @@ def parse_dependency_seeds(output: str) -> tuple[str, ...]:
     if len(packages) != expected_count:
         raise fail("Playwright dependency dry run reported an incomplete package list")
     return tuple(sorted(set(packages)))
+
+
+def parse_dependency_seeds(output: str) -> tuple[str, ...]:
+    """Extract safe package names from Playwright's dependency dry-run report."""
+    packages = _apt_install_seeds(output)
+    if packages:
+        return tuple(sorted(set(packages)))
+    return _missing_dependency_list_seeds(output)
 
 
 def dependency_seeds(paths: RuntimePaths) -> tuple[str, ...]:
@@ -572,46 +586,55 @@ def download_and_extract(packages: Sequence[PackageVersion], stage: Path) -> Pat
     return extracted_root
 
 
+def _reject_escaping_entry(entry: Path, extracted_root: Path) -> None:
+    """Reject an entry that sits outside the root or a symlink that points outside it."""
+    # Containment applies to where a symlink sits, never to what it points
+    # at: that is the dedicated check below, which compares the target
+    # lexically instead of demanding that it exist. Resolving through the
+    # link here would conflate "dangling" with "escaping" and refuse a whole
+    # extraction over a documentation file. APT produces those links by
+    # design - it does not download a package the host already has, so the
+    # usr/share/doc link naming that sibling dangles while still pointing
+    # inside the root - which failed every well-provisioned developer
+    # machine while a bare CI container, holding none of those packages,
+    # downloaded the lot and stayed green.
+    location = entry.parent if entry.is_symlink() else entry
+    if not is_within(location, extracted_root):
+        raise fail(
+            "extracted package path escaped the private runtime root: "
+            f"{entry.relative_to(extracted_root)}"
+        )
+    if entry.is_symlink():
+        target = entry.readlink()
+        if target.is_absolute() or not is_within(entry.parent / target, extracted_root):
+            raise fail(
+                "extracted package contains a symlink that escapes the private runtime "
+                f"root: {entry.relative_to(extracted_root)} -> {target}"
+            )
+
+
+def _reject_host_runtime_overlay(entry: Path, extracted_root: Path) -> None:
+    """Reject an extracted dynamic loader or libc placed in a system library directory."""
+    relative = entry.relative_to(extracted_root)
+    in_library_tree = relative.parts[0] in {"lib", "lib64"} or relative.parts[:2] in {
+        ("usr", "lib"),
+        ("usr", "lib64"),
+    }
+    is_host_runtime = entry.name.startswith("ld-linux") or (
+        re.fullmatch(r"libc\.so(?:\.\d+)*", entry.name) is not None
+    )
+    if in_library_tree and is_host_runtime:
+        raise fail("refusing an extracted host loader or libc overlay")
+
+
 def validate_extracted_root(extracted_root: Path) -> None:
     """Reject symlink escapes and extracted host loader or libc replacements."""
     require_regular_directory(extracted_root, "extracted Playwright runtime root")
     if not extracted_root.exists():
         raise fail("package extraction did not create a runtime root")
     for entry in extracted_root.rglob("*"):
-        # Containment applies to where a symlink sits, never to what it points
-        # at: that is the dedicated check below, which compares the target
-        # lexically instead of demanding that it exist. Resolving through the
-        # link here would conflate "dangling" with "escaping" and refuse a whole
-        # extraction over a documentation file. APT produces those links by
-        # design - it does not download a package the host already has, so the
-        # usr/share/doc link naming that sibling dangles while still pointing
-        # inside the root - which failed every well-provisioned developer
-        # machine while a bare CI container, holding none of those packages,
-        # downloaded the lot and stayed green.
-        location = entry.parent if entry.is_symlink() else entry
-        if not is_within(location, extracted_root):
-            raise fail(
-                "extracted package path escaped the private runtime root: "
-                f"{entry.relative_to(extracted_root)}"
-            )
-        if entry.is_symlink():
-            target = entry.readlink()
-            if target.is_absolute() or not is_within(entry.parent / target, extracted_root):
-                raise fail(
-                    "extracted package contains a symlink that escapes the private runtime "
-                    f"root: {entry.relative_to(extracted_root)} -> {target}"
-                )
-        name = entry.name
-        relative = entry.relative_to(extracted_root)
-        in_library_tree = relative.parts[0] in {"lib", "lib64"} or relative.parts[:2] in {
-            ("usr", "lib"),
-            ("usr", "lib64"),
-        }
-        is_host_runtime = name.startswith("ld-linux") or (
-            re.fullmatch(r"libc\.so(?:\.\d+)*", name) is not None
-        )
-        if in_library_tree and is_host_runtime:
-            raise fail("refusing an extracted host loader or libc overlay")
+        _reject_escaping_entry(entry, extracted_root)
+        _reject_host_runtime_overlay(entry, extracted_root)
 
 
 def write_manifest(path: Path, manifest: CacheManifest) -> None:
@@ -629,14 +652,8 @@ def regular_file(path: Path) -> bool:
         return False
 
 
-def load_manifest(path: Path) -> CacheManifest | None:
-    """Load a manifest only when its JSON has the exact expected schema and types."""
-    if not regular_file(path):
-        return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+def _parse_manifest(raw: object) -> CacheManifest | None:
+    """Return the manifest when ``raw`` has exactly the expected schema and types."""
     if not isinstance(raw, dict) or raw.get("schema") != MANIFEST_SCHEMA:
         return None
     host = raw.get("host")
@@ -676,6 +693,17 @@ def load_manifest(path: Path) -> CacheManifest | None:
         engines=tuple(engines),
         packages=tuple(parsed_packages),
     )
+
+
+def load_manifest(path: Path) -> CacheManifest | None:
+    """Load a manifest only when its JSON has the exact expected schema and types."""
+    if not regular_file(path):
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return _parse_manifest(raw)
 
 
 def cache_matches(paths: RuntimePaths, expected: CacheManifest) -> bool:
@@ -777,6 +805,23 @@ def prepare_locked(paths: RuntimePaths) -> None:
         shutil.rmtree(stage, ignore_errors=True)
 
 
+def _contains_shared_library(directory: Path) -> bool:
+    """Return whether the directory directly holds a ``lib*.so*`` file."""
+    return any(
+        child.name.startswith("lib") and ".so" in child.name
+        for child in directory.iterdir()
+        if child.is_file()
+    )
+
+
+def _is_loader_directory(relative: Path) -> bool:
+    """Return whether a root-relative path is a system library directory the loader searches."""
+    parts = relative.parts
+    return (bool(parts) and parts[0] in {"lib", "lib64"} and len(parts) <= 2) or (
+        len(parts) >= 2 and parts[:2] in {("usr", "lib"), ("usr", "lib64")} and len(parts) <= 3
+    )
+
+
 def discovered_directories(root: Path) -> dict[str, list[Path]]:
     """Discover only extracted locations relevant to dynamic libraries and browser data."""
     found: dict[str, list[Path]] = {
@@ -802,18 +847,7 @@ def discovered_directories(root: Path) -> dict[str, list[Path]]:
             found["gstreamer"].append(directory)
         if relative.parts[-2:] == ("glib-2.0", "schemas"):
             found["schemas"].append(directory)
-        contains_shared_library = any(
-            child.name.startswith("lib") and ".so" in child.name
-            for child in directory.iterdir()
-            if child.is_file()
-        )
-        parts = relative.parts
-        is_loader_directory = (
-            bool(parts) and parts[0] in {"lib", "lib64"} and len(parts) <= 2
-        ) or (
-            len(parts) >= 2 and parts[:2] in {("usr", "lib"), ("usr", "lib64")} and len(parts) <= 3
-        )
-        if contains_shared_library and is_loader_directory:
+        if _contains_shared_library(directory) and _is_loader_directory(relative):
             found["libraries"].append(directory)
     return found
 

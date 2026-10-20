@@ -5,10 +5,12 @@ import { mount } from "svelte";
 import { AppRouter } from "../../app/router.js";
 import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
+import { loadAnalyticsBase } from "../../platform/persistence/analytics-base.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
 import { Session } from "../../platform/persistence/session.js";
 import { Storage } from "../../platform/persistence/storage.js";
 import { INSIGHTS_EXPORT_CACHE_KEY } from "../../shared/constants.js";
+import { setEmptyStateText } from "../../shared/ui/empty-state.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { createRangeFilter } from "../../shared/ui/time-range.js";
 import { createWorkerHandle } from "../../shared/worker-handle.js";
@@ -17,7 +19,6 @@ import { formatReplyRate, formatSentRatio } from "../messages/format.js";
 import InsightCards from "./InsightCards.svelte";
 
 /** @typedef {import("../../app/router.js").RouteParams} RouteParams */
-/** @typedef {import("../../platform/persistence/storage.js").StoredAnalytics} StoredAnalytics */
 /** @typedef {import("../analytics/screen.js").AnalyticsFilters} AnalyticsFilters */
 /** @typedef {import("../analytics/screen.js").AnalyticsScreenView} AnalyticsScreenView */
 
@@ -292,6 +293,16 @@ export const InsightsPage = (() => {
         state.currentViewRange = null;
     }
 
+    /**
+     * Show an empty state that explains a problem, and stop the loading overlay.
+     * @param {string} title - Empty state title
+     * @param {string} message - Empty state explanation
+     */
+    function showInsightsProblem(title, message) {
+        setEmptyState(title, message);
+        showInsightsLoading(false);
+    }
+
     /** Load the analytics base and send it to the worker. */
     async function loadBase() {
         showInsightsLoading(true);
@@ -300,24 +311,16 @@ export const InsightsPage = (() => {
             await Session.waitForCleanup();
 
             const worker = workers.ensure();
-            /* v8 ignore next 5 */
+            /* v8 ignore next 7 */
             if (!worker) {
-                setEmptyState(
+                showInsightsProblem(
                     "Insights not supported",
                     "Your browser does not support analytics workers.",
                 );
-                showInsightsLoading(false);
                 return;
             }
 
-            let analyticsBase =
-                /** @type {StoredAnalytics|undefined} */ (DataCache.get("storage:analyticsBase")) ||
-                null;
-
-            if (!analyticsBase) {
-                analyticsBase = await Storage.getAnalytics();
-                DataCache.set("storage:analyticsBase", analyticsBase);
-            }
+            const analyticsBase = await loadAnalyticsBase();
             // The worker may have been replaced or stopped while storage was
             // read; a newer load owns it now, so this one steps aside.
             if (workers.current() !== worker) {
@@ -325,12 +328,11 @@ export const InsightsPage = (() => {
             }
 
             if (!analyticsBase || !analyticsBase.months) {
-                setEmptyState(
+                needsBaseReload = false;
+                showInsightsProblem(
                     "No data available yet",
                     "Upload Shares.csv or Comments.csv on the Home page.",
                 );
-                needsBaseReload = false;
-                showInsightsLoading(false);
                 return;
             }
 
@@ -339,12 +341,11 @@ export const InsightsPage = (() => {
                 payload: analyticsBase,
             });
             workers.watch(WORKER_TIMEOUT_MS, () => {
-                setEmptyState(
+                workers.terminate();
+                showInsightsProblem(
                     "Insights timeout",
                     "Insights worker did not respond in time. Try refreshing the page.",
                 );
-                workers.terminate();
-                showInsightsLoading(false);
             });
             needsBaseReload = false;
         } catch (error) {
@@ -352,11 +353,10 @@ export const InsightsPage = (() => {
                 module: "insights-ui",
                 operation: "load-base",
             });
-            setEmptyState(
+            showInsightsProblem(
                 "Storage error",
                 "Unable to load saved analytics. Please re-upload your files.",
             );
-            showInsightsLoading(false);
         }
     }
 
@@ -635,17 +635,7 @@ export const InsightsPage = (() => {
      * @param {string} message - The descriptive message for the empty state.
      */
     function setEmptyState(title, message) {
-        const heading = elements.insightsEmpty.querySelector("h2");
-        const text = elements.insightsEmpty.querySelector("p");
-        // The static shell includes both nodes. Keep the guards for incomplete DOM setup.
-        /* v8 ignore next */
-        if (heading) {
-            heading.textContent = title;
-        }
-        /* v8 ignore next */
-        if (text) {
-            text.textContent = message;
-        }
+        setEmptyStateText(elements.insightsEmpty, title, message);
         elements.insightsEmpty.hidden = false;
         elements.insightsGrid.hidden = true;
         elements.insightTip.hidden = true;

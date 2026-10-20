@@ -10,6 +10,7 @@
 
 import { captureError } from "../../platform/observability/sentry.js";
 import { DataCache } from "../../platform/persistence/data-cache.js";
+import { downloadBlob } from "../../shared/ui/download.js";
 import { LoadingOverlay } from "../../shared/ui/loading-overlay.js";
 import { celebrateStaple } from "../../shared/ui/mascot.js";
 
@@ -374,29 +375,6 @@ export const PdfExport = (() => {
     }
 
     /**
-     * Download a blob under the given name.
-     * @param {Blob} blob - PDF bytes
-     * @param {string} filename - File name
-     */
-    function download(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        try {
-            document.body.appendChild(link);
-            link.click();
-        } finally {
-            // Remove the temporary link and release its object URL even if
-            // clicking the link fails.
-            if (link.parentNode) {
-                link.remove();
-            }
-            URL.revokeObjectURL(url);
-        }
-    }
-
-    /**
      * Fetch the export's own modules, at most once a session.
      *
      * The promise is kept rather than only the modules, so a second export
@@ -473,7 +451,7 @@ export const PdfExport = (() => {
             }
 
             runtime.renderPdfDocument(doc, data, { palette, fonts });
-            download(doc.output("blob"), buildFilename(generatedAt));
+            downloadBlob(doc.output("blob"), buildFilename(generatedAt));
 
             // Clear busy before close(), which cancels a generation
             // it still believes is running, so the other order would terminate

@@ -197,6 +197,45 @@ export const ScreenManager = (() => {
     }
 
     /**
+     * Run the leave hooks of the route being left.
+     * @param {string|null} previousName - Route name being left
+     * @param {ScreenRoute|null|undefined} previousRoute - Route entry being left
+     * @param {string} routeName - Route name being entered
+     */
+    function leaveRoute(previousName, previousRoute, routeName) {
+        // A screen still loading must not leave its overlay on the next one.
+        if (previousName) {
+            LoadingOverlay.hide(`route:${previousName}`);
+        }
+        if (
+            previousRoute &&
+            previousRoute.controller &&
+            typeof previousRoute.controller.onRouteLeave === "function"
+        ) {
+            previousRoute.controller.onRouteLeave({ from: previousName, to: routeName });
+        }
+    }
+
+    /**
+     * Move focus to the new screen's heading once the transition ends, unless
+     * the user has already navigated on.
+     * @param {HTMLElement} screen - Screen that was switched in
+     * @param {string} routeName - Route the screen belongs to
+     */
+    function focusScreenAfterTransition(screen, routeName) {
+        setTimeout(() => {
+            if (currentRouteName !== routeName) {
+                return;
+            }
+            const heading = /** @type {HTMLElement|null} */ (screen.querySelector("h1, h2"));
+            if (heading && !heading.hasAttribute("tabindex")) {
+                heading.setAttribute("tabindex", "-1");
+            }
+            (heading || screen).focus({ preventScroll: false });
+        }, TRANSITION_DURATION_MS);
+    }
+
+    /**
      * Activate a route screen and trigger its lifecycle hooks.
      * @param {string} routeName - Route name
      * @param {RouteParams} params - Route query params
@@ -217,13 +256,7 @@ export const ScreenManager = (() => {
         updateActiveLinks(routeName);
 
         if (previousName !== routeName) {
-            // A screen still loading must not leave its overlay on the next one.
-            if (previousName) {
-                LoadingOverlay.hide(`route:${previousName}`);
-            }
-            if (previousRoute && previousRoute.controller && typeof previousRoute.controller.onRouteLeave === "function") {
-                previousRoute.controller.onRouteLeave({ from: previousName, to: routeName });
-            }
+            leaveRoute(previousName, previousRoute, routeName);
             switchScreens(previousScreen, nextScreen);
         }
 
@@ -241,17 +274,7 @@ export const ScreenManager = (() => {
         announceRoute(routeName);
 
         if (previousName !== routeName && nextScreen) {
-            const targetRoute = routeName;
-            setTimeout(() => {
-                if (currentRouteName !== targetRoute) {
-                    return;
-                }
-                const heading = /** @type {HTMLElement|null} */ (nextScreen.querySelector("h1, h2"));
-                if (heading && !heading.hasAttribute("tabindex")) {
-                    heading.setAttribute("tabindex", "-1");
-                }
-                (heading || nextScreen).focus({ preventScroll: false });
-            }, TRANSITION_DURATION_MS);
+            focusScreenAfterTransition(nextScreen, routeName);
         }
 
         LoadingOverlay.syncActiveScreen();

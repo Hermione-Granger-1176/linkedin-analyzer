@@ -11,7 +11,7 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
-from scripts.ci import repo_audit
+from scripts.ci import repo_audit, workflow_helpers
 from scripts.gh.gh_runner import GhError
 
 from tests.support.gh import FakeGh, completed_process, has
@@ -912,7 +912,8 @@ def test_the_verdict_reaches_the_workflow_as_an_output(
     """The alert jobs pick their state on this bit, which no exit code can carry."""
     output = tmp_path / "github-output"
 
-    repo_audit.report_checked(reached_verdict, env={repo_audit.GITHUB_OUTPUT_ENV: str(output)})
+    env = {workflow_helpers.GITHUB_OUTPUT_ENV: str(output)}
+    repo_audit.report_checked(reached_verdict, env=env)
 
     assert output.read_text(encoding="utf-8") == f"{expected}\n"
 
@@ -922,7 +923,7 @@ def test_the_verdict_is_appended_beside_any_other_step_output(tmp_path: Path) ->
     output = tmp_path / "github-output"
     output.write_text("already=here\n", encoding="utf-8")
 
-    repo_audit.report_checked(True, env={repo_audit.GITHUB_OUTPUT_ENV: str(output)})
+    repo_audit.report_checked(True, env={workflow_helpers.GITHUB_OUTPUT_ENV: str(output)})
 
     assert output.read_text(encoding="utf-8") == "already=here\nchecked=true\n"
 
@@ -937,7 +938,7 @@ def test_nothing_is_written_outside_github_actions(
     something to catch: writing anywhere at all would create it.
     """
     unwanted = tmp_path / "should-not-be-written"
-    monkeypatch.setenv(repo_audit.GITHUB_OUTPUT_ENV, str(unwanted))
+    monkeypatch.setenv(workflow_helpers.GITHUB_OUTPUT_ENV, str(unwanted))
 
     repo_audit.report_checked(True, env=env)
 
@@ -949,7 +950,7 @@ def test_a_drift_verdict_is_reported_as_reached(
 ) -> None:
     """Drift is a verdict, so it must not be mistaken for the audit failing to look."""
     output = tmp_path / "github-output"
-    monkeypatch.setenv(repo_audit.GITHUB_OUTPUT_ENV, str(output))
+    monkeypatch.setenv(workflow_helpers.GITHUB_OUTPUT_ENV, str(output))
     _patch_audit(monkeypatch, ["allow_merge_commit should be disabled"])
 
     assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_DRIFT_FOUND
@@ -963,7 +964,7 @@ def test_a_failure_to_look_is_reported_as_unchecked(
 ) -> None:
     """Collapsing this into drift would alert on settings the audit never read."""
     output = tmp_path / "github-output"
-    monkeypatch.setenv(repo_audit.GITHUB_OUTPUT_ENV, str(output))
+    monkeypatch.setenv(workflow_helpers.GITHUB_OUTPUT_ENV, str(output))
     _patch_audit(monkeypatch, GhError("token missing a permission"))
 
     assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_CHECK_FAILED

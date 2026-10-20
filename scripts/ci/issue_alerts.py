@@ -75,20 +75,14 @@ def build_alert_body(*, state: str, run_url: str, detail: str = "") -> str:
     return body
 
 
-def find_alert_issue(
+def _list_open_labeled_issues(
     repo: str,
     title: str,
     label: str,
     *,
-    run_fn: gh_runner.RunFunction | None = None,
-) -> dict[str, object] | None:
-    """Return the open issue that exactly matches ``title`` within ``label``.
-
-    Filtering by label first keeps the search bounded to issues this alert
-    owns. `gh issue list` never returns pull requests, so no extra filtering
-    is needed to keep a same-titled pull request from being mistaken for the
-    alert issue.
-    """
+    run_fn: gh_runner.RunFunction | None,
+) -> list[dict[str, object]]:
+    """Return the open issues carrying ``label``, refusing a list that may be truncated."""
     payload = gh_runner.gh_json(
         [
             "issue",
@@ -114,13 +108,28 @@ def find_alert_issue(
             f"{ISSUE_MATCH_LIMIT} open issues, so the matching issue may be truncated "
             "out of the results. Reserve this label for its alert issue."
         )
-
-    matches = []
     for issue in payload:
         if not isinstance(issue, dict):
             raise GhError("Unexpected issue entry shape in issue list response.")
-        if issue.get("title") == title:
-            matches.append(issue)
+    return payload
+
+
+def find_alert_issue(
+    repo: str,
+    title: str,
+    label: str,
+    *,
+    run_fn: gh_runner.RunFunction | None = None,
+) -> dict[str, object] | None:
+    """Return the open issue that exactly matches ``title`` within ``label``.
+
+    Filtering by label first keeps the search bounded to issues this alert
+    owns. `gh issue list` never returns pull requests, so no extra filtering
+    is needed to keep a same-titled pull request from being mistaken for the
+    alert issue.
+    """
+    issues = _list_open_labeled_issues(repo, title, label, run_fn=run_fn)
+    matches = [issue for issue in issues if issue.get("title") == title]
     if not matches:
         return None
     # Oldest issue wins so repeated syncs converge on one issue even if a
@@ -172,6 +181,58 @@ def ensure_label(
         raise GhError(f"Failed to ensure alert label {label!r} on {repo}: {exc}") from exc
 
 
+def _create_alert_issue(
+    repo: str,
+    title: str,
+    label: str,
+    body: str,
+    *,
+    run_fn: gh_runner.RunFunction | None,
+) -> str:
+    """Open the alert issue and return its URL."""
+    url = gh_runner.run_gh(
+        ["issue", "create", "--repo", repo, "--title", title, "--label", label, "--body", body],
+        run_fn=run_fn,
+    ).strip()
+    if not url:
+        raise GhError(f"Creating alert issue {title!r} on {repo} returned no URL.")
+    return url
+
+
+def _close_alert_issue(
+    repo: str,
+    existing: dict[str, object],
+    body: str,
+    *,
+    run_fn: gh_runner.RunFunction | None,
+) -> None:
+    """Close the alert issue with ``body`` as the closing comment."""
+    number = _issue_number(existing)
+    gh_runner.run_gh(
+        ["issue", "close", str(number), "--repo", repo, "--comment", body],
+        run_fn=run_fn,
+    )
+
+
+def _comment_on_alert_issue(
+    repo: str,
+    existing: dict[str, object],
+    body: str,
+    *,
+    run_fn: gh_runner.RunFunction | None,
+) -> str:
+    """Add ``body`` as a comment on the alert issue and return its URL."""
+    number = _issue_number(existing)
+    # Validated before commenting so a malformed payload cannot leave a comment
+    # behind on an issue this call then fails to report.
+    url = _issue_url(existing)
+    gh_runner.run_gh(
+        ["issue", "comment", str(number), "--repo", repo, "--body", body],
+        run_fn=run_fn,
+    )
+    return url
+
+
 def sync_alert_issue(
     *,
     repo: str,
@@ -198,41 +259,11 @@ def sync_alert_issue(
     if existing is None:
         if not should_exist:
             return ""
-        url = gh_runner.run_gh(
-            [
-                "issue",
-                "create",
-                "--repo",
-                repo,
-                "--title",
-                title,
-                "--label",
-                label,
-                "--body",
-                body,
-            ],
-            run_fn=run_fn,
-        ).strip()
-        if not url:
-            raise GhError(f"Creating alert issue {title!r} on {repo} returned no URL.")
-        return url
-
-    number = _issue_number(existing)
+        return _create_alert_issue(repo, title, label, body, run_fn=run_fn)
     if not should_exist:
-        gh_runner.run_gh(
-            ["issue", "close", str(number), "--repo", repo, "--comment", body],
-            run_fn=run_fn,
-        )
+        _close_alert_issue(repo, existing, body, run_fn=run_fn)
         return ""
-
-    # Validated before commenting so a malformed payload cannot leave a comment
-    # behind on an issue this call then fails to report.
-    url = _issue_url(existing)
-    gh_runner.run_gh(
-        ["issue", "comment", str(number), "--repo", repo, "--body", body],
-        run_fn=run_fn,
-    )
-    return url
+    return _comment_on_alert_issue(repo, existing, body, run_fn=run_fn)
 
 
 def _read_detail(detail_file: str | None) -> str:

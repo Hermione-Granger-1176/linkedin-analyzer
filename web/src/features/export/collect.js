@@ -198,6 +198,26 @@ function buildAllTimeStats(networkGrowth, outreach) {
 }
 
 /**
+ * Read the payload of an analytics worker "view" reply into what the export keeps.
+ * @param {unknown} payload - Reply payload, which may omit any part of the view
+ * @returns {AnalyticsRun} The insights, tip, network growth, and view, with null for what is absent
+ */
+function analyticsRunFromPayload(payload) {
+    /* v8 ignore next */
+    const reply =
+        /** @type {{insights?: {insights?: Insight[], tip?: string|null}, view?: ExportAnalyticsView|null}} */ (
+            payload || {}
+        );
+    const insights = reply.insights || {};
+    return {
+        insights: insights.insights || [],
+        tip: insights.tip || null,
+        networkGrowth: (reply.view && reply.view.networkGrowth) || null,
+        view: reply.view || null,
+    };
+}
+
+/**
  * Run a one-shot analytics worker to produce a view and its insights.
  *
  * The worker computes the timeline, topics, and heatmap with the insight cards.
@@ -230,24 +250,12 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
                     }
                     post({ type: "view", requestId, filters: { ...DEFAULT_FILTERS, timeRange } });
                     return;
-                case "view": {
+                case "view":
                     if (message.requestId !== requestId) {
                         return;
                     }
-                    /* v8 ignore next */
-                    const payload =
-                        /** @type {{insights?: {insights?: Insight[], tip?: string|null}, view?: ExportAnalyticsView|null}} */ (
-                            message.payload || {}
-                        );
-                    const insights = payload.insights || {};
-                    finish({
-                        insights: insights.insights || [],
-                        tip: insights.tip || null,
-                        networkGrowth: (payload.view && payload.view.networkGrowth) || null,
-                        view: payload.view || null,
-                    });
+                    finish(analyticsRunFromPayload(message.payload));
                     return;
-                }
                 case "error":
                     captureError(new Error("Analytics worker error during export."), {
                         module: "pdf-export",

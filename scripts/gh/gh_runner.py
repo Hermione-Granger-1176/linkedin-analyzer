@@ -289,6 +289,28 @@ def _field_args(key: str, value: object) -> list[str]:
     return ["-f", f"{key}={value}"]
 
 
+def _graphql_data(payload: object) -> Any:
+    """Return the ``data`` of a GraphQL response, or raise on errors or a missing body."""
+    if not isinstance(payload, dict):
+        raise GhError("Unexpected GraphQL response shape")
+    # gh exits non-zero on GraphQL errors (handled above), but a 200 response
+    # can still carry an errors array alongside partial data; catch that too.
+    errors = payload.get("errors")
+    if errors:
+        message = json.dumps(errors)
+        # Trust the structured error type first; fall back to string heuristics
+        # only when the type is absent or unrecognized.
+        rate_limited = any(
+            isinstance(error, dict) and error.get("type") == "RATE_LIMITED" for error in errors
+        )
+        if rate_limited or gh_policy.classify_gh_failure(message) == "rate_limit":
+            raise GhRateLimitError(f"GitHub rate limit reported by GraphQL: {message}")
+        raise GhError(f"GraphQL errors: {message}")
+    if "data" not in payload:
+        raise GhError("GraphQL response missing data")
+    return payload["data"]
+
+
 def graphql(
     query: str,
     *,
@@ -324,24 +346,7 @@ def graphql(
         args += _field_args(key, value)
 
     payload = gh_json(args, run_fn=run_fn, timeout=timeout, retries=retries)
-    if not isinstance(payload, dict):
-        raise GhError("Unexpected GraphQL response shape")
-    # gh exits non-zero on GraphQL errors (handled above), but a 200 response
-    # can still carry an errors array alongside partial data; catch that too.
-    errors = payload.get("errors")
-    if errors:
-        message = json.dumps(errors)
-        # Trust the structured error type first; fall back to string heuristics
-        # only when the type is absent or unrecognized.
-        rate_limited = any(
-            isinstance(error, dict) and error.get("type") == "RATE_LIMITED" for error in errors
-        )
-        if rate_limited or gh_policy.classify_gh_failure(message) == "rate_limit":
-            raise GhRateLimitError(f"GitHub rate limit reported by GraphQL: {message}")
-        raise GhError(f"GraphQL errors: {message}")
-    if "data" not in payload:
-        raise GhError("GraphQL response missing data")
-    return payload["data"]
+    return _graphql_data(payload)
 
 
 def rest_text(
@@ -733,6 +738,61 @@ def _head_repo_matches(pull: dict[str, Any], repo: str | None) -> bool:
     return not isinstance(name, str) or same_repo(name, repo)
 
 
+def _local_heads(
+    branch: str, origin: str, *, run_fn: RunFunction | None
+) -> list[tuple[str, str, str | None]]:
+    """Return the ``(owner, branch, source repository)`` heads to search without a recorded PR.
+
+    The upstream the branch tracks comes first, when it differs from origin's
+    own branch of the same name.
+    """
+    heads: list[tuple[str, str, str | None]] = [(origin.split("/")[0], branch, origin)]
+    tracked = _tracked_head(branch, run_fn=run_fn)
+    if tracked is not None and not (same_repo(tracked[0], origin) and tracked[1] == branch):
+        heads.insert(0, (tracked[0].split("/")[0], tracked[1], tracked[0]))
+    return heads
+
+
+def _recorded_head(pull: dict[str, Any], branch: str, owner: str) -> tuple[str, str, str | None]:
+    """Return the ``(owner, branch, source repository)`` head a recorded PR names.
+
+    A fork checkout's local branch is prefixed, so the PR's own head is used.
+    """
+    head = as_object(pull.get("head"))
+    head_owner = as_object(as_object(head.get("repo")).get("owner")).get("login")
+    head_owner_name = str(head_owner or str(head.get("label") or "").partition(":")[0] or owner)
+    head_repo_name = as_object(head.get("repo")).get("full_name")
+    return (
+        head_owner_name,
+        str(head.get("ref") or branch),
+        head_repo_name if isinstance(head_repo_name, str) else None,
+    )
+
+
+def _find_pull_number(
+    slug: str, heads: list[tuple[str, str, str | None]], *, run_fn: RunFunction | None
+) -> int | None:
+    """Return the number of the first PR on any of ``heads``, open ones before closed ones.
+
+    Every candidate head is searched for an open PR before any closed one, so a
+    closed PR on a tracked branch never hides an open PR on the local name.
+    """
+    for state in ("open", "closed"):
+        for head_owner, head_branch, head_repo in heads:
+            pulls = rest_pages(
+                f"repos/{slug}/pulls",
+                fields={"head": f"{head_owner}:{head_branch}", "state": state},
+                accept=partial(_head_repo_matches, repo=head_repo),
+                run_fn=run_fn,
+            )
+            if pulls:
+                try:
+                    return int(pulls[0]["number"])
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise GhError("Could not read PR number from the pull request list.") from exc
+    return None
+
+
 def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
     """Find the PR whose head is the current branch through the REST API.
 
@@ -750,44 +810,16 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
     recorded = _recorded_pr_number(branch, slug, run_fn=run_fn)
     # The branch lives in origin, which is a fork when GH_REPO names upstream.
     origin = checkout_repo(slug, run_fn=run_fn)
-    owner = origin.split("/")[0]
-    # Each head is (owner, branch, source repository or None when unknown).
-    heads: list[tuple[str, str, str | None]] = [(owner, branch, origin)]
     if recorded is None:
-        tracked = _tracked_head(branch, run_fn=run_fn)
-        if tracked is not None and not (same_repo(tracked[0], origin) and tracked[1] == branch):
-            heads.insert(0, (tracked[0].split("/")[0], tracked[1], tracked[0]))
+        heads = _local_heads(branch, origin, run_fn=run_fn)
     else:
         pull = as_object(rest(f"repos/{slug}/pulls/{recorded}", run_fn=run_fn))
         if pull.get("state") == "open":
             return recorded
-        # A fork checkout's local branch is prefixed, so use the PR's own head.
-        head = as_object(pull.get("head"))
-        head_owner = as_object(as_object(head.get("repo")).get("owner")).get("login")
-        owner = str(head_owner or str(head.get("label") or "").partition(":")[0] or owner)
-        head_repo_name = as_object(head.get("repo")).get("full_name")
-        heads = [
-            (
-                owner,
-                str(head.get("ref") or branch),
-                head_repo_name if isinstance(head_repo_name, str) else None,
-            )
-        ]
-    # Every candidate head is searched for an open PR before any closed one, so a
-    # closed PR on a tracked branch never hides an open PR on the local name.
-    for state in ("open", "closed"):
-        for head_owner_name, head_branch, head_repo in heads:
-            pulls = rest_pages(
-                f"repos/{slug}/pulls",
-                fields={"head": f"{head_owner_name}:{head_branch}", "state": state},
-                accept=partial(_head_repo_matches, repo=head_repo),
-                run_fn=run_fn,
-            )
-            if pulls:
-                try:
-                    return int(pulls[0]["number"])
-                except (KeyError, TypeError, ValueError) as exc:
-                    raise GhError("Could not read PR number from the pull request list.") from exc
+        heads = [_recorded_head(pull, branch, origin.split("/")[0])]
+    number = _find_pull_number(slug, heads, run_fn=run_fn)
+    if number is not None:
+        return number
     if recorded is not None:
         return recorded
     raise GhError("No pull request found for the current branch.")

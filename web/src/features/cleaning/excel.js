@@ -4,6 +4,7 @@
  */
 
 import { FILE_TYPE_LABELS } from "../../shared/constants.js";
+import { downloadBlob } from "../../shared/ui/download.js";
 
 import { LinkedInCleaner } from "./cleaner.js";
 
@@ -350,19 +351,29 @@ export const ExcelGenerator = (() => {
     }
 
     /**
+     * Run a download and report how it ended, so a failure reaches the caller as a result.
+     * @param {() => Promise<void>} work - Builds and saves the workbook
+     * @returns {Promise<DownloadResult>}
+     */
+    async function toDownloadResult(work) {
+        try {
+            await work();
+            return { success: true, error: null };
+        } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : String(err) };
+        }
+    }
+
+    /**
      * Build and download a workbook from a sheet spec.
      * @param {SheetSpec} spec - Sheet spec
      * @param {string} filename - Download file name
      * @returns {Promise<DownloadResult>}
      */
-    async function downloadFromSpec(spec, filename) {
-        try {
-            const blob = await generateFromSpec(spec);
-            download(blob, filename);
-            return { success: true, error: null };
-        } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : String(err) };
-        }
+    function downloadFromSpec(spec, filename) {
+        return toDownloadResult(async () => {
+            downloadBlob(await generateFromSpec(spec), filename);
+        });
     }
 
     /**
@@ -401,41 +412,21 @@ export const ExcelGenerator = (() => {
     }
 
     /**
-     * Save a Blob through a temporary download link.
-     * @param {Blob} blob - File content
-     * @param {string} filename - Download file name
-     */
-    function download(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-
-    /**
      * Build and download the workbook for cleaned rows of one file type.
      * @param {import("./cleaner.js").CleanedRow[]} data - Cleaned rows
      * @param {string} fileType - Cleaner file type
      * @param {string|null} [customFilename=null] - File name override
      * @returns {Promise<DownloadResult>}
      */
-    async function generateAndDownload(data, fileType, customFilename = null) {
-        try {
+    function generateAndDownload(data, fileType, customFilename = null) {
+        return toDownloadResult(async () => {
             const blob = await generate(data, fileType);
-            const filename = customFilename || getConfig(fileType).outputName;
-            download(blob, filename);
-            return { success: true, error: null };
-        } catch (err) {
-            return { success: false, error: err instanceof Error ? err.message : String(err) };
-        }
+            downloadBlob(blob, customFilename || getConfig(fileType).outputName);
+        });
     }
 
     return {
-        download,
+        download: downloadBlob,
         generate,
         generateAndDownload,
         generateFromSpec,

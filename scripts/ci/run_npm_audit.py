@@ -27,7 +27,10 @@ from datetime import date
 from scripts.ci.security_audit_policy import (
     NPM_EXCEPTIONS_KEY,
     VulnerabilityExceptionEntry,
+    exception_error,
     load_security_audit_exceptions,
+    print_audit_report,
+    unused_exception_errors,
 )
 
 _GHSA_PATTERN = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}", re.IGNORECASE)
@@ -169,8 +172,8 @@ def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFindin
     return tuple(findings)
 
 
-def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, ...]:
-    """Run ``npm audit --json`` and return parsed vulnerability findings.
+def _execute_npm_audit(npm_command: str) -> subprocess.CompletedProcess[str]:
+    """Run ``npm audit --json`` and return its completed process.
 
     ``npm_command`` is a shell-style command string, so an override may carry
     flags (for example ``npm --silent``). It is split with :func:`shlex.split`
@@ -181,7 +184,7 @@ def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, .
         raise ValueError("npm command must not be empty")
     command = [*npm_parts, "audit", "--json"]
     try:
-        result = subprocess.run(
+        return subprocess.run(
             command,
             capture_output=True,
             check=False,
@@ -195,6 +198,9 @@ def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, .
             f"npm executable not found: {npm_command}. Install Node.js to run the audit."
         ) from exc
 
+
+def _audit_payload(result: subprocess.CompletedProcess[str]) -> dict[str, object]:
+    """Return the JSON object from ``npm audit``, or raise when it reports an error."""
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
@@ -213,8 +219,12 @@ def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, .
             else "unknown error"
         )
         raise RuntimeError(f"npm audit reported an error: {summary}")
+    return payload
 
-    return _parse_npm_audit(payload)
+
+def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, ...]:
+    """Run ``npm audit --json`` and return parsed vulnerability findings."""
+    return _parse_npm_audit(_audit_payload(_execute_npm_audit(npm_command)))
 
 
 def _matches_exception(
@@ -230,6 +240,30 @@ def _matches_exception(
         exception.package.lower() == finding.package.lower()
         and exception.vulnerability_id.upper() in finding_ids
     )
+
+
+def _finding_exception_error(
+    finding: NpmVulnerabilityFinding,
+    matching: tuple[VulnerabilityExceptionEntry, ...],
+    today: date,
+) -> str | None:
+    """Return why the exceptions matching one finding cannot apply, or None."""
+    error = exception_error(
+        ecosystem="npm",
+        package=finding.package,
+        advisory_id=finding.advisory_id,
+        matching=matching,
+        today=today,
+    )
+    if error is not None:
+        return error
+    if matching and matching[0].ignore_only_without_fix and finding.fix_available:
+        return (
+            "npm vulnerability exception must be removed because a fix "
+            "is available: "
+            f"{finding.package} {finding.advisory_id}"
+        )
+    return None
 
 
 def _audit_npm_dependencies(
@@ -248,54 +282,29 @@ def _audit_npm_dependencies(
     matched_exception_keys: set[tuple[str, str]] = set()
 
     for finding in findings:
-        matching_exceptions = tuple(
-            entry for entry in exceptions if _matches_exception(entry, finding)
-        )
-        matched_exception_keys.update(entry.key for entry in matching_exceptions)
-        if len(matching_exceptions) > 1:
-            errors.append(
-                "Multiple npm vulnerability exceptions match one advisory: "
-                f"{finding.package} {finding.advisory_id}"
-            )
-            continue
+        matching = tuple(entry for entry in exceptions if _matches_exception(entry, finding))
+        matched_exception_keys.update(entry.key for entry in matching)
 
-        matching_exception = matching_exceptions[0] if matching_exceptions else None
-        if matching_exception is not None:
-            if today > matching_exception.review_by:
-                errors.append(
-                    "Expired npm vulnerability exception: "
-                    f"{matching_exception.package} "
-                    f"{matching_exception.vulnerability_id} "
-                    f"review_by={matching_exception.review_by.isoformat()}"
-                )
-                continue
-            if matching_exception.ignore_only_without_fix and finding.fix_available:
-                errors.append(
-                    "npm vulnerability exception must be removed because a fix "
-                    "is available: "
-                    f"{finding.package} {finding.advisory_id}"
-                )
-                continue
+        # An exception that cannot apply is an error even for a finding below the
+        # audit level, so stale entries surface in every run.
+        error = _finding_exception_error(finding, matching, today)
+        if error is not None:
+            errors.append(error)
+            continue
 
         if not _is_gated(finding.severity, audit_level):
             continue
 
-        if matching_exception is None:
+        if not matching:
             errors.append(
                 "Unreviewed npm vulnerability: "
                 f"{finding.package} {finding.severity} {finding.advisory_id}"
             )
             continue
 
-        ignored.append((finding, matching_exception))
+        ignored.append((finding, matching[0]))
 
-    for exception in exceptions:
-        if exception.key not in matched_exception_keys:
-            errors.append(
-                "Unused npm vulnerability exception: "
-                f"{exception.package} {exception.vulnerability_id}"
-            )
-
+    errors.extend(unused_exception_errors("npm", exceptions, matched_exception_keys))
     return tuple(ignored), tuple(errors)
 
 
@@ -334,25 +343,14 @@ def main(argv: list[str] | None = None) -> int:
         audit_level=args.audit_level,
     )
 
-    if ignored:
-        print("Reviewed npm vulnerability exceptions:")
-        for finding, exception in ignored:
-            print(
-                "- "
-                f"{finding.package} {finding.severity} "
-                f"{finding.advisory_id} "
-                f"(review by {exception.review_by.isoformat()})"
-            )
-            print(f"  reason: {exception.reason}")
-
-    if errors:
-        print("npm dependency audit failed:")
-        for error in errors:
-            print(f"- {error}")
-        return 1
-
-    print("npm dependency audit passed.")
-    return 0
+    return print_audit_report(
+        "npm",
+        [
+            (f"{finding.package} {finding.severity} {finding.advisory_id}", exception)
+            for finding, exception in ignored
+        ],
+        errors,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

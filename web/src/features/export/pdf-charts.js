@@ -262,13 +262,136 @@ function drawValueAxis(painter, plot, values) {
 }
 
 /**
+ * @typedef {object} PlacedPoint
+ * @property {number} x - Horizontal position in mm
+ * @property {number} y - Vertical position in mm
+ * @property {string} axisLabel - Label under the point, or "" when it gets none
+ * @property {string} valueLabel - Label above the point, or "" when it gets none
+ */
+
+/**
+ * Put each point on the plot, with the labels it earns.
+ * @param {LinePoint[]} points - Points to place
+ * @param {{left: number, top: number, height: number}} area - Plot area on the page
+ * @param {{slice: number, maxValue: number, labeled: Set<number>, showValues: boolean}} scale - Spacing, axis maximum, and which labels to show
+ * @returns {PlacedPoint[]} Points in page coordinates
+ */
+function placeLinePoints(points, area, scale) {
+    const { slice, maxValue, labeled, showValues } = scale;
+    const baseline = area.top + area.height;
+    return points.map((point, index) => ({
+        x: area.left + slice * index + slice / 2,
+        y: baseline - (point.value / maxValue) * area.height,
+        axisLabel: labeled.has(index) ? String(point.label) : "",
+        valueLabel: showValues && point.value !== 0 ? String(point.value) : "",
+    }));
+}
+
+/**
+ * Erase the gridline behind each value label so the label stays above its
+ * point. Draw the filled area next to cover any background rectangle inside
+ * the fill.
+ * @param {Painter} painter - Drawing helpers
+ * @param {PlacedPoint[]} placed - Points in page coordinates
+ */
+function eraseValueLabelBackdrops(painter, placed) {
+    const { palette, fonts } = painter;
+    const valueLabelHeight = lineHeightMm(AXIS_SIZE);
+    for (const { x, y, valueLabel } of placed) {
+        if (!valueLabel) {
+            continue;
+        }
+        const width = painter.measure(valueLabel, fonts.body, AXIS_SIZE) + VALUE_LABEL_PAD * 2;
+        painter.fillRect(
+            x - width / 2,
+            y - VALUE_LABEL_GAP - valueLabelHeight * BASELINE_RATIO,
+            width,
+            valueLabelHeight,
+            palette["--bg-primary"],
+        );
+    }
+}
+
+/**
+ * Draw the filled area and the line over it. Needs at least two points; a
+ * single point is drawn as a dot by drawPointMarks.
+ * @param {Painter} painter - Drawing helpers
+ * @param {PlacedPoint[]} placed - Points in page coordinates
+ * @param {number} baseline - Vertical position of the x axis in mm
+ * @param {{accent: Rgb, areaFill: Rgb}} colors - Line color and area fill
+ */
+function drawAreaAndLine(painter, placed, baseline, colors) {
+    if (placed.length < 2) {
+        return;
+    }
+    const spine = placed.map(({ x, y }) => ({ x, y }));
+    painter.polygon(
+        [
+            { x: placed[0].x, y: baseline },
+            ...spine,
+            { x: placed[placed.length - 1].x, y: baseline },
+        ],
+        colors.areaFill,
+    );
+    painter.polyline(spine, colors.accent, 0.5);
+}
+
+/**
+ * Draw a dot for each point, with its value label above and its axis label below.
+ * @param {Painter} painter - Drawing helpers
+ * @param {{left: number, top: number, width: number, height: number}} area - Plot area on the page
+ * @param {PlacedPoint[]} placed - Points in page coordinates
+ * @param {Rgb} accent - Dot color
+ */
+function drawPointMarks(painter, area, placed, accent) {
+    const { palette, fonts } = painter;
+    const baseline = area.top + area.height;
+    for (const { x, y, axisLabel, valueLabel } of placed) {
+        painter.fillCircle(x, y, 0.7, accent);
+        if (valueLabel) {
+            painter.text(
+                valueLabel,
+                x,
+                y - VALUE_LABEL_GAP,
+                fonts.body,
+                AXIS_SIZE,
+                palette["--text-secondary"],
+                { align: "center" },
+            );
+        }
+        if (axisLabel) {
+            // Whole label: a weekly point reads "Jan 05" and a growth
+            // point "Jan 2024", so a first word alone would repeat the
+            // month across the axis or drop the year entirely. Held
+            // inside the plot rather than centered come what may: the
+            // last point sits half a slice from the right edge, which
+            // over a decade of months is a third of a millimetre, and
+            // the label ran out over the margin.
+            const half = painter.measure(axisLabel, fonts.body, AXIS_SIZE) / 2;
+            const center = Math.min(Math.max(x, area.left + half), area.left + area.width - half);
+            painter.text(
+                axisLabel,
+                center,
+                baseline + 4,
+                fonts.body,
+                AXIS_SIZE,
+                palette["--text-muted"],
+                {
+                    align: "center",
+                },
+            );
+        }
+    }
+}
+
+/**
  * Build a line chart: gridded axis, filled area and plotted points.
  * @param {Painter} painter - Drawing helpers
  * @param {{title: string, points: LinePoint[]}} config - Chart configuration
  * @returns {Block[]} Title block and plot block
  */
 export function buildLineChartBlocks(painter, config) {
-    const { palette, fonts } = painter;
+    const { palette } = painter;
     // A value that is not a finite number scales nothing: it poisons the axis
     // maximum, and from there every gridline, every dot and every label on the
     // plot, until jsPDF is handed NaN coordinates and refuses the whole export
@@ -282,11 +405,12 @@ export function buildLineChartBlocks(painter, config) {
 
     const plot = plotArea(LINE_PADDING, PLOT_HEIGHT);
     const gridlines = axisScale(Math.max(1, ...points.map((point) => point.value)));
-    const maxValue = gridlines[gridlines.length - 1];
-    const slice = plot.width / points.length;
-    const labeled = pickLabelIndices(points.length, plot.width);
-    const showValues = points.length <= MAX_VALUE_LABELS;
-    const valueLabelHeight = lineHeightMm(AXIS_SIZE);
+    const scale = {
+        slice: plot.width / points.length,
+        maxValue: gridlines[gridlines.length - 1],
+        labeled: pickLabelIndices(points.length, plot.width),
+        showValues: points.length <= MAX_VALUE_LABELS,
+    };
 
     /** @type {Row} */
     const plotRow = {
@@ -294,88 +418,13 @@ export function buildLineChartBlocks(painter, config) {
         draw: (x, y) => {
             const area = { ...plot, left: x + plot.left, top: y + plot.top };
             const baseline = area.top + area.height;
-
-            const placed = points.map((point, index) => ({
-                x: area.left + slice * index + slice / 2,
-                y: baseline - (point.value / maxValue) * area.height,
-                axisLabel: labeled.has(index) ? String(point.label) : "",
-                valueLabel: showValues && point.value !== 0 ? String(point.value) : "",
-            }));
+            const placed = placeLinePoints(points, area, scale);
 
             drawValueAxis(painter, area, gridlines);
-
-            // Erase the gridline behind each value label so the label stays
-            // above its point. Draw the filled area next to cover any background
-            // rectangle inside the fill.
-            placed.forEach(({ x: pointX, y: pointY, valueLabel }) => {
-                if (!valueLabel) {
-                    return;
-                }
-                const width =
-                    painter.measure(valueLabel, fonts.body, AXIS_SIZE) + VALUE_LABEL_PAD * 2;
-                painter.fillRect(
-                    pointX - width / 2,
-                    pointY - VALUE_LABEL_GAP - valueLabelHeight * BASELINE_RATIO,
-                    width,
-                    valueLabelHeight,
-                    palette["--bg-primary"],
-                );
-            });
-
-            // Draw a line and filled area only when at least two points exist.
-            // A single point is drawn as a dot below.
-            if (placed.length > 1) {
-                const spine = placed.map(({ x: pointX, y: pointY }) => ({ x: pointX, y: pointY }));
-                painter.polygon(
-                    [
-                        { x: placed[0].x, y: baseline },
-                        ...spine,
-                        { x: placed[placed.length - 1].x, y: baseline },
-                    ],
-                    areaFill,
-                );
-                painter.polyline(spine, accent, 0.5);
-            }
-
+            eraseValueLabelBackdrops(painter, placed);
+            drawAreaAndLine(painter, placed, baseline, { accent, areaFill });
             painter.fillRect(area.left, baseline, area.width, 0.3, palette["--border-color"]);
-
-            placed.forEach(({ x: pointX, y: pointY, axisLabel, valueLabel }) => {
-                painter.fillCircle(pointX, pointY, 0.7, accent);
-                if (valueLabel) {
-                    painter.text(
-                        valueLabel,
-                        pointX,
-                        pointY - VALUE_LABEL_GAP,
-                        fonts.body,
-                        AXIS_SIZE,
-                        palette["--text-secondary"],
-                        { align: "center" },
-                    );
-                }
-                if (axisLabel) {
-                    // Whole label: a weekly point reads "Jan 05" and a growth
-                    // point "Jan 2024", so a first word alone would repeat the
-                    // month across the axis or drop the year entirely. Held
-                    // inside the plot rather than centered come what may: the
-                    // last point sits half a slice from the right edge, which
-                    // over a decade of months is a third of a millimetre, and
-                    // the label ran out over the margin.
-                    const half = painter.measure(axisLabel, fonts.body, AXIS_SIZE) / 2;
-                    const center = Math.min(
-                        Math.max(pointX, area.left + half),
-                        area.left + area.width - half,
-                    );
-                    painter.text(
-                        axisLabel,
-                        center,
-                        baseline + 4,
-                        fonts.body,
-                        AXIS_SIZE,
-                        palette["--text-muted"],
-                        { align: "center" },
-                    );
-                }
-            });
+            drawPointMarks(painter, area, placed, accent);
         },
     };
 

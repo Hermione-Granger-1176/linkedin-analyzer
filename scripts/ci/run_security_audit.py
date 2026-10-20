@@ -27,7 +27,10 @@ from scripts.ci.security_audit_policy import (
     PYTHON_EXCEPTIONS_KEY,
     REPO_ROOT,
     VulnerabilityExceptionEntry,
+    exception_error,
     load_security_audit_exceptions,
+    print_audit_report,
+    unused_exception_errors,
 )
 
 # Default pip-audit invocation. The Makefile overrides this with the uv-managed
@@ -190,10 +193,10 @@ def _parse_dependency_findings(
     )
 
 
-def _run_pip_audit(
-    requirements_file: Path, *, pip_audit_command: str = DEFAULT_PIP_AUDIT_COMMAND
-) -> tuple[tuple[VulnerabilityFinding, ...], tuple[str, ...]]:
-    """Run pip-audit for one requirements file and return findings and skip errors.
+def _execute_pip_audit(
+    requirements_file: Path, *, pip_audit_command: str
+) -> subprocess.CompletedProcess[str]:
+    """Run pip-audit for one requirements file and return its completed process.
 
     ``pip_audit_command`` is a shell-style command string, so an override may
     carry a launcher (for example ``uv run --with pip-audit pip-audit``). It is
@@ -236,7 +239,13 @@ def _run_pip_audit(
     if result.returncode not in {0, 1}:
         detail = _subprocess_error_detail(result.stderr, result.stdout)
         raise RuntimeError(f"pip-audit failed for {_relative_path(requirements_file)}: {detail}")
+    return result
 
+
+def _report_dependencies(
+    result: subprocess.CompletedProcess[str], requirements_file: Path
+) -> list[object]:
+    """Return the ``dependencies`` list from a pip-audit JSON report."""
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
@@ -256,6 +265,15 @@ def _run_pip_audit(
             f"pip-audit JSON for {_relative_path(requirements_file)} "
             "must include a dependencies list"
         )
+    return dependencies
+
+
+def _run_pip_audit(
+    requirements_file: Path, *, pip_audit_command: str = DEFAULT_PIP_AUDIT_COMMAND
+) -> tuple[tuple[VulnerabilityFinding, ...], tuple[str, ...]]:
+    """Run pip-audit for one requirements file and return findings and skip errors."""
+    result = _execute_pip_audit(requirements_file, pip_audit_command=pip_audit_command)
+    dependencies = _report_dependencies(result, requirements_file)
 
     skipped = tuple(
         error
@@ -282,6 +300,36 @@ def _matches_exception(
     )
 
 
+def _finding_error(
+    finding: VulnerabilityFinding,
+    matching: tuple[VulnerabilityExceptionEntry, ...],
+    today: date,
+) -> str | None:
+    """Return why one finding fails the policy, or None when a valid exception covers it."""
+    error = exception_error(
+        ecosystem="Python",
+        package=finding.package,
+        advisory_id=finding.vulnerability_id,
+        matching=matching,
+        today=today,
+    )
+    if error is not None:
+        return error
+    if not matching:
+        return (
+            "Unreviewed Python vulnerability: "
+            f"{finding.package} {finding.version} {finding.vulnerability_id}"
+        )
+    if matching[0].ignore_only_without_fix and finding.fix_versions:
+        return (
+            "Python vulnerability exception must be removed because fixes "
+            "are available: "
+            f"{finding.package} {finding.vulnerability_id} "
+            f"fix_versions={', '.join(finding.fix_versions)}"
+        )
+    return None
+
+
 def _audit_python_dependencies(
     *,
     today: date,
@@ -300,50 +348,15 @@ def _audit_python_dependencies(
     errors: list[str] = list(skipped)
 
     for finding in findings:
-        matching_exceptions = tuple(
-            entry for entry in exceptions if _matches_exception(entry, finding)
-        )
-        matched_exception_keys.update(entry.key for entry in matching_exceptions)
-        if len(matching_exceptions) > 1:
-            errors.append(
-                "Multiple Python vulnerability exceptions match one advisory: "
-                f"{finding.package} {finding.vulnerability_id}"
-            )
-            continue
-        if not matching_exceptions:
-            errors.append(
-                "Unreviewed Python vulnerability: "
-                f"{finding.package} {finding.version} {finding.vulnerability_id}"
-            )
-            continue
+        matching = tuple(entry for entry in exceptions if _matches_exception(entry, finding))
+        matched_exception_keys.update(entry.key for entry in matching)
+        error = _finding_error(finding, matching, today)
+        if error is None:
+            ignored.append((finding, matching[0]))
+        else:
+            errors.append(error)
 
-        matching_exception = matching_exceptions[0]
-        if today > matching_exception.review_by:
-            errors.append(
-                "Expired Python vulnerability exception: "
-                f"{matching_exception.package} "
-                f"{matching_exception.vulnerability_id} "
-                f"review_by={matching_exception.review_by.isoformat()}"
-            )
-            continue
-        if matching_exception.ignore_only_without_fix and finding.fix_versions:
-            errors.append(
-                "Python vulnerability exception must be removed because fixes "
-                "are available: "
-                f"{finding.package} {finding.vulnerability_id} "
-                f"fix_versions={', '.join(finding.fix_versions)}"
-            )
-            continue
-
-        ignored.append((finding, matching_exception))
-
-    for exception in exceptions:
-        if exception.key not in matched_exception_keys:
-            errors.append(
-                "Unused Python vulnerability exception: "
-                f"{exception.package} {exception.vulnerability_id}"
-            )
-
+    errors.extend(unused_exception_errors("Python", exceptions, matched_exception_keys))
     return tuple(ignored), tuple(errors)
 
 
@@ -392,25 +405,14 @@ def main(argv: list[str] | None = None) -> int:
         pip_audit_command=args.pip_audit,
     )
 
-    if ignored:
-        print("Reviewed Python vulnerability exceptions:")
-        for finding, exception in ignored:
-            print(
-                "- "
-                f"{finding.package} {finding.version} "
-                f"{finding.vulnerability_id} "
-                f"(review by {exception.review_by.isoformat()})"
-            )
-            print(f"  reason: {exception.reason}")
-
-    if errors:
-        print("Python dependency audit failed:")
-        for error in errors:
-            print(f"- {error}")
-        return 1
-
-    print("Python dependency audit passed.")
-    return 0
+    return print_audit_report(
+        "Python",
+        [
+            (f"{finding.package} {finding.version} {finding.vulnerability_id}", exception)
+            for finding, exception in ignored
+        ],
+        errors,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

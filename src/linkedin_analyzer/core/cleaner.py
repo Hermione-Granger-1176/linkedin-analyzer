@@ -7,7 +7,7 @@ import os
 import tempfile
 from io import StringIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 
@@ -157,9 +157,6 @@ def validate_columns(df: pd.DataFrame, required: list[str]) -> None:
 
 def normalize_required_columns(df: pd.DataFrame, required: list[str]) -> None:
     """Normalize required columns so blank-like values become missing."""
-    if not required:
-        return
-
     for column in required:
         if column not in df.columns:
             continue
@@ -235,6 +232,127 @@ def _apply_row_read_limit(csv_kwargs: dict[str, Any], max_rows: int) -> None:
     csv_kwargs["nrows"] = read_limit
 
 
+def _preflight_error(config: CleanerConfig) -> str | None:
+    """Return why the input cannot be processed, or None when the limits allow it."""
+    for name, value in (
+        ("max_input_bytes", config.max_input_bytes),
+        ("max_rows", config.max_rows),
+    ):
+        error = _limit_error(name, value)
+        if error:
+            return error
+
+    if config.max_input_bytes <= 0:
+        return None
+    try:
+        input_size = config.input_path.stat().st_size
+    except OSError as exc:
+        return str(exc)
+    if input_size > config.max_input_bytes:
+        return (
+            "Input file is too large: "
+            f"{input_size} {_byte_unit(input_size)} exceeds limit of "
+            f"{config.max_input_bytes} {_byte_unit(config.max_input_bytes)}"
+        )
+    return None
+
+
+def _load_frame(config: CleanerConfig) -> pd.DataFrame:
+    """Read the input CSV and enforce the configured row limit."""
+    LOG.info("Reading %s", config.input_path)
+    csv_kwargs: dict[str, Any] = dict(config.csv_kwargs)
+    if config.skiprows:
+        csv_kwargs.setdefault("skiprows", config.skiprows)
+    _apply_row_read_limit(csv_kwargs, config.max_rows)
+    df = _read_csv_with_fallback(config.input_path, csv_kwargs, config.encoding)
+    LOG.info("Found %d rows", len(df))
+    if config.max_rows > 0 and len(df) > config.max_rows:
+        raise ValueError(
+            f"Input CSV has too many rows: {len(df)} exceeds limit of {config.max_rows}"
+        )
+    return df
+
+
+def _normalize_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize headers, turn blank cells into missing values, and drop empty rows."""
+    df = df.rename(columns=_normalize_header)
+    duplicate_columns = [str(name) for name in df.columns[df.columns.duplicated()].unique()]
+    if duplicate_columns:
+        raise ValueError(
+            f"Duplicate columns after header normalization: {', '.join(duplicate_columns)}"
+        )
+    df = df.replace(r"^\s*$", pd.NA, regex=True)
+    rows_before = len(df)
+    df = df.dropna(how="all")
+    _log_dropped(rows_before, len(df), "with no values")
+    return df
+
+
+def _drop_rows_missing(
+    df: pd.DataFrame,
+    columns: list[str],
+    *,
+    how: Literal["any", "all"],
+    reason: str,
+) -> pd.DataFrame:
+    """Drop rows whose values in ``columns`` are missing, and log how many went.
+
+    ``how="any"`` drops a row missing any of the columns; ``how="all"`` drops it
+    only when every one of them is missing. Does nothing when ``columns`` is empty.
+    """
+    if not columns:
+        return df
+    normalize_required_columns(df, columns)
+    rows_before = len(df)
+    df = df.dropna(subset=columns, how=how)
+    _log_dropped(rows_before, len(df), reason)
+    return df
+
+
+def _filter_rows(df: pd.DataFrame, config: CleanerConfig) -> pd.DataFrame:
+    """Check the required columns exist, then drop rows that lack required values."""
+    LOG.info("Validating columns")
+    validate_columns(df, config.required_columns)
+    required_row_columns = list(config.required_row_columns or config.required_columns)
+    df = _drop_rows_missing(
+        df,
+        required_row_columns,
+        how="any",
+        reason="missing required values",
+    )
+    optional_columns = [col for col in config.drop_if_all_missing if col in df.columns]
+    return _drop_rows_missing(
+        df,
+        optional_columns,
+        how="all",
+        reason="with all optional fields empty",
+    )
+
+
+def _clean_columns(df: pd.DataFrame, config: CleanerConfig) -> pd.DataFrame:
+    """Apply each column's cleaner, then keep only the configured columns in order."""
+    for col_config in config.columns:
+        if col_config.name not in df.columns:
+            continue
+        cleaner = col_config.cleaner if col_config.cleaner is not None else clean_value
+        LOG.info("Cleaning column: %s", col_config.name)
+        df[col_config.name] = df[col_config.name].apply(cleaner)
+
+    return df.reindex(columns=[col.name for col in config.columns], fill_value="")
+
+
+def _sanitize_cells(df: pd.DataFrame) -> pd.DataFrame:
+    r"""Make every cell safe to write to a worksheet.
+
+    Strips XML-illegal control characters before formula-escaping so a cell
+    like "\x01=SUM(...)" is both made writable by openpyxl and still
+    recognized as a formula-injection payload to quote-prefix.
+    """
+    for column in df.columns:
+        df[column] = df[column].map(remove_illegal_chars).map(escape_excel_formula)
+    return df
+
+
 def run_cleaner(config: CleanerConfig) -> CleanerResult:
     """Execute a cleaning operation.
 
@@ -254,82 +372,15 @@ def run_cleaner(config: CleanerConfig) -> CleanerResult:
             missing_input=True,
         )
 
-    for name, value in (
-        ("max_input_bytes", config.max_input_bytes),
-        ("max_rows", config.max_rows),
-    ):
-        error = _limit_error(name, value)
-        if error:
-            return _failure_result(config, error)
-
-    if config.max_input_bytes > 0:
-        try:
-            input_size = input_path.stat().st_size
-        except OSError as exc:
-            return _failure_result(config, str(exc))
-        if input_size > config.max_input_bytes:
-            return _failure_result(
-                config,
-                "Input file is too large: "
-                f"{input_size} {_byte_unit(input_size)} exceeds limit of "
-                f"{config.max_input_bytes} {_byte_unit(config.max_input_bytes)}",
-            )
+    error = _preflight_error(config)
+    if error:
+        return _failure_result(config, error)
 
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        LOG.info("Reading %s", input_path)
-        csv_kwargs: dict[str, Any] = dict(config.csv_kwargs)
-        if config.skiprows:
-            csv_kwargs.setdefault("skiprows", config.skiprows)
-        _apply_row_read_limit(csv_kwargs, config.max_rows)
-        df = _read_csv_with_fallback(input_path, csv_kwargs, config.encoding)
-        LOG.info("Found %d rows", len(df))
-        if config.max_rows > 0 and len(df) > config.max_rows:
-            raise ValueError(
-                f"Input CSV has too many rows: {len(df)} exceeds limit of {config.max_rows}"
-            )
-
-        df = df.rename(columns=_normalize_header)
-        duplicate_columns = [str(name) for name in df.columns[df.columns.duplicated()].unique()]
-        if duplicate_columns:
-            raise ValueError(
-                f"Duplicate columns after header normalization: {', '.join(duplicate_columns)}"
-            )
-        df = df.replace(r"^\s*$", pd.NA, regex=True)
-        rows_before_blank = len(df)
-        df = df.dropna(how="all")
-        _log_dropped(rows_before_blank, len(df), "with no values")
-
-        LOG.info("Validating columns")
-        validate_columns(df, config.required_columns)
-        required_row_columns = list(config.required_row_columns or config.required_columns)
-        normalize_required_columns(df, required_row_columns)
-        if required_row_columns:
-            rows_before_required = len(df)
-            df = df.dropna(subset=required_row_columns)
-            _log_dropped(rows_before_required, len(df), "missing required values")
-        drop_columns = [col for col in (config.drop_if_all_missing or []) if col in df.columns]
-        if drop_columns:
-            normalize_required_columns(df, drop_columns)
-            rows_before_optional = len(df)
-            df = df.dropna(subset=drop_columns, how="all")
-            _log_dropped(rows_before_optional, len(df), "with all optional fields empty")
-
-        for col_config in config.columns:
-            if col_config.name not in df.columns:
-                continue
-            cleaner = col_config.cleaner if col_config.cleaner is not None else clean_value
-            LOG.info("Cleaning column: %s", col_config.name)
-            df[col_config.name] = df[col_config.name].apply(cleaner)
-
-        configured_columns = [col.name for col in config.columns]
-        df = df.reindex(columns=configured_columns, fill_value="")
-
-        # Strip XML-illegal control characters before formula-escaping so a cell
-        # like "\x01=SUM(...)" is both made writable by openpyxl and still
-        # recognized as a formula-injection payload to quote-prefix.
-        for column in df.columns:
-            df[column] = df[column].map(remove_illegal_chars).map(escape_excel_formula)
+        df = _load_frame(config)
+        df = _filter_rows(_normalize_frame(df), config)
+        df = _sanitize_cells(_clean_columns(df, config))
 
         LOG.info("Exporting to %s", output_path)
         _write_excel_atomic(df, output_path, config)

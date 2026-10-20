@@ -222,32 +222,31 @@ def _copilot_reviews(reviews: object) -> tuple[CopilotReview, ...]:
             raise GhError("Unexpected review author shape in PR view response.")
         if not isinstance(author, dict) or author.get("login") != _COPILOT_LOGIN:
             continue
-
-        review_id = review.get("id")
-        if not isinstance(review_id, str) or not review_id.strip():
-            raise GhError("A Copilot review is missing a non-empty string id.")
-        submitted_at = review.get("submittedAt")
-        if not isinstance(submitted_at, str) or not submitted_at:
-            raise GhError("A Copilot review is missing a string submittedAt.")
-        body = review.get("body")
-        if not isinstance(body, str):
-            raise GhError("A Copilot review is missing a string body.")
-        state = review.get("state")
-        if not isinstance(state, str):
-            raise GhError("A Copilot review is missing a string state.")
-        parsed.append(
-            CopilotReview(
-                review_id=review_id,
-                submitted_at=_parse_timestamp(
-                    submitted_at,
-                    f"Copilot review {review_id} submittedAt",
-                ),
-                body=body,
-                generated_comment_count=_generated_comment_count(body),
-                state=state,
-            )
-        )
+        parsed.append(_parse_copilot_review(review))
     return tuple(parsed)
+
+
+def _parse_copilot_review(review: dict[str, Any]) -> CopilotReview:
+    """Validate the fields of one Copilot review and return it."""
+    review_id = review.get("id")
+    if not isinstance(review_id, str) or not review_id.strip():
+        raise GhError("A Copilot review is missing a non-empty string id.")
+    submitted_at = review.get("submittedAt")
+    if not isinstance(submitted_at, str) or not submitted_at:
+        raise GhError("A Copilot review is missing a string submittedAt.")
+    body = review.get("body")
+    if not isinstance(body, str):
+        raise GhError("A Copilot review is missing a string body.")
+    state = review.get("state")
+    if not isinstance(state, str):
+        raise GhError("A Copilot review is missing a string state.")
+    return CopilotReview(
+        review_id=review_id,
+        submitted_at=_parse_timestamp(submitted_at, f"Copilot review {review_id} submittedAt"),
+        body=body,
+        generated_comment_count=_generated_comment_count(body),
+        state=state,
+    )
 
 
 def _review_payload(pr: int, *, run_fn: RunFunction | None = None) -> dict[str, object]:
@@ -287,46 +286,47 @@ def _check_status(
     if expected_checks < 1:
         raise GhError("expected_checks must be at least 1.")
 
-    settled = len(rollup) >= expected_checks
-    successful = settled
-    validated: list[dict[str, Any]] = []
+    outcomes: list[tuple[bool, bool]] = []
     identities: set[str] = set()
     for ordinal, entry in enumerate(rollup):
         if not isinstance(entry, dict):
             raise GhError("Unexpected check entry shape in PR view response.")
-        validated.append(entry)
         identities.add(_check_identity(entry, ordinal))
-        if "status" in entry:
-            status = entry.get("status")
-            if not isinstance(status, str):
-                raise GhError("A check run is missing a string status.")
-            if status != "COMPLETED":
-                settled = False
-                successful = False
-                continue
-            conclusion = entry.get("conclusion")
-            if not isinstance(conclusion, str):
-                raise GhError("A completed check run is missing a string conclusion.")
-            if conclusion not in _SUCCESSFUL_CHECK_OUTCOMES:
-                successful = False
-            continue
+        outcomes.append(_entry_outcome(entry))
 
-        state = entry.get("state")
-        if not isinstance(state, str):
-            raise GhError("A status context is missing a string state.")
-        if state in _PENDING_STATES:
-            settled = False
-            successful = False
-        elif state != "SUCCESS":
-            successful = False
-
+    enough_checks = len(rollup) >= expected_checks
     return (
-        settled,
-        successful,
-        len(validated),
-        pr_review.rollup_summary(validated),
+        enough_checks and all(finished for finished, _ in outcomes),
+        enough_checks and all(succeeded for _, succeeded in outcomes),
+        len(rollup),
+        pr_review.rollup_summary(rollup),
         frozenset(identities),
     )
+
+
+def _entry_outcome(entry: dict[str, Any]) -> tuple[bool, bool]:
+    """Return whether one rollup entry has finished and whether it succeeded.
+
+    Check runs report ``status`` and ``conclusion``. Legacy status contexts
+    report ``state``. A pending entry has neither finished nor succeeded.
+    """
+    if "status" in entry:
+        status = entry.get("status")
+        if not isinstance(status, str):
+            raise GhError("A check run is missing a string status.")
+        if status != "COMPLETED":
+            return False, False
+        conclusion = entry.get("conclusion")
+        if not isinstance(conclusion, str):
+            raise GhError("A completed check run is missing a string conclusion.")
+        return True, conclusion in _SUCCESSFUL_CHECK_OUTCOMES
+
+    state = entry.get("state")
+    if not isinstance(state, str):
+        raise GhError("A status context is missing a string state.")
+    if state in _PENDING_STATES:
+        return False, False
+    return True, state == "SUCCESS"
 
 
 def _check_identity(entry: dict[str, Any], ordinal: int) -> str:
@@ -426,6 +426,74 @@ def _watch_report(
     )
 
 
+def _validate_watch_options(interval: float, max_polls: int, expected_checks: int) -> None:
+    """Reject watch options that could never settle or would spin without waiting."""
+    if interval < 0:
+        raise GhError("interval must not be negative.")
+    if max_polls < 1:
+        raise GhError("max_polls must be at least 1.")
+    if expected_checks < 1:
+        raise GhError("expected_checks must be at least 1.")
+
+
+def _track_rollup_stability(
+    previous_check_ids: frozenset[str] | None,
+    status: PollStatus,
+) -> tuple[bool, frozenset[str] | None]:
+    """Return whether the check set repeated, and the ids to compare on the next poll.
+
+    Stability only counts across consecutive *settled* polls. Carrying ids over
+    from a poll where checks were still running would let an unchanged set settle
+    the very first time it turned terminal, which is the "terminal but still
+    incomplete" race this is meant to close: jobs gated on an earlier one have not
+    registered yet at that moment.
+    """
+    if not status.checks_settled:
+        return False, None
+    return previous_check_ids == status.check_ids, status.check_ids
+
+
+def _awaiting_review_threads(
+    review: CopilotReview | None,
+    all_threads: list[pr_review.ReviewThread],
+    baseline_thread_ids: frozenset[str],
+) -> bool:
+    """Return whether threads the fresh review announced have not all arrived yet."""
+    if review is not None and review.is_v2_overview and review.generated_comment_count is not None:
+        # A v2 overview links the threads it lists, so wait for exactly those.
+        # Their state, author, and age do not matter.
+        anchors = {thread.url.rpartition("#")[2] for thread in all_threads}
+        return not review.open_discussions <= anchors
+    review_count = review.generated_comment_count if review is not None else 0
+    fresh_thread_count = sum(thread.thread_id not in baseline_thread_ids for thread in all_threads)
+    return review_count is not None and review_count > fresh_thread_count
+
+
+def _settled_report(
+    *,
+    pr: int,
+    poll_count: int,
+    status: PollStatus,
+    all_threads: list[pr_review.ReviewThread],
+    requested: bool,
+) -> str:
+    """Render the final report once checks, review, and threads have all settled."""
+    review = status.fresh_review
+    if review is not None and review.generated_comment_count is None:
+        raise GhError(
+            "The fresh Copilot review overview could not be classified; "
+            "read it with `make pr-comments` and inspect "
+            "`make pr-review-comments` before merging."
+        )
+    return _watch_report(
+        pr=pr,
+        poll_count=poll_count,
+        status=status,
+        threads=[thread for thread in all_threads if thread.state == "open"],
+        requested=requested,
+    )
+
+
 def watch_pr(
     pr: int | None = None,
     *,
@@ -445,12 +513,7 @@ def watch_pr(
     baseline and request a new review. With ``checks_only`` no Copilot review is
     requested or awaited.
     """
-    if interval < 0:
-        raise GhError("interval must not be negative.")
-    if max_polls < 1:
-        raise GhError("max_polls must be at least 1.")
-    if expected_checks < 1:
-        raise GhError("expected_checks must be at least 1.")
+    _validate_watch_options(interval, max_polls, expected_checks)
 
     pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
     baseline = WatchBaseline(frozenset(), frozenset())
@@ -458,7 +521,6 @@ def watch_pr(
         baseline = watch_baseline(pr, run_fn=run_fn)
         pr_review.request_copilot_review(pr, run_fn=run_fn)
     sleeper = sleep_fn or time.sleep
-    threads: list[pr_review.ReviewThread] = []
     # GitHub registers check runs progressively, so a rollup can be briefly both
     # small and entirely terminal before the rest appear. Requiring the check set
     # to repeat before declaring success establishes completeness by observation
@@ -477,53 +539,18 @@ def watch_pr(
         if status.checks_settled and not status.checks_successful:
             raise GhError(f"PR #{pr} checks settled unsuccessfully: {status.rollup_tally}.")
 
-        # Stability only counts across consecutive *settled* polls. Carrying ids
-        # over from a poll where checks were still running would let an unchanged
-        # set settle the very first time it turned terminal, which is the
-        # "terminal but still incomplete" race this is meant to close: jobs gated
-        # on an earlier one have not registered yet at that moment.
-        if status.checks_settled:
-            rollup_stable = previous_check_ids == status.check_ids
-            previous_check_ids = status.check_ids
-        else:
-            rollup_stable = False
-            previous_check_ids = None
-        ready_for_threads = (
-            status.checks_settled
-            and rollup_stable
-            and (checks_only or status.fresh_review is not None)
+        rollup_stable, previous_check_ids = _track_rollup_stability(previous_check_ids, status)
+        checks_and_review_ready = status.checks_settled and (
+            checks_only or status.fresh_review is not None
         )
-        if ready_for_threads:
+        if checks_and_review_ready and rollup_stable:
             all_threads = pr_review.list_threads(pr, include_resolved=True, run_fn=run_fn)
-            review = status.fresh_review
-            if (
-                review is not None
-                and review.is_v2_overview
-                and review.generated_comment_count is not None
-            ):
-                # A v2 overview links the threads it lists, so wait for exactly those.
-                # Their state, author, and age do not matter.
-                anchors = {thread.url.rpartition("#")[2] for thread in all_threads}
-                waiting_for_threads = not review.open_discussions <= anchors
-            else:
-                review_count = review.generated_comment_count if review is not None else 0
-                fresh_thread_count = sum(
-                    thread.thread_id not in baseline.thread_ids for thread in all_threads
-                )
-                waiting_for_threads = review_count is not None and review_count > fresh_thread_count
-            if not waiting_for_threads:
-                if review is not None and review.generated_comment_count is None:
-                    raise GhError(
-                        "The fresh Copilot review overview could not be classified; "
-                        "read it with `make pr-comments` and inspect "
-                        "`make pr-review-comments` before merging."
-                    )
-                threads = [thread for thread in all_threads if thread.state == "open"]
-                return _watch_report(
+            if not _awaiting_review_threads(status.fresh_review, all_threads, baseline.thread_ids):
+                return _settled_report(
                     pr=pr,
                     poll_count=poll_count,
                     status=status,
-                    threads=threads,
+                    all_threads=all_threads,
                     requested=not checks_only,
                 )
 
@@ -533,11 +560,7 @@ def watch_pr(
             # delay instead, so a finished PR settles in seconds rather than one
             # poll cycle, while still giving a late-registering check a chance to
             # appear before success is declared.
-            confirming = (
-                status.checks_settled
-                and not rollup_stable
-                and (checks_only or status.fresh_review is not None)
-            )
+            confirming = checks_and_review_ready and not rollup_stable
             sleeper(min(interval, CONFIRM_DELAY_SECONDS) if confirming else interval)
 
     raise GhError(

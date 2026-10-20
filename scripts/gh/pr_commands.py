@@ -134,32 +134,39 @@ def create_pr(
     if title is not None:
         args += ["--title", title, "--body-file", "-"]
 
-    def create_with_rest() -> int:
-        slug = gh_runner.resolve_repo(run_fn=run_fn)
-        branch = gh_runner.current_branch(run_fn=run_fn)
-        if branch == "HEAD":
-            raise GhError("HEAD is detached. Check out a branch before creating a pull request.")
-        target = base or gh_runner.default_branch(slug, run_fn=run_fn)
-        source = gh_runner.checkout_repo(slug, run_fn=run_fn)
-        head_sha = _require_pushed(source, branch, run_fn=run_fn)
-        head = branch if gh_runner.same_repo(source, slug) else f"{source.split('/')[0]}:{branch}"
-        pr_title, pr_body = (
-            (title, body)
-            if title is not None
-            else _filled_text(slug, target, head_sha, branch, run_fn=run_fn)
-        )
-        fields = {"title": pr_title, "head": head, "base": target, "body": pr_body}
-        if not gh_runner.same_repo(source, slug):
-            # GitHub needs the source repository's name when a cross-repository
-            # PR stays inside one organization, where the owner prefix is not enough.
-            fields["head_repo"] = source.split("/")[1]
-        pull = gh_runner.rest(f"repos/{slug}/pulls", method="POST", fields=fields, run_fn=run_fn)
-        print(pull.get("html_url") if isinstance(pull, dict) else "Created pull request")
-        return 0
-
     return gh_runner.gh_or_rest(
-        args, create_with_rest, run_fn=run_fn, stdin_text=body if title is not None else None
+        args,
+        lambda: _create_pr_via_rest(title, base, body, run_fn=run_fn),
+        run_fn=run_fn,
+        stdin_text=body if title is not None else None,
     )
+
+
+def _create_pr_via_rest(
+    title: str | None, base: str | None, body: str, *, run_fn: RunFunction | None
+) -> int:
+    """Open a pull request through the REST API, which never pushes the branch first."""
+    slug = gh_runner.resolve_repo(run_fn=run_fn)
+    branch = gh_runner.current_branch(run_fn=run_fn)
+    if branch == "HEAD":
+        raise GhError("HEAD is detached. Check out a branch before creating a pull request.")
+    target = base or gh_runner.default_branch(slug, run_fn=run_fn)
+    source = gh_runner.checkout_repo(slug, run_fn=run_fn)
+    head_sha = _require_pushed(source, branch, run_fn=run_fn)
+    head = branch if gh_runner.same_repo(source, slug) else f"{source.split('/')[0]}:{branch}"
+    pr_title, pr_body = (
+        (title, body)
+        if title is not None
+        else _filled_text(slug, target, head_sha, branch, run_fn=run_fn)
+    )
+    fields = {"title": pr_title, "head": head, "base": target, "body": pr_body}
+    if not gh_runner.same_repo(source, slug):
+        # GitHub needs the source repository's name when a cross-repository
+        # PR stays inside one organization, where the owner prefix is not enough.
+        fields["head_repo"] = source.split("/")[1]
+    pull = gh_runner.rest(f"repos/{slug}/pulls", method="POST", fields=fields, run_fn=run_fn)
+    print(pull.get("html_url") if isinstance(pull, dict) else "Created pull request")
+    return 0
 
 
 def _require_pushed(slug: str, branch: str, *, run_fn: RunFunction | None) -> str:

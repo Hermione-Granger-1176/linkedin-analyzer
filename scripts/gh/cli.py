@@ -69,6 +69,24 @@ def _add_json_option(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_poll_options(
+    parser: argparse.ArgumentParser, *, interval: float, max_polls: int, suffix: str = ""
+) -> None:
+    """Add the ``--interval`` and ``--max-polls`` options of a polling command."""
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=interval,
+        help=f"Poll interval in seconds{suffix}",
+    )
+    parser.add_argument(
+        "--max-polls",
+        type=int,
+        default=max_polls,
+        help=f"Maximum poll count{suffix}",
+    )
+
+
 def _add_issue_option(parser: argparse.ArgumentParser) -> None:
     """Add the required ``--issue`` number option."""
     parser.add_argument("--issue", type=int, required=True, help="Issue number")
@@ -109,14 +127,16 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="gh-helper", description="GitHub pull-request and CI helper commands"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    _add_review_and_ci_commands(subparsers)
+    _add_review_commands(subparsers)
+    _add_overview_and_watch_commands(subparsers)
+    _add_ci_commands(subparsers)
     _add_pr_commands(subparsers)
     _add_issue_commands(subparsers)
     return parser
 
 
-def _add_review_and_ci_commands(subparsers: _Subparsers) -> None:
-    """Add the review-thread, PR overview, watch, CI, and commit-message commands."""
+def _add_review_commands(subparsers: _Subparsers) -> None:
+    """Add the review-thread, review-comment, and PR text-editing commands."""
     list_parser = subparsers.add_parser("list", help="List pull-request review threads")
     _add_pr_option(list_parser)
     list_parser.add_argument(
@@ -159,6 +179,9 @@ def _add_review_and_ci_commands(subparsers: _Subparsers) -> None:
     edit_pr_parser.add_argument("--title", help="New PR title")
     _add_body_options(edit_pr_parser, required=False)
 
+
+def _add_overview_and_watch_commands(subparsers: _Subparsers) -> None:
+    """Add the PR and issue overviews and the review watcher."""
     summary_parser = subparsers.add_parser("summary", help="One-screen PR overview")
     _add_pr_option(summary_parser)
 
@@ -170,18 +193,7 @@ def _add_review_and_ci_commands(subparsers: _Subparsers) -> None:
         help="Observe the Copilot review and successful checks",
     )
     _add_pr_option(watch_parser)
-    watch_parser.add_argument(
-        "--interval",
-        type=float,
-        default=45.0,
-        help="Poll interval in seconds",
-    )
-    watch_parser.add_argument(
-        "--max-polls",
-        type=int,
-        default=40,
-        help="Maximum poll count",
-    )
+    _add_poll_options(watch_parser, interval=45.0, max_polls=40)
     watch_parser.add_argument(
         "--expected-checks",
         type=int,
@@ -199,6 +211,9 @@ def _add_review_and_ci_commands(subparsers: _Subparsers) -> None:
         help="Request Copilot after capturing the review baseline",
     )
 
+
+def _add_ci_commands(subparsers: _Subparsers) -> None:
+    """Add the CI, Copilot review, commit-message, and current-PR commands."""
     ci_parser = subparsers.add_parser(
         "ci-failures", help="Show failed-step logs for the latest run"
     )
@@ -245,17 +260,11 @@ def _add_pr_commands(subparsers: _Subparsers) -> None:
         "pr-checks", help="Watch a PR's CI checks until they finish or one fails"
     )
     _add_pr_option(pr_checks_parser)
-    pr_checks_parser.add_argument(
-        "--interval",
-        type=float,
-        default=pr_commands.CHECKS_INTERVAL_SECONDS,
-        help="Poll interval in seconds (REST fallback)",
-    )
-    pr_checks_parser.add_argument(
-        "--max-polls",
-        type=int,
-        default=pr_commands.CHECKS_MAX_POLLS,
-        help="Maximum poll count (REST fallback)",
+    _add_poll_options(
+        pr_checks_parser,
+        interval=pr_commands.CHECKS_INTERVAL_SECONDS,
+        max_polls=pr_commands.CHECKS_MAX_POLLS,
+        suffix=" (REST fallback)",
     )
 
     pr_diff_parser = subparsers.add_parser("pr-diff", help="Show a PR's diff")

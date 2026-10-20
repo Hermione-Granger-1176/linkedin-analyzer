@@ -484,6 +484,31 @@ def _thread_comments_connection(node: Any) -> tuple[str, dict[str, Any]]:
     return str(node_id), thread_comments
 
 
+def _thread_comments_page(
+    thread_id: str, after: str, *, run_fn: RunFunction | None = None
+) -> dict[str, Any]:
+    """Fetch the comments of a thread after the cursor ``after`` and return their connection."""
+    result = gh_runner.graphql(
+        _THREAD_COMMENTS_QUERY,
+        variables={"thread": thread_id, "after": after},
+        run_fn=run_fn,
+    )
+    if not isinstance(result, dict):
+        raise GhError(
+            f"Unexpected review thread response shape for {thread_id} "
+            "in GraphQL response: expected a mapping."
+        )
+    node = result.get("node")
+    if not isinstance(node, dict) or "comments" not in node:
+        raise GhError(f"Review thread {thread_id} not found or inaccessible in GraphQL response.")
+    connection = node["comments"]
+    if not isinstance(connection, dict):
+        raise GhError(
+            f"Unexpected review thread comments shape for {thread_id} in GraphQL response."
+        )
+    return connection
+
+
 def _remaining_thread_comments(
     thread_id: str, page_info: dict[str, Any], *, run_fn: RunFunction | None = None
 ) -> list[ReviewComment]:
@@ -505,26 +530,7 @@ def _remaining_thread_comments(
             f"Unexpected review thread pageInfo.endCursor shape for {thread_id} "
             "in GraphQL response.",
         )
-        result = gh_runner.graphql(
-            _THREAD_COMMENTS_QUERY,
-            variables={"thread": thread_id, "after": after},
-            run_fn=run_fn,
-        )
-        if not isinstance(result, dict):
-            raise GhError(
-                f"Unexpected review thread response shape for {thread_id} "
-                "in GraphQL response: expected a mapping."
-            )
-        node = result.get("node")
-        if not isinstance(node, dict) or "comments" not in node:
-            raise GhError(
-                f"Review thread {thread_id} not found or inaccessible in GraphQL response."
-            )
-        connection = node["comments"]
-        if not isinstance(connection, dict):
-            raise GhError(
-                f"Unexpected review thread comments shape for {thread_id} in GraphQL response."
-            )
+        connection = _thread_comments_page(thread_id, after, run_fn=run_fn)
         comments.extend(_parse_comment_nodes(connection.get("nodes")))
         page_info = _page_info(
             connection,
@@ -766,20 +772,31 @@ def edit_pr(
     elif body is not None:
         args += ["--body", body]
 
-    def edit_with_rest() -> None:
-        slug = gh_runner.resolve_repo(run_fn=run_fn)
-        fields: dict[str, object] = {}
-        if title is not None:
-            fields["title"] = title
-        if body_file is not None:
-            fields["body"] = _read_body_file(body_file, stdin_text)
-        elif body is not None:
-            fields["body"] = body
-        gh_runner.rest(f"repos/{slug}/pulls/{pr}", method="PATCH", fields=fields, run_fn=run_fn)
-
     gh_runner.with_rest_fallback(
-        lambda: gh_runner.run_gh(args, run_fn=run_fn, stdin_text=stdin_text), edit_with_rest
+        lambda: gh_runner.run_gh(args, run_fn=run_fn, stdin_text=stdin_text),
+        lambda: _edit_pr_via_rest(pr, title, body, body_file, stdin_text, run_fn=run_fn),
     )
+
+
+def _edit_pr_via_rest(
+    pr: int,
+    title: str | None,
+    body: str | None,
+    body_file: str | None,
+    stdin_text: str | None,
+    *,
+    run_fn: RunFunction | None,
+) -> None:
+    """Patch a pull request's title and body through the REST API."""
+    slug = gh_runner.resolve_repo(run_fn=run_fn)
+    fields: dict[str, object] = {}
+    if title is not None:
+        fields["title"] = title
+    if body_file is not None:
+        fields["body"] = _read_body_file(body_file, stdin_text)
+    elif body is not None:
+        fields["body"] = body
+    gh_runner.rest(f"repos/{slug}/pulls/{pr}", method="PATCH", fields=fields, run_fn=run_fn)
 
 
 def rollup_summary(rollup: list[dict[str, Any]]) -> str:

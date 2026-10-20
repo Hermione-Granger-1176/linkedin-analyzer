@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import pytest
+from scripts.gh import cli
 
 MAKEFILE_TEXT = (Path(__file__).parents[3] / "Makefile").read_text(encoding="utf-8")
 
@@ -193,8 +194,8 @@ def test_environment_text_is_refused_as_a_make_argument(name: str) -> None:
         ("pr-comment", "$(GH) comment"),
         ("pr-reply", "$(GH) reply"),
         ("pr-address", "$(GH) address"),
-        ("issue-comment", "gh issue comment"),
-        ("issue-create", "gh issue create"),
+        ("issue-comment", "$(GH) issue-comment"),
+        ("issue-create", "$(GH) issue-create"),
     ],
 )
 def test_posting_targets_take_the_body_from_stdin_and_nowhere_else(
@@ -289,13 +290,13 @@ def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> 
 
     ``gh pr create`` prompts for whatever it was not given, which hangs a
     non-interactive shell instead of failing. Keying the choice to ``TITLE``
-    removes that state: without it ``--fill`` takes the title and body from the
-    commits, and with it the body comes from stdin.
+    removes that state: without it the title and body come from the commits, and
+    with it the body comes from stdin.
     """
     recipe = _target_recipe("pr-create")
 
     assert 'if [ -z "$$TITLE" ]' in recipe
-    assert "gh pr create --fill" in recipe
+    assert "$(GH) pr-create" in recipe
     assert '--title "$$TITLE" --body-file -' in recipe
 
 
@@ -340,7 +341,7 @@ def test_alert_issue_takes_its_detail_from_stdin() -> None:
     [
         ("bench", '$(if $(runs),"$(runs)")'),
         ("bench-decode", '$(if $(runs),"$(runs)")'),
-        ("pr-reviewers", '--add-reviewer "$(users)"'),
+        ("pr-reviewers", '--users "$(users)"'),
     ],
 )
 def test_scalar_arguments_reach_their_command_as_one_word(target: str, interpolation: str) -> None:
@@ -446,3 +447,53 @@ def test_targeted_node_lock_update_is_package_scoped() -> None:
 
     assert 'test -n "$(packages)"' in recipe
     assert "$(NPM) update --package-lock-only $(packages)" in recipe
+
+
+GH_TARGET_COMMANDS = {
+    "pr-create": "pr-create",
+    "pr-list": "pr-list",
+    "pr-status": "pr-status",
+    "pr-checks": "pr-checks",
+    "pr-diff": "pr-diff",
+    "pr-checkout": "pr-checkout",
+    "pr-comments": "pr-comments",
+    "pr-merge": "pr-merge",
+    "pr-merge-admin": "pr-merge",
+    "pr-reviewers": "pr-reviewers",
+    "pr-label": "pr-label",
+    "pr-close": "pr-close",
+    "issue-list": "issue-list",
+    "issue-view": "issue-view",
+    "issue-create": "issue-create",
+    "issue-comment": "issue-comment",
+    "issue-edit": "issue-edit",
+    "issue-label": "issue-label",
+    "issue-unlabel": "issue-unlabel",
+    "issue-assign": "issue-assign",
+    "issue-unassign": "issue-unassign",
+    "issue-close": "issue-close",
+    "issue-reopen": "issue-reopen",
+    "issue-develop": "issue-develop",
+}
+
+
+def test_pr_and_issue_targets_use_the_tested_gh_helpers() -> None:
+    """GitHub targets go through scripts.gh so GraphQL-blocked sandboxes can fall back to REST."""
+    for target, command in GH_TARGET_COMMANDS.items():
+        assert f"$(GH) {command}" in _target_recipe(target), target
+
+    assert not re.search(r"^\t[^#\n]*\bgh (?:pr|issue)\b", MAKEFILE_TEXT, re.MULTILINE)
+
+
+def test_gh_helper_commands_in_the_makefile_exist() -> None:
+    """Every ``$(GH) <command>`` named in the Makefile is a registered helper subcommand."""
+    used = set(re.findall(r"\$\(GH\) ([a-z][a-z-]*)", MAKEFILE_TEXT))
+
+    assert used
+    assert used <= set(cli.COMMAND_HANDLERS)
+
+
+def test_thread_targets_accept_a_pr_number_for_numeric_ids() -> None:
+    """Numeric thread ids need the PR, so reply, resolve, and address forward pr_num."""
+    for target in ("pr-reply", "pr-resolve", "pr-address"):
+        assert '$(if $(pr_num),--pr "$(pr_num)")' in _target_recipe(target), target

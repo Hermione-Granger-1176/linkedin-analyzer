@@ -169,5 +169,6 @@ show_missing = true
 paths = ["src", "tests", "scripts"]
 min_confidence = 60
 # openpyxl consumes `cell.alignment` on save; vulture only sees the assignment.
-ignore_names = ["alignment"]
+# pytest runs the autouse fixtures in tests/tooling/gh/conftest.py without any caller.
+ignore_names = ["alignment", "_fresh_graphql_verdict", "_no_repo_override"]
 sort_by_size = true

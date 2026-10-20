@@ -9,7 +9,14 @@ import pytest
 from scripts.gh import cli, gh_runner, pr_review, pr_watch
 from scripts.gh.gh_runner import GhError
 
-from tests.support.gh import FakeGh, completed_process, has
+from tests.support.gh import (
+    FakeGh,
+    completed_process,
+    has,
+    json_response,
+    rest,
+    sandbox_routes,
+)
 
 _CLEAN_BODY = "Copilot reviewed 8 files and generated no new comments."
 _COMMENT_BODY = "Copilot reviewed 8 files and generated 2 comments."
@@ -1430,3 +1437,46 @@ def test_watch_helpers_share_the_expected_check_default() -> None:
         inspect.signature(pr_watch.watch_pr).parameters["expected_checks"].default
         == pr_watch.DEFAULT_EXPECTED_CHECKS
     )
+
+
+def test_review_payload_falls_back_to_rest_with_the_same_shape() -> None:
+    """A blocked ``gh pr view`` is rebuilt from REST checks and reviews."""
+    runner = FakeGh(
+        [
+            *sandbox_routes(),
+            (rest("GET", "repos/o/r/pulls/7"), json_response({"head": {"sha": "abc"}})),
+            (
+                rest("GET", "repos/o/r/commits/abc/check-runs"),
+                json_response(
+                    {
+                        "check_runs": [
+                            {"name": "lint", "status": "completed", "conclusion": "success"}
+                        ]
+                    }
+                ),
+            ),
+            (rest("GET", "repos/o/r/commits/abc/status"), json_response({"statuses": []})),
+            (
+                rest("GET", "repos/o/r/pulls/7/reviews"),
+                json_response(
+                    [
+                        {
+                            "node_id": "PRR_1",
+                            "user": {"login": "copilot-pull-request-reviewer[bot]"},
+                            "submitted_at": "2026-01-01T00:00:00Z",
+                            "body": _CLEAN_BODY,
+                            "state": "COMMENTED",
+                        }
+                    ]
+                ),
+            ),
+        ]
+    )
+
+    status = pr_watch.poll_once(7, frozenset(), run_fn=runner)
+
+    assert status.checks_settled
+    assert status.checks_successful
+    assert status.fresh_review is not None
+    assert status.fresh_review.review_id == "PRR_1"
+    assert status.fresh_review.is_explicitly_clean

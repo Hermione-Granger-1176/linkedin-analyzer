@@ -11,10 +11,20 @@ import argparse
 import io
 import json
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
-from scripts.gh import ci_status, cli, issues, pr_review, pr_watch
+from scripts.gh import (
+    ci_status,
+    cli,
+    gh_runner,
+    issue_commands,
+    issues,
+    pr_commands,
+    pr_review,
+    pr_watch,
+)
 from scripts.gh.gh_runner import GhError
 
 _THREAD = "PRRT_x"
@@ -78,7 +88,7 @@ def test_reply_reports_the_addressed_thread(
     calls = _record(monkeypatch, pr_review, "reply_to_thread")
 
     assert cli.main(["reply", "--thread", _THREAD, "--body", "ack"]) == 0
-    assert calls == [((_THREAD, "ack"), {})]
+    assert calls == [((_THREAD, "ack"), {"pr": None})]
     assert capsys.readouterr().out.strip() == f"Replied to {_THREAD}"
 
 
@@ -89,7 +99,7 @@ def test_resolve_reports_the_resolved_thread(
     calls = _record(monkeypatch, pr_review, "resolve_thread")
 
     assert cli.main(["resolve", "--thread", _THREAD]) == 0
-    assert calls == [((_THREAD,), {})]
+    assert calls == [((_THREAD,), {"pr": None})]
     assert capsys.readouterr().out.strip() == f"Resolved {_THREAD}"
 
 
@@ -105,7 +115,7 @@ def test_address_replies_and_resolves_in_one_step(
     )
 
     assert cli.main(["address", "--thread", _THREAD, "--body", "fixed"]) == 0
-    assert calls == [((_THREAD, "fixed"), {})]
+    assert calls == [((_THREAD, "fixed"), {"pr": None})]
     assert capsys.readouterr().out.strip() == f"Replied to and resolved {_THREAD}"
 
 
@@ -276,7 +286,7 @@ def test_reply_reads_the_body_from_a_file(monkeypatch: pytest.MonkeyPatch, tmp_p
     body_file.write_text('needs >=3.12\nand a "quote"\n', encoding="utf-8")
 
     assert cli.main(["reply", "--thread", _THREAD, "--body-file", str(body_file)]) == 0
-    assert calls == [((_THREAD, 'needs >=3.12\nand a "quote"\n'), {})]
+    assert calls == [((_THREAD, 'needs >=3.12\nand a "quote"\n'), {"pr": None})]
 
 
 def test_address_reads_the_body_from_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -285,7 +295,7 @@ def test_address_reads_the_body_from_stdin(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO("piped body\n"))
 
     assert cli.main(["address", "--thread", _THREAD, "--body-file", "-"]) == 0
-    assert calls == [((_THREAD, "piped body\n"), {})]
+    assert calls == [((_THREAD, "piped body\n"), {"pr": None})]
 
 
 def test_body_file_reports_an_unreadable_path(tmp_path: Path) -> None:
@@ -371,3 +381,245 @@ def test_main_rejects_an_unknown_subcommand() -> None:
     """An unknown subcommand fails at parse time rather than dispatching."""
     with pytest.raises(SystemExit):
         cli.main(["not-a-command"])
+
+
+def _spy(
+    monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str, result: int = 0
+) -> list[tuple[tuple[object, ...], dict[str, object]]]:
+    """Replace ``module.name`` with a recorder that returns ``result``."""
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def record(*args: object, **kwargs: object) -> int:
+        """Record the call."""
+        calls.append((args, kwargs))
+        return result
+
+    monkeypatch.setattr(module, name, record)
+    return calls
+
+
+@pytest.mark.parametrize(
+    ("argv", "function", "args", "kwargs"),
+    [
+        (["pr-list"], "list_prs", (), {}),
+        (["pr-status"], "pr_checks_status", (None,), {}),
+        (["pr-status", "--pr", "7"], "pr_checks_status", (7,), {}),
+        (
+            ["pr-checks", "--pr", "7", "--interval", "2", "--max-polls", "3"],
+            "watch_pr_checks",
+            (7,),
+            {"interval": 2.0, "max_polls": 3},
+        ),
+        (
+            ["pr-checks"],
+            "watch_pr_checks",
+            (None,),
+            {
+                "interval": pr_commands.CHECKS_INTERVAL_SECONDS,
+                "max_polls": pr_commands.CHECKS_MAX_POLLS,
+            },
+        ),
+        (["pr-diff"], "show_diff", (None,), {}),
+        (["pr-checkout", "--pr", "7"], "checkout_pr", (7,), {}),
+        (["pr-comments", "--pr", "7"], "view_comments", (7,), {}),
+        (["pr-merge"], "merge_pr", (None,), {"admin": False}),
+        (["pr-merge", "--pr", "7", "--admin"], "merge_pr", (7,), {"admin": True}),
+        (["pr-reviewers", "--users", "a,b"], "add_reviewers", ("a,b", None), {}),
+        (["pr-label", "--labels", "bug", "--pr", "7"], "add_labels", ("bug", 7), {}),
+        (["pr-close", "--pr", "7"], "close_pr", (7,), {}),
+        (["pr-create", "--base", "dev"], "create_pr", (), {"base": "dev"}),
+        (
+            ["pr-create", "--title", "T", "--body", "B"],
+            "create_pr",
+            (),
+            {"title": "T", "base": None, "body": "B"},
+        ),
+        (
+            ["pr-create", "--title", "T"],
+            "create_pr",
+            (),
+            {"title": "T", "base": None, "body": ""},
+        ),
+    ],
+)
+def test_pr_subcommands_dispatch_to_pr_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    function: str,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> None:
+    """Each pr-* subcommand forwards its parsed options and returns the exit code."""
+    calls = _spy(monkeypatch, pr_commands, function, result=3)
+
+    assert cli.main(argv) == 3
+
+    assert calls == [(args, kwargs)]
+
+
+def test_pr_create_rejects_a_body_without_a_title() -> None:
+    """A body only makes sense with a title; otherwise the text is filled from commits."""
+    with pytest.raises(GhError, match="needs a --title"):
+        cli.main(["pr-create", "--body", "B"])
+
+
+def test_pr_create_reads_the_body_from_standard_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--body-file - supplies the body text."""
+    calls = _spy(monkeypatch, pr_commands, "create_pr")
+    monkeypatch.setattr("sys.stdin", io.StringIO("from stdin"))
+
+    assert cli.main(["pr-create", "--title", "T", "--body-file", "-"]) == 0
+
+    assert calls == [((), {"title": "T", "base": None, "body": "from stdin"})]
+
+
+@pytest.mark.parametrize(
+    ("argv", "function", "args", "kwargs"),
+    [
+        (
+            ["issue-list"],
+            "list_issues",
+            (),
+            {
+                "state": None,
+                "labels": None,
+                "assignees": None,
+                "author": None,
+                "limit": None,
+                "search": None,
+            },
+        ),
+        (
+            [
+                "issue-list",
+                "--state",
+                "all",
+                "--label",
+                "bug",
+                "--assignee",
+                "a",
+                "--assignee",
+                "@me",
+                "--author",
+                "o",
+                "--limit",
+                "5",
+                "--search",
+                "x",
+            ],
+            "list_issues",
+            (),
+            {
+                "state": "all",
+                "labels": "bug",
+                "assignees": ["a", "@me"],
+                "author": "o",
+                "limit": 5,
+                "search": "x",
+            },
+        ),
+        (["issue-view", "--issue", "5"], "view_issue", (5,), {}),
+        (
+            ["issue-create", "--title", "T", "--labels", "bug", "--assignee", "@me", "--body", "B"],
+            "create_issue",
+            ("T", "B"),
+            {"labels": "bug", "assignee": "@me"},
+        ),
+        (["issue-comment", "--issue", "5", "--body", "B"], "comment_issue", (5, "B"), {}),
+        (
+            ["issue-edit", "--issue", "5", "--title", "T", "--body", "B"],
+            "edit_issue",
+            (5,),
+            {"title": "T", "body": "B"},
+        ),
+        (
+            ["issue-edit", "--issue", "5", "--title", "T"],
+            "edit_issue",
+            (5,),
+            {"title": "T", "body": None},
+        ),
+        (["issue-label", "--issue", "5", "--labels", "bug"], "label_issue", (5, "bug"), {}),
+        (
+            ["issue-unlabel", "--issue", "5", "--labels", "bug"],
+            "label_issue",
+            (5, "bug"),
+            {"remove": True},
+        ),
+        (
+            ["issue-assign", "--issue", "5", "--users", "a", "--mine"],
+            "assign_issue",
+            (5,),
+            {"users": "a", "mine": True},
+        ),
+        (
+            ["issue-unassign", "--issue", "5", "--users", "a"],
+            "assign_issue",
+            (5,),
+            {"users": "a", "mine": False, "remove": True},
+        ),
+        (
+            ["issue-close", "--issue", "5", "--reason", "completed", "--comment", "Done"],
+            "close_issue",
+            (5,),
+            {"reason": "completed", "comment": "Done"},
+        ),
+        (["issue-reopen", "--issue", "5"], "reopen_issue", (5,), {"comment": None}),
+        (
+            ["issue-develop", "--issue", "5", "--base", "dev", "--name", "n"],
+            "develop_issue",
+            (5,),
+            {"base": "dev", "name": "n"},
+        ),
+    ],
+)
+def test_issue_subcommands_dispatch_to_issue_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+    function: str,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> None:
+    """Each issue-* subcommand forwards its parsed options and returns the exit code."""
+    calls = _spy(monkeypatch, issue_commands, function, result=2)
+
+    assert cli.main(argv) == 2
+
+    assert calls == [(args, kwargs)]
+
+
+def test_current_pr_subcommand_prints_the_number(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """current-pr prints just the number, for the Makefile's PR_NUM."""
+    monkeypatch.setattr(gh_runner, "current_pr_number", lambda: 42)
+
+    assert cli.main(["current-pr"]) == 0
+    assert capsys.readouterr().out == "42\n"
+
+
+@pytest.mark.parametrize(
+    ("argv", "attribute", "value"),
+    [
+        (["issue-list", "--search=-label:bug"], "search", "-label:bug"),
+        (["issue-create", "--title=-1 off", "--body", "b"], "title", "-1 off"),
+        (["issue-create", "--title=-fix", "--body", "b"], "title", "-fix"),
+        (["issue-close", "--issue", "7", "--comment=-not planned"], "comment", "-not planned"),
+    ],
+)
+def test_option_equals_value_keeps_a_leading_dash(
+    argv: list[str], attribute: str, value: str
+) -> None:
+    """The Makefile passes free text as --option=value, so a leading dash survives parsing."""
+    args = cli._build_parser().parse_args(argv)
+
+    assert getattr(args, attribute) == value
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [["issue-list", "--search", "-label:bug"], ["issue-create", "--title", "-fix", "--body", "b"]],
+)
+def test_separate_value_with_a_leading_dash_is_read_as_an_option(argv: list[str]) -> None:
+    """The separate-word form fails, which is why the Makefile never uses it for free text."""
+    with pytest.raises(SystemExit):
+        cli._build_parser().parse_args(argv)

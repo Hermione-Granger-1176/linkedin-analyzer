@@ -8,13 +8,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from . import gh_runner, pr_review
+from . import gh_runner, pr_rest, pr_review
 from .gh_runner import GhError, RunFunction
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 _COPILOT_LOGIN = "copilot-pull-request-reviewer"
+# Fields read from ``gh pr view --json``, and from the REST fallback in the same shape.
+_WATCH_FIELDS = "statusCheckRollup,reviews"
 _PENDING_STATES = {"EXPECTED", "PENDING"}
 _SUCCESSFUL_CHECK_OUTCOMES = {"NEUTRAL", "SKIPPED", "SUCCESS"}
 # A floor on how many checks must exist before a rollup can settle, not a
@@ -250,9 +252,9 @@ def _copilot_reviews(reviews: object) -> tuple[CopilotReview, ...]:
 
 def _review_payload(pr: int, *, run_fn: RunFunction | None = None) -> dict[str, object]:
     """Return the validated PR fields needed by the watcher."""
-    payload = gh_runner.gh_json(
-        ["pr", "view", str(pr), "--json", "statusCheckRollup,reviews"],
-        run_fn=run_fn,
+    payload = gh_runner.with_rest_fallback(
+        lambda: gh_runner.gh_json(["pr", "view", str(pr), "--json", _WATCH_FIELDS], run_fn=run_fn),
+        lambda: pr_rest.pr_view(pr, _WATCH_FIELDS.split(","), run_fn=run_fn),
     )
     if not isinstance(payload, dict):
         raise GhError(f"Unexpected PR view response shape for PR {pr}.")
@@ -450,7 +452,7 @@ def watch_pr(
     if expected_checks < 1:
         raise GhError("expected_checks must be at least 1.")
 
-    pr = pr if pr is not None else gh_runner.current_pr_number(run_fn=run_fn)
+    pr = gh_runner.resolve_pr_number(pr, run_fn=run_fn)
     baseline = WatchBaseline(frozenset(), frozenset())
     if request_copilot and not checks_only:
         baseline = watch_baseline(pr, run_fn=run_fn)

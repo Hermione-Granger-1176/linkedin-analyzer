@@ -281,7 +281,7 @@ def test_issue_state_changes_pass_their_comment_through_the_environment(target: 
     """
     recipe = _target_recipe(target)
 
-    assert '--comment "$$COMMENT"' in recipe
+    assert '--comment="$$COMMENT"' in recipe
     assert '--comment "$(comment)"' not in recipe
 
 
@@ -297,7 +297,7 @@ def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> 
 
     assert 'if [ -z "$$TITLE" ]' in recipe
     assert "$(GH) pr-create" in recipe
-    assert '--title "$$TITLE" --body-file -' in recipe
+    assert '--title="$$TITLE" --body-file -' in recipe
 
 
 @pytest.mark.parametrize(
@@ -497,3 +497,29 @@ def test_thread_targets_accept_a_pr_number_for_numeric_ids() -> None:
     """Numeric thread ids need the PR, so reply, resolve, and address forward pr_num."""
     for target in ("pr-reply", "pr-resolve", "pr-address"):
         assert '$(if $(pr_num),--pr "$(pr_num)")' in _target_recipe(target), target
+
+
+@pytest.mark.parametrize(
+    ("target", "variable", "option"),
+    [
+        ("pr-create", "TITLE", "--title"),
+        ("pr-edit", "TITLE", "--title"),
+        ("issue-list", "SEARCH", "--search"),
+        ("issue-create", "TITLE", "--title"),
+        ("issue-edit", "TITLE", "--title"),
+        ("issue-close", "COMMENT", "--comment"),
+        ("issue-reopen", "COMMENT", "--comment"),
+    ],
+)
+def test_free_text_reaches_the_helper_as_one_option_equals_value_word(
+    target: str, variable: str, option: str
+) -> None:
+    """A value that starts with a dash, such as SEARCH='-label:bug', must not read as an option.
+
+    argparse takes ``--search -label:bug`` for two options and fails, while
+    ``--search=-label:bug`` is one word whose value it never inspects.
+    """
+    recipe = _target_recipe(target)
+
+    assert f'{option}="$${variable}"' in recipe
+    assert f'{option} "$${variable}"' not in recipe

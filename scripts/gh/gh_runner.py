@@ -27,6 +27,7 @@ import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 from urllib.parse import urlparse
 
@@ -614,6 +615,11 @@ def _repo_from_remote(*, remote: str = "origin", run_fn: RunFunction | None = No
         url = run_git(["remote", "get-url", remote], run_fn=run_fn)
     except GhError:
         return ""
+    return _repo_from_url(url)
+
+
+def _repo_from_url(url: str) -> str:
+    """Extract ``owner/name`` from a GitHub remote URL, or ``""`` for any other URL."""
     remote_path = _github_remote_path(url)
     if not remote_path:
         return ""
@@ -695,21 +701,36 @@ def _recorded_pr_number(branch: str, slug: str, *, run_fn: RunFunction | None) -
 
 
 def _tracked_head(branch: str, *, run_fn: RunFunction | None) -> tuple[str, str] | None:
-    """Return the ``(owner, branch)`` a local ``branch`` tracks on GitHub, if it tracks one.
+    """Return the ``(owner/name, branch)`` a local ``branch`` tracks on GitHub, if any.
 
     A local branch may be named differently from its upstream, such as
-    ``review-copy`` tracking ``origin/feature``. Only a GitHub remote and a
-    ``refs/heads/`` merge ref count: ``.`` tracks a local branch, and a
-    ``refs/pull/<n>/head`` ref is a read-only PR checkout, not a head branch.
+    ``review-copy`` tracking ``origin/feature``. The tracked remote is a remote
+    name or, for an editable fork checked out by ``gh pr checkout`` or the REST
+    checkout, a GitHub URL. Only a GitHub remote and a ``refs/heads/`` merge ref
+    count: ``.`` tracks a local branch, and a ``refs/pull/<n>/head`` ref is a
+    read-only PR checkout, not a head branch.
     """
     remote = _git_config_value(f"branch.{branch}.remote", run_fn=run_fn)
     merge = _git_config_value(f"branch.{branch}.merge", run_fn=run_fn)
     if not remote or remote == "." or not merge or not merge.startswith("refs/heads/"):
         return None
-    tracked = _repo_from_remote(remote=remote, run_fn=run_fn)
+    tracked = _repo_from_remote(remote=remote, run_fn=run_fn) or _repo_from_url(remote)
     if not tracked:
         return None
-    return tracked.split("/")[0], merge.removeprefix("refs/heads/")
+    return tracked, merge.removeprefix("refs/heads/")
+
+
+def _head_repo_matches(pull: dict[str, Any], repo: str | None) -> bool:
+    """Return whether ``pull`` comes from ``repo``, or GitHub does not say where it comes from.
+
+    A head filter names only the owner, so two repositories of one owner can
+    share a branch name. A PR whose source repository was deleted reports none,
+    and it is kept rather than lost.
+    """
+    if repo is None:
+        return True
+    name = as_object(as_object(pull.get("head")).get("repo")).get("full_name")
+    return not isinstance(name, str) or same_repo(name, repo)
 
 
 def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
@@ -720,18 +741,22 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
     recorded PR that is no longer open yields to a newer open PR on its head.
     Without a recorded PR, the upstream the branch tracks is tried first, then
     origin's owner with the local name, which covers a branch that has not been
-    pushed with ``-u`` yet. An open PR on either head beats a closed one.
+    pushed with ``-u`` yet. An open PR on either head beats a closed one. Each
+    head names its source repository, so a same-named branch in another
+    repository of the same owner is never taken for it.
     """
     branch = current_branch(run_fn=run_fn)
     slug = resolve_repo(run_fn=run_fn)
     recorded = _recorded_pr_number(branch, slug, run_fn=run_fn)
     # The branch lives in origin, which is a fork when GH_REPO names upstream.
-    owner = checkout_repo(slug, run_fn=run_fn).split("/")[0]
-    heads = [(owner, branch)]
+    origin = checkout_repo(slug, run_fn=run_fn)
+    owner = origin.split("/")[0]
+    # Each head is (owner, branch, source repository or None when unknown).
+    heads: list[tuple[str, str, str | None]] = [(owner, branch, origin)]
     if recorded is None:
         tracked = _tracked_head(branch, run_fn=run_fn)
-        if tracked is not None and tracked != heads[0]:
-            heads.insert(0, tracked)
+        if tracked is not None and not (same_repo(tracked[0], origin) and tracked[1] == branch):
+            heads.insert(0, (tracked[0].split("/")[0], tracked[1], tracked[0]))
     else:
         pull = as_object(rest(f"repos/{slug}/pulls/{recorded}", run_fn=run_fn))
         if pull.get("state") == "open":
@@ -740,17 +765,25 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
         head = as_object(pull.get("head"))
         head_owner = as_object(as_object(head.get("repo")).get("owner")).get("login")
         owner = str(head_owner or str(head.get("label") or "").partition(":")[0] or owner)
-        heads = [(owner, str(head.get("ref") or branch))]
+        head_repo_name = as_object(head.get("repo")).get("full_name")
+        heads = [
+            (
+                owner,
+                str(head.get("ref") or branch),
+                head_repo_name if isinstance(head_repo_name, str) else None,
+            )
+        ]
     # Every candidate head is searched for an open PR before any closed one, so a
     # closed PR on a tracked branch never hides an open PR on the local name.
     for state in ("open", "closed"):
-        for head_owner_name, head_branch in heads:
-            pulls = rest(
+        for head_owner_name, head_branch, head_repo in heads:
+            pulls = rest_pages(
                 f"repos/{slug}/pulls",
                 fields={"head": f"{head_owner_name}:{head_branch}", "state": state},
+                accept=partial(_head_repo_matches, repo=head_repo),
                 run_fn=run_fn,
             )
-            if isinstance(pulls, list) and pulls:
+            if pulls:
                 try:
                     return int(pulls[0]["number"])
                 except (KeyError, TypeError, ValueError) as exc:

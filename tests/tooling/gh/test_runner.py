@@ -866,6 +866,101 @@ def test_current_pr_number_fallback_names_the_tracked_remotes_owner() -> None:
     assert gh_runner.current_pr_number(run_fn=runner) == 8
 
 
+@pytest.mark.parametrize(
+    "url",
+    ["https://github.com/alice/Hello.git", "git@github.com:alice/Hello.git"],
+)
+def test_current_pr_number_fallback_follows_a_tracking_remote_given_as_a_url(url: str) -> None:
+    """An editable fork tracks its clone URL, which is read directly instead of as a remote name."""
+    runner = FakeGh(
+        [
+            (has("pr", "view"), graphql_blocked()),
+            (
+                has("remote", "get-url", "origin"),
+                completed_process(0, "git@github.com:octo/Hello.git\n"),
+            ),
+            (has("remote", "get-url", url), completed_process(1, "", "No such remote")),
+            (has("rev-parse"), completed_process(0, "review-copy\n")),
+            (has("config", "--get", "branch.review-copy.remote"), completed_process(0, f"{url}\n")),
+            (
+                has("config", "--get", "branch.review-copy.merge"),
+                completed_process(0, "refs/heads/feature\n"),
+            ),
+            (has("config", "--get"), completed_process(1)),
+            (
+                rest("GET", "repos/octo/Hello/pulls", "head=alice:feature", "state=open"),
+                json_response([{"number": 8, "head": {"repo": {"full_name": "alice/Hello"}}}]),
+            ),
+        ]
+    )
+
+    assert gh_runner.current_pr_number(run_fn=runner) == 8
+
+
+def test_current_pr_number_fallback_ignores_a_tracking_url_that_is_not_on_github() -> None:
+    """A tracking URL on another host gives no GitHub head, so the local name is used."""
+    url = "https://example.com/alice/Hello.git"
+    runner = _tracking_runner(
+        {"branch.review-copy.remote": url, "branch.review-copy.merge": "refs/heads/feature"}
+    )
+    runner.routes.insert(0, (has("remote", "get-url", url), completed_process(1)))
+
+    assert gh_runner.current_pr_number(run_fn=runner) == 99
+
+
+def test_current_pr_number_fallback_skips_a_pr_from_a_same_owner_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two repositories of one owner can share a branch name, so the source repository decides."""
+    monkeypatch.setenv("GH_REPO", "org/project")
+    runner = FakeGh(
+        [
+            (has("pr", "view"), graphql_blocked()),
+            (has("remote"), completed_process(0, "git@github.com:org/project-fork.git\n")),
+            (has("rev-parse"), completed_process(0, "feature\n")),
+            (has("config", "--get"), completed_process(1)),
+            (
+                rest("GET", "repos/org/project/pulls", "head=org:feature", "state=open"),
+                json_response(
+                    [
+                        {"number": 11, "head": {"repo": {"full_name": "org/project"}}},
+                        {"number": 12, "head": {"repo": {"full_name": "Org/Project-Fork"}}},
+                    ]
+                ),
+            ),
+        ]
+    )
+
+    assert gh_runner.current_pr_number(run_fn=runner) == 12
+
+
+def test_current_pr_number_fallback_finds_nothing_when_only_another_repository_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR from the sibling repository alone is not this branch's PR."""
+    monkeypatch.setenv("GH_REPO", "org/project")
+    sibling = [{"number": 11, "head": {"repo": {"full_name": "org/project"}}}]
+    runner = FakeGh(
+        [
+            (has("pr", "view"), graphql_blocked()),
+            (has("remote"), completed_process(0, "git@github.com:org/project-fork.git\n")),
+            (has("rev-parse"), completed_process(0, "feature\n")),
+            (has("config", "--get"), completed_process(1)),
+            (rest("GET", "repos/org/project/pulls", "head=org:feature"), json_response(sibling)),
+        ]
+    )
+
+    with pytest.raises(GhError, match="No pull request found"):
+        gh_runner.current_pr_number(run_fn=runner)
+
+
+def test_current_pr_number_fallback_keeps_a_pr_whose_source_repository_was_deleted() -> None:
+    """GitHub reports no head repository for a deleted fork, and the PR is still the branch's."""
+    runner = _branch_runner([{"number": 42, "head": {"repo": None}}])
+
+    assert gh_runner.current_pr_number(run_fn=runner) == 42
+
+
 def test_current_pr_number_fallback_tries_the_local_name_after_the_tracked_head() -> None:
     """A branch that still tracks another branch, such as main, is found by its own name."""
     runner = _tracking_runner(

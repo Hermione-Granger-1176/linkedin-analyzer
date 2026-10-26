@@ -142,12 +142,6 @@ If the dependency tree installs and passes the audit, the checker reports that t
 
 The checker does not modify the repository. After validating the replacement, remove the fork, its maintenance entry, the advisory exception, and the fork-specific pin assertions together.
 
-For GHSA-vfj7-8cjw-p6xm, `package.json` overrides all `braces` consumers to the [FSDevelop security fork at commit 28d440b](https://github.com/FSDevelop/braces/tree/28d440b5dd449dbf1fe6f3506cf94ecca4d02660). The archive URL pins the full commit, and `package-lock.json` pins its SHA-512 integrity. `.npmrc` allows remote archives declared by the root project.
-
-Run `make test-js-quick ARGS=braces-override` to check the source pin, excessive nesting rejection, AST guards, cycle rejection, and ordinary pattern compatibility. The fork retains version 3.0.3, so npm still reports the advisory. A temporary audit exception records the tested mitigation and expires after November 5, 2026.
-
-npm's suggested Stylelint 7.7.0 downgrade does not preserve the current lint configuration. When a compatible fix becomes available, review the exception manually. Once an official patched release is available and regression tests pass, replace the fork and remove the exception.
-
 The container publish job runs Trivy with every severity enabled and ignores only unfixed findings. A finding with an available fix blocks publication regardless of its severity or whether Trivy classifies it as `UNKNOWN`.
 
 ## Understand CI

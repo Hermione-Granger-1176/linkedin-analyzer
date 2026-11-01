@@ -1,5 +1,18 @@
 {
   "npm_override_dev_dependencies": [],
-  "npm_vulnerability_exceptions": [],
+  "npm_vulnerability_exceptions": [
+    {
+      "id": "GHSA-gcqx-w48m-w2h4",
+      "package": "deepmerge",
+      "reason": "No patched deepmerge release exists. It is a build-time dev dependency of @sveltejs/vite-plugin-svelte and workbox-build that merges repository-owned config, never user input, and is not shipped to the browser. The only npm-suggested fix downgrades vite-plugin-pwa to 1.1.0.",
+      "review_by": "2027-02-01"
+    },
+    {
+      "id": "GHSA-g3hv-75wg-m249",
+      "package": "minimatch",
+      "reason": "minimatch 11.0.1 is the first patched release, but eslint-plugin-import-x 4.17.1 imports makeRe, which minimatch 11 removed, so overriding minimatch breaks ESLint. The remaining minimatch 10 and 5 copies serve dev-only lint tooling (eslint, @eslint/config-array, typescript-estree, eslint-plugin-import-x) and the ejs CLI dependency filelist, which the build never loads. They only compile globs from repository config, never user input. glob is overridden to 14, which brings its own patched minimatch 11. Revisit once eslint-plugin-import-x supports minimatch 11.",
+      "review_by": "2027-02-01"
+    }
+  ],
   "python_vulnerability_exceptions": []
 }

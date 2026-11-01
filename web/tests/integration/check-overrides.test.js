@@ -3,16 +3,28 @@ import { spawnSync } from "node:child_process";
 import {
     chmodSync,
     copyFileSync,
+    existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
     rmSync,
+    symlinkSync,
     writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, expect, it } from "vitest";
+
+// The checker delegates each trial audit to scripts/ci/run_npm_audit.py, so the
+// temporary project carries the same Python policy modules the repository uses.
+const AUDIT_MODULES = [
+    "scripts/__init__.py",
+    "scripts/ci/__init__.py",
+    "scripts/ci/run_npm_audit.py",
+    "scripts/ci/security_audit_policy.py",
+];
+const LEFTOVER = "deepmerge GHSA-GCQX-W48M-W2H4";
 
 const roots = [];
 afterEach(() => {
@@ -21,6 +33,20 @@ afterEach(() => {
     }
 });
 
+/**
+ * A reviewed exception for the leftover deepmerge advisory, valid unless overridden.
+ * @param {Record<string, unknown>} fields
+ */
+function deepmergeException(fields = {}) {
+    return {
+        id: "ghsa-gcqx-w48m-w2h4",
+        package: "deepmerge",
+        reason: "Synthetic reviewed advisory that no override can fix.",
+        review_by: "2999-12-31",
+        ...fields,
+    };
+}
+
 function runChecker({
     configured = true,
     blocked = false,
@@ -28,15 +54,27 @@ function runChecker({
     fork = false,
     temporary = fork,
     fix = false,
+    leftover = null,
+    fixAvailable = false,
+    rawReport = null,
+    exceptions = [],
+    auditPython = process.env.AUDIT_PYTHON || "python3",
+    withPolicy = true,
+    setup = () => {},
 } = {}) {
     const root = mkdtempSync(join(tmpdir(), "override-check-test-"));
     roots.push(root);
     const scriptDir = join(root, "scripts/checks");
     const binDir = join(root, "bin");
     mkdirSync(scriptDir, { recursive: true });
+    mkdirSync(join(root, "scripts/ci"));
     mkdirSync(binDir);
     const script = join(scriptDir, "check-overrides.mjs");
     copyFileSync(join(process.cwd(), "scripts/checks/check-overrides.mjs"), script);
+    for (const module of withPolicy ? AUDIT_MODULES : []) {
+        copyFileSync(join(process.cwd(), module), join(root, module));
+    }
+    setup(root);
     const manifest = fork
         ? {
               overrides: { braces: "$braces" },
@@ -48,19 +86,19 @@ function runChecker({
         : { overrides: { braces: "3.0.3" } };
     writeFileSync(join(root, "package.json"), JSON.stringify(manifest));
     mkdirSync(join(root, "config"));
-    writeFileSync(
-        join(root, "config/security_audit.json"),
-        JSON.stringify({
-            npm_override_dev_dependencies: temporary ? ["braces"] : [],
-            npm_vulnerability_exceptions: [{ package: "braces", id: "synthetic" }],
-        }),
-    );
+    const policy = {
+        npm_override_dev_dependencies: temporary ? ["braces"] : [],
+        npm_vulnerability_exceptions: exceptions,
+    };
+    writeFileSync(join(root, "config/security_audit.json"), JSON.stringify(policy));
     const config = configured ? "engine-strict=true\nallow-remote=root\n" : null;
     if (configured) {
         writeFileSync(join(root, ".npmrc"), config);
     }
     const log = join(root, "npm-calls.jsonl");
     const npm = join(binDir, "npm");
+    // Fake npm: `audit --json` reports the braces advisory while the override is
+    // still needed, plus an optional leftover advisory no override can fix.
     writeFileSync(
         npm,
         `#!/usr/bin/env node
@@ -72,7 +110,24 @@ if (process.env.OVERRIDE_TEST_BLOCKED === "true") {
     console.error("npm error code EALLOWREMOTE");
     process.exit(1);
 }
-process.exit(process.argv[2] === "audit" && (process.env.OVERRIDE_TEST_FIXED !== "true" || manifest.devDependencies?.braces) ? 1 : 0);
+if (process.argv[2] !== "audit") process.exit(0);
+const needed = process.env.OVERRIDE_TEST_FIXED !== "true" || Boolean(manifest.devDependencies?.braces);
+if (!needed && process.env.OVERRIDE_TEST_RAW) {
+    console.log(process.env.OVERRIDE_TEST_RAW);
+    process.exit(1);
+}
+const advisory = (id, source, severity) => ({ source, severity, url: \`https://github.com/advisories/\${id}\` });
+const vulnerabilities = {};
+if (needed) {
+    vulnerabilities.braces = { name: "braces", via: [advisory("GHSA-GRV7-FG5C-XMJG", 2, "high")], fixAvailable: false };
+}
+if (process.env.OVERRIDE_TEST_LEFTOVER) {
+    const [name, id] = process.env.OVERRIDE_TEST_LEFTOVER.split(" ");
+    const fixAvailable = process.env.OVERRIDE_TEST_FIX_AVAILABLE === "true";
+    vulnerabilities[name] = { name, via: [advisory(id, 1, "low")], fixAvailable };
+}
+console.log(JSON.stringify({ vulnerabilities }));
+process.exit(Object.keys(vulnerabilities).length > 0 ? 1 : 0);
 `,
     );
     chmodSync(npm, 0o755);
@@ -84,13 +139,26 @@ process.exit(process.argv[2] === "audit" && (process.env.OVERRIDE_TEST_FIXED !==
             OVERRIDE_TEST_LOG: log,
             OVERRIDE_TEST_BLOCKED: String(blocked),
             OVERRIDE_TEST_FIXED: String(upstreamFixed),
+            OVERRIDE_TEST_LEFTOVER: leftover ?? "",
+            OVERRIDE_TEST_FIX_AVAILABLE: String(fixAvailable),
+            OVERRIDE_TEST_RAW: rawReport ?? "",
+            AUDIT_PYTHON: auditPython,
         },
     });
-    const calls = readFileSync(log, "utf8")
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line));
-    return { result, calls, root, config, manifest };
+    const calls = existsSync(log)
+        ? readFileSync(log, "utf8")
+              .trim()
+              .split("\n")
+              .map((line) => JSON.parse(line))
+        : [];
+    return { result, calls, root, config, manifest, policy };
+}
+
+/** @param {ReturnType<typeof runChecker>} run */
+function expectOverridesKept({ result, root, manifest }) {
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("still needed (audit failure)");
+    expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual(manifest);
 }
 
 it.each([
@@ -142,13 +210,136 @@ it("preserves direct dependencies that are not marked as temporary", () => {
 });
 
 it("removes the temporary fork and its maintenance entry only when fixing a stale override", () => {
-    const { result, root } = runChecker({ fork: true, upstreamFixed: true, fix: true });
+    const exceptions = [deepmergeException()];
+    const { result, root } = runChecker({
+        fork: true,
+        upstreamFixed: true,
+        fix: true,
+        leftover: LEFTOVER,
+        exceptions,
+    });
     expect(result.status).toBe(0);
     expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual({
         devDependencies: { stylelint: "^17.0.0" },
     });
     expect(JSON.parse(readFileSync(join(root, "config/security_audit.json"), "utf8"))).toEqual({
         npm_override_dev_dependencies: [],
-        npm_vulnerability_exceptions: [{ package: "braces", id: "synthetic" }],
+        npm_vulnerability_exceptions: exceptions,
     });
+});
+
+it.each([
+    { label: "a reviewed exception", exceptions: [deepmergeException()], stale: true },
+    { label: "no exception", exceptions: [], stale: false },
+])("judges a leftover advisory covered by $label", ({ exceptions, stale }) => {
+    const run = runChecker({ upstreamFixed: true, leftover: LEFTOVER, exceptions, fix: true });
+    if (!stale) {
+        expectOverridesKept(run);
+        return;
+    }
+    expect(run.result.status).toBe(0);
+    expect(run.result.stdout).toContain("All overrides are stale");
+    expect(JSON.parse(readFileSync(join(run.root, "package.json"), "utf8"))).toEqual({});
+});
+
+it.each([
+    {
+        label: "an expired exception",
+        exceptions: [deepmergeException({ review_by: "2000-01-01" })],
+    },
+    {
+        label: "a fix-restricted exception once a fix exists",
+        exceptions: [deepmergeException({ ignore_only_without_fix: true })],
+        fixAvailable: true,
+    },
+    {
+        label: "overlapping GHSA and source exceptions",
+        exceptions: [deepmergeException(), deepmergeException({ id: 1 })],
+    },
+])("keeps overrides when the leftover finding has $label", ({ exceptions, fixAvailable }) => {
+    expectOverridesKept(
+        runChecker({
+            upstreamFixed: true,
+            leftover: LEFTOVER,
+            exceptions,
+            fixAvailable,
+            fix: true,
+        }),
+    );
+});
+
+it("accepts a fix-restricted exception while no fix exists", () => {
+    const { result } = runChecker({
+        upstreamFixed: true,
+        leftover: LEFTOVER,
+        exceptions: [deepmergeException({ ignore_only_without_fix: true })],
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("All overrides are stale");
+});
+
+/** @param {ReturnType<typeof runChecker>} run */
+function expectEvaluationError({ result, root, manifest }) {
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Unable to evaluate overrides");
+    expect(result.stdout).not.toContain("still needed (audit failure)");
+    expect(result.stdout).not.toContain("stale");
+    expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual(manifest);
+}
+
+it.each([
+    { label: "an invalid via shape", rawReport: '{"vulnerabilities":{"glob":{"via":{}}}}' },
+    { label: "a node without via", rawReport: '{"vulnerabilities":{"glob":{}}}' },
+    { label: "no advisories despite failing", rawReport: '{"vulnerabilities":{}}' },
+    { label: "an npm error report", rawReport: '{"error":{"summary":"ENOAUDIT"}}' },
+    {
+        label: "an advisory without ids",
+        rawReport: '{"vulnerabilities":{"glob":{"via":[{"severity":"low"}]}}}',
+    },
+    { label: "non-JSON output", rawReport: "npm error network" },
+])("reports an evaluation error after an audit with $label", ({ rawReport }) => {
+    expectEvaluationError(runChecker({ upstreamFixed: true, rawReport, fix: true }));
+});
+
+it("reports an evaluation error for an invalid exception", () => {
+    const exceptions = [deepmergeException({ review_by: undefined })];
+    expectEvaluationError(
+        runChecker({ upstreamFixed: true, leftover: LEFTOVER, exceptions, fix: true }),
+    );
+});
+
+it.each([
+    { label: "a missing interpreter", options: { auditPython: "missing-python-for-test" } },
+    {
+        label: "a non-executable interpreter",
+        options: {
+            auditPython: "tools/python-not-executable",
+            setup: (root) => {
+                mkdirSync(join(root, "tools"));
+                writeFileSync(join(root, "tools/python-not-executable"), "#!/bin/sh\n");
+            },
+        },
+    },
+    { label: "missing policy modules", options: { withPolicy: false } },
+])("fails before any trial with $label", ({ options }) => {
+    const { result, calls } = runChecker({ upstreamFixed: true, fix: true, ...options });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("cannot load the npm audit policy");
+    expect(calls).toEqual([]);
+});
+
+it("resolves a relative interpreter path against the repository", () => {
+    const python = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], {
+        encoding: "utf8",
+    }).stdout.trim();
+    const { result } = runChecker({
+        upstreamFixed: true,
+        auditPython: "tools/python",
+        setup: (root) => {
+            mkdirSync(join(root, "tools"));
+            symlinkSync(python, join(root, "tools/python"));
+        },
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("All overrides are stale");
 });

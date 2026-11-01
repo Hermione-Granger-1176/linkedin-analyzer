@@ -21,6 +21,7 @@ import json
 import re
 import shlex
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import date
 
@@ -39,6 +40,7 @@ _GHSA_PATTERN = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}", re.IGNOR
 # severities, while _is_gated still treats an unexpected value as gated.
 SEVERITY_ORDER = ("info", "low", "moderate", "high", "critical")
 DEFAULT_AUDIT_LEVEL = SEVERITY_ORDER[0]
+EVALUATION_ERROR_EXIT = 2
 
 
 def _is_gated(severity: str, audit_level: str) -> bool:
@@ -144,7 +146,9 @@ def _fix_is_available(value: object, *, package: str) -> bool:
 
 def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFinding, ...]:
     """Parse ``npm audit --json`` output into vulnerability findings."""
-    vulnerabilities = payload.get("vulnerabilities", {})
+    # npm always reports ``vulnerabilities`` and each node's ``fixAvailable``;
+    # defaulting either would read an incomplete report as clean or unfixed.
+    vulnerabilities = payload.get("vulnerabilities")
     if not isinstance(vulnerabilities, dict):
         raise ValueError("npm audit 'vulnerabilities' must be an object")
 
@@ -153,12 +157,16 @@ def _parse_npm_audit(payload: dict[str, object]) -> tuple[NpmVulnerabilityFindin
         if not isinstance(node, dict):
             raise ValueError(f"npm audit vulnerability entries must be objects: {name}")
 
-        via = node.get("via", [])
-        if not isinstance(via, list):
-            raise ValueError(f"npm audit 'via' must be a list: {name}")
+        # Every vulnerable package names at least one advisory or upstream
+        # package, so a missing or empty ``via`` marks an incomplete report.
+        via = node.get("via")
+        if not isinstance(via, list) or not via:
+            raise ValueError(f"npm audit 'via' must be a non-empty list: {name}")
 
         # ``fixAvailable`` is False, True, or an object describing the fix.
-        fix_value = node.get("fixAvailable", False)
+        if "fixAvailable" not in node:
+            raise ValueError(f"npm audit vulnerability is missing 'fixAvailable': {name}")
+        fix_value = node["fixAvailable"]
         fix_available = _fix_is_available(fix_value, package=str(name))
         package_value = node.get("name", name)
         if not isinstance(package_value, str) or not package_value.strip():
@@ -223,8 +231,18 @@ def _audit_payload(result: subprocess.CompletedProcess[str]) -> dict[str, object
 
 
 def _run_npm_audit(npm_command: str = "npm") -> tuple[NpmVulnerabilityFinding, ...]:
-    """Run ``npm audit --json`` and return parsed vulnerability findings."""
-    return _parse_npm_audit(_audit_payload(_execute_npm_audit(npm_command)))
+    """Run ``npm audit --json`` and return parsed vulnerability findings.
+
+    npm exits non-zero only when it found vulnerabilities, so a failed run
+    whose report names no advisory is incomplete and cannot pass the audit.
+    """
+    result = _execute_npm_audit(npm_command)
+    findings = _parse_npm_audit(_audit_payload(result))
+    if result.returncode != 0 and not findings:
+        raise RuntimeError(
+            f"npm audit exited with status {result.returncode} but reported no advisories"
+        )
+    return findings
 
 
 def _matches_exception(
@@ -332,10 +350,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the policy-driven npm security audit."""
+    """Run the policy-driven npm security audit.
+
+    Returns 0 when the audit passes, 1 when the policy rejects the findings,
+    and ``EVALUATION_ERROR_EXIT`` when the config, npm, or its report cannot be
+    evaluated, so callers such as check-overrides can tell the two apart.
+    """
     args = _parse_args(argv)
-    exceptions = load_security_audit_exceptions(config_key=NPM_EXCEPTIONS_KEY)
-    findings = _run_npm_audit(args.npm)
+    try:
+        exceptions = load_security_audit_exceptions(config_key=NPM_EXCEPTIONS_KEY)
+        findings = _run_npm_audit(args.npm)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"npm dependency audit could not be evaluated: {exc}", file=sys.stderr)
+        return EVALUATION_ERROR_EXIT
     ignored, errors = _audit_npm_dependencies(
         today=date.today(),
         exceptions=exceptions,

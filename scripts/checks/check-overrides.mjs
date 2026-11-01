@@ -5,9 +5,12 @@
  *
  * Approach: copies package.json and .npmrc into a temporary directory with the
  * "overrides" field removed, runs `npm install --package-lock-only`
- * and `npm audit`, then reports whether everything passes without
- * overrides. Temporary dev dependencies listed in config/security_audit.json
- * are removed alongside their overrides. If the audit passes, the overrides
+ * and the policy-driven audit from scripts/ci/run_npm_audit.py, then reports
+ * whether everything passes without overrides. That audit applies the
+ * reviewed exceptions in config/security_audit.json, so a finding that fails
+ * with every override in place too cannot keep a stale override alive.
+ * Temporary dev dependencies listed in config/security_audit.json are removed
+ * alongside their overrides. If the audit passes, the overrides
  * are stale and can be removed.
  *
  * This script is fully generic. It reads overrides dynamically from
@@ -41,6 +44,13 @@ const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 const overrides = pkg.overrides ?? {};
 const names = Object.keys(overrides);
 const policyPath = join(rootDir, "config", "security_audit.json");
+// A bare name such as python3 is looked up on PATH; a path is resolved against
+// the repository, because each trial audit runs inside a temporary directory.
+const configuredPython = process.env.AUDIT_PYTHON || "python3";
+const auditPython = /[\\/]/u.test(configuredPython)
+    ? resolve(rootDir, configuredPython)
+    : configuredPython;
+const auditEnv = { ...process.env, PYTHONPATH: rootDir };
 const policy = existsSync(policyPath) ? JSON.parse(readFileSync(policyPath, "utf8")) : {};
 const temporaryDevDependencies = policy.npm_override_dev_dependencies ?? [];
 if (
@@ -135,18 +145,51 @@ const testWithout = (overridesToRemove) => {
     }
 
     try {
-        // Gate every severity, matching the default in scripts/ci/run_npm_audit.py.
-        // A higher floor would call an override stale because the advisory it
-        // holds back happens to sit below the threshold.
-        run("npm audit --audit-level=info");
+        // Reuse the policy-driven npm audit behind `make audit-node`, so reviewed
+        // exceptions, their expiry and fix limits, ambiguous matches, and npm
+        // error reports are judged exactly as CI judges them. It gates every
+        // severity by default; a higher floor would call an override stale
+        // because the advisory it holds back sits below the threshold.
+        execSync(`"${auditPython}" -m scripts.ci.run_npm_audit`, {
+            cwd: tmp,
+            stdio: "pipe",
+            timeout: 180_000,
+            env: auditEnv,
+        });
     } catch (err) {
         cleanup();
+        // scripts/ci/run_npm_audit.py exits 1 when the policy rejects a completed
+        // audit and 2 when it cannot evaluate one. Any status other than 1,
+        // including shell 126 or 127, means no verdict was reached.
+        if (err.status !== 1) {
+            console.error("Unable to evaluate overrides because the npm audit policy failed.");
+            console.error((err.stderr ?? err.stdout ?? err.message ?? "").toString().trim());
+            process.exit(1);
+        }
         return { ok: false, phase: "audit", err };
     }
 
     cleanup();
     return { ok: true };
 };
+
+/* ------------------------------------------------------------------ */
+/* 0. Confirm the audit policy can start before judging any trial      */
+/* ------------------------------------------------------------------ */
+try {
+    execSync(`"${auditPython}" -c "import scripts.ci.run_npm_audit"`, {
+        cwd: rootDir,
+        stdio: "pipe",
+        timeout: 60_000,
+        env: auditEnv,
+    });
+} catch (err) {
+    console.error(
+        `Unable to evaluate overrides because ${auditPython} cannot load the npm audit policy.`,
+    );
+    console.error((err.stderr ?? err.message ?? "").toString().trim());
+    process.exit(1);
+}
 
 /* ------------------------------------------------------------------ */
 /* 1. Try removing ALL overrides at once (fast path)                   */

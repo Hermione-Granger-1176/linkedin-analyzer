@@ -6,7 +6,9 @@
  * Approach: copies package.json and .npmrc into a temporary directory with the
  * "overrides" field removed, runs `npm install --package-lock-only`
  * and `npm audit`, then reports whether everything passes without
- * overrides. Temporary dev dependencies listed in config/security_audit.json
+ * overrides. Findings covered by a reviewed exception in
+ * config/security_audit.json are ignored, because they fail the audit with
+ * every override in place too. Temporary dev dependencies listed in config/security_audit.json
  * are removed alongside their overrides. If the audit passes, the overrides
  * are stale and can be removed.
  *
@@ -91,6 +93,45 @@ const requireValidInstall = (result) => {
     process.exit(1);
 };
 
+const reviewedExceptions = new Set(
+    (Array.isArray(policy.npm_vulnerability_exceptions) ? policy.npm_vulnerability_exceptions : [])
+        .filter((entry) => entry && typeof entry.package === "string" && entry.id !== undefined)
+        .map((entry) => `${entry.package.toLowerCase()}\u0000${String(entry.id).toLowerCase()}`),
+);
+
+/**
+ * Returns the audit findings that no reviewed exception covers, or null when
+ * the npm audit output cannot be read. Reviewed findings already fail the
+ * audit with every override in place, so they say nothing about whether
+ * removing an override reintroduced an advisory.
+ * @param {Buffer | string | undefined} stdout
+ * @returns {string[] | null}
+ */
+const unreviewedFindings = (stdout) => {
+    let report;
+    try {
+        report = JSON.parse((stdout ?? "").toString());
+    } catch {
+        return null;
+    }
+    const vulnerabilities = report?.vulnerabilities;
+    if (!vulnerabilities || typeof vulnerabilities !== "object") return null;
+    const findings = [];
+    for (const [name, node] of Object.entries(vulnerabilities)) {
+        const pkgName = String(node?.name ?? name).toLowerCase();
+        for (const via of Array.isArray(node?.via) ? node.via : []) {
+            if (!via || typeof via !== "object") continue;
+            const ghsa = /GHSA(?:-[0-9a-z]{4}){3}/iu.exec(String(via.url ?? ""))?.[0];
+            const ids = [ghsa, via.source].filter((id) => id !== undefined && id !== null);
+            const reviewed = ids.some((id) =>
+                reviewedExceptions.has(`${pkgName}\u0000${String(id).toLowerCase()}`),
+            );
+            if (!reviewed) findings.push(`${pkgName} ${ids[0] ?? "unknown"}`);
+        }
+    }
+    return findings;
+};
+
 const removeOverrides = (manifest, overridesToRemove) => {
     for (const name of overridesToRemove) {
         delete manifest.overrides[name];
@@ -138,10 +179,13 @@ const testWithout = (overridesToRemove) => {
         // Gate every severity, matching the default in scripts/ci/run_npm_audit.py.
         // A higher floor would call an override stale because the advisory it
         // holds back happens to sit below the threshold.
-        run("npm audit --audit-level=info");
+        run("npm audit --json --audit-level=info");
     } catch (err) {
-        cleanup();
-        return { ok: false, phase: "audit", err };
+        const unreviewed = unreviewedFindings(err.stdout);
+        if (unreviewed === null || unreviewed.length > 0) {
+            cleanup();
+            return { ok: false, phase: "audit", err };
+        }
     }
 
     cleanup();

@@ -28,6 +28,7 @@ function runChecker({
     fork = false,
     temporary = fork,
     fix = false,
+    remainingAdvisory = null,
 } = {}) {
     const root = mkdtempSync(join(tmpdir(), "override-check-test-"));
     roots.push(root);
@@ -52,7 +53,10 @@ function runChecker({
         join(root, "config/security_audit.json"),
         JSON.stringify({
             npm_override_dev_dependencies: temporary ? ["braces"] : [],
-            npm_vulnerability_exceptions: [{ package: "braces", id: "synthetic" }],
+            npm_vulnerability_exceptions: [
+                { package: "braces", id: "synthetic" },
+                { package: "deepmerge", id: "ghsa-gcqx-w48m-w2h4" },
+            ],
         }),
     );
     const config = configured ? "engine-strict=true\nallow-remote=root\n" : null;
@@ -72,7 +76,15 @@ if (process.env.OVERRIDE_TEST_BLOCKED === "true") {
     console.error("npm error code EALLOWREMOTE");
     process.exit(1);
 }
-process.exit(process.argv[2] === "audit" && (process.env.OVERRIDE_TEST_FIXED !== "true" || manifest.devDependencies?.braces) ? 1 : 0);
+const failing = process.argv[2] === "audit" && (process.env.OVERRIDE_TEST_FIXED !== "true" || manifest.devDependencies?.braces);
+const remaining = process.env.OVERRIDE_TEST_REMAINING;
+if (process.argv[2] === "audit" && !failing && remaining) {
+    const [name, id] = remaining.split(" ");
+    const via = [{ source: 1, url: \`https://github.com/advisories/\${id}\` }];
+    console.log(JSON.stringify({ vulnerabilities: { [name]: { name, via } } }));
+    process.exit(1);
+}
+process.exit(failing ? 1 : 0);
 `,
     );
     chmodSync(npm, 0o755);
@@ -84,6 +96,7 @@ process.exit(process.argv[2] === "audit" && (process.env.OVERRIDE_TEST_FIXED !==
             OVERRIDE_TEST_LOG: log,
             OVERRIDE_TEST_BLOCKED: String(blocked),
             OVERRIDE_TEST_FIXED: String(upstreamFixed),
+            OVERRIDE_TEST_REMAINING: remainingAdvisory ?? "",
         },
     });
     const calls = readFileSync(log, "utf8")
@@ -149,6 +162,23 @@ it("removes the temporary fork and its maintenance entry only when fixing a stal
     });
     expect(JSON.parse(readFileSync(join(root, "config/security_audit.json"), "utf8"))).toEqual({
         npm_override_dev_dependencies: [],
-        npm_vulnerability_exceptions: [{ package: "braces", id: "synthetic" }],
+        npm_vulnerability_exceptions: [
+            { package: "braces", id: "synthetic" },
+            { package: "deepmerge", id: "ghsa-gcqx-w48m-w2h4" },
+        ],
     });
 });
+
+it.each([
+    { remainingAdvisory: "deepmerge GHSA-GCQX-W48M-W2H4", stale: true },
+    { remainingAdvisory: "minimatch GHSA-G3HV-75WG-M249", stale: false },
+])(
+    "judges overrides by unreviewed findings with $remainingAdvisory still reported",
+    ({ remainingAdvisory, stale }) => {
+        const { result } = runChecker({ upstreamFixed: true, remainingAdvisory });
+        expect(result.status).toBe(stale ? 1 : 0);
+        expect(result.stdout).toContain(
+            stale ? "All overrides are stale" : "still needed (audit failure)",
+        );
+    },
+);

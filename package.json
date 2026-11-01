@@ -118,10 +118,6 @@
     "vitest": "^5.0.2"
   },
   "overrides": {
-    "eslint-plugin-import-x": {
-      "minimatch": "^10.2.6"
-    },
-    "glob": "^14.0.3",
-    "minimatch": "^11.0.2"
+    "glob": "^14.0.3"
   }
 }

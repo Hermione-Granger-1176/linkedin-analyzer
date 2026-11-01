@@ -177,7 +177,7 @@ def test_shares_fixture_matches_expected_python_contract(tmp_path: Path) -> None
     )
 
     assert result.success is True
-    df = pd.read_excel(output_file).fillna("")
+    df = pd.read_excel(output_file, dtype=str).fillna("")
     assert df["Date"].str.match(LOCAL_DATETIME_PATTERN).all()
     # The impossible date passes through as raw text, which also matches the
     # pattern above, so pin the exact cell explicitly.
@@ -218,7 +218,7 @@ def test_comments_fixture_matches_expected_python_contract(tmp_path: Path) -> No
     )
 
     assert result.success is True
-    df = pd.read_excel(output_file).fillna("")
+    df = pd.read_excel(output_file, dtype=str).fillna("")
     # The "none" row is dropped (Message required, NONE is a sentinel).
     assert len(df) == 3
     assert df["Date"].str.match(LOCAL_DATETIME_PATTERN).all()
@@ -244,7 +244,7 @@ def test_messages_fixture_matches_expected_python_contract(tmp_path: Path) -> No
     )
 
     assert result.success is True
-    df = pd.read_excel(output_file).fillna("")
+    df = pd.read_excel(output_file, dtype=str).fillna("")
     assert list(df["FROM"]) == ["Ada", "Eve"]
     assert list(df["TO"]) == ["Bob", "Bob"]
     assert df["DATE"].str.match(LOCAL_DATETIME_PATTERN).all()
@@ -268,7 +268,7 @@ def test_connections_fixture_matches_expected_python_contract(tmp_path: Path) ->
     )
 
     assert result.success is True
-    df = pd.read_excel(output_file).fillna("")
+    df = pd.read_excel(output_file, dtype=str).fillna("")
     assert list(df["First Name"]) == ["Ada", "", "'=2+5", "Bob"]
     assert list(df["Last Name"]) == ["Lovelace", "Builder", "'+Lovelace", "Builder II"]
     assert list(df["URL"]) == [

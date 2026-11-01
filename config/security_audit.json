@@ -10,7 +10,7 @@
     {
       "id": "GHSA-g3hv-75wg-m249",
       "package": "minimatch",
-      "reason": "The global override moves every consumer to minimatch 11 except eslint-plugin-import-x 4.17.1, which imports makeRe, an export minimatch 11 removed. That one dev-only lint plugin stays on minimatch 10.2.6 through a scoped override and only compiles globs from the repository ESLint config. Drop the scoped override once eslint-plugin-import-x supports minimatch 11.",
+      "reason": "The global override moves glob and its consumers (Sentry and workbox build plugins) to minimatch 11. eslint-plugin-import-x 4.17.1 imports makeRe, which minimatch 11 removed, so a scoped override keeps it on minimatch 10.2.6; npm 11 extends that pin to import-x's eslint peer tree (eslint, @eslint/config-array, typescript-estree). These are dev-only lint tools that compile globs from the repository ESLint config, never user input. Drop the scoped override once eslint-plugin-import-x supports minimatch 11.",
       "review_by": "2027-02-01"
     }
   ],

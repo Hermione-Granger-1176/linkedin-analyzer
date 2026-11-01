@@ -29,6 +29,7 @@ function runChecker({
     temporary = fork,
     fix = false,
     remainingAdvisory = null,
+    rawReport = null,
 } = {}) {
     const root = mkdtempSync(join(tmpdir(), "override-check-test-"));
     roots.push(root);
@@ -78,6 +79,10 @@ if (process.env.OVERRIDE_TEST_BLOCKED === "true") {
 }
 const failing = process.argv[2] === "audit" && (process.env.OVERRIDE_TEST_FIXED !== "true" || manifest.devDependencies?.braces);
 const remaining = process.env.OVERRIDE_TEST_REMAINING;
+if (process.argv[2] === "audit" && !failing && process.env.OVERRIDE_TEST_RAW) {
+    console.log(process.env.OVERRIDE_TEST_RAW);
+    process.exit(1);
+}
 if (process.argv[2] === "audit" && !failing && remaining) {
     const [name, id] = remaining.split(" ");
     const via = [{ source: 1, url: \`https://github.com/advisories/\${id}\` }];
@@ -97,6 +102,7 @@ process.exit(failing ? 1 : 0);
             OVERRIDE_TEST_BLOCKED: String(blocked),
             OVERRIDE_TEST_FIXED: String(upstreamFixed),
             OVERRIDE_TEST_REMAINING: remainingAdvisory ?? "",
+            OVERRIDE_TEST_RAW: rawReport ?? "",
         },
     });
     const calls = readFileSync(log, "utf8")
@@ -182,3 +188,17 @@ it.each([
         );
     },
 );
+
+it.each([
+    { label: "invalid via shape", rawReport: '{"vulnerabilities":{"glob":{"via":{}}}}' },
+    { label: "error report", rawReport: '{"error":{"code":"ENOAUDIT"},"vulnerabilities":{}}' },
+    { label: "no vulnerabilities", rawReport: '{"vulnerabilities":{}}' },
+    { label: "only package references", rawReport: '{"vulnerabilities":{"glob":{"via":["minimatch"]}}}' },
+    { label: "advisory without ids", rawReport: '{"vulnerabilities":{"glob":{"via":[{"title":"x"}]}}}' },
+    { label: "non-JSON output", rawReport: "npm error network" },
+])("keeps overrides after a failed audit with $label", ({ rawReport }) => {
+    const { result, root, manifest } = runChecker({ upstreamFixed: true, rawReport, fix: true });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("still needed (audit failure)");
+    expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual(manifest);
+});

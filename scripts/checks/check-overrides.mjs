@@ -99,11 +99,15 @@ const reviewedExceptions = new Set(
         .map((entry) => `${entry.package.toLowerCase()}\u0000${String(entry.id).toLowerCase()}`),
 );
 
+const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
 /**
  * Returns the audit findings that no reviewed exception covers, or null when
- * the npm audit output cannot be read. Reviewed findings already fail the
+ * the npm audit output cannot be trusted. Reviewed findings already fail the
  * audit with every override in place, so they say nothing about whether
- * removing an override reintroduced an advisory.
+ * removing an override reintroduced an advisory. The audit already exited
+ * non-zero, so an error report, an unexpected shape, or a report that names
+ * no advisory at all leaves the failure unexplained and returns null.
  * @param {Buffer | string | undefined} stdout
  * @returns {string[] | null}
  */
@@ -114,22 +118,27 @@ const unreviewedFindings = (stdout) => {
     } catch {
         return null;
     }
-    const vulnerabilities = report?.vulnerabilities;
-    if (!vulnerabilities || typeof vulnerabilities !== "object") return null;
+    if (!isRecord(report) || "error" in report || !isRecord(report.vulnerabilities)) return null;
     const findings = [];
-    for (const [name, node] of Object.entries(vulnerabilities)) {
-        const pkgName = String(node?.name ?? name).toLowerCase();
-        for (const via of Array.isArray(node?.via) ? node.via : []) {
-            if (!via || typeof via !== "object") continue;
+    let advisories = 0;
+    for (const [name, node] of Object.entries(report.vulnerabilities)) {
+        if (!isRecord(node) || !Array.isArray(node.via)) return null;
+        const pkgName = String(node.name ?? name).toLowerCase();
+        for (const via of node.via) {
+            // A string names another vulnerable package; its own entry carries the advisory.
+            if (typeof via === "string") continue;
+            if (!isRecord(via)) return null;
             const ghsa = /GHSA(?:-[0-9a-z]{4}){3}/iu.exec(String(via.url ?? ""))?.[0];
             const ids = [ghsa, via.source].filter((id) => id !== undefined && id !== null);
+            if (ids.length === 0) return null;
+            advisories += 1;
             const reviewed = ids.some((id) =>
                 reviewedExceptions.has(`${pkgName}\u0000${String(id).toLowerCase()}`),
             );
-            if (!reviewed) findings.push(`${pkgName} ${ids[0] ?? "unknown"}`);
+            if (!reviewed) findings.push(`${pkgName} ${ids[0]}`);
         }
     }
-    return findings;
+    return advisories === 0 ? null : findings;
 };
 
 const removeOverrides = (manifest, overridesToRemove) => {

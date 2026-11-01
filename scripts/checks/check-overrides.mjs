@@ -5,11 +5,12 @@
  *
  * Approach: copies package.json and .npmrc into a temporary directory with the
  * "overrides" field removed, runs `npm install --package-lock-only`
- * and `npm audit`, then reports whether everything passes without
- * overrides. Findings covered by a reviewed exception in
- * config/security_audit.json are ignored, because they fail the audit with
- * every override in place too. Temporary dev dependencies listed in config/security_audit.json
- * are removed alongside their overrides. If the audit passes, the overrides
+ * and the policy-driven audit from scripts/ci/run_npm_audit.py, then reports
+ * whether everything passes without overrides. That audit applies the
+ * reviewed exceptions in config/security_audit.json, so a finding that fails
+ * with every override in place too cannot keep a stale override alive.
+ * Temporary dev dependencies listed in config/security_audit.json are removed
+ * alongside their overrides. If the audit passes, the overrides
  * are stale and can be removed.
  *
  * This script is fully generic. It reads overrides dynamically from
@@ -43,6 +44,7 @@ const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 const overrides = pkg.overrides ?? {};
 const names = Object.keys(overrides);
 const policyPath = join(rootDir, "config", "security_audit.json");
+const auditPython = process.env.AUDIT_PYTHON || "python3";
 const policy = existsSync(policyPath) ? JSON.parse(readFileSync(policyPath, "utf8")) : {};
 const temporaryDevDependencies = policy.npm_override_dev_dependencies ?? [];
 if (
@@ -93,72 +95,6 @@ const requireValidInstall = (result) => {
     process.exit(1);
 };
 
-const today = new Date().toISOString().slice(0, 10);
-const reviewedExceptions = (
-    Array.isArray(policy.npm_vulnerability_exceptions) ? policy.npm_vulnerability_exceptions : []
-).filter((entry) => entry && typeof entry.package === "string" && entry.id !== undefined);
-
-/**
- * Whether a reviewed exception still covers one advisory, applying the same
- * limits as scripts/ci/run_npm_audit.py: an exception stops applying after
- * its review_by date, or once a fix exists when ignore_only_without_fix is set.
- * @param {string} pkgName
- * @param {unknown[]} ids
- * @param {boolean} fixAvailable
- * @returns {boolean}
- */
-const isReviewed = (pkgName, ids, fixAvailable) =>
-    reviewedExceptions.some(
-        (entry) =>
-            entry.package.toLowerCase() === pkgName &&
-            ids.some((id) => String(id).toLowerCase() === String(entry.id).toLowerCase()) &&
-            typeof entry.review_by === "string" &&
-            /^\d{4}-\d{2}-\d{2}$/u.test(entry.review_by) &&
-            today <= entry.review_by &&
-            !(entry.ignore_only_without_fix === true && fixAvailable),
-    );
-
-const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-
-/**
- * Returns the audit findings that no reviewed exception covers, or null when
- * the npm audit output cannot be trusted. Reviewed findings already fail the
- * audit with every override in place, so they say nothing about whether
- * removing an override reintroduced an advisory. The audit already exited
- * non-zero, so an error report, an unexpected shape, or a report that names
- * no advisory at all leaves the failure unexplained and returns null.
- * @param {Buffer | string | undefined} stdout
- * @returns {string[] | null}
- */
-const unreviewedFindings = (stdout) => {
-    let report;
-    try {
-        report = JSON.parse((stdout ?? "").toString());
-    } catch {
-        return null;
-    }
-    if (!isRecord(report) || "error" in report || !isRecord(report.vulnerabilities)) return null;
-    const findings = [];
-    let advisories = 0;
-    for (const [name, node] of Object.entries(report.vulnerabilities)) {
-        if (!isRecord(node) || !Array.isArray(node.via)) return null;
-        const pkgName = String(node.name ?? name).toLowerCase();
-        for (const via of node.via) {
-            // A string names another vulnerable package; its own entry carries the advisory.
-            if (typeof via === "string") continue;
-            if (!isRecord(via)) return null;
-            const ghsa = /GHSA(?:-[0-9a-z]{4}){3}/iu.exec(String(via.url ?? ""))?.[0];
-            const ids = [ghsa, via.source].filter((id) => id !== undefined && id !== null);
-            if (ids.length === 0) return null;
-            advisories += 1;
-            if (!isReviewed(pkgName, ids, Boolean(node.fixAvailable))) {
-                findings.push(`${pkgName} ${ids[0]}`);
-            }
-        }
-    }
-    return advisories === 0 ? null : findings;
-};
-
 const removeOverrides = (manifest, overridesToRemove) => {
     for (const name of overridesToRemove) {
         delete manifest.overrides[name];
@@ -203,16 +139,26 @@ const testWithout = (overridesToRemove) => {
     }
 
     try {
-        // Gate every severity, matching the default in scripts/ci/run_npm_audit.py.
-        // A higher floor would call an override stale because the advisory it
-        // holds back happens to sit below the threshold.
-        run("npm audit --json --audit-level=info");
+        // Reuse the policy-driven npm audit behind `make audit-node`, so reviewed
+        // exceptions, their expiry and fix limits, ambiguous matches, and npm
+        // error reports are judged exactly as CI judges them. It gates every
+        // severity by default; a higher floor would call an override stale
+        // because the advisory it holds back sits below the threshold.
+        execSync(`"${auditPython}" -m scripts.ci.run_npm_audit`, {
+            cwd: tmp,
+            stdio: "pipe",
+            timeout: 180_000,
+            env: { ...process.env, PYTHONPATH: rootDir },
+        });
     } catch (err) {
-        const unreviewed = unreviewedFindings(err.stdout);
-        if (unreviewed === null || unreviewed.length > 0) {
-            cleanup();
-            return { ok: false, phase: "audit", err };
+        cleanup();
+        if (err.status === 127 || err.code === "ENOENT") {
+            console.error(
+                `Unable to evaluate overrides because ${auditPython} could not run the npm audit policy.`,
+            );
+            process.exit(1);
         }
+        return { ok: false, phase: "audit", err };
     }
 
     cleanup();

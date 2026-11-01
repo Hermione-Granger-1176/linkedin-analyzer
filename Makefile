@@ -843,7 +843,7 @@ audit-fix-node: ## Apply available npm audit fixes to package-lock.json
 	$(NPM) audit fix --package-lock-only
 
 check-overrides: ## Check npm overrides are still needed
-	$(NPM) run check:overrides
+	AUDIT_PYTHON="$(SYSTEM_PYTHON)" $(NPM) run check:overrides
 
 security-alerts: ## List open GitHub Dependabot alerts
 	gh api --paginate 'repos/{owner}/{repo}/dependabot/alerts?state=open'

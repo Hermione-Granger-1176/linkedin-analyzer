@@ -30,6 +30,8 @@ function runChecker({
     fix = false,
     remainingAdvisory = null,
     rawReport = null,
+    exception = {},
+    fixAvailable = false,
 } = {}) {
     const root = mkdtempSync(join(tmpdir(), "override-check-test-"));
     roots.push(root);
@@ -56,7 +58,12 @@ function runChecker({
             npm_override_dev_dependencies: temporary ? ["braces"] : [],
             npm_vulnerability_exceptions: [
                 { package: "braces", id: "synthetic" },
-                { package: "deepmerge", id: "ghsa-gcqx-w48m-w2h4" },
+                {
+                    package: "deepmerge",
+                    id: "ghsa-gcqx-w48m-w2h4",
+                    review_by: "2999-12-31",
+                    ...exception,
+                },
             ],
         }),
     );
@@ -86,7 +93,8 @@ if (process.argv[2] === "audit" && !failing && process.env.OVERRIDE_TEST_RAW) {
 if (process.argv[2] === "audit" && !failing && remaining) {
     const [name, id] = remaining.split(" ");
     const via = [{ source: 1, url: \`https://github.com/advisories/\${id}\` }];
-    console.log(JSON.stringify({ vulnerabilities: { [name]: { name, via } } }));
+    const fixAvailable = process.env.OVERRIDE_TEST_FIX_AVAILABLE === "true";
+    console.log(JSON.stringify({ vulnerabilities: { [name]: { name, via, fixAvailable } } }));
     process.exit(1);
 }
 process.exit(failing ? 1 : 0);
@@ -103,6 +111,7 @@ process.exit(failing ? 1 : 0);
             OVERRIDE_TEST_FIXED: String(upstreamFixed),
             OVERRIDE_TEST_REMAINING: remainingAdvisory ?? "",
             OVERRIDE_TEST_RAW: rawReport ?? "",
+            OVERRIDE_TEST_FIX_AVAILABLE: String(fixAvailable),
         },
     });
     const calls = readFileSync(log, "utf8")
@@ -170,7 +179,7 @@ it("removes the temporary fork and its maintenance entry only when fixing a stal
         npm_override_dev_dependencies: [],
         npm_vulnerability_exceptions: [
             { package: "braces", id: "synthetic" },
-            { package: "deepmerge", id: "ghsa-gcqx-w48m-w2h4" },
+            { package: "deepmerge", id: "ghsa-gcqx-w48m-w2h4", review_by: "2999-12-31" },
         ],
     });
 });
@@ -201,4 +210,35 @@ it.each([
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("still needed (audit failure)");
     expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual(manifest);
+});
+
+it.each([
+    { label: "an expired exception", exception: { review_by: "2000-01-01" }, fixAvailable: false },
+    { label: "a missing review date", exception: { review_by: undefined }, fixAvailable: false },
+    {
+        label: "a fix-restricted exception once a fix exists",
+        exception: { ignore_only_without_fix: true },
+        fixAvailable: true,
+    },
+])("keeps overrides when only $label covers the leftover finding", ({ exception, fixAvailable }) => {
+    const { result, root, manifest } = runChecker({
+        upstreamFixed: true,
+        remainingAdvisory: "deepmerge GHSA-GCQX-W48M-W2H4",
+        exception,
+        fixAvailable,
+        fix: true,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("still needed (audit failure)");
+    expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual(manifest);
+});
+
+it("still accepts a fix-restricted exception while no fix exists", () => {
+    const { result } = runChecker({
+        upstreamFixed: true,
+        remainingAdvisory: "deepmerge GHSA-GCQX-W48M-W2H4",
+        exception: { ignore_only_without_fix: true },
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("All overrides are stale");
 });

@@ -93,11 +93,30 @@ const requireValidInstall = (result) => {
     process.exit(1);
 };
 
-const reviewedExceptions = new Set(
-    (Array.isArray(policy.npm_vulnerability_exceptions) ? policy.npm_vulnerability_exceptions : [])
-        .filter((entry) => entry && typeof entry.package === "string" && entry.id !== undefined)
-        .map((entry) => `${entry.package.toLowerCase()}\u0000${String(entry.id).toLowerCase()}`),
-);
+const today = new Date().toISOString().slice(0, 10);
+const reviewedExceptions = (
+    Array.isArray(policy.npm_vulnerability_exceptions) ? policy.npm_vulnerability_exceptions : []
+).filter((entry) => entry && typeof entry.package === "string" && entry.id !== undefined);
+
+/**
+ * Whether a reviewed exception still covers one advisory, applying the same
+ * limits as scripts/ci/run_npm_audit.py: an exception stops applying after
+ * its review_by date, or once a fix exists when ignore_only_without_fix is set.
+ * @param {string} pkgName
+ * @param {unknown[]} ids
+ * @param {boolean} fixAvailable
+ * @returns {boolean}
+ */
+const isReviewed = (pkgName, ids, fixAvailable) =>
+    reviewedExceptions.some(
+        (entry) =>
+            entry.package.toLowerCase() === pkgName &&
+            ids.some((id) => String(id).toLowerCase() === String(entry.id).toLowerCase()) &&
+            typeof entry.review_by === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/u.test(entry.review_by) &&
+            today <= entry.review_by &&
+            !(entry.ignore_only_without_fix === true && fixAvailable),
+    );
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -132,10 +151,9 @@ const unreviewedFindings = (stdout) => {
             const ids = [ghsa, via.source].filter((id) => id !== undefined && id !== null);
             if (ids.length === 0) return null;
             advisories += 1;
-            const reviewed = ids.some((id) =>
-                reviewedExceptions.has(`${pkgName}\u0000${String(id).toLowerCase()}`),
-            );
-            if (!reviewed) findings.push(`${pkgName} ${ids[0]}`);
+            if (!isReviewed(pkgName, ids, Boolean(node.fixAvailable))) {
+                findings.push(`${pkgName} ${ids[0]}`);
+            }
         }
     }
     return advisories === 0 ? null : findings;

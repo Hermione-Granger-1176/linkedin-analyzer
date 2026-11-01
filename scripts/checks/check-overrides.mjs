@@ -44,7 +44,13 @@ const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 const overrides = pkg.overrides ?? {};
 const names = Object.keys(overrides);
 const policyPath = join(rootDir, "config", "security_audit.json");
-const auditPython = process.env.AUDIT_PYTHON || "python3";
+// A bare name such as python3 is looked up on PATH; a path is resolved against
+// the repository, because each trial audit runs inside a temporary directory.
+const configuredPython = process.env.AUDIT_PYTHON || "python3";
+const auditPython = /[\\/]/u.test(configuredPython)
+    ? resolve(rootDir, configuredPython)
+    : configuredPython;
+const auditEnv = { ...process.env, PYTHONPATH: rootDir };
 const policy = existsSync(policyPath) ? JSON.parse(readFileSync(policyPath, "utf8")) : {};
 const temporaryDevDependencies = policy.npm_override_dev_dependencies ?? [];
 if (
@@ -148,14 +154,16 @@ const testWithout = (overridesToRemove) => {
             cwd: tmp,
             stdio: "pipe",
             timeout: 180_000,
-            env: { ...process.env, PYTHONPATH: rootDir },
+            env: auditEnv,
         });
     } catch (err) {
         cleanup();
-        if (err.status === 127 || err.code === "ENOENT") {
-            console.error(
-                `Unable to evaluate overrides because ${auditPython} could not run the npm audit policy.`,
-            );
+        // scripts/ci/run_npm_audit.py exits 1 when the policy rejects a completed
+        // audit and 2 when it cannot evaluate one. Any status other than 1,
+        // including shell 126 or 127, means no verdict was reached.
+        if (err.status !== 1) {
+            console.error("Unable to evaluate overrides because the npm audit policy failed.");
+            console.error((err.stderr ?? err.stdout ?? err.message ?? "").toString().trim());
             process.exit(1);
         }
         return { ok: false, phase: "audit", err };
@@ -164,6 +172,24 @@ const testWithout = (overridesToRemove) => {
     cleanup();
     return { ok: true };
 };
+
+/* ------------------------------------------------------------------ */
+/* 0. Confirm the audit policy can start before judging any trial      */
+/* ------------------------------------------------------------------ */
+try {
+    execSync(`"${auditPython}" -c "import scripts.ci.run_npm_audit"`, {
+        cwd: rootDir,
+        stdio: "pipe",
+        timeout: 60_000,
+        env: auditEnv,
+    });
+} catch (err) {
+    console.error(
+        `Unable to evaluate overrides because ${auditPython} cannot load the npm audit policy.`,
+    );
+    console.error((err.stderr ?? err.message ?? "").toString().trim());
+    process.exit(1);
+}
 
 /* ------------------------------------------------------------------ */
 /* 1. Try removing ALL overrides at once (fast path)                   */

@@ -3,10 +3,12 @@ import { spawnSync } from "node:child_process";
 import {
     chmodSync,
     copyFileSync,
+    existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
     rmSync,
+    symlinkSync,
     writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -57,6 +59,8 @@ function runChecker({
     rawReport = null,
     exceptions = [],
     auditPython = process.env.AUDIT_PYTHON || "python3",
+    withPolicy = true,
+    setup = () => {},
 } = {}) {
     const root = mkdtempSync(join(tmpdir(), "override-check-test-"));
     roots.push(root);
@@ -67,9 +71,10 @@ function runChecker({
     mkdirSync(binDir);
     const script = join(scriptDir, "check-overrides.mjs");
     copyFileSync(join(process.cwd(), "scripts/checks/check-overrides.mjs"), script);
-    for (const module of AUDIT_MODULES) {
+    for (const module of withPolicy ? AUDIT_MODULES : []) {
         copyFileSync(join(process.cwd(), module), join(root, module));
     }
+    setup(root);
     const manifest = fork
         ? {
               overrides: { braces: "$braces" },
@@ -140,10 +145,12 @@ process.exit(Object.keys(vulnerabilities).length > 0 ? 1 : 0);
             AUDIT_PYTHON: auditPython,
         },
     });
-    const calls = readFileSync(log, "utf8")
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line));
+    const calls = existsSync(log)
+        ? readFileSync(log, "utf8")
+              .trim()
+              .split("\n")
+              .map((line) => JSON.parse(line))
+        : [];
     return { result, calls, root, config, manifest, policy };
 }
 
@@ -241,10 +248,6 @@ it.each([
         exceptions: [deepmergeException({ review_by: "2000-01-01" })],
     },
     {
-        label: "a missing review date",
-        exceptions: [deepmergeException({ review_by: undefined })],
-    },
-    {
         label: "a fix-restricted exception once a fix exists",
         exceptions: [deepmergeException({ ignore_only_without_fix: true })],
         fixAvailable: true,
@@ -275,21 +278,68 @@ it("accepts a fix-restricted exception while no fix exists", () => {
     expect(result.stdout).toContain("All overrides are stale");
 });
 
+/** @param {ReturnType<typeof runChecker>} run */
+function expectEvaluationError({ result, root, manifest }) {
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Unable to evaluate overrides");
+    expect(result.stdout).not.toContain("still needed (audit failure)");
+    expect(result.stdout).not.toContain("stale");
+    expect(JSON.parse(readFileSync(join(root, "package.json"), "utf8"))).toEqual(manifest);
+}
+
 it.each([
     { label: "an invalid via shape", rawReport: '{"vulnerabilities":{"glob":{"via":{}}}}' },
+    { label: "a node without via", rawReport: '{"vulnerabilities":{"glob":{}}}' },
+    { label: "no advisories despite failing", rawReport: '{"vulnerabilities":{}}' },
     { label: "an npm error report", rawReport: '{"error":{"summary":"ENOAUDIT"}}' },
     {
         label: "an advisory without ids",
         rawReport: '{"vulnerabilities":{"glob":{"via":[{"severity":"low"}]}}}',
     },
     { label: "non-JSON output", rawReport: "npm error network" },
-])("keeps overrides after an audit with $label", ({ rawReport }) => {
-    expectOverridesKept(runChecker({ upstreamFixed: true, rawReport, fix: true }));
+])("reports an evaluation error after an audit with $label", ({ rawReport }) => {
+    expectEvaluationError(runChecker({ upstreamFixed: true, rawReport, fix: true }));
 });
 
-it("fails loudly when the audit policy cannot run", () => {
-    const { result } = runChecker({ upstreamFixed: true, auditPython: "missing-python-for-test" });
+it("reports an evaluation error for an invalid exception", () => {
+    const exceptions = [deepmergeException({ review_by: undefined })];
+    expectEvaluationError(
+        runChecker({ upstreamFixed: true, leftover: LEFTOVER, exceptions, fix: true }),
+    );
+});
+
+it.each([
+    { label: "a missing interpreter", options: { auditPython: "missing-python-for-test" } },
+    {
+        label: "a non-executable interpreter",
+        options: {
+            auditPython: "tools/python-not-executable",
+            setup: (root) => {
+                mkdirSync(join(root, "tools"));
+                writeFileSync(join(root, "tools/python-not-executable"), "#!/bin/sh\n");
+            },
+        },
+    },
+    { label: "missing policy modules", options: { withPolicy: false } },
+])("fails before any trial with $label", ({ options }) => {
+    const { result, calls } = runChecker({ upstreamFixed: true, fix: true, ...options });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("Unable to evaluate overrides");
-    expect(result.stdout).not.toContain("still needed (audit failure)");
+    expect(result.stderr).toContain("cannot load the npm audit policy");
+    expect(calls).toEqual([]);
+});
+
+it("resolves a relative interpreter path against the repository", () => {
+    const python = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], {
+        encoding: "utf8",
+    }).stdout.trim();
+    const { result } = runChecker({
+        upstreamFixed: true,
+        auditPython: "tools/python",
+        setup: (root) => {
+            mkdirSync(join(root, "tools"));
+            symlinkSync(python, join(root, "tools/python"));
+        },
+    });
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("All overrides are stale");
 });

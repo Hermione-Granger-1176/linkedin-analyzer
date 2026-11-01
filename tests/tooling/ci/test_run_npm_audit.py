@@ -173,6 +173,7 @@ def test_parse_npm_audit_defaults_package_name_to_key() -> None:
     payload = {
         "vulnerabilities": {
             "lodash": {
+                "fixAvailable": False,
                 "via": [{"source": 7, "severity": "low"}],
             }
         }
@@ -192,6 +193,7 @@ def test_parse_npm_audit_rejects_invalid_package_name(name: object) -> None:
         "vulnerabilities": {
             "left-pad": {
                 "name": name,
+                "fixAvailable": False,
                 "via": [{"source": 7, "severity": "high"}],
             }
         }
@@ -257,6 +259,11 @@ def test_parse_npm_audit_accepts_fix_description_object() -> None:
         {"vulnerabilities": []},
         {"vulnerabilities": {"pkg": ["oops"]}},
         {"vulnerabilities": {"pkg": {"via": {}}}},
+        {"vulnerabilities": {"pkg": {"fixAvailable": False}}},
+        {"vulnerabilities": {"pkg": {"fixAvailable": False, "via": []}}},
+        {"vulnerabilities": {"pkg": {"via": [{"source": 7, "severity": "low"}]}}},
+        {},
+        {"error": None},
     ],
 )
 def test_parse_npm_audit_rejects_invalid_shapes(payload: dict[str, object]) -> None:
@@ -276,6 +283,39 @@ def test_run_npm_audit_parses_clean_report(monkeypatch: pytest.MonkeyPatch) -> N
     )
 
     assert run_npm_audit._run_npm_audit("npm") == ()
+
+
+def test_run_npm_audit_rejects_failed_run_without_advisories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-zero npm exit whose report names no advisory cannot pass."""
+    monkeypatch.setattr(
+        run_npm_audit.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=1, stdout='{"vulnerabilities": {}}', stderr=""
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="exited with status 1 but reported no advisories"):
+        run_npm_audit._run_npm_audit()
+
+
+def test_run_npm_audit_returns_findings_from_failed_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-zero npm exit that reports advisories is a normal audit result."""
+    payload = (
+        '{"vulnerabilities": {"left-pad": {"fixAvailable": false,'
+        ' "via": [{"source": 7, "severity": "low"}]}}}'
+    )
+    monkeypatch.setattr(
+        run_npm_audit.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout=payload, stderr=""),
+    )
+
+    assert [finding.advisory_id for finding in run_npm_audit._run_npm_audit()] == ["7"]
 
 
 def test_run_npm_audit_accepts_explicit_null_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -606,6 +646,36 @@ def test_main_reports_errors(
     output = capsys.readouterr().out
     assert "npm dependency audit failed:" in output
     assert "- Unreviewed npm vulnerability: left-pad high GHSA-aaaa-bbbb-cccc" in output
+
+
+@pytest.mark.parametrize(
+    ("target", "error"),
+    [
+        ("load_security_audit_exceptions", FileNotFoundError("missing config")),
+        ("load_security_audit_exceptions", ValueError("bad config")),
+        ("_run_npm_audit", RuntimeError("npm audit reported an error: boom")),
+        ("_run_npm_audit", ValueError("npm audit 'via' must be a non-empty list: pkg")),
+    ],
+)
+def test_main_separates_evaluation_errors_from_policy_failures(
+    target: str,
+    error: Exception,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Return the evaluation-error status, not the policy failure, when the audit cannot run."""
+
+    def _raise(*_args: object, **_kwargs: object) -> object:
+        raise error
+
+    monkeypatch.setattr(run_npm_audit, "load_security_audit_exceptions", lambda **_kwargs: ())
+    monkeypatch.setattr(run_npm_audit, "_run_npm_audit", lambda _npm: ())
+    monkeypatch.setattr(run_npm_audit, target, _raise)
+
+    assert run_npm_audit.main([]) == run_npm_audit.EVALUATION_ERROR_EXIT == 2
+    captured = capsys.readouterr()
+    assert f"npm dependency audit could not be evaluated: {error}" in captured.err
+    assert "npm dependency audit failed:" not in captured.out
 
 
 def test_is_gated_applies_the_npm_severity_ladder() -> None:

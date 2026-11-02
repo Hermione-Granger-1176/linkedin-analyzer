@@ -34,14 +34,15 @@ jobs:
             exit 1
           fi
 
-  publish-pypi:
+  # Build and smoke-test without the PyPI OIDC grant. These steps install
+  # unhashed build tools and the wheel's runtime dependencies, so none of that
+  # code may run in the job that can mint a publishing token.
+  build-python:
     needs: require-ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: pypi
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,6 +71,31 @@ jobs:
             echo "::error::Built version $actual does not match release tag $expected"
             exit 1
           fi
+      - name: Upload distributions
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Holds the OIDC grant. It installs nothing and runs only two SHA-pinned
+  # actions: GitHub's artifact download and PyPA's publisher. Those two pins are
+  # the code this job trusts with the token.
+  publish-pypi:
+    needs: build-python
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-dist
+          path: dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
@@ -102,23 +128,27 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build metadata
         id: image-meta
+        env:
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           # Docker tags keep the raw vX.Y.Z; build args/labels need a PEP 440 version.
-          tag_version="${{ github.event.release.tag_name }}"
+          # Event values reach the shell only through the environment, never as
+          # expression text spliced into this script.
+          tag_version="${GITHUB_REF_NAME}"
           version="${tag_version#v}"
           {
             echo "image=${image}"
             echo "version=${version}"
-            echo "revision=${{ github.sha }}"
-            echo "source_url=https://github.com/${{ github.repository }}"
+            echo "revision=${GITHUB_SHA}"
+            echo "source_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
           } >> "$GITHUB_OUTPUT"
           # Prereleases must never re-point the floating :latest tag.
           {
             echo "tags<<TAGS_EOF"
             echo "${image}:${tag_version}"
-            echo "${image}:sha-${{ github.sha }}"
-            if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+            echo "${image}:sha-${GITHUB_SHA}"
+            if [ "${RELEASE_PRERELEASE}" != "true" ]; then
               echo "${image}:latest"
             fi
             echo "TAGS_EOF"

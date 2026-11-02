@@ -76,6 +76,7 @@ describe("sentry", () => {
         expect(options).toEqual(
             expect.objectContaining({
                 dsn: "https://key@sentry.io/123",
+                tunnel: "/api/sentry-tunnel",
                 environment: "production",
                 release: "sha-123",
                 defaultIntegrations: false,

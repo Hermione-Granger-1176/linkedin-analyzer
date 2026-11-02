@@ -3,4 +3,4 @@ interface:
   short_description: "Run Copilot reviews and address their feedback"
   default_prompt: "Use $copilot-review-loop to run the current pull request through GitHub Copilot review until it is clean."
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false

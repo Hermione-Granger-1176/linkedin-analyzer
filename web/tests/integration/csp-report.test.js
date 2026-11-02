@@ -7,44 +7,7 @@ import handler, {
     sentryReportUriFromDsn,
     shouldDropReportForRateLimit,
 } from "../../../api/csp-report.mjs";
-
-/**
- * Build a mock request whose body is delivered as an async stream of chunks.
- * @param {Array<string | Buffer>} chunks - Body chunks to yield.
- * @param {object} [options] - Overrides for method, headers, and body.
- * @returns {object} A request-like object.
- */
-function streamRequest(chunks, options = {}) {
-    const { method = "POST", headers = {}, body } = options;
-    return {
-        method,
-        headers,
-        body,
-        async *[Symbol.asyncIterator]() {
-            for (const chunk of chunks) {
-                yield chunk;
-            }
-        },
-    };
-}
-
-/**
- * Build a mock response capturing status, headers, and end state.
- * @returns {object} A response-like object.
- */
-function mockResponse() {
-    return {
-        statusCode: 0,
-        headers: {},
-        ended: false,
-        setHeader(key, value) {
-            this.headers[key] = value;
-        },
-        end() {
-            this.ended = true;
-        },
-    };
-}
+import { mockResponse, streamRequest } from "../helpers/serverless.js";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -504,6 +467,28 @@ describe("csp-report handler", () => {
     it("returns 413 when a parsed body exceeds the size cap", async () => {
         const res = mockResponse();
         await handler({ method: "POST", headers: {}, body: { data: "a".repeat(70 * 1024) } }, res);
+        expect(res.statusCode).toBe(413);
+    });
+
+    it("decodes a Buffer body, as Vercel delivers application/octet-stream", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const report = { "csp-report": { "violated-directive": "img-src" } };
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: Buffer.from(JSON.stringify(report)) }, res);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+            "csp-report": { "violated-directive": "img-src" },
+        });
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("returns 413 when a Buffer body exceeds the size cap", async () => {
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: Buffer.alloc(70 * 1024, 0x61) }, res);
         expect(res.statusCode).toBe(413);
     });
 

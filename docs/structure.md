@@ -125,7 +125,7 @@ Scripts are part of the Python coverage target. A new Python script needs tests 
 4. `web/src/platform/persistence/storage.js` stores the original uploads as `Blob` records and selected aggregates in IndexedDB when available.
 5. Screens render local results and exports use local data to create files.
 
-`api/csp-report.mjs` receives only browser CSP violation reports. It does not receive uploaded file contents.
+`api/csp-report.mjs` receives only browser CSP violation reports. `api/sentry-tunnel.mjs` relays opt-in Sentry diagnostics to the configured project. The browser reduces those diagnostics before it sends them. The relay checks only the destination. Neither receives uploaded file contents.
 
 ### CLI data flow
 

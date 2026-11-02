@@ -8,7 +8,9 @@
 //
 // The relay forwards only to the project named by this deployment's own DSN
 // configuration, and only when the envelope header names that same DSN. It
-// cannot reach another Sentry project or any other host. Forwarding from the
+// cannot reach another Sentry project or any other host. It does not inspect
+// event content. The browser reduces events before sending them, and anything
+// that bypasses that reducer can still reach only this deployment's project. Forwarding from the
 // server also keeps the visitor's IP address out of the Sentry request.
 
 // Reduced events carry fixed-schema tags and a few stack frames, so real
@@ -16,7 +18,7 @@
 const MAX_BODY_BYTES = 256 * 1024;
 const FORWARD_TIMEOUT_MS = 5000;
 const ENVELOPE_CONTENT_TYPE = "application/x-sentry-envelope";
-// Sentry's rate-limit headers tell the SDK to back off; relay them unchanged.
+// Sentry's rate-limit headers tell the SDK to back off. Relay them unchanged.
 const RELAYED_RESPONSE_HEADERS = ["retry-after", "x-sentry-rate-limits"];
 const PROJECT_ID = /^\d+$/;
 
@@ -63,7 +65,7 @@ export function parseDsn(dsn) {
     if (!url.username || !projectId || !PROJECT_ID.test(projectId)) {
         return null;
     }
-    // Self-hosted Sentry can serve from a path prefix; keep it in the target.
+    // Self-hosted Sentry can serve from a path prefix. Keep it in the target.
     const prefix = segments.length ? `/${segments.join("/")}` : "";
     return {
         publicKey: url.username,
@@ -75,7 +77,7 @@ export function parseDsn(dsn) {
 
 /**
  * Resolve the DSNs this deployment may relay to, from server-side env vars.
- * The browser DSN is the usual target; `SENTRY_DSN` is accepted as well so a
+ * The browser DSN is the usual target. The relay also accepts `SENTRY_DSN`, so a
  * deployment that sets only the server-side variable still works.
  * @param {Record<string, string | undefined>|undefined} env - Environment variables.
  * @returns {ParsedDsn[]} Allowed relay targets, possibly empty.
@@ -108,7 +110,9 @@ export function envelopeDsn(body) {
 }
 
 /**
- * Find the configured target that an envelope's DSN names exactly.
+ * Find the configured target that an envelope's DSN names exactly. The
+ * envelope URL carries the scheme, host, path prefix, and project, so two DSNs
+ * that differ in any of those never match each other.
  * @param {ParsedDsn} dsn - DSN from the envelope header.
  * @param {ParsedDsn[]} targets - Allowed relay targets.
  * @returns {ParsedDsn|null} The matching target, or null.
@@ -116,47 +120,63 @@ export function envelopeDsn(body) {
 export function matchTarget(dsn, targets) {
     return (
         targets.find(
-            (target) =>
-                target.host === dsn.host &&
-                target.projectId === dsn.projectId &&
-                target.publicKey === dsn.publicKey,
+            (target) => target.envelopeUrl === dsn.envelopeUrl && target.publicKey === dsn.publicKey,
         ) || null
     );
 }
 
 /**
- * Read the request body as bytes, enforcing a hard size cap. Vercel pre-parses
- * `text/plain` bodies (the SDK's default for string envelopes) into a string
- * and `application/octet-stream` bodies into a Buffer. A request without a
- * content type gets an empty pre-parsed string while its stream stays unread,
- * so an empty pre-parsed body falls back to the stream.
+ * Convert the body Vercel already parsed into bytes. Vercel parses `text/plain`
+ * bodies (the SDK's default for string envelopes) into a string and
+ * `application/octet-stream` bodies into a Buffer.
+ * @param {unknown} value - The request's pre-parsed `req.body`.
+ * @returns {Buffer} The body bytes, empty when Vercel parsed nothing.
+ */
+function preParsedBody(value) {
+    if (Buffer.isBuffer(value)) {
+        return value;
+    }
+    if (typeof value === "string") {
+        return Buffer.from(value, "utf8");
+    }
+    if (value === undefined || value === null) {
+        return Buffer.alloc(0);
+    }
+    // A parsed JSON or form body is not a Sentry envelope.
+    throw httpError(400, "Unsupported body");
+}
+
+/**
+ * Read a request stream, stopping as soon as it passes the size cap.
+ * @param {AsyncIterable<string | Buffer>} req - Incoming request stream.
+ * @param {number} limit - Maximum allowed body size in bytes.
+ * @returns {Promise<Buffer>} The streamed body.
+ */
+async function readStream(req, limit) {
+    let size = 0;
+    const chunks = [];
+    for await (const chunk of req) {
+        const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+        size += buf.length;
+        if (size > limit) {
+            throw httpError(413, "Payload too large");
+        }
+        chunks.push(buf);
+    }
+    return Buffer.concat(chunks);
+}
+
+/**
+ * Read the request body as bytes, enforcing a hard size cap. For a request
+ * without a content type, Vercel sets `req.body` to an empty string and leaves
+ * the stream unread, so an empty pre-parsed body falls back to the stream.
  * @param {object} req - Incoming request (Node `IncomingMessage`-like).
  * @param {number} limit - Maximum allowed body size in bytes.
  * @returns {Promise<Buffer>} The request body.
  */
 async function readEnvelopeBody(req, limit) {
-    const preParsed = req.body;
-    let body;
-    if (Buffer.isBuffer(preParsed) && preParsed.length) {
-        body = preParsed;
-    } else if (typeof preParsed === "string" && preParsed) {
-        body = Buffer.from(preParsed, "utf8");
-    } else if (preParsed && typeof preParsed === "object" && !Buffer.isBuffer(preParsed)) {
-        // A parsed JSON or form body is not a Sentry envelope.
-        throw httpError(400, "Unsupported body");
-    } else {
-        let size = 0;
-        const chunks = [];
-        for await (const chunk of req) {
-            const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
-            size += buf.length;
-            if (size > limit) {
-                throw httpError(413, "Payload too large");
-            }
-            chunks.push(buf);
-        }
-        body = Buffer.concat(chunks);
-    }
+    const preParsed = preParsedBody(req.body);
+    const body = preParsed.length ? preParsed : await readStream(req, limit);
     if (body.length > limit) {
         throw httpError(413, "Payload too large");
     }

@@ -6,6 +6,7 @@ import handler, {
     parseDsn,
     resolveTunnelTargets,
 } from "../../../api/sentry-tunnel.mjs";
+import { mockResponse, streamRequest } from "../helpers/serverless.js";
 
 const DSN = "https://abc123@o45.ingest.us.sentry.io/678";
 const ENVELOPE_URL = "https://o45.ingest.us.sentry.io/api/678/envelope/";
@@ -17,44 +18,6 @@ const ENVELOPE_URL = "https://o45.ingest.us.sentry.io/api/678/envelope/";
  */
 function envelope(dsn = DSN) {
     return `${JSON.stringify({ dsn, sent_at: "2026-11-02T00:00:00.000Z" })}\n{"type":"event"}\n{"message":"x"}`;
-}
-
-/**
- * Build a mock request whose body is delivered as an async stream of chunks.
- * @param {Array<string | Buffer>} chunks - Body chunks to yield.
- * @param {object} [options] - Overrides for method and pre-parsed body.
- * @returns {object} A request-like object.
- */
-function streamRequest(chunks, options = {}) {
-    const { method = "POST", body } = options;
-    return {
-        method,
-        headers: {},
-        body,
-        async *[Symbol.asyncIterator]() {
-            for (const chunk of chunks) {
-                yield chunk;
-            }
-        },
-    };
-}
-
-/**
- * Build a mock response capturing status, headers, and end state.
- * @returns {object} A response-like object.
- */
-function mockResponse() {
-    return {
-        statusCode: 0,
-        headers: {},
-        ended: false,
-        setHeader(key, value) {
-            this.headers[key] = value;
-        },
-        end() {
-            this.ended = true;
-        },
-    };
 }
 
 /**
@@ -150,8 +113,15 @@ describe("matchTarget", () => {
         ["another public key", "https://other@o45.ingest.us.sentry.io/678"],
         ["another project", "https://abc123@o45.ingest.us.sentry.io/999"],
         ["another host", "https://abc123@o99.ingest.us.sentry.io/678"],
+        ["another scheme", "http://abc123@o45.ingest.us.sentry.io/678"],
+        ["another path prefix", "https://abc123@o45.ingest.us.sentry.io/prefix/678"],
     ])("rejects %s", (_label, dsn) => {
         expect(matchTarget(parseDsn(dsn), targets)).toBeNull();
+    });
+
+    it("picks the target whose prefix matches when two DSNs share host, key, and project", () => {
+        const prefixed = parseDsn("https://abc123@o45.ingest.us.sentry.io/prefix/678");
+        expect(matchTarget(prefixed, [targets[0], prefixed])).toBe(prefixed);
     });
 });
 
@@ -206,14 +176,18 @@ describe("sentry-tunnel handler", () => {
         expect(res.headers).toEqual({});
     });
 
-    it("reads the stream when the pre-parsed body is empty", async () => {
+    it.each([
+        ["an empty string", ""],
+        ["an empty Buffer", Buffer.alloc(0)],
+        ["null", null],
+    ])("reads the stream when the pre-parsed body is %s", async (_label, body) => {
         process.env.VITE_SENTRY_DSN = DSN;
         const fetchMock = vi.fn().mockResolvedValue(upstreamResponse(200));
         vi.stubGlobal("fetch", fetchMock);
 
         const [header, ...rest] = envelope().split("\n");
         const res = mockResponse();
-        await handler(streamRequest([`${header}\n`, Buffer.from(rest.join("\n"))], { body: "" }), res);
+        await handler(streamRequest([`${header}\n`, Buffer.from(rest.join("\n"))], { body }), res);
 
         expect(fetchMock.mock.calls[0][1].body.toString("utf8")).toBe(envelope());
         expect(res.statusCode).toBe(200);

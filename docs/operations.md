@@ -81,7 +81,7 @@ Omit the input when you want GitHub to generate release notes. Pass `prerelease=
 4. Let `.github/workflows/publish.yml` run from the published release event.
 5. Set `VITE_APP_RELEASE` to the same tag or commit on the next web deployment.
 
-The publish workflow first checks the tagged commit's latest successful `CI result`. The `build-python` job builds the package, runs `twine check`, installs the wheel, compares `linkedin-analyzer --version` with the tag, and uploads `dist/` as an artifact. It has no `id-token` permission, so the build tools and runtime dependencies it installs cannot mint a publishing token. The `publish-pypi` job holds the `pypi` environment and `id-token: write`, downloads that artifact, and runs only the pinned publish action through PyPI trusted publishing with OIDC. It does not use a stored PyPI API token.
+The publish workflow first checks the tagged commit's latest successful `CI result`. The `build-python` job builds the package, runs `twine check`, installs the wheel, compares `linkedin-analyzer --version` with the tag, and uploads `dist/` as an artifact. That job has no `id-token` permission, so the build tools and runtime dependencies it installs cannot mint a publishing token. The `publish-pypi` job holds the `pypi` environment and `id-token: write`. It downloads the artifact and runs only the pinned publish action, which uploads through PyPI trusted publishing with OIDC. The workflow does not use a stored PyPI API token.
 
 The container job builds `linux/amd64` and `linux/arm64` images, verifies the image version, runs Trivy with every severity enabled and unfixed findings ignored, then pushes these tags:
 
@@ -117,7 +117,9 @@ The browser stores uploads locally when IndexedDB works. A 24-hour inactivity sw
 
 The browser initializes Sentry only when `VITE_SENTRY_DSN` exists and the user grants consent. It sends reduced error events and numeric performance data. The reducer removes file contents, file names, message bodies, contact names, URLs, query strings, DOM text, breadcrumbs, arbitrary rejection values, and SDK attachments.
 
-The SDK sends envelopes to the same-origin `/api/sentry-tunnel` function, not to Sentry directly, so the CSP keeps `connect-src 'self'`. The function forwards an envelope only when its header names the project in `VITE_SENTRY_DSN` or `SENTRY_DSN`, so it cannot relay to any other Sentry project or host. It returns `403` for any other DSN, `404` when neither variable is set, and Sentry's own status and rate-limit headers otherwise. Vercel exposes project variables to functions at runtime, so the same `VITE_SENTRY_DSN` serves the build and the relay. Sentry sees the function's address instead of the visitor's.
+The SDK sends each envelope (Sentry's request format) to the same-origin relay in `api/sentry-tunnel.mjs`, not to Sentry. The CSP can therefore keep `connect-src 'self'`. The relay forwards an envelope only when the envelope header names the same DSN as `VITE_SENTRY_DSN` or `SENTRY_DSN`. It cannot reach any other Sentry project or host. The relay checks the destination, not the content. The browser reducer strips private data, and the relay forwards the envelope bytes unchanged.
+
+The relay returns `403` for any other DSN and `404` when neither variable is set. Otherwise it returns Sentry's status code and copies Sentry's rate-limit headers. Vercel exposes project variables to functions at runtime, so one `VITE_SENTRY_DSN` serves both the build and the relay. Sentry sees the relay's address, not the visitor's.
 
 Set `VITE_APP_RELEASE` during the build so Sentry can group events by release. The metrics buffer flushes when the page becomes hidden and includes only allowlisted nonnegative numbers and positive sample counts.
 

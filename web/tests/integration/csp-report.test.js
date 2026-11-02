@@ -507,6 +507,28 @@ describe("csp-report handler", () => {
         expect(res.statusCode).toBe(413);
     });
 
+    it("decodes a Buffer body, as Vercel delivers application/octet-stream", async () => {
+        process.env.CSP_REPORT_URI = "https://collector.example/report";
+        const fetchMock = vi.fn().mockResolvedValue({});
+        vi.stubGlobal("fetch", fetchMock);
+
+        const report = { "csp-report": { "violated-directive": "img-src" } };
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: Buffer.from(JSON.stringify(report)) }, res);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+            "csp-report": { "violated-directive": "img-src" },
+        });
+        expect(res.statusCode).toBe(204);
+    });
+
+    it("returns 413 when a Buffer body exceeds the size cap", async () => {
+        const res = mockResponse();
+        await handler({ method: "POST", headers: {}, body: Buffer.alloc(70 * 1024, 0x61) }, res);
+        expect(res.statusCode).toBe(413);
+    });
+
     it("returns 413 when a streamed body exceeds the size cap", async () => {
         const res = mockResponse();
         await handler(streamRequest([Buffer.alloc(70 * 1024, 0x61)]), res);

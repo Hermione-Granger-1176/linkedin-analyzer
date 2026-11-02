@@ -136,7 +136,7 @@ Check all of these conditions:
 
 1. The build has `VITE_SENTRY_DSN`.
 2. The user selected the diagnostics consent control.
-3. The browser has network access to the configured Sentry host.
+3. The deployment serves `/api/sentry-tunnel`, and the function can read `VITE_SENTRY_DSN` or `SENTRY_DSN` at runtime. The browser sends diagnostics to that same-origin relay, so the Vite dev server, which has no `/api` functions, never delivers them.
 4. The deployment has a valid `VITE_APP_RELEASE` when release grouping matters.
 
 The app intentionally drops file contents, names, URLs, breadcrumbs, and arbitrary error values. An absent event can mean no error, no consent, a filtered browser-noise event, or a reduced event that the collector rejected.

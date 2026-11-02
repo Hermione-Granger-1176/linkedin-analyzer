@@ -135,12 +135,20 @@ export function shouldDropReportForRateLimit(env, now = Date.now(), logFn = cons
 
 /**
  * Read the request body as a UTF-8 string, enforcing a hard size cap.
- * Handles both a pre-parsed `req.body` and a raw request stream.
+ * Handles both a pre-parsed `req.body` and a raw request stream. Vercel leaves
+ * `req.body` undefined for the CSP report content types, hands an
+ * `application/octet-stream` body over as a Buffer, and parses JSON and text.
  * @param {object} req - Incoming request (Node `IncomingMessage`-like).
  * @param {number} limit - Maximum allowed body size in bytes.
  * @returns {Promise<string>} The request body text.
  */
 async function readReportBody(req, limit) {
+    if (Buffer.isBuffer(req.body)) {
+        if (req.body.length > limit) {
+            throw httpError(413, "Payload too large");
+        }
+        return req.body.toString("utf8");
+    }
     if (req.body !== undefined && req.body !== null) {
         const serialized = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
         if (Buffer.byteLength(serialized, "utf8") > limit) {

@@ -29,7 +29,7 @@ Once an upload makes Analytics available, `web/src/app/route-preload.js` loads i
 5. Screens read aggregates and render charts, lists, and insight cards in the browser.
 6. Export modules create Excel, PNG, or PDF downloads in the browser.
 
-No application endpoint receives the uploaded file contents. The only server-side function is `api/csp-report.mjs`, which accepts browser CSP violation reports.
+No application endpoint receives the uploaded file contents. The server-side functions are `api/csp-report.mjs`, which accepts browser CSP violation reports, and `api/sentry-tunnel.mjs`, which relays opt-in, already reduced Sentry envelopes to the configured project.
 
 ## Why workers have separate contracts
 

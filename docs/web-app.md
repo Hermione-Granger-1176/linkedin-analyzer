@@ -121,7 +121,7 @@ Diagnostics are disabled until both conditions hold:
 1. The build contains `VITE_SENTRY_DSN`.
 2. You select the diagnostics consent control.
 
-You can revoke consent from the footer. With consent, the app may send reduced error events, numeric performance measurements, and the visual effects tier in use.
+You can revoke consent from the footer. With consent, the app sends diagnostics through the same-origin `/api/sentry-tunnel` relay, which forwards them only to this deployment's Sentry project. The app may send reduced error events, numeric performance measurements, and the visual effects tier in use.
 
 When the app detects an unfinished processing run, it may also send one `processing-unfinished` event. That event contains the file-size bucket, the device memory bucket where available, and whether the run processed one file or several. Diagnostics exclude CSV text, file names, message bodies, contact names, URLs, DOM text, and arbitrary exception values.
 

@@ -40,6 +40,7 @@ import { WIRE_METRIC_NAMES } from "./metrics.js";
 
 let sentryReady = false;
 const TELEMETRY_CONSENT_STORAGE_KEY = "linkedin-analyzer:telemetry-consent";
+const SENTRY_TUNNEL_PATH = "/api/sentry-tunnel";
 const NOISY_EVENT_PATTERNS = [
     /ResizeObserver loop limit exceeded/i,
     /ResizeObserver loop completed with undelivered notifications/i,
@@ -621,6 +622,9 @@ export function initSentry() {
     const appBasePath = resolveAppBasePath();
     Sentry.init({
         dsn,
+        // Same-origin relay (api/sentry-tunnel.mjs) so the CSP can keep
+        // connect-src 'self' instead of allowing every Sentry ingest host.
+        tunnel: SENTRY_TUNNEL_PATH,
         environment,
         release,
         defaultIntegrations: false,

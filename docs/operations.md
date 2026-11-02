@@ -6,12 +6,13 @@ This project has three production outputs: a static web app, a Python package, a
 
 Vercel reads the repository configuration from `vercel.json`:
 
-| Setting             | Value                |
-| ------------------- | -------------------- |
-| Install command     | `npm ci`             |
-| Build command       | `npm run build`      |
-| Output directory    | `web/dist`           |
-| Serverless function | `api/csp-report.mjs` |
+| Setting             | Value                   |
+| ------------------- | ----------------------- |
+| Install command     | `npm ci`                |
+| Build command       | `npm run build`         |
+| Output directory    | `web/dist`              |
+| Serverless function | `api/csp-report.mjs`    |
+| Serverless function | `api/sentry-tunnel.mjs` |
 
 The Vite build uses a relative base path. The app can therefore run at a domain root or below a path prefix. The hash router does not need server-side rewrites.
 
@@ -80,7 +81,7 @@ Omit the input when you want GitHub to generate release notes. Pass `prerelease=
 4. Let `.github/workflows/publish.yml` run from the published release event.
 5. Set `VITE_APP_RELEASE` to the same tag or commit on the next web deployment.
 
-The publish workflow first checks the tagged commit's latest successful `CI result`. The PyPI job builds the package, runs `twine check`, installs the wheel, and compares `linkedin-analyzer --version` with the tag. It publishes through PyPI trusted publishing with OIDC and the `pypi` environment. It does not use a stored PyPI API token.
+The publish workflow first checks the tagged commit's latest successful `CI result`. The `build-python` job builds the package, runs `twine check`, installs the wheel, compares `linkedin-analyzer --version` with the tag, and uploads `dist/` as an artifact. It has no `id-token` permission, so the build tools and runtime dependencies it installs cannot mint a publishing token. The `publish-pypi` job holds the `pypi` environment and `id-token: write`, downloads that artifact, and runs only the pinned publish action through PyPI trusted publishing with OIDC. It does not use a stored PyPI API token.
 
 The container job builds `linux/amd64` and `linux/arm64` images, verifies the image version, runs Trivy with every severity enabled and unfixed findings ignored, then pushes these tags:
 
@@ -115,6 +116,8 @@ The browser stores uploads locally when IndexedDB works. A 24-hour inactivity sw
 ### Sentry diagnostics
 
 The browser initializes Sentry only when `VITE_SENTRY_DSN` exists and the user grants consent. It sends reduced error events and numeric performance data. The reducer removes file contents, file names, message bodies, contact names, URLs, query strings, DOM text, breadcrumbs, arbitrary rejection values, and SDK attachments.
+
+The SDK sends envelopes to the same-origin `/api/sentry-tunnel` function, not to Sentry directly, so the CSP keeps `connect-src 'self'`. The function forwards an envelope only when its header names the project in `VITE_SENTRY_DSN` or `SENTRY_DSN`, so it cannot relay to any other Sentry project or host. It returns `403` for any other DSN, `404` when neither variable is set, and Sentry's own status and rate-limit headers otherwise. Vercel exposes project variables to functions at runtime, so the same `VITE_SENTRY_DSN` serves the build and the relay. Sentry sees the function's address instead of the visitor's.
 
 Set `VITE_APP_RELEASE` during the build so Sentry can group events by release. The metrics buffer flushes when the page becomes hidden and includes only allowlisted nonnegative numbers and positive sample counts.
 

@@ -79,8 +79,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Holds the OIDC grant and runs nothing but the pinned publish action on the
-  # artifact built above.
+  # Holds the OIDC grant. It installs nothing and runs only two SHA-pinned
+  # actions: GitHub's artifact download and PyPA's publisher. Those two pins are
+  # the code this job trusts with the token.
   publish-pypi:
     needs: build-python
     runs-on: ubuntu-latest

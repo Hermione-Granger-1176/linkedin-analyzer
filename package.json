@@ -103,7 +103,7 @@
     "actionlint": "2.0.6",
     "eslint": "^10.14.0",
     "eslint-import-resolver-node": "^0.4.0",
-    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-import-x": "^4.18.1",
     "eslint-plugin-jsdoc": "^65.4.4",
     "fake-indexeddb": "^6.2.7",
     "globals": "^17.14.0",
@@ -118,6 +118,7 @@
     "vitest": "^5.0.2"
   },
   "overrides": {
-    "glob": "^14.0.3"
+    "glob": "^14.0.3",
+    "minimatch@>=7.0.0 <11.0.8": "^11.0.8"
   }
 }

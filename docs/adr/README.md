@@ -16,5 +16,6 @@ These records preserve the reasoning behind choices that affect the repository's
 - [ADR-010: Stream uploads and store original files](010-stream-uploads-and-store-original-files.md)
 - [ADR-011: Svelte for screen views](011-svelte-for-screen-views.md)
 - [ADR-012: Try GraphQL first and fall back to REST for local GitHub tooling](012-graphql-first-rest-fallback.md)
+- [ADR-013: npm override for patched minimatch](013-minimatch-override.md)
 
 When adding a record, use the next number, keep the file name descriptive, and link it from this page. Use the existing sections for context, decision, consequences, and validation when they apply.

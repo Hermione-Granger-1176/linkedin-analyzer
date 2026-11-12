@@ -23,6 +23,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. One repository cont
 8. **Auto-fix commands are the user's call** (`make fmt`, `make align-tables`, `make lock`). To see what a formatter would change, use `make format-py-diff` or `make format-js-diff path=...` and apply it by hand.
 9. **Committing, pushing, and opening or merging PRs are the user's call.** Make and verify changes in the working tree and stop there. Fold small tooling or doc tweaks into the branch in progress rather than opening a second PR.
 10. **CHANGELOG.md tracks the Python package only.** Web and Node changes do not go there.
+11. **Keep documentation in its owning page.** Before adding prose, check `docs/index.md` and existing ADRs. `docs/operations.md` owns current operating procedures; dependency decisions, override rationale, removal criteria, and historical validation belong in `docs/adr/`. Update existing guidance instead of appending another explanation, and link to the owner rather than duplicating it.
 
 ## Daily drivers
 

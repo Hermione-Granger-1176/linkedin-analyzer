@@ -137,17 +137,11 @@ After configuring forwarding, run `make web-smoke url=https://your-production-do
 
 ## Protect the supply chain
 
-GitHub Actions references are pinned to full commit SHAs. Pull requests use dependency review, and scheduled audits inspect npm dependencies, Python dependencies resolved from `uv.lock`, and the npm override policy. Both dependency audits fail closed on malformed reports, expired or unused exceptions, ambiguous exceptions, and findings whose configured exception no longer matches. They evaluate every advisory severity, including informational findings.
+Run `make security` to audit npm dependencies, Python dependencies from `uv.lock`, and npm overrides. The [scheduled audit](#run-scheduled-maintenance) checks every advisory severity and opens an [alert issue](#track-alert-issues) on failure. Invalid audit reports and expired, unused, or ambiguous exceptions fail the audit.
 
-Review `config/security_audit.json` before changing an exception. Each exception names its ecosystem, package, advisory, reason, and ISO `review_by` date. Set `ignore_only_without_fix` when the exception must stop applying as soon as a package manager reports a fix. Use `make check-overrides` to confirm that npm overrides remain necessary. Each trial runs the same policy-driven audit as `make audit-node`, so a finding covered by a valid reviewed exception cannot keep a stale override alive. The checker stops with an error, and changes nothing, when that audit cannot start or cannot evaluate a trial.
+Review `config/security_audit.json` before changing an exception. Each entry requires a package, advisory, reason, and ISO `review_by` date. Set `ignore_only_without_fix` when a reported fix must invalidate the exception.
 
-The `npm_override_dev_dependencies` list in `config/security_audit.json` identifies direct development dependencies added to supply temporary `$name` overrides. For each entry, the checker removes the dependency and its override in a temporary project. It resolves a fresh dependency tree and audits every severity. Other direct dependencies remain in the trial manifest.
-
-If the dependency tree installs and passes the audit, the checker reports that the override can be removed. It fails the scheduled check so the dependency-audit alert notifies maintainers. Once setup succeeds, the override check runs even if the preceding npm audit fails. An expired exception therefore cannot prevent the trial.
-
-The checker does not modify the repository. After validating the replacement, remove the fork, its maintenance entry, the advisory exception, and the fork-specific pin assertions together.
-
-The container publish job runs Trivy with every severity enabled and ignores only unfixed findings. A finding with an available fix blocks publication regardless of its severity or whether Trivy classifies it as `UNKNOWN`.
+Run `make check-overrides` to test removal in a temporary dependency tree without changing the repository. List direct development dependencies added solely for `$name` overrides in `npm_override_dev_dependencies` so the trial removes them too. An unnecessary override fails the check and triggers the scheduled alert. Keep each override's rationale, compatibility evidence, and removal criteria in an [ADR](adr/README.md).
 
 ## Understand CI
 
@@ -208,7 +202,7 @@ The scheduled workflows have these owners and times:
 | `refresh-action-shas.yml` | First day of each month at 03:00 UTC | Refresh CI pins and open a maintenance PR                |
 | `schedule-watchdog.yml`   | Push to `main` and manual dispatch   | Detect disabled scheduled workflows                      |
 
-Run any workflow with `make ci-dispatch workflow=<workflow-file>`. Scheduled dependency audits fail closed on malformed reports, expired exceptions, unused exceptions, and ambiguous exceptions. The Docker publish scan also gates every severity that Trivy reports when a fix exists.
+Run any workflow with `make ci-dispatch workflow=<workflow-file>`.
 
 ## Track alert issues
 
@@ -255,13 +249,11 @@ make ci-audit-repo-settings
 make ci-audit-repo-settings repo=owner/name branch=main
 ```
 
-The audit checks the default branch, security scanning, branch protection, Actions policy and SHA pins, required repository variables and secrets, environments, and the protected version-tag ruleset. It does not read PyPI settings because PyPI has no read API for the trusted publisher. Configure the PyPI publisher with owner `Hermione-Granger-1176`, repository `linkedin-analyzer`, workflow `publish.yml`, and environment `pypi`.
+The audit checks the default branch, security scanning, branch protection, Actions policy and SHA pins, required repository variables and secrets, environments, and the protected version-tag ruleset. Verify the [PyPI trusted publisher](#publish-a-release) manually because PyPI has no read API for that setting.
 
 The audit App needs `administration: read`, `secrets: read`, `actions_variables: read`, and `issues: write`, in addition to implicit metadata access. Do not use `GITHUB_TOKEN` for a manual audit because it cannot read the required administration settings.
 
 The audit workflow runs on Monday at 08:23 UTC and on manual dispatch. It skips when `AUDIT_APP_ID` or `AUDIT_APP_PRIVATE_KEY` is absent. It opens or closes the `repo-settings-audit` alert issue when the audit reaches a verdict.
-
-The expected settings include `main` as the default branch, enabled secret scanning and push protection, protected version tags matching `v*`, SHA-pinned Actions, required CI and security checks, review and history protections, required repository variables and secrets, and the `pypi` environment reviewer rule. The audit intentionally cannot inspect the PyPI trusted publisher because PyPI does not expose a read API. Verify that publisher manually with owner `Hermione-Granger-1176`, repository `linkedin-analyzer`, workflow `publish.yml`, and environment `pypi`.
 
 ## Keep credentials separate
 
@@ -273,9 +265,7 @@ The repository uses three GitHub Apps with separate roles:
 | Escalation        | `ESCALATION_APP_ID`, `ESCALATION_APP_PRIVATE_KEY` | Monthly CI pin refresh pull request                         |
 | Audit             | `AUDIT_APP_ID`, `AUDIT_APP_PRIVATE_KEY`           | Read-only repository settings audit and alert issue updates |
 
-Scope each installation to the required repositories. Keep private keys available only to the steps that create an App token or perform the verified writeback.
-
-The primary App writes validated `uv.lock` commits to Dependabot branches. The escalation App creates the protected-branch pin refresh pull request. The audit App reads repository settings and updates alert issues. Do not reuse one App for another role or expose a private key to a whole job when only one step needs it.
+Scope each installation to the required repositories. Keep private keys available only to the steps that create an App token or perform the verified writeback. Do not reuse one App for another role.
 
 ## Recover external services
 

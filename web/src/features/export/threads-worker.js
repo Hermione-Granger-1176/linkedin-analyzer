@@ -165,8 +165,7 @@ async function processPayload(payload) {
         return {
             success: false,
             threads: [],
-            /* v8 ignore next */
-            error: result.error || "Unable to parse messages.csv.",
+            error: result.error,
         };
     }
 

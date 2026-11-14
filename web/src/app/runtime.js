@@ -108,7 +108,7 @@ function handleChartExportClick(event) {
         return;
     }
     const canvasId = btn.dataset.exportCanvas;
-    if (!canvasId || !SketchCharts) {
+    if (!canvasId) {
         return;
     }
 

@@ -7,8 +7,8 @@ export const LoadingOverlay = (() => {
     /**
      * @typedef {object} OverlayElements
      * @property {HTMLElement} overlay - Overlay root
-     * @property {HTMLElement|null} title - Title element
-     * @property {HTMLElement|null} message - Message element
+     * @property {HTMLElement} title - Title element
+     * @property {HTMLElement} message - Message element
      */
 
     /** @type {Readonly<Record<string, OverlayText>>} */
@@ -104,14 +104,8 @@ export const LoadingOverlay = (() => {
         }
 
         const latest = Array.from(activeSources.values()).pop();
-        /* v8 ignore next 3 */
-        if (elements.title) {
-            elements.title.textContent = latest.title;
-        }
-        /* v8 ignore next 3 */
-        if (elements.message) {
-            elements.message.textContent = latest.message;
-        }
+        elements.title.textContent = latest.title;
+        elements.message.textContent = latest.message;
 
         elements.overlay.hidden = false;
         applyLoadingClass(true);
@@ -153,8 +147,8 @@ export const LoadingOverlay = (() => {
 
         overlayElements = {
             overlay,
-            title: document.getElementById("contentLoadingTitle"),
-            message: document.getElementById("contentLoadingText")
+            title: /** @type {HTMLElement} */ (document.getElementById("contentLoadingTitle")),
+            message: /** @type {HTMLElement} */ (document.getElementById("contentLoadingText"))
         };
         return overlayElements;
     }

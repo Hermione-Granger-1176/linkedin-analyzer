@@ -1262,7 +1262,6 @@ def test_edit_pr_prefers_the_body_file_over_the_inline_body() -> None:
 
     (cmd,) = runner.calls
     assert cmd == ["gh", "pr", "edit", "7", "--body-file", "/tmp/body.md"]
-    assert "--body" not in cmd
 
 
 def test_edit_pr_defaults_to_current_pr() -> None:

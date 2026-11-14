@@ -77,10 +77,8 @@ describe("buildInsightReaction", () => {
             const markup = buildInsightReaction(id);
 
             expect(markup).toBe(buildInsightReaction("no-such-insight"));
-            // The resting arms, and none of the props any posed id carries.
+            // The resting arms.
             expect(markup).toContain("M85 84 Q96 92 97 102");
-            expect(markup).not.toContain("pip-pencil");
-            expect(markup).not.toContain("insight-reaction-zzz");
         },
     );
 

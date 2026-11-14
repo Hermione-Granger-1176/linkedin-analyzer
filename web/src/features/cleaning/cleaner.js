@@ -57,15 +57,22 @@ import { createColumnCache } from "./string-pool.js";
  */
 
 /**
- * Result of LinkedInCleaner.process() and of a stream processor's finish().
- * @typedef {object} ProcessResult
- * @property {boolean} success - Whether the file parsed, validated, and cleaned
+ * Fields every process() result carries.
+ * @typedef {object} ProcessFields
  * @property {string|null} fileType - Type processed as (requested type on a mismatch), or null
  * @property {FileType|null} detectedType - Type detected from the headers, or null
  * @property {string[]} headers - Normalized CSV headers
  * @property {CleanedRow[]} cleanedData - Cleaned rows (empty on failure)
  * @property {number} rowCount - Cleaned row count, or parsed row count on failure
- * @property {string|null} error - User-facing error, or null on success
+ */
+
+/** @typedef {ProcessFields & {success: true, error: null}} ProcessSuccess */
+/** @typedef {ProcessFields & {success: false, error: string}} ProcessFailure */
+
+/**
+ * Result of LinkedInCleaner.process() and of a stream processor's finish().
+ * A failure always carries a user-facing error, so callers need no fallback text.
+ * @typedef {ProcessSuccess|ProcessFailure} ProcessResult
  */
 
 /**
@@ -133,11 +140,6 @@ export const LinkedInCleaner = (() => {
      * @returns {boolean}
      */
     function hasRequiredRowValues(row, requiredColumns) {
-        // Configurations normally define required columns. Treat an empty list as valid for malformed config.
-        /* v8 ignore next 2 */
-        if (!requiredColumns.length) {
-            return true;
-        }
         return requiredColumns.every((column) => !isMissing(row[column]));
     }
 
@@ -148,11 +150,6 @@ export const LinkedInCleaner = (() => {
      * @returns {boolean}
      */
     function hasAnyRowValue(row, columns) {
-        // cleanData() normally passes a non-empty list. Treat an empty list as valid for malformed config.
-        /* v8 ignore next 2 */
-        if (!columns.length) {
-            return true;
-        }
         return columns.some((column) => !isMissing(row[column]));
     }
 
@@ -162,11 +159,6 @@ export const LinkedInCleaner = (() => {
      * @returns {string} Normalized header
      */
     function normalizeHeader(header) {
-        // CSV parsing normally returns strings. Ignore malformed headers.
-        /* v8 ignore next 2 */
-        if (typeof header !== "string") {
-            return "";
-        }
         return header.replace(/^\uFEFF/, "").trim();
     }
 
@@ -544,12 +536,6 @@ export const LinkedInCleaner = (() => {
      * @returns {CleanedRow[]} Cleaned data
      */
     function cleanData(data, fileType) {
-        // process() validates the file type before cleaning. Keep the branch for an unknown type.
-        /* v8 ignore next 2 */
-        if (!CONFIGS[fileType]) {
-            return data;
-        }
-
         // Clean and filter in a single pass to avoid intermediate arrays.
         const cleanRow = createRowCleaner(/** @type {FileType} */ (fileType));
         /** @type {CleanedRow[]} */
@@ -593,15 +579,14 @@ export const LinkedInCleaner = (() => {
     }
 
     /**
-     * Build a standardized process() result object.
-     * @param {boolean} success - Whether processing succeeded
-     * @param {string|null} error - Error message, or null on success
-     * @param {Partial<ProcessResult>} [overrides] - Fields that differ from the empty defaults
-     * @returns {ProcessResult}
+     * Build the result of a file that did not process.
+     * @param {string} error - User-facing error message
+     * @param {Partial<ProcessFields>} [overrides] - Fields that differ from the empty defaults
+     * @returns {ProcessFailure}
      */
-    function makeResult(success, error, overrides = {}) {
+    function makeFailure(error, overrides = {}) {
         return {
-            success,
+            success: false,
             fileType: null,
             detectedType: null,
             headers: [],
@@ -618,16 +603,18 @@ export const LinkedInCleaner = (() => {
      * @param {string[]} headers - Normalized header row
      * @param {CleanedRow[]} cleanedData - Cleaned rows
      * @param {FileType|null} [detectedType] - Type the headers match, when it can differ from `fileType`
-     * @returns {ProcessResult}
+     * @returns {ProcessSuccess}
      */
     function makeSuccess(fileType, headers, cleanedData, detectedType = fileType) {
-        return makeResult(true, null, {
+        return {
+            success: true,
             fileType,
             detectedType,
             headers,
             cleanedData,
             rowCount: cleanedData.length,
-        });
+            error: null,
+        };
     }
 
     /**
@@ -686,10 +673,9 @@ export const LinkedInCleaner = (() => {
 
             const initialParse = parseCSV(csvText, "auto", parseCache);
             if (initialParse.error) {
-                return makeResult(false, initialParse.error);
+                return makeFailure(initialParse.error);
             }
-            return makeResult(
-                false,
+            return makeFailure(
                 "Could not auto-detect file type. This file does not appear to be a LinkedIn Shares, Comments, Messages, or Connections export. Please check that you uploaded the correct file.",
                 {
                     headers: initialParse.headers,
@@ -704,14 +690,13 @@ export const LinkedInCleaner = (() => {
                 const alternateType = detectAlternateFileType(csvText, fileType, parseCache);
                 if (alternateType) {
                     const missing = CONFIGS[fileType]?.requiredColumns || [];
-                    return makeResult(
-                        false,
+                    return makeFailure(
                         buildColumnErrorMessage(fileType, alternateType, missing),
                         { fileType, detectedType: alternateType },
                     );
                 }
             }
-            return makeResult(false, parsed.error);
+            return makeFailure(parsed.error);
         }
 
         const { headers, data } = parsed;
@@ -721,8 +706,7 @@ export const LinkedInCleaner = (() => {
             detectedType =
                 detectedType ||
                 detectAlternateFileType(csvText, fileType, parseCache);
-            return makeResult(
-                false,
+            return makeFailure(
                 buildColumnErrorMessage(fileType, detectedType, validation.missing),
                 {
                     fileType,
@@ -864,7 +848,7 @@ export const LinkedInCleaner = (() => {
             // Flushing the last row can also fail it, so check again afterward.
             const parseError = /** @type {CsvRowParser} */ (parser).finish();
             // Detection found a header row, so headers is always set by now.
-            if (parseError || failed || /* v8 ignore next */ !headers) {
+            if (parseError || failed || !headers) {
                 return null;
             }
             return makeSuccess(/** @type {FileType} */ (fileType), headers, cleanedData);

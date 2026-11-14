@@ -148,10 +148,7 @@ def _write_pull_request_section(
         run_fn=run_fn,
         env=_child_env(root),
     )
-    # Old shell ran ``$(GH) summary || true``: any failure, including a
-    # launch failure, is swallowed and the target still succeeds. The
-    # swallowing is about the exit status, not about staying quiet, so a
-    # launch failure still says so.
+    # A summary failure never fails the report, but a launch failure is still shown.
     if summary is None:
         _emit(out, f"UNAVAILABLE: {venv_python} could not be launched")
     else:

@@ -367,8 +367,7 @@ export const InsightsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            /* v8 ignore next */
-            captureError(new Error(parsed.error || "Invalid analytics worker payload."), {
+            captureError(new Error(parsed.error), {
                 module: "insights-ui",
                 operation: "worker-message-parse",
             });
@@ -390,28 +389,16 @@ export const InsightsPage = (() => {
                 if (message.requestId !== pendingViewId) {
                     return;
                 }
-                /* v8 ignore next */
-                applyWorkerInsightsPayload(
-                    /** @type {InsightsViewPayload} */ (message.payload || {}),
-                );
+                applyWorkerInsightsPayload(/** @type {InsightsViewPayload} */ (message.payload));
                 return;
             case "error":
-                captureError(
-                    new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
-                    {
-                        module: "insights-ui",
-                        operation: "worker-error-payload",
-                        requestId: message.requestId,
-                    },
-                );
-                setEmptyState(
-                    "Insights error",
-                    getWorkerMessage(message.payload, "Analytics worker error."),
-                );
+                captureError(new Error(message.payload.message), {
+                    module: "insights-ui",
+                    operation: "worker-error-payload",
+                    requestId: message.requestId,
+                });
+                setEmptyState("Insights error", message.payload.message);
                 showInsightsLoading(false);
-                return;
-            /* v8 ignore next 2 */
-            default:
                 return;
         }
     }
@@ -547,18 +534,6 @@ export const InsightsPage = (() => {
     }
 
     /**
-     * Resolve a worker message text with fallback.
-     * @param {{message?: string}|null|undefined} payload - Worker payload
-     * @param {string} fallback - Fallback message
-     * @returns {string}
-     */
-    function getWorkerMessage(payload, fallback) {
-        // Parser-normalized payloads normally carry a message. Use the fallback for malformed data.
-        /* v8 ignore next */
-        return payload && payload.message ? payload.message : fallback;
-    }
-
-    /**
      * Handle worker-level errors.
      * @param {ErrorEvent|MessageEvent} event - Worker error or messageerror event
      */
@@ -566,9 +541,7 @@ export const InsightsPage = (() => {
         captureError(
             event && "error" in event && event.error
                 ? event.error
-                : // Dispatched events have a type. Keep an "error" fallback for malformed events.
-                  /* v8 ignore next */
-                  new Error(`Insights worker ${event && event.type ? event.type : "error"} event`),
+                : new Error(`Insights worker ${event.type} event`),
             {
                 module: "insights-ui",
                 operation: "worker-error-event",

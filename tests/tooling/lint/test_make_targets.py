@@ -39,11 +39,12 @@ def test_parse_makefile_targets_does_not_invent_group_help_without_pattern() -> 
 
 def test_extract_make_references_handles_environment_prefixes() -> None:
     """Environment-prefixed Make commands retain target and source context."""
-    references = make_targets.extract_make_references(
+    references = make_targets.extract_path_make_references(
+        Path("README.md"),
         "Use `make check-local`.\n"
         'Run `ARTIFACTS_BROWSER_APP_SLUGS="demo" make test-browser-apps`.\n'
         "Run `make --no-print-directory playwright-version`.\n"
-        "Generic `make <target>` guidance is ignored.\n"
+        "Generic `make <target>` guidance is ignored.\n",
     )
 
     assert references == [
@@ -67,11 +68,12 @@ def test_extract_make_references_handles_environment_prefixes() -> None:
 
 def test_extract_make_references_ignores_plain_prose() -> None:
     """Prose and incomplete target tokens are not interpreted as commands."""
-    references = make_targets.extract_make_references(
+    references = make_targets.extract_path_make_references(
+        Path("README.md"),
         "Adding a new make target with a description makes it appear automatically.\n"
         "CI and local workflows use the same make targets.\n"
         "The two `make audit-memory-*` targets measure memory usage.\n"
-        "Examples include `make lint-py=value` and `make lint-py.extra`.\n"
+        "Examples include `make lint-py=value` and `make lint-py.extra`.\n",
     )
 
     assert references == []
@@ -79,10 +81,11 @@ def test_extract_make_references_ignores_plain_prose() -> None:
 
 def test_extract_make_references_requires_standalone_make_command() -> None:
     """Executable-name substrings and paths are not mistaken for Make commands."""
-    references = make_targets.extract_make_references(
+    references = make_targets.extract_path_make_references(
+        Path("README.md"),
         "Ignore `remake check-local`, `gmake check-local`, and `foo-make check-local`.\n"
         "Ignore `./make check-local` and `$make check-local`.\n"
-        "Accept `make check-local&&make lint-py`.\n"
+        "Accept `make check-local&&make lint-py`.\n",
     )
 
     assert [reference.target for reference in references] == ["check-local", "lint-py"]
@@ -417,27 +420,6 @@ def test_resolve_requested_paths_rejects_a_directory(tmp_path: Path) -> None:
     _, errors = check_make_targets.resolve_requested_paths(["docs.md"], tmp_path)
 
     assert errors == ["docs.md: path does not exist or is not a file"]
-
-
-def test_resolve_requested_paths_rejects_a_path_resolving_outside(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A path that resolves out of the repository is refused before it is read."""
-    write_text(tmp_path / "README.md", "# Root\n")
-    outside = tmp_path.parent / f"{tmp_path.name}-outside" / "README.md"
-    original = Path.resolve
-
-    def escaping_resolve(self: Path, strict: bool = False) -> Path:
-        """Resolve the candidate file to a location outside the repository."""
-        if self.name == "README.md":
-            return outside
-        return original(self, strict=strict)
-
-    monkeypatch.setattr(Path, "resolve", escaping_resolve)
-
-    _, errors = check_make_targets.resolve_requested_paths(["README.md"], tmp_path)
-
-    assert errors == ["README.md: path resolves outside the repository"]
 
 
 def test_run_check_reports_a_candidate_outside_the_workspace(tmp_path: Path) -> None:

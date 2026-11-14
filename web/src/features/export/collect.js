@@ -203,7 +203,6 @@ function buildAllTimeStats(networkGrowth, outreach) {
  * @returns {AnalyticsRun} The insights, tip, network growth, and view, with null for what is absent
  */
 function analyticsRunFromPayload(payload) {
-    /* v8 ignore next */
     const reply =
         /** @type {{insights?: {insights?: Insight[], tip?: string|null}, view?: ExportAnalyticsView|null}} */ (
             payload || {}

@@ -13,39 +13,22 @@ export function nextFrame() {
 }
 
 /**
- * Mark a performance point if available.
+ * Mark a performance point.
  * @param {string} name - Mark name
  */
 export function markPerformance(name) {
-    // Keep the guard for environments without the Performance API.
-    /* v8 ignore next 3 */
-    if (typeof performance === "undefined" || typeof performance.mark !== "function") {
-        return;
-    }
     performance.mark(name);
 }
 
 /**
- * Measure a performance range if available.
+ * Measure a performance range and report it.
  * @param {string} name - Measure name
  * @param {string} start - Start mark
  * @param {string} end - End mark
  */
 export function measurePerformance(name, start, end) {
-    // Keep the guard for environments without the Performance API.
-    /* v8 ignore next 3 */
-    if (typeof performance === "undefined" || typeof performance.measure !== "function") {
-        return;
-    }
     try {
         performance.measure(name, start, end);
-
-        // Keep the guard for partial Performance API implementations.
-        /* v8 ignore next 3 */
-        if (typeof performance.getEntriesByName !== "function") {
-            return;
-        }
-
         const entries = performance.getEntriesByName(name);
         const lastEntry = entries.length ? entries[entries.length - 1] : null;
         if (

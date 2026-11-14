@@ -76,12 +76,7 @@ const ANALYTICS_SCHEMA_VERSION = 2;
  * @returns {Blob}
  */
 function textToBlob(text, name) {
-    const options = { type: "text/csv" };
-    /* v8 ignore next 3 */
-    if (typeof File !== "function") {
-        return new Blob([text], options);
-    }
-    return new File([text], name || "file.csv", options);
+    return new File([text], name || "file.csv", { type: "text/csv" });
 }
 
 /**
@@ -400,7 +395,6 @@ export const Storage = (() => {
             try {
                 listener(error);
             } catch {
-                /* v8 ignore next */
                 // A faulty listener must not break the storage operation.
             }
         }
@@ -423,13 +417,9 @@ export const Storage = (() => {
      * text store and strip it from the metadata store, so metadata reads no longer
      * load text. Runs inside the versionchange transaction, so it is atomic with
      * the rest of the upgrade. An interrupted upgrade rolls back and retries.
-     * @param {IDBTransaction|null} tx - The active versionchange transaction
+     * @param {IDBTransaction} tx - The active versionchange transaction
      */
     function migrateInlineTextToTextStore(tx) {
-        /* v8 ignore next 3 */
-        if (!tx) {
-            return;
-        }
         const fileStore = tx.objectStore(FILE_STORE);
         const textStore = tx.objectStore(FILE_TEXT_STORE);
         fileStore.openCursor().onsuccess = (event) => {
@@ -467,13 +457,12 @@ export const Storage = (() => {
                 if (!db.objectStoreNames.contains(FILE_STORE)) {
                     db.createObjectStore(FILE_STORE, { keyPath: "type" });
                 }
-                /* v8 ignore next 3 */
                 if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
                     db.createObjectStore(ANALYTICS_STORE, { keyPath: "id" });
                 }
                 if (!db.objectStoreNames.contains(FILE_TEXT_STORE)) {
                     db.createObjectStore(FILE_TEXT_STORE, { keyPath: "type" });
-                    migrateInlineTextToTextStore(target.transaction);
+                    migrateInlineTextToTextStore(/** @type {IDBTransaction} */ (target.transaction));
                 }
                 // Existing text records stay where they are and are read as
                 // Blobs; the next upload of each type replaces its text record.
@@ -711,10 +700,9 @@ export const Storage = (() => {
                 new Promise((resolve, reject) => {
                     const tx = db.transaction(FILE_STORE, "readonly");
                     const request = tx.objectStore(FILE_STORE).getAll();
-                    /* v8 ignore next */
                     request.onsuccess = () =>
                         resolve(
-                            (request.result || [])
+                            request.result
                                 .map(normalizeStoredFileMetadata)
                                 .filter(isPresent),
                         );

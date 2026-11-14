@@ -8,10 +8,6 @@
  */
 export function pearson(xs, ys) {
     const n = xs.length;
-    /* v8 ignore next 3 */
-    if (n < 2) {
-        return null;
-    }
     let sumX = 0;
     let sumY = 0;
     let sumXX = 0;
@@ -37,14 +33,10 @@ export function pearson(xs, ys) {
 }
 
 /**
- * Average a numeric array, treating an empty array as 0.
+ * Average a non-empty numeric array.
  * @param {number[]} values - Numbers to average
  * @returns {number} Arithmetic mean
  */
 export function average(values) {
-    if (!values.length) {
-        /* v8 ignore next */
-        return 0;
-    }
     return values.reduce((sum, value) => sum + value, 0) / values.length;
 }

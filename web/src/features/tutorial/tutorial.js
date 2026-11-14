@@ -77,26 +77,12 @@ export const Tutorial = (() => {
         miniTipEntries: [],
     };
 
-    /** @type {import("./shell.js").TutorialUi} */
-    const ui = {
-        root: null,
-        overlay: null,
-        spotlight: null,
-        pointer: null,
-        pointerMainPath: null,
-        pointerEchoPath: null,
-        pointerHeadPath: null,
-        popover: null,
-        title: null,
-        body: null,
-        counter: null,
-        dots: null,
-        backButton: null,
-        nextButton: null,
-        skipButton: null,
-        mascot: null,
-        miniTipsLayer: null,
-    };
+    /**
+     * Shell elements, built by init(). Every path that reads them runs init()
+     * first, so they are never read before the shell exists.
+     * @type {import("./shell.js").TutorialUi}
+     */
+    let ui;
 
     /**
      * Allow automated environments to opt out of tutorial overlays.
@@ -117,7 +103,7 @@ export const Tutorial = (() => {
             return;
         }
 
-        buildTutorialShell(ui);
+        ui = buildTutorialShell();
         bindEvents();
         state.initialized = true;
     }
@@ -219,11 +205,6 @@ export const Tutorial = (() => {
 
         clearMiniTips();
 
-        // init() mounts the shell before start() runs. Keep this guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!ui.root || !ui.popover) {
-            return false;
-        }
         ui.root.hidden = false;
         ui.root.setAttribute("aria-hidden", "false");
         ui.popover.hidden = false;
@@ -263,11 +244,6 @@ export const Tutorial = (() => {
 
     /** Attach event handlers for controls, keyboard, and layout updates. */
     function bindEvents() {
-        // bindEvents() runs after the controls are mounted. Keep this guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!ui.backButton || !ui.nextButton || !ui.skipButton || !ui.popover) {
-            return;
-        }
         ui.backButton.addEventListener("click", handleBackClick);
         ui.nextButton.addEventListener("click", handleNextClick);
         ui.skipButton.addEventListener("click", handleSkipClick);
@@ -449,7 +425,7 @@ export const Tutorial = (() => {
         if (!state.active) {
             return;
         }
-        if (ui.popover && ui.popover.contains(/** @type {Node | null} */ (event.target))) {
+        if (ui.popover.contains(/** @type {Node | null} */ (event.target))) {
             return;
         }
         event.preventDefault();
@@ -547,11 +523,6 @@ export const Tutorial = (() => {
      * @returns {boolean}
      */
     function scheduleInitialRetry() {
-        // Retry only during an active render attempt.
-        /* v8 ignore next 3 */
-        if (!state.active) {
-            return false;
-        }
         if (state.retryCount >= INITIAL_TARGET_RETRY_MAX) {
             completeCurrentRoute();
             return false;
@@ -576,12 +547,6 @@ export const Tutorial = (() => {
      * @returns {number}
      */
     function findRenderableStepIndex(fromIndex, direction) {
-        // A started route should have a step. Return no index if it does not.
-        /* v8 ignore next 3 */
-        if (!state.steps.length) {
-            return -1;
-        }
-
         if (fromIndex < 0 || fromIndex >= state.steps.length) {
             return -1;
         }
@@ -608,22 +573,10 @@ export const Tutorial = (() => {
      * @param {boolean} focusPopover - Focus the dialog after render
      */
     function renderCurrentStep(focusPopover) {
-        // The active tutorial owns the mounted shell. Keep these guards for incomplete DOM setup.
-        /* v8 ignore start */
+        /* v8 ignore next 3 */
         if (!state.active) {
             return;
         }
-        if (
-            !ui.title ||
-            !ui.body ||
-            !ui.backButton ||
-            !ui.skipButton ||
-            !ui.nextButton ||
-            !ui.popover
-        ) {
-            return;
-        }
-        /* v8 ignore stop */
 
         const step = getCurrentStep();
         const title = step.title || step.heading || "Quick tour";
@@ -664,11 +617,6 @@ export const Tutorial = (() => {
 
     /** Render step counter and dot navigation. */
     function renderProgress() {
-        // init() mounts the counter and dots with the shell. Keep this guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!ui.counter || !ui.dots) {
-            return;
-        }
         const visibleIndices = state.renderableIndices.length
             ? state.renderableIndices
             : computeRenderableIndices();
@@ -749,11 +697,6 @@ export const Tutorial = (() => {
      * @param {TutorialStep} step - Step config
      */
     function updateGeometry(target, step) {
-        // init() mounts the spotlight and popover with the shell. Keep this guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!ui.spotlight || !ui.popover) {
-            return;
-        }
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         const placement = String((step && step.placement) || "auto").toLowerCase();
@@ -795,11 +738,6 @@ export const Tutorial = (() => {
      * @param {TutorialStep} step - Step config
      */
     function updatePointer(targetRect, popPosition, popRect, placement, step) {
-        // init() mounts the pointer SVG with the shell. Keep this guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!ui.pointer || !ui.pointerMainPath || !ui.pointerEchoPath || !ui.pointerHeadPath) {
-            return;
-        }
         if (!targetRect || placement === "center") {
             ui.pointer.style.display = "none";
             setTutorialMascotFacing(ui.mascot, false);
@@ -911,13 +849,11 @@ export const Tutorial = (() => {
         state.miniTipRetryCount = 0;
 
         setHighlightedTarget(null);
-        if (ui.root && ui.popover && ui.pointer && ui.spotlight) {
-            ui.root.hidden = true;
-            ui.root.setAttribute("aria-hidden", "true");
-            ui.popover.hidden = true;
-            ui.pointer.style.display = "none";
-            ui.spotlight.style.display = "none";
-        }
+        ui.root.hidden = true;
+        ui.root.setAttribute("aria-hidden", "true");
+        ui.popover.hidden = true;
+        ui.pointer.style.display = "none";
+        ui.spotlight.style.display = "none";
         document.body.classList.remove("tutorial-open");
 
         state.active = false;
@@ -948,7 +884,7 @@ export const Tutorial = (() => {
      * @param {string} routeName
      */
     function renderMiniTips(routeName) {
-        if (state.active || isLoadingActive() || !ui.miniTipsLayer) {
+        if (state.active || isLoadingActive()) {
             return;
         }
 
@@ -1117,11 +1053,6 @@ export const Tutorial = (() => {
     /** Clear rendered mini-tip nodes and tracked entries. */
     function clearMiniTips() {
         state.miniTipEntries = [];
-        // init() mounts the mini-tip layer with the shell. Keep this guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!ui.miniTipsLayer) {
-            return;
-        }
         ui.miniTipsLayer.innerHTML = "";
     }
 
@@ -1157,11 +1088,6 @@ export const Tutorial = (() => {
      * @param {KeyboardEvent} event - Key event
      */
     function trapFocus(event) {
-        // Focus trapping runs only while the popover is mounted.
-        /* v8 ignore next 3 */
-        if (!ui.popover) {
-            return;
-        }
         const focusable = getFocusableElements(ui.popover);
         // The mounted popover includes navigation controls. Focus it if none are found.
         /* v8 ignore next 5 */
@@ -1218,27 +1144,13 @@ export const Tutorial = (() => {
 
     /**
      * Read route-scoped items from a tutorial config object.
-     * @param {TutorialStep[]|{[key: string]: TutorialStep[]}|undefined} config - Config source
+     * @param {{[key: string]: TutorialStep[]}} config - Config source
      * @param {string} routeName - Route name
      * @returns {TutorialStep[]}
      */
     function getRouteConfigItems(config, routeName) {
-        /* v8 ignore next 3 */
-        if (!config) {
-            return [];
-        }
-
-        if (Array.isArray(config)) {
-            return config.filter((item) => normalizeRouteName(item.route) === routeName);
-        }
-
-        if (typeof config === "object") {
-            const list = config[routeName];
-            return Array.isArray(list) ? list.slice() : [];
-        }
-
-        /* v8 ignore next */
-        return [];
+        const list = config[routeName];
+        return Array.isArray(list) ? list.slice() : [];
     }
 
     /**
@@ -1325,7 +1237,6 @@ export const Tutorial = (() => {
             if (!canStartMiniTips(routeName, token)) {
                 return;
             }
-            /* v8 ignore next 4 */
             if (isLoadingActive()) {
                 scheduleMiniTipStart(routeName, token, MINI_TIP_RETRY_MS);
                 return;

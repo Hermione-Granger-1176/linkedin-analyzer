@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
@@ -12,7 +12,6 @@ from linkedin_analyzer.core.text import clean_connections_date, clean_empty_fiel
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from pathlib import Path
 
 DEFAULT_INPUT = DEFAULT_CONNECTIONS_INPUT
@@ -40,7 +39,6 @@ class ConnectionsCleanerConfig(CleanerConfig):
     input_path: Path = DEFAULT_INPUT
     output_path: Path = DEFAULT_OUTPUT
     columns: tuple[ColumnConfig, ...] = CONNECTIONS_COLUMNS
-    csv_kwargs: Mapping[str, object] = field(default_factory=dict)
     skiprows: int = 3
     required_row_columns: tuple[str, ...] = ("Connected On",)
     drop_if_all_missing: tuple[str, ...] = ("First Name", "Last Name", "URL")

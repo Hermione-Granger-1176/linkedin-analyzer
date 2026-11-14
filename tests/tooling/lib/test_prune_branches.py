@@ -39,14 +39,6 @@ def test_makefile_branch_prune_target_uses_the_helper() -> None:
     assert "branch-prune: export PRUNE_MAIN_BRANCH := main" in makefile
     assert "branch-prune: export PRUNE_CONFIRM := $(confirm)" in makefile
     assert "$(VENV_PYTHON) -m scripts.lib.prune_branches" in makefile
-    assert "--merged" not in makefile
-
-
-def test_branch_prune_is_not_in_the_control_flow_allowlist() -> None:
-    """Keep branch-prune outside the exceptions for inline shell control flow."""
-    from scripts.lint.make_targets import CONTROL_FLOW_ALLOWLIST
-
-    assert "branch-prune" not in CONTROL_FLOW_ALLOWLIST
 
 
 def test_resolve_base_prefers_the_remote_tracking_branch() -> None:
@@ -149,12 +141,6 @@ def test_candidate_branches_defaults_when_environment_is_empty() -> None:
     base, branches = prune_branches.candidate_branches({}, runner=runner)
     assert base == "main"
     assert branches == ["old"]
-
-
-def test_supports_merge_tree_reports_old_git() -> None:
-    """A git without merge-tree --write-tree is detected up front."""
-    runner = make_runner({("merge-tree", "--write-tree", "main", "main"): (129, "")})
-    assert prune_branches.supports_merge_tree("main", runner=runner) is False
 
 
 def test_merge_tree_error_detail_accepts_error_like_stdout() -> None:

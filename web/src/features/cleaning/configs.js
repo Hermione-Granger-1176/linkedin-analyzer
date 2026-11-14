@@ -123,3 +123,16 @@ export const CONFIGS = Object.freeze({
         skipRows: 3,
     }),
 });
+
+/**
+ * Look up a file type's config, throwing for an unknown type.
+ * @param {string} fileType - Cleaner file type
+ * @returns {CleanerConfig}
+ */
+export function getConfig(fileType) {
+    const config = /** @type {CleanerConfigs} */ (CONFIGS)[fileType];
+    if (!config) {
+        throw new Error(`Unknown file type: ${fileType}`);
+    }
+    return config;
+}

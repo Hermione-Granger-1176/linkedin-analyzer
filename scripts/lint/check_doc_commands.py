@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from scripts import REPO_ROOT
-from scripts.lint import resolve_repo_files
+from scripts.lint import print_failures, resolve_repo_files
 from scripts.lint.make_targets import (
     INLINE_CODE_PATTERN,
     extract_markdown_code_snippets,
@@ -351,13 +351,6 @@ def resolve_requested_paths(raw_paths: list[str], root: Path) -> tuple[list[Path
     return resolve_repo_files(raw_paths, root, reject=_not_markdown)
 
 
-def print_failures(messages: list[str]) -> None:
-    """Print command-lint failures with consistent CI-friendly context."""
-    print("Command lint failed:")
-    for message in messages:
-        print(f"  {message}")
-
-
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI entry point and return a shell exit code."""
     args = parse_args(argv)
@@ -368,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         candidate_paths, path_errors = resolve_requested_paths(args.paths, workspace_root)
         if path_errors:
-            print_failures(path_errors)
+            print_failures("Command lint failed:", path_errors)
             return 1
 
     violations = run_check(paths=candidate_paths, root=workspace_root)
@@ -376,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Command lint passed for {len(candidate_paths)} file(s)")
         return 0
 
-    print_failures(violations)
+    print_failures("Command lint failed:", violations)
     return 1
 
 

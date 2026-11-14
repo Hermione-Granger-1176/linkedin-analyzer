@@ -11,7 +11,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from scripts import REPO_ROOT
-from scripts.lint import resolve_repo_files
+from scripts.lint import print_failures, resolve_repo_files
 from scripts.lint.make_targets import (
     MAKEFILE_PATH,
     extract_path_make_references,
@@ -102,13 +102,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def print_failures(messages: list[str]) -> None:
-    """Print Make target failures with consistent CI-friendly context."""
-    print("Make target check failed:")
-    for message in messages:
-        print(f"  {message}")
-
-
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI entry point and return a shell exit code."""
     args = parse_args(argv)
@@ -119,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         candidate_paths, path_errors = resolve_requested_paths(args.paths, workspace_root)
         if path_errors:
-            print_failures(path_errors)
+            print_failures("Make target check failed:", path_errors)
             return 1
 
     violations = run_check(paths=candidate_paths, root=workspace_root)
@@ -131,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    print_failures(violations)
+    print_failures("Make target check failed:", violations)
     return 1
 
 

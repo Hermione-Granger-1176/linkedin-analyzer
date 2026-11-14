@@ -60,8 +60,7 @@ export function serveWorker(service) {
         postFailure(GLOBAL_FAILURE_ID, runtimeFailure);
     };
 
-    // Every caller is a worker module; the guard only keeps a bare import safe.
-    /* v8 ignore next 5 */
+    // scripts/checks/state-audit.mjs imports worker modules in Node, which has no `self`.
     if (typeof self !== "undefined") {
         self.addEventListener("message", (event) => handleMessage(event.data));
         self.addEventListener("error", answerFailure);

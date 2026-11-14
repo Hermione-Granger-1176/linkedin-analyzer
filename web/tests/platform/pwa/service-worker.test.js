@@ -41,7 +41,7 @@ describe("service worker", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.resetModules();
-        globalThis.self = { __WB_MANIFEST: [] };
+        globalThis.self = { __WB_MANIFEST: [], location: { href: "https://example.com/sw.js" } };
         globalThis.caches = {
             match: vi.fn(async () => new Response("cached-shell"))
         };

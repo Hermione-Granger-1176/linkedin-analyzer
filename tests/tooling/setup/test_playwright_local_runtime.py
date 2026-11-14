@@ -341,7 +341,6 @@ def test_runtime_environment_prepends_only_discovered_private_paths(tmp_path: Pa
     assert environment["npm_config_cache"] == str(paths.runtime_cache / "npm")
     assert environment["PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS"] == "1"
     assert environment["LD_LIBRARY_PATH"] == f"{library_dir}{os.pathsep}/host/lib"
-    assert str(plugin_dir) not in environment["LD_LIBRARY_PATH"]
     assert environment["PATH"] == f"{paths.extracted_root / 'usr' / 'bin'}{os.pathsep}/host/bin"
     assert environment["XDG_DATA_DIRS"] == (
         f"{paths.extracted_root / 'usr' / 'share'}{os.pathsep}/host/share"

@@ -8,7 +8,7 @@ describe("startPerformanceSpan", () => {
     });
 
     it("marks the start now and the end and the measure when the span is closed", () => {
-        const performanceStub = { mark: vi.fn(), measure: vi.fn() };
+        const performanceStub = { mark: vi.fn(), measure: vi.fn(), getEntriesByName: vi.fn(() => []) };
         vi.stubGlobal("performance", performanceStub);
 
         const end = startPerformanceSpan("page:load");
@@ -24,13 +24,5 @@ describe("startPerformanceSpan", () => {
             "page:load:start",
             "page:load:end",
         );
-    });
-
-    it("does nothing where the Performance API is missing", () => {
-        vi.stubGlobal("performance", undefined);
-
-        const end = startPerformanceSpan("page:load");
-
-        expect(() => end()).not.toThrow();
     });
 });

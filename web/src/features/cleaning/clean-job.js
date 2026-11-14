@@ -56,7 +56,7 @@ async function cleanFile({ fileType, source, key }) {
     held = null;
     const processed = await processCsvSource(source, fileType);
     if (!processed.success) {
-        return { error: processed.error || "Unable to parse file." };
+        return { error: processed.error };
     }
     held = {
         key,

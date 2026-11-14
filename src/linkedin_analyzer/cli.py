@@ -343,7 +343,7 @@ def run_all(args: argparse.Namespace) -> int:
         )
         for command_name in ALL_COMMAND_NAMES
     )
-    skip_missing = getattr(args, "skip_missing", False)
+    skip_missing = args.skip_missing
     exit_code = 0
     for label, cleaner, input_path, output_path in tasks:
         LOG.info("Processing %s...", label)
@@ -400,8 +400,8 @@ def _invoke_cleaner(
 def _cleaner_limit_kwargs(args: argparse.Namespace) -> dict[str, int]:
     """Return resource limit kwargs from parsed arguments."""
     return {
-        "max_input_bytes": getattr(args, "max_input_bytes", DEFAULT_MAX_INPUT_BYTES),
-        "max_rows": getattr(args, "max_rows", DEFAULT_MAX_ROWS),
+        "max_input_bytes": args.max_input_bytes,
+        "max_rows": args.max_rows,
     }
 
 
@@ -441,11 +441,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "all": run_all,
     }
 
-    handler = command_handlers.get(args.command)
-    if handler is None:
-        LOG.error("Unknown command: %s", args.command)
-        return 1
-
+    # argparse has already rejected any command outside this mapping.
+    handler = command_handlers[args.command]
     try:
         return handler(args)
     except KeyboardInterrupt:

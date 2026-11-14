@@ -294,16 +294,6 @@ class TestMain:
         )
         assert exit_code == 1
 
-    def test_unknown_command_returns_error(self) -> None:
-        parser = SimpleNamespace(
-            parse_args=lambda _argv=None: SimpleNamespace(
-                command="unknown", log_level="INFO", log_format="text"
-            ),
-            print_help=lambda: None,
-        )
-        with patch("linkedin_analyzer.cli._build_parser", return_value=parser):
-            assert main([]) == 1
-
     def test_main_handles_handler_exception(self) -> None:
         parser = SimpleNamespace(
             parse_args=lambda _argv=None: SimpleNamespace(
@@ -345,6 +335,9 @@ class TestRunAll:
             connections_input=tmp_path / "Connections.csv",
             connections_output=tmp_path / "Connections.xlsx",
             encoding=None,
+            skip_missing=False,
+            max_input_bytes=cli.DEFAULT_MAX_INPUT_BYTES,
+            max_rows=cli.DEFAULT_MAX_ROWS,
         )
 
         def fake_shares(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
@@ -397,6 +390,9 @@ class TestRunAll:
             connections_input=tmp_path / "Connections.csv",
             connections_output=tmp_path / "Connections.xlsx",
             encoding=None,
+            skip_missing=False,
+            max_input_bytes=cli.DEFAULT_MAX_INPUT_BYTES,
+            max_rows=cli.DEFAULT_MAX_ROWS,
         )
 
         def fake_shares(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
@@ -453,6 +449,8 @@ class TestRunAll:
             connections_output=tmp_path / "Connections.xlsx",
             encoding=None,
             skip_missing=True,
+            max_input_bytes=cli.DEFAULT_MAX_INPUT_BYTES,
+            max_rows=cli.DEFAULT_MAX_ROWS,
         )
 
         def fake_missing(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
@@ -494,6 +492,8 @@ class TestRunAll:
             connections_output=tmp_path / "Connections.xlsx",
             encoding=None,
             skip_missing=True,
+            max_input_bytes=cli.DEFAULT_MAX_INPUT_BYTES,
+            max_rows=cli.DEFAULT_MAX_ROWS,
         )
 
         def fake_malformed(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:
@@ -535,6 +535,9 @@ class TestRunAll:
             connections_input=tmp_path / "Connections.csv",
             connections_output=tmp_path / "Connections.xlsx",
             encoding=None,
+            skip_missing=False,
+            max_input_bytes=cli.DEFAULT_MAX_INPUT_BYTES,
+            max_rows=cli.DEFAULT_MAX_ROWS,
         )
 
         def fake_shares(*, input_path: Path, output_path: Path, **_: object) -> CleanerResult:

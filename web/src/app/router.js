@@ -58,12 +58,7 @@ export const AppRouter = (() => {
      * @param {RouteOptions} [options] - Route options
      */
     function registerRoute(name, options) {
-        const normalized = normalizeRouteName(name);
-        /* v8 ignore next 3 */
-        if (!normalized) {
-            return;
-        }
-        routes.set(normalized, options || {});
+        routes.set(normalizeRouteName(name), options || {});
     }
 
     /**
@@ -103,10 +98,7 @@ export const AppRouter = (() => {
             return;
         }
 
-        // The membership check above makes this lookup safe in normal execution.
-        // Keep the fallback for an inconsistent route map.
-        /* v8 ignore next */
-        const routeOptions = routes.get(normalized) || {};
+        const routeOptions = /** @type {RouteOptions} */ (routes.get(normalized));
         const nextParams = params === undefined
             ? (rememberedParams.get(normalized) || {})
             : (params || {});
@@ -123,38 +115,8 @@ export const AppRouter = (() => {
      * @param {NavigateOptions} [options] - Navigation options
      */
     function setParams(params, options) {
-        const current = getCurrentRoute();
-        /* v8 ignore next 3 */
-        if (!current) {
-            return;
-        }
+        const current = /** @type {RouteState} */ (getCurrentRoute());
         navigate(current.name, params || {}, options);
-    }
-
-    /**
-     * Merge partial params into current route params.
-     * Null/empty values remove keys.
-     * @param {RouteParamsInput} patch - Partial params
-     * @param {NavigateOptions} [options] - Navigation options
-     */
-    function updateParams(patch, options) {
-        const current = getCurrentRoute();
-        /* v8 ignore next 3 */
-        if (!current) {
-            return;
-        }
-
-        /** @type {RouteParams} */
-        const merged = { ...current.params };
-        Object.entries(patch || {}).forEach(([key, value]) => {
-            if (isEmptyParamValue(value)) {
-                delete merged[key];
-                return;
-            }
-            merged[key] = String(value);
-        });
-
-        navigate(current.name, merged, options);
     }
 
     /**
@@ -265,9 +227,7 @@ export const AppRouter = (() => {
      * @param {boolean} replaceHistory - Use replaceState instead of push
      */
     function setHash(name, params, replaceHistory) {
-        // Callers pass params objects. Keep the fallback for malformed state.
-        /* v8 ignore next */
-        const nextHash = buildHash(name, params || {});
+        const nextHash = buildHash(name, params);
         if (nextHash === window.location.hash) {
             handleHashChange();
             return;
@@ -345,9 +305,7 @@ export const AppRouter = (() => {
      * @param {RouteState} state - Current route state
      */
     function rememberSharedParams(state) {
-        // state.name identifies a registered route. Keep the fallback for malformed state.
-        /* v8 ignore next */
-        const routeOptions = routes.get(state.name) || {};
+        const routeOptions = /** @type {RouteOptions} */ (routes.get(state.name));
         const keys = Array.isArray(routeOptions.sharedParams) ? routeOptions.sharedParams : [];
         if (!keys.length) {
             return;
@@ -400,10 +358,8 @@ export const AppRouter = (() => {
             return false;
         }
 
-        // Route states store params as objects. Keep these fallbacks for malformed state.
-        /* v8 ignore next 2 */
-        const leftKeys = Object.keys(left.params || {});
-        const rightKeys = Object.keys(right.params || {});
+        const leftKeys = Object.keys(left.params);
+        const rightKeys = Object.keys(right.params);
         if (leftKeys.length !== rightKeys.length) {
             return false;
         }
@@ -415,7 +371,6 @@ export const AppRouter = (() => {
         start,
         navigate,
         setParams,
-        updateParams,
         subscribe,
         getCurrentRoute,
         parseHash,

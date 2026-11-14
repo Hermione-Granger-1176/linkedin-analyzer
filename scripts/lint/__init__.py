@@ -104,6 +104,13 @@ def resolve_repo_files(
     return resolved_paths, errors
 
 
+def print_failures(header: str, messages: list[str]) -> None:
+    """Print a lint header and its failures with consistent CI-friendly context."""
+    print(header)
+    for message in messages:
+        print(f"  {message}")
+
+
 def iter_lint_paths(root: Path) -> Iterator[Path]:
     """Yield sorted real files without descending into ignored or symlinked trees."""
     for current_root, directory_names, file_names in os.walk(

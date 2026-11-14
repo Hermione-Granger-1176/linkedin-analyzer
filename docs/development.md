@@ -61,7 +61,7 @@ make setup-playwright-engines engines=chromium-webkit
 
 The accepted engine names are `chromium`, `firefox`, and `webkit`. Use `with_deps=1` only on an ephemeral runner where the target is allowed to install operating-system dependencies. Browser-running targets accept `local_libs=1`, including `make test-e2e`, `make test-e2e-headed`, `make test-e2e-ui`, and `make web-screens`.
 
-The repository-local runtime keeps extracted libraries, browser data, configuration, and temporary files under the ignored `.playwright/` directory. It reuses browsers from Playwright's shared cache and never downloads packages during a test run. Use native Playwright host detection. Do not set `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE`.
+The repository-local runtime keeps extracted libraries, browser data, configuration, and temporary files under the ignored `.playwright/` directory. It reuses browsers from Playwright's shared cache and never downloads packages during a test run.
 
 Use `make playwright-local-clean` or `make clean` to remove this repository's private runtime. Neither target removes the shared browser cache.
 

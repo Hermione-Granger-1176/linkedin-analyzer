@@ -40,7 +40,6 @@ jobs:
         uses: ./.github/actions/ci-setup
         with:
           node-version: ""
-          install-node-deps: "false"
 
       # The watchdog writes checked because Make maps recipe failures to exit 2.
       # The output distinguishes disabled schedules from an incomplete check.

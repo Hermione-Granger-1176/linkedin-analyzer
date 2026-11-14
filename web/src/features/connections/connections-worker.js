@@ -31,7 +31,7 @@ async function processConnections(connectionsCsv) {
 
     const result = await processCsvSource(connectionsCsv, "connections");
     if (!result.success) {
-        return { success: false, error: result.error || "Unable to parse Connections.csv." };
+        return { success: false, error: result.error };
     }
 
     const rows = result.cleanedData;

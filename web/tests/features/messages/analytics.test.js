@@ -1,33 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { LinkedInCleaner } from "../../../src/features/cleaning/cleaner.js";
 import { MessagesAnalytics } from "../../../src/features/messages/analytics.js";
 import { expandEvents } from "../../helpers/message-events.js";
 
 describe("MessagesAnalytics", () => {
-    it("builds message state when the Performance API is unavailable", () => {
-        const rows = [
-            {
-                FROM: "Ada Lovelace",
-                TO: "Bob Smith",
-                DATE: "2025-01-01 10:00:00",
-                CONTENT: "Hello",
-                "SENDER PROFILE URL": "https://linkedin.com/in/ada",
-                "RECIPIENT PROFILE URLS": "https://linkedin.com/in/bob",
-            },
-        ];
-        // Some environments, including older Safari and restricted workers, lack
-        // performance APIs. The instrumentation guards must tolerate that.
-        vi.stubGlobal("performance", undefined);
-        try {
-            const state = MessagesAnalytics.buildMessageState(rows);
-            expect(state.contacts.size).toBe(1);
-            expect(state.events.timestamps.length).toBe(1);
-        } finally {
-            vi.unstubAllGlobals();
-        }
-    });
-
     it("buildMessageState extracts contacts and events", () => {
         const rows = [
             {
@@ -520,9 +497,9 @@ describe("MessagesAnalytics", () => {
             }
         ];
         const state = MessagesAnalytics.buildMessageState(rows);
-        // Only 'alice' is the non-self contact; self is detected and excluded
-        // Contact count depends on self-detection; at minimum no throw
-        expect(state.events.timestamps.length).toBeGreaterThanOrEqual(0);
+        // Self is detected and excluded, and both rows merge into Alice by URL.
+        expect([...state.contacts.values()].map((contact) => contact.name)).toEqual(["Alice"]);
+        expect(state.events.timestamps).toHaveLength(2);
     });
 
     it("normalizeUrl extracts URL from text with surrounding content", () => {

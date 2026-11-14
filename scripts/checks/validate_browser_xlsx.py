@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 import warnings
@@ -156,18 +155,11 @@ def check_safety(data_rows: list[list[str]]) -> list[str]:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse the workbook and expectation paths, with environment fallbacks."""
+    """Parse the workbook and expectation paths."""
     parser = argparse.ArgumentParser(description=__doc__)
-    # Accept CLI arguments and environment defaults as strings, then convert
-    # both to Path below so they use the same validation.
-    parser.add_argument("--workbook", default=os.environ.get("BROWSER_XLSX_OUT"))
-    parser.add_argument("--expected", default=os.environ.get("BROWSER_XLSX_EXPECTED"))
-    args = parser.parse_args(argv)
-    if args.workbook is None or args.expected is None:
-        parser.error("both --workbook and --expected are required")
-    args.workbook = Path(args.workbook)
-    args.expected = Path(args.expected)
-    return args
+    parser.add_argument("--workbook", type=Path, required=True)
+    parser.add_argument("--expected", type=Path, required=True)
+    return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:

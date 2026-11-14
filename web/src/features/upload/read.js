@@ -30,8 +30,8 @@ const STREAMING_READ_THRESHOLD_BYTES = 5 * 1024 * 1024;
  * @returns {Promise<{text: string, usedFallback: boolean}>}
  */
 export function readFileAsText(file, options = {}) {
-    // The upload page rejects oversized files before calling this helper. Keep
-    // this check for direct callers that bypass page-level validation.
+    // New uploads are size-checked on the page, but files restored from storage
+    // reach this helper without that check.
     /* v8 ignore next 4 */
     if (file.size > MAX_FILE_BYTES) {
         const maxMb = Math.round(MAX_FILE_BYTES / (1024 * 1024));
@@ -146,12 +146,7 @@ function readBytesWithReader(file) {
         const reader = new FileReader();
         let settled = false;
         const timeoutId = globalThis.setTimeout(() => {
-            try {
-                reader.abort();
-            } catch {
-                /* v8 ignore next */
-                // Ignore abort failures and continue timeout handling.
-            }
+            reader.abort();
             finish(() => reject(new Error(`Reading ${file.name} timed out.`)));
         }, FILE_READ_TIMEOUT_MS);
 

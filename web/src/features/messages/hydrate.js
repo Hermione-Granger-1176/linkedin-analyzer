@@ -20,9 +20,7 @@
  * @returns {MessageState}
  */
 export function hydrateMessageState(payload) {
-    // Worker payloads normally contain an object. Use an empty object for malformed data.
-    /* v8 ignore next */
-    const safePayload = /** @type {Partial<SerializedMessageState>} */ (payload || {});
+    const safePayload = /** @type {Partial<SerializedMessageState>} */ (payload);
     /** @type {Map<string, MessageContact>} */
     const contacts = new Map();
     const contactList = Array.isArray(safePayload.contacts) ? safePayload.contacts : [];
@@ -85,9 +83,7 @@ function hydrateEvents(events) {
  * @returns {ConnectionState}
  */
 export function hydrateConnectionState(payload) {
-    // Worker payloads normally contain an object. Use an empty object for malformed data.
-    /* v8 ignore next */
-    const safePayload = /** @type {Partial<SerializedConnectionState>} */ (payload || {});
+    const safePayload = /** @type {Partial<SerializedConnectionState>} */ (payload);
     const list = Array.isArray(safePayload.list) ? safePayload.list : [];
     /** @type {Map<string, Connection>} */
     const byUrl = new Map();
@@ -95,11 +91,6 @@ export function hydrateConnectionState(payload) {
     const byName = new Map();
 
     for (const connection of list) {
-        // Worker output contains object rows. Ignore null entries in malformed data.
-        /* v8 ignore next 3 */
-        if (!connection) {
-            continue;
-        }
         if (connection.url && !byUrl.has(connection.url)) {
             byUrl.set(connection.url, connection);
         }

@@ -217,25 +217,8 @@ def test_check_safety_reports_illegal_xml_and_formula_prefixes() -> None:
     ]
 
 
-def test_parse_args_reads_the_environment_when_flags_are_absent(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The Make target may hand both paths through the environment instead."""
-    monkeypatch.setenv("BROWSER_XLSX_OUT", str(tmp_path / "workbook.xlsx"))
-    monkeypatch.setenv("BROWSER_XLSX_EXPECTED", str(tmp_path / "expected.json"))
-
-    args = validator.parse_args([])
-
-    assert args.workbook == tmp_path / "workbook.xlsx"
-    assert args.expected == tmp_path / "expected.json"
-
-
-def test_parse_args_requires_both_paths(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Neither path may be left unset once the environment is empty."""
-    monkeypatch.delenv("BROWSER_XLSX_OUT", raising=False)
-    monkeypatch.delenv("BROWSER_XLSX_EXPECTED", raising=False)
-
+def test_parse_args_requires_both_paths() -> None:
+    """Neither path may be left unset."""
     with pytest.raises(SystemExit):
         validator.parse_args(["--workbook", "book.xlsx"])
 

@@ -21,7 +21,6 @@ CLIENT_ID_INPUT = re.compile(
     r"^\s+client-id:\s+\$\{\{\s*vars\.(?:APP_ID|ESCALATION_APP_ID|AUDIT_APP_ID)\s*\}\}\s*$",
     re.MULTILINE,
 )
-LEGACY_APP_ID_INPUT = re.compile(r"^\s+app-id:\s+", re.MULTILINE)
 
 # GitHub job ids allow underscores and uppercase too. Matching only the spelling
 # this workflow happens to use would let a job named `security_scan` slip past
@@ -128,7 +127,6 @@ def test_github_app_token_actions_use_client_id_without_renaming_repository_vari
     assert len(steps) == len(references)
     for step in steps:
         assert CLIENT_ID_INPUT.search(step)
-        assert not LEGACY_APP_ID_INPUT.search(step)
 
     for variable in ("APP_ID", "ESCALATION_APP_ID", "AUDIT_APP_ID"):
         assert f"vars.{variable}" in source

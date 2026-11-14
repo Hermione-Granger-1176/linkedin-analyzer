@@ -343,7 +343,7 @@ ci: ci-python lint-workflows ci-web ## Full local CI gate
 ci-fast: ## Run the non-browser CI checks in parallel (excludes web-build-size)
 	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py editorconfig-check lint-doc-commands lint-make-targets lint-py lint-yaml format-py-check align-tables-check typecheck-py dead-code-py test-py lint-workflows lint-js lint-css format-js-check typecheck-web dead-code-js test-js
 
-check: check-local test-e2e ## Full gate including browser tests
+check: ci test-e2e ## Full gate including browser tests
 
 fix: fmt ci ## Auto-fix formatting, then run the full local CI gate
 
@@ -906,32 +906,6 @@ playwright-local-gate: ## Launch Chromium, Firefox, and WebKit in the private ru
 
 playwright-local-clean: ## Remove only the repository-local Playwright cache (keeps shared browsers)
 	$(PLAYWRIGHT_LOCAL_RUNTIME) clean
-
-# ─── Aliases, old names that still work @aliases ──────────────────────────────────
-
-.PHONY: format workflow-lint web-lint web-format-check web-typecheck web-test web-e2e web-e2e-container check-local check-fast pr-copilot
-
-format: fmt ## Alias for fmt
-
-workflow-lint: lint-workflows ## Alias for lint-workflows
-
-web-lint: lint-js ## Alias for lint-js
-
-web-format-check: format-js-check ## Alias for format-js-check
-
-web-typecheck: typecheck-web ## Alias for typecheck-web
-
-web-test: test-js ## Alias for test-js
-
-web-e2e: test-e2e ## Alias for test-e2e
-
-web-e2e-container: test-e2e-container ## Alias for test-e2e-container
-
-check-local: ci ## Alias for the full local CI gate
-
-check-fast: ci-fast ## Alias for ci-fast
-
-pr-copilot: pr-copilot-review ## Backward-compatible alias for pr-copilot-review
 
 # ═══ Internal ═════════════════════════════════════════════════════════════════════
 

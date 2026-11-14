@@ -153,15 +153,6 @@ describe("clean job", () => {
         expect(reply.success).toBe(false);
         expect(reply.error).toBeTruthy();
         expect(reply.previewRows).toEqual([]);
-
-        vi.spyOn(LinkedInCleaner, "process").mockReturnValue({ success: false });
-        const fallback = await runCleanJob({
-            fileType: "shares",
-            output: "preview",
-            source: SHARES_CSV,
-            key: "shares:7",
-        });
-        expect(fallback.error).toBe("Unable to parse file.");
     });
 
     it("previews a missing cell as empty text", async () => {

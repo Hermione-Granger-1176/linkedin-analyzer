@@ -40,7 +40,6 @@ MANIFEST_SCHEMA = 1
 ENGINES = ("chromium", "firefox", "webkit")
 PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.-]*(?::[A-Za-z0-9][A-Za-z0-9+_.-]*)?$")
 PACKAGE_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+_.:~%-]*$")
-UNSAFE_SHELL_CHARS = (";", "&", "|", "<", ">", "`", "$", "(", ")")
 AT_FDCWD = -100
 RENAME_EXCHANGE = 0x2
 WEBKIT_LAUNCHER_LD_LINE = 'export LD_LIBRARY_PATH="${MYDIR}/lib:${MYDIR}/sys/lib"'
@@ -364,53 +363,12 @@ def checked_run(
     return completed
 
 
-def normalize_shell_lines(output: str) -> list[str]:
-    """Join backslash-continued dry-run lines without executing any text."""
-    lines: list[str] = []
-    current = ""
-    for raw_line in output.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line.endswith("\\"):
-            current += f"{line[:-1]} "
-            continue
-        lines.append(f"{current}{line}")
-        current = ""
-    if current:
-        raise fail("unterminated Playwright dependency command")
-    return lines
+def parse_dependency_seeds(output: str) -> tuple[str, ...]:
+    """Return the package names in Playwright's dependency dry-run report.
 
-
-def _apt_install_seeds(output: str) -> list[str]:
-    """Return the package names on the report's ``apt-get install`` command lines."""
-    packages: list[str] = []
-    for line in normalize_shell_lines(output):
-        if "apt-get" not in line:
-            continue
-        try:
-            tokens = shlex.split(line, posix=True)
-        except ValueError as error:
-            raise fail("cannot parse Playwright's dependency dry-run output") from error
-        if any(any(char in token for char in UNSAFE_SHELL_CHARS) for token in tokens):
-            raise fail("unsafe shell syntax in Playwright's dependency dry-run output")
-        if not tokens or tokens[0] == "sudo":
-            tokens = tokens[1:]
-        if len(tokens) < 3 or tokens[0] != "apt-get" or tokens[1] != "install":
-            continue
-        for token in tokens[2:]:
-            if token.startswith("-"):
-                continue
-            if PACKAGE_NAME_RE.fullmatch(token) is None:
-                raise fail("invalid package name in Playwright's dependency dry-run output")
-            packages.append(token)
-    return packages
-
-
-def _missing_dependency_list_seeds(output: str) -> tuple[str, ...]:
-    """Return the package names in a "Missing system dependencies (N):" list.
-
-    Return an empty tuple when the report says every dependency is installed.
+    The pinned Playwright prints a "Missing system dependencies (N):" list, or
+    says every dependency is installed, in which case this returns an empty
+    tuple. Anything else, including its own failure text, is an error.
     """
     lines = output.splitlines()
     header_index = next(
@@ -439,14 +397,6 @@ def _missing_dependency_list_seeds(output: str) -> tuple[str, ...]:
     if len(packages) != expected_count:
         raise fail("Playwright dependency dry run reported an incomplete package list")
     return tuple(sorted(set(packages)))
-
-
-def parse_dependency_seeds(output: str) -> tuple[str, ...]:
-    """Extract safe package names from Playwright's dependency dry-run report."""
-    packages = _apt_install_seeds(output)
-    if packages:
-        return tuple(sorted(set(packages)))
-    return _missing_dependency_list_seeds(output)
 
 
 def dependency_seeds(paths: RuntimePaths) -> tuple[str, ...]:

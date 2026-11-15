@@ -181,4 +181,10 @@ make lint-make-targets
 make align-tables-check
 ```
 
-Use real Make target names in code spans and fenced command blocks. Put prose in standard Markdown paragraphs. Run `make format-js-diff path=docs/troubleshooting.md` to inspect the configured formatter result without changing the file.
+Use real Make target names in code spans and fenced command blocks. Put prose in standard Markdown paragraphs. To inspect the configured formatter result without changing the file, pass its path on stdin:
+
+```bash
+make format-js-diff <<'EOF'
+docs/troubleshooting.md
+EOF
+```

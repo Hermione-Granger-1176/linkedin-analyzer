@@ -7,7 +7,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. One repository cont
 1. **The Makefile is the only interface.** Always `make <target>`, never the underlying tool. `make help` lists command groups, and `make help-<group>` expands one. `make help-json` lists every command as JSON. The Makefile generates this help from its target descriptions.
 2. **If a target is missing, add it.** Put `## description` after the target name and it appears in `make help` automatically.
 3. **Use Make targets for GitHub work.** Run `make pr`, `make git`, `make issue`, or `make ci` for the relevant commands. Targets detect the repository and PR automatically (override with `pr_num=N`). `make pr-review-comments` prints a `thread=PRRT_...` ID for each thread. Pass that ID to `make pr-address` to reply and resolve the thread. After pushing a fix, run `make pr-watch request=1` in the background to request and wait for a new Copilot review. Without `request=1`, the watcher can settle on the previous review. A verdict other than "Approval recommended" means the PR is not ready to merge, even with no open threads. `make ci-jobs`, `make ci-failures`, `make ci-watch`, and `make ci-rerun` default to this branch's latest run (override with `run=ID`). Pass Make arguments, not underlying tool flags such as `--jq`.
-4. **Text goes in on stdin; a title goes in the environment.** A heredoc is the everyday form:
+4. **Text and paths go in on stdin; a title goes in the environment.** A heredoc is the everyday form:
 
    ```bash
    make pr-address thread=PRRT_... <<'EOF'
@@ -15,12 +15,12 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. One repository cont
    EOF
    ```
 
-   That is the whole convention, for every target that takes prose. Redirect a file (`make pr-comment < notes.md`) when the text is already in one, or when it might contain a line matching the terminator. Set a title alongside it as `TITLE='...' make issue-create < issue.md`.
+   That is the whole convention, for every target that takes prose. Redirect a file (`make pr-comment < notes.md`) when the text is already in one, or when it might contain a line matching the terminator. Set a title alongside it as `TITLE='...' make issue-create < issue.md`. Targets that take files read them the same way, one path per line (`make stage <<'EOF'`), so a path with spaces or quotes needs no escaping; without paths, a check covers its default scope.
 
 5. **Each tool has one config file, pointed at directory roots.** Change what gets linted, typed, or tested by editing that tool's config and nothing else: `pyproject.toml` owns ruff, mypy, pytest, coverage, and vulture; `config/` owns ESLint, stylelint, Prettier, Playwright, knip, and jsconfig; `web/` owns Vite and Vitest. Point them at roots or globs so a new file is covered the day it lands. Config-file _locations_ may be named; per-file source lists may not.
 6. **Coverage is 100% over `src/linkedin_analyzer` and `scripts`, statements and branches, with no `omit`.** A new script needs its tests in the same change.
 7. **Read before acting.** Read the Makefile and the existing code before proposing changes.
-8. **Auto-fix commands are the user's call** (`make fmt`, `make align-tables`, `make lock`). To see what a formatter would change, use `make format-py-diff` or `make format-js-diff path=...` and apply it by hand.
+8. **Auto-fix commands are the user's call** (`make fmt`, `make align-tables`, `make lock`). To see what a formatter would change, use `make format-py-diff` or `make format-js-diff <<'EOF'` (paths on stdin) and apply it by hand.
 9. **Committing, pushing, and opening or merging PRs are the user's call.** Make and verify changes in the working tree and stop there. Fold small tooling or doc tweaks into the branch in progress rather than opening a second PR.
 10. **CHANGELOG.md tracks the Python package only.** Web and Node changes do not go there.
 11. **Keep documentation in its owning page.** Before adding prose, check `docs/index.md` and existing ADRs. `docs/operations.md` owns current operating procedures; dependency decisions, override rationale, removal criteria, and historical validation belong in `docs/adr/`. Update existing guidance instead of appending another explanation, and link to the owner rather than duplicating it.
@@ -34,14 +34,14 @@ Enough to work without looking anything up. `make help` has the rest.
 | Full gate, serial / parallel       | `make ci` / `make ci-fast`                                                              |
 | Tests only                         | `make test` (both) / `make test-py` / `make test-js` / `make test-e2e`                  |
 | Lint and types                     | `make lint-py` / `make lint-js` / `make typecheck-py`                                   |
-| See what a formatter would change  | `make format-py-diff` / `make format-js-diff path=...`                                  |
+| See what a formatter would change  | `make format-py-diff` / `make format-js-diff <<'EOF'` (paths on stdin)                  |
 | Apply every repository formatter   | `make fmt`                                                                              |
-| Align Markdown table pipes         | `make align-tables [paths="README.md docs/example.md"]`                                 |
+| Align Markdown table pipes         | `make align-tables` (whole repo, or paths on stdin)                                     |
 | Workspace health                   | `make status`                                                                           |
 | Unused code                        | `make dead-code`                                                                        |
 | Dev server                         | `make web`                                                                              |
 | New branch off `main`              | `make branch name=X`                                                                    |
-| Stage and commit                   | `make stage files="a.py b.py"` then `make commit <<'EOF'`                               |
+| Stage and commit                   | `make stage <<'EOF'` (one path per line) then `make commit <<'EOF'`                     |
 | Open a PR                          | `make pr-create` (`--fill` from commits) or `TITLE='...' make pr-create <<'EOF'`        |
 | Review threads, with `thread=` ids | `make pr-review-comments`                                                               |
 | Reply and resolve in one           | `make pr-address thread=PRRT_... <<'EOF'`                                               |

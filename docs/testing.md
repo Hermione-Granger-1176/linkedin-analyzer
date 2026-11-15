@@ -197,9 +197,11 @@ Options:
 
 - `base=REF` sets the commit to compare against. The default is `origin/main`.
 - `merge_base=1` compares against the merge base of `REF` and your checkout, which CI uses for pull requests.
-- `size_mb=N`, `runs=N`, and `threshold=N` set the export size, the rounds (rounded up to a multiple of three), and the allowed slowdown percentage.
+- `size_mb=N`, `runs=N`, and `threshold=N` set the export size, the rounds (a whole number, rounded up to a multiple of three), and the allowed slowdown percentage. An invalid value exits 2 before anything is timed.
 
-The comparison covers the pipeline in Node only. Browser upload handling, worker startup and messaging, and rendering are outside it. Use `make bench-browser` for those. [ADR-014](adr/014-noise-controlled-benchmark-gate.md) records why the gate uses a control and the fastest round.
+The comparison covers the pipeline in Node only. Browser upload handling, worker startup and messaging, and rendering are outside it. Use `make bench-browser` for those.
+
+Only `web/src` is copied from the base, so all three copies load packages from your checkout's `node_modules`. The gate therefore times changes to `web/src`, not dependency upgrades. When a change removes or restructures a package that the base still imports, the base cannot load. The command then skips the comparison, explains why in the report and a CI warning, and exits 0. If your checkout itself cannot load, the command fails. [ADR-014](adr/014-noise-controlled-benchmark-gate.md) records why the gate uses a control and the fastest round.
 
 ## Run documentation and repository checks
 

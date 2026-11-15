@@ -250,7 +250,10 @@ export function parseOptions(argv) {
         }
         return parsed;
     };
-    const runs = Math.round(number(values.runs, "runs", 1));
+    const runs = number(values.runs, "runs", 1);
+    if (!Number.isInteger(runs)) {
+        throw new Error(`invalid runs: ${values.runs}`);
+    }
     return {
         baseRef: values["base-ref"],
         mergeBase: values["merge-base"],
@@ -292,6 +295,50 @@ export function runGate({ stagesBySide, runs, threshold, clock = SYSTEM_CLOCK })
 }
 
 /**
+ * Whether an import failed because a package could not be resolved.
+ *
+ * The base and control copies hold only web/src and resolve packages from
+ * this checkout's node_modules. A change that removes or restructures a
+ * package the base still imports leaves the base unable to load, which says
+ * nothing about the speed of either side's code.
+ * @param {unknown} error - Error thrown while importing a side
+ * @returns {boolean}
+ */
+export function isDependencyResolutionError(error) {
+    const code = /** @type {{code?: unknown}} */ (error)?.code;
+    return code === "ERR_MODULE_NOT_FOUND" || code === "ERR_PACKAGE_PATH_NOT_EXPORTED";
+}
+
+/**
+ * Report a comparison that could not run because the base cannot load
+ * against this checkout's dependencies.
+ * @param {string} baseCommit - Base commit
+ * @param {string} reason - Import error message
+ */
+function reportSkipped(baseCommit, reason) {
+    const report = [
+        "## Web benchmark",
+        "",
+        `Skipped: base ${baseCommit.slice(0, 7)} could not load against this checkout's dependencies.`,
+        "This happens when a change removes or restructures a package the base imports. The",
+        "gate times web/src only, with the same dependencies on both sides, so it has nothing",
+        "to compare here.",
+        "",
+        `Import error: ${reason}`,
+        "",
+    ].join("\n");
+    console.log(report);
+    if (process.env.GITHUB_ACTIONS === "true") {
+        console.log(
+            "::warning title=Web benchmark skipped::The base commit cannot load against this checkout's dependencies. See the job summary.",
+        );
+    }
+    if (process.env.GITHUB_STEP_SUMMARY) {
+        appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${report}\n`);
+    }
+}
+
+/**
  * Prepare the copies and the export, compare, and report.
  * @param {ReturnType<typeof parseOptions>} options - Validated options
  * @param {string} inputDir - Private directory for the synthetic export
@@ -325,7 +372,17 @@ async function compare(options, inputDir) {
     const roots = { base: join(COPIES, "base"), control: join(COPIES, "control"), head: REPO };
     const stagesBySide = {};
     for (const side of SIDES) {
-        stagesBySide[side] = buildStages(await loadSide(roots[side]), raw);
+        let modules;
+        try {
+            modules = await loadSide(roots[side]);
+        } catch (error) {
+            if (side === "head" || !isDependencyResolutionError(error)) {
+                throw error;
+            }
+            reportSkipped(baseCommit, /** @type {Error} */ (error).message);
+            return 0;
+        }
+        stagesBySide[side] = buildStages(modules, raw);
     }
 
     const { first, confirmation, regressed, changedOutputs, brokenControl } = runGate({

@@ -31,6 +31,7 @@ A fixed time budget would not work as a CI gate. Shared runners vary from run to
 - The job runs in parallel with the other jobs on web changes. Its first CI run took about one minute, against three for `web-e2e`.
 - The gate covers the pipeline in Node only. Browser upload handling, worker startup and messaging, and rendering are not gated. `make bench-browser` still measures those on demand.
 - A regression smaller than the threshold plus the measured noise can pass. Lowering the threshold trades sensitivity against the risk of failing on noise.
+- All three copies load packages from the head checkout's `node_modules`, so the gate times `web/src` changes, not dependency upgrades. Installing the base's dependencies separately would roughly double the job. A change that removes a package the base still imports leaves the base unable to load, and the gate then skips with a warning rather than failing a valid change.
 
 ## Validation
 

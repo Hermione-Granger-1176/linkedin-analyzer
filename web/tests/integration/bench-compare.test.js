@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseOptions, runGate } from "../../../scripts/checks/bench-compare.mjs";
+import {
+    isDependencyResolutionError,
+    parseOptions,
+    runGate,
+} from "../../../scripts/checks/bench-compare.mjs";
 
 const SIDES = ["base", "control", "head"];
 
@@ -152,10 +156,37 @@ describe("bench-compare options", () => {
         ["--runs=0", "invalid runs: 0"],
         ["--runs=abc", "invalid runs: abc"],
         ["--runs=", "invalid runs: "],
+        ["--runs=3.1", "invalid runs: 3.1"],
         ["--threshold=-1", "invalid threshold: -1"],
         ["--threshold=x", "invalid threshold: x"],
         ["--size-mb=0", "invalid size_mb: 0"],
     ])("rejects %s instead of passing without timing anything", (argument, message) => {
         expect(() => parseOptions([argument])).toThrow(message);
     });
+});
+
+describe("bench-compare dependency changes", () => {
+    it("recognizes a package that cannot be resolved", () => {
+        // The code Node gives an import of a package that is not installed.
+        const error = Object.assign(new Error("Cannot find package 'gone'"), {
+            code: "ERR_MODULE_NOT_FOUND",
+        });
+
+        expect(isDependencyResolutionError(error)).toBe(true);
+    });
+
+    it("recognizes a package subpath that is no longer exported", () => {
+        const error = Object.assign(new Error("not exported"), {
+            code: "ERR_PACKAGE_PATH_NOT_EXPORTED",
+        });
+
+        expect(isDependencyResolutionError(error)).toBe(true);
+    });
+
+    it.each([[new Error("boom")], [new SyntaxError("bad token")], [null], [undefined]])(
+        "treats %s as a real failure, not a dependency change",
+        (error) => {
+            expect(isDependencyResolutionError(error)).toBe(false);
+        },
+    );
 });

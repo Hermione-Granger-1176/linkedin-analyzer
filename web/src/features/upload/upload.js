@@ -163,12 +163,12 @@ export const UploadPage = (() => {
         if (initialized) {
             return;
         }
-        if (!elements.dropZone || !elements.fileInput) {
+        if (!elements.dropZone || !elements.fileInput || !elements.uploadHint) {
             return;
         }
         initialized = true;
 
-        if (!Storage.isAvailable && elements.uploadHint) {
+        if (!Storage.isAvailable) {
             elements.uploadHint.textContent =
                 "Browser storage is unavailable. Uploads will not persist across sessions.";
         }
@@ -1393,6 +1393,7 @@ export const UploadPage = (() => {
      * @param {boolean} isError - Whether the hint is an error
      */
     function setHint(message, isError) {
+        // init() does not start without #uploadHint, and every caller runs after it.
         const uploadHint = /** @type {HTMLElement} */ (elements.uploadHint);
         uploadHint.textContent = message;
         uploadHint.classList.toggle("is-error", Boolean(isError));

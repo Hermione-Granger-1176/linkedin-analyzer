@@ -110,12 +110,15 @@ export const AppRouter = (() => {
     }
 
     /**
-     * Replace current route params entirely.
+     * Replace current route params entirely. Does nothing before a route is active.
      * @param {RouteParamsInput} params - Next full params object
      * @param {NavigateOptions} [options] - Navigation options
      */
     function setParams(params, options) {
-        const current = /** @type {RouteState} */ (getCurrentRoute());
+        const current = getCurrentRoute();
+        if (!current) {
+            return;
+        }
         navigate(current.name, params || {}, options);
     }
 

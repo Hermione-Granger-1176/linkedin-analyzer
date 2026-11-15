@@ -141,15 +141,13 @@ export const LoadingOverlay = (() => {
         }
 
         const overlay = document.getElementById("contentLoadingOverlay");
-        if (!overlay) {
+        const title = document.getElementById("contentLoadingTitle");
+        const message = document.getElementById("contentLoadingText");
+        if (!overlay || !title || !message) {
             return null;
         }
 
-        overlayElements = {
-            overlay,
-            title: /** @type {HTMLElement} */ (document.getElementById("contentLoadingTitle")),
-            message: /** @type {HTMLElement} */ (document.getElementById("contentLoadingText"))
-        };
+        overlayElements = { overlay, title, message };
         return overlayElements;
     }
 

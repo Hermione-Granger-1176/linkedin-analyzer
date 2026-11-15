@@ -89,6 +89,15 @@ describe("AppRouter navigation", () => {
         expect(() => unsubscribe()).not.toThrow();
     });
 
+    it("setParams does nothing before a route is active", async () => {
+        vi.resetModules();
+        const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
+        const hashBefore = window.location.hash;
+
+        expect(() => FreshRouter.setParams({ x: "1" })).not.toThrow();
+        expect(window.location.hash).toBe(hashBefore);
+    });
+
     it("navigate ignores unknown route names", () => {
         AppRouter.navigate("does-not-exist-xyz", { foo: "bar" }, { replaceHistory: true });
         // The hash should not contain the unknown route.

@@ -28,6 +28,8 @@
  * Usage through Make:
  *   make bench-browser size_mb=100
  *   make bench-browser size_mb=55 cpu=4 gpu=0 mobile=1 budget_mb=300
+ *   make bench-browser size_mb=20 budget_s=8
+ *   make bench-browser-container size_mb=20 budget_s=8   # the CI page-speed check
  *   make bench-browser input_dir=/private/export runs=5
  *
  * With size_mb and no input_dir, a synthetic export of that size is generated
@@ -80,6 +82,7 @@ export function parseArgs(argv) {
         gpu: true,
         mobile: false,
         budgetMb: 0,
+        budgetS: 0,
         exportKind: "none",
     };
     const number = (value, name, min) => {
@@ -110,6 +113,8 @@ export function parseArgs(argv) {
             options.mobile = value === "1";
         } else if (argument === "--budget-mb") {
             options.budgetMb = number(value, "budget_mb", 0);
+        } else if (argument === "--budget-s") {
+            options.budgetS = number(value, "budget_s", 0);
         } else if (argument === "--export") {
             if (!EXPORT_KINDS.includes(value)) {
                 throw new Error(`invalid export: ${value}`);
@@ -458,6 +463,35 @@ export function oversizedInputs(inputDir, limit = MEASUREMENT_LIMITS.maxFileByte
 }
 
 /**
+ * List why a set of runs fails its budgets. The time budget applies to the
+ * median time from file drop to the Analytics screen showing data, so one slow
+ * run cannot fail it alone.
+ * @param {object[]} runs - Run results.
+ * @param {ReturnType<typeof parseArgs>} options - Parsed options.
+ * @returns {string[]} One reason per failed budget; empty when every budget holds.
+ */
+export function budgetProblems(runs, options) {
+    const finished = runs.filter((result) => !result.error);
+    const peaks = runs.map((result) => Math.max(result.peak.combined, result.exportPeak.combined));
+    const worstPeak = Math.max(...peaks);
+    const reasons = [];
+    if (options.budgetMb > 0 && worstPeak > options.budgetMb * MB) {
+        reasons.push(`peak=${megabytes(worstPeak)}MB budget=${options.budgetMb}MB`);
+    }
+    if (options.budgetS > 0 && finished.length) {
+        const { median } = summarize(finished.map((result) => result.analyticsMs));
+        if (median > options.budgetS * 1000) {
+            reasons.push(`analytics-median=${seconds(median)}s budget=${options.budgetS}s`);
+        }
+    }
+    const failed = runs.length - finished.length;
+    if (failed) {
+        reasons.push(`unfinished-runs=${failed}`);
+    }
+    return reasons;
+}
+
+/**
  * Print per-run lines and the median and range summary.
  * @param {object[]} runs - Run results.
  * @param {ReturnType<typeof parseArgs>} options - Parsed options.
@@ -510,17 +544,12 @@ function report(runs, options) {
     }
     console.log(
         `SETUP    runs=${runs.length} cpu=${options.cpu} gpu=${options.gpu ? 1 : 0} ` +
-            `mobile=${options.mobile ? 1 : 0} export=${options.exportKind} budget_mb=${options.budgetMb || "none"}` +
+            `mobile=${options.mobile ? 1 : 0} export=${options.exportKind} budget_mb=${options.budgetMb || "none"} ` +
+            `budget_s=${options.budgetS || "none"}` +
             (options.cpu > 1 ? " (cpu throttles the page main thread only)" : ""),
     );
-    const worstPeak = Math.max(...peaks);
-    const overBudget = options.budgetMb > 0 && worstPeak > options.budgetMb * MB;
-    const failed = runs.length - finished.length;
-    if (overBudget || failed) {
-        const reasons = [
-            overBudget ? `peak=${megabytes(worstPeak)}MB budget=${options.budgetMb}MB` : "",
-            failed ? `unfinished-runs=${failed}` : "",
-        ].filter(Boolean);
+    const reasons = budgetProblems(runs, options);
+    if (reasons.length) {
         console.log(`RESULT   FAILED ${reasons.join(" ")}`);
         return false;
     }

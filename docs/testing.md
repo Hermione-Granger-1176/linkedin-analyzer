@@ -165,12 +165,27 @@ Use these options to change the run:
 - `gpu=0` launches with `--disable-gpu`.
 - `mobile=1` uses a Pixel 7 viewport with touch.
 - `budget_mb=N` fails a run when its combined peak JavaScript heap exceeds the budget.
+- `budget_s=N` fails when the median time from file drop to the Analytics screen showing data exceeds `N` seconds. The median keeps one slow run from failing the check alone.
 
 Runs use reduced motion so timeline animations cannot end a filter timing early. The memory budget compares designs and detects regressions. It does not establish a safe limit for phones. Sampling excludes browser, graphics, and native memory, and can miss short peaks.
 
 CPU throttling slows only the page's main thread. Chromium rejects it on worker targets, and a measured worker loop ran at the same speed at rates 1 and 4, so throttled timings understate slow-device time for work done in workers.
 
 The [large-export investigation](large-export-investigation.md) records the October 2026 measurements, intermediate designs, and measurement limitations.
+
+## Check page speed in CI
+
+The `web-page-speed` CI job runs the browser benchmark in the pinned Playwright container, on a 20 MiB synthetic export, three times:
+
+```bash
+make bench-browser-container size_mb=20 runs=3 budget_s=3.5
+```
+
+The job fails when the median time from file drop to the Analytics screen showing data exceeds 3.5 seconds. The first CI run measured a median of 1.74 seconds, with runs from 1.70 to 1.75 seconds. The budget is about twice that, so a page that gets twice as slow fails, while slower runner hardware does not. It catches large slowdowns in the real browser flow. `web-benchmark` catches smaller slowdowns in the analysis pipeline.
+
+The container needs a running Docker daemon. Without one, use `make bench-browser` with the same options on the host. Host timings are not comparable with the CI budget.
+
+Raise the budget only when a change makes the dashboard slower on purpose, such as new work the page has to do before it can show data. Record the new CI median in the workflow comment beside the budget.
 
 ## Compare performance against main
 

@@ -20,6 +20,9 @@ PY_PATHS            := src/ tests/ scripts/*.py scripts/checks/ scripts/ci/ scri
 PY_TYPE_PATHS       := src/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
 PLAYWRIGHT_CI_IMAGE := mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+# Run a command in the pinned hosted-CI image as the calling user, with the
+# checkout mounted. The image omits GNU make, so callers run npm or node.
+PLAYWRIGHT_CONTAINER_RUN = $(DOCKER) run --rm --init --ipc=host --user "$$(id -u):$$(id -g)" --env CI=true --volume "$(CURDIR):/work" --workdir /work $(PLAYWRIGHT_CI_IMAGE)
 PLAYWRIGHT_ENGINE_ARGS = $(subst -, ,$(strip $(engines)))
 PLAYWRIGHT_INVALID_ENGINES = $(filter-out $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))
 
@@ -309,13 +312,7 @@ test-e2e-dev: ## Run Playwright against development modules, including content-b
 	PLAYWRIGHT_DEV_SERVER=1 $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- $(ARGS)
 
 test-e2e-container: ## Run Playwright tests in the immutable hosted-CI container
-	$(DOCKER) run --rm --init --ipc=host \
-		--user "$$(id -u):$$(id -g)" \
-		--env CI=true \
-		--volume "$(CURDIR):/work" \
-		--workdir /work \
-		$(PLAYWRIGHT_CI_IMAGE) \
-		$(NPM) run test:e2e -- $(ARGS)
+	$(PLAYWRIGHT_CONTAINER_RUN) $(NPM) run test:e2e -- $(ARGS)
 
 test-e2e-headed: ## Run Playwright browser tests in headed mode
 	$(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e:headed
@@ -780,11 +777,12 @@ web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.art
 # They skip cleanly when the export is absent unless strict=1 is set, except
 # bench-browser, which generates a synthetic export with size_mb=N and otherwise
 # fails when its inputs are missing, and bench-compare, which always uses a
-# synthetic export and also runs as the CI web benchmark gate. Any cross-runtime
-# row dumps use a private temporary directory and are always removed.
+# synthetic export and also runs as the CI web benchmark gate. CI runs
+# bench-browser-container as its page-speed check. Any cross-runtime row dumps
+# use a private temporary directory and are always removed.
 # See docs/testing.md (Run local checks and benchmarks).
 
-.PHONY: cleaner-diff xrt-diff bench bench-decode bench-compare bench-browser audit-memory-python audit-memory-browser audit-state explore gen-large-export
+.PHONY: cleaner-diff xrt-diff bench bench-decode bench-compare bench-browser bench-browser-container audit-memory-python audit-memory-browser audit-state explore gen-large-export
 
 cleaner-diff: ## Compare web cleaner behavior across refs (make cleaner-diff [args="oldRef newRef"] [strict=1] [input_dir=path])
 	$(NODE) scripts/checks/cleaner-diff.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") $(args)
@@ -806,8 +804,11 @@ bench-decode: ## Benchmark and verify the upload decode layer (make bench-decode
 bench-compare: ## Fail when the pipeline is slower than a base ref beyond measured noise (make bench-compare [base=origin/main] [merge_base=1] [size_mb=20] [runs=15] [threshold=10])
 	$(NODE) --expose-gc scripts/checks/bench-compare.mjs --base-ref "$(or $(base),origin/main)" $(if $(merge_base),--merge-base) --size-mb "$(or $(size_mb),20)" --runs "$(or $(runs),15)" --threshold "$(or $(threshold),10)"
 
-bench-browser: ## Time upload to Analytics and Messages in Chromium with a heap budget (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [export=excel|pdf|pdf-summary] [budget_mb=N] [local_libs=1])
-	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)") $(if $(export),--export "$(export)")
+bench-browser: ## Time upload to Analytics and Messages in Chromium with heap and time budgets (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [export=excel|pdf|pdf-summary] [budget_mb=N] [budget_s=N] [local_libs=1])
+	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)") $(if $(budget_s),--budget-s "$(budget_s)") $(if $(export),--export "$(export)")
+
+bench-browser-container: ## Run the browser benchmark in the pinned hosted-CI container, as the CI page-speed check does (make bench-browser-container [size_mb=20] [runs=3] [budget_s=N] [budget_mb=N])
+	$(PLAYWRIGHT_CONTAINER_RUN) $(NODE) scripts/checks/browser-bench.mjs --size-mb "$(or $(size_mb),20)" $(if $(runs),--runs "$(runs)") $(if $(budget_s),--budget-s "$(budget_s)") $(if $(budget_mb),--budget-mb "$(budget_mb)")
 
 audit-memory-python: ## Measure per-cleaner peak RSS on your export (make audit-memory-python [strict=1] [input_dir=path])
 	$(VENV_PYTHON) scripts/checks/audit_memory_python.py $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)")

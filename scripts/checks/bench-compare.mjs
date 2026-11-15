@@ -38,20 +38,10 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 
+import { generateLargeExport } from "../fixtures/gen-large-export.mjs";
 import { formatVerdicts, judgeRun, stagesToConfirm } from "./bench-gate.mjs";
 
-// Under Vitest this module is imported with a non-file import.meta.url, so
-// fall back to the working directory, as cleaner-diff.mjs does. Tests drive
-// runGate and parseOptions, which never read REPO, and Make runs from the root.
-function resolveRepoRoot() {
-    try {
-        return fileURLToPath(new URL("../..", import.meta.url));
-    } catch {
-        return process.cwd();
-    }
-}
-
-const REPO = resolveRepoRoot();
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const COPIES = join(REPO, ".artifacts", "bench-compare");
 const STREAM_THRESHOLD = 5 * 1024 * 1024;
 const CHUNK = 64 * 1024;
@@ -356,9 +346,6 @@ async function compare(options, inputDir) {
     rmSync(COPIES, { recursive: true, force: true });
     extractWebSource(baseCommit, join(COPIES, "base"));
     extractWebSource(baseCommit, join(COPIES, "control"));
-    // Imported here, not at the top: the generator resolves its own paths from
-    // a file URL when it loads, which fails when tests import this module.
-    const { generateLargeExport } = await import("../fixtures/gen-large-export.mjs");
     generateLargeExport({ sizeMb: options.sizeMb, dir: inputDir });
 
     const raw = Object.fromEntries(

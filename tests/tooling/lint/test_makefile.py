@@ -61,15 +61,24 @@ def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
 
 
 def test_containerized_playwright_runs_through_the_pinned_image() -> None:
-    """Keep hosted E2E outside the image that intentionally omits GNU make."""
-    recipe = _target_recipe("test-e2e-container")
+    """Keep hosted E2E and the page-speed check outside the image that omits GNU make."""
+    run = re.search(r"^PLAYWRIGHT_CONTAINER_RUN = (?P<command>.*)$", MAKEFILE_TEXT, re.MULTILINE)
+    assert run is not None
+    command = run.group("command")
 
-    assert "$(DOCKER) run --rm --init --ipc=host" in recipe
-    assert '--user "$$(id -u):$$(id -g)"' in recipe
-    assert "--env CI=true" in recipe
-    assert '--volume "$(CURDIR):/work"' in recipe
-    assert "$(PLAYWRIGHT_CI_IMAGE)" in recipe
-    assert "$(NPM) run test:e2e" in recipe
+    assert command.startswith("$(DOCKER) run --rm --init --ipc=host")
+    assert '--user "$$(id -u):$$(id -g)"' in command
+    assert "--env CI=true" in command
+    assert '--volume "$(CURDIR):/work"' in command
+    assert command.endswith("$(PLAYWRIGHT_CI_IMAGE)")
+    assert _target_recipe("test-e2e-container").strip() == (
+        "$(PLAYWRIGHT_CONTAINER_RUN) $(NPM) run test:e2e -- $(ARGS)"
+    )
+    assert (
+        _target_recipe("bench-browser-container")
+        .strip()
+        .startswith("$(PLAYWRIGHT_CONTAINER_RUN) $(NODE) scripts/checks/browser-bench.mjs")
+    )
 
 
 def test_node_audit_uses_policy_runner_and_optional_severity_filter() -> None:

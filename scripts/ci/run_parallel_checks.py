@@ -31,11 +31,16 @@ def _execute_make_target(
     timeout: int,
     run_fn: RunFunction | None,
 ) -> tuple[bool, str]:
-    """Run one Make target and return whether it passed, with its output."""
+    """Run one Make target and return whether it passed, with its output.
+
+    Each check gets an empty stdin. Path-taking targets read their paths from
+    stdin, and parallel checks must not share or wait on this process's input.
+    """
     try:
         result = (run_fn or subprocess.run)(
             ["make", name],
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=timeout,
         )

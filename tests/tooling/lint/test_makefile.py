@@ -257,20 +257,46 @@ def test_targets_with_optional_input_never_read_a_terminal(target: str, read_com
     assert f"$(NO_TTY_READ) {read_command}" in _target_recipe(target)
 
 
-def test_format_js_diff_fails_on_a_real_error_but_not_on_a_difference() -> None:
-    """Showing a diff must not turn a broken run into a passing one.
+PATH_TARGETS = {
+    "editorconfig-check": "-- $(VENV_PYTHON) -m scripts.lint.check_editorconfig",
+    "lint-doc-commands": "-- $(VENV_PYTHON) -m scripts.lint.check_doc_commands",
+    "lint-make-targets": "-- $(VENV_PYTHON) -m scripts.lint.check_make_targets",
+    "lint-yaml": ". -- $(VENV_PYTHON) -m yamllint",
+    "format-py-diff": "$(PY_PATHS) -- $(VENV_PYTHON) -m ruff format --check --diff",
+    "format-js-diff": (
+        '--require --name "make format-js-diff" -- '
+        '$(VENV_PYTHON) -m scripts.lint.format_js_diff --npx "$(NPX)"'
+    ),
+    "align-tables": "-- $(VENV_PYTHON) -m scripts.lint.align_tables",
+    "align-tables-check": "-- $(VENV_PYTHON) -m scripts.lint.align_tables --check",
+    "stage": '--require --name "make stage" -- git add --',
+}
 
-    ``diff`` exits 1 whenever the files differ, which is this target's whole
-    purpose, so that status alone is tolerated. A blanket ``|| true`` would also
-    swallow exit 2 and above, and running Prettier through a pipe would discard
-    its status entirely, so a Prettier crash would look like "no changes".
+
+@pytest.mark.parametrize(("target", "invocation"), PATH_TARGETS.items())
+def test_path_targets_read_their_paths_from_stdin(target: str, invocation: str) -> None:
+    """Every target that takes files reads them from stdin, one per line.
+
+    A list on stdin needs no quoting rules, so a path with spaces or quotes is
+    just a line. The defaults before ``--`` apply when stdin brings no paths,
+    and ``--require`` makes an empty list a usage error instead.
     """
-    recipe = _target_recipe("format-js-diff")
+    assert _target_recipe(target).strip() == f"@$(STDIN_PATHS) {invocation}"
 
-    assert "|| true" not in recipe
-    assert "test $$? -eq 1" in recipe
-    assert '> "$$formatted"' in recipe
-    assert "trap 'rm -f -- \"$$formatted\"' EXIT" in recipe
+
+def test_no_recipe_reads_paths_from_a_make_variable() -> None:
+    """Paths have one way in: no recipe interpolates a path variable."""
+    for name in ("files", "file", "paths", "path"):
+        assert f"$({name})" not in MAKEFILE_TEXT, name
+        assert f"$(value {name})" not in MAKEFILE_TEXT, name
+
+
+@pytest.mark.parametrize("name", ["files", "file", "paths", "path"])
+def test_retired_path_arguments_are_refused_rather_than_ignored(name: str) -> None:
+    """A stale ``files="a.py"`` fails the run instead of being dropped in silence."""
+    retired = re.search(r"^RETIRED_PATH_ARGS :=(.*)$", MAKEFILE_TEXT, re.MULTILINE)
+    assert retired is not None
+    assert name in retired.group(1).split()
 
 
 def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> None:
@@ -348,6 +374,13 @@ def test_pr_edit_routes_through_the_tested_helper() -> None:
 
     assert "$(GH) edit-pr" in recipe
     assert '$(if $(pr_num),--pr "$(pr_num)")' in recipe
+
+
+def test_pr_checks_reports_the_helper_exit_status() -> None:
+    """A failing or stuck check fails the target, so `make pr-checks && ...` cannot proceed."""
+    recipe = _target_recipe("pr-checks")
+
+    assert recipe.strip() == '@$(GH) pr-checks $(if $(pr_num),--pr "$(pr_num)")'
 
 
 def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:

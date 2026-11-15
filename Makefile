@@ -37,6 +37,10 @@ PLAYWRIGHT_LOCAL_RUN = $(if $(filter 1,$(local_libs)),$(PLAYWRIGHT_LOCAL_RUNTIME
 # discarding a PYTHONPATH the developer set for their own tooling.
 PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}
 
+# Run a command with the paths read from stdin, one per line, or with its
+# defaults when stdin brings none. scripts/lib/stdin_paths.py documents it.
+STDIN_PATHS = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.lib.stdin_paths
+
 # Entry point for the GitHub PR/CI helper (scripts/gh). The Makefile targets
 # below are thin wrappers; the testable logic (repo and PR auto-detection,
 # GraphQL, CI triage) lives in Python.
@@ -64,8 +68,16 @@ RUN_ID = $(if $(run),$(run),$(strip $(shell $(GH) latest-run-id 2>/dev/null)))
 # Environment values remain literal. A command-line TITLE assignment would
 # expand Make expressions, so the check below rejects that form.
 #
-# Paths use Make arguments such as files= and path=. Targets such as stage
-# export literal values with $(value ...) to keep them out of shell source.
+# Paths go in on stdin too, one per line, through $(STDIN_PATHS), so a name
+# with spaces or quotes needs no escaping:
+#
+#     make stage <<'EOF'
+#     My Notes.md
+#     src/app.py
+#     EOF
+#
+# A target that checks the whole repository by default does so when stdin
+# brings no paths or is a terminal.
 #
 # Required bodies may be read from a terminal. Targets with optional bodies
 # use NO_TTY_READ so a title-only edit or generated release does not wait for
@@ -83,6 +95,14 @@ body_file message_file notes_file detail_file
 $(foreach v,$(RETIRED_TEXT_ARGS),$(if $(filter command line,$(origin $(v))),$(error \
 $(v)= is no longer an argument: a body comes from stdin (make <target> < file) \
 and a title from the environment (TITLE='...' make <target>))))
+
+# The path arguments stdin replaced, refused for the same reason: a stale
+# `files="a.py"` would otherwise be dropped and the target would run on nothing
+# or on the whole repository.
+RETIRED_PATH_ARGS := files file paths path
+$(foreach v,$(RETIRED_PATH_ARGS),$(if $(filter command line,$(origin $(v))),$(error \
+$(v)= is no longer an argument: pass paths on stdin, one per line \
+(make <target> <<'EOF' then one path per line, then EOF))))
 
 # ═══ Daily ════════════════════════════════════════════════════════════════════════
 
@@ -196,14 +216,14 @@ run-cli: ## Run the linkedin-analyzer CLI (args="shares|comments|messages|connec
 
 lint: editorconfig-check lint-doc-commands lint-make-targets lint-py lint-js lint-css lint-yaml lint-workflows ## Run all linters
 
-editorconfig-check: ## Check EditorConfig rules [paths=...]
-	$(VENV_PYTHON) -m scripts.lint.check_editorconfig $(if $(paths),$(paths))
+editorconfig-check: ## Check EditorConfig rules [paths on stdin, one per line]
+	@$(STDIN_PATHS) -- $(VENV_PYTHON) -m scripts.lint.check_editorconfig
 
-lint-doc-commands: ## Check contributor docs use Make targets [paths=...]
-	$(VENV_PYTHON) -m scripts.lint.check_doc_commands $(if $(paths),$(paths))
+lint-doc-commands: ## Check contributor docs use Make targets [paths on stdin, one per line]
+	@$(STDIN_PATHS) -- $(VENV_PYTHON) -m scripts.lint.check_doc_commands
 
-lint-make-targets: ## Check Make targets named in docs, CI, and source exist, and that no recipe holds raw shell control flow [paths=...]
-	$(VENV_PYTHON) -m scripts.lint.check_make_targets $(if $(paths),$(paths))
+lint-make-targets: ## Check Make targets named in docs, CI, and source exist, and that no recipe holds raw shell control flow [paths on stdin, one per line]
+	@$(STDIN_PATHS) -- $(VENV_PYTHON) -m scripts.lint.check_make_targets
 
 lint-py: ## Run Python linter only
 	$(VENV_PYTHON) -m ruff check $(PY_PATHS)
@@ -214,8 +234,8 @@ lint-js: ## Run ESLint only
 lint-css: ## Run stylelint only
 	$(NPM) run lint:css
 
-lint-yaml: ## Run yamllint only [paths=...]
-	$(VENV_PYTHON) -m yamllint $(if $(paths),$(paths),.)
+lint-yaml: ## Run yamllint only [paths on stdin, one per line]
+	@$(STDIN_PATHS) . -- $(VENV_PYTHON) -m yamllint
 
 lint-workflows: ## Run GitHub workflow linter only
 	$(NPM) run lint:workflows
@@ -242,33 +262,23 @@ format-check: format-py-check format-js-check align-tables-check ## Check code, 
 format-py-check: ## Check Python formatting only
 	$(VENV_PYTHON) -m ruff format --check $(PY_PATHS)
 
-format-py-diff: ## Show Python formatting changes without modifying files [paths=...]
-	$(VENV_PYTHON) -m ruff format --check --diff $(if $(paths),$(paths),$(PY_PATHS))
+format-py-diff: ## Show Python formatting changes without modifying files [paths on stdin, one per line]
+	@$(STDIN_PATHS) $(PY_PATHS) -- $(VENV_PYTHON) -m ruff format --check --diff
 
 format-js-check: ## Check Prettier formatting only
 	$(NPM) run format:check
 
-# Prettier has no --diff. Compare its output with the original file to preview
-# formatting changes without modifying the file, as format-py-diff does.
-#
-# The result goes to a file rather than through a pipe so that a Prettier
-# failure is still an error; in a pipeline its status would be discarded. Only
-# diff's exit 1, "the files differ", is tolerated, since that is this target's
-# entire purpose. Exit 2 and above stay failures.
-format-js-diff: ## Show Prettier formatting changes without modifying files (make format-js-diff path=docs/x.md)
-	@test -n "$(path)" || (printf 'Usage: make format-js-diff path=docs/development.md\n' >&2; exit 1)
-	@set -e; \
-	formatted=$$(mktemp "$${TMPDIR:-/tmp}/linkedin-analyzer-prettier.XXXXXX"); \
-	trap 'rm -f -- "$$formatted"' EXIT; \
-	$(NPX) prettier --config config/prettierrc.json --ignore-path config/prettierignore \
-		-- "$(path)" > "$$formatted"; \
-	diff -u -- "$(path)" "$$formatted" || test $$? -eq 1
+# Prettier has no --diff. scripts/lint/format_js_diff.py compares its output
+# with each file, as format-py-diff does: a difference exits 0, and a Prettier
+# failure stays an error.
+format-js-diff: ## Show Prettier formatting changes without modifying files [paths on stdin, one per line, required]
+	@$(STDIN_PATHS) --require --name "make format-js-diff" -- $(VENV_PYTHON) -m scripts.lint.format_js_diff --npx "$(NPX)"
 
-align-tables: ## Align Markdown table pipes [paths="README.md docs/example.md"]
-	$(VENV_PYTHON) -m scripts.lint.align_tables $(if $(paths),$(paths))
+align-tables: ## Align Markdown table pipes [paths on stdin, one per line]
+	@$(STDIN_PATHS) -- $(VENV_PYTHON) -m scripts.lint.align_tables
 
-align-tables-check: ## Check Markdown table pipe alignment [paths="README.md docs/example.md"]
-	$(VENV_PYTHON) -m scripts.lint.align_tables --check $(if $(paths),$(paths))
+align-tables-check: ## Check Markdown table pipe alignment [paths on stdin, one per line]
+	@$(STDIN_PATHS) -- $(VENV_PYTHON) -m scripts.lint.align_tables --check
 
 # ─── Types and dead code @types ───────────────────────────────────────────────────
 
@@ -440,12 +450,10 @@ diff: ## Show unstaged changes
 diff-staged: ## Show staged changes
 	git diff --cached
 
-# Paths reach the helper through the environment, never interpolated into the
-# recipe, so a name containing a space or a shell metacharacter stays inert.
-stage: export STAGE_FILES := $(value files)
-stage: export STAGE_FILE := $(value file)
-stage: ## Stage selected files (make stage [files="path ..."] [file="one path with spaces"])
-	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.lib.stage_files
+# Paths come from stdin and reach git as separate arguments, never through a
+# shell, so a name containing a space or a shell metacharacter stays inert.
+stage: ## Stage selected files, one path per line on stdin (make stage <<'EOF')
+	@$(STDIN_PATHS) --require --name "make stage" -- git add --
 
 stage-all: ## Stage all working tree changes
 	git add -A
@@ -509,8 +517,8 @@ pr-list: ## List open pull requests
 pr-status: ## Show a PR's status and CI checks (make pr-status [pr_num=N])
 	@$(GH) pr-status $(if $(pr_num),--pr "$(pr_num)")
 
-pr-checks: ## Watch CI checks until done (make pr-checks [pr_num=N])
-	@$(GH) pr-checks $(if $(pr_num),--pr "$(pr_num)") || true
+pr-checks: ## Watch CI checks until done, failing when a check fails (make pr-checks [pr_num=N])
+	@$(GH) pr-checks $(if $(pr_num),--pr "$(pr_num)")
 
 pr-diff: ## Show the diff for a PR (make pr-diff [pr_num=N])
 	@$(GH) pr-diff $(if $(pr_num),--pr "$(pr_num)")

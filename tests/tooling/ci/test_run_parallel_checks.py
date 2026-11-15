@@ -24,6 +24,19 @@ def test_run_check_reports_success_output() -> None:
     assert result.output == "ok\ndone"
 
 
+def test_run_check_gives_each_check_an_empty_stdin() -> None:
+    """A path-taking target reads stdin, so a check must never inherit this process's input."""
+    calls: list[dict[str, object]] = []
+
+    def runner(*_args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(kwargs)
+        return completed_process(0, "", "")
+
+    run_parallel_checks.run_check("lint-yaml", run_fn=runner)
+
+    assert calls[0]["stdin"] is subprocess.DEVNULL
+
+
 def test_run_check_reports_failed_output() -> None:
     """Capture failed make output."""
     result = run_parallel_checks.run_check(

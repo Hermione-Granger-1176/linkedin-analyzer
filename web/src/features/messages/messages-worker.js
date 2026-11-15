@@ -104,15 +104,9 @@ async function processPayload(payload) {
     return {
         success: true,
         totalInputRows: messagesData.length,
-        /* v8 ignore next */
-        messageState: messageState ? serializeMessageState(messageState) : null,
-        /* v8 ignore next */
-        connectionState: connectionState ? serializeConnectionState(connectionState) : null,
+        messageState: serializeMessageState(messageState),
+        connectionState: serializeConnectionState(connectionState),
         connectionError,
-        /* v8 ignore next */
-        messagesData: messageState ? [] : messagesData,
-        /* v8 ignore next */
-        connectionsData: connectionState ? [] : connectionsData,
     };
 }
 

@@ -208,17 +208,27 @@ make fmt
 make align-tables
 ```
 
+Targets that take files read them from stdin, one path per line, so a path with spaces or quotes is just a line. Without paths on stdin, a check covers its default scope, usually the whole repository.
+
 Preview Python changes without writing them:
 
 ```bash
 make format-py-diff
-make format-py-diff paths="src tests"
 ```
 
-Preview Prettier changes for one file:
+```bash
+make format-py-diff <<'EOF'
+src
+tests
+EOF
+```
+
+Preview Prettier changes for specific files:
 
 ```bash
-make format-js-diff path=docs/development.md
+make format-js-diff <<'EOF'
+docs/development.md
+EOF
 ```
 
 Check the result without changing files:
@@ -250,11 +260,13 @@ make diff
 make diff-staged
 ```
 
-Stage paths through the tested helper:
+Stage paths, one per line on stdin:
 
 ```bash
-make stage files="docs/index.md docs/development.md"
-make stage file="path with spaces.md"
+make stage <<'EOF'
+docs/index.md
+path with spaces.md
+EOF
 ```
 
 Commit messages come from standard input. Put the title and body in the repository's commit format:

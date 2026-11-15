@@ -417,7 +417,9 @@ export const AnalyticsEngine = (() => {
         if (!filters.topic || filters.topic === "all") {
             return 1;
         }
-        // Existing buckets have a positive total. Return zero for malformed data.
+        // Buckets this code builds always have a positive total. Analytics saved
+        // by an earlier version can outlive a deploy (the session TTL renews on
+        // every visit), so a zero total returns 0 instead of dividing by zero.
         /* v8 ignore next 3 */
         if (!bucket.total) {
             return 0;
@@ -442,7 +444,7 @@ export const AnalyticsEngine = (() => {
             return dayTotal > 0 ? dayHour / dayTotal : 0;
         }
         const hourTotal = bucket.hours[filters.hour] || 0;
-        // Existing buckets have a positive total. Return zero for malformed data.
+        // A zero total can only come from analytics saved by an earlier version.
         /* v8 ignore next */
         return bucket.total > 0 ? hourTotal / bucket.total : 0;
     }
@@ -497,7 +499,7 @@ export const AnalyticsEngine = (() => {
         const dimensionKey = hasDay && hasHour ? "both" : hasDay ? "day" : hasHour ? "hour" : null;
         if (useMonth && dimensionKey) {
             const filterCount = DIMENSION_COUNT_BY_KEY[dimensionKey](bucket, filters);
-            // Existing buckets have a positive total. Return zero for malformed data.
+            // A zero total can only come from analytics saved by an earlier version.
             /* v8 ignore next */
             const ratio = bucket.total > 0 ? filterCount / bucket.total : 0;
             monthPosts = Math.round(monthPosts * ratio);
@@ -888,7 +890,7 @@ export const AnalyticsEngine = (() => {
         const hasDay = filters.day !== null && filters.day !== undefined;
         const hasHour = filters.hour !== null && filters.hour !== undefined;
 
-        // Activity days normally have a positive total. Use zero for malformed data.
+        // A day without a total can only come from analytics saved by an earlier version.
         /* v8 ignore next */
         let value = entry.total || 0;
         const typeKey = SHARE_TYPE_MAP[filters.shareType];
@@ -906,7 +908,8 @@ export const AnalyticsEngine = (() => {
 
         if (filters.topic && filters.topic !== "all") {
             const meta = monthMeta[dateKey.slice(0, 7)];
-            // Activity days normally have month metadata. Use zero when it is missing.
+            // Every day this code records has month metadata; saved analytics from
+            // an earlier version may not.
             /* v8 ignore next */
             const ratio = meta ? meta.topicRatio : 0;
             value *= ratio;
@@ -914,7 +917,8 @@ export const AnalyticsEngine = (() => {
 
         if (hasHour) {
             const meta = monthMeta[dateKey.slice(0, 7)];
-            // Activity days normally have month metadata. Use zero when it is missing.
+            // Every day this code records has month metadata; saved analytics from
+            // an earlier version may not.
             /* v8 ignore next */
             const ratio = meta ? meta.hourRatio : 0;
             value *= ratio;
@@ -954,7 +958,7 @@ export const AnalyticsEngine = (() => {
                 continue;
             }
 
-            // Activity days normally have a positive total. Use zero for malformed data.
+            // A day without a total can only come from analytics saved by an earlier version.
             /* v8 ignore next */
             baselineTotals[index] += entry.total || 0;
             weeks[index].value += filteredDayValue(entry, dateKey, date, filters, monthMeta);

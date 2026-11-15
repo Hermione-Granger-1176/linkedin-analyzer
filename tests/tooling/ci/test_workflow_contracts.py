@@ -46,6 +46,7 @@ EXPECTED_RESULT_VARIABLES = {
     "PYTHON_COMPATIBILITY_RESULT",
     "NODE_COMPATIBILITY_RESULT",
     "WEB_E2E_RESULT",
+    "WEB_BENCHMARK_RESULT",
 }
 
 GATED_CI_JOBS = {
@@ -53,6 +54,7 @@ GATED_CI_JOBS = {
     "python-compatibility": "needs.changes.outputs.python == 'true'",
     "node-compatibility": "needs.changes.outputs.web == 'true'",
     "web-e2e": "needs.changes.outputs.web == 'true'",
+    "web-benchmark": "needs.changes.outputs.web == 'true'",
 }
 
 

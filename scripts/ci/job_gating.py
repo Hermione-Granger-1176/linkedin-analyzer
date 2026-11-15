@@ -153,6 +153,7 @@ GATED_JOBS: tuple[GatedJob, ...] = (
     GatedJob("Python compatibility", "PYTHON_COMPATIBILITY_RESULT", PYTHON_ONLY),
     GatedJob("Node.js compatibility", "NODE_COMPATIBILITY_RESULT", WEB_ONLY),
     GatedJob("Web E2E", "WEB_E2E_RESULT", WEB_ONLY),
+    GatedJob("Web benchmark", "WEB_BENCHMARK_RESULT", WEB_ONLY),
 )
 
 AREA_VARIABLES = {PYTHON_AREA: "PYTHON_CHANGED", WEB_AREA: "WEB_CHANGED"}

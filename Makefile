@@ -777,8 +777,9 @@ web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.art
 # They skip cleanly when the export is absent unless strict=1 is set, except
 # bench-browser, which generates a synthetic export with size_mb=N and otherwise
 # fails when its inputs are missing, and bench-compare, which always uses a
-# synthetic export and also runs as the CI web benchmark gate. Any cross-runtime
-# row dumps use a private temporary directory and are always removed.
+# synthetic export and also runs as the CI web benchmark gate. CI runs
+# bench-browser-container as its page-speed check. Any cross-runtime row dumps
+# use a private temporary directory and are always removed.
 # See docs/testing.md (Run local checks and benchmarks).
 
 .PHONY: cleaner-diff xrt-diff bench bench-decode bench-compare bench-browser bench-browser-container audit-memory-python audit-memory-browser audit-state explore gen-large-export

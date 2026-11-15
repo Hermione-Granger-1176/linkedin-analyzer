@@ -257,8 +257,11 @@ jobs:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           python-version: ""
 
+      # The first CI run measured a 1.74 s median (1.70 to 1.75 s) on a
+      # 20 MiB export. The budget is about twice that, so a page that gets
+      # twice as slow fails while slower runner hardware does not.
       - name: Check page speed budget
-        run: make bench-browser-container size_mb=20 runs=3 budget_s=0.001
+        run: make bench-browser-container size_mb=20 runs=3 budget_s=3.5
 
   ci-result:
     name: CI result

@@ -154,7 +154,8 @@ GitHub Actions runs the primary CI workflow on pull requests and pushes to `main
 5. `node-compatibility` tests Node.js 22 and 24 when the web area changed.
 6. `web-e2e` runs Playwright in the digest-pinned container when the web area changed.
 7. `web-benchmark` runs `make bench-compare` against the base commit when the web area changed, and fails when the analysis pipeline slowed down beyond its noise allowance. Its report is in the job summary. [Testing](testing.md#compare-performance-against-main) explains how to read it.
-8. `ci-result` checks that the jobs required by the detected areas ran and succeeded.
+8. `web-page-speed` runs `make bench-browser-container` when the web area changed, and fails when the median time from file drop to the Analytics screen showing data exceeds its budget. [Testing](testing.md#check-page-speed-in-ci) explains the budget.
+9. `ci-result` checks that the jobs required by the detected areas ran and succeeded.
 
 The required branch status is `CI result`. Run the same non-browser order locally with:
 

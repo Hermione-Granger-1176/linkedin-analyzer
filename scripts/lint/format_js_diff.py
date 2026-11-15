@@ -8,6 +8,9 @@ Prettier configuration and compared with the file on disk as a unified diff.
 A difference is the expected result and exits 0. A Prettier failure, such as a
 syntax error or an unreadable file, stops the run and returns Prettier's exit
 code, because a diff of half-formatted output would be misleading.
+
+Both sides are read as bytes and decoded without newline translation, so a
+file whose only problem is CRLF line endings still shows a diff.
 """
 
 from __future__ import annotations
@@ -34,13 +37,19 @@ Formatter = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 
 def _default_format(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    """Run Prettier without a shell, capturing the formatted output."""
-    return subprocess.run(list(command), check=False, shell=False, capture_output=True, text=True)
+    """Run Prettier without a shell, capturing its output with line endings intact."""
+    result = subprocess.run(list(command), check=False, shell=False, capture_output=True)
+    return subprocess.CompletedProcess(
+        result.args,
+        result.returncode,
+        result.stdout.decode("utf-8"),
+        result.stderr.decode("utf-8", errors="replace"),
+    )
 
 
 def diff_for(path: str, formatted: str) -> str:
     """Return a unified diff from the file on disk to ``formatted``, or an empty string."""
-    original = Path(path).read_text(encoding="utf-8")
+    original = Path(path).read_bytes().decode("utf-8")
     return "".join(
         difflib.unified_diff(
             original.splitlines(keepends=True),

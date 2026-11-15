@@ -45,7 +45,6 @@ jobs:
         uses: ./.github/actions/ci-setup
         with:
           node-version: ""
-          install-node-deps: "false"
 
       # Inputs reach make through the environment and stdin, never through
       # template interpolation inside the script body. The detail is the alert's

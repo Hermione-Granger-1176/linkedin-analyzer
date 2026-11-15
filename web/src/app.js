@@ -122,7 +122,6 @@ function init() {
         /** @type {import("./shared/constants.js").SessionCleanupWindow} */ (window)[
             SESSION_CLEANUP_PROMISE_KEY
         ] = Session.cleanIfStale()
-            /* v8 ignore next */
             .catch((error) => {
                 captureError(error, {
                     module: "app",
@@ -228,7 +227,6 @@ function init() {
             );
         const offerTelemetry =
             Boolean(import.meta.env.VITE_SENTRY_DSN) ||
-            /* v8 ignore next */
             Boolean(globalWindow.__LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__);
 
         let granted = consentGranted;

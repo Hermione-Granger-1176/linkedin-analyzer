@@ -78,10 +78,11 @@ export const MessagesAnalytics = (() => {
     );
 
     /**
-     * Run `work` between performance marks, then measure the span. Skip each
-     * step the runtime does not support, so a missing Performance API never
-     * stops the work. Unlike the page's own helpers this reports nothing to
-     * telemetry, because this module also runs in a worker.
+     * Run `work` between performance marks, then measure the span. The
+     * Performance API is part of the supported browser baseline (see
+     * docs/web-app.md), and a measure that cannot find its marks is ignored.
+     * Unlike the page's own helpers this reports nothing to telemetry,
+     * because this module also runs in a worker.
      * @template T
      * @param {string} name - Measure name; its marks are `${name}:start` and `${name}:end`
      * @param {() => T} work - Work to time
@@ -90,19 +91,13 @@ export const MessagesAnalytics = (() => {
     function measureSpan(name, work) {
         const start = `${name}:start`;
         const end = `${name}:end`;
-        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
-            performance.mark(start);
-        }
+        performance.mark(start);
         const result = work();
-        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
-            performance.mark(end);
-        }
-        if (typeof performance !== "undefined" && typeof performance.measure === "function") {
-            try {
-                performance.measure(name, start, end);
-            } catch {
-                // Ignore missing marks to keep instrumentation resilient.
-            }
+        performance.mark(end);
+        try {
+            performance.measure(name, start, end);
+        } catch {
+            // Ignore missing marks to keep instrumentation resilient.
         }
         return result;
     }
@@ -197,9 +192,7 @@ export const MessagesAnalytics = (() => {
         function insert(contactKey, contact, timestamp) {
             const created = {
                 key: contactKey,
-                // sanitizeParticipant supplies a name. Keep "Unknown" for malformed data.
-                /* v8 ignore next */
-                name: contact.name || "Unknown",
+                name: contact.name,
                 url: contact.url,
                 count: 1,
                 lastTimestamp: timestamp
@@ -216,34 +209,19 @@ export const MessagesAnalytics = (() => {
          * @param {number} timestamp - Message time
          */
         function record(contact, timestamp) {
-            // Only non-anonymous names are safe to merge on: "LinkedIn Member"
-            // placeholders belong to different people and must not collapse.
-            // sanitizeParticipant supplies a real name or "Unknown". Keep the
-            // empty branch and anonymity checks for malformed participant data.
-            /* v8 ignore next 4 */
-            const mergeNameKey =
-                contact.name && !isAnonymousName(contact.name)
-                    ? normalizeName(contact.name)
-                    : "";
+            // sanitizeParticipant has already dropped blank names and "LinkedIn
+            // Member" placeholders, which belong to different people, so every
+            // participant here has a name key that is safe to merge on.
+            const nameKey = normalizeName(contact.name);
             const contactKey = buildContactKey(contact);
-            const found = findStoredContact(contact, contactKey, mergeNameKey);
+            const found = findStoredContact(contact, contactKey, nameKey);
             if (found) {
                 mergeInto(found, contact, timestamp);
             }
             const existing = found || insert(contactKey, contact, timestamp);
 
-            // Sanitized participants normally produce both keys. Keep these
-            // branches for malformed participant data.
-            /* v8 ignore next */
-            if (mergeNameKey) {
-                nameToKey.set(mergeNameKey, existing.key);
-            }
-
-            const nameKey = normalizeName(contact.name);
-            /* v8 ignore next */
-            if (nameKey) {
-                talkedNameKeys.add(nameKey);
-            }
+            nameToKey.set(nameKey, existing.key);
+            talkedNameKeys.add(nameKey);
             if (contact.url) {
                 talkedUrlKeys.add(contact.url);
             }
@@ -580,9 +558,6 @@ export const MessagesAnalytics = (() => {
      * @returns {SelfContext}
      */
     function detectSelfContext(rows) {
-        // buildMessageState passes an array. Keep an empty list for malformed input.
-        /* v8 ignore next */
-        const safeRows = Array.isArray(rows) ? rows : [];
         /** @type {Map<string, ParticipantStats>} */
         const urlStats = new Map();
         /** @type {Map<string, ParticipantStats>} */
@@ -590,7 +565,7 @@ export const MessagesAnalytics = (() => {
         /** @type {Map<string, Map<string, number>>} */
         const urlNameCounts = new Map();
 
-        safeRows.forEach((row, index) => {
+        rows.forEach((row, index) => {
             const conversationKey = buildConversationKey(row, index);
             const senderUrl = normalizeUrl(row["SENDER PROFILE URL"]);
             const recipientUrls = normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
@@ -668,21 +643,14 @@ export const MessagesAnalytics = (() => {
             return;
         }
 
-        // Callers pass "sender" or "recipient". Keep the null fallback for malformed input.
-        /* v8 ignore next 4 */
-        const roleField = {
-            sender: "senderCount",
-            recipient: "recipientCount"
-        }[role] || null;
+        /** @type {RoleCountField} */
+        const roleField = role === "sender" ? "senderCount" : "recipientCount";
 
         const existing = statsMap.get(key);
         if (existing) {
             existing.totalCount += 1;
             existing.conversations.add(conversationKey);
-            /* v8 ignore next */
-            if (roleField) {
-                existing[/** @type {RoleCountField} */ (roleField)] += 1;
-            }
+            existing[roleField] += 1;
             return;
         }
 
@@ -692,10 +660,7 @@ export const MessagesAnalytics = (() => {
             recipientCount: 0,
             conversations: new Set([conversationKey])
         };
-        /* v8 ignore next */
-        if (roleField) {
-            next[/** @type {RoleCountField} */ (roleField)] = 1;
-        }
+        next[roleField] = 1;
         statsMap.set(key, next);
     }
 
@@ -833,7 +798,6 @@ export const MessagesAnalytics = (() => {
         }
 
         const key = buildContactKey(sanitized);
-        /* v8 ignore next 3 */
         if (seenKeys.has(key)) {
             return;
         }
@@ -883,17 +847,14 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Create a stable key for contact aggregation.
-     * @param {{name: string, url: string}} contact - Contact candidate
+     * @param {{name: string, url: string}} contact - Contact from sanitizeParticipant
      * @returns {string}
      */
     function buildContactKey(contact) {
         if (contact.url) {
             return `url:${contact.url}`;
         }
-        // A sanitized contact name normally produces a key. Use "unknown" for malformed data.
-        /* v8 ignore next 2 */
-        const nameKey = normalizeName(contact.name);
-        return `name:${nameKey || "unknown"}`;
+        return `name:${normalizeName(contact.name)}`;
     }
 
     /**

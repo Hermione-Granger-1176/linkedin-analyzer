@@ -46,8 +46,8 @@ export function terminateMessagesWorker() {
  */
 
 /**
- * Result of `LinkedInCleaner.process`, as far as this transport reads it.
- * @typedef {{success: boolean, cleanedData: Array<Record<string, string>>}} CleanedRows
+ * A LinkedInCleaner.process() result whose rows are string records.
+ * @typedef {import("../cleaning/cleaner.js").ProcessResult & {cleanedData: Array<Record<string, string>>}} CleanedRows
  */
 
 /**
@@ -163,9 +163,6 @@ function buildStateOnMainThread(messagesCsv, connectionsCsv) {
             return null;
         }
         const messageState = MessagesAnalytics.buildMessageState(messages.cleanedData);
-        if (!messageState) {
-            return null;
-        }
 
         // A connections file is optional, and one that will not parse costs the
         // lists that need it rather than the whole dashboard.

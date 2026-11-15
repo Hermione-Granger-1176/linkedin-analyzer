@@ -44,11 +44,6 @@ const COLUMNS = Object.freeze(
  * @returns {string} Message body, verbatim
  */
 function messageBodyText(value) {
-    // CONTENT is required and the parser fills every cell. Keep an empty body for malformed data.
-    /* v8 ignore next 3 */
-    if (value === null || value === undefined) {
-        return "";
-    }
     return String(value);
 }
 

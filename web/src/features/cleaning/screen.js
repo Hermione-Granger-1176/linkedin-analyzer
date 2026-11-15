@@ -223,14 +223,10 @@ export const CleanPage = (() => {
         }
 
         const fallbackType = loadedTypes[0];
-        const fallbackInput = document.querySelector(
-            `input[name="cleanFileType"][value="${fallbackType}"]`,
+        const fallbackInput = /** @type {HTMLInputElement} */ (
+            document.querySelector(`input[name="cleanFileType"][value="${fallbackType}"]`)
         );
-        // loadedTypes comes from FILE_TYPES. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next */
-        if (fallbackInput) {
-            /** @type {HTMLInputElement} */ (fallbackInput).checked = true;
-        }
+        fallbackInput.checked = true;
 
         elements.cleanerHint.textContent = getCleanerHint(loadedCount);
 
@@ -387,14 +383,11 @@ export const CleanPage = (() => {
      * @param {string} fileType - Selected cleaner file type.
      */
     function showPreview(result, fileType) {
-        const config = LinkedInCleaner.configs[fileType];
-        /* v8 ignore next */
-        if (!config) {
-            return;
-        }
+        const config = /** @type {import("./configs.js").CleanerConfig} */ (
+            LinkedInCleaner.configs[fileType]
+        );
         const headers = config.columns.map((column) => column.name);
-        /* v8 ignore next */
-        const label = TYPE_LABELS[fileType] || fileType;
+        const label = TYPE_LABELS[fileType];
         elements.cleanFileInfo.textContent = `${label} - ${formatRows(result.rowCount)}`;
 
         const thead = /** @type {HTMLElement} */ (
@@ -415,8 +408,7 @@ export const CleanPage = (() => {
         result.previewRows.forEach((row) => {
             const previewRow = document.createElement("tr");
             headers.forEach((_, index) => {
-                /* v8 ignore next */
-                const value = row[index] || "";
+                const value = row[index];
                 const cell = document.createElement("td");
                 cell.title = value;
                 cell.textContent = truncate(value, PREVIEW_CELL_LIMIT);
@@ -606,10 +598,6 @@ export const CleanPage = (() => {
      * @returns {string} The truncated string.
      */
     function truncate(value, maxLength) {
-        /* v8 ignore next */
-        if (!value) {
-            return "";
-        }
         if (value.length <= maxLength) {
             return value;
         }

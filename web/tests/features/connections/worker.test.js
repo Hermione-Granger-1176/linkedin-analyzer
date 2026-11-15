@@ -29,20 +29,6 @@ describe("connections worker", () => {
         expect((await processConnections("")).error).toBeTruthy();
     });
 
-    it("processConnections uses fallback parser error message when cleaner omits error", async () => {
-        const processSpy = vi.spyOn(LinkedInCleaner, "process").mockReturnValueOnce({
-            success: false,
-            error: ""
-        });
-
-        const result = await processConnections("First Name,Last Name\nAda,Lovelace");
-
-        expect(result.success).toBe(false);
-        expect(result.error).toBe("Unable to parse Connections.csv.");
-
-        processSpy.mockRestore();
-    });
-
     it("processConnections reports an error when the CSV parses but yields no valid rows", async () => {
         // A valid connections header but every row is empty (all identity fields missing)
         const csv = [

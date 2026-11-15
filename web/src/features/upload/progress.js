@@ -92,21 +92,18 @@ export const UploadProgress = (() => {
      * Smoothly animate progress bar to target value.
      * @param {number} target - Target progress value (0-1)
      * @param {number} duration - Animation duration in ms
-     * @param {(() => void) | null} [callback] - Optional callback when animation completes
-     * @param {number} [sessionId] - Progress animation session token
+     * @param {() => void} callback - Called when the animation completes
+     * @param {number} sessionId - Progress animation session token
      */
     function animateProgressTo(target, duration, callback, sessionId) {
         stopProgressAnimation();
         const start = performance.now();
         const startValue = progressValue;
-        // show() and hide() pass a session token. Keep the fallback for direct callers.
-        /* v8 ignore next */
-        const animationSession = sessionId || progressSessionId;
 
         /** @param {number} now - Frame timestamp */
         function step(now) {
             /* v8 ignore next 4 */
-            if (animationSession !== progressSessionId) {
+            if (sessionId !== progressSessionId) {
                 progressAnimationId = null;
                 return;
             }
@@ -121,11 +118,7 @@ export const UploadProgress = (() => {
             }
 
             progressAnimationId = null;
-            // show() and hide() pass a callback when the animation should notify a caller.
-            /* v8 ignore next */
-            if (callback) {
-                queueMicrotask(callback);
-            }
+            queueMicrotask(callback);
         }
 
         progressAnimationId = requestAnimationFrame(step);
@@ -210,10 +203,6 @@ export const UploadProgress = (() => {
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         ctx.clearRect(0, 0, rect.width, rect.height);
 
-        /* v8 ignore next 3 */
-        if (typeof document === "undefined" || !document.documentElement) {
-            return;
-        }
         const styles = getComputedStyle(document.documentElement);
         const border = styles.getPropertyValue("--border-color").trim();
         const fill = styles.getPropertyValue("--accent-purple").trim();
@@ -223,25 +212,22 @@ export const UploadProgress = (() => {
         const trackWidth = rect.width - 16;
         const trackHeight = 28;
 
-        /* v8 ignore next */
-        if (rough) {
-            const rc = rough.canvas(canvas);
-            rc.rectangle(trackX, trackY, trackWidth, trackHeight, {
-                stroke: border,
-                strokeWidth: 1.5,
-                roughness: 1.4,
-            });
-            const fillWidth = Math.max(4, (trackWidth - 4) * value);
-            ctx.fillStyle = fill;
-            ctx.globalAlpha = 0.6;
-            ctx.fillRect(trackX + 2, trackY + 2, fillWidth, trackHeight - 4);
-            ctx.globalAlpha = 1;
-            rc.rectangle(trackX + 2, trackY + 2, fillWidth, trackHeight - 4, {
-                stroke: fill,
-                strokeWidth: 1.2,
-                roughness: 1.2,
-            });
-        }
+        const rc = rough.canvas(canvas);
+        rc.rectangle(trackX, trackY, trackWidth, trackHeight, {
+            stroke: border,
+            strokeWidth: 1.5,
+            roughness: 1.4,
+        });
+        const fillWidth = Math.max(4, (trackWidth - 4) * value);
+        ctx.fillStyle = fill;
+        ctx.globalAlpha = 0.6;
+        ctx.fillRect(trackX + 2, trackY + 2, fillWidth, trackHeight - 4);
+        ctx.globalAlpha = 1;
+        rc.rectangle(trackX + 2, trackY + 2, fillWidth, trackHeight - 4, {
+            stroke: fill,
+            strokeWidth: 1.2,
+            roughness: 1.2,
+        });
 
         if (elements.percent) {
             elements.percent.textContent = `${Math.round(value * 100)}%`;

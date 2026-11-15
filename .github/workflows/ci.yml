@@ -146,7 +146,6 @@ jobs:
         with:
           node-version: ""
           python-version: ${{ matrix.python-version }}
-          install-node-deps: "false"
 
       - name: Test Python compatibility
         run: make test-py
@@ -172,7 +171,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           python-version: ""
-          install-python-deps: "false"
 
       - name: Verify web compatibility
         run: make ci-web
@@ -194,7 +192,6 @@ jobs:
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           python-version: ""
-          install-python-deps: "false"
 
       - name: Test web E2E
         run: make test-e2e-container

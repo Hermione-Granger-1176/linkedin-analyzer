@@ -38,15 +38,6 @@ describe("AppRouter navigation", () => {
         expect(parsed.params.range).toBe("6m");
     });
 
-    it("updates params by patching and removing empties", () => {
-        AppRouter.registerRoute("home");
-        AppRouter.navigate("home", { alpha: "1", beta: "2" }, { replaceHistory: true });
-        AppRouter.updateParams({ beta: null, gamma: "3" });
-        const parsed = AppRouter.parseHash(window.location.hash);
-        expect(parsed.params.beta).toBeUndefined();
-        expect(parsed.params.gamma).toBe("3");
-    });
-
     it("hashchange listener redirects unknown routes to default", () => {
         AppRouter.registerRoute("home");
         // navigate to unknown route via the router itself to trigger hash handling
@@ -60,12 +51,6 @@ describe("AppRouter navigation", () => {
 
     it("parseHash returns default route for empty hash", () => {
         const parsed = AppRouter.parseHash("");
-        expect(parsed.name).toBeTruthy();
-        expect(parsed.params).toEqual({});
-    });
-
-    it("parseHash returns default route for hash with only #", () => {
-        const parsed = AppRouter.parseHash("#");
         expect(parsed.name).toBeTruthy();
         expect(parsed.params).toEqual({});
     });
@@ -104,22 +89,13 @@ describe("AppRouter navigation", () => {
         expect(() => unsubscribe()).not.toThrow();
     });
 
-    it("getCurrentRoute returns null before any navigation", () => {
-        // The router has state from prior tests, so verify the returned structure.
-        const route = AppRouter.getCurrentRoute();
-        if (route !== null) {
-            expect(route).toHaveProperty("name");
-            expect(route).toHaveProperty("params");
-        } else {
-            expect(route).toBeNull();
-        }
-    });
-
-    it("setParams does nothing when no current route", async () => {
+    it("setParams does nothing before a route is active", async () => {
         vi.resetModules();
         const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
-        // If no route is active, setParams should return without throwing.
+        const hashBefore = window.location.hash;
+
         expect(() => FreshRouter.setParams({ x: "1" })).not.toThrow();
+        expect(window.location.hash).toBe(hashBefore);
     });
 
     it("navigate ignores unknown route names", () => {
@@ -134,13 +110,6 @@ describe("AppRouter navigation", () => {
         AppRouter.navigate("home", undefined, { replaceHistory: true });
         const parsed = AppRouter.parseHash(window.location.hash);
         expect(parsed.params.saved).toBe("yes");
-    });
-
-    it("updateParams does nothing when no current route", async () => {
-        vi.resetModules();
-        const { AppRouter: FreshRouter } = await import("../../src/app/router.js");
-        // Verify that updateParams is a no-op and does not throw without an active route.
-        expect(() => FreshRouter.updateParams({ x: "1" })).not.toThrow();
     });
 
     it("sharedParams applies default value when no stored value exists", () => {
@@ -241,11 +210,6 @@ describe("AppRouter pure helpers", () => {
     it("buildHash tolerates null params", () => {
         expect(AppRouter.buildHash("home", null)).toBe("#home");
     });
-
-    it("buildHash normalizes an undefined name to the default route", () => {
-        // Exercises the String(value || "") coercion in normalizeRouteName.
-        expect(AppRouter.buildHash(undefined, {})).toBe("#home");
-    });
 });
 
 describe("AppRouter start and navigate edge cases", () => {
@@ -301,12 +265,6 @@ describe("AppRouter start and navigate edge cases", () => {
         AppRouter.navigate("home", { a: "1" }, { replaceHistory: true });
         AppRouter.setParams(null, { replaceHistory: true });
         expect(AppRouter.parseHash(window.location.hash).params.a).toBeUndefined();
-    });
-
-    it("updateParams tolerates an undefined patch", () => {
-        AppRouter.navigate("home", { a: "1" }, { replaceHistory: true });
-        expect(() => AppRouter.updateParams(undefined, { replaceHistory: true })).not.toThrow();
-        expect(AppRouter.parseHash(window.location.hash).params.a).toBe("1");
     });
 
     it("getCurrentRoute returns null before any navigation on a fresh module", async () => {

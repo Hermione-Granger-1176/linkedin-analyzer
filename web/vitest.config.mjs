@@ -8,7 +8,6 @@ export default defineConfig({
     test: {
         environment: "jsdom",
         include: ["web/tests/**/*.test.js"],
-        exclude: ["web/e2e/**"],
         coverage: {
             provider: "v8",
             reportsDirectory: "./coverage",

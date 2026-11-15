@@ -1,7 +1,5 @@
 /* Analytics page logic */
 
-import rough from "roughjs/bundled/rough.esm.js";
-
 import { AppRouter } from "../../app/router.js";
 import { parseAnalyticsWorkerMessage } from "../../app/worker-contracts.ts";
 import { captureError } from "../../platform/observability/sentry.js";
@@ -174,7 +172,6 @@ export const AnalyticsPage = (() => {
     let chartCanvases = [];
     let initialized = false;
     let needsBaseReload = true;
-    let isApplyingRouteParams = false;
     /** @type {import("../../shared/ui/time-range.js").RangeFilter|null} */
     let rangeFilter = null;
 
@@ -243,7 +240,6 @@ export const AnalyticsPage = (() => {
         if (!initialized) {
             init();
         }
-        /* v8 ignore next 2 */
         if (!initialized) {
             return;
         }
@@ -435,9 +431,7 @@ export const AnalyticsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            // invalid() returns an error string. Keep the fallback for malformed worker data.
-            /* v8 ignore next */
-            captureError(new Error(parsed.error || "Invalid analytics worker message."), {
+            captureError(new Error(parsed.error), {
                 module: "analytics-ui",
                 operation: "worker-message-parse",
             });
@@ -458,27 +452,16 @@ export const AnalyticsPage = (() => {
                 if (message.requestId !== pendingViewId) {
                     return;
                 }
-                // The parser returns an object. Keep the fallback for malformed worker data.
-                /* v8 ignore next */
-                applyWorkerViewPayload(/** @type {AnalyticsViewPayload} */ (message.payload || {}));
+                applyWorkerViewPayload(/** @type {AnalyticsViewPayload} */ (message.payload));
                 return;
             case "error":
                 workers.unwatch();
-                captureError(
-                    new Error(getWorkerMessage(message.payload, "Analytics worker error.")),
-                    {
-                        module: "analytics-ui",
-                        operation: "worker-error-payload",
-                        requestId: message.requestId,
-                    },
-                );
-                setEmptyState(
-                    "Analytics error",
-                    getWorkerMessage(message.payload, "Analytics worker error."),
-                );
-                return;
-            /* v8 ignore next 2 */
-            default:
+                captureError(new Error(message.payload.message), {
+                    module: "analytics-ui",
+                    operation: "worker-error-payload",
+                    requestId: message.requestId,
+                });
+                setEmptyState("Analytics error", message.payload.message);
                 return;
         }
     }
@@ -499,18 +482,6 @@ export const AnalyticsPage = (() => {
                 renderAnalyticsView(state.currentView);
             });
         });
-    }
-
-    /**
-     * Resolve a worker message text with fallback.
-     * @param {{message?: string}|null|undefined} payload - Worker payload
-     * @param {string} fallback - Fallback message
-     * @returns {string}
-     */
-    function getWorkerMessage(payload, fallback) {
-        // Keep the fallback for malformed worker data that omits the message.
-        /* v8 ignore next */
-        return payload && payload.message ? payload.message : fallback;
     }
 
     /**
@@ -546,9 +517,7 @@ export const AnalyticsPage = (() => {
             filters.monthFocus || "none",
             filters.day !== null && filters.day !== undefined ? filters.day : "none",
             filters.hour !== null && filters.hour !== undefined ? filters.hour : "none",
-            // Use "all" when the filter state does not include a share type.
-            /* v8 ignore next */
-            filters.shareType || "all",
+            filters.shareType,
         ].join("|");
     }
 
@@ -725,20 +694,11 @@ export const AnalyticsPage = (() => {
         }
 
         try {
-            // Callers pass a view object. Keep the branch for malformed worker data.
+            // A cache change can clear state.currentView between the frames
+            // scheduled to render it.
             /* v8 ignore next */
             if (!view) {
                 setEmptyState("No analytics data", "Try resetting filters.");
-                showAnalyticsLoading(false);
-                return;
-            }
-
-            /* v8 ignore next 5 */
-            if (!rough) {
-                setEmptyState(
-                    "Charts unavailable",
-                    "Required libraries failed to load. Please refresh the page.",
-                );
                 showAnalyticsLoading(false);
                 return;
             }
@@ -765,7 +725,6 @@ export const AnalyticsPage = (() => {
             });
             setEmptyState("Render error", "Failed to draw charts. Please refresh the page.");
         } finally {
-            /* v8 ignore next 9 */
             if (isRendering) {
                 showAnalyticsLoading(false);
                 isRendering = false;
@@ -827,9 +786,7 @@ export const AnalyticsPage = (() => {
             filters.push({ key: "month", label });
         }
         if (state.filters.day !== null && state.filters.day !== undefined) {
-            // Use "Unknown" when the selected day has no label in DAY_LABELS.
-            /* v8 ignore next */
-            const label = DAY_LABELS[state.filters.day] || "Unknown";
+            const label = DAY_LABELS[state.filters.day];
             filters.push({ key: "day", label: `Day: ${label}` });
         }
         if (state.filters.hour !== null && state.filters.hour !== undefined) {
@@ -1031,23 +988,16 @@ export const AnalyticsPage = (() => {
      */
     function applyFiltersFromRoute(nextFilters) {
         const previousKey = getFilterKey(state.filters);
-        isApplyingRouteParams = true;
         state.filters = { ...nextFilters };
         /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (rangeFilter).show(
             state.filters.timeRange,
         );
         renderActiveFilters();
-        isApplyingRouteParams = false;
         return previousKey !== getFilterKey(state.filters);
     }
 
     /** Sync active filter state into route query parameters. */
     function syncRouteFromFilters() {
-        /* v8 ignore next 3 */
-        if (isApplyingRouteParams) {
-            return;
-        }
-
         const currentRoute = AppRouter.getCurrentRoute();
         if (!currentRoute || currentRoute.name !== "analytics") {
             return;

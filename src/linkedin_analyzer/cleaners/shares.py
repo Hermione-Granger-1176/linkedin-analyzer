@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from linkedin_analyzer.core.cleaner import run_cleaner
@@ -12,7 +12,6 @@ from linkedin_analyzer.core.text import clean_date, clean_empty_field, clean_sha
 from linkedin_analyzer.core.types import CleanerConfig, CleanerResult, ColumnConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from pathlib import Path
 
 DEFAULT_INPUT = DEFAULT_SHARES_INPUT
@@ -45,7 +44,6 @@ class SharesCleanerConfig(CleanerConfig):
     input_path: Path = DEFAULT_INPUT
     output_path: Path = DEFAULT_OUTPUT
     columns: tuple[ColumnConfig, ...] = SHARES_COLUMNS
-    csv_kwargs: Mapping[str, object] = field(default_factory=dict)
 
 
 def clean_shares(

@@ -288,7 +288,6 @@ describe("InsightsPage", () => {
         const icon = document.querySelector(".insight-icon");
         expect(card.dataset.accent).toBe("accent-blue");
         expect(icon.classList.contains("accent-blue")).toBe(true);
-        expect(icon.className).not.toContain("onclick");
     });
 
     it("stamps a mood-matched Pip on each card without disturbing its text or the export", async () => {

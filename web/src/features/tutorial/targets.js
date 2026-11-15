@@ -153,12 +153,6 @@ export function ensureTargetInView(target) {
  * @returns {HTMLElement[]}
  */
 export function getFocusableElements(root) {
-    // Return no controls when the popover root is missing.
-    /* v8 ignore next 3 */
-    if (!root) {
-        return [];
-    }
-
     const selectors = [
         "button:not([disabled])",
         "a[href]",

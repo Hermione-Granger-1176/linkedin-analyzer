@@ -320,11 +320,6 @@ def iter_reference_files(root: Path) -> list[Path]:
     ]
 
 
-def extract_make_references(text: str) -> list[MakeReference]:
-    """Extract documented ``make <target>`` references from Markdown code."""
-    return _references_from_snippets(extract_markdown_code_snippets(text))
-
-
 def extract_path_make_references(relative_path: Path, text: str) -> list[MakeReference]:
     """Extract ``make <target>`` references using the rule for the path's kind."""
     extractor = snippet_extractor(relative_path)

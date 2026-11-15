@@ -165,9 +165,6 @@ def _clean_escaped_quotes_text(value: object) -> str:
         return ""
 
     text = str(value)
-    if '"' not in text and "\\" not in text:
-        return text.strip()
-
     text = text.replace('\\"', '"')
     text = text.replace('""', '"')
     return text.strip()

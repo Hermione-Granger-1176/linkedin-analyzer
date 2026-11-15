@@ -15,12 +15,9 @@ const CONNECTIONS_READ_ERROR = "Unable to read Connections.csv.";
 /** @typedef {import("./analytics.js").ConnectionState} ConnectionState */
 
 /**
- * The fields of a LinkedInCleaner.process() result this feature reads.
+ * A LinkedInCleaner.process() result whose rows are typed for this feature.
  * @template Row
- * @typedef {object} CleanedRows
- * @property {boolean} success - Whether the file parsed and validated
- * @property {string|null} error - Parse error, if any
- * @property {Row[]} cleanedData - Cleaned rows
+ * @typedef {import("../cleaning/cleaner.js").ProcessResult & {cleanedData: Row[]}} CleanedRows
  */
 
 /**
@@ -70,8 +67,7 @@ async function processPayload(payload) {
     if (!messagesResult.success) {
         return {
             success: false,
-            /* v8 ignore next */
-            error: messagesResult.error || "Unable to parse messages.csv.",
+            error: messagesResult.error,
         };
     }
 
@@ -97,8 +93,7 @@ async function processPayload(payload) {
         } else if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {
-            /* v8 ignore next */
-            connectionError = connectionsResult.error || "Unable to parse Connections.csv.";
+            connectionError = connectionsResult.error;
         }
     }
 

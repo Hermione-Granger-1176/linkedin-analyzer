@@ -125,7 +125,6 @@ export const ConnectionsPage = (() => {
             elements.connectionGrowthChart,
             elements.connectionCompaniesChart,
             elements.connectionPositionsChart,
-            /* v8 ignore next */
         ].filter(Boolean);
 
         initialized = true;
@@ -143,7 +142,6 @@ export const ConnectionsPage = (() => {
         if (!initialized) {
             init();
         }
-        /* v8 ignore next 2 */
         if (!initialized) {
             return;
         }
@@ -332,7 +330,6 @@ export const ConnectionsPage = (() => {
             }
 
             requestParse(worker, file.blob);
-            /* v8 ignore next 6 */
         } catch (error) {
             captureError(error, {
                 module: "connections-ui",
@@ -395,12 +392,7 @@ export const ConnectionsPage = (() => {
 
         captureError(
             new Error(
-                // A valid parse carries text and invalid() returns an error. Keep this
-                // branch for malformed parsed data.
-                /* v8 ignore next 3 */
-                parsed.valid
-                    ? "Unexpected file type in connections cache."
-                    : parsed.error || "Invalid connections file payload.",
+                parsed.valid ? "Unexpected file type in connections cache." : parsed.error,
             ),
             {
                 module: "connections-ui",
@@ -418,9 +410,7 @@ export const ConnectionsPage = (() => {
     function handleWorkerMessage(event) {
         const parsed = parseConnectionsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            // invalid() returns an error string. Keep the fallback for malformed worker data.
-            /* v8 ignore next */
-            captureError(new Error(parsed.error || "Invalid connections worker message."), {
+            captureError(new Error(parsed.error), {
                 module: "connections-ui",
                 operation: "worker-message-parse",
             });
@@ -452,9 +442,7 @@ export const ConnectionsPage = (() => {
             "connections:worker-parse:end",
         );
 
-        // The contract parser returns an object. Keep the fallback for malformed worker data.
-        /* v8 ignore next */
-        const payload = message.payload || {};
+        const payload = message.payload;
 
         if (!payload.success) {
             showConnectionsProblem(
@@ -466,9 +454,7 @@ export const ConnectionsPage = (() => {
 
         // The worker posts the analytics and rows processConnections() built.
         const analytics = /** @type {Partial<ConnectionsAnalytics>} */ (payload.analytics || {});
-        // The parser returns an array. Keep the fallback for malformed worker data.
-        /* v8 ignore next */
-        const rawRows = /** @type {CleanedConnectionRow[]} */ (payload.rows || []);
+        const rawRows = /** @type {CleanedConnectionRow[]} */ (payload.rows);
 
         const endNormalize = startPerformanceSpan("connections:normalize");
         const rows = normalizeConnectionRows(rawRows);
@@ -498,12 +484,7 @@ export const ConnectionsPage = (() => {
      */
     function handleWorkerErrorPayload(message) {
         workers.unwatch();
-        // The contract parser returns a message. Keep the fallback for malformed worker data.
-        /* v8 ignore next 4 */
-        const text =
-            message.payload && message.payload.message
-                ? message.payload.message
-                : "Unable to parse Connections.csv.";
+        const text = message.payload.message;
         captureError(new Error(text), {
             module: "connections-ui",
             operation: "worker-error-payload",
@@ -521,11 +502,7 @@ export const ConnectionsPage = (() => {
         captureError(
             event && "error" in event && event.error
                 ? event.error
-                : // Dispatched events have a type. Keep an "error" fallback for malformed events.
-                  /* v8 ignore next */
-                  new Error(
-                      `Connections worker ${event && event.type ? event.type : "error"} event`,
-                  ),
+                : new Error(`Connections worker ${event.type} event`),
             {
                 module: "connections-ui",
                 operation: "worker-error-event",
@@ -564,16 +541,6 @@ export const ConnectionsPage = (() => {
         /* v8 ignore next 6 */
         if (!view) {
             setEmptyState("No connections data", "Try resetting filters.");
-            showConnectionsLoading(false);
-            return;
-        }
-
-        /* v8 ignore next 7 */
-        if (!SketchCharts) {
-            setEmptyState(
-                "Charts unavailable",
-                "Required libraries failed to load. Please refresh the page.",
-            );
             showConnectionsLoading(false);
             return;
         }

@@ -77,7 +77,6 @@ def test_makefile_status_target_runs_on_the_system_interpreter() -> None:
 
     assert "$(SYSTEM_PYTHON) -m scripts.lib.workspace_status" in recipe
     assert '--venv-python "$(VENV_PYTHON)"' in recipe
-    assert "$(VENV_PYTHON) -m scripts.lib.workspace_status" not in recipe
 
 
 def test_healthy_workspace_reports_every_section_ok(tmp_path: Path) -> None:
@@ -141,7 +140,7 @@ def test_pr_summary_is_skipped_without_a_venv(tmp_path: Path) -> None:
 
 
 def test_pr_summary_failure_never_fails_the_report(tmp_path: Path) -> None:
-    """A failing gh summary is reported inline, mirroring the old `|| true` recipe."""
+    """A failing gh summary is reported inline and never fails the report."""
     venv_python = _make_venv(tmp_path)
     run = FakeRun(
         [

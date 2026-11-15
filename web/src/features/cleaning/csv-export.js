@@ -4,7 +4,7 @@
  * never builds one string for the whole file.
  */
 
-import { LinkedInCleaner } from "./cleaner.js";
+import { getConfig } from "./configs.js";
 
 const ROWS_PER_PART = 2000;
 // A byte order mark makes Excel read the file as UTF-8 instead of the system code page.
@@ -55,17 +55,4 @@ export function buildCleanedCsvBlob(data, fileType) {
  */
 export function cleanedCsvName(fileType) {
     return getConfig(fileType).outputName.replace(/\.xlsx$/, "_cleaned.csv");
-}
-
-/**
- * Look up a file type's config, throwing for an unknown type.
- * @param {string} fileType - Cleaner file type
- * @returns {import("./configs.js").CleanerConfig}
- */
-function getConfig(fileType) {
-    const config = LinkedInCleaner.configs[fileType];
-    if (!config) {
-        throw new Error(`Unknown file type: ${fileType}`);
-    }
-    return config;
 }

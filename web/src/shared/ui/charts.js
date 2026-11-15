@@ -220,7 +220,6 @@ export const SketchCharts = (() => {
         const match = color.match(
             /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:\d*\.?\d+))?\s*\)/i,
         );
-        /* v8 ignore next */
         if (!match) {
             return { r: 81, g: 147, b: 212 };
         }
@@ -385,15 +384,12 @@ export const SketchCharts = (() => {
         // Area fill
         ctx.fillStyle = colors.blue;
         ctx.globalAlpha = 0.16;
-        /* v8 ignore next */
-        if (visiblePoints.length) {
-            ctx.beginPath();
-            ctx.moveTo(visiblePoints[0].x, baseY);
-            visiblePoints.forEach(({ x, y }) => ctx.lineTo(x, y));
-            ctx.lineTo(visiblePoints[visiblePoints.length - 1].x, baseY);
-            ctx.closePath();
-            ctx.fill();
-        }
+        ctx.beginPath();
+        ctx.moveTo(visiblePoints[0].x, baseY);
+        visiblePoints.forEach(({ x, y }) => ctx.lineTo(x, y));
+        ctx.lineTo(visiblePoints[visiblePoints.length - 1].x, baseY);
+        ctx.closePath();
+        ctx.fill();
         ctx.globalAlpha = 1;
 
         // Primary line
@@ -401,34 +397,28 @@ export const SketchCharts = (() => {
         ctx.lineWidth = 2.1;
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
-        /* v8 ignore next */
-        if (visiblePoints.length) {
-            ctx.beginPath();
-            ctx.moveTo(visiblePoints[0].x, visiblePoints[0].y);
-            for (let i = 1; i < visiblePoints.length; i++) {
-                ctx.lineTo(visiblePoints[i].x, visiblePoints[i].y);
-            }
-            ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(visiblePoints[0].x, visiblePoints[0].y);
+        for (let i = 1; i < visiblePoints.length; i++) {
+            ctx.lineTo(visiblePoints[i].x, visiblePoints[i].y);
         }
+        ctx.stroke();
 
         // Secondary jitter line for sketch feel
         ctx.globalAlpha = 0.6;
         ctx.lineWidth = 1.2;
-        /* v8 ignore next */
-        if (visiblePoints.length) {
-            ctx.beginPath();
-            visiblePoints.forEach(({ x, y }, index) => {
-                const jitter = (Math.random() - 0.5) * 1.4;
-                const px = x + jitter;
-                const py = y + jitter;
-                if (index === 0) {
-                    ctx.moveTo(px, py);
-                } else {
-                    ctx.lineTo(px, py);
-                }
-            });
-            ctx.stroke();
-        }
+        ctx.beginPath();
+        visiblePoints.forEach(({ x, y }, index) => {
+            const jitter = (Math.random() - 0.5) * 1.4;
+            const px = x + jitter;
+            const py = y + jitter;
+            if (index === 0) {
+                ctx.moveTo(px, py);
+            } else {
+                ctx.lineTo(px, py);
+            }
+        });
+        ctx.stroke();
         ctx.globalAlpha = 1;
 
         // Points
@@ -482,26 +472,14 @@ export const SketchCharts = (() => {
         ctx.fillStyle = colors.textSecondary;
         const isWeekly = WEEKLY_TIME_RANGES.has(timeRange);
         if (timeRange === "all" && points.length > 18) {
-            /** @type {number|null} */
-            let lastYear = null;
             points.forEach(({ point, x }, index) => {
                 const [year, month] = point.key.split("-").map(Number);
-                /* v8 ignore next */
-                if (!year || !month) {
-                    return;
-                }
                 const isStart = index === 0;
                 const isJan = month === 1;
                 const isLast = index === points.length - 1;
                 if (!isStart && !isJan && !isLast) {
                     return;
                 }
-                // Month keys should produce one label per year. Keep the check for duplicate keys.
-                /* v8 ignore next 3 */
-                if (year === lastYear && !isLast) {
-                    return;
-                }
-                lastYear = year;
                 ctx.save();
                 ctx.translate(x, baseY + 20);
                 ctx.rotate(-0.18);
@@ -802,15 +780,11 @@ export const SketchCharts = (() => {
         }
 
         // Single sketchy border (only 1 RoughJS call for entire heatmap)
-        /* v8 ignore next */
-        if (rough) {
-            const rc = rough.canvas(canvas);
-            rc.rectangle(padding.left, padding.top, chartWidth, chartHeight, {
-                stroke: colors.border,
-                strokeWidth: 1.2,
-                roughness: 1.4,
-            });
-        }
+        rough.canvas(canvas).rectangle(padding.left, padding.top, chartWidth, chartHeight, {
+            stroke: colors.border,
+            strokeWidth: 1.2,
+            roughness: 1.4,
+        });
 
         register(canvas, items);
     }
@@ -896,13 +870,7 @@ export const SketchCharts = (() => {
                     if (anglePoint < -Math.PI / 2) {
                         anglePoint += Math.PI * 2;
                     }
-                    // Segment angles should not cross this boundary. Keep the wrap
-                    // adjustment for malformed angles.
-                    /* v8 ignore next 3 */
-                    const ns =
-                        segmentStart < -Math.PI / 2 ? segmentStart + Math.PI * 2 : segmentStart;
-                    const ne = segmentEnd < -Math.PI / 2 ? segmentEnd + Math.PI * 2 : segmentEnd;
-                    return anglePoint >= ns && anglePoint <= ne;
+                    return anglePoint >= segmentStart && anglePoint <= segmentEnd;
                 },
             });
 
@@ -917,15 +885,11 @@ export const SketchCharts = (() => {
         ctx.globalCompositeOperation = "source-over";
 
         // Single RoughJS call for outer circle
-        /* v8 ignore next */
-        if (rough) {
-            const rc = rough.canvas(canvas);
-            rc.circle(centerX, centerY, radius * 2, {
-                stroke: colors.border,
-                strokeWidth: 1.2,
-                roughness: 1.5,
-            });
-        }
+        rough.canvas(canvas).circle(centerX, centerY, radius * 2, {
+            stroke: colors.border,
+            strokeWidth: 1.2,
+            roughness: 1.5,
+        });
 
         register(canvas, items);
     }
@@ -953,7 +917,6 @@ export const SketchCharts = (() => {
             if (myId !== animationId) {
                 return;
             } // Cancelled
-            /* v8 ignore next */
             if (!start) {
                 start = timestamp;
             }
@@ -974,10 +937,6 @@ export const SketchCharts = (() => {
      * @param {string} [filename='chart.png'] - Download file name.
      */
     function exportPng(canvas, filename) {
-        /* v8 ignore next */
-        if (!canvas) {
-            return;
-        }
         const redraw = drawRegistry.get(canvas);
         /* v8 ignore next */
         if (!redraw) {
@@ -1015,7 +974,6 @@ export const SketchCharts = (() => {
 
         // Restore on-screen canvas synchronously, no async gap
         redraw();
-        /* v8 ignore next */
         if (!tempCtx) {
             return;
         }

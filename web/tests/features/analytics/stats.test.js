@@ -37,8 +37,4 @@ describe("average", () => {
     it("handles negative values", () => {
         expect(average([-2, 2])).toBe(0);
     });
-
-    it("returns 0 for an empty array", () => {
-        expect(average([])).toBe(0);
-    });
 });

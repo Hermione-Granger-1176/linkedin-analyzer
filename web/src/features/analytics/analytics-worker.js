@@ -123,20 +123,6 @@ function hasAnalyticsData() {
 }
 
 /**
- * Serialize the analytics aggregate for storage.
- * @param {AnalyticsBase|HydratedAnalytics|null} analyticsData - Analytics aggregate payload
- * @returns {AnalyticsBase|HydratedAnalytics|null}
- */
-function serializeAnalytics(analyticsData) {
-    if (!analyticsData) {
-        /* v8 ignore next */
-        return null;
-    }
-    // The new format is already serializable (no Date objects, no Sets in final output)
-    return analyticsData;
-}
-
-/**
  * Hydrate the analytics aggregate from a stored payload.
  * @param {AnalyticsBase|null} base - Stored analytics payload
  * @returns {HydratedAnalytics|null}
@@ -393,7 +379,7 @@ async function handleAddFile(payload) {
     }
 
     if (!processed.success) {
-        postFileFailure(jobId, fileName, processed.error || "Unable to process file.");
+        postFileFailure(jobId, fileName, processed.error);
         return;
     }
 
@@ -436,7 +422,8 @@ function takeAnalyticsBase(jobId, fileName) {
     computeAnalytics();
     analyticsStale = false;
     postProgress(jobId, fileName, 0.85);
-    const analyticsBase = serializeAnalytics(analytics);
+    // The aggregate is already structured-clone safe, so it is stored as is.
+    const analyticsBase = analytics;
     postProgress(jobId, fileName, 0.95);
     return analyticsBase;
 }
@@ -635,7 +622,7 @@ function handleMessage(event) {
     const parsed = parseAnalyticsWorkerRequest(rawMessage);
     /* v8 ignore next 4 */
     if (!parsed.valid) {
-        postError(0, parsed.error || "Invalid analytics worker message.");
+        postError(0, parsed.error);
         return undefined;
     }
 

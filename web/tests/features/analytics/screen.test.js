@@ -916,14 +916,13 @@ describe("AnalyticsPage", () => {
         Object.defineProperty(window, "innerHeight", { value: 768, configurable: true });
     });
 
-    it("syncRouteFromFilters skips when isApplyingRouteParams is true", async () => {
+    it("applying route filters does not write them back to the router", async () => {
         Storage.getAnalytics.mockResolvedValue({ months: { "2024-01": {} } });
         DataCache.get.mockReturnValue(null);
         AnalyticsPage.init();
         // Applying route filters must not write those filters back to the router.
         AppRouter.setParams.mockClear();
         await AnalyticsPage.onRouteChange({ range: "3m" });
-        // isApplyingRouteParams prevents setParams during route application.
         expect(AppRouter.setParams).not.toHaveBeenCalled();
     });
 

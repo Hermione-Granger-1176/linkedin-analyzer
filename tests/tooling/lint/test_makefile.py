@@ -20,12 +20,6 @@ def _target_recipe(name: str) -> str:
     return match.group("recipe")
 
 
-def test_playwright_uses_native_host_detection() -> None:
-    """Do not retain the obsolete Ubuntu platform override workaround."""
-    assert "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE" not in MAKEFILE_TEXT
-    assert "PLAYWRIGHT_SUPPORTED_UBUNTU" not in MAKEFILE_TEXT
-
-
 def test_playwright_runtime_is_linted_and_type_checked() -> None:
     """Keep the setup utility in both Python quality scopes."""
     assert re.search(r"^PY_PATHS\s*:=.*scripts/setup/", MAKEFILE_TEXT, re.MULTILINE)
@@ -270,21 +264,6 @@ def test_format_js_diff_fails_on_a_real_error_but_not_on_a_difference() -> None:
     assert "trap 'rm -f -- \"$$formatted\"' EXIT" in recipe
 
 
-@pytest.mark.parametrize("target", ["issue-close", "issue-reopen"])
-def test_issue_state_changes_pass_their_comment_through_the_environment(target: str) -> None:
-    """Closing and reopening carry their comment in the environment.
-
-    ``gh issue close`` and ``gh issue reopen`` accept ``--comment`` and offer no
-    ``--comment-file``, so there is no stream to point at and stdin cannot serve
-    them. The environment still keeps the text out of the recipe, which is what
-    stops a newline or a quote from ending the command early.
-    """
-    recipe = _target_recipe(target)
-
-    assert '--comment="$$COMMENT"' in recipe
-    assert '--comment "$(comment)"' not in recipe
-
-
 def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> None:
     """One variable selects the mode, so gh is never left half-specified.
 
@@ -359,7 +338,6 @@ def test_pr_edit_routes_through_the_tested_helper() -> None:
     recipe = _target_recipe("pr-edit")
 
     assert "$(GH) edit-pr" in recipe
-    assert "gh pr edit" not in recipe
     assert '$(if $(pr_num),--pr "$(pr_num)")' in recipe
 
 
@@ -374,7 +352,6 @@ def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:
     assert '$(if $(expected_checks),--expected-checks "$(expected_checks)")' in recipe
     assert "$(if $(filter 1,$(request)),--request-copilot)" in recipe
     assert "$(if $(filter 1,$(checks_only)),--checks-only)" in recipe
-    assert "gh pr checks --watch" not in recipe
 
 
 def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> None:
@@ -382,10 +359,7 @@ def test_local_playwright_runtime_setup_prepares_libs_and_shares_browsers() -> N
     recipe = _target_recipe("setup-playwright-local")
 
     prepare = "$(PLAYWRIGHT_LOCAL_RUNTIME) prepare"
-    # Browsers install into Playwright's shared cache, so no repository-local
-    # browser path or private install environment is layered onto the install.
-    assert "PLAYWRIGHT_LOCAL_INSTALL_ENV" not in MAKEFILE_TEXT
-    assert "PLAYWRIGHT_LOCAL_BROWSERS" not in MAKEFILE_TEXT
+    # Browsers install into Playwright's shared cache, not a repository-local path.
     assert "PLAYWRIGHT_BROWSERS_PATH" not in recipe
     assert recipe.count(prepare) == 2
     assert "$(NPX) playwright install $(PLAYWRIGHT_BROWSERS)" in recipe

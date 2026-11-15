@@ -103,9 +103,7 @@ function armWatchdog() {
 function handleWorkerMessage(event) {
     const parsed = parseMessagesWorkerMessage(event.data || {});
     if (!parsed.valid) {
-        // Invalid worker responses normally include an error string. Keep the fallback for malformed responses.
-        /* v8 ignore next */
-        captureError(new Error(parsed.error || "Invalid messages worker response."), {
+        captureError(new Error(parsed.error), {
             module: "messages-insights",
             operation: "worker-message-parse",
         });
@@ -243,7 +241,7 @@ function processFilesOnMainThread(messagesCsv, connectionsCsv) {
     if (!messagesResult.success) {
         return {
             success: false,
-            error: messagesResult.error || "Unable to parse messages.csv.",
+            error: messagesResult.error,
         };
     }
 
@@ -259,7 +257,7 @@ function processFilesOnMainThread(messagesCsv, connectionsCsv) {
         if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
         } else {
-            connectionError = connectionsResult.error || "Unable to parse Connections.csv.";
+            connectionError = connectionsResult.error;
         }
     }
 

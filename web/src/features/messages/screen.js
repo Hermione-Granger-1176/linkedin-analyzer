@@ -58,7 +58,46 @@ export const MessagesPage = (() => {
      * @property {number} totalInputRows - Cleaned message rows
      */
 
-    /** @type {{timeRangeButtons: NodeListOf<Element>, timeRangeSelect: HTMLSelectElement | null, resetFiltersBtn: HTMLElement | null, topContactsExportBtn: HTMLButtonElement | null, silentConnectionsExportBtn: HTMLButtonElement | null, fadingConversationsExportBtn: HTMLButtonElement | null, messagesEmpty: HTMLElement | null, messagesLayout: HTMLElement | null, topContactsList: HTMLElement | null, silentConnectionsList: HTMLElement | null, fadingConversationsList: HTMLElement | null, msgStatMessages: HTMLElement | null, msgStatContacts: HTMLElement | null, msgStatConnected: HTMLElement | null, msgStatFading: HTMLElement | null, messagesTip: HTMLElement | null, messagesTipText: HTMLElement | null}} */
+    /**
+     * Page elements. Controls are optional; the shell is required, and init()
+     * refuses to start without every SHELL_KEYS element, so the rest of this
+     * module reads them without null checks.
+     * @typedef {object} MessagesElements
+     * @property {NodeListOf<Element>} timeRangeButtons - Range filter buttons
+     * @property {HTMLSelectElement|null} timeRangeSelect - Compact range selector
+     * @property {HTMLElement|null} resetFiltersBtn - Reset filters button
+     * @property {HTMLButtonElement|null} topContactsExportBtn - Top contacts export
+     * @property {HTMLButtonElement|null} silentConnectionsExportBtn - Silent connections export
+     * @property {HTMLButtonElement|null} fadingConversationsExportBtn - Fading conversations export
+     * @property {HTMLElement} messagesEmpty - Empty state container
+     * @property {HTMLElement} messagesLayout - Dashboard layout container
+     * @property {HTMLElement} topContactsList - Top contacts list
+     * @property {HTMLElement} silentConnectionsList - Silent connections list
+     * @property {HTMLElement} fadingConversationsList - Fading conversations list
+     * @property {HTMLElement} msgStatMessages - Message count stat
+     * @property {HTMLElement} msgStatContacts - Contact count stat
+     * @property {HTMLElement} msgStatConnected - Connected contact stat
+     * @property {HTMLElement} msgStatFading - Fading conversation stat
+     * @property {HTMLElement} messagesTip - Tip container
+     * @property {HTMLElement} messagesTipText - Tip text
+     */
+
+    /** @type {readonly (keyof MessagesElements)[]} */
+    const SHELL_KEYS = [
+        "messagesEmpty",
+        "messagesLayout",
+        "topContactsList",
+        "silentConnectionsList",
+        "fadingConversationsList",
+        "msgStatMessages",
+        "msgStatContacts",
+        "msgStatConnected",
+        "msgStatFading",
+        "messagesTip",
+        "messagesTipText",
+    ];
+
+    /** @type {MessagesElements} */
     const elements = {
         timeRangeButtons: document.querySelectorAll("#messagesTimeRangeButtons .filter-btn"),
         timeRangeSelect: /** @type {HTMLSelectElement|null} */ (
@@ -74,17 +113,17 @@ export const MessagesPage = (() => {
         fadingConversationsExportBtn: /** @type {HTMLButtonElement|null} */ (
             document.getElementById("fadingConversationsExportBtn")
         ),
-        messagesEmpty: document.getElementById("messagesEmpty"),
-        messagesLayout: document.getElementById("messagesLayout"),
-        topContactsList: document.getElementById("topContactsList"),
-        silentConnectionsList: document.getElementById("silentConnectionsList"),
-        fadingConversationsList: document.getElementById("fadingConversationsList"),
-        msgStatMessages: document.getElementById("msgStatMessages"),
-        msgStatContacts: document.getElementById("msgStatContacts"),
-        msgStatConnected: document.getElementById("msgStatConnected"),
-        msgStatFading: document.getElementById("msgStatFading"),
-        messagesTip: document.getElementById("messagesTip"),
-        messagesTipText: document.getElementById("messagesTipText"),
+        messagesEmpty: /** @type {HTMLElement} */ (document.getElementById("messagesEmpty")),
+        messagesLayout: /** @type {HTMLElement} */ (document.getElementById("messagesLayout")),
+        topContactsList: /** @type {HTMLElement} */ (document.getElementById("topContactsList")),
+        silentConnectionsList: /** @type {HTMLElement} */ (document.getElementById("silentConnectionsList")),
+        fadingConversationsList: /** @type {HTMLElement} */ (document.getElementById("fadingConversationsList")),
+        msgStatMessages: /** @type {HTMLElement} */ (document.getElementById("msgStatMessages")),
+        msgStatContacts: /** @type {HTMLElement} */ (document.getElementById("msgStatContacts")),
+        msgStatConnected: /** @type {HTMLElement} */ (document.getElementById("msgStatConnected")),
+        msgStatFading: /** @type {HTMLElement} */ (document.getElementById("msgStatFading")),
+        messagesTip: /** @type {HTMLElement} */ (document.getElementById("messagesTip")),
+        messagesTipText: /** @type {HTMLElement} */ (document.getElementById("messagesTipText")),
     };
 
     /** @type {{filters: {timeRange: string}, messageState: MessageState | null, connectionState: ConnectionState | null, hasConnectionsFile: boolean, connectionLoadError: string | null, loadedSignature: string | null, totalInputRows: number, currentLists: {topContacts: RangeContact[], silentConnections: Connection[], fadingConversations: FadingConversation[]}}} */
@@ -112,7 +151,7 @@ export const MessagesPage = (() => {
         if (initialized) {
             return;
         }
-        if (!elements.messagesLayout || !elements.messagesEmpty) {
+        if (!SHELL_KEYS.every((key) => elements[key])) {
             return;
         }
         initialized = true;
@@ -410,9 +449,7 @@ export const MessagesPage = (() => {
 
         const parsed = parseStoredUploadFile(file);
         if (!parsed.valid) {
-            // invalid() returns an error string. Keep the fallback for malformed stored data.
-            /* v8 ignore next */
-            captureError(new Error(parsed.error || "Invalid stored file payload."), {
+            captureError(new Error(parsed.error), {
                 module: "messages-insights",
                 operation: "parse-stored-file",
                 expectedType,
@@ -523,9 +560,7 @@ export const MessagesPage = (() => {
 
         updateStats(
             topSummary,
-            // hasConnections implies a connection list. Keep the optional access for malformed state.
-            /* v8 ignore next */
-            hasConnections ? (state.connectionState?.list.length ?? 0) : 0,
+            hasConnections ? connectionState.list.length : 0,
             fadingConversations.length,
         );
         updateTip(topSummary.items, silentConnections, fadingConversations);
@@ -581,13 +616,7 @@ export const MessagesPage = (() => {
      * @param {RangeContact[]} items - Top contacts
      */
     function renderTopContacts(items) {
-        const listElement = elements.topContactsList;
-        // The static shell includes this list. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!listElement) {
-            return;
-        }
-        renderItemList(listElement, items, {
+        renderItemList(elements.topContactsList, items, {
             unavailableReason: null,
             emptyMessage: "No conversations in this range yet.",
             toItem: (item) => ({
@@ -604,13 +633,7 @@ export const MessagesPage = (() => {
      * @param {Connection[]} items - Silent connection rows
      */
     function renderSilentConnections(items) {
-        const listElement = elements.silentConnectionsList;
-        // The static shell includes this list. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!listElement) {
-            return;
-        }
-        renderItemList(listElement, items, {
+        renderItemList(elements.silentConnectionsList, items, {
             unavailableReason: getConnectionsUnavailableMessage("silent"),
             emptyMessage: "Great job. Every connection has at least one message.",
             toItem: (item) => {
@@ -633,13 +656,7 @@ export const MessagesPage = (() => {
      * @param {FadingConversation[]} items - Fading conversation rows
      */
     function renderFadingConversations(items) {
-        const listElement = elements.fadingConversationsList;
-        // The static shell includes this list. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!listElement) {
-            return;
-        }
-        renderItemList(listElement, items, {
+        renderItemList(elements.fadingConversationsList, items, {
             unavailableReason: getConnectionsUnavailableMessage("fading"),
             emptyMessage: "No fading conversations in your connected network.",
             toItem: (item) => ({
@@ -733,11 +750,6 @@ export const MessagesPage = (() => {
             msgStatConnected,
             msgStatFading,
         } = elements;
-        // The static shell includes these stat cells. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!msgStatMessages || !msgStatContacts || !msgStatConnected || !msgStatFading) {
-            return;
-        }
         const card = msgStatMessages.closest(".stat-card");
         if (card) {
             card.classList.remove("popup-active");
@@ -770,11 +782,6 @@ export const MessagesPage = (() => {
      */
     function updateTip(topContacts, silentConnections, fadingConversations) {
         const { messagesTip, messagesTipText } = elements;
-        // The static shell includes these tip elements. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!messagesTip || !messagesTipText) {
-            return;
-        }
         const tipText = buildTipText(topContacts, silentConnections, fadingConversations);
         if (!tipText) {
             messagesTip.hidden = true;
@@ -833,9 +840,7 @@ export const MessagesPage = (() => {
         };
 
         if (!state.hasConnectionsFile) {
-            // section is a known key in normal calls. Use the tip message for malformed input.
-            /* v8 ignore next */
-            return missingFileMessages[section] || missingFileMessages.tip;
+            return missingFileMessages[section];
         }
         if (state.connectionLoadError) {
             return state.connectionLoadError;
@@ -887,7 +892,6 @@ export const MessagesPage = (() => {
      */
     function toLinkedInCell(url) {
         const value = cleanText(url);
-        /* v8 ignore next 3 */
         if (!value) {
             return "";
         }
@@ -908,15 +912,9 @@ export const MessagesPage = (() => {
         if (!rows.length) {
             return;
         }
-        /* v8 ignore next 3 */
-        if (!ExcelGenerator || typeof ExcelGenerator.downloadFromSpec !== "function") {
-            return;
-        }
 
         const headers = Object.keys(rows[0]);
-        // Export rows use the same keys. Keep an empty cell for malformed rows.
-        /* v8 ignore next */
-        const orderedRows = rows.map((row) => headers.map((header) => row[header] ?? ""));
+        const orderedRows = rows.map((row) => headers.map((header) => row[header]));
         const result = await ExcelGenerator.downloadFromSpec(
             {
                 sheetName,
@@ -934,12 +932,8 @@ export const MessagesPage = (() => {
         }
     }
 
-    /** Enable/disable export buttons based on availability and list content. */
+    /** Enable each export button only when its list has rows. */
     function updateExportButtonStates() {
-        const exportReady = Boolean(
-            ExcelGenerator && typeof ExcelGenerator.downloadFromSpec === "function",
-        );
-
         /** @type {Array<[HTMLButtonElement|null, unknown[]]>} */
         const buttons = [
             [elements.topContactsExportBtn, state.currentLists.topContacts],
@@ -948,7 +942,7 @@ export const MessagesPage = (() => {
         ];
         for (const [button, list] of buttons) {
             if (button) {
-                button.disabled = !(exportReady && list.length);
+                button.disabled = !list.length;
             }
         }
     }
@@ -969,28 +963,16 @@ export const MessagesPage = (() => {
      */
     function setEmptyState(title, message) {
         const { messagesEmpty, messagesLayout } = elements;
-        // The static shell includes both containers. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!messagesEmpty || !messagesLayout) {
-            return;
-        }
         setEmptyStateText(messagesEmpty, title, message);
         messagesEmpty.hidden = false;
         messagesLayout.hidden = true;
-        if (elements.messagesTip) {
-            elements.messagesTip.hidden = true;
-        }
+        elements.messagesTip.hidden = true;
         updateExportButtonStates();
     }
 
     /** Hide empty state and show layout. */
     function hideEmptyState() {
         const { messagesEmpty, messagesLayout } = elements;
-        // The static shell includes both containers. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!messagesEmpty || !messagesLayout) {
-            return;
-        }
         messagesEmpty.hidden = true;
         messagesLayout.hidden = false;
     }
@@ -1011,26 +993,13 @@ export const MessagesPage = (() => {
     /** Render temporary skeleton rows while loading data. */
     function renderLoadingSkeleton() {
         const { messagesEmpty, messagesLayout } = elements;
-        // The static shell includes both containers. Keep the guard for incomplete DOM setup.
-        /* v8 ignore next 3 */
-        if (!messagesEmpty || !messagesLayout) {
-            return;
-        }
         messagesEmpty.hidden = true;
         messagesLayout.hidden = false;
-        if (elements.messagesTip) {
-            elements.messagesTip.hidden = true;
-        }
+        elements.messagesTip.hidden = true;
 
-        if (elements.topContactsList) {
-            elements.topContactsList.innerHTML = SKELETON_ITEM.repeat(3);
-        }
-        if (elements.silentConnectionsList) {
-            elements.silentConnectionsList.innerHTML = SKELETON_ITEM.repeat(3);
-        }
-        if (elements.fadingConversationsList) {
-            elements.fadingConversationsList.innerHTML = SKELETON_ITEM.repeat(3);
-        }
+        elements.topContactsList.innerHTML = SKELETON_ITEM.repeat(3);
+        elements.silentConnectionsList.innerHTML = SKELETON_ITEM.repeat(3);
+        elements.fadingConversationsList.innerHTML = SKELETON_ITEM.repeat(3);
     }
 
     return {

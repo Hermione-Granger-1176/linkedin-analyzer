@@ -1099,17 +1099,6 @@ describe("dot navigation", () => {
         dots[0].click();
         expect(document.querySelector(".tutorial-title").textContent).toBe("Welcome");
     });
-
-    it("dot click is a no-op when tutorial is not active", () => {
-        document.querySelector(".tutorial-btn-skip").click();
-        expect(document.body.classList.contains("tutorial-open")).toBe(false);
-
-        // Dispatch a click on the popover area, should not throw
-        const popover = document.querySelector(".tutorial-popover");
-        if (popover) {
-            popover.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        }
-    });
 });
 
 
@@ -1487,10 +1476,6 @@ describe("renderMiniTips", () => {
 
 
 describe("prefers-reduced-motion", () => {
-    it("matchMedia reduced motion false is the default in tests", () => {
-        expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(false);
-    });
-
     it("matchMedia reduced motion true when overridden", () => {
         mockMatchMedia(true);
         expect(window.matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(true);
@@ -2432,12 +2417,12 @@ describe("positionMiniTip with left, right, and bottom placements", () => {
         vi.advanceTimersByTime(5000);
 
         // Should have rendered tips (or attempted to) without throwing
-        expect(document.querySelectorAll(".tutorial-mini-tip").length).toBeGreaterThanOrEqual(0);
+        expect(document.querySelectorAll(".tutorial-mini-tip").length).toBeGreaterThan(0);
     });
 });
 
 
-// getRouteConfigItems null/array/fallback
+// getRouteConfigItems missing route
 
 
 describe("getRouteConfigItems edge cases", () => {

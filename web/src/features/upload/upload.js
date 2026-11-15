@@ -152,7 +152,6 @@ export const UploadPage = (() => {
     let pendingPrimePayload = null;
     /** @type {Promise<void>|null} */
     let primeInFlight = null;
-    let storagePersistenceRequested = false;
     // Restart throttle: at most MAX_WORKER_RESTARTS within WORKER_RESTART_WINDOW_MS.
     const MAX_WORKER_RESTARTS = 3;
     const WORKER_RESTART_WINDOW_MS = 10000;
@@ -164,12 +163,12 @@ export const UploadPage = (() => {
         if (initialized) {
             return;
         }
-        if (!elements.dropZone || !elements.fileInput) {
+        if (!elements.dropZone || !elements.fileInput || !elements.uploadHint) {
             return;
         }
         initialized = true;
 
-        if (!Storage.isAvailable && elements.uploadHint) {
+        if (!Storage.isAvailable) {
             elements.uploadHint.textContent =
                 "Browser storage is unavailable. Uploads will not persist across sessions.";
         }
@@ -187,13 +186,6 @@ export const UploadPage = (() => {
 
     /** Request persistent browser storage when supported. */
     function requestPersistentStorage() {
-        // init() runs once. Keep the flag check if a caller invokes this function again.
-        /* v8 ignore next 3 */
-        if (storagePersistenceRequested) {
-            return;
-        }
-        storagePersistenceRequested = true;
-
         if (!navigator.storage || typeof navigator.storage.persist !== "function") {
             return;
         }
@@ -297,15 +289,8 @@ export const UploadPage = (() => {
     /** Attach event listeners for drag/drop, file input, and buttons. */
     function bindEvents() {
         const { dropZone, fileInput, openAnalyticsBtn, clearAllBtn } = elements;
-        // Match init()'s contract: only dropZone/fileInput are required for uploads.
-        // The optional buttons are guarded individually below so a missing button
-        // never disables drag/drop or the file input. init() already returns before
-        // calling bindEvents when either is missing, so this mirror is unreachable here.
-        /* v8 ignore next 3 */
-        if (!dropZone || !fileInput) {
-            return;
-        }
-        bindDropTargets(dropZone, fileInput);
+        // init() only calls this once dropZone and fileInput exist.
+        bindDropTargets(/** @type {HTMLElement} */ (dropZone), /** @type {HTMLElement} */ (fileInput));
         bindActionButtons(openAnalyticsBtn, clearAllBtn);
 
         window.addEventListener("resize", () => UploadProgress.redraw());
@@ -661,7 +646,7 @@ export const UploadPage = (() => {
     async function handleWorkerMessage(event) {
         const parsed = parseAnalyticsWorkerMessage(event.data || {});
         if (!parsed.valid) {
-            captureError(new Error(parsed.error || "Invalid analytics worker payload."), {
+            captureError(new Error(parsed.error), {
                 module: "upload",
                 operation: "worker-message-parse",
             });
@@ -674,14 +659,14 @@ export const UploadPage = (() => {
             case "restored":
                 return;
             case "fileProcessed":
-                await handleFileProcessedMessage(message.payload || {});
+                await handleFileProcessedMessage(message.payload);
                 return;
             case "progress":
-                handleProgressMessage(message.payload || {});
+                handleProgressMessage(message.payload);
                 return;
             case "error": {
-                const payload = message.payload || {};
-                const errorMessage = payload.message || "Worker error.";
+                const payload = message.payload;
+                const errorMessage = payload.message;
                 setHint(errorMessage, true);
                 captureError(new Error(errorMessage), {
                     module: "upload",
@@ -695,11 +680,6 @@ export const UploadPage = (() => {
                 completeJob(payload.jobId || null, payload.fileName || "");
                 return;
             }
-            // parseAnalyticsWorkerMessage only yields the known message types above,
-            // so the switch default is an unreachable exhaustiveness guard.
-            /* v8 ignore next 2 */
-            default:
-                return;
         }
     }
 
@@ -845,15 +825,9 @@ export const UploadPage = (() => {
 
     /**
      * Handle incremental worker progress updates.
-     * @param {{jobId?: string|null, percent?: number}} payload - Progress payload
+     * @param {{percent: number}} payload - Progress payload
      */
     function handleProgressMessage(payload) {
-        // parseAnalyticsWorkerMessage normally returns a numeric percent. Keep the
-        // guard for malformed payloads.
-        /* v8 ignore next 3 */
-        if (!payload || typeof payload.percent !== "number") {
-            return;
-        }
         if (activeJobs.size === 0) {
             return;
         }
@@ -1161,7 +1135,7 @@ export const UploadPage = (() => {
         files.forEach((file) => {
             const parsed = parseStoredUploadFile(file);
             if (!parsed.valid) {
-                captureError(new Error(parsed.error || "Invalid stored upload file record."), {
+                captureError(new Error(parsed.error), {
                     module: "upload",
                     operation: "parse-stored-file-map",
                 });
@@ -1419,14 +1393,10 @@ export const UploadPage = (() => {
      * @param {boolean} isError - Whether the hint is an error
      */
     function setHint(message, isError) {
-        // The upload shell always renders #uploadHint; the guard mirrors the
-        // optional-element contract for embedders that omit it.
-        /* v8 ignore next 3 */
-        if (!elements.uploadHint) {
-            return;
-        }
-        elements.uploadHint.textContent = message;
-        elements.uploadHint.classList.toggle("is-error", Boolean(isError));
+        // init() does not start without #uploadHint, and every caller runs after it.
+        const uploadHint = /** @type {HTMLElement} */ (elements.uploadHint);
+        uploadHint.textContent = message;
+        uploadHint.classList.toggle("is-error", Boolean(isError));
     }
 
     /** Hide progress overlay when all active jobs complete. */
@@ -1461,13 +1431,6 @@ export const UploadPage = (() => {
         const fileName = file.name;
         const budget = Math.max(JOB_TIMEOUT_MS, computeWorkerTimeout(file));
         const timeoutId = window.setTimeout(() => {
-            // completeJob() clears this timer when a job settles, including error paths.
-            // resetProcessingState() clears all job timers during teardown.
-            /* v8 ignore next 3 */
-            if (!activeJobs.has(jobId)) {
-                return;
-            }
-
             // Terminate the timed-out worker so later uploads can proceed.
             // Reset processing state before creating its replacement.
             resetProcessingState();

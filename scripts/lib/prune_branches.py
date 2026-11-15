@@ -95,11 +95,6 @@ def candidate_branches(
     return base, [branch for branch in local_branches(runner=runner) if branch not in protected]
 
 
-def supports_merge_tree(base: str, *, runner: GitRunner = run_git) -> bool:
-    """Return whether this git build understands ``merge-tree --write-tree``."""
-    return merge_tree_result(base, base, runner=runner).returncode == 0
-
-
 def merge_tree_result(
     base: str, branch: str, *, runner: GitRunner = run_git
 ) -> subprocess.CompletedProcess[str]:

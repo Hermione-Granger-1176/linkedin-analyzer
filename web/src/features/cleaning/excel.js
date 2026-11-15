@@ -6,7 +6,7 @@
 import { FILE_TYPE_LABELS } from "../../shared/constants.js";
 import { downloadBlob } from "../../shared/ui/download.js";
 
-import { LinkedInCleaner } from "./cleaner.js";
+import { getConfig } from "./configs.js";
 
 /** @typedef {import("write-excel-file/browser").CellObject} CellObject */
 /** @typedef {import("write-excel-file/browser").Value} CellValue */
@@ -60,19 +60,6 @@ export const ExcelGenerator = (() => {
     const DATA_ROW_HEIGHT = 20;
     const MIN_COLUMN_WIDTH = 10;
     const MAX_COLUMN_WIDTH = 60;
-
-    /**
-     * Look up a file type's config, throwing for an unknown type.
-     * @param {string} fileType - Cleaner file type
-     * @returns {import("./configs.js").CleanerConfig}
-     */
-    function getConfig(fileType) {
-        const config = LinkedInCleaner.configs[fileType];
-        if (!config) {
-            throw new Error(`Unknown file type: ${fileType}`);
-        }
-        return config;
-    }
 
     /**
      * Normalize a spec cell to `{value, hyperlink}`.
@@ -387,12 +374,7 @@ export const ExcelGenerator = (() => {
         const rows = data.map((row) => headers.map((header) => row[header] ?? ""));
 
         return {
-            // Known file types have labels. Use "Sheet1" for malformed config.
-            /* v8 ignore next */
-            sheetName:
-                /** @type {Readonly<Record<string, string|undefined>>} */ (FILE_TYPE_LABELS)[
-                    fileType
-                ] || "Sheet1",
+            sheetName: /** @type {Record<string, string>} */ (FILE_TYPE_LABELS)[fileType],
             headers,
             rows,
             columnWidths: config.columns.map((column) => column.width),

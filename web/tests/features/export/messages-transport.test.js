@@ -5,7 +5,6 @@ import {
     loadMessagesState,
     terminateMessagesWorker,
 } from "../../../src/features/export/messages-transport.js";
-import { MessagesAnalytics } from "../../../src/features/messages/analytics.js";
 import { captureError } from "../../../src/platform/observability/sentry.js";
 import { compactEvents } from "../../helpers/message-events.js";
 import { createWorkerHarness } from "../../helpers/mock-worker.js";
@@ -252,13 +251,6 @@ describe("loadMessagesState", () => {
         harness.uninstall();
 
         expect(await loadMessagesState("not,a,messages,export", "")).toBeNull();
-    });
-
-    it("returns nothing on the main thread when the file yields no state", async () => {
-        harness.uninstall();
-        vi.spyOn(MessagesAnalytics, "buildMessageState").mockReturnValue(null);
-
-        expect(await loadMessagesState(MESSAGES_CSV, CONNECTIONS_CSV)).toBeNull();
     });
 
     it("refuses the main-thread fallback for very large exports", async () => {

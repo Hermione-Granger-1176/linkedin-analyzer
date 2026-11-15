@@ -933,17 +933,11 @@ export const AnalyticsEngine = (() => {
      * max baseline value.
      */
     function buildWeeklyTimeline(dayIndex, targetMonths, filters, monthMeta) {
-        /* v8 ignore next 3 */
-        if (!dayIndex || !targetMonths.length) {
-            return { timeline: [], timelineMax: 1 };
-        }
-
         const { weeks, weekIndex, startKey, endKey } = createWeekSlots(targetMonths);
         const baselineTotals = new Array(weeks.length).fill(0);
 
         for (const [dateKey, entry] of Object.entries(dayIndex)) {
             if (dateKey < startKey || dateKey > endKey) {
-                /* v8 ignore next */
                 continue;
             }
             const date = parseDateKey(dateKey);
@@ -1013,7 +1007,6 @@ export const AnalyticsEngine = (() => {
      */
     function calculateStreaksFromDays(daySet) {
         if (!daySet || daySet.size === 0) {
-            /* v8 ignore next */
             return { current: 0, longest: 0 };
         }
         const days = Array.from(daySet).sort();

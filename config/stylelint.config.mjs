@@ -1,17 +1,7 @@
 export default {
-    // Stylelint resolves ignoreFiles relative to this config directory.
-    // Each pattern needs ../ to match repository directories. Without it,
-    // coverage reports and other generated files would be linted.
-    ignoreFiles: [
-        "../node_modules/**",
-        "../.venv/**",
-        "../.playwright/**",
-        "../coverage/**",
-        "../web/coverage/**",
-        "../web/dist/**",
-        "../playwright-report/**",
-        "../test-results/**",
-    ],
+    // `npm run lint:css` only globs web/**/*.css, so build output is the one
+    // generated tree it can reach. Paths resolve from this config directory.
+    ignoreFiles: ["../web/dist/**"],
     rules: {
         "block-no-empty": true,
         "color-no-invalid-hex": true,

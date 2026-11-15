@@ -28,7 +28,7 @@ A fixed time budget would not work as a CI gate. Shared runners vary from run to
 ## Consequences
 
 - A slowdown in the analysis pipeline blocks a pull request, and the job summary shows which stage regressed and by how much.
-- The job adds about two minutes to CI for web changes, in parallel with the other jobs.
+- The job runs in parallel with the other jobs on web changes. Its first CI run took about one minute, against three for `web-e2e`.
 - The gate covers the pipeline in Node only. Browser upload handling, worker startup and messaging, and rendering are not gated. `make bench-browser` still measures those on demand.
 - A regression smaller than the threshold plus the measured noise can pass. Lowering the threshold trades sensitivity against the risk of failing on noise.
 

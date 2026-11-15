@@ -23,8 +23,12 @@
  * .artifacts/bench-compare, where their imports resolve this repository's
  * node_modules. The export is generated in a private temporary directory.
  * Both are removed on exit. Writes a Markdown report to $GITHUB_STEP_SUMMARY
- * when that is set. Exits 1 on a regression and 2 when the control's output
- * differs from the base's, which means the harness, not the code, is broken.
+ * when that is set. Exits 1 on a regression. Exits 2 on an invalid option, or
+ * when the control's output differs from the base's, which means the
+ * harness, not the code, is broken.
+ *
+ * parseOptions and runGate are exported so tests can drive the timing loop,
+ * the confirmation pass, and the output checks with a fake clock.
  */
 import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -34,10 +38,20 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isDeepStrictEqual, parseArgs } from "node:util";
 
-import { generateLargeExport } from "../fixtures/gen-large-export.mjs";
 import { formatVerdicts, judgeRun, stagesToConfirm } from "./bench-gate.mjs";
 
-const REPO = fileURLToPath(new URL("../..", import.meta.url));
+// Under Vitest this module is imported with a non-file import.meta.url, so
+// fall back to the working directory, as cleaner-diff.mjs does. Tests drive
+// runGate and parseOptions, which never read REPO, and Make runs from the root.
+function resolveRepoRoot() {
+    try {
+        return fileURLToPath(new URL("../..", import.meta.url));
+    } catch {
+        return process.cwd();
+    }
+}
+
+const REPO = resolveRepoRoot();
 const COPIES = join(REPO, ".artifacts", "bench-compare");
 const STREAM_THRESHOLD = 5 * 1024 * 1024;
 const CHUNK = 64 * 1024;
@@ -165,12 +179,25 @@ function plain(value) {
 }
 
 /**
- * Time stages on every side, rotating which side goes first each round.
- * @param {Record<string, ReturnType<typeof buildStages>>} stagesBySide - Stages per side
- * @param {number} runs - Rounds to time
- * @param {string[]} [only] - Stages to time; every stage when omitted
+ * @typedef {object} GateClock
+ * @property {() => number} now - Current time in milliseconds
+ * @property {() => void} collectGarbage - Run a garbage collection before a timed call
  */
-function timeStages(stagesBySide, runs, only) {
+
+/** Real timer and collector; the collector needs node --expose-gc. */
+const SYSTEM_CLOCK = {
+    now: () => performance.now(),
+    collectGarbage: () => globalThis.gc(),
+};
+
+/**
+ * Time stages on every side, rotating which side goes first each round.
+ * @param {Record<string, Record<string, () => unknown>>} stagesBySide - Stages per side
+ * @param {number} runs - Rounds to time
+ * @param {string[]|undefined} only - Stages to time; every stage when undefined
+ * @param {GateClock} clock - Timer and collector
+ */
+function timeStages(stagesBySide, runs, only, clock) {
     const stageNames = only ?? Object.keys(stagesBySide.base);
     const timings = Object.fromEntries(
         stageNames.map((name) => [name, { base: [], control: [], head: [] }]),
@@ -182,10 +209,10 @@ function timeStages(stagesBySide, runs, only) {
         for (const name of stageNames) {
             const outputs = {};
             for (const side of order) {
-                globalThis.gc();
-                const started = performance.now();
+                clock.collectGarbage();
+                const started = clock.now();
                 outputs[side] = stagesBySide[side][name]();
-                timings[name][side].push(performance.now() - started);
+                timings[name][side].push(clock.now() - started);
             }
             if (run === 0) {
                 const base = plain(outputs.base);
@@ -200,19 +227,81 @@ function timeStages(stagesBySide, runs, only) {
 }
 
 /**
+ * Parse and validate the command-line options. An unusable value throws
+ * rather than reaching the gate, where an empty sample set would compare as
+ * NaN and pass without timing anything.
+ * @param {string[]} argv - Arguments after the script path
+ */
+export function parseOptions(argv) {
+    const { values } = parseArgs({
+        args: argv,
+        options: {
+            "base-ref": { type: "string", default: "origin/main" },
+            "merge-base": { type: "boolean", default: false },
+            "size-mb": { type: "string", default: "20" },
+            runs: { type: "string", default: "15" },
+            threshold: { type: "string", default: "10" },
+        },
+    });
+    const number = (value, name, min) => {
+        const parsed = Number(value);
+        if (value.trim() === "" || !Number.isFinite(parsed) || parsed < min) {
+            throw new Error(`invalid ${name}: ${value}`);
+        }
+        return parsed;
+    };
+    const runs = Math.round(number(values.runs, "runs", 1));
+    return {
+        baseRef: values["base-ref"],
+        mergeBase: values["merge-base"],
+        sizeMb: number(values["size-mb"], "size_mb", 1),
+        // Round up to a multiple of the side count, so each side runs first,
+        // second, and third equally often.
+        runs: Math.ceil(runs / SIDES.length) * SIDES.length,
+        threshold: number(values.threshold, "threshold", 0) / 100,
+    };
+}
+
+/**
+ * Time every stage, judge it, and confirm any regression with a second pass.
+ * @param {{
+ *   stagesBySide: Record<string, Record<string, () => unknown>>,
+ *   runs: number,
+ *   threshold: number,
+ *   clock?: GateClock,
+ * }} options - Stages for the base, control, and head sides, and the gate settings
+ */
+export function runGate({ stagesBySide, runs, threshold, clock = SYSTEM_CLOCK }) {
+    const { stageNames, timings, sameOutput } = timeStages(stagesBySide, runs, undefined, clock);
+    const first = judgeRun(timings, threshold);
+    let confirmation = null;
+    if (first.regressed) {
+        // A noisy round can push one stage over by chance. Time the flagged
+        // stages again with twice the rounds, and fail only if they still regress.
+        const retry = stagesToConfirm(first.verdicts);
+        const again = timeStages(stagesBySide, runs * 2, retry.names, clock);
+        confirmation = judgeRun(again.timings, threshold, { total: retry.total });
+    }
+    return {
+        first,
+        confirmation,
+        regressed: Boolean(confirmation && confirmation.regressed),
+        changedOutputs: stageNames.filter((name) => !sameOutput[name].head),
+        brokenControl: stageNames.filter((name) => !sameOutput[name].control),
+    };
+}
+
+/**
  * Prepare the copies and the export, compare, and report.
- * @param {ReturnType<typeof parseArgs>["values"]} args - Parsed options
+ * @param {ReturnType<typeof parseOptions>} options - Validated options
  * @param {string} inputDir - Private directory for the synthetic export
  * @returns {Promise<number>} Process exit code
  */
-async function compare(args, inputDir) {
-    // Round up to a multiple of the side count, so each side runs first,
-    // second, and third equally often.
-    const runs = Math.ceil(Number(args.runs) / SIDES.length) * SIDES.length;
-    const threshold = Number(args.threshold) / 100;
-    const baseCommit = args["merge-base"]
-        ? git(["merge-base", args["base-ref"], "HEAD"])
-        : git(["rev-parse", "--verify", `${args["base-ref"]}^{commit}`]);
+async function compare(options, inputDir) {
+    const { runs, threshold } = options;
+    const baseCommit = options.mergeBase
+        ? git(["merge-base", options.baseRef, "HEAD"])
+        : git(["rev-parse", "--verify", `${options.baseRef}^{commit}`]);
     console.log(
         `bench-compare: head ${git(["rev-parse", "--short", "HEAD"])} against base ${baseCommit.slice(0, 7)}`,
     );
@@ -220,7 +309,10 @@ async function compare(args, inputDir) {
     rmSync(COPIES, { recursive: true, force: true });
     extractWebSource(baseCommit, join(COPIES, "base"));
     extractWebSource(baseCommit, join(COPIES, "control"));
-    generateLargeExport({ sizeMb: Number(args["size-mb"]), dir: inputDir });
+    // Imported here, not at the top: the generator resolves its own paths from
+    // a file URL when it loads, which fails when tests import this module.
+    const { generateLargeExport } = await import("../fixtures/gen-large-export.mjs");
+    generateLargeExport({ sizeMb: options.sizeMb, dir: inputDir });
 
     const raw = Object.fromEntries(
         [
@@ -236,30 +328,24 @@ async function compare(args, inputDir) {
         stagesBySide[side] = buildStages(await loadSide(roots[side]), raw);
     }
 
-    const { stageNames, timings, sameOutput } = timeStages(stagesBySide, runs);
-    const first = judgeRun(timings, threshold);
+    const { first, confirmation, regressed, changedOutputs, brokenControl } = runGate({
+        stagesBySide,
+        runs,
+        threshold,
+    });
     const sections = [formatVerdicts(first.verdicts, threshold)];
-    let regressed = false;
-    if (first.regressed) {
-        // A noisy round can push one stage over by chance. Time the flagged
-        // stages again with twice the rounds, and fail only if they still regress.
-        const retry = stagesToConfirm(first.verdicts);
-        const again = timeStages(stagesBySide, runs * 2, retry.names);
-        const confirmed = judgeRun(again.timings, threshold, { total: retry.total });
-        regressed = confirmed.regressed;
+    if (confirmation) {
         sections.push(
             "",
             `### Confirmation pass (${runs * 2} rounds of the flagged stages)`,
             "",
-            formatVerdicts(confirmed.verdicts, threshold),
+            formatVerdicts(confirmation.verdicts, threshold),
         );
     }
-    const changedOutputs = stageNames.filter((name) => !sameOutput[name].head);
-    const brokenControl = stageNames.filter((name) => !sameOutput[name].control);
     const report = [
         "## Web benchmark",
         "",
-        `Base ${baseCommit.slice(0, 7)}, ${args["size-mb"]} MiB synthetic export, ${runs} rounds.`,
+        `Base ${baseCommit.slice(0, 7)}, ${options.sizeMb} MiB synthetic export, ${runs} rounds.`,
         "Each stage ran once per side per round, after a forced garbage collection.",
         "",
         ...sections,
@@ -287,25 +373,32 @@ async function compare(args, inputDir) {
     return 0;
 }
 
-const { values: args } = parseArgs({
-    options: {
-        "base-ref": { type: "string", default: "origin/main" },
-        "merge-base": { type: "boolean", default: false },
-        "size-mb": { type: "string", default: "20" },
-        runs: { type: "string", default: "15" },
-        threshold: { type: "string", default: "10" },
-    },
-});
-
-if (typeof globalThis.gc !== "function") {
-    console.error("bench-compare: run under node --expose-gc");
-    process.exitCode = 2;
-} else {
+/**
+ * Validate the environment and options, run the comparison, and clean up.
+ * @param {string[]} argv - Arguments after the script path
+ * @returns {Promise<number>} Process exit code
+ */
+async function main(argv) {
+    let options;
+    try {
+        options = parseOptions(argv);
+    } catch (error) {
+        console.error(`bench-compare: ${/** @type {Error} */ (error).message}`);
+        return 2;
+    }
+    if (typeof globalThis.gc !== "function") {
+        console.error("bench-compare: run under node --expose-gc");
+        return 2;
+    }
     const inputDir = mkdtempSync(join(tmpdir(), "linkedin-analyzer-bench-"));
     try {
-        process.exitCode = await compare(args, inputDir);
+        return await compare(options, inputDir);
     } finally {
         rmSync(COPIES, { recursive: true, force: true });
         rmSync(inputDir, { recursive: true, force: true });
     }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+    process.exitCode = await main(process.argv.slice(2));
 }

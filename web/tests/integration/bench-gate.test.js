@@ -134,7 +134,9 @@ describe("bench gate", () => {
         const table = formatVerdicts(verdicts, 0.1);
 
         expect(table).toContain("Threshold: 10% beyond the control's measured noise.");
-        expect(table).toContain("| compute | 100.0 | 120.0 | +20.0% | ±0.0% | > +10.0% | regression |");
+        expect(table).toContain(
+            "| compute | 100.0 | 120.0 | +20.0% | ±0.0% | > +10.0% | regression |",
+        );
         expect(table).toContain("| buildView | 1.0 | 1.0 | +0.0% | ±0.0% | not gated | same |");
     });
 });

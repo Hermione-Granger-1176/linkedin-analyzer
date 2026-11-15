@@ -34,4 +34,8 @@ A fixed time budget would not work as a CI gate. Shared runners vary from run to
 
 ## Validation
 
-VALIDATION_PLACEHOLDER
+Measured in November 2026 on a shared cloud machine, with the defaults (20 MiB export, 15 rounds, 10% threshold):
+
+- Identical code passed three runs out of three. No stage was flagged, so no confirmation pass ran, and the totals of the gated stages differed from the base by -1.0%, 0.0%, and +0.9%.
+- A 16 ms busy wait added to `AnalyticsEngine.compute` (about 77 ms) failed two runs out of two. The stage measured +18.1% and +18.9% against allowances of +10.1% and +11.4%, and the confirmation passes measured +16.1% and +17.8%. No untouched stage was flagged in either run.
+- Earlier variants failed on the same slowdown. With medians and no confirmation pass, it also flagged an untouched stage (`insights clean`, +12.7%). With per-round ratios, the measured noise rose to about 10% and the slowdown passed. With medians and a confirmation pass, it passed in two runs out of two.

@@ -157,7 +157,7 @@ function plain(value) {
     return JSON.parse(
         JSON.stringify(value, (_key, item) => {
             if (item instanceof Map || item instanceof Set || ArrayBuffer.isView(item)) {
-                return [...(/** @type {Iterable<unknown>} */ (item))];
+                return [.../** @type {Iterable<unknown>} */ (item)];
             }
             return item;
         }),

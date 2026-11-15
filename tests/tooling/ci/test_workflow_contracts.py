@@ -47,6 +47,7 @@ EXPECTED_RESULT_VARIABLES = {
     "NODE_COMPATIBILITY_RESULT",
     "WEB_E2E_RESULT",
     "WEB_BENCHMARK_RESULT",
+    "WEB_PAGE_SPEED_RESULT",
 }
 
 GATED_CI_JOBS = {
@@ -55,6 +56,7 @@ GATED_CI_JOBS = {
     "node-compatibility": "needs.changes.outputs.web == 'true'",
     "web-e2e": "needs.changes.outputs.web == 'true'",
     "web-benchmark": "needs.changes.outputs.web == 'true'",
+    "web-page-speed": "needs.changes.outputs.web == 'true'",
 }
 
 

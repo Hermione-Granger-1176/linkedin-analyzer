@@ -236,6 +236,30 @@ jobs:
           MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: make bench-compare base="$BASE_SHA" merge_base="$MERGE_BASE"
 
+  # Time file drop to the Analytics screen showing data in the pinned
+  # Playwright container, and fail when the median run is over budget.
+  # docs/testing.md explains the budget and how it was set.
+  web-page-speed:
+    name: Web page speed
+    needs: [changes, quick-gates]
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: CI setup
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          python-version: ""
+
+      - name: Check page speed budget
+        run: make bench-browser-container size_mb=20 runs=3 budget_s=0.001
+
   ci-result:
     name: CI result
     if: always()
@@ -247,6 +271,7 @@ jobs:
       - node-compatibility
       - web-e2e
       - web-benchmark
+      - web-page-speed
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -269,4 +294,5 @@ jobs:
           NODE_COMPATIBILITY_RESULT: ${{ needs.node-compatibility.result }}
           WEB_E2E_RESULT: ${{ needs.web-e2e.result }}
           WEB_BENCHMARK_RESULT: ${{ needs.web-benchmark.result }}
+          WEB_PAGE_SPEED_RESULT: ${{ needs.web-page-speed.result }}
         run: make ci-check-results

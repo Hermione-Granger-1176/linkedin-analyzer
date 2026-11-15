@@ -22,9 +22,8 @@ PLAYWRIGHT_IMAGE_PATTERN = re.compile(
     r"(?m)^PLAYWRIGHT_CI_IMAGE := "
     r"mcr\.microsoft\.com/playwright:v[^-\s]+-noble@sha256:[0-9a-f]{64}$"
 )
-# uv is deliberately absent: tool.uv.required-version is a floor, and a floor
-# that is rewritten to the newest release on every monthly run is not a floor.
-# Raise it by hand when something actually needs a newer uv.
+# uv is not refreshed. tool.uv.required-version is a floor, raised by hand when a
+# newer uv is needed.
 PRE_COMMIT_HOOKS_PATTERN = re.compile(
     r"(?m)(^\s*-\s+repo:\s+https://github\.com/pre-commit/pre-commit-hooks\s*$"
     r".*?^\s+rev:\s*)\S+",

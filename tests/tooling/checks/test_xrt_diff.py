@@ -116,12 +116,11 @@ def run_diff(
 
 
 def test_read_xlsx_rows_preserves_cell_values(tmp_path: Path) -> None:
-    """Keep exact cell values for a workbook openpyxl wrote itself.
+    """Return exact cell values from a workbook that openpyxl wrote.
 
-    This does not exercise the header-width padding, despite the shape of the
-    input: openpyxl pads short rows on write whenever the sheet declares a
-    dimension, so the reader never sees a ragged row here. The padding branch is
-    covered by the undimensioned-sheet test below.
+    The sheet declares a dimension, so openpyxl pads the short row on write and
+    the reader sees no ragged row. The padding branch is covered by the
+    undimensioned-sheet test below.
     """
     path = tmp_path / "synthetic.xlsx"
     write_xlsx(path, [HEADER, ["Ada"]])
@@ -150,7 +149,7 @@ def test_workbook_without_a_worksheet_is_rejected(tmp_path: Path) -> None:
 
 
 def test_workbook_without_rows_is_rejected(tmp_path: Path) -> None:
-    """Reject an empty worksheet, which carries no header to project web rows onto."""
+    """Reject an empty worksheet that has no header row."""
     xlsx_path = tmp_path / "empty.xlsx"
     write_undimensioned_xlsx(xlsx_path, "")
     json_path = tmp_path / "shares.json"
@@ -161,7 +160,7 @@ def test_workbook_without_rows_is_rejected(tmp_path: Path) -> None:
 
 
 def test_workbook_with_an_empty_header_row_is_rejected(tmp_path: Path) -> None:
-    """Reject a header row without cells, which would project every web row to nothing."""
+    """Reject a header row that has no cells."""
     xlsx_path = tmp_path / "headerless.xlsx"
     write_undimensioned_xlsx(xlsx_path, '<row r="1"/>' + inline_row(2, ["Ada"]))
     json_path = tmp_path / "shares.json"
@@ -310,7 +309,7 @@ def test_missing_inputs_skip_unless_strict(
     expected_code: int,
     expected_status: str,
 ) -> None:
-    """Keep local skips friendly while making strict audits fail closed."""
+    """Missing inputs skip locally and fail in strict mode."""
     xlsx_dir = tmp_path / "xlsx"
     json_dir = tmp_path / "json"
     write_inputs(xlsx_dir, json_dir)

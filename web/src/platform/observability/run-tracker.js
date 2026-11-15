@@ -1,12 +1,10 @@
 /*
  * Notice processing runs that did not finish.
  *
- * A tab the browser kills cannot report anything as it dies, so each run
- * leaves a marker in localStorage and the next visit checks for leftovers. A
- * leftover marker is not proof of a crash: a reload, a closed tab, or a run
- * still going in another tab can look the same. The checks below separate
- * those cases where they can, and nothing here claims more than "did not
- * finish".
+ * Each run writes a marker to localStorage and removes it when the run finishes.
+ * A later visit checks for markers left behind. A leftover marker can also come
+ * from a reload, a closed tab, or a run still going in another tab, so the checks
+ * separate those cases where they can. Reports say only "did not finish".
  *
  * Markers hold no file names and no contents: only the owning tab ID, the
  * start and heartbeat times, the combined size as a bucket, and whether files
@@ -56,7 +54,7 @@ const SIZE_BUCKETS = Object.freeze([
 ]);
 
 /**
- * Bucket a combined upload size so markers and telemetry never hold exact sizes.
+ * Bucket a combined upload size. Markers and telemetry hold buckets, not exact sizes.
  * @param {number} bytes - Combined file size
  * @returns {string}
  */
@@ -159,8 +157,8 @@ export function createRunTracker({
             // Ignore blocked storage.
         }
     };
-    // The marker lives in memory and every write stores all of it, so a marker
-    // another tab removed while this one was hidden or frozen comes back.
+    // The marker lives in memory. Every write stores all of it, so a marker that
+    // another tab removed while this tab was hidden or frozen is written back.
     const save = () => {
         if (active) {
             write(activeKey, active.marker);
@@ -213,7 +211,7 @@ export function createRunTracker({
             return Promise.resolve(false);
         }
         return new Promise((resolve) => {
-            // A tab never hears its own posts, so ask on a second channel object.
+            // Asks on a second channel object, since a tab does not receive its own posts.
             /** @type {BroadcastChannel} */
             let asker;
             try {
@@ -243,7 +241,7 @@ export function createRunTracker({
         save();
     };
     // A page restored from the back/forward cache, or a frozen tab that
-    // resumes, is still running its run.
+    // resumes, continues the same run.
     /** @param {Event & { persisted?: boolean }} event */
     const onPageShow = (event) => {
         if (event.type === "resume" || event.persisted) {
@@ -256,8 +254,8 @@ export function createRunTracker({
     const lifecycleEvents = [
         ["pagehide", onPageHide],
         // A frozen tab cannot answer an ownership check, so it counts as left.
-    // freeze and resume fire on the document without bubbling, so the
-    // listeners use capture to hear them from the window.
+    // freeze and resume fire on the document without bubbling. The listeners
+    // are registered with capture to receive them from the window.
         ["freeze", onPageHide],
         ["pageshow", onPageShow],
         ["resume", onPageShow],
@@ -320,8 +318,7 @@ export function createRunTracker({
     /**
      * Find runs from earlier visits that did not finish, removing their markers.
      * A run with a recent heartbeat and no answering owner is checked again
-     * once it would turn stale, so a crash followed by a quick reopen still
-     * reports.
+     * once it would turn stale.
      * @param {(run: UnfinishedRun) => void} onUnfinished - Called once per unfinished run
      * @returns {Promise<void>}
      */
@@ -380,9 +377,8 @@ export function createRunTracker({
     }
 
     /**
-     * Run the final check and report for one marker in one tab at a time, so
-     * two tabs that open together cannot both report it. Without Web Locks the
-     * report runs unguarded.
+     * Run the final check and report for one marker in one tab at a time. Without
+     * Web Locks the report runs unguarded.
      * @param {string} key - Marker key
      * @param {() => void} report - Final check and report
      * @returns {Promise<void>}

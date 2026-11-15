@@ -310,8 +310,8 @@ export const AnalyticsPage = (() => {
 
     /** Attach event listeners for filters, charts, theme, and visibility. */
     function bindEvents() {
-        // No route option: this screen writes its other filters into the route
-        // beside the range, so it syncs the whole set itself.
+        // No route option. This screen syncs its other filters into the route
+        // itself, along with the range.
         rangeFilter = createRangeFilter({
             ranges: RANGE_VALUES,
             fallback: FILTER_DEFAULTS.timeRange,
@@ -383,8 +383,8 @@ export const AnalyticsPage = (() => {
             }
 
             const analyticsBase = await loadAnalyticsBase();
-            // The worker may have been replaced or stopped while storage was
-            // read; a newer load owns it now, so this one steps aside.
+            // Returns if the worker was replaced or stopped while storage was read.
+            // A newer load owns the worker then.
             if (workers.current() !== worker) {
                 return;
             }
@@ -497,10 +497,9 @@ export const AnalyticsPage = (() => {
             module: "analytics-ui",
             operation: "worker-error-event",
         });
-        // Tear down the broken worker: this clears the in-flight loadBase watchdog
-        // (so it cannot fire ~30s later and overwrite the screen) and nulls the
-        // reference so a subsequent loadBase recreates a fresh worker instead of
-        // posting to a dead one (the handle reuses a worker while one is set).
+        // Terminates the broken worker. This clears the in-flight watchdog and
+        // nulls the reference, so a later loadBase creates a new worker. The
+        // handle reuses a worker while one is set.
         workers.terminate();
         setEmptyState("Analytics worker error", "Refresh the page and try again.");
     }

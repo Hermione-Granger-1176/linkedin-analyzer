@@ -365,9 +365,8 @@ class TestRunCleaner:
     def test_illegal_control_characters_are_stripped_and_export_succeeds(
         self, tmp_path: Path
     ) -> None:
-        # A cell holding XML-illegal control chars makes openpyxl raise
-        # IllegalCharacterError inside df.to_excel; stripping them keeps the
-        # export working while leaving the surrounding text intact.
+        # XML-illegal control characters are stripped from cells. The surrounding
+        # text is kept.
         illegal_value = "a\x00b\x07c\x1fd"
         input_path = tmp_path / "test.csv"
         output_path = tmp_path / "test.xlsx"
@@ -385,8 +384,7 @@ class TestRunCleaner:
         assert list(df["Name"]) == ["abcd"]
 
     def test_illegal_control_characters_would_break_openpyxl(self) -> None:
-        # Guard the premise of the fix: the same value written without stripping
-        # raises IllegalCharacterError, so stripping is required for a writable export.
+        # Confirms openpyxl raises IllegalCharacterError for a control character.
         from openpyxl import Workbook
         from openpyxl.utils.exceptions import IllegalCharacterError
 
@@ -395,8 +393,8 @@ class TestRunCleaner:
             sheet["A1"] = "a\x07b"
 
     def test_control_characters_are_stripped_before_formula_escaping(self, tmp_path: Path) -> None:
-        # A leading control char must not hide a formula-injection payload: it is
-        # removed first so the "=" is still recognized and quote-prefixed.
+        # Control characters are removed before formula escaping, so a leading
+        # control character before "=" is still escaped.
         input_path = tmp_path / "test.csv"
         output_path = tmp_path / "test.xlsx"
         input_path.write_text("Name\nvalue\n")
@@ -590,7 +588,7 @@ class TestEncoding:
         assert list(df["Name"]) == ["José"]
 
     def test_encoding_from_csv_kwargs_is_used(self, tmp_path: Path) -> None:
-        """An encoding supplied via csv_kwargs is honored (no duplicate-kwarg error)."""
+        """An encoding supplied via csv_kwargs is honored."""
         input_path = tmp_path / "latin1.csv"
         output_path = tmp_path / "latin1.xlsx"
         input_path.write_bytes("Name\nJosé\n".encode("latin-1"))
@@ -622,8 +620,8 @@ class TestEncoding:
         )
         result = run_cleaner(config)
 
-        # latin-1 (from config.encoding) decodes cleanly; the utf-8 in csv_kwargs
-        # would have raised, proving config.encoding took precedence.
+        # config.encoding (latin-1) is used. The utf-8 in csv_kwargs would fail on
+        # this input.
         assert result.success is True
         df = pd.read_excel(output_path)
         assert list(df["Name"]) == ["José"]

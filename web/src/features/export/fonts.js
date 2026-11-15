@@ -27,15 +27,12 @@ export const FALLBACK_FONTS = Object.freeze({
     accent: FALLBACK_FAMILY,
 });
 
-// btoa() takes a binary string, and spreading a multi-megabyte array into
-// String.fromCharCode overflows the call stack, so it is fed in slices.
+// Bytes are converted to a binary string in slices of this size.
 const BASE64_CHUNK_SIZE = 0x8000;
 
-// The characters cp1252 maps in the gap Latin-1 leaves at 0x80 to 0x9F. jsPDF
-// writes a core font's text as WinAnsi bytes, so those plus printable ASCII and
-// Latin-1 are exactly what the Helvetica fallback can show, and one character
-// outside them turns the whole string into UTF-16 mojibake rather than costing
-// only itself.
+// The cp1252 characters in the 0x80 to 0x9F range that Latin-1 leaves unassigned.
+// With printable ASCII and Latin-1, these are the characters the Helvetica
+// fallback can draw. A character outside that set corrupts the whole string.
 const WINANSI_EXTRAS = Object.freeze([
     0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039,
     0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122,
@@ -134,9 +131,8 @@ function addSegmentedCoverage(view, offset, coverage) {
     for (let index = 0; index < segmentCount; index += 1) {
         const start = view.getUint16(startCodes + index * 2);
         const end = view.getUint16(endCodes + index * 2);
-        // 0xFFFF closes the list, and real segments are ordered and never
-        // overlap: anything else is a table this cannot read, and walking it
-        // would go over the same ranges again and again.
+        // 0xFFFF ends the list. Segments must be ordered and non-overlapping;
+        // anything else stops the read.
         if (start === 0xffff || start <= previousEnd || end < start) {
             return;
         }
@@ -147,7 +143,7 @@ function addSegmentedCoverage(view, offset, coverage) {
 
 /**
  * Read supported code points from a font's cmap.
- * Return null for an unsupported format so the caller uses fallback coverage.
+ * Returns null when the cmap is missing or lists no code points.
  * @param {ArrayBuffer} buffer - Whole font file
  * @returns {Set<number>|null} Code points, or null when the cmap says nothing
  */
@@ -171,8 +167,8 @@ function readFontCoverage(buffer) {
 
 /**
  * Intersect the coverage of all registered faces.
- * The document model does not select a face for each string, so a character
- * must exist in every face. Use WinAnsi if any cmap is unreadable or the list is empty.
+ * Returns the code points present in every face, since a string is not assigned
+ * a face. Falls back to WinAnsi when any cmap is unreadable or there are no faces.
  * @param {Array<Set<number>|null>} coverages - One entry per embedded face
  * @returns {Set<number>} Code points the document can draw
  */
@@ -199,9 +195,7 @@ export function readDrawableCoverage() {
 }
 
 /**
- * Fetch one TrueType asset with a timeout.
- * An aborted fetch uses the Helvetica fallback so an unresponsive server
- * does not leave the export dialog waiting.
+ * Fetch one TrueType asset. The request is aborted after FONT_TIMEOUT_MS.
  * @param {string} file - File name under the public fonts directory
  * @returns {Promise<ArrayBuffer>} Font bytes
  */
@@ -222,22 +216,19 @@ async function fetchFont(file) {
 /**
  * Fetch and register the handwritten faces on a jsPDF document.
  *
- * Registration is all-or-nothing: a document with one embedded face and one
- * core face would look broken, so a single failure falls back to Helvetica for
- * everything.
+ * Registration is all-or-nothing: a single failure falls back to Helvetica for
+ * every face.
  * @param {import("jspdf").jsPDF} doc - jsPDF document instance
  * @returns {Promise<Readonly<{body: string, accent: string}>>} Registered family names
  */
 export async function registerPdfFonts(doc) {
     try {
-        // Each face is carried with its own bytes rather than the two being kept
-        // in step by an index, which is the pairing every line below depends on.
+        // Each face carries its own bytes.
         const faces = await Promise.all(
             FONT_ASSETS.map(async (asset) => ({ asset, buffer: await fetchFont(asset.file) })),
         );
-        // Read before anything is registered: a file this cannot get through is
-        // not one the document should be drawn with either, and the catch below
-        // then leaves both the families and the coverage on the fallback.
+        // Coverage is read before anything is registered. If it fails, the catch
+        // below leaves both the families and the coverage on the fallback.
         const coverage = intersectCoverage(faces.map((face) => readFontCoverage(face.buffer)));
 
         const families = { body: FALLBACK_FAMILY, accent: FALLBACK_FAMILY };
@@ -249,9 +240,8 @@ export async function registerPdfFonts(doc) {
         drawableCoverage = coverage;
         return Object.freeze(families);
     } catch {
-        // The export still produces a valid document, so this is a degradation
-        // rather than a failure. The caught value is discarded so this path
-        // matches the rest of the export: fixed errors only.
+        // A registration failure degrades the export rather than failing it. The
+        // caught value is not reported; only the fixed error is.
         captureError(new Error("PDF font registration failed."), {
             module: "pdf-export",
             operation: "register-fonts",

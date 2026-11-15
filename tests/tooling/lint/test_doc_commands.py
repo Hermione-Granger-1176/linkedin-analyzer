@@ -260,13 +260,9 @@ def test_resolve_requested_paths_reports_inaccessible_paths(tmp_path: Path) -> N
 def test_resolve_requested_paths_rejects_a_target_that_resolves_outside_the_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Re-check the resolved location, so a symlink planted after the guard still fails.
+    """The resolved location is re-checked, so an escaping symlink is refused.
 
-    Every escape reachable today is already caught by ``contains_symlink``, so
-    this containment check is defence in depth against a symlink created between
-    the guard and the resolve. That race cannot be produced from real filesystem
-    state inside a test, so the guard is stubbed out to stand in for losing it.
-    The escaping symlink itself is real.
+    The symlink guard is stubbed to pass. The escaping symlink itself is real.
     """
     root = tmp_path / "repo"
     root.mkdir()

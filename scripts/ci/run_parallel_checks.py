@@ -33,8 +33,8 @@ def _execute_make_target(
 ) -> tuple[bool, str]:
     """Run one Make target and return whether it passed, with its output.
 
-    Each check gets an empty stdin. Path-taking targets read their paths from
-    stdin, and parallel checks must not share or wait on this process's input.
+    Each check gets empty stdin, so path-taking targets never read this process's
+    input.
     """
     try:
         result = (run_fn or subprocess.run)(

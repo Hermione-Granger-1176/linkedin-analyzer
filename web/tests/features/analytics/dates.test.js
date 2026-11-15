@@ -1,8 +1,8 @@
 /**
  * Vitest unit tests for the analytics date parsing and calendar math helpers.
  *
- * These functions were extracted from analytics.js. They are pure and operate
- * on local-time Date objects (the cleaner has already localized timestamps).
+ * These functions are pure. They operate on local-time Date objects, since the
+ * cleaner has already localized timestamps.
  */
 
 import { describe, expect, it } from "vitest";
@@ -71,8 +71,7 @@ describe("parseLinkedInDate", () => {
     });
 
     it("rejects out-of-range month and day instead of rolling them over", () => {
-        // Month 13 would roll into next January and day 32 into the next month;
-        // both must be treated as unparseable rather than silently shifted.
+        // Out-of-range month and day values return null, not a rolled-over date.
         expect(parseLinkedInDate("2024-13-01 09:30:00")).toBeNull();
         expect(parseLinkedInDate("2024-00-15 09:30:00")).toBeNull();
         expect(parseLinkedInDate("2024-01-32 09:30:00")).toBeNull();

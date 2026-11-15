@@ -31,8 +31,7 @@ def _exception(
     *,
     vulnerability_id: str = "GHSA-aaaa-bbbb-cccc",
     package: str = "left-pad",
-    # A stable far-future default keeps unexpired-exception tests from rotting
-    # as the real calendar advances past any near-term date.
+    # Far-future default, so tests that need an unexpired exception stay valid.
     review_by: date = date(2999, 12, 31),
     ignore_only_without_fix: bool = False,
 ) -> VulnerabilityExceptionEntry:
@@ -79,7 +78,7 @@ def test_advisory_ids_falls_back_to_numeric_source() -> None:
 
 @pytest.mark.parametrize("source", [True, -1, "42", {}, [], None])
 def test_advisory_ids_rejects_invalid_numeric_source(source: object) -> None:
-    """Malformed npm source ids fail closed instead of becoming bogus aliases."""
+    """Malformed npm source IDs raise ValueError."""
     with pytest.raises(ValueError, match="'source' must be a non-negative integer"):
         run_npm_audit._advisory_ids(
             {
@@ -90,7 +89,7 @@ def test_advisory_ids_rejects_invalid_numeric_source(source: object) -> None:
 
 
 def test_advisory_ids_rejects_non_string_url() -> None:
-    """Malformed advisory URLs cannot be stringified into trusted input."""
+    """A non-string advisory URL raises ValueError."""
     with pytest.raises(ValueError, match="'url' must be a string"):
         run_npm_audit._advisory_ids({"url": {}, "source": 42})
 
@@ -127,7 +126,7 @@ def test_parse_advisory_builds_finding() -> None:
 
 @pytest.mark.parametrize("severity", [None, "", "HIGH", "unknown", 1])
 def test_parse_advisory_rejects_invalid_severity(severity: object) -> None:
-    """Malformed severities cannot pass through a reviewed exception."""
+    """Unknown or non-string severities raise ValueError."""
     with pytest.raises(ValueError, match="invalid severity"):
         run_npm_audit._parse_advisory(
             {"source": 42, "severity": severity},
@@ -188,7 +187,7 @@ def test_parse_npm_audit_defaults_package_name_to_key() -> None:
 
 @pytest.mark.parametrize("name", [None, "", " ", 42])
 def test_parse_npm_audit_rejects_invalid_package_name(name: object) -> None:
-    """Malformed package names cannot be coerced into exception identities."""
+    """Package names must be non-empty strings."""
     payload = {
         "vulnerabilities": {
             "left-pad": {
@@ -221,7 +220,7 @@ def test_parse_npm_audit_rejects_invalid_package_name(name: object) -> None:
     ],
 )
 def test_parse_npm_audit_rejects_invalid_fix_available(fix_available: object) -> None:
-    """Unexpected fix metadata fails closed instead of changing policy truthiness."""
+    """Unexpected fixAvailable values raise ValueError."""
     payload = {
         "vulnerabilities": {
             "left-pad": {
@@ -288,7 +287,7 @@ def test_run_npm_audit_parses_clean_report(monkeypatch: pytest.MonkeyPatch) -> N
 def test_run_npm_audit_rejects_failed_run_without_advisories(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A non-zero npm exit whose report names no advisory cannot pass."""
+    """A non-zero npm exit with no advisories raises RuntimeError."""
     monkeypatch.setattr(
         run_npm_audit.subprocess,
         "run",
@@ -348,7 +347,7 @@ def test_run_npm_audit_splits_command_with_flags(monkeypatch: pytest.MonkeyPatch
 
 
 def test_run_npm_audit_rejects_empty_command() -> None:
-    """An empty override cannot accidentally execute a binary named audit."""
+    """An empty command raises ValueError."""
     with pytest.raises(ValueError, match="must not be empty"):
         run_npm_audit._run_npm_audit("  ")
 
@@ -538,7 +537,7 @@ def test_audit_reports_unused_exception() -> None:
 
 
 def test_audit_counts_exception_below_raised_threshold_as_used() -> None:
-    """Ad-hoc severity filtering does not make a valid policy look stale."""
+    """An exception below the audit level still counts as used."""
     exception = _exception()
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 1, 1),
@@ -601,7 +600,7 @@ def test_audit_rejects_ambiguous_exceptions_below_threshold() -> None:
 
 
 def test_audit_rejects_multiple_exceptions_matching_one_advisory() -> None:
-    """Alias and primary-id policies cannot ambiguously govern one finding."""
+    """An advisory matched by two exceptions is reported."""
     ignored, errors = run_npm_audit._audit_npm_dependencies(
         today=date(2026, 1, 1),
         exceptions=(

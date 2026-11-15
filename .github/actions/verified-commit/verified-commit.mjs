@@ -200,13 +200,8 @@ export function createBranchName(prefix, date = new Date()) {
 }
 
 /**
- * Pick the pull request to reuse for a fallback branch, newest first.
- *
- * Resetting the dated branch to the base empties any open pull request on it,
- * which GitHub closes automatically. That close lands before this runs, so an
- * open-only lookup finds nothing and opens a duplicate. A closed but unmerged
- * pull request is therefore still reusable; a merged one never is, because its
- * branch has moved on to unrelated work.
+ * Pick the newest pull request on a fallback branch that is open or closed without merging.
+ * Merged pull requests are never returned.
  * @param {Array<{number: number, state: string, merged_at: string | null, html_url: string}>} pulls - Pull requests for the branch.
  * @returns {{number: number, state: string, merged_at: string | null, html_url: string} | undefined} Reusable pull request, if any.
  */
@@ -282,9 +277,8 @@ export function createApiClients({ owner, repo, token, fetchDependencies }) {
 
 /**
  * Create the fallback branch at the expected head, or force-reset it there.
- * The race guard handles another run creating the branch between the
- * existence check and the POST. Only "Reference already exists" 422s are
- * recovered; all other errors propagate.
+ * A "Reference already exists" 422 from the POST falls through to the reset.
+ * Other errors propagate.
  * @param {ReturnType<typeof createApiClients>} clients - Authenticated API helpers.
  * @param {string} fallbackBranch - Branch name without the refs/heads/ prefix.
  * @param {string} expectedHeadSha - Commit the branch must point at.
@@ -326,8 +320,7 @@ async function resetFallbackBranch(clients, fallbackBranch, expectedHeadSha) {
 }
 
 /**
- * Reuse the pull request for the fallback branch, reopening it if the branch
- * reset closed it, or open a new one.
+ * Reuse the pull request for the fallback branch, reopening it if closed, or open a new one.
  * @param {ReturnType<typeof createApiClients>} clients - Authenticated API helpers.
  * @param {{
  *   fallbackBranch: string,

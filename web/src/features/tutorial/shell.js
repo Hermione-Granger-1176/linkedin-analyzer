@@ -2,9 +2,8 @@
  * DOM construction for the guided tutorial shell.
  *
  * Builds the overlay, spotlight, pointer SVG, popover, and mini-tip layer once
- * and mounts them on document.body. The caller owns the `ui` handle object and
- * passes it in, so this module only decides what the shell looks like and never
- * reads tutorial flow state.
+ * and mounts them on document.body. The module returns the element handles and
+ * reads no tutorial flow state.
  */
 
 import { buildTutorialMascot } from "./mascot.js";
@@ -137,12 +136,9 @@ function buildPopover() {
 
     const { footer, ...footerParts } = buildFooter();
 
-    // Pip leads the popover children and is positioned out of flow, so he adds
-    // nothing to the card's own size and the focus trap never sees him. The
-    // title does give up a gutter beside him, and the stylesheet moves that
-    // gutter from one side to the other when he flips, so the card measures the
-    // same whichever way he faces. Ahead of the title on purpose: the corner he
-    // stands in changes with the step.
+    // Pip is the first popover child and is positioned out of flow, so he adds
+    // nothing to the card's size. He is not focusable. The stylesheet moves the
+    // title's side gutter when Pip flips.
     const mascot = buildTutorialMascot();
 
     popover.appendChild(mascot);

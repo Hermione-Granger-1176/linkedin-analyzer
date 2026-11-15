@@ -40,11 +40,11 @@ def fake_runner(stdout: str = "", returncode: int = 0) -> tuple[list[Sequence[st
 
 
 def failing_runner(_command: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    """Stand in for a git binary that is missing from the runner image."""
+    """Stands in for a git binary that is not installed."""
     raise OSError("git not found")
 
 
-DEVELOPMENT_DOC = Path(__file__).resolve().parents[3] / "docs" / "development.md"
+CI_DOC = Path(__file__).resolve().parents[3] / "docs" / "ci.md"
 DOC_TABLE_HEADING = "### Which jobs run for a change"
 DOC_TABLE_AREAS = {
     "Python": PYTHON_ONLY,
@@ -56,13 +56,13 @@ BACKTICKED = re.compile(r"`([^`]+)`")
 
 
 def _documented_path_rules() -> dict[str, frozenset[str]]:
-    """Return the classification table as `docs/development.md` states it.
+    """Return the classification table as `docs/ci.md` states it.
 
     Rows whose final cell is not an area name skip themselves, which covers the
     header, the alignment row, and the fail-open `anything else` row that names
     no pattern at all.
     """
-    body = DEVELOPMENT_DOC.read_text(encoding="utf-8").partition(DOC_TABLE_HEADING)[2]
+    body = CI_DOC.read_text(encoding="utf-8").partition(DOC_TABLE_HEADING)[2]
     lines = body.splitlines()
     start = next(index for index, line in enumerate(lines) if line.startswith("|"))
     documented: dict[str, frozenset[str]] = {}
@@ -147,22 +147,17 @@ def test_classify_path_matches_the_documented_table(path: str, expected: frozens
 
 
 def test_the_documented_table_lists_exactly_the_rules_that_exist() -> None:
-    """Keep the table in `docs/development.md` honest about what CI actually skips.
+    """The table in `docs/ci.md` lists exactly the PATH_RULES entries and areas.
 
-    The table is the only place a contributor looks before trusting a skipped
-    job, and nothing else compares it to the rules. Checking the whole mapping
-    catches a rule added without a row, a row left behind by a deleted rule, and
-    a path quietly moved from one area to another.
+    Catches a rule with no row, a row with no rule, and a path moved between areas.
     """
     assert _documented_path_rules() == {rule.pattern: rule.areas for rule in PATH_RULES}
 
 
 def test_classify_path_treats_shared_fixtures_as_both_areas() -> None:
-    """Run both matrices for the parity corpus that the JavaScript suite reads directly.
+    """Shared fixtures under tests/fixtures classify as both areas.
 
-    `web/tests/integration/parity.test.js` resolves `tests/fixtures`, so filing
-    these under the Python area alone would skip Node compatibility on a change
-    to JavaScript test inputs.
+    `web/tests/integration/parity.test.js` reads them.
     """
     assert classify_path("tests/fixtures/parity-corpus.json") == BOTH_AREAS
 
@@ -172,16 +167,15 @@ def test_classify_path_treats_shared_fixtures_as_both_areas() -> None:
     [".github/SECURITY.md", ".github/CONTRIBUTING.md", ".github/PULL_REQUEST_TEMPLATE.md"],
 )
 def test_classify_path_unions_overlapping_rules(path: str) -> None:
-    """Let an infrastructure rule win over the Markdown rule regardless of order.
+    """A path that matches several rules gets the union of their areas.
 
-    These paths match both `.github/` and `*.md`. Rules contribute rather than
-    fall through, so the result cannot depend on which one is consulted first.
+    These paths match both `.github/` and `*.md`.
     """
     assert classify_path(path) == BOTH_AREAS
 
 
 def test_classify_path_fails_open_for_an_unrecognized_path() -> None:
-    """Run everything for a path no rule names, so new top-level files are covered."""
+    """A path that no rule matches runs both areas."""
     assert classify_path("terraform/main.tf") == BOTH_AREAS
 
 
@@ -192,7 +186,7 @@ def test_classify_paths_unions_every_changed_path() -> None:
 
 
 def test_classify_paths_of_nothing_selects_nothing() -> None:
-    """Select no area for an empty diff, so a no-op push runs no heavy jobs."""
+    """An empty diff selects no area."""
     assert classify_paths([]) == NO_AREA
 
 
@@ -211,7 +205,7 @@ def test_path_rule_matches_only_its_own_pattern_form() -> None:
 
 
 def test_changed_paths_returns_the_diff_and_drops_blank_lines() -> None:
-    """Compare the two commits directly, which is what a push needs."""
+    """Uses the two-dot range for a direct comparison of the two commits."""
     commands, runner = fake_runner("README.md\n\nsrc/cli.py\n")
 
     assert changed_paths("base-sha", "head-sha", runner=runner) == ["README.md", "src/cli.py"]
@@ -219,7 +213,7 @@ def test_changed_paths_returns_the_diff_and_drops_blank_lines() -> None:
 
 
 def test_changed_paths_compares_against_the_merge_base_on_request() -> None:
-    """Use the three-dot range for a pull request, whose base moves on without it."""
+    """Uses the three-dot range, which compares against the merge base."""
     commands, runner = fake_runner("src/cli.py\n")
 
     changed_paths("base-sha", "head-sha", merge_base=True, runner=runner)
@@ -228,11 +222,10 @@ def test_changed_paths_compares_against_the_merge_base_on_request() -> None:
 
 
 def test_changed_paths_reports_both_ends_of_a_rename(tmp_path: Path) -> None:
-    """Keep the source of a rename in the diff, against real git rather than a fake.
+    """Lists both ends of a rename, using real git.
 
-    With rename detection on, `--name-only` reports only the destination. Moving
-    `web/src/feature.js` to `docs/feature.md` would then list one Markdown path,
-    report `web=false`, and skip the web jobs the deleted module broke.
+    With rename detection on, `--name-only` reports only the destination, which
+    would classify a move from `web/` to `docs/` as Markdown only.
     """
     repository = tmp_path / "repository"
     (repository / "web" / "src").mkdir(parents=True)
@@ -272,7 +265,7 @@ def test_changed_paths_reports_both_ends_of_a_rename(tmp_path: Path) -> None:
     [("", "head-sha"), ("base-sha", ""), ("0" * 40, "head-sha")],
 )
 def test_changed_paths_fails_open_without_usable_commits(base: str, head: str) -> None:
-    """Fail open when GitHub supplies no base, as it does when a ref is first created."""
+    """Returns None (fail open) when the base or head is empty, or the base is all zeros."""
     commands, runner = fake_runner("README.md\n")
 
     assert changed_paths(base, head, runner=runner) is None
@@ -285,14 +278,14 @@ def test_changed_paths_fails_open_when_git_cannot_run() -> None:
 
 
 def test_changed_paths_fails_open_when_the_commit_is_missing() -> None:
-    """Fail open when git rejects the range, as after a force push rewrites the base."""
+    """Returns None (fail open) when git rejects the commit range."""
     _commands, runner = fake_runner("", returncode=128)
 
     assert changed_paths("base-sha", "head-sha", runner=runner) is None
 
 
 def test_resolve_areas_reports_both_the_verdict_and_its_evidence() -> None:
-    """Return the paths behind a verdict so the job log can explain a skip."""
+    """Returns the verdict together with the changed paths behind it."""
     _commands, runner = fake_runner("docs/development.md\n")
 
     assert resolve_areas("base-sha", "head-sha", runner=runner) == (
@@ -307,7 +300,7 @@ def test_resolve_areas_runs_everything_when_the_diff_is_unknown() -> None:
 
 
 def test_run_git_invokes_the_real_binary() -> None:
-    """Prove the default runner reaches git, since every other test injects a fake."""
+    """Runs the real git binary through the default runner."""
     result = run_git(["--version"])
 
     assert result.returncode == 0
@@ -315,7 +308,7 @@ def test_run_git_invokes_the_real_binary() -> None:
 
 
 def test_active_areas_reads_only_the_exact_true_flag() -> None:
-    """Treat anything but 'true' as unchanged, so an empty output cannot enable a job."""
+    """Only the exact string 'true' sets an area."""
     assert active_areas({"PYTHON_CHANGED": "true", "WEB_CHANGED": "false"}) == PYTHON_ONLY
     assert active_areas({"PYTHON_CHANGED": "", "WEB_CHANGED": ""}) == NO_AREA
 
@@ -360,10 +353,9 @@ def test_result_problems_accepts_a_documentation_run() -> None:
     ],
 )
 def test_result_problems_rejects_a_failure_in_any_job(variable: str, label: str) -> None:
-    """Fail on any job that failed while both areas changed, with no row left unwatched.
+    """Fails on any job that failed while both areas changed.
 
-    Enumerating every row keeps a job from dropping out of the table and its
-    workflow environment together, which no single-job test would notice.
+    Each row is enumerated, so every job in the table is checked.
     """
     environment = {**ENVIRONMENT_FOR_FULL_RUN, variable: "failure"}
 
@@ -391,10 +383,9 @@ def test_result_problems_rejects_any_job_that_ran_outside_its_areas(
 
 
 def test_result_problems_rejects_a_skip_the_areas_did_not_ask_for() -> None:
-    """Fail a job that skipped while its area changed.
+    """A job that skips while its area changed fails the gate.
 
-    This is the failure this whole design could introduce: a mistyped `if:`
-    condition skipping real work. Accepting every skip would make it invisible.
+    This catches a mistyped `if:` condition that skips real work.
     """
     environment = {**ENVIRONMENT_FOR_FULL_RUN, "WEB_E2E_RESULT": "skipped"}
 
@@ -410,7 +401,7 @@ def test_result_problems_rejects_a_job_that_ran_when_it_should_not_have() -> Non
 
 @pytest.mark.parametrize("result", ["failure", "cancelled"])
 def test_result_problems_rejects_failed_and_cancelled_jobs(result: str) -> None:
-    """Keep the original behavior: anything that is not a clean pass fails the gate."""
+    """Anything other than success fails the gate."""
     environment = {**ENVIRONMENT_FOR_FULL_RUN, "PYTHON_COMPATIBILITY_RESULT": result}
 
     assert result_problems(environment) == [
@@ -419,10 +410,9 @@ def test_result_problems_rejects_failed_and_cancelled_jobs(result: str) -> None:
 
 
 def test_result_problems_rejects_a_failed_detection_job() -> None:
-    """Fail closed when detection failed, since its empty outputs read as 'nothing changed'.
+    """A failed detection job fails the gate.
 
-    Without this the area flags arrive empty, every gated job skips, and the
-    aggregate would otherwise call that a clean documentation-only run.
+    Its empty area outputs do not count as a documentation-only run.
     """
     environment = {
         "CHANGES_RESULT": "failure",
@@ -439,7 +429,7 @@ def test_result_problems_rejects_a_failed_detection_job() -> None:
 
 
 def test_result_problems_reports_every_offending_job_at_once() -> None:
-    """List all mismatches, so one rerun shows the whole picture."""
+    """Reports every mismatch in one pass."""
     environment = {
         **ENVIRONMENT_FOR_FULL_RUN,
         "QUICK_GATES_RESULT": "failure",
@@ -455,7 +445,7 @@ def test_result_problems_reports_every_offending_job_at_once() -> None:
 def test_main_changed_areas_writes_the_flags_as_job_outputs(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Publish both flags where a workflow condition can read them."""
+    """Writes both flags to GITHUB_OUTPUT."""
     output = tmp_path / "github-output"
 
     exit_code = main(
@@ -471,7 +461,7 @@ def test_main_changed_areas_writes_the_flags_as_job_outputs(
 def test_main_changed_areas_runs_without_github_output(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Stay usable from a terminal, where there is no job output file to append to."""
+    """Runs without GITHUB_OUTPUT set."""
     monkeypatch.chdir(Path(__file__).resolve().parents[3])
 
     exit_code = main(["changed-areas", "--base", "HEAD", "--head", "HEAD"], {})
@@ -485,7 +475,7 @@ def test_main_changed_areas_runs_without_github_output(
 def test_report_areas_lists_the_paths_behind_the_verdict(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Print every changed path, so a surprising skip can be traced from the job log."""
+    """Prints every changed path with the verdict."""
     _report_areas(PYTHON_ONLY, ["src/cli.py", "README.md"])
 
     assert capsys.readouterr().out == (
@@ -500,7 +490,7 @@ def test_main_check_results_passes_a_consistent_run(capsys: pytest.CaptureFixtur
 
 
 def test_main_check_results_annotates_each_problem(capsys: pytest.CaptureFixture[str]) -> None:
-    """Exit non-zero and annotate the run, so the failure is visible on the job page."""
+    """Exits 1 and prints an ::error:: annotation for each problem."""
     environment = {**ENVIRONMENT_FOR_FULL_RUN, "HEAVY_CHECKS_RESULT": "failure"}
 
     assert main(["check-results"], environment) == 1
@@ -508,7 +498,7 @@ def test_main_check_results_annotates_each_problem(capsys: pytest.CaptureFixture
 
 
 def test_main_falls_back_to_the_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Read the real environment when no mapping is injected, which is how CI calls it."""
+    """Reads os.environ when no mapping is passed."""
     for name, value in ENVIRONMENT_FOR_DOCS_RUN.items():
         monkeypatch.setenv(name, value)
 

@@ -13,12 +13,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _fresh_graphql_verdict() -> Iterator[None]:
-    """Start and end every test with GraphQL assumed reachable.
-
-    A GraphQL-unavailable verdict is remembered for the life of the process, so
-    a test that triggers one would otherwise send every later test down the REST
-    path.
-    """
+    """Reset the process-wide GraphQL availability before and after each test."""
     gh_runner.reset_graphql_availability()
     yield
     gh_runner.reset_graphql_availability()
@@ -26,5 +21,5 @@ def _fresh_graphql_verdict() -> Iterator[None]:
 
 @pytest.fixture(autouse=True)
 def _no_repo_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep a ``GH_REPO`` set in the developer's shell from redirecting test calls."""
+    """Unset GH_REPO so the shell environment does not redirect test calls."""
     monkeypatch.delenv("GH_REPO", raising=False)

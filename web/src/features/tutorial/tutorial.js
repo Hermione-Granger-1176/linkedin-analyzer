@@ -807,7 +807,7 @@ export const Tutorial = (() => {
         target.classList.add("tutorial-highlighted");
     }
 
-    /** Restore previously highlighted target styles. */
+    /** Restore the styles saved on the highlighted target. */
     function clearHighlightedTarget() {
         if (!(state.highlightedTarget instanceof HTMLElement)) {
             state.highlightedTarget = null;

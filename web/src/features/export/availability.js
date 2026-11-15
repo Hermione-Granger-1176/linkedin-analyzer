@@ -1,8 +1,8 @@
 /**
  * Check stored data for PDF export availability.
  *
- * This module stays outside collect.js so the global export button can check
- * availability without loading the PDF layout, charts, or worker transports.
+ * This module does not import collect.js, the PDF layout, charts, or worker
+ * transports. The export button can check availability without loading them.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
@@ -23,8 +23,8 @@ const ANALYTICS_BASE_CACHE_KEY = "storage:analyticsBase";
 /**
  * The parts of a filtered analytics view the export reads.
  *
- * It crosses a worker boundary unvalidated, so the fields the export guards are
- * optional; the plotted series it hands straight to the charts are not.
+ * It crosses a worker boundary unvalidated. Fields the export guards are
+ * optional. The plotted series are required.
  * @typedef {object} ExportAnalyticsView
  * @property {Array<{key: string, label: string, value: number}>} timeline - Activity timeline, keyed by date
  * @property {import("./pdf-charts.js").BarItem[]} topics - Top topics
@@ -53,8 +53,8 @@ const DASHBOARD_FILE_TYPES = new Set(["connections", "messages"]);
 /**
  * Read a stored value without letting a storage failure abort the export.
  *
- * The caught value is discarded rather than reported: one of these reads is the
- * stored messages CSV, so a storage error could carry a fragment of it.
+ * The caught error is not reported. Only the fixed message and the operation
+ * identifier are.
  * @template T
  * @param {() => Promise<T>} read - Storage reader
  * @param {string} operation - Fixed identifier for diagnostics
@@ -74,8 +74,7 @@ export async function readSafely(read, operation) {
 
 /**
  * Read the analytics base, preferring a populated cache entry.
- * The availability check and collection use this same lookup so they agree
- * when the cache is empty but storage contains analytics.
+ * Shared by the availability check and collection.
  * @returns {Promise<StoredAnalytics|null>} Analytics base carrying months, or null
  */
 export async function readAnalyticsBase() {
@@ -138,8 +137,8 @@ export async function hasExportableData() {
         return true;
     }
     // Connections and messages can provide dashboard data without shares or
-    // comments in the analytics base. Read their metadata and require a positive
-    // row count to exclude uploads that produced no rows.
+    // comments in the analytics base. Their metadata is read, and a file counts
+    // only with a positive row count.
     const files = await readSafely(() => Storage.getAllFiles(), "load-file-metadata");
     return (
         Array.isArray(files) &&

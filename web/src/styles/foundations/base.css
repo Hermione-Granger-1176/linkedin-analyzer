@@ -25,7 +25,7 @@ body {
         background-color var(--transition-normal),
         color var(--transition-normal);
 
-    /* Keep the binder holes and margin rule in one reusable background layer. */
+    /* Binder holes and margin rule, as one background layer. */
     --paper-furniture:
         radial-gradient(
             circle at var(--paper-punch-x) 50%,
@@ -43,7 +43,7 @@ body {
         );
     --paper-furniture-size: 100% var(--paper-punch-step), 100% 100%;
 
-    /* Keep the grid layers separate so dark mode can reuse them. */
+    /* Grid ruling layers. */
     --paper-ruling:
         linear-gradient(var(--grid-color) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
@@ -201,7 +201,7 @@ button {
     color: var(--text-primary);
 }
 
-/* Keep the button in the tab order with aria-disabled instead of :disabled. */
+/* The disabled state uses aria-disabled, not :disabled, so the button stays in the tab order. */
 .pdf-export-btn:hover:not([aria-disabled="true"]) {
     transform: scale(1.06) rotate(-8deg);
     box-shadow: var(--shadow-md);

@@ -4,9 +4,9 @@
 ``changed-areas`` classifies changed paths as ``python``, ``web``, both, or
 neither. The workflow uses those results to select area-specific jobs.
 
-Path filtering belongs in job conditions. Filtering the workflow trigger would
-leave required checks pending when a workflow does not run. A job skipped through
-``if:`` reports a conclusion that the aggregate check can validate.
+Path filtering belongs in job conditions, not the workflow trigger. A workflow
+that does not run leaves required checks pending. A job skipped through ``if:``
+reports a conclusion that the aggregate check validates.
 
 Unrecognized paths, unavailable diffs, and missing base commits select both
 areas. New directories therefore receive the full matrix until a rule identifies
@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from scripts.ci.workflow_helpers import append_github_output
 
 # A runner takes the git command vector and returns the completed process.
-# Injectable so tests never touch a real repository.
+# Tests pass a fake runner.
 GitRunner = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 PYTHON_AREA = "python"
@@ -70,10 +70,9 @@ class PathRule:
         return path == self.pattern
 
 
-# Every rule that matches a path contributes, and the union of their areas
-# decides. Order carries no meaning: `.github/SECURITY.md` matches both the
-# `.github/` rule and the `*.md` rule, and taking the union makes it
-# infrastructure without anyone having to reason about which rule wins.
+# Every matching rule contributes, and the union of their areas decides, so order
+# carries no meaning. For example, `.github/SECURITY.md` matches both the
+# `.github/` rule and the `*.md` rule, and is treated as infrastructure.
 PATH_RULES: tuple[PathRule, ...] = (
     # The published package and the suites that exercise it.
     PathRule("src/", PYTHON_ONLY),
@@ -92,10 +91,9 @@ PATH_RULES: tuple[PathRule, ...] = (
     PathRule("package-lock.json", WEB_ONLY),
     PathRule("vercel.json", WEB_ONLY),
     # Shared infrastructure. Anything here can change how either runtime is
-    # built, linted, or tested, so it runs the whole matrix. `tests/fixtures/`
-    # belongs with them rather than with the Python suites: it holds the
-    # cross-runtime parity corpus that `web/tests/integration/parity.test.js`
-    # reads directly, so a fixture-only change alters JavaScript test inputs.
+    # built, linted, or tested, so it runs the whole matrix. `tests/fixtures/` is
+    # listed here, not with the Python suites, because it holds the cross-runtime
+    # parity corpus that `web/tests/integration/parity.test.js` reads.
     PathRule("Makefile", BOTH_AREAS),
     PathRule(".github/", BOTH_AREAS),
     PathRule("scripts/", BOTH_AREAS),
@@ -108,11 +106,10 @@ PATH_RULES: tuple[PathRule, ...] = (
     PathRule(".npmrc", BOTH_AREAS),
     PathRule(".pre-commit-config.yaml", BOTH_AREAS),
     PathRule(".yamllint.yml", BOTH_AREAS),
-    # Prose, agent skills, and local scratch space. These rules exist to
-    # recognize the path, not to select anything: contributing no area is what
-    # makes a non-runtime change cheap, and matching at all is what keeps it out
-    # of the fail-open default. Markdown, YAML, and formatting checks still run
-    # either way, because the quick-gates job is never gated.
+    # Prose, agent skills, and local scratch space. These rules match the path
+    # without selecting any area. Matching keeps the path out of the fail-open
+    # default. Markdown, YAML, and formatting checks still run, because the
+    # quick-gates job is never gated.
     PathRule(".agents/skills/", NO_AREA),
     PathRule("*.md", NO_AREA),
     PathRule("docs/", NO_AREA),
@@ -143,9 +140,8 @@ class GatedJob:
 
 
 # Mirrors the job graph in .github/workflows/ci.yml. `changes` and `quick-gates`
-# are ungated and must succeed outright: a detection job that failed leaves every
-# area flag empty, which would otherwise read as "nothing changed, so every skip
-# is fine" and turn a broken run green.
+# are ungated and must succeed outright. A failed detection job leaves every area
+# flag empty, which would otherwise pass every skip.
 GATED_JOBS: tuple[GatedJob, ...] = (
     GatedJob("Detect changes", "CHANGES_RESULT", NO_AREA),
     GatedJob("Quick gates", "QUICK_GATES_RESULT", NO_AREA),
@@ -181,15 +177,12 @@ def changed_paths(
 ) -> list[str] | None:
     """Return the paths differing between two commits, or ``None`` when unknown.
 
-    ``--no-renames`` includes both the deleted and added paths of a rename.
-    Without it, moving ``web/src/feature.js`` to ``docs/feature.md`` could report
-    only the Markdown destination and skip checks for the deleted web module.
+    ``--no-renames`` lists both the deleted and added paths of a rename. Without
+    it, a move from ``web/`` to ``docs/`` would report only the Markdown destination.
 
-    ``merge_base`` picks the comparison to match the event. A pull request wants
-    the three-dot range, everything on the branch since it diverged, because its
-    base moves on without it. A push wants the two-dot range, what those commits
-    actually did, which also stays correct if a non-fast-forward push ever makes
-    the previous tip something other than an ancestor.
+    ``merge_base`` selects the comparison for the event. A pull request uses the
+    three-dot range, the commits on the branch since it diverged. A push uses the
+    two-dot range, the changes the pushed commits make.
 
     ``None`` is the fail-open signal. It covers a base GitHub could not supply
     (creating a branch sends an all-zero SHA), a commit missing from a shallow or
@@ -218,17 +211,16 @@ def resolve_areas(
 
 
 def _area_flags(areas: frozenset[str]) -> list[str]:
-    """Render the verdict as the ``area=value`` lines a workflow condition compares against.
+    """Render the verdict as ``area=value`` lines.
 
-    The job log and the job outputs are produced from this one list rather than
-    formatted separately, so what the log says the detector decided is by
-    construction what the ``if:`` conditions downstream actually read.
+    The job log and the job outputs both use this list, so the logged verdict is
+    the one the ``if:`` conditions read.
     """
     return [f"{area}={TRUE if area in areas else FALSE}" for area in AREAS]
 
 
 def _report_areas(areas: frozenset[str], paths: list[str] | None) -> None:
-    """Explain the verdict in the job log, so a surprising skip is traceable."""
+    """Explain the verdict in the job log."""
     if paths is None:
         print("Could not determine the changed paths; running every area.")
     else:

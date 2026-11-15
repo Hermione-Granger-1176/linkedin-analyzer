@@ -7,9 +7,9 @@ APT transaction, downloads the resulting archives with ``apt download``, and
 extracts them below the repository's ignored ``.playwright`` directory.  It never
 installs a package or changes the system package database.
 
-Browsers themselves are not copied per repository: they use Playwright's shared
-``$HOME/.cache/ms-playwright`` cache so every project reuses one copy.  Only the
-extracted shared libraries and per-run scratch stay under ``.playwright``.
+Browsers are not copied per repository: they use Playwright's shared
+``$HOME/.cache/ms-playwright`` cache.  Only the extracted shared libraries and
+per-run scratch stay under ``.playwright``.
 """
 
 from __future__ import annotations
@@ -91,12 +91,11 @@ class CacheManifest:
 
 
 def default_shared_browser_root() -> Path:
-    """Return Playwright's shared browser cache so every project reuses one copy.
+    """Return Playwright's shared browser cache, used by every project.
 
-    Browsers are large and version-stable, so they live in Playwright's normal
-    user-level cache (``$HOME/.cache/ms-playwright``) rather than a per-repository
-    copy. An explicit ``PLAYWRIGHT_BROWSERS_PATH`` in the environment wins, mirroring
-    Playwright's own precedence. Only the extracted shared libraries and per-run
+    The default is Playwright's user-level cache, ``$HOME/.cache/ms-playwright``.
+    An explicit ``PLAYWRIGHT_BROWSERS_PATH`` in the environment takes precedence,
+    as it does in Playwright. Only the extracted shared libraries and per-run
     scratch stay under the repository's ignored ``.playwright`` cache.
     """
     override = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
@@ -127,8 +126,8 @@ class RuntimePaths:
     def from_repo(cls, repo_root: Path, browser_root: Path | None = None) -> RuntimePaths:
         """Create cache paths without following a user-controlled cache symlink.
 
-        ``browser_root`` defaults to the shared Playwright browser cache; callers
-        (and tests) may pass an explicit path to isolate the browser location.
+        ``browser_root`` defaults to the shared Playwright browser cache. Callers
+        and tests may pass a path to isolate it.
         """
         resolved_root = repo_root.resolve()
         cache_root = resolved_root / ".playwright"
@@ -183,8 +182,7 @@ def is_within(path: Path, parent: Path) -> bool:
 
 def require_regular_directory(path: Path, label: str) -> None:
     """Reject symlinked roots before reading, creating, or deleting their contents."""
-    # lstat (unlike exists) does not follow symlinks, so a dangling symlink is
-    # still rejected here instead of surfacing later as a raw mkdir/rmtree error.
+    # lstat does not follow symlinks, so a dangling symlink is rejected here.
     try:
         mode = path.lstat().st_mode
     except FileNotFoundError:
@@ -231,10 +229,9 @@ def cache_lock(paths: RuntimePaths) -> Iterator[None]:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | no_follow, 0o600)
     except OSError as error:
         raise fail(f"cannot open the repository-local Playwright cache lock: {error}") from error
-    # Validate and tighten the descriptor before wrapping it in a stream. Opening
-    # a stream over a non-regular file (a planted FIFO, say) can fail after it
-    # takes ownership of the descriptor, which would replace this guard's message
-    # with an unhandled double-close error.
+    # Validate and tighten the descriptor before wrapping it in a stream. A stream
+    # over a non-regular file, such as a FIFO, can fail after it takes ownership of
+    # the descriptor, so the checks come first.
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise fail("Playwright cache lock must be a regular file")
@@ -526,8 +523,8 @@ def download_and_extract(packages: Sequence[PackageVersion], stage: Path) -> Pat
             cwd=stage,
             env=environment,
         )
-    # Validate once after every archive is extracted: nothing uses the tree until
-    # this passes, so a single full scan keeps the same safety at O(files) cost.
+    # Validate once after all archives are extracted. A single scan covers every
+    # file in O(files) time.
     validate_extracted_root(extracted_root)
     for archive in debs:
         archive.unlink()
@@ -538,16 +535,11 @@ def download_and_extract(packages: Sequence[PackageVersion], stage: Path) -> Pat
 
 def _reject_escaping_entry(entry: Path, extracted_root: Path) -> None:
     """Reject an entry that sits outside the root or a symlink that points outside it."""
-    # Containment applies to where a symlink sits, never to what it points
-    # at: that is the dedicated check below, which compares the target
-    # lexically instead of demanding that it exist. Resolving through the
-    # link here would conflate "dangling" with "escaping" and refuse a whole
-    # extraction over a documentation file. APT produces those links by
-    # design - it does not download a package the host already has, so the
-    # usr/share/doc link naming that sibling dangles while still pointing
-    # inside the root - which failed every well-provisioned developer
-    # machine while a bare CI container, holding none of those packages,
-    # downloaded the lot and stayed green.
+    # Containment applies to where a symlink sits, never to what it points at.
+    # The target is checked lexically by the dedicated check below, which does not
+    # require it to exist. Resolving through the link here would treat a dangling
+    # link as escaping. APT creates such links for packages the host already has:
+    # a usr/share/doc link can dangle while still pointing inside the root.
     location = entry.parent if entry.is_symlink() else entry
     if not is_within(location, extracted_root):
         raise fail(
@@ -749,9 +741,8 @@ def prepare_locked(paths: RuntimePaths) -> None:
         patch_webkit_launchers(paths)
         print("Prepared repository-local Playwright runtime.")
     finally:
-        # ignore_errors keeps a cleanup problem from masking the real setup error
-        # this finally may be unwinding. Anything left behind is swept by
-        # remove_stale_staging on the next preparation.
+        # ignore_errors keeps a cleanup failure from masking the setup error that is
+        # unwinding. Leftovers are removed by remove_stale_staging on the next run.
         shutil.rmtree(stage, ignore_errors=True)
 
 
@@ -842,9 +833,9 @@ def runtime_environment(
 
 def browser_cache_ready(paths: RuntimePaths) -> bool:
     """Require all engine folders in the shared browser cache before a wrapped run."""
-    # browser_root is the user-owned shared cache (for example ~/.cache/ms-playwright),
-    # which is only read and launcher-patched in place and never deleted here, so a
-    # symlinked cache (a common redirect to another disk) is accepted; is_dir follows it.
+    # browser_root is the user-owned shared cache, such as ~/.cache/ms-playwright.
+    # It is read and launcher-patched in place and never deleted here. A symlinked
+    # cache is accepted, since is_dir follows the link.
     if not paths.browser_root.is_dir():
         return False
     for engine in ENGINES:
@@ -912,9 +903,8 @@ def require_ready(paths: RuntimePaths) -> None:
     require_regular_directory(paths.cache_root, "Playwright cache root")
     require_regular_directory(paths.local_libraries, "local library cache")
     require_regular_directory(paths.extracted_root, "extracted Playwright runtime root")
-    # Establish that a cache exists at all before validating its contents, so an
-    # untouched repository is told to run setup instead of being handed a
-    # confusing extraction diagnostic.
+    # Check that a cache exists before validating its contents, so an unprepared
+    # repository is told to run setup.
     manifest = load_manifest(paths.manifest)
     if manifest is None or not paths.extracted_root.is_dir():
         raise fail("local Playwright runtime is not prepared; run make setup-playwright-local")
@@ -988,8 +978,7 @@ def status(paths: RuntimePaths) -> int:
 def clean(paths: RuntimePaths) -> None:
     """Remove only this repository's private runtime cache, keeping shared browsers.
 
-    The shared browser cache lives outside ``.playwright`` and is reused by other
-    projects, so it is deliberately left in place.
+    The shared browser cache lives outside ``.playwright`` and is left in place.
     """
     require_regular_directory(paths.cache_root, "Playwright cache root")
     if paths.cache_root.exists():
@@ -1008,8 +997,8 @@ def parse_args(arguments: Sequence[str]) -> argparse.Namespace:
     subparsers.add_parser("probe", help="launch every Playwright engine")
     subparsers.add_parser("clean", help="remove only the private cache")
     parsed = parser.parse_args(arguments)
-    # argparse.REMAINDER keeps the "--" separator the Make wrapper passes before
-    # the wrapped command, so drop one leading separator before it reaches exec.
+    # argparse.REMAINDER keeps the "--" separator that the Make wrapper passes, so
+    # one leading separator is dropped before exec.
     if parsed.action == "run" and parsed.command and parsed.command[0] == "--":
         parsed.command = parsed.command[1:]
     return parsed

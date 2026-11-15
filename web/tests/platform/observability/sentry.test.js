@@ -481,10 +481,8 @@ describe("sentry", () => {
 
     it("keeps the PDF export's module and every operation it reports", async () => {
         const { options } = await enableSentry();
-        // Derived from the source, not hand-listed: an operation added to the
-        // export without a matching allowlist entry silently collapses the
-        // reduced event to "captured-error", and a hand-maintained copy of the
-        // list here is exactly the thing that failed to notice last time.
+        // Operations are read from the export sources, not hand-listed. An
+        // operation missing from the allowlist would reduce to "captured-error".
         const sources = import.meta.glob("../../../src/features/export/*.js", {
             query: "?raw",
             import: "default",
@@ -494,8 +492,8 @@ describe("sentry", () => {
         // of collect.js's readSafely wrapper.
         const patterns = [
             /operation:\s*"([a-z0-9-]+)"/g,
-            // The readSafely label is always the hyphenated last argument, so
-            // requiring a hyphen keeps plain arguments like "messages" out.
+            // The readSafely label is the hyphenated last argument. Requiring a
+            // hyphen excludes plain arguments such as "messages".
             /readSafely\([\s\S]{0,200}?"([a-z0-9]+(?:-[a-z0-9]+)+)"\s*\)/g,
         ];
         const operations = Array.from(
@@ -508,8 +506,7 @@ describe("sentry", () => {
             ),
         ).sort();
 
-        // A tripwire on the derivation itself: if a refactor stops the patterns
-        // matching, the loop below would vacuously pass.
+        // Checks that the derivation finds operations. Without them the loop below passes with no cases.
         expect(operations).toContain("analytics-worker-post");
         expect(operations).toContain("load-analytics");
         expect(operations.length).toBeGreaterThan(15);

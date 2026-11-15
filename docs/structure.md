@@ -1,6 +1,6 @@
 # Project structure
 
-The repository contains a Python package, a browser app, a Vercel function, tests, and tested repository automation. Directory ownership determines which quality gates discover a file.
+The repository holds a Python package, a browser app, a Vercel function, tests, and tested repository automation. Directory ownership decides which quality gates discover a file.
 
 ## Map the repository
 
@@ -17,8 +17,8 @@ linkedin-analyzer/
 ├── web/                         # Vite single-page app
 ├── .github/                     # Workflows, actions, templates, and policy files
 ├── .env.example                 # Optional browser and server diagnostics settings
-├── .pre-commit-config.yaml       # Local hook definitions
-├── .editorconfig                 # Cross-editor text rules
+├── .pre-commit-config.yaml      # Local hook definitions
+├── .editorconfig                # Cross-editor text rules
 ├── Dockerfile                   # CLI container image
 ├── Makefile                     # Repository command interface
 ├── package.json                 # Node manifest and script definitions
@@ -32,7 +32,7 @@ linkedin-analyzer/
 
 The repository keeps one source of truth for tool configuration. `pyproject.toml` owns Python linting, typing, tests, coverage, and dead-code settings. Files under `config/` own JavaScript, CSS, browser, formatting, and audit settings. `web/` owns Vite and Vitest configuration.
 
-`CLAUDE.md` is the repository instruction source and `AGENTS.md` is its symlink. `CHANGELOG.md` records Python package releases only. `LICENSE`, `.gitignore`, `.npmrc`, and `.yamllint.yml` remain at the root because package managers, deployment platforms, and repository checks expect those conventional locations.
+`CLAUDE.md` is the repository instruction file. `AGENTS.md` is a symlink to it. `CHANGELOG.md` records Python package releases only. The root also holds `LICENSE`, `.gitignore`, `.npmrc`, and `.yamllint.yml`.
 
 ## Browse the web app
 
@@ -47,10 +47,10 @@ web/
 │   │   ├── cleaning/            # Bounded CSV parser and Excel cleaner
 │   │   ├── connections/         # Network aggregation and Connections screen
 │   │   ├── export/              # Excel lists, chart downloads, and PDF export
-│   │   ├── insights/             # Rule-based insight screen and its Svelte card grid
-│   │   ├── messages/             # Message parsing and relationship screen
-│   │   ├── tutorial/             # Guided tutorials and mini-tips
-│   │   └── upload/               # File reading, decoding, upload state, and progress
+│   │   ├── insights/            # Rule-based insight screen and its Svelte card grid
+│   │   ├── messages/            # Message parsing and relationship screen
+│   │   ├── tutorial/            # Guided tutorials and mini-tips
+│   │   └── upload/              # File reading, decoding, upload state, and progress
 │   ├── platform/                # Device, persistence, and observability services
 │   ├── shared/                  # Reused constants, events, workers, and UI
 │   ├── styles/                  # Foundation, feature, component, and responsive CSS
@@ -70,22 +70,12 @@ Keep feature code inside its feature directory. Put code used by multiple featur
 src/linkedin_analyzer/
 ├── __init__.py                  # Public package exports and version
 ├── cli.py                       # Argument parsing, logging, dispatch, and exit codes
-├── cleaners/
-│   ├── comments.py              # Comments columns and cleaner configuration
-│   ├── connections.py            # Connections columns, preamble, and row rules
-│   ├── messages.py              # Messages columns and cleaner configuration
-│   └── shares.py                # Shares columns and cleaner configuration
-├── core/
-│   ├── cleaner.py               # Shared CSV read, validation, row filtering, and write flow
-│   ├── excel.py                 # Workbook formatting
-│   ├── limits.py                # Default byte and row limits
-│   ├── paths.py                 # Data directory and default paths
-│   ├── text.py                  # Missing values, dates, escaping, and formula protection
-│   └── types.py                 # Cleaner and column configuration types
+├── cleaners/                    # One module per export type, each with its public clean_* function
+├── core/                        # Shared CSV pipeline, workbook formatting, limits, paths, text rules, and types
 └── py.typed                     # Type-checker marker
 ```
 
-The four modules under `cleaners/` provide the public `clean_*` functions. `core/cleaner.py` owns the common pipeline so the file-specific modules only declare columns and parsing rules.
+The four modules under `cleaners/` provide the public `clean_*` functions. `core/cleaner.py` owns the common pipeline, so each file-specific module declares only its columns and parsing rules.
 
 ## Browse tests
 
@@ -119,20 +109,14 @@ Scripts are part of the Python coverage target. A new Python script needs tests 
 
 ### Browser data flow
 
-1. `web/src/features/upload/` hands each `File` to the analytics worker, which streams the bytes and decodes them locally.
-2. `web/src/features/cleaning/` identifies the export type, then parses and cleans bounded rows as each chunk arrives.
-3. Workers under `analytics/`, `connections/`, and `messages/` build aggregates for the screens.
-4. `web/src/platform/persistence/storage.js` stores the original uploads as `Blob` records and selected aggregates in IndexedDB when available.
-5. Screens render local results and exports use local data to create files.
-
-`api/csp-report.mjs` receives only browser CSP violation reports. `api/sentry-tunnel.mjs` relays opt-in Sentry diagnostics to the configured project. The browser reduces those diagnostics before it sends them. The relay checks only the destination. Neither receives uploaded file contents.
+The browser pipeline runs from upload through storage to exports. See [web architecture](web-architecture.md#how-files-move-through-the-app) for each step and the module that owns it.
 
 ### CLI data flow
 
 1. `src/linkedin_analyzer/cli.py` parses global options and dispatches a command.
 2. A file-specific cleaner builds a `CleanerConfig`.
 3. `core/cleaner.py` checks file limits, reads and decodes the CSV, validates headers, drops invalid rows, and applies column cleaners.
-4. `core/text.py` prefixes formula-like strings with an apostrophe and removes control characters that XML forbids before `core/excel.py` formats the workbook.
-5. The writer replaces the destination atomically after the workbook is complete.
+4. `core/text.py` prefixes formula-like strings with an apostrophe and removes control characters that XML forbids.
+5. `core/excel.py` formats the workbook, and the writer replaces the destination atomically once the workbook is complete.
 
-See [data formats](data-formats.md) for the shared cleaning rules and [web architecture](web-architecture.md) for the browser design decisions.
+See [data formats](data-formats.md) for the shared cleaning rules.

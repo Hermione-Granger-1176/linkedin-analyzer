@@ -1,8 +1,10 @@
-# Large-export investigation, October 2026
+# ADR-015: Large-export investigation, October 2026
 
-This report records measurements from October 16 and 17, 2026, during changes to upload processing, storage, and exports. It preserves intermediate results and limitations. Statements about limits and worker behavior describe the measured stage, unless stated otherwise. Use [browser limits](web-app.md#check-browser-limits) for current behavior and [testing](testing.md#run-local-checks-and-benchmarks) for commands.
+**Date:** 2026-10-17 **Status:** Accepted (measurement record) **Deciders:** Aditya Kumar Darak
 
-These results have not been rerun as part of the documentation revision. The original measurements used different readiness checks at different stages. The correction is recorded beside the affected results, so those timings and peaks do not form a controlled comparison across every stage.
+This record keeps the measurements taken on October 16 and 17, 2026, while upload processing, storage, and exports changed. The decisions they supported are in [ADR-010](010-stream-uploads-and-store-original-files.md). For current limits, read [browser limits](../web-app.md#check-browser-limits). For the commands, read [benchmarks](../benchmarks.md#run-local-checks-and-benchmarks).
+
+The runs used different readiness checks at different stages, so timings and peaks are not a controlled comparison across every stage. Corrections sit beside the affected results.
 
 ## Initial baselines
 

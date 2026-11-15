@@ -67,7 +67,7 @@
 }
 
 @media (max-width: 540px) {
-    /* Keep heatmap cells readable on phones; only this chart may scroll. */
+    /* Heatmap cells keep a readable width on phones. Only this chart scrolls. */
     #heatmapCard .chart-canvas-wrap {
         overflow-x: auto;
     }
@@ -114,8 +114,8 @@
         text-align: center;
     }
 
-    /* Use the primary text color on the solid mobile menu panel. The fill and
-       border already identify the active link. */
+    /* Active link text uses the primary text color on the solid menu panel. The
+       fill and border mark the active link. */
     .top-nav.is-open .top-link.is-active {
         color: var(--text-primary);
     }

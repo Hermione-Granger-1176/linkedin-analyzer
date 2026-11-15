@@ -170,7 +170,7 @@ def test_cherry_pick_preserves_make_syntax_from_environment(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("ref", ["--output=x", "abc -m", "-x abc"])
 def test_cherry_pick_refuses_option_like_refs(ref: str, tmp_path: Path) -> None:
-    """Git reads revision options even after the separator, so dashed words never reach it."""
+    """Dash-prefixed refs are refused before Git runs."""
     result, args_file = run_make_target(tmp_path, "cherry-pick", f"ref={ref}")
 
     assert result.returncode != 0

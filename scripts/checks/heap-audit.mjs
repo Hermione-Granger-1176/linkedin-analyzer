@@ -38,7 +38,7 @@ import {
     waitForServer,
 } from "./app-preview.mjs";
 
-// A distinct port from the e2e webServer (4173) so the two never collide.
+// Distinct from the e2e webServer port (4173).
 const PORT = 4319;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 const STATUS_TIMEOUT_MS = 20000;
@@ -155,9 +155,9 @@ async function main() {
 try {
     process.exitCode = await main();
 } catch (error) {
-    // main() already tears the browser and preview down in its finally blocks;
-    // this only guarantees a structured RESULT line on unexpected failures
-    // (build, browser launch, server readiness), matching the sibling scripts.
+    // main() tears the browser and preview down in its finally blocks. This catch
+    // prints a structured RESULT line for unexpected failures (build, browser
+    // launch, server readiness).
     console.error(error);
     console.error("RESULT   FAILED reason=unexpected");
     process.exitCode = 1;

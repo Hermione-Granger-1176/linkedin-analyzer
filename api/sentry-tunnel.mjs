@@ -1,24 +1,21 @@
 // Same-origin relay for opt-in Sentry diagnostics.
 //
 // The browser SDK posts envelopes here (the `tunnel` option in
-// web/src/platform/observability/sentry.js), so the CSP can keep
-// `connect-src 'self'` instead of allowing every Sentry tenant's ingest host.
-// A wildcard ingest allowance would let any script running in the page, such as
-// a compromised dependency, post data to a Sentry project its author controls.
+// web/src/platform/observability/sentry.js). The CSP keeps `connect-src 'self'`,
+// so the page cannot post to Sentry ingest hosts directly.
 //
 // The relay forwards only to the project named by this deployment's own DSN
 // configuration, and only when the envelope header names that same DSN. It
 // cannot reach another Sentry project or any other host. It does not inspect
-// event content. The browser reduces events before sending them, and anything
-// that bypasses that reducer can still reach only this deployment's project. Forwarding from the
-// server also keeps the visitor's IP address out of the Sentry request.
+// event content; the browser reduces events before sending them, and anything
+// that bypasses that reducer can still reach only this deployment's project.
+// The request to Sentry comes from the server, not the visitor.
 
-// Reduced events carry fixed-schema tags and a few stack frames, so real
-// envelopes are a few kilobytes. The cap only bounds abuse.
+// Reduced events are a few kilobytes each. The cap bounds request size.
 const MAX_BODY_BYTES = 256 * 1024;
 const FORWARD_TIMEOUT_MS = 5000;
 const ENVELOPE_CONTENT_TYPE = "application/x-sentry-envelope";
-// Sentry's rate-limit headers tell the SDK to back off. Relay them unchanged.
+// Sentry rate-limit response headers, relayed to the caller unchanged.
 const RELAYED_RESPONSE_HEADERS = ["retry-after", "x-sentry-rate-limits"];
 const PROJECT_ID = /^\d+$/;
 
@@ -77,8 +74,7 @@ export function parseDsn(dsn) {
 
 /**
  * Resolve the DSNs this deployment may relay to, from server-side env vars.
- * The browser DSN is the usual target. The relay also accepts `SENTRY_DSN`, so a
- * deployment that sets only the server-side variable still works.
+ * Reads `VITE_SENTRY_DSN` and `SENTRY_DSN`; either one may be unset.
  * @param {Record<string, string | undefined>|undefined} env - Environment variables.
  * @returns {ParsedDsn[]} Allowed relay targets, possibly empty.
  */

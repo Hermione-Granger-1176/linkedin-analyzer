@@ -62,8 +62,8 @@ const DEFAULT_FILTERS = {
     shareType: "all",
 };
 
-// Include chunk preparation and concatenation for files of at least 5 MiB.
-// Both paths use the production decodeBytes function.
+// Files of at least 5 MiB go through chunk preparation and concatenation first.
+// Both paths call decodeBytes.
 function decodeNew(bytes) {
     let decodeInput = bytes;
     if (bytes.length >= STREAM_THRESHOLD) {

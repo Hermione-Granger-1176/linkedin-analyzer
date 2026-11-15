@@ -1,9 +1,8 @@
 /**
  * Vitest unit tests for the tutorial storage keys and safe localStorage access.
  *
- * These helpers were extracted from tutorial.js. The key builders are pure; the
- * storage wrappers swallow access errors so a locked-down browser cannot break
- * the tutorial.
+ * The key builders are pure. The storage wrappers swallow access errors, so a
+ * locked-down browser cannot break the tutorial.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

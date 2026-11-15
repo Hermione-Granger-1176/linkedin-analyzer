@@ -66,11 +66,9 @@ def _render(root: Path, run: FakeRun, venv_python: str = ".venv/bin/python") -> 
 
 
 def test_makefile_status_target_runs_on_the_system_interpreter() -> None:
-    """``make status`` must work before ``make setup`` exists to report on.
+    """``make status`` runs on the system interpreter, since the venv may not exist.
 
-    Running the report through the venv interpreter would fail to launch on the
-    exact workspace the report is meant to diagnose, so the target has to use the
-    system interpreter and forward the venv path as data.
+    The venv path is passed to the report as data.
     """
     makefile = (workspace_status.REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     recipe = makefile[makefile.index("\nstatus: ") :].split("\n\n", 1)[0]
@@ -157,12 +155,7 @@ def test_pr_summary_failure_never_fails_the_report(tmp_path: Path) -> None:
 
 
 def test_a_tool_that_cannot_launch_is_treated_as_a_plain_failure(tmp_path: Path) -> None:
-    """An OSError from any subprocess degrades to the failure branch, never a crash.
-
-    Degrading must stay visible: a section that prints its header and nothing
-    else is the least useful thing a health report can do on the exact
-    workstation it is meant to diagnose.
-    """
+    """An OSError from any subprocess takes the failure branch and prints a message."""
     venv_python = _make_venv(tmp_path)
     run = FakeRun(
         [
@@ -195,10 +188,9 @@ def test_child_env_prepends_the_root_without_dropping_an_existing_path(
 def test_child_env_without_an_existing_path_has_only_the_root(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """An unset or empty PYTHONPATH does not leave an empty entry behind.
+    """An unset or empty PYTHONPATH adds only the root.
 
-    An empty entry means the current directory, which would silently widen the
-    import path of every child process.
+    An empty entry would add the current directory to the import path.
     """
     monkeypatch.setenv("PYTHONPATH", "")
 
@@ -232,9 +224,8 @@ def test_main_writes_the_report_for_the_repository(
 ) -> None:
     """The CLI entry point reports on the real repository root and exits zero.
 
-    The runner is stubbed rather than left real: ``uv lock --check`` and the npm
-    lock probe are slow and can reach the network, so a hermetic fake keeps this
-    a test of the entry point's wiring instead of a test of the local toolchain.
+    The runner is stubbed, so the test checks the entry point's wiring without
+    running uv or npm.
     """
     monkeypatch.setattr(
         workspace_status, "_default_run", lambda cmd, **_kwargs: _proc(0, f"ran {cmd[0]}\n")

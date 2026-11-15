@@ -25,14 +25,13 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-# OWASP formula-injection prefixes (= + - @ TAB CR LF). A cleaned cell that
-# started with one of these is quote-prefixed, so no exported cell may begin
-# with them. Mirrors _FORMULA_PREFIXES in core/text.py and field-cleaners.js.
+# OWASP formula-injection prefixes (= + - @ TAB CR LF). No exported cell may begin
+# with one. Mirrors _FORMULA_PREFIXES in core/text.py and field-cleaners.js.
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
 
-# Control characters XML 1.0 forbids in a worksheet cell. They are stripped
-# before export, so no exported cell may contain them. Mirrors
-# _ILLEGAL_XML_CHARS_RE in core/text.py and ILLEGAL_XML_CHARS in field-cleaners.js.
+# Control characters that XML 1.0 forbids in a worksheet cell. No exported cell
+# may contain them. Mirrors _ILLEGAL_XML_CHARS_RE in core/text.py and
+# ILLEGAL_XML_CHARS in field-cleaners.js.
 ILLEGAL_XML_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
@@ -50,8 +49,8 @@ def load_expectations(path: Path) -> dict[str, Any]:
 def read_workbook(path: Path) -> tuple[list[str], list[str], list[list[str]]]:
     """Read worksheet names, the header row, and data rows as string cells."""
     with warnings.catch_warnings():
-        # write-excel-file omits the default cell style openpyxl expects; the
-        # substituted default is irrelevant to the value-level checks here.
+        # Suppresses openpyxl's warning about the default cell style that
+        # write-excel-file output lacks. Value-level checks do not depend on it.
         warnings.filterwarnings("ignore", message="Workbook contains no default style")
         workbook = load_workbook(path, read_only=True, data_only=False)
     try:
@@ -178,8 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     failures = check_structure(sheet_names, header, data_rows, expected)
-    # check_cells guards out-of-range positions and check_safety is row-count
-    # agnostic, so run both unconditionally for complete diagnostics.
+    # check_cells guards out-of-range positions, and check_safety does not depend
+    # on row count, so both always run.
     failures.extend(check_cells(data_rows, expected))
     failures.extend(check_safety(data_rows))
 

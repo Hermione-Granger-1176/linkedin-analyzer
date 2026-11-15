@@ -174,7 +174,7 @@ def exception_error(
     """Return why the exceptions matching one finding cannot apply, or None.
 
     Covers more than one match and an expired ``review_by`` date. No match
-    returns None, because the caller words the unreviewed-finding error.
+    returns None; the caller reports unreviewed findings.
     """
     if len(matching) > 1:
         return (

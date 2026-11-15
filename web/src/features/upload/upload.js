@@ -120,26 +120,26 @@ export const UploadPage = (() => {
     const activeJobs = new Set();
     /** @type {Map<string, number>} */
     const jobTimeouts = new Map();
-    // Saves still writing a processed upload. Clear waits for them so a save
-    // that began before it cannot write the upload back afterwards.
+    // Saves still writing a processed upload. Clear waits for them, so none can
+    // write an upload back after the wipe.
     const pendingSaves = new Set();
     // Saves of analytics inputs still writing. A batch's analytics wait for
-    // them, so an aggregate is never stored over an input storage lacks.
+    // them, so an aggregate is never stored without its inputs.
     /** @type {Set<Promise<void>>} */
     const analyticsInputSaves = new Set();
     // True once an analytics input in the running batch failed to save.
     let analyticsInputFailed = false;
-    // Bumped by Clear, so a save that began before it skips its analytics,
-    // cache and status continuations.
+    // Incremented by Clear. Saves started under an older generation skip their
+    // analytics, cache, and status updates.
     let clearGeneration = 0;
-    // The Clear in progress, so new uploads wait for it rather than racing it.
+    // The Clear in progress. New uploads wait for it.
     /** @type {Promise<void>|null} */
     let clearInFlight = null;
     let initialized = false;
     /** @type {string|null} */
     let lastPrimedSignature = null;
-    // True when the last prime failed to reach the worker, so it does not hold
-    // the whole stored set and a later upload must not record it as primed.
+    // True when the last prime failed to reach the worker. A later upload must
+    // not record the set as primed.
     let primeFailed = false;
     /** @type {Promise<void>|null} */
     let restorePromise = null;
@@ -216,16 +216,16 @@ export const UploadPage = (() => {
         restoreState();
     }
 
-    /** Tear down the current worker and spin up a fresh one so later uploads recover. */
+    /** Tears down the current worker and starts a fresh one. */
     function restartWorker() {
         workers.terminate();
-        // A fresh worker has no in-memory primed state, so clear the prime tracking
-        // (otherwise an unchanged signature would skip re-priming and leave analytics stale).
+        // A fresh worker has no primed state. Clears the prime tracking so the
+        // next prime is not skipped.
         clearPrimeSchedule();
         pendingPrimePayload = null;
         lastPrimedSignature = null;
         primeFailed = false;
-        // Re-prime the new worker from cached files so analytics stay accurate after a crash.
+        // Re-primes the new worker from cached files.
         if (!workers.ensure()) {
             return;
         }
@@ -300,8 +300,8 @@ export const UploadPage = (() => {
 
     /**
      * Read stored files and analytics, then show them in the upload status.
-     * Does not prime the worker. That is deferred to the first upload (see
-     * processFiles); the dashboard reads the persisted analyticsBase directly.
+     * Does not prime the worker. Priming is deferred to the first upload (see
+     * processFiles). The dashboard reads the persisted analyticsBase directly.
      * @returns {Promise<void>}
      */
     async function loadStoredState() {
@@ -309,24 +309,21 @@ export const UploadPage = (() => {
         await Session.waitForCleanup();
         updateOfflineBanner();
         const files = await Storage.getAllFiles();
-        // A Clear during the read leaves these files describing a wiped store.
+        // Stops if a Clear ran during the read, since these files describe a wiped store.
         if (generation !== clearGeneration) {
             return;
         }
         const fileMap = getFileMap(files);
         DataCache.set("storage:files", files.map(toStoredFileMetadata));
-        // Intentionally do NOT prime the worker on load: the dashboard reads
-        // the persisted analyticsBase directly and never needs the worker's
-        // raw shares/comments. Only a fresh upload (which recomputes the base)
-        // does, so priming is deferred to processFiles(), saving a redundant
-        // re-parse of shares+comments on every page load.
+        // Does not prime the worker on load. The dashboard reads the persisted
+        // analyticsBase directly. Priming is deferred to processFiles(), which
+        // runs on the first upload.
         const analyticsReady = await hasAnalyticsData();
         if (generation !== clearGeneration) {
             return;
         }
         updateStatus({ fileMap, analyticsReady });
-        // If a stale 24h session was wiped, tell the user once rather than
-        // letting their previously-uploaded files silently disappear.
+        // Shows a notice once when an expired session was wiped.
         if (Session.consumeExpiryNotice()) {
             setHint(
                 "Your saved data expired after 24 hours and was cleared for privacy. Re-upload to continue.",
@@ -420,8 +417,7 @@ export const UploadPage = (() => {
             hideCatcher();
             return;
         }
-        // The catch plays for any drop that landed, valid or not: Pip is
-        // reacting to the file arriving, not to what processing makes of it.
+        // The catch plays for any drop that carries files, whether or not they are valid.
         playCatch();
         processFiles(files);
     }
@@ -475,11 +471,8 @@ export const UploadPage = (() => {
 
     /**
      * Seed the worker with the stored shares, comments, and connections before
-     * a new file goes out, so an added file recomputes analytics from the full
-     * set rather than from the new file alone. Awaiting here guarantees the
-     * restoreFiles is queued before the addFile messages (worker messages are
-     * FIFO), even when an upload races ahead of the not-yet-awaited
-     * restoreState() on load.
+     * a new file goes out, so the analytics cover the full set. Awaiting here
+     * queues restoreFiles before the addFile messages, since worker messages are FIFO.
      * @returns {Promise<void>}
      */
     async function primeBeforeUpload() {
@@ -488,7 +481,7 @@ export const UploadPage = (() => {
         } catch (error) {
             // Priming is best-effort; a storage read failure must not block the upload.
             captureError(error, { module: "upload", operation: "prime-before-upload" });
-            // The worker may be missing stored files, so this upload cannot mark them primed.
+            // Sets primeFailed, so the set is not recorded as primed.
             primeFailed = true;
         }
     }
@@ -544,8 +537,8 @@ export const UploadPage = (() => {
         const incomingBytes = acceptedFiles.reduce((sum, file) => sum + file.size, 0);
         warnIfStorageLow(incomingBytes);
 
-        // Files dropped during a Clear are processed after it, so the wipe
-        // cannot take them with it.
+        // Waits for an in-flight Clear, so files dropped during it are processed
+        // after the wipe.
         if (clearInFlight) {
             await clearInFlight;
         }
@@ -554,14 +547,13 @@ export const UploadPage = (() => {
             UploadProgress.show(() => activeJobs.size > 0);
         }
         await primeBeforeUpload();
-        // Files dropped before a Clear that ran during the priming await went
-        // with it; Clear has already reset the overlay and the jobs.
+        // Returns if a Clear ran during the priming await. Clear has already
+        // reset the overlay and the jobs.
         if (generation !== clearGeneration) {
             return;
         }
-        // Start or join the tracked run only now, in the same task that adds
-        // the jobs: earlier jobs finishing during the priming await would
-        // otherwise finish the run these files just joined.
+        // Starts or joins the tracked run in the same task that adds the jobs, so
+        // earlier jobs finishing during the priming await cannot end it.
         RunTracker.start({ totalBytes: incomingBytes, fileCount: acceptedFiles.length });
         acceptedFiles.forEach((file) => postFileToWorker(file));
         armRunningJobTimeout();
@@ -570,10 +562,10 @@ export const UploadPage = (() => {
     /**
      * Wipe stored uploads and analytics.
      *
-     * Everything that could still start a save is stopped first: the pending
-     * jobs are dropped, so a reply that lands meanwhile finds nothing to save,
-     * and the worker is cleared. Only then does Clear wait out the saves already
-     * writing, so none of them can write an upload back after the wipe.
+     * Stops everything that could start a save first. Pending jobs are dropped,
+     * so a reply that arrives meanwhile finds nothing to save, and the worker is
+     * cleared. Then Clear waits for saves already writing, so none can write an
+     * upload back after the wipe.
      * @returns {Promise<void>}
      */
     async function clearAllData() {
@@ -621,8 +613,8 @@ export const UploadPage = (() => {
                     return;
                 }
                 const remaining = estimate.quota - estimate.usage;
-                // Scale the storage warning threshold to incoming bytes, with a 20 MiB
-                // minimum. Allow space for temporary copies during persistence.
+                // Threshold is twice the incoming bytes, with a 20 MiB minimum, to allow
+                // for temporary copies during persistence.
                 const threshold = Math.max(incomingBytes * 2, 20 * 1024 * 1024);
                 if (remaining < threshold) {
                     setHint(
@@ -690,12 +682,12 @@ export const UploadPage = (() => {
      */
     async function reportUnprocessedFile(payload, pending) {
         const generation = clearGeneration;
-        // A reply with no pending job outlived a Clear, so its analytics
-        // describe data that is gone.
+        // Analytics are saved only when the reply still has a pending job. Without
+        // one, the reply outlived a Clear.
         if (pending) {
             await persistAnalyticsOnly(payload.analyticsBase);
         }
-        // Set after the save, whose status update would replace it.
+        // Set after the save, since the save's status update would replace it.
         if (generation === clearGeneration) {
             setHint(payload.error || "File could not be processed.", true);
         }
@@ -757,9 +749,8 @@ export const UploadPage = (() => {
             !primeFailed &&
             workers.current() === replyWorker
         ) {
-            // The worker that processed this file already holds it along
-            // with the rest of the stored set, so record that set as primed
-            // instead of having the worker read and parse it all again.
+            // The worker that processed this file already holds the stored set, so
+            // record it as primed rather than priming again.
             lastPrimedSignature = getPrimeSignature(fileMap);
         }
     }
@@ -882,8 +873,8 @@ export const UploadPage = (() => {
 
     /**
      * Track the save of an analytics input, so the batch's analytics wait for
-     * it. A failed save leaves the worker holding an input storage lacks, so
-     * the worker is primed again from storage before the next upload.
+     * it. A failed save leaves the worker holding an input that storage lacks,
+     * so the next upload primes the worker again from storage.
      * @param {Promise<unknown>} save - Storage.saveFile promise
      */
     function trackAnalyticsInputSave(save) {
@@ -909,9 +900,9 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Store analytics that arrived on a reply whose file is not stored. The
-     * worker computes a batch's analytics on its last reply, which can be a
-     * rejected file, so the files accepted before it still reach the dashboard.
+     * Stores analytics from a reply whose file is not stored. The worker computes
+     * a batch's analytics on its last reply, which can be a rejected file. Files
+     * accepted earlier in the batch still reach the dashboard.
      * @param {PlainObject|null|undefined} analyticsBase - Analytics aggregate base
      * @returns {Promise<void>}
      */
@@ -920,13 +911,13 @@ export const UploadPage = (() => {
             return;
         }
         const generation = clearGeneration;
-        // An input the aggregate counts did not reach storage, so the stored
-        // analytics stay as they were rather than describe it.
+        // If an input the aggregate counts did not reach storage, the stored
+        // analytics are left unchanged.
         if (!(await analyticsInputsStored()) || generation !== clearGeneration) {
             return;
         }
         const save = Storage.saveAnalytics(analyticsBase);
-        // Clear waits for this save, so it cannot write analytics back after the wipe.
+        // Clear waits for this save.
         pendingSaves.add(save);
         try {
             await save;
@@ -959,13 +950,12 @@ export const UploadPage = (() => {
         DataCache.invalidate("storage:");
         DataCache.invalidate("clean:");
         DataCache.invalidate("messages:");
-        // The Insights screen publishes what is on screen for the PDF export to
-        // reuse. That snapshot describes the previous upload, and the export
-        // prefers it over recomputing, so it has to go with the rest.
+        // The Insights screen publishes a snapshot for the PDF export to reuse. The
+        // snapshot describes the previous upload, so it is invalidated here with the rest.
         DataCache.invalidate("insights:");
 
         const files = await Storage.getAllFiles();
-        // A Clear during the read would have these stale files cached after it.
+        // Stops if a Clear ran during the read, so stale files are not cached afterward.
         if (generation !== clearGeneration) {
             return;
         }
@@ -1031,9 +1021,8 @@ export const UploadPage = (() => {
         });
         resetProcessingState();
 
-        // Throttle restarts: a worker that fails on startup (e.g. a script load error)
-        // would otherwise restart-and-fail in a tight loop. Give up after too many
-        // failures in a short window and ask the user to reload instead.
+        // Restarts are throttled. After MAX_WORKER_RESTARTS failures within the
+        // window, the worker is not restarted and the user is asked to reload.
         const now = Date.now();
         workerRestartTimes = workerRestartTimes.filter(
             (time) => now - time < WORKER_RESTART_WINDOW_MS,
@@ -1119,7 +1108,7 @@ export const UploadPage = (() => {
             elements.openAnalyticsBtn.disabled = !hasAnalyticsFiles || !analyticsReady;
         }
         if (hasAnalyticsFiles && analyticsReady) {
-            // Analytics is where the button leads, so fetch it before the click.
+            // Preloads the analytics route, which the button opens.
             preloadRouteWhenIdle("analytics");
         }
         setHint(getUploadHint(hasAny, hasAnalyticsFiles, analyticsReady), false);
@@ -1187,9 +1176,7 @@ export const UploadPage = (() => {
             cachedFiles = files.map(toStoredFileMetadata);
             DataCache.set("storage:files", cachedFiles);
         }
-        // Await the prime so its restoreFiles is posted (after loading the Blobs
-        // from storage) before processFiles posts any addFile, preserving the
-        // "recompute from the full set" guarantee now that priming is async.
+        // Awaits the prime so restoreFiles is posted before processFiles posts any addFile.
         await scheduleAnalyticsWorkerPrime(getFileMap(cachedFiles), { priority: "immediate" });
     }
 
@@ -1212,7 +1199,7 @@ export const UploadPage = (() => {
          */
         const stamp = (file) => (file ? `${file.updatedAt || 0}:${file.rowCount || 0}` : "-");
         // Connections feeds the network-growth correlation, so a connections-only
-        // change must still invalidate the signature and force a re-prime.
+        // change alters the signature and triggers a re-prime.
         return `${stamp(sharesFile)}|${stamp(commentsFile)}|${stamp(connectionsFile)}`;
     }
 
@@ -1225,8 +1212,7 @@ export const UploadPage = (() => {
      * @returns {Promise<void>|void}
      */
     function scheduleAnalyticsWorkerPrime(fileMap, options) {
-        // Upload flows normally create the worker before priming. Keep the guard
-        // for a worker teardown race.
+        // Guards against a worker teardown race.
         /* v8 ignore next 3 */
         if (!workers.current()) {
             return undefined;
@@ -1236,9 +1222,8 @@ export const UploadPage = (() => {
         // so even an empty stored set is primed, which clears them.
         const signature =
             getPrimeSignature(fileMap) || (primeFailed ? EMPTY_PRIME_SIGNATURE : null);
-        // Connections alone are worth priming: the worker retains the dataset so
-        // the first later shares/comments upload picks up the already-stored
-        // connections for the network-growth correlation without a re-upload.
+        // A connections-only set is primed too. The worker keeps the dataset, so a
+        // later shares or comments upload uses the stored connections without a re-upload.
         if (!signature) {
             lastPrimedSignature = null;
             pendingPrimePayload = null;
@@ -1259,9 +1244,8 @@ export const UploadPage = (() => {
             return primeAnalyticsWorkerNow();
         }
 
-        // Cancel any in-flight idle/timeout prime before scheduling a fresh one so a
-        // repeated idle request can never leak a timer (the sole idle caller,
-        // restartWorker, already clears, but this keeps scheduling self-contained).
+        // Cancels any pending idle or timeout prime before scheduling a new one, so
+        // no timer is left behind.
         clearPrimeSchedule();
 
         if (typeof requestIdleCallback === "function") {
@@ -1284,13 +1268,13 @@ export const UploadPage = (() => {
 
     /**
      * Queue a restoreFiles post through primeInFlight.
-     * Serialize asynchronous reads and posts so an earlier prime cannot arrive
-     * after a newer addFile and replace the worker's inputs.
+     * Serializes reads and posts, so an earlier prime does not arrive after a
+     * newer addFile and replace the worker's inputs.
      * @returns {Promise<void>}
      */
     function primeAnalyticsWorkerNow() {
-        // Both guards fire only on a torn-down worker or a payload cleared by a
-        // racing restart between scheduling and firing, neither staged in units.
+        // Guards for a torn-down worker, or for a payload cleared by a racing
+        // restart between scheduling and firing.
         /* v8 ignore next 3 */
         if (!workers.current() || !pendingPrimePayload) {
             return Promise.resolve();
@@ -1319,8 +1303,7 @@ export const UploadPage = (() => {
      * @returns {Promise<void>}
      */
     async function postPrimeToWorker(signature, generation) {
-        // Entry guard for a worker torn down before the chained post runs; the
-        // caller only reaches here with a live worker in unit flows.
+        // Guard for a worker torn down before the chained post runs.
         /* v8 ignore next 3 */
         if (!workers.current()) {
             return;
@@ -1329,8 +1312,8 @@ export const UploadPage = (() => {
         let commentsCsv = null;
         let connectionsCsv = null;
         try {
-            // Connections feeds the posting-vs-network-growth correlation, so it
-            // primes alongside shares/comments even though it is not a posting source.
+            // Connections primes alongside shares and comments, although it is not a
+            // posting source.
             const [sharesFile, commentsFile, connectionsFile] = await Promise.all([
                 Storage.getFile("shares"),
                 Storage.getFile("comments"),
@@ -1345,8 +1328,7 @@ export const UploadPage = (() => {
             primeFailed = true;
             return;
         }
-        // Posting files read before a Clear would restore them into the worker
-        // after the clear it was sent.
+        // Returns if a Clear ran during the reads, so files read before it are not restored.
         if (generation !== clearGeneration) {
             return;
         }
@@ -1363,10 +1345,10 @@ export const UploadPage = (() => {
                 payload: { sharesCsv, commentsCsv, connectionsCsv },
             });
         } catch (error) {
-            // postMessage can throw synchronously (DataCloneError / invalid
-            // state). Priming is best-effort, so swallow it (don't reject the
-            // serialized chain and stall the awaiting upload) and leave
-            // lastPrimedSignature unchanged so a later prime can retry.
+            // postMessage can throw synchronously (DataCloneError or invalid
+            // state). Priming is best-effort. The error is captured rather than
+            // rejecting the serialized chain. lastPrimedSignature is left unchanged
+            // so a later prime can retry.
             captureError(error, { module: "upload", operation: "prime-post-message" });
             primeFailed = true;
             return;
@@ -1421,8 +1403,7 @@ export const UploadPage = (() => {
     }
 
     /**
-     * Start a timeout watchdog for a worker job. A large file gets more time, so
-     * a slow device is not cut off partway through a file within the limits.
+     * Starts a timeout watchdog for a worker job. Large files get a longer budget.
      * @param {string} jobId - Worker job id
      * @param {File} file - Uploaded file
      */
@@ -1431,8 +1412,7 @@ export const UploadPage = (() => {
         const fileName = file.name;
         const budget = Math.max(JOB_TIMEOUT_MS, computeWorkerTimeout(file));
         const timeoutId = window.setTimeout(() => {
-            // Terminate the timed-out worker so later uploads can proceed.
-            // Reset processing state before creating its replacement.
+            // Resets processing state, then restarts the worker so later uploads can proceed.
             resetProcessingState();
             restartWorker();
             setHint(`Processing took too long for ${fileName}. Please retry this file.`, true);

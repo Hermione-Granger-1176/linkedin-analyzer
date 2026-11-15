@@ -4,8 +4,7 @@ import { getDeviceProfile } from "../platform/device/capabilities.js";
 
 import { ScreenManager } from "./screen-manager.js";
 
-// Without requestIdleCallback, wait this long so the preload stays out of the
-// way of whatever the page is doing right now.
+// Delay before preloading when requestIdleCallback is unavailable.
 const IDLE_FALLBACK_MS = 2000;
 // An idle callback is still run after this long on a page that is never idle.
 const IDLE_TIMEOUT_MS = 5000;
@@ -15,8 +14,7 @@ const requested = new Set();
 
 /**
  * Load a route's screen code when the browser is next idle, once per route.
- * Skipped on the lite tier with Save-Data on, where the page does no work it
- * can put off, and the screen still loads when it is opened.
+ * Skipped on the lite tier with Save-Data on. The screen then loads when opened.
  * @param {string} routeName - Route to preload
  */
 export function preloadRouteWhenIdle(routeName) {

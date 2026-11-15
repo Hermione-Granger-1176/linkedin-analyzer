@@ -143,13 +143,12 @@ describe("LinkedInCleaner", () => {
         expect(result.cleanedData[0].URL).toBe("https://linkedin.com/in/ada");
     });
 
-    // ── buildColumnErrorMessage paths ─────────────────────────────────────────
+    // buildColumnErrorMessage paths
 
     it("returns type-mismatch error when wrong file type selected", () => {
-        // Upload a shares CSV but tell the cleaner it's comments.
-        // Shares have Date/ShareLink/ShareCommentary; Comments require Date/Link/Message.
-        // detectFileType will identify the headers as 'shares', which != 'comments',
-        // so buildColumnErrorMessage fires the "This looks like a X file" branch.
+        // A shares CSV processed as comments. detectFileType identifies the
+        // headers as 'shares', so buildColumnErrorMessage's "This looks like a X
+        // file" branch fires.
         const csv = [
             "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility",
             "2025-01-01 10:00:00,https://linkedin.com/in/post,Hello world,,,MEMBER_NETWORK",
@@ -208,7 +207,7 @@ describe("LinkedInCleaner", () => {
         expect(result.error).toMatch(/doesn't appear to be/i);
     });
 
-    // ── process() auto-detect failure paths ──────────────────
+    // process() auto-detect failure paths
 
     it("returns failure with headers when auto-detect finds no match", () => {
         // A well-formed CSV with unknown column names so no file type matches
@@ -262,7 +261,7 @@ describe("LinkedInCleaner", () => {
         });
     });
 
-    // ── cleanSharesCommentary paths ──────────────────────────
+    // cleanSharesCommentary paths
 
     it("cleans shares commentary that starts and ends with quotes", () => {
         // A shares CSV where ShareCommentary starts with " and ends with "
@@ -308,7 +307,7 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    // ── Empty CSV edge cases ──────────────────────────────────
+    // Empty CSV edge cases
 
     it("returns empty-CSV error when CSV has no rows", () => {
         const result = LinkedInCleaner.process("", "shares");
@@ -323,7 +322,7 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(false);
     });
 
-    // ── Date parsing edge cases in cleanDate ────────────────────────────────
+    // Date parsing edge cases in cleanDate
 
     it("returns raw value when date format has no time part", () => {
         // A date without a time component, cleanDate should return as-is
@@ -346,7 +345,7 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(true);
     });
 
-    // ── validateColumns with unknown file type ────────────────────
+    // validateColumns with unknown file type
 
     it("validateColumns returns invalid for unknown file type", () => {
         // Process with an unsupported file type → config lookup fails → buildColumnErrorMessage fires
@@ -359,7 +358,7 @@ describe("LinkedInCleaner", () => {
         expect(result.success).toBe(false);
     });
 
-    // ── CRLF inside quoted field ───────────────────────────────────
+    // CRLF inside quoted field
 
     it("handles bare \\r (without \\n) inside a quoted CSV field", () => {
         // A quoted field with \r NOT followed by \n, triggers the `else` branch in
@@ -624,7 +623,7 @@ describe("LinkedInCleaner", () => {
         expect(result.cleanedData[0].ShareCommentary).toBe("line one\nline two");
     });
 
-    // ── process() auto-detect prefix pre-pass (large files) ──────────────────
+    // process() auto-detect prefix pre-pass (large files)
     describe("auto-detect prefix pre-pass", () => {
         const SHARES_HEADER = "Date,ShareLink,ShareCommentary,SharedUrl,MediaUrl,Visibility";
 
@@ -684,8 +683,8 @@ describe("LinkedInCleaner", () => {
         });
 
         it("detects the type when a quoted field spans the end of the prefix", () => {
-            // Real comments often hold multi-line quoted text, so the 64KB cut
-            // regularly lands inside a quote. Only the header row matters.
+            // The 64KB cut can land inside a quoted field. Detection uses only
+            // the header row.
             const lines = ["Date,Link,Message"];
             let length = lines[0].length;
             for (let i = 0; length < 64 * 1024 - 300; i += 1) {

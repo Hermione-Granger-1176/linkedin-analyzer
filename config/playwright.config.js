@@ -10,8 +10,7 @@ module.exports = defineConfig({
     workers: 4,
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 1 : 0,
-    // Keep retries to identify flaky tests, but fail CI when a retry passes.
-    // Playwright otherwise reports those tests with a successful exit status.
+    // In CI, a test that passes only on retry fails the run.
     failOnFlakyTests: Boolean(process.env.CI),
     reporter: [["list"], ["html", { open: "never" }]],
     use: {

@@ -1,6 +1,6 @@
 /* CSS custom properties for theming. */
 
-/* Self-hosted fonts avoid a Google Fonts DNS lookup. */
+/* Fonts are self-hosted from /fonts/. */
 
 @font-face {
     font-family: "Patrick Hand";
@@ -118,8 +118,7 @@
     --border-color: rgba(178, 161, 141, 1);
     --border-light: rgba(97, 82, 67, 1);
 
-    /* Dark-mode accent colors. Keep the hues from the light palette and adjust
-       lightness and alpha for the dark background. */
+    /* Dark-mode accent colors. Hues match the light palette. Lightness and alpha differ. */
     --accent-blue: rgba(122, 189, 255, 1);
     --accent-blue-contrast: rgba(168, 214, 255, 1);
     --accent-blue-light: rgba(38, 66, 94, 1);

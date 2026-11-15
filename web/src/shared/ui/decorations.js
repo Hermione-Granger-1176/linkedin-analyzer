@@ -5,7 +5,7 @@ import rough from "roughjs/bundled/rough.esm.js";
 /**
  * Build the RoughJS options for one background circle.
  * Light paints a solid tinted blob; dark draws the same circle as a faint chalk
- * outline, because a tinted fill over a near-black ground only reads as a smudge.
+ * outline.
  * @param {string} color - Resolved decoration color
  * @param {boolean} outline - Draw a chalk outline instead of a solid fill
  * @returns {object} Options for rough.canvas().circle()
@@ -17,8 +17,7 @@ function circleOptions(color, outline) {
     return { fill: color, fillStyle: "solid", stroke: "transparent", roughness: 2 };
 }
 
-/* The frame a resize has booked, so a drag repaints once per frame rather than
-   once per event. */
+/* Handle of the pending animation frame for a resize repaint, or 0 when none is pending. */
 let resizeFrame = 0;
 
 /** Size the decoration canvas to the viewport and redraw it for the current theme. */
@@ -58,9 +57,7 @@ function draw() {
 }
 
 /**
- * Repaint after a resize, at most once per animation frame. A resize drag fires
- * a long stream of events, and only the size the last of them leaves behind is
- * worth a repaint.
+ * Repaint after a resize, at most once per animation frame.
  * @returns {void}
  */
 function handleResize() {

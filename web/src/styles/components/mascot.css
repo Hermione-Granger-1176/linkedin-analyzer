@@ -109,8 +109,8 @@
     opacity: 0.5;
 }
 
-/* Idle loops. Keep these animations infinite. The screenshot harness waits for
-   finite animations to finish. One-shot animations are finite. */
+/* Idle loops, which run infinitely. One-shot animations must stay finite, since
+   the screenshot harness waits for them to end. */
 
 .pip-bob {
     transform-box: fill-box;
@@ -328,7 +328,7 @@
     pointer-events: none;
 }
 
-/* Keep the hero title and mascot in one row without moving the subtitle. */
+/* Hero title and mascot share one row. The subtitle does not move. */
 .hero-title-row {
     display: flex;
     align-items: center;
@@ -343,7 +343,7 @@
     height: auto;
 }
 
-/* Keep the error mascot beside the note and clear of the fixed tutorial button. */
+/* Error mascot sits beside the note, clear of the fixed tutorial button. */
 .pip-alarm {
     flex: 0 0 auto;
     align-self: center;
@@ -353,12 +353,12 @@
     margin-right: calc(var(--help-btn-size) + var(--space-md));
 }
 
-/* Position the cheer over the download button so it does not change row layout. */
+/* Anchor for the absolutely positioned cheer, which leaves the row layout unchanged. */
 .download-section {
     position: relative;
 }
 
-/* Use translate instead of transform because the moment animation owns transform. */
+/* The moment animation owns transform, so this rule uses the translate property. */
 .pip-cheer {
     position: absolute;
     left: 50%;
@@ -379,7 +379,7 @@
     flex: 0 0 auto;
     width: 78px;
     height: auto;
-    /* Keep the hand over the bubble border. */
+    /* The hand sits over the bubble border. */
     position: relative;
     z-index: 1;
     margin-right: -11px;
@@ -390,7 +390,7 @@
     flex: 1 1 auto;
     padding: var(--space-md) var(--space-lg);
     border: 2px solid var(--border-color);
-    /* Match the irregular corners used by sketch cards. */
+    /* Irregular corners, as on sketch cards. */
     border-radius: 16px 14px 17px 15px / 14px 17px 15px 16px;
     background: var(--bg-secondary);
     box-shadow: var(--shadow-sm);
@@ -426,7 +426,7 @@
     color: var(--text-primary);
 }
 
-/* Keep the lightbulb as a small mark beside the tip title. */
+/* Lightbulb mark beside the tip title. */
 .pip-bubble-bulb {
     flex: 0 0 auto;
     width: 18px;
@@ -696,7 +696,7 @@
     animation: pip-catch-hug 0.9s ease-in-out;
 }
 
-/* Fade the wrapper so the body can keep its hug transform. */
+/* Fades the wrapper, leaving the body's hug transform free. */
 .pip-catcher[data-pose="catch"] {
     animation: pip-catch-away 1.05s ease-in forwards;
 }
@@ -750,8 +750,8 @@
     }
 }
 
-/* Export and clear animations. shared/ui/mascot.js adds the state classes and
-   hides these elements after the finite animations finish. */
+/* Export and clear animations. shared/ui/mascot.js adds the state classes.
+   playOneShot hides these elements when the finite animation ends. */
 
 .pip-staple,
 .pip-eraser {
@@ -1133,8 +1133,8 @@
     }
 }
 
-/* Move the export animation inward and reduce its size below the tablet
-   breakpoint. Reduce the eraser width to preserve the Files card layout. */
+/* Shrink the export animation below the tablet breakpoint. The eraser is
+   narrower too, so the Files card layout holds. */
 @media (max-width: 768px) {
     .pip-staple {
         top: calc(var(--space-md) + var(--corner-btn-size) + var(--space-sm));
@@ -1168,7 +1168,7 @@
 }
 
 @media (max-width: 540px) {
-    /* Hide the error mascot when the note cannot fit beside the fixed help button. */
+    /* Hide the error mascot. The note cannot fit beside the fixed help button. */
     .pip-alarm {
         display: none;
     }
@@ -1235,7 +1235,7 @@
     width: 104px;
 }
 
-/* Use a translucent lens so the eye remains visible through it. */
+/* Translucent lens, so the eye shows through. */
 .pip-lens {
     fill: var(--accent-blue);
     fill-opacity: 0.14;
@@ -1260,16 +1260,16 @@
 }
 
 /* Draw the plane path as a dashed line. */
-/* The lite effects tier keeps Pip's transform and opacity moves but stops the
-   stroke-dashoffset ones, which repaint the path on every frame. */
+/* The lite tier keeps Pip's transform and opacity moves but stops the
+   stroke-dashoffset animations. */
 :root[data-effects="lite"] .pip-mark,
 :root[data-effects="lite"] .is-erasing .pip-erase-mark,
 :root[data-effects="lite"] .pip-trail {
     animation: none;
 }
 
-/* Lite is filter-free: drop Pip's turbulence wobble, which re-rasterizes the
-   whole drawing as it moves. CSS outranks the SVG filter attribute. */
+/* The lite tier drops Pip's turbulence wobble filter. CSS overrides the SVG
+   filter attribute. */
 :root[data-effects="lite"] [filter="url(#pipWobble)"] {
     filter: none;
 }

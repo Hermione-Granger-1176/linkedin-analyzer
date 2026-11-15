@@ -19,9 +19,8 @@ import {
     spacerRow,
 } from "./pdf-layout.js";
 
-// Plot heights in millimetres preserve detail at print size. Dashboards may
-// span pages. Line plots leave 43 mm between axes over a 164 mm width to separate
-// monthly points. Heatmap cells are about 6.83 mm wide and 5 mm high.
+// Plot heights in millimetres. Dashboards may span pages. Line plots are 164 mm
+// wide and 43 mm tall between axes. Heatmap cells are about 6.9 mm by 5 mm.
 const PLOT_HEIGHT = 56;
 const HEATMAP_HEIGHT = 44;
 
@@ -32,7 +31,7 @@ const LABEL_SIZE = 7.5;
 const LINE_PADDING = Object.freeze({ top: 5, right: 3, bottom: 8, left: 11 });
 const HEATMAP_PADDING = Object.freeze({ top: 3, right: 2, bottom: 6, left: 11 });
 
-// Fix chart accents to match the screen colors regardless of dashboard config.
+// Chart accents are fixed to the screen colors.
 const LINE_ACCENT = "--accent-blue";
 const BAR_ACCENT = "--accent-purple";
 const HEATMAP_ACCENT = "--accent-blue";
@@ -41,16 +40,13 @@ const HEATMAP_ACCENT = "--accent-blue";
 // interval count. The chosen step may produce an extra interval.
 const AXIS_TICKS = 4;
 const AXIS_STEP_MULTIPLES = Object.freeze([1, 2, 5]);
-// Past this many points the value labels above the dots collide, so they are
-// dropped and the gridline scale carries the reading instead.
+// Past this many points, value labels are omitted and the gridlines carry the reading.
 const MAX_VALUE_LABELS = 14;
 // How far a value label sits above its dot, and how far the gridline is broken
 // either side of it.
 const VALUE_LABEL_GAP = 1.6;
 const VALUE_LABEL_PAD = 0.8;
-// Room for a whole label such as "Jan 2024", or the weekly "Jan 05", rather
-// than for the first word of one: on paper there is no tooltip to recover the
-// rest from.
+// Minimum room for a whole axis label such as "Jan 2024" or "Jan 05".
 const MIN_LABEL_SPACING = 16;
 
 const ROW_HEIGHT = 6.4;
@@ -63,8 +59,8 @@ const LIST_VALUE_WIDTH = 24;
 const LIST_TEXT_INSET = 2;
 // Align list text with bar-row text without requiring a bar in the list row.
 const LIST_TEXT_BASELINE = BAR_HEIGHT;
-// A list row is two columns rather than two strings sharing one width: the
-// primary takes the larger share, the secondary what is left over.
+// A list row has two columns. The primary takes the larger share; the secondary
+// takes the rest.
 const LIST_PRIMARY_FRACTION = 0.55;
 const LIST_COLUMN_GAP = 3;
 
@@ -158,8 +154,7 @@ export function pickLabelIndices(count, width) {
 
 /**
  * Truncate a label to its available width and mark the truncation.
- * Measure character prefixes because word-based wrapping can drop every word
- * after a long first word.
+ * Measures character prefixes, not words.
  * @param {Painter} painter - Drawing helpers
  * @param {string|null|undefined} value - Raw label
  * @param {number} width - Available width in millimetres
@@ -167,17 +162,14 @@ export function pickLabelIndices(count, width) {
  * @returns {string} Label that fits
  */
 function fitLabel(painter, value, width, size) {
-    // A field the data never filled in is left blank rather than cut down to a
-    // bare ellipsis standing for nothing.
+    // A missing value is drawn as an empty string.
     const text = value ?? "";
     const family = painter.fonts.body;
     if (painter.measure(text, family, size) <= width) {
         return text;
     }
 
-    // Halved rather than walked back a character at a time: a company name or a
-    // headline runs to hundreds of characters, and every probe measures a
-    // string.
+    // Binary search over the prefix length.
     let kept = 0;
     let limit = text.length;
     while (kept < limit) {
@@ -360,13 +352,10 @@ function drawPointMarks(painter, area, placed, accent) {
             );
         }
         if (axisLabel) {
-            // Whole label: a weekly point reads "Jan 05" and a growth
-            // point "Jan 2024", so a first word alone would repeat the
-            // month across the axis or drop the year entirely. Held
-            // inside the plot rather than centered come what may: the
-            // last point sits half a slice from the right edge, which
-            // over a decade of months is a third of a millimetre, and
-            // the label ran out over the margin.
+            // Whole label, so a weekly point reads "Jan 05" and a growth point
+            // "Jan 2024". The label is kept inside the plot: the last point sits
+            // half a slice from the right edge, and a centred label there would
+            // run into the margin.
             const half = painter.measure(axisLabel, fonts.body, AXIS_SIZE) / 2;
             const center = Math.min(Math.max(x, area.left + half), area.left + area.width - half);
             painter.text(
@@ -392,11 +381,8 @@ function drawPointMarks(painter, area, placed, accent) {
  */
 export function buildLineChartBlocks(painter, config) {
     const { palette } = painter;
-    // A value that is not a finite number scales nothing: it poisons the axis
-    // maximum, and from there every gridline, every dot and every label on the
-    // plot, until jsPDF is handed NaN coordinates and refuses the whole export
-    // rather than the one chart. Nothing sends one today, which is exactly the
-    // case mixColors() already answers for a blend amount.
+    // Values that are not finite numbers are dropped. One would make the axis
+    // maximum NaN, and then every gridline, dot, and label would get NaN coordinates.
     const points = (Array.isArray(config.points) ? config.points : []).filter((point) =>
         Number.isFinite(point.value),
     );
@@ -442,8 +428,8 @@ export function buildLineChartBlocks(painter, config) {
  */
 export function buildBarChartBlocks(painter, config) {
     const { palette, fonts } = painter;
-    // Counts are filtered the way a line chart's values are, and for the same
-    // reason: one that is not a finite number makes every bar width NaN.
+    // Counts that are not finite numbers are dropped, as line values are, since one
+    // would make every bar width NaN.
     const items = (Array.isArray(config.items) ? config.items : []).filter((item) =>
         Number.isFinite(item.count),
     );
@@ -458,11 +444,9 @@ export function buildBarChartBlocks(painter, config) {
     /** @type {Row[]} */
     const rows = items.map((item) => {
         const label = fitLabel(painter, item.topic, labelWidth, LABEL_SIZE);
-        // A count that rounds to nothing still gets a visible stub, so a row is
-        // never a label with blank paper beside it.
+        // A small count still gets a minimum-width stub.
         const width = Math.max(BAR_MIN_WIDTH, (item.count / maxValue) * trackWidth);
-        // A radius wider than half the bar it rounds is drawn as a lozenge that
-        // overshoots its own track, which the stub width is narrow enough to hit.
+        // The radius is capped at half the bar width, so the rounded end stays inside the track.
         const radius = Math.min(BAR_RADIUS, width / 2);
         return {
             height: ROW_HEIGHT,
@@ -493,9 +477,8 @@ export function buildBarChartBlocks(painter, config) {
 
     return [
         buildChartTitleBlock(painter, config.title),
-        // Kept together while it fits a page: split, the tail arrives overleaf as
-        // bars with no title and nothing to say what they count. A chart too tall
-        // for any page still flows, which is the pagination contract.
+        // Kept together when it fits on one page. A chart taller than a page still
+        // flows across pages.
         { kind: "bar-chart", keepTogether: true, spacingAfter: 4, rows },
     ];
 }
@@ -537,8 +520,7 @@ export function buildHeatmapBlocks(painter, config) {
                 );
                 for (let hour = 0; hour < HOURS_PER_DAY; hour += 1) {
                     const value = values[hour] || 0;
-                    // An empty cell still takes a whisper of ink, so the grid
-                    // reads as a grid rather than as marks on blank paper.
+                    // Empty cells get a faint fill so the grid stays visible.
                     const intensity = value ? 0.15 + 0.85 * (value / maxValue) : 0.05;
                     painter.fillRect(
                         left + hour * cellWidth,
@@ -598,12 +580,8 @@ export function buildListBlocks(painter, config) {
     const items = Array.isArray(config.items) ? config.items : [];
     const valueLeft = CONTENT_WIDTH - LIST_VALUE_WIDTH;
 
-    // The two are drawn from opposite ends of one baseline, so fitting both to
-    // the whole width let them overprint: "Wolfgang-Maximilian von
-    // Habsburg-Lothringen de la Cruz PhD MBA" against "Head of People Operations
-    // and Culture @ Globex Worldwide Holdings International" overlapped by 36mm.
-    // A column each, with a gap between them, is what keeps them apart whatever
-    // the data says.
+    // The primary and secondary texts are drawn from opposite ends of one
+    // baseline, so each gets its own column with a gap between them.
     const textWidth = valueLeft - LIST_TEXT_INSET * 2;
     const primaryWidth = textWidth * LIST_PRIMARY_FRACTION;
     const secondaryWidth = textWidth - primaryWidth - LIST_COLUMN_GAP;
@@ -615,9 +593,7 @@ export function buildListBlocks(painter, config) {
         const secondary = item.secondary
             ? fitLabel(painter, item.secondary, secondaryWidth, LABEL_SIZE - 1)
             : "";
-        // Fitted for the same reason the two above are: drawn from the right
-        // edge, a value wider than its column reaches back across the secondary
-        // one.
+        // Fitted to its column, like the other two texts.
         const value = item.value
             ? fitLabel(painter, item.value, LIST_VALUE_WIDTH - LIST_TEXT_INSET, LABEL_SIZE)
             : "";
@@ -662,8 +638,7 @@ export function buildListBlocks(painter, config) {
 
     return [
         buildChartTitleBlock(painter, config.title),
-        // Kept together on the same terms as a bar chart: a headless run of names
-        // overleaf says nothing about what ranked them.
+        // Kept together, as for bar charts.
         { kind: "list", keepTogether: true, spacingAfter: 4, rows },
     ];
 }

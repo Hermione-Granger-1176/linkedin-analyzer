@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 def _add_body_options(parser: argparse.ArgumentParser, *, required: bool = True) -> None:
     """Add the shared body options (reply, comment, or PR body) to a subcommand parser.
 
-    Free text reaches these commands through a file wherever it can be long or
-    multi-line, so the Makefile never has to interpolate it into a recipe.
+    Long or multi-line text is passed through a file, not interpolated into a
+    Makefile recipe.
     """
     body_group = parser.add_mutually_exclusive_group(required=required)
     body_group.add_argument("--body", help="Body text")
@@ -112,8 +112,8 @@ def _body_text(args: argparse.Namespace) -> str:
 
     Raises:
         GhError: If the file cannot be read, or if neither option was supplied.
-            Only commands that make the body optional can reach the second case,
-            and they must forward the raw values rather than call this.
+            Commands with an optional body must forward the raw values rather
+            than call this.
     """
     if args.body_file is not None:
         return _read_text_option(args.body_file, "--body-file")
@@ -422,8 +422,8 @@ def _handle_comment(args: argparse.Namespace) -> int:
 def _handle_edit_pr(args: argparse.Namespace) -> int:
     """Edit a pull request's title, body, or both.
 
-    Forward the body file to ``gh pr edit --body-file`` so large bodies do not need
-    to fit in the argument list.
+    Forwards the body file to ``gh pr edit --body-file``, so the body is not passed
+    as an argument.
     """
     pr_review.edit_pr(args.pr, title=args.title, body=args.body, body_file=args.body_file)
     print("Edited the PR")
@@ -479,9 +479,8 @@ def _handle_copilot_review(args: argparse.Namespace) -> int:
 def _handle_check_commit_message(args: argparse.Namespace) -> int:
     """Validate a commit message and reject leaked shell fragments.
 
-    The ``ValueError`` from the validator is re-raised as a ``GhError`` so the
-    module entry point prints it as a plain message and exits non-zero, the same
-    way every other command reports a refusal.
+    The validator's ``ValueError`` is re-raised as ``GhError``, which the module
+    entry point prints before exiting non-zero.
     """
     message = _read_text_option(args.message_file, "--message-file")
     try:

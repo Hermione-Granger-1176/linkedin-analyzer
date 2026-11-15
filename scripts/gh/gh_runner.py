@@ -6,8 +6,7 @@ detection, timeouts, and the retry policy in ``scripts.lib.gh_policy``.
 
 Idempotent calls retry HTTP 500, 502, 503, and 504 responses, network failures,
 and timeouts with bounded exponential backoff. Rate limits and other failures,
-including HTTP 501, stop immediately. Non-idempotent operations disable retries
-to avoid duplicate writes after a lost response.
+including HTTP 501, stop immediately. Non-idempotent operations never retry.
 
 Some environments block GitHub's GraphQL endpoint, and ``gh`` subcommands such
 as ``gh pr view`` use GraphQL internally. That failure is reported as
@@ -35,15 +34,12 @@ from scripts.lib import gh_policy
 
 RunFunction = Callable[..., subprocess.CompletedProcess[str]]
 
-# Timeouts (seconds). API calls use the default budget; failed-log downloads
-# can be large, so they get a longer budget.
+# Timeouts (seconds). Failed-log downloads get a longer budget than API calls.
 DEFAULT_TIMEOUT = 30
 LOG_TIMEOUT = 120
 
-# Retry budget (extra attempts beyond the first) for idempotent calls. The
-# classification rules and the bounded exponential backoff live in
-# ``scripts.lib.gh_policy`` so every ``gh`` caller in this repository shares one
-# rate-limit and transient-failure policy.
+# Retry budget (extra attempts beyond the first) for idempotent calls. Failure
+# classification and backoff live in ``scripts.lib.gh_policy``.
 DEFAULT_RETRIES = gh_policy.DEFAULT_GH_RETRIES
 
 
@@ -54,8 +50,8 @@ class GhError(RuntimeError):
 class GhRateLimitError(GhError):
     """Raised when GitHub reports a primary or secondary rate limit.
 
-    Kept distinct from :class:`GhError` so callers never auto-retry it; the
-    correct response is to stop and wait for the limit window to reset.
+    Distinct from :class:`GhError`. Callers do not retry it. They stop and wait
+    for the limit window to reset.
     """
 
 
@@ -63,8 +59,7 @@ class GhGraphqlUnavailableError(GhError):
     """Raised when the environment refuses GitHub GraphQL requests.
 
     Distinct from :class:`GhError` so callers can switch to the REST API. Other
-    forbidden responses (a missing token scope) stay plain errors and never
-    trigger a fallback.
+    forbidden responses stay plain :class:`GhError` and do not trigger a fallback.
     """
 
 
@@ -77,8 +72,8 @@ class _GraphqlState:
 
 _GRAPHQL_STATE = _GraphqlState()
 
-# Git config key, under branch.<name>, where a REST checkout records the PR it
-# fetched. A fork PR's branch is not in origin, so a head lookup cannot find it.
+# Git config keys, under ``branch.<name>``, that record the PR a REST checkout
+# fetched.
 PR_NUMBER_CONFIG = "gh-pr-number"
 PR_REPO_CONFIG = "gh-pr-repo"
 
@@ -89,7 +84,7 @@ def graphql_unavailable() -> bool:
 
 
 def reset_graphql_availability() -> None:
-    """Forget a remembered GraphQL-unavailable verdict (tests start from a clean slate)."""
+    """Forget a remembered GraphQL-unavailable verdict. Tests use this to reset state."""
     _GRAPHQL_STATE.unavailable = False
 
 
@@ -107,7 +102,7 @@ def _label(cmd: list[str]) -> str:
 
 
 def _sleep(seconds: float) -> None:
-    """Sleep for ``seconds`` (indirection so tests can stub backoff waits)."""
+    """Sleep for ``seconds``. Tests stub this function to skip backoff waits."""
     time.sleep(seconds)
 
 
@@ -184,8 +179,8 @@ def _run(
         if result.returncode == 0:
             return result
 
-        # Classify on the real output, but never raise a bare "failed:" when the
-        # command exited quietly: the exit code is the only clue left.
+        # Classify on the command's output. When it printed nothing, the error
+        # reports the exit code.
         detail = (result.stderr or result.stdout or "").strip()
         reported = detail or f"no output (exit code {result.returncode})"
         kind = gh_policy.classify_gh_failure(detail)
@@ -219,10 +214,9 @@ def run_gh_passthrough(
 ) -> int:
     """Run ``gh`` with its output on this terminal and return its exit code.
 
-    Commands such as ``gh pr list`` format their output for a terminal, so
-    standard output stays attached and nothing is captured or retried. Standard
-    error is captured only to recognize the GraphQL-unavailable verdict, and is
-    replayed once the command ends.
+    Standard output stays attached to this terminal, so it is not captured or
+    retried. Standard error is captured only to recognize the GraphQL-unavailable
+    verdict, and is replayed once the command ends.
 
     Raises:
         GhGraphqlUnavailableError: If the environment blocks GitHub GraphQL.
@@ -277,9 +271,8 @@ def _field_args(key: str, value: object) -> list[str]:
     Integers and booleans are typed parameters (``-F``), lists become repeated
     ``key[]`` fields, and everything else is a string (``-f``).
     """
-    # bool is a subclass of int, so both go through -F (typed parameters).
-    # gh expects JSON booleans, so serialize bool as lowercase true/false
-    # rather than Python's True/False, which gh would send as a string.
+    # bool is checked first because it subclasses int. Booleans are sent as
+    # lowercase true/false, since Python's True would reach gh as a string.
     if isinstance(value, bool):
         return ["-F", f"{key}={str(value).lower()}"]
     if isinstance(value, int):
@@ -293,8 +286,8 @@ def _graphql_data(payload: object) -> Any:
     """Return the ``data`` of a GraphQL response, or raise on errors or a missing body."""
     if not isinstance(payload, dict):
         raise GhError("Unexpected GraphQL response shape")
-    # gh exits non-zero on GraphQL errors (handled above), but a 200 response
-    # can still carry an errors array alongside partial data; catch that too.
+    # A 200 response can carry an errors array alongside partial data, so it is
+    # checked here too.
     errors = payload.get("errors")
     if errors:
         message = json.dumps(errors)
@@ -329,7 +322,7 @@ def graphql(
         run_fn: Optional injected subprocess runner.
         timeout: Per-attempt timeout in seconds.
         retries: Extra attempts for transient failures. Pass ``0`` for
-            non-idempotent mutations so a lost response never double-applies.
+            non-idempotent mutations.
 
     Returns:
         The ``data`` object from the GraphQL response.
@@ -367,14 +360,13 @@ def rest_text(
             and the JSON body for every other method.
         fields: Request parameters. ``GET`` sends them as query arguments (see
             :func:`_field_args` for the typing rules). Other methods send them
-            as a JSON body on standard input, so a long comment or PR body
-            never meets the operating system's per-argument size limit.
+            as a JSON body on standard input, so large bodies are not passed as
+            command-line arguments.
         headers: Extra ``Name: value`` request headers, such as an ``Accept`` type.
         run_fn: Optional injected subprocess runner.
         timeout: Per-attempt timeout in seconds.
         retries: Extra attempts for transient failures. Defaults to the shared
-            budget for ``GET`` and to none for mutations, so a lost response
-            never applies a write twice.
+            budget for ``GET`` and to none for other methods.
     """
     args = ["api", "--method", method, endpoint]
     stdin_text = None
@@ -423,8 +415,8 @@ def rest_pages(
 ) -> list[dict[str, Any]]:
     """Return every object of a paginated REST list, optionally capped at ``limit``.
 
-    Pages through ``per_page``/``page`` explicitly instead of ``gh api
-    --paginate`` so each page parses as one JSON document. ``items_key`` names
+    Pages through ``per_page``/``page`` explicitly, so each page parses as one
+    JSON document. ``items_key`` names
     the array inside an envelope response such as ``check_runs``. Objects that
     ``accept`` rejects are skipped and do not count toward ``limit``.
     """
@@ -513,10 +505,10 @@ def gh_or_rest(
 def resolve_repo(*, run_fn: RunFunction | None = None) -> str:
     """Return the ``owner/name`` slug for the current repository.
 
-    Tries the GitHub-aware ``gh repo view`` first. Without it (rate-limited,
-    or GraphQL blocked, which ``gh repo view`` needs), it reads the default
-    that ``gh repo set-default`` stored, then the ``origin`` git remote. A
-    ``GH_REPO`` override wins over all of them, as it does for ``gh`` itself.
+    Tries ``gh repo view`` first. If that fails (rate limited, or GraphQL
+    blocked), it reads the default stored by ``gh repo set-default``, then the
+    ``origin`` git remote. A ``GH_REPO`` override takes precedence over all of
+    them.
     """
     override = os.environ.get("GH_REPO", "").strip()
     if override:
@@ -542,9 +534,8 @@ def _repo_from_gh_default(*, run_fn: RunFunction | None = None) -> str:
     """Return the repository ``gh repo set-default`` chose, or ``""`` when none is set.
 
     gh marks the chosen remote with ``remote.<name>.gh-resolved``. The value is
-    ``base`` for that remote's own repository, or an ``owner/name`` in older gh
-    versions. A default that cannot be read raises rather than falling back to
-    ``origin``, which may be a fork with unrelated PR and issue numbers.
+    ``base`` for that remote's own repository, or an ``owner/name`` slug. An
+    unreadable default raises ``GhError`` and never falls back to ``origin``.
     """
     try:
         output = run_git(["config", "--get-regexp", r"^remote\..+\.gh-resolved$"], run_fn=run_fn)
@@ -581,8 +572,8 @@ def same_repo(a: str, b: str) -> bool:
 def require_checkout_repo(slug: str, action: str, *, run_fn: RunFunction | None = None) -> None:
     """Refuse an ``action`` that fetches from ``origin`` when ``origin`` is not ``slug``.
 
-    PR and issue numbers belong to one repository, so fetching ``pull/<n>/head``
-    or a base branch from a different one would use unrelated commits.
+    PR and issue numbers belong to one repository. Fetching ``pull/<n>/head`` or a
+    base branch from another repository would use unrelated commits.
     """
     local = _repo_from_remote(run_fn=run_fn)
     if not local:
@@ -611,10 +602,10 @@ def _repo_from_override(value: str) -> str:
 def _repo_from_remote(*, remote: str = "origin", run_fn: RunFunction | None = None) -> str:
     """Extract ``owner/name`` from a git remote's URL, ``origin`` by default.
 
-    Handles both SSH (``git@github.com:octo/Hello.git``,
-    ``ssh://git@github.com:22/octo/Hello.git``) and HTTPS forms. ``owner/name``
-    are always the final two path segments, so any leading ``:`` separator or
-    host port is skipped.
+    Handles SSH (``git@github.com:octo/Hello.git``,
+    ``ssh://git@github.com:22/octo/Hello.git``) and HTTPS forms. The final two
+    path segments are ``owner/name``. Any ``:`` separator or host port before
+    them is ignored.
     """
     try:
         url = run_git(["remote", "get-url", remote], run_fn=run_fn)
@@ -730,7 +721,7 @@ def _head_repo_matches(pull: dict[str, Any], repo: str | None) -> bool:
 
     A head filter names only the owner, so two repositories of one owner can
     share a branch name. A PR whose source repository was deleted reports none,
-    and it is kept rather than lost.
+    and it is kept.
     """
     if repo is None:
         return True
@@ -756,7 +747,8 @@ def _local_heads(
 def _recorded_head(pull: dict[str, Any], branch: str, owner: str) -> tuple[str, str, str | None]:
     """Return the ``(owner, branch, source repository)`` head a recorded PR names.
 
-    A fork checkout's local branch is prefixed, so the PR's own head is used.
+    Uses the PR's own head ref rather than the local branch name, which a fork
+    checkout may prefix.
     """
     head = as_object(pull.get("head"))
     head_owner = as_object(as_object(head.get("repo")).get("owner")).get("login")
@@ -774,8 +766,7 @@ def _find_pull_number(
 ) -> int | None:
     """Return the number of the first PR on any of ``heads``, open ones before closed ones.
 
-    Every candidate head is searched for an open PR before any closed one, so a
-    closed PR on a tracked branch never hides an open PR on the local name.
+    Every candidate head is searched for an open PR before any closed one.
     """
     for state in ("open", "closed"):
         for head_owner, head_branch, head_repo in heads:
@@ -797,13 +788,11 @@ def _current_pr_number_rest(*, run_fn: RunFunction | None = None) -> int:
     """Find the PR whose head is the current branch through the REST API.
 
     Like ``gh pr view``, an open PR wins. Otherwise the newest closed or merged
-    one counts, so a branch merged through the fallback still finds its PR. A
-    recorded PR that is no longer open yields to a newer open PR on its head.
-    Without a recorded PR, the upstream the branch tracks is tried first, then
-    origin's owner with the local name, which covers a branch that has not been
-    pushed with ``-u`` yet. An open PR on either head beats a closed one. Each
-    head names its source repository, so a same-named branch in another
-    repository of the same owner is never taken for it.
+    PR is returned. A recorded PR that is no longer open yields to a newer open PR
+    on its head. Without a recorded PR, the tracked upstream is tried first, then
+    origin's owner with the local name. An open PR on either head beats a closed
+    one. Each head names its source repository, so a same-named branch in another
+    repository of the same owner is not matched.
     """
     branch = current_branch(run_fn=run_fn)
     slug = resolve_repo(run_fn=run_fn)

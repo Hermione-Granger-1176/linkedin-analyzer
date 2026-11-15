@@ -7,10 +7,10 @@ Prettier configuration and compared with the file on disk as a unified diff.
 
 A difference is the expected result and exits 0. A Prettier failure, such as a
 syntax error or an unreadable file, stops the run and returns Prettier's exit
-code, because a diff of half-formatted output would be misleading.
+code.
 
-Both sides are read as bytes and decoded without newline translation, so a
-file whose only problem is CRLF line endings still shows a diff.
+Both sides are decoded without newline translation, so CRLF-only differences
+produce a diff.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ PRETTIER_ARGS = (
 )
 
 # A formatter takes the command vector and returns the completed process.
-# Injectable so tests never start Prettier.
+# Tests pass a fake formatter.
 Formatter = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 

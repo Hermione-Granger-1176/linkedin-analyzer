@@ -1,9 +1,9 @@
 """Issue management commands behind the ``make issue-*`` targets.
 
-Each command runs the same ``gh issue ...`` invocation the Makefile used to call
-inline, with standard output left on the terminal so ``gh`` formats it exactly
-as before. When the environment blocks GitHub GraphQL, the command is rebuilt on
-the REST API instead. The functions return the process exit code.
+Each command runs the matching ``gh issue ...`` invocation with standard output
+left on the terminal, so ``gh`` formats it. When GitHub GraphQL is blocked, the
+command is rebuilt on the REST API instead. The functions return the process exit
+code.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ def list_issues(
         *_flag("--search", search),
     ]
 
-    # gh's --assignee is a single-value flag, so a repeated one keeps the last value.
+    # gh's --assignee takes a single value, so the REST path also uses only the last one.
     last_assignee = assignees[-1] if assignees else None
 
     def list_with_rest() -> int:
@@ -244,8 +244,7 @@ def edit_issue(
 ) -> int:
     """Change an issue's title and/or body (``gh issue edit``).
 
-    ``body`` is piped to ``--body-file -`` so a large body never hits the
-    command-line length limit.
+    ``body`` is piped to ``--body-file -``.
     """
     if title is None and body is None:
         raise GhError("Provide a title or body to edit.")
@@ -283,9 +282,8 @@ def label_issue(
             gh_runner.rest(f"{path}/labels", method="POST", fields={"labels": names}, run_fn=run_fn)
             print(f"Added labels to issue #{issue}: {labels}")
             return 0
-        # Deleting a label the issue does not carry is a 404, while gh treats it
-        # as a no-op, so only the labels actually present are removed, under the
-        # spelling the issue uses.
+        # Only labels the issue carries are removed, using the spelling the issue
+        # uses. Deleting an absent label returns 404, which gh treats as a no-op.
         current = _labels_of(as_object(gh_runner.rest(path, run_fn=run_fn)))
         present = {label.lower(): label for label in current}
         for name in names:
@@ -414,7 +412,7 @@ def develop_issue(
         target = base or gh_runner.default_branch(slug, run_fn=run_fn)
         branch = name or _branch_name(issue, slug, run_fn=run_fn)
         gh_runner.run_git(["fetch", "origin", target], run_fn=run_fn)
-        # FETCH_HEAD exists even in a clone whose refspec has no origin/<target>.
+        # Checks out from FETCH_HEAD, which exists even when no origin/<target> ref does.
         gh_runner.run_git(["checkout", "-b", branch, "--no-track", "FETCH_HEAD"], run_fn=run_fn)
         print(
             f"Created and checked out {branch} from {target}. GitHub GraphQL is unavailable, "

@@ -20,10 +20,8 @@ describe("computeWorkerTimeout", () => {
     });
 
     it("sums however many files the caller was given", () => {
-        // Variadic so a caller with one file passes one, rather than padding
-        // the call with an empty second file it does not have. Summing means
-        // three half-megabyte files clear a whole megabyte together, the way
-        // two would.
+        // Takes any number of files and sums their sizes, so three half-megabyte
+        // files add up to one megabyte together.
         const halfMb = "a".repeat(Math.floor(0.5 * 1024 * 1024));
         expect(computeWorkerTimeout()).toBe(30000);
         expect(computeWorkerTimeout(halfMb)).toBe(30000);

@@ -47,15 +47,13 @@ const READ_PROGRESS_SPAN = 0.3;
 // Post a read progress update only when it moves the bar at least this much.
 const READ_PROGRESS_STEP = 0.01;
 
-// Requests run one at a time in arrival order, because reading a file is
-// asynchronous. Clear runs at once instead: it aborts the read in flight, bumps
-// the epoch so requests from before it drop their results, and starts a fresh
-// queue so a request after it never waits on a stale read.
+// Requests run one at a time in arrival order. Clear runs at once instead: it
+// aborts the read in flight, bumps the epoch so earlier requests drop their
+// results, and resets the queue.
 let requestQueue = Promise.resolve();
 let requestEpoch = 0;
-// addFile requests waiting behind the one running. A batch of uploads arrives
-// as several addFile requests at once, so analytics are computed once, by the
-// last of them, rather than after every file.
+// Count of addFile requests queued behind the running one. Analytics are
+// computed once, by the last queued addFile in a batch.
 let queuedAddFiles = 0;
 // True when the source datasets changed after analytics were last computed.
 let analyticsStale = false;
@@ -98,7 +96,7 @@ function getViewKey(filters) {
 
 /**
  * Recompute analytics aggregates from the current shares, comments, and
- * connections data. Clears the view cache since aggregates have changed.
+ * connections data. Clears the view cache.
  */
 function computeAnalytics() {
     analytics = AnalyticsEngine.compute(sharesData, commentsData, connectionsData);
@@ -152,10 +150,9 @@ function hydrateAnalytics(base) {
 
 /**
  * Post an error message back to the main thread.
- * `message` must be a static description (or an Error message from the parser /
- * analytics engine, which never interpolate row/cell content) so the value that
- * `analytics-ui` forwards to Sentry can never carry user data. `worker-contracts`
- * also length-caps it on receipt.
+ * `message` must be a static description, or an Error message from the parser or
+ * analytics engine (neither interpolates row or cell content). `analytics-ui`
+ * forwards it to Sentry. `worker-contracts` also length-caps it on receipt.
  * @param {RequestId} requestId - ID of the originating request
  * @param {string} message - Human-readable error description
  */
@@ -265,7 +262,7 @@ async function readUpload(read, jobId, fileName, epoch) {
     };
     try {
         const result = await read({ signal: controller.signal, onProgress });
-        // A Clear during the last read can let it finish with done; drop it.
+        // Drop the result when Clear arrives during the read.
         return controller.signal.aborted || epoch !== requestEpoch ? null : result;
     } catch (error) {
         if (controller.signal.aborted) {
@@ -283,11 +280,11 @@ async function readUpload(read, jobId, fileName, epoch) {
  * Read, parse, and clean an uploaded File.
  *
  * Where the File can be streamed, each decoded chunk is parsed and cleaned as
- * it arrives, so the full text and the full row arrays are never built. The
- * page stores the original File, so no text goes back. When the streaming
+ * it arrives. Neither the full text nor the full row arrays are built. The page
+ * stores the original File, so no text is posted back. When the streaming
  * processor cannot finish (an error, or no type found in the prefix), the File
- * is read again whole and process() runs on that text, so results and
- * messages match the whole-text path.
+ * is read again whole and process() runs on that text. Results match the
+ * whole-text path.
  * Resolves null when a clear cancels the read.
  * @param {File} file - Uploaded file
  * @param {string|null} jobId - Upload job ID
@@ -341,8 +338,8 @@ async function readAndProcessUpload(file, jobId, fileName, epoch) {
 
 /**
  * Process an uploaded CSV file: read, parse, clean, recompute analytics, and
- * reply. The page posts the File so the read happens here, off the main
- * thread, and stores that File itself, so the reply carries no text.
+ * reply. The page posts the File, so the read happens here, off the main
+ * thread. The reply carries no text.
  * @param {import("../../app/worker-contracts.ts").AddFilePayload} payload - File and name
  * @returns {Promise<void>}
  */
@@ -448,9 +445,8 @@ async function handleRestoreFiles(payload) {
             try {
                 parsed = await processCsvSource(source, type, { signal: controller.signal });
             } catch {
-                // A stored Blob the browser can no longer read counts as absent,
-                // like a file that fails to parse, so it cannot fail the other
-                // types' restore.
+                // A stored Blob that cannot be read counts as absent, like a file
+                // that fails to parse. The other types still restore.
                 parsed = null;
             }
             // Do not restore data after Clear arrives during the read.
@@ -474,8 +470,8 @@ async function handleRestoreFiles(payload) {
     const hasPostingSource = Boolean(sharesData?.length || commentsData?.length);
 
     // Seed source datasets for the next addFile request. handleAddFile computes
-    // and persists the dashboard aggregate. Clear the old aggregate so a view
-    // cannot read it between restoration and recomputation.
+    // the dashboard aggregate. The old aggregate is cleared, so a view cannot
+    // read it between restoration and recomputation.
     resetAnalyticsState();
 
     self.postMessage({
@@ -568,10 +564,10 @@ function handleClear() {
  */
 function cancelPendingRequests() {
     requestEpoch += 1;
-    // Stale reads may still be settling; they drop their results by epoch,
-    // so nothing after the clear has to wait for them.
+    // Stale reads may still be settling. They drop their results by epoch and
+    // are not awaited.
     requestQueue = Promise.resolve();
-    // The queued addFile requests are skipped, so none of them will count down.
+    // Skipped addFile requests never decrement the count, so it is reset here.
     queuedAddFiles = 0;
     if (activeRead) {
         activeRead.abort();
@@ -624,8 +620,8 @@ function handleMessage(event) {
         handleClear();
         return undefined;
     }
-    // Each case reads its own payload so the request type narrows it. Only a
-    // view request carries an id; a failure in the others reports id zero.
+    // Each case reads its own payload. Only a view request carries an id; a
+    // failure in the others reports id zero.
     switch (message.type) {
         case "addFile": {
             const { payload } = message;

@@ -4,8 +4,9 @@
  * Load jsPDF and the export runtime on demand. Collect data, register fonts,
  * render the document, and download it through a temporary object URL.
  *
- * Names and message contents require separate opt-ins. Discard caught values
- * and report fixed errors because failures may contain uploaded data.
+ * Names and message contents each need their own opt-in. Caught values are
+ * discarded and only fixed error text is reported, since failures may contain
+ * uploaded data.
  */
 
 import { captureError } from "../../platform/observability/sentry.js";
@@ -70,17 +71,17 @@ export const PdfExport = (() => {
     let initialized = false;
     let isOpen = false;
     let isGenerating = false;
-    // The trigger is aria-disabled rather than natively disabled, so it can
-    // still be clicked and activated by keyboard; open() consults this instead.
+    // The trigger uses aria-disabled rather than native disabled, so it stays
+    // focusable. open() checks this flag.
     let isAvailable = false;
-    // Bumped on every availability check so an older storage read that finishes
-    // late cannot overwrite a newer answer.
+    // Bumped on every availability check. A result is applied only if its token
+    // is still current.
     let availabilityToken = 0;
     /** @type {HTMLElement|null} */
     let lastFocused = null;
-    // Bumped whenever an export starts or is abandoned. A run whose token is no
-    // longer the current one has been cancelled: it must not download, touch the
-    // dialog, move focus or hide an overlay that now belongs to another run.
+    // Bumped when an export starts or is abandoned. A run whose token is no longer
+    // current is cancelled and must not download, touch the dialog, move focus,
+    // or hide an overlay owned by another run.
     let generationToken = 0;
     /**
      * The export's own modules, once a run has fetched them.
@@ -125,8 +126,7 @@ export const PdfExport = (() => {
         }
 
         const resolved = resolveElements();
-        // Checking only some of them left the rest to throw during boot and take
-        // the whole app down with them.
+        // If any required node is missing, init does nothing.
         if (REQUIRED_ELEMENTS.some((name) => !resolved[name])) {
             return;
         }
@@ -171,10 +171,8 @@ export const PdfExport = (() => {
                 operation: "check-availability",
             });
         }
-        // A check started before this one may still be in flight; whichever
-        // storage read finishes last would otherwise win, and an upload's
-        // "available" could be overwritten by a stale "unavailable" for the
-        // rest of the session.
+        // Results from superseded checks are ignored, so a late read cannot
+        // overwrite a newer answer.
         if (token !== availabilityToken) {
             return;
         }
@@ -196,8 +194,7 @@ export const PdfExport = (() => {
         isOpen = true;
         lastFocused = /** @type {HTMLElement|null} */ (document.activeElement);
         hideError();
-        // Both opt-ins reset on every open: an export is a fresh decision about
-        // what leaves the browser, never a setting the dialog remembers for you.
+        // Both opt-ins reset on every open.
         elements.includeNames.checked = false;
         elements.includeMessages.checked = false;
         elements.backdrop.hidden = false;
@@ -223,9 +220,7 @@ export const PdfExport = (() => {
     /**
      * Close the dialog and hand focus back to the trigger.
      *
-     * Closing during a generation cancels it. Cancel is the one control still
-     * enabled while an export runs, so a dialog that refused to close would be
-     * one a keyboard user could not leave.
+     * Closing during a generation cancels it.
      */
     function close() {
         if (!isOpen) {
@@ -243,8 +238,7 @@ export const PdfExport = (() => {
 
     /**
      * Check whether focus can return to the recorded element.
-     * Exclude body, which may remain active after a pointer click and does not
-     * provide a useful focus destination.
+     * Excludes body, which is not a useful focus target.
      * @param {HTMLElement|null} node - Node recorded when the dialog opened
      * @returns {node is HTMLElement} True when focusing it would land somewhere useful
      */
@@ -256,8 +250,8 @@ export const PdfExport = (() => {
 
     /**
      * Cancel the active export and reset the dialog.
-     * Terminate workers only if their runtime is already loaded. Cancelling
-     * before the runtime arrives must not fetch it solely for cleanup.
+     * Terminates workers only if the runtime is loaded. The runtime is never
+     * fetched for cleanup.
      */
     function cancelGeneration() {
         generationToken += 1;
@@ -273,8 +267,7 @@ export const PdfExport = (() => {
      * @param {KeyboardEvent} event - Key event
      */
     function handleKeydown(event) {
-        // The document listener can outlive the dialog it was bound with. Ignore
-        // events when the dialog is no longer connected to the document.
+        // Ignores events when the dialog is no longer connected to the document.
         if (!isOpen || !elements.dialog.isConnected) {
             return;
         }
@@ -308,10 +301,8 @@ export const PdfExport = (() => {
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         const active = document.activeElement;
-        // Clicking the dialog's heading, its text or its padding focuses none of
-        // them and leaves activeElement on <body>. That is neither first nor
-        // last, so without this the native Tab ran and walked focus into the
-        // page behind an aria-modal dialog.
+        // If focus is outside the dialog (for example on body after a click on its
+        // heading), Tab wraps to the first or last control instead of leaving it.
         if (!elements.dialog.contains(active)) {
             return backwards ? last : first;
         }
@@ -338,9 +329,8 @@ export const PdfExport = (() => {
     }
 
     /**
-     * Set the dialog's busy state while keeping Cancel enabled.
-     * Cancel provides a focus target for the Tab trap. Announce progress through
-     * the live region because a disabled button's label may not be reread.
+     * Set the dialog's busy state. Cancel stays enabled as a focus target for the
+     * Tab trap. Progress is announced through the live region.
      * @param {boolean} busy - Whether an export is running
      */
     function setBusy(busy) {
@@ -357,8 +347,7 @@ export const PdfExport = (() => {
         }
 
         elements.status.textContent = "Generating your PDF. Cancel to stop.";
-        // Confirm started this operation and is now disabled,
-        // which drops focus onto the body. Cancel is the only thing left to do.
+        // Disabling Confirm moves focus to body, so focus moves to Cancel.
         elements.cancel.focus();
     }
 
@@ -377,9 +366,8 @@ export const PdfExport = (() => {
     /**
      * Fetch the export's own modules, at most once a session.
      *
-     * The promise is kept rather than only the modules, so a second export
-     * started before the first has finished still shares the one fetch. A failed
-     * fetch is not cached, so the next attempt can fetch the chunk again.
+     * The promise is kept, so an export started before the first finishes shares
+     * its fetch. A failed fetch is not cached.
      * @returns {Promise<typeof import("./pdf-runtime.js")>} Loaded modules
      */
     function loadExportRuntime() {
@@ -418,11 +406,9 @@ export const PdfExport = (() => {
         });
 
         try {
-            // Two chunks, fetched together rather than one after the other: a
-            // run needs both before it can draw anything, and a failure in
-            // either is the same failure to the user. The cancellation check
-            // below covers the wait: a run abandoned while its own code is
-            // still on the wire must not carry on once it lands.
+            // Two chunks, fetched together. A run needs both before it can draw,
+            // and a failure in either fails the run. A run cancelled during the
+            // fetch returns once the chunks arrive.
             const [{ jsPDF }, runtime] = await Promise.all([
                 import("jspdf"),
                 loadExportRuntime(),
@@ -441,8 +427,7 @@ export const PdfExport = (() => {
                 includeNames,
                 includeMessages,
                 generatedAt,
-                // Checking only on the way back is not enough: collection walks
-                // several storage reads before it reaches either worker, and
+                // Collection checks cancellation during its storage reads, since
                 // terminating a worker that does not exist yet does nothing.
                 isCancelled,
             });
@@ -453,30 +438,26 @@ export const PdfExport = (() => {
             runtime.renderPdfDocument(doc, data, { palette, fonts });
             downloadBlob(doc.output("blob"), buildFilename(generatedAt));
 
-            // Clear busy before close(), which cancels a generation
-            // it still believes is running, so the other order would terminate
-            // both workers and bump the token for a run that completed download,
-            // making the finally below skip hiding its own overlay.
+            // setBusy(false) runs before close(), because close() cancels a
+            // generation that is still marked busy. Reversing the order would bump
+            // the token for a completed run, so the finally block would skip
+            // hiding its overlay.
             setBusy(false);
             close();
             downloaded = true;
         } catch (error) {
-            // A failure the user already walked away from is not worth reporting
-            // or showing, and the dialog it would write into may be reopened.
+            // A cancelled run's failure is neither reported nor shown.
             if (isCancelled()) {
                 return;
             }
-            // A refusal is not a failure: its text is fixed and says what to
-            // change, so it is shown as is and not reported.
+            // A refusal is shown as is and not reported.
             if (error instanceof ExportRefusal) {
                 setBusy(false);
                 showError(error.message);
                 return;
             }
-            // The caught value is discarded on purpose: this catch surrounds CSV
-            // parsing, contact identities, message bodies and jsPDF rendering, so
-            // anything it holds could carry the user's own text. Only a fixed
-            // error crosses into telemetry.
+            // The caught value is discarded, since it can carry the user's own
+            // text. Only a fixed error is reported to telemetry.
             captureError(new Error("PDF generation failed."), {
                 module: "pdf-export",
                 operation: "generate",
@@ -484,15 +465,14 @@ export const PdfExport = (() => {
             setBusy(false);
             showError(GENERIC_ERROR);
         } finally {
-            // A cancelled run's overlay is already down, and by now the source
-            // may belong to a newer run.
+            // A cancelled run leaves the overlay alone, since it may now belong to a newer run.
             if (!isCancelled()) {
                 LoadingOverlay.hide(OVERLAY_SOURCE);
             }
         }
 
-        // Celebrate after triggering the download. Keep this outside the catch
-        // so a celebration error does not mark the export as failed.
+        // Celebrates after the download is triggered. Kept outside the catch, so a
+        // celebration error does not mark the export as failed.
         if (downloaded) {
             celebrateStaple();
         }

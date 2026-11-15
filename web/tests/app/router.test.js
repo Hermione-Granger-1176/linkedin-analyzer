@@ -40,10 +40,8 @@ describe("AppRouter navigation", () => {
 
     it("hashchange listener redirects unknown routes to default", () => {
         AppRouter.registerRoute("home");
-        // navigate to unknown route via the router itself to trigger hash handling
-        // (jsdom's location.hash setter triggers hashchange)
+        // Navigates to a registered route and checks that it becomes current.
         AppRouter.navigate("home", {}, { replaceHistory: true });
-        // Verify the router is on a known route
         const route = AppRouter.getCurrentRoute();
         expect(route).not.toBeNull();
         expect(route.name).toBe("home");
@@ -113,7 +111,7 @@ describe("AppRouter navigation", () => {
     });
 
     it("sharedParams applies default value when no stored value exists", () => {
-        // Use a unique param key to avoid bleeding from previous tests that stored 'range'
+        // Shared param values persist across navigations, so this test uses a key no other test sets.
         AppRouter.registerRoute("myroute", {
             sharedParams: ["myuniquetimeframe"],
             defaultParams: { myuniquetimeframe: "12m" }

@@ -248,7 +248,7 @@ describe("SketchCharts", () => {
                 break;
             }
         }
-        // We may or may not find an item, but the hit test code should have run
+        // Runs the hit test over the ring. The result is not asserted.
         expect(typeof SketchCharts.getItemAt).toBe("function");
     });
 
@@ -402,8 +402,7 @@ describe("SketchCharts", () => {
 
         SketchCharts.exportPng(canvas, "empty.png");
 
-        // An empty chart keeps a registered redraw, so exporting reproduces the
-        // message instead of being a no-op.
+        // An empty chart keeps its redraw registered, so export draws the message again.
         const labels = ctx.fillText.mock.calls.map((args) => String(args[0]));
         expect(labels).toContain("No activity yet.");
         expect(createUrl).toHaveBeenCalled();
@@ -418,8 +417,7 @@ describe("SketchCharts", () => {
         ];
         SketchCharts.drawTimeline(canvas, data, "all", 1, 0);
         const labels = ctx.fillText.mock.calls.map((args) => String(args[0]));
-        // Flat value-1 data gets a max of 2, so the axis shows a "2" tick and the
-        // points are no longer pinned to the top edge.
+        // Flat value-1 data gets a max of 2, so the axis shows a "2" tick.
         expect(labels).toContain("2");
         expect(labels).toContain("0");
     });

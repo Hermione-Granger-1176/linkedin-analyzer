@@ -8,8 +8,8 @@
  *   messages  the page-side message state, then each field it keeps
  *   analytics the AnalyticsEngine state for shares and comments
  *
- * The web modules load through Vite in `measurement` mode, so a 100 MB export
- * passes the raised upload limits the same way it does in `make bench-browser`.
+ * The web modules load through Vite in `measurement` mode, which raises the upload
+ * limits, so a 100 MB export passes as it does in `make bench-browser`.
  *
  * Usage:
  *   make audit-state [input_dir=path] [strict=1]

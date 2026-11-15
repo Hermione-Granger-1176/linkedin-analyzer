@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 
 export const REPO = fileURLToPath(new URL("../..", import.meta.url));
-// Match the Makefile's overridable NPM launcher instead of hard-coding "npm".
+// Uses the Makefile's overridable NPM launcher.
 const NPM = process.env.NPM || "npm";
 const SERVER_TIMEOUT_MS = 120000;
 const KILL_TIMEOUT_MS = 5000;
@@ -29,17 +29,16 @@ export const EXPORT_FILES = {
     connections: "Connections.csv",
 };
 const STATUS_IDS = ["sharesStatus", "commentsStatus", "messagesStatus", "connectionsStatus"];
-// Confirms a readiness response is our own app, not an unrelated listener that
-// held the port before strictPort forced the preview process to exit.
+// Identifies the app's own readiness response, not another listener on the port.
 const APP_TITLE_MARKER = "<title>LinkedIn Analyzer</title>";
-// Persisted consent plus a build-time DSN is what starts Sentry; clearing this
-// key before boot keeps measurement runs reliably no-telemetry.
+// Stored consent and a build-time DSN start Sentry. The key is cleared before boot,
+// so measurement runs send no telemetry.
 const TELEMETRY_CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
 
 /**
- * Per-route readiness signals, copied from web/e2e/app.e2e.spec.js, so each
- * route's real IndexedDB reads and Web Worker processing complete before a
- * measurement. Keys drive both the hash navigation and the wait.
+ * Per-route readiness signals, matching web/e2e/app.e2e.spec.js. Each route's
+ * IndexedDB reads and Web Worker processing complete before a measurement starts.
+ * Keys drive both the hash navigation and the wait.
  * @param {number} timeout - Wait limit in milliseconds.
  */
 export function routeReady(timeout) {
@@ -105,8 +104,8 @@ export function buildApp({ measurementLimits = false } = {}) {
 }
 
 /**
- * Serve the built bundle. detached lets us kill the whole preview process group
- * (npm plus vite) on teardown.
+ * Serve the built bundle. detached starts a process group, so teardown can signal
+ * npm and vite together.
  * @param {number} port - Port to listen on.
  */
 export function startPreview(port) {
@@ -182,9 +181,8 @@ export async function waitForServer(url, preview) {
     };
     preview.on("exit", onExit);
     preview.on("error", onError);
-    // The child may have already exited (for example strictPort found the port
-    // taken) before these listeners attached; seed from its recorded state so
-    // fail-fast stays reliable.
+    // The child may have exited before these listeners attached, so its recorded
+    // state seeds childExit.
     if (preview.exitCode !== null) {
         childExit = `code ${preview.exitCode}`;
     } else if (preview.signalCode !== null) {
@@ -261,8 +259,8 @@ export async function uploadExport(page, inputDir, timeout) {
 }
 
 /**
- * Navigate within the SPA by changing the hash rather than reloading, so the
- * upload and every screen accumulate in one continuous session.
+ * Navigate within the SPA by changing the hash, without reloading, so the session
+ * stays continuous.
  * @param {import("@playwright/test").Page} page - App page.
  * @param {string} route - Route name without the hash.
  * @param {number} timeout - Wait limit in milliseconds.

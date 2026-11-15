@@ -3,7 +3,7 @@
  *
  * Wrap text into rows, group rows into blocks, and place blocks on pages.
  * Blocks marked to stay together move to the next page when needed. Blocks
- * taller than a page split by row so long messages can span pages.
+ * taller than a page split by row.
  *
  * Dashboard sections correspond to app screens. The first follows the title
  * on page one. Each later dashboard starts on a new page.
@@ -36,8 +36,7 @@ const RULE_RADIUS = 0.6;
 /** Width available to text inside a gutter-indented card, in millimetres. */
 const CARD_TEXT_WIDTH = CONTENT_WIDTH - CARD_GUTTER - CARD_PADDING;
 
-// Insight titles wrap short of the card edge so a long one does not crowd the
-// rounded corner.
+// Insight titles wrap this far short of the card edge.
 const TITLE_RIGHT_SLACK = 10;
 
 const CHIP_WIDTH = 15;
@@ -51,8 +50,8 @@ const STAT_COLUMNS = 2;
 const STAT_GAP = 5;
 const STAT_TILE_HEIGHT = 19;
 
-// Select columns by tile count to avoid partially filled rows for up to six
-// tiles. Larger grids use three columns.
+// Tiles per row, indexed by tile count minus one, for up to six tiles. Larger
+// grids use three columns.
 const DASHBOARD_STAT_COLUMNS = Object.freeze([1, 2, 3, 2, 5, 3]);
 const DEFAULT_DASHBOARD_STAT_COLUMNS = 3;
 
@@ -168,7 +167,7 @@ function leadingRequirement(blocks, from, usableHeight) {
  *
  * A keepTogether block with keepWithNext also reserves the height needed to
  * start the next block. Ignore that flag on the row-by-row path. Honor
- * pageBreakBefore only on a non-empty page to avoid blank pages.
+ * pageBreakBefore only on a non-empty page, so no blank page is produced.
  * @param {Block[]} blocks - Blocks in document order
  * @param {number} usableHeight - Height available on one page
  * @returns {Segment[][]} Placed segments per page
@@ -201,9 +200,7 @@ export function paginateBlocks(blocks, usableHeight) {
         if (block.keepTogether && height <= usableHeight) {
             let required = height;
             if (block.keepWithNext) {
-                // Falls back to the block's own height when the pair cannot
-                // share a page at all, so an unsatisfiable request cannot loop
-                // pages.
+                // Falls back to the block's own height when the pair cannot share a page.
                 const withNext =
                     height + spacingAfter + leadingRequirement(blocks, index + 1, usableHeight);
                 if (withNext <= usableHeight) {
@@ -221,11 +218,9 @@ export function paginateBlocks(blocks, usableHeight) {
         let pending = [];
         let start = cursor;
         for (const row of block.rows) {
-            // A row is one indivisible drawing unit, so a row taller than the
-            // whole content area cannot be placed without painting through the
-            // footer and off the sheet. No row builder produces one - every row
-            // is line-height based - but dropping it keeps "nothing outside the
-            // margins" true rather than merely likely.
+            // A row is indivisible, so a row taller than the content area is
+            // dropped. Painting it would run past the footer and off the sheet.
+            // No row builder currently produces one.
             if (row.height > usableHeight) {
                 continue;
             }
@@ -286,7 +281,7 @@ export function createPainter(doc, palette, fonts) {
 
     /**
      * Measure a line of text for truncation and plot placement.
-     * Use its actual width because wrapping reports word boundaries.
+     * Returns the measured width of the text.
      * @param {string} text - Line text
      * @param {string} family - Registered family name
      * @param {number} size - Font size in points
@@ -591,11 +586,8 @@ function buildInsightBlock(painter, insight, index) {
                         { align: "center" },
                     );
                 }
-                // The accent stays the card's rule and roundel, exactly as the
-                // Insights screen uses it for the border and icon; the heading is
-                // measured against the tint rather than taking the accent, which
-                // on this palette lands on `--text-primary`, as it does on
-                // screen.
+                // The accent is used for the rule and roundel only. The heading takes
+                // the more readable palette text color against the tint.
                 painter.text(
                     line,
                     x + CARD_GUTTER,
@@ -661,16 +653,14 @@ function buildTipBlock(painter, tip) {
 
 /**
  * Fit a stat value inside its tile.
- * Reduce font size before truncating so long company names cannot overlap
- * adjacent tiles.
+ * Reduces font size before truncating, so long values stay within their tile.
  * @param {Painter} painter - Drawing helpers
  * @param {string|null|undefined} value - Stat value
  * @param {number} width - Width available inside the tile
  * @returns {{text: string, size: number}} Text to draw and the size to draw it at
  */
 function fitStatValue(painter, value, width) {
-    // A tile whose value never arrived is left blank rather than cut down to an
-    // ellipsis standing for nothing.
+    // A missing value is drawn as an empty string.
     const text = value ?? "";
     let longest = "";
     for (const size of STAT_VALUE_SIZES) {
@@ -680,8 +670,8 @@ function fitStatValue(painter, value, width) {
         }
         longest = first;
     }
-    // The last iteration already wrapped at the smallest size, so its first line
-    // is the most that size can hold; measuring it again would say the same.
+    // The last iteration wrapped at the smallest size, so its first line is the
+    // most that size holds.
     return { text: `${longest.trimEnd()}…`, size: STAT_VALUE_SIZES[STAT_VALUE_SIZES.length - 1] };
 }
 
@@ -695,7 +685,7 @@ function dashboardStatColumns(count) {
 }
 
 /**
- * Build a grid of stat tiles, the shape the site's stat bars take on paper.
+ * Build a grid of stat tiles.
  * @param {Painter} painter - Drawing helpers
  * @param {Array<{label: string, value: string}>} stats - Stats in display order
  * @param {number} [columns] - Tiles per row
@@ -769,8 +759,7 @@ function buildThreadHeaderBlock(painter, thread) {
     const nameSize = 12.5;
     const metaSize = 8.5;
     const plural = thread.messageCount === 1 ? "message" : "messages";
-    // A long name, a group thread listing several people, or the profile-URL
-    // fallback all overrun the right margin if they are drawn unmeasured.
+    // Names are wrapped to the content width.
     const nameLines = painter.wrap(thread.name, CONTENT_WIDTH, fonts.body, nameSize);
 
     /** @type {Row[]} */
@@ -951,8 +940,8 @@ const CHART_BUILDERS =
  * @returns {boolean} True when the chart carries data
  */
 function hasChartData(chart) {
-    // Read through one loose view: the model crosses no contract, so a chart may
-    // carry any of these whatever its `type` says.
+    // Read through one loose view, since a chart may carry any of these fields
+    // whatever its type says.
     const fields = /** @type {{grid?: number[][], points?: unknown[], items?: unknown[]}} */ (
         chart
     );
@@ -998,7 +987,7 @@ function buildDashboardBlocks(painter, dashboard, pageBreakBefore) {
     }
     for (const chart of charts) {
         const build = CHART_BUILDERS[chart.type];
-        // Skip unsupported chart types so the rest of the export can finish.
+        // Unsupported chart types are skipped.
         if (!build) {
             continue;
         }
@@ -1026,9 +1015,9 @@ export function buildBlocks(painter, data) {
 
     const blocks = [buildHeaderBlock(painter, data)];
 
-    // Put the first non-empty section after the title on page one. Start each
-    // later section on a new page. Check the blocks already added so an empty
-    // section does not leave the title alone on its page.
+    // The first non-empty section follows the title on page one. Later sections
+    // start on a new page. The check uses the blocks already added, so an empty
+    // section does not leave the title alone.
     for (const dashboard of dashboards) {
         blocks.push(...buildDashboardBlocks(painter, dashboard, blocks.length > 1));
     }
@@ -1070,8 +1059,8 @@ export function buildBlocks(painter, data) {
 
 /**
  * Draw a continuation heading in the top margin.
- * The page painter knows which dashboard continues only after pagination,
- * so the heading is page decoration rather than a measured block.
+ * Drawn in the top margin, not as a measured block, since the continuation
+ * is known only after pagination.
  * @param {Painter} painter - Drawing helpers
  * @param {string} label - Continuation text
  */
@@ -1126,8 +1115,8 @@ function drawFooter(painter, pageNumber, pageCount) {
 export function renderPdfDocument(doc, data, theme) {
     const painter = createPainter(doc, theme.palette, theme.fonts);
     const pages = paginateBlocks(buildBlocks(painter, data), USABLE_HEIGHT);
-    // buildBlocks always emits at least the header, so an empty result would
-    // mean no rows at all; render one blank page rather than nothing.
+    // buildBlocks always emits the header, so an empty result means no rows. One
+    // blank page is rendered in that case.
     const placed = pages.length ? pages : [[]];
 
     placed.forEach((segments, pageIndex) => {
@@ -1136,9 +1125,8 @@ export function renderPdfDocument(doc, data, theme) {
         }
         painter.fillRect(0, 0, PAGE.width, PAGE.height, theme.palette["--bg-primary"]);
 
-        // A page whose first block carries a continuation label is a page that
-        // opened part way through a dashboard: the heading itself never carries
-        // one, so a page that starts with it is the section's own first page.
+        // A page whose first block has a continuation label opened partway through
+        // a dashboard. Section headings have no continuation label.
         const [opening] = segments;
         if (opening && opening.block.continuation) {
             drawRunningHead(painter, opening.block.continuation);

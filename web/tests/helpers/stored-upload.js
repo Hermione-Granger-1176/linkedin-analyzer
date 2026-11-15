@@ -1,7 +1,6 @@
 /**
- * Stored-upload stand-ins for tests that run under jsdom, whose Blob has no
- * stream(). The returned Blob streams its bytes as a browser's would, so code
- * that streams a stored upload takes the same path it takes in the browser.
+ * Stored-upload stand-ins for jsdom tests. jsdom's Blob has no stream(), so
+ * the Blob returned here gets a stream() that yields its bytes.
  */
 
 import { Blob as NodeBlob } from "node:buffer";

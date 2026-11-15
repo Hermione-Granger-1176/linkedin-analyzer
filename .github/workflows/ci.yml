@@ -30,14 +30,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Both ends of the diff have to be present, so this job and the web
-          # benchmark cannot use the shallow checkout the rest of the workflow does.
+          # Full history, so both ends of the diff are present. This job and web-benchmark need it.
           fetch-depth: 0
 
-      # The classification table and its fail-open rules live in
-      # scripts/ci/job_gating.py, where they are unit tested. This job installs
-      # no toolchain: the script is standard library only and runs on the
-      # runner's system Python.
+      # Classification rules and fail-open behavior are in scripts/ci/job_gating.py.
+      # This job installs no toolchain and runs the script with the system Python.
       - name: Detect changed areas
         id: detect
         env:
@@ -47,9 +44,7 @@ jobs:
           HEAD_SHA: >-
             ${{ github.event_name == 'pull_request'
             && github.event.pull_request.head.sha || github.sha }}
-          # A pull request compares against its merge base, because its base
-          # branch moves on without it. A push compares the two commits, which
-          # is what those commits actually did.
+          # Pull requests compare against the merge base. Pushes compare the two commits.
           MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: make ci-changed-areas base="$BASE_SHA" head="$HEAD_SHA" merge_base="$MERGE_BASE"
 
@@ -86,8 +81,7 @@ jobs:
   heavy-checks:
     name: Heavy checks
     needs: [changes, quick-gates]
-    # Keep one coverage run over all Python sources so the 100% threshold
-    # applies to the complete package and repository scripts.
+    # One coverage run covers all Python sources. The 100% threshold applies to the package and repository scripts.
     if: needs.changes.outputs.python == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -106,8 +100,8 @@ jobs:
       - name: Run heavy checks
         run: make ci-heavy-checks
 
-      # Report available coverage even after a test failure. Copy the summary
-      # to the log for terminal readers. pipefail preserves failures through tee.
+      # Writes the coverage summary to the job summary and the log, even after a test failure.
+      # pipefail keeps the make exit status through tee.
       - name: Summarize coverage
         if: always()
         run: |
@@ -206,9 +200,8 @@ jobs:
             playwright-report/
             test-results/
 
-  # Compare the pipeline against the base commit in one process, with an
-  # identical copy of the base as a noise control. scripts/checks/bench-gate.mjs
-  # holds the decision rule; docs/testing.md describes how to read the report.
+  # Compares the branch with the base commit in one process, using an identical copy of the base as a control.
+  # Decision rule: scripts/checks/bench-gate.mjs. Report guide: docs/benchmarks.md.
   web-benchmark:
     name: Web benchmark
     needs: [changes, quick-gates]
@@ -236,9 +229,8 @@ jobs:
           MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: make bench-compare base="$BASE_SHA" merge_base="$MERGE_BASE"
 
-  # Time file drop to the Analytics screen showing data in the pinned
-  # Playwright container, and fail when the median run is over budget.
-  # docs/testing.md explains the budget and how it was set.
+  # Times file drop to the Analytics screen in the pinned Playwright container, and fails when the median run exceeds the budget.
+  # Budget details: docs/benchmarks.md.
   web-page-speed:
     name: Web page speed
     needs: [changes, quick-gates]
@@ -257,9 +249,7 @@ jobs:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           python-version: ""
 
-      # The first CI run measured a 1.74 s median (1.70 to 1.75 s) on a
-      # 20 MiB export. The budget is about twice that, so a page that gets
-      # twice as slow fails while slower runner hardware does not.
+      # Fails when the median time for a 20 MiB export exceeds budget_s.
       - name: Check page speed budget
         run: make bench-browser-container size_mb=20 runs=3 budget_s=3.5
 
@@ -283,9 +273,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Compare each job result with the detected areas. A skipped job fails
-      # when its area requires it, and detection itself must succeed.
-      # scripts/ci/job_gating.py defines and tests the result table.
+      # Compares each job result with the detected areas. A skipped job fails when its area requires it,
+      # and the changes job must succeed. Result table: scripts/ci/job_gating.py.
       - name: Check required jobs
         env:
           PYTHON_CHANGED: ${{ needs.changes.outputs.python }}

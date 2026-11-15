@@ -23,7 +23,7 @@ LinkedIn Analyzer cleans and analyzes LinkedIn data exports. One repository cont
 8. **Auto-fix commands are the user's call** (`make fmt`, `make align-tables`, `make lock`). To see what a formatter would change, use `make format-py-diff` or `make format-js-diff <<'EOF'` (paths on stdin) and apply it by hand.
 9. **Committing, pushing, and opening or merging PRs are the user's call.** Make and verify changes in the working tree and stop there. Fold small tooling or doc tweaks into the branch in progress rather than opening a second PR.
 10. **CHANGELOG.md tracks the Python package only.** Web and Node changes do not go there.
-11. **Keep documentation in its owning page.** Before adding prose, check `docs/index.md` and existing ADRs. `docs/operations.md` owns current operating procedures; dependency decisions, override rationale, removal criteria, and historical validation belong in `docs/adr/`. Update existing guidance instead of appending another explanation, and link to the owner rather than duplicating it.
+11. **Keep documentation in its owning page.** Before adding prose, check `docs/index.md` and existing ADRs. `docs/operations.md` owns deploy and release procedures and `docs/ci.md` owns CI and repository automation. History, design rationale, override removal criteria, and past measurements belong only in `docs/adr/`. Code comments describe what the current code does, never its history or justification (see `docs/style-guide.md`). Update existing guidance instead of appending another explanation, and link to the owner rather than duplicating it.
 
 ## Daily drivers
 
@@ -85,11 +85,14 @@ Setup needs Python 3.12+, uv, and Node.js 22.22.2+ or 24.15.0+ within those supp
 - [`web-app.md`](docs/web-app.md): browser workflow, exports, limits, and privacy
 - [`cli.md`](docs/cli.md): Python CLI commands and API
 - [`data-formats.md`](docs/data-formats.md): CSV columns and cleaning rules
-- [`development.md`](docs/development.md): local setup, Make targets, and GitHub helpers
+- [`development.md`](docs/development.md): local setup, dependencies, formatting, branches, and commits
+- [`github-helpers.md`](docs/github-helpers.md): PR, issue, and Actions Make targets, including the REST fallback
 - [`testing.md`](docs/testing.md): test layers, coverage, parity, and browser checks
+- [`benchmarks.md`](docs/benchmarks.md): speed and memory benchmarks and the CI performance gates
 - [`structure.md`](docs/structure.md): repository layout and ownership
 - [`web-architecture.md`](docs/web-architecture.md): browser design and data flow
-- [`operations.md`](docs/operations.md): deployment, releases, CI, and incident response
+- [`operations.md`](docs/operations.md): deployment, releases, diagnostics, and incident response
+- [`ci.md`](docs/ci.md): CI jobs, path gating, scheduled workflows, alert issues, and supply-chain checks
 - [`troubleshooting.md`](docs/troubleshooting.md): setup and runtime failure recovery
 - [`style-guide.md`](docs/style-guide.md): code and documentation conventions
 - [`adr/README.md`](docs/adr/README.md): architecture decision records

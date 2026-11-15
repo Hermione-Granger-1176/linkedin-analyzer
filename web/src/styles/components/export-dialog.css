@@ -173,7 +173,7 @@
     }
 }
 
-/* Match the hover selectors so reduced-motion users also get transform: none. */
+/* The hover selectors are repeated here so reduced-motion users also get transform: none. */
 @media (prefers-reduced-motion: reduce) {
     .export-dialog-btn,
     .export-dialog-btn:hover:not(:disabled),

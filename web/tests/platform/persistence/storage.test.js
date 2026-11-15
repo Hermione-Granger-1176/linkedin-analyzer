@@ -24,7 +24,7 @@ describe("Storage", () => {
         const spy = vi
             .spyOn(IDBObjectStore.prototype, "put")
             .mockImplementation(function guarded(value, key) {
-                // WebKit's ephemeral sessions reject Blobs in IndexedDB.
+                // Simulates a browser that refuses to store Blobs in IndexedDB (WebKit ephemeral sessions).
                 if (value && value.blob instanceof Blob) {
                     throw new DOMException("Error preparing Blob/File data", "UnknownError");
                 }
@@ -247,8 +247,8 @@ describe("Storage", () => {
             vi.restoreAllMocks();
         });
 
-        // Abort the next transaction once handlers are wired (mimics a quota-exceeded
-        // write, where the browser fires `abort` rather than `error`).
+        // Aborts the next transaction after its handlers are wired. This matches a
+        // quota-exceeded write, which fires `abort` instead of `error`.
         function abortNextTransaction() {
             const original = IDBDatabase.prototype.transaction;
             vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (...args) {
@@ -261,8 +261,7 @@ describe("Storage", () => {
         it("saveFile rejects with an Error when the write transaction aborts", async () => {
             await Storage.clearAll();
             abortNextTransaction();
-            // tx.error is null on an explicit abort, so the rejection must still be a
-            // concrete Error (not null) for telemetry and callers to be actionable.
+            // tx.error is null on an explicit abort, so the rejection is a concrete Error.
             let reason;
             await Storage.saveFile("shares", { name: "x.csv", text: "a,b", rowCount: 1 }).catch(
                 (error) => {
@@ -277,8 +276,7 @@ describe("Storage", () => {
             await Storage.clearAll();
             await Storage.saveFile("shares", { name: "x.csv", text: "a,b", rowCount: 1 });
             abortNextTransaction();
-            // tx.error is null on an explicit abort, so getFile must still reject
-            // with a concrete Error (not null) for telemetry and callers.
+            // tx.error is null on an explicit abort, so getFile rejects with a concrete Error.
             let reason;
             await Storage.getFile("shares").catch((error) => {
                 reason = error;
@@ -360,9 +358,9 @@ describe("Storage", () => {
         it("defaults schemaVersion and updatedAt for records missing them", async () => {
             await Storage.clearAll();
             const db = await openRawDb();
-            // A record with no schemaVersion/updatedAt and inline text but no
-            // fileTexts entry exercises the Number(... || fallback) coercions and
-            // the inline-text fallback when the split text store has no row.
+            // A record with no schemaVersion or updatedAt, and inline text but no
+            // fileTexts row. Missing fields take their defaults, and inline text is
+            // used when the text store has no row.
             await putRaw(db, "files", { type: "shares", name: "legacy.csv", text: "a,b" });
             db.close();
 
@@ -384,7 +382,7 @@ describe("Storage", () => {
                 updatedAt: 10,
                 schemaVersion: 2,
             });
-            // A non-string text-store row must not shadow the inline metadata text.
+            // A non-string fileTexts row is ignored, and the inline text is used.
             await putRaw(db, "fileTexts", { type: "shares", text: 12345 });
             db.close();
 
@@ -609,9 +607,8 @@ describe("Storage", () => {
 
     describe("connection lifecycle", () => {
         it("memoizes a single database connection across operations", async () => {
-            // Open the shared connection within this test, then assert further
-            // ops reuse it rather than calling indexedDB.open again, keeping the
-            // test independent of execution order.
+            // Opens the shared connection first, then checks that later operations
+            // reuse it without calling indexedDB.open.
             await Storage.getAllFiles();
             const openSpy = vi.spyOn(indexedDB, "open");
             await Storage.getAllFiles();
@@ -622,8 +619,8 @@ describe("Storage", () => {
 
         it("closes the shared connection on an external version change", async () => {
             await Storage.getAllFiles();
-            // A newer connection upgrading the DB would block unless our
-            // versionchange handler closes the shared connection first.
+            // The shared connection closes on versionchange, so an upgrade from
+            // another connection is not blocked.
             await new Promise((resolve, reject) => {
                 // Open above the current schema version to force an upgrade, which
                 // fires versionchange on the shared connection.
@@ -640,22 +637,21 @@ describe("Storage", () => {
         });
     });
 
-    // Runs last: it rebuilds the database from a legacy v2 shape, so it must not
-    // pollute the shared connection used by earlier tests.
+    // Runs last because it deletes the database. Builds a schema version 2
+    // database and runs the v2 to v3 migration when it is opened.
     describe("v2 to v3 migration", () => {
         it("moves inline CSV text into the text store on upgrade", async () => {
-            // Delete the current database before recreating a legacy v2 database.
+            // Deletes the current database before a schema version 2 database is created.
             await new Promise((resolve, reject) => {
                 const request = indexedDB.deleteDatabase("linkedin-analyzer");
                 request.onsuccess = () => resolve();
                 request.onerror = () => reject(request.error);
-                // A blocked delete leaves an open connection and prevents fixture setup.
-                // Reject so migration assertions cannot run against the current database.
+                // A blocked delete rejects, so the assertions never run against the current database.
                 request.onblocked = () =>
                     reject(new Error("deleteDatabase blocked: a connection is still open"));
             });
 
-            // Build a legacy v2 database: a single "files" store with inline text.
+            // Builds a schema version 2 database with a "files" store that holds inline text.
             await new Promise((resolve, reject) => {
                 const request = indexedDB.open("linkedin-analyzer", 2);
                 request.onupgradeneeded = () => {
@@ -697,8 +693,7 @@ describe("Storage", () => {
             expect(await file.blob.text()).toBe("legacy-csv-text");
             expect(file.blob.name).toBe("messages.csv");
 
-            // Inspect the raw stores to prove the migration actually moved the text
-            // out of the metadata store (rather than getFile falling back to inline).
+            // Reads the raw stores to confirm the text moved out of the metadata store.
             const rawDb = await new Promise((resolve, reject) => {
                 const request = indexedDB.open("linkedin-analyzer", 4);
                 request.onsuccess = () => resolve(request.result);
@@ -818,7 +813,7 @@ describe("probeBlobStorage", () => {
             vi.resetModules();
             const { Storage: Fresh } = await import("../../../src/platform/persistence/storage.js");
             await Fresh.saveFile("shares", { name: "Shares.csv", text: "a,b", rowCount: 2 });
-            // One attempt only: the probe already said Blobs will not store.
+            // Only one attempt is made. The probe has already reported that Blobs cannot be stored.
             expect(spy.mock.calls.filter(([value]) => value && "blob" in value)).toHaveLength(1);
             expect(await (await Fresh.getFile("shares")).blob.text()).toBe("a,b");
         } finally {

@@ -1,9 +1,9 @@
 /**
  * DOM builders for the messages insights list panels.
  *
- * These construct detached elements from their arguments only. They read no
- * page state, so the messages page owns all decisions about what to render and
- * this module owns only how a row looks.
+ * These construct detached elements from their arguments only and read no page
+ * state. The messages page decides what to render. This module decides how a
+ * row looks.
  */
 
 import { getInitials, pickAvatarColor } from "../../shared/ui/avatar.js";
@@ -39,8 +39,8 @@ function cleanText(value) {
  */
 function appendContactName(container, label, url) {
     const cleanUrl = cleanText(url);
-    // Callers validate URLs with MessagesAnalytics. Keep this scheme check so a
-    // future caller cannot introduce a javascript: URL.
+    // Callers validate URLs with MessagesAnalytics. This scheme check also
+    // rejects non-http(s) URLs, such as javascript: URLs.
     if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
         container.textContent = label;
         return;

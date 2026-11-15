@@ -19,48 +19,42 @@ _COPILOT_LOGIN = "copilot-pull-request-reviewer"
 _WATCH_FIELDS = "statusCheckRollup,reviews"
 _PENDING_STATES = {"EXPECTED", "PENDING"}
 _SUCCESSFUL_CHECK_OUTCOMES = {"NEUTRAL", "SKIPPED", "SUCCESS"}
-# A floor on how many checks must exist before a rollup can settle, not a
-# prediction of the total. It used to be a fixed count matching a full CI run,
-# which meant any PR whose plan skipped work produced fewer checks than the
-# constant and could never settle: the watcher polled until max_polls and then
-# failed while reporting every check green. Completeness is now established by
-# ``watch_pr`` observing the check set repeat across consecutive settled polls,
-# so this only has to rule out settling against an empty rollup.
+# A floor on how many checks must exist before a rollup can settle. It is not a
+# prediction of the total. ``watch_pr`` establishes completeness by observing the
+# check set repeat across consecutive settled polls, so this only rules out
+# settling against an empty rollup.
 DEFAULT_EXPECTED_CHECKS = 1
 
-# How long to wait when the only outstanding condition is confirming that the
-# check set has stopped changing. Short on purpose: it is a confirmation read,
-# not a wait for work to finish.
+# Delay before re-reading when only the check-set stability confirmation is
+# outstanding. It is a confirmation read, not a wait for work to finish.
 CONFIRM_DELAY_SECONDS = 5.0
 # Copilot writes "generated no comments" on a first review and "generated no new
-# comments" on a re-review, so "new" has to be optional or a clean first pass is
-# reported as unclassifiable.
+# comments" on a re-review, so "new" is optional in the pattern.
 _COMMENT_COUNT_PATTERN = re.compile(
     r"\bgenerated (?:(no(?: new)?)|(\d+)) comments?\b",
     re.IGNORECASE,
 )
-# Copilot's v2 overview drops that sentence. It opens with a verdict heading such as
-# "### 🟢 Approval recommended" and folds its detail into collapsible sections. Two
-# layouts are in use:
+# Copilot's v2 overview omits the "generated N comments" sentence. It opens with a
+# verdict heading such as "### 🟢 Approval recommended" and puts its detail in
+# collapsible sections. Two layouts are recognized:
 #
-# - Earlier: a "## Copilot review overview" heading above the verdict, a
+# - Older layout: a "## Copilot review overview" heading above the verdict, a
 #   "**Findings:** None" line when clean, sections headed "<Label> (N)", and open
 #   findings linked as "(#discussion_r<id>)".
-# - Current: no "##" heading, a "**No open issues**" line when clean, sections headed
-#   "N <label>" such as "1 open issue", full thread URLs ending in
+# - Current layout: no "##" heading, a "**No open issues**" line when clean, sections
+#   headed "N <label>" such as "1 open issue", full thread URLs ending in
 #   "#discussion_r<id>", and an uncounted "What changed in this PR" section.
 #
-# A review with findings has an open section that links each finding still open,
-# including ones from earlier rounds, to its thread. The "discussion_r<id>" anchor
-# also ends the thread's URL.
+# An open section links each finding still open, including ones from earlier
+# rounds, to its thread. The "discussion_r<id>" anchor also ends the thread's URL.
 #
-# The clean line alone is not clean. A review can describe a finding in a
+# A clean line is not sufficient. A review can describe a finding in a
 # "Previously missed (N)" section without opening a thread, so a clean review needs
 # the approval verdict and no counted section other than the resolved list.
 _V2_OVERVIEW_MARKER = "<!-- ccr-overview-v2 -->"
 _V2_APPROVAL_VERDICT = "Approval recommended"
 _V2_CLEAN_SECTIONS = frozenset({"resolved since last review"})
-# The verdict is the first heading of the overview, so a "###" further down is not one.
+# The verdict is the first "###" heading of the overview. Later "###" headings do not match.
 _V2_VERDICT_PATTERN = re.compile(
     re.escape(_V2_OVERVIEW_MARKER)
     + r"\s*(?:^## Copilot review overview\s*)?^### (?:\W+\s)?(.+?)\s*$",
@@ -75,8 +69,8 @@ _V2_PREFIX_COUNT_PATTERN = re.compile(r"^\d+ (.+)$")
 _V2_OPEN_HEADING_PATTERN = re.compile(
     r"<summary><strong>(?:Open \((\d+)\)|(\d+) open issues?)</strong></summary>"
 )
-# Open items are plain list lines, so the section must close before any other
-# <details> opens. Otherwise an unclosed section would borrow a later block's close.
+# Open items are plain list lines. The section must close before another <details>
+# opens, so an unclosed section cannot match a later block's close.
 _V2_OPEN_SECTION_PATTERN = re.compile(
     _V2_OPEN_HEADING_PATTERN.pattern + r"((?:(?!<details).)*?)</details>", re.DOTALL
 )
@@ -113,13 +107,12 @@ class CopilotReview:
     def is_explicitly_clean(self) -> bool:
         """Return whether the review reports nothing to address.
 
-        Copilot review state is not evidence of a clean review. The review
-        wording must say "generated no comments" on a first review or
-        "generated no new comments" on a re-review. A v2 overview must
-        recommend approval, have a "**Findings:** None" or "**No open issues**"
-        line, and have no counted section other than the resolved list. A numeric
-        "generated 0 comments" deliberately does not count, so unexpected
-        wording fails closed.
+        The review state field is not used. A first review must say "generated no
+        comments", and a re-review must say "generated no new comments". A v2
+        overview must recommend approval, have a "**Findings:** None" or
+        "**No open issues**" line, and have no counted section other than the
+        resolved list. A numeric "generated 0 comments" does not count, so
+        unexpected wording fails closed.
         """
         if self.is_v2_overview:
             sections = _v2_counted_sections(self.body)
@@ -148,8 +141,8 @@ class PollStatus:
 class WatchBaseline:
     """Copilot review and thread ids seen before an explicit request.
 
-    ``thread_ids`` deliberately includes resolved threads so that a thread
-    resolved between polls is never mistaken for a newly generated one.
+    ``thread_ids`` includes resolved threads, so a thread resolved between polls
+    is not counted as newly generated.
     """
 
     review_ids: frozenset[str]
@@ -194,9 +187,8 @@ def _generated_comment_count(body: str) -> int | None:
         heading = _V2_OPEN_HEADING_PATTERN.search(body)
         if heading is None:
             return 0 if _V2_CLEAN_PATTERN.search(body) is not None else None
-        # Each open finding must link its thread, or the watcher cannot tell when
-        # every thread has arrived. A count without matching links, or a section
-        # that never closes, fails closed.
+        # Each open finding must link its thread. A count without matching links,
+        # or a section that never closes, returns None (unclassified).
         count = int(heading.group(1) or heading.group(2))
         complete = _V2_OPEN_SECTION_PATTERN.search(body) is not None
         return count if complete and len(set(_open_discussion_links(body))) == count else None
@@ -333,13 +325,9 @@ def _check_identity(entry: dict[str, Any], ordinal: int) -> str:
     """Return a stable identity for one rollup entry.
 
     Check runs carry ``name`` and status contexts carry ``context``. Anything
-    without either falls back to its index in the rollup, so an unnamed entry
-    cannot collapse into another and make a growing rollup look stable.
-
-    The ordinal must be the entry's real index. Deriving it from the number of
-    identities collected so far breaks when earlier entries share a name: the
-    set stops growing, later unnamed entries reuse an ordinal, and a rollup that
-    gained an entry can produce an identity set identical to the previous poll's.
+    without either falls back to its index in the rollup. The ordinal is the
+    entry's real index, not the count of identities collected so far, so
+    duplicate names cannot make unnamed entries collide.
     """
     for key in ("name", "context"):
         value = entry.get(key)
@@ -442,11 +430,9 @@ def _track_rollup_stability(
 ) -> tuple[bool, frozenset[str] | None]:
     """Return whether the check set repeated, and the ids to compare on the next poll.
 
-    Stability only counts across consecutive *settled* polls. Carrying ids over
-    from a poll where checks were still running would let an unchanged set settle
-    the very first time it turned terminal, which is the "terminal but still
-    incomplete" race this is meant to close: jobs gated on an earlier one have not
-    registered yet at that moment.
+    Stability counts only across consecutive settled polls. Ids from an unsettled
+    poll are not carried over, so the first settled poll is never stable on its
+    own. Jobs gated on an earlier job may not be registered yet at that point.
     """
     if not status.checks_settled:
         return False, None
@@ -460,8 +446,8 @@ def _awaiting_review_threads(
 ) -> bool:
     """Return whether threads the fresh review announced have not all arrived yet."""
     if review is not None and review.is_v2_overview and review.generated_comment_count is not None:
-        # A v2 overview links the threads it lists, so wait for exactly those.
-        # Their state, author, and age do not matter.
+        # A v2 overview links the threads it lists. Wait for exactly those,
+        # regardless of state, author, or age.
         anchors = {thread.url.rpartition("#")[2] for thread in all_threads}
         return not review.open_discussions <= anchors
     review_count = review.generated_comment_count if review is not None else 0
@@ -507,11 +493,9 @@ def watch_pr(
 ) -> str:
     """Wait for settled successful checks and the latest available Copilot review.
 
-    Automatic PR review starts outside this command, so the default mode observes
-    the latest available review without mutating reviewer state. Set
-    ``request_copilot`` when the caller explicitly wants this command to capture a
-    baseline and request a new review. With ``checks_only`` no Copilot review is
-    requested or awaited.
+    The default mode observes the latest available review without changing
+    reviewer state. Set ``request_copilot`` to capture a baseline and request a
+    new review. With ``checks_only`` no Copilot review is requested or awaited.
     """
     _validate_watch_options(interval, max_polls, expected_checks)
 
@@ -521,11 +505,10 @@ def watch_pr(
         baseline = watch_baseline(pr, run_fn=run_fn)
         pr_review.request_copilot_review(pr, run_fn=run_fn)
     sleeper = sleep_fn or time.sleep
-    # GitHub registers check runs progressively, so a rollup can be briefly both
-    # small and entirely terminal before the rest appear. Requiring the check set
-    # to repeat before declaring success establishes completeness by observation
-    # rather than by a hardcoded total, which is what lets this settle on the
-    # first poll after CI is genuinely done, whatever the PR's check count is.
+    # GitHub registers check runs progressively, so a rollup can be briefly small
+    # and entirely terminal. Success requires the check set to repeat across
+    # settled polls, so completeness is established by observation rather than by
+    # a fixed total.
     previous_check_ids: frozenset[str] | None = None
 
     for poll_count in range(1, max_polls + 1):
@@ -555,11 +538,9 @@ def watch_pr(
                 )
 
         if poll_count < max_polls:
-            # When everything else is ready and only the stability confirmation is
-            # outstanding, a full interval is pure latency. Re-read after a short
-            # delay instead, so a finished PR settles in seconds rather than one
-            # poll cycle, while still giving a late-registering check a chance to
-            # appear before success is declared.
+            # When only the stability confirmation is outstanding, re-read after the
+            # short confirmation delay instead of a full interval. A late-registering
+            # check gets a chance to appear before success is declared.
             confirming = checks_and_review_ready and not rollup_stable
             sleeper(min(interval, CONFIRM_DELAY_SECONDS) if confirming else interval)
 

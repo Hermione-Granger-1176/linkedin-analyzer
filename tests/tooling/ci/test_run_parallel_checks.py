@@ -25,7 +25,7 @@ def test_run_check_reports_success_output() -> None:
 
 
 def test_run_check_gives_each_check_an_empty_stdin() -> None:
-    """A path-taking target reads stdin, so a check must never inherit this process's input."""
+    """Each check runs with stdin set to DEVNULL."""
     calls: list[dict[str, object]] = []
 
     def runner(*_args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:

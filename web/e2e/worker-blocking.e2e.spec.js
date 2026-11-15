@@ -8,8 +8,8 @@ test("local data processing does not match the tracking-script filter", async ({
     page,
     context,
 }) => {
-    // EasyPrivacy's /analytics/analytics.js filter also matches local module URLs.
-    // Development serves those modules individually, unlike the bundled build.
+    // The EasyPrivacy filter for /analytics/analytics.js also matches local module URLs.
+    // Dev mode serves modules individually; the bundled build does not.
     /** @type {string[]} */
     const blocked = [];
     await context.route(/\/analytics\/analytics\.js/, async (route) => {

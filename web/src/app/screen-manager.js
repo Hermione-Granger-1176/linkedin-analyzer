@@ -52,9 +52,8 @@ export const ScreenManager = (() => {
     let transitionToken = 0;
 
     /**
-     * Register a screen route. A route either carries its controller or a
-     * `load` function that imports it the first time the route opens, so the
-     * first page load does not wait on every screen's code.
+     * Register a screen route. A route carries its controller, or a `load`
+     * function that imports it the first time the route opens.
      * @param {string} routeName - Route name
      * @param {ScreenRouteConfig} config - Route config
      */
@@ -203,7 +202,7 @@ export const ScreenManager = (() => {
      * @param {string} routeName - Route name being entered
      */
     function leaveRoute(previousName, previousRoute, routeName) {
-        // A screen still loading must not leave its overlay on the next one.
+        // Hides the loading overlay of the route being left.
         if (previousName) {
             LoadingOverlay.hide(`route:${previousName}`);
         }
@@ -263,8 +262,8 @@ export const ScreenManager = (() => {
         currentRouteName = routeName;
         nextRoute.params = params || {};
         if (!nextRoute.controller && nextRoute.load) {
-            // The latest params are read once the code arrives, so a route
-            // change made while it loads is not lost.
+            // The latest params are read when the code arrives, so route changes
+            // made during the load are used.
             void activateWhenLoaded(routeName, previousName);
         } else {
             // A preload may have fetched the code after an earlier failure.
@@ -281,7 +280,7 @@ export const ScreenManager = (() => {
     }
 
     /**
-     * Ensure a route controller init is called only once.
+     * Calls a route controller's init at most once.
      * @param {ScreenRoute} route - Registered route
      */
     function ensureControllerInitialized(route) {
@@ -309,23 +308,21 @@ export const ScreenManager = (() => {
 
     /**
      * Show the incoming screen and synchronously hide every other screen.
-     * This prevents rapid navigation from leaving an earlier screen overlaid.
      * @param {HTMLElement|null} previousScreen - Previous screen
      * @param {HTMLElement|null} nextScreen - Next screen
      */
     function switchScreens(previousScreen, nextScreen) {
         if (!nextScreen) {
-            /* Target DOM element is missing; leave the current screen visible rather
-               than sweeping it away and blanking the app. */
+            /* The target screen element is missing. Return without changes, so the
+               current screen stays visible. */
             return;
         }
 
         const token = ++transitionToken;
         const isInitialMount = !previousScreen;
 
-        /* Strip transition classes from the outgoing screen and from any screen left
-           mid-transition by a superseded switch. is-loading is left to LoadingOverlay,
-           which only marks the active screen. */
+        /* Remove transition classes from every screen except the incoming one.
+           is-loading is managed by LoadingOverlay. */
         forEachScreenElement(screen => {
             if (screen !== nextScreen) {
                 screen.classList.remove("active", "enter", "exit");

@@ -269,8 +269,8 @@ vi.mock("../../../src/features/tutorial/steps.js", () => ({
 
 /**
  * Make a visible element with a realistic bounding rect.
- * jsdom always returns zero rects, so we must stub getBoundingClientRect and
- * getComputedStyle for Tutorial's isElementVisible() to return true.
+ * jsdom returns zero rects. The stubbed getBoundingClientRect gives the element
+ * a size, so Tutorial's isElementVisible() returns true for it.
  */
 function makeVisible(element, rect = {}) {
     const fullRect = {
@@ -394,11 +394,10 @@ beforeEach(async () => {
     // jsdom does not implement scrollIntoView, stub it out
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-    // jsdom returns all-zero from getBoundingClientRect. Tutorial's isElementVisible
-    // checks width > 0 && height > 0. Provide a sensible default so that popover
-    // buttons (dynamically built by Tutorial) are considered visible.
-    // Per-element overrides installed by makeVisible() take precedence because they
-    // are own-property assignments, not prototype-level.
+    // jsdom returns all-zero from getBoundingClientRect. isElementVisible checks
+    // width > 0 && height > 0, so this default gives the popover buttons a size.
+    // Per-element overrides from makeVisible() win because they are own-property
+    // assignments, not prototype-level.
     window.HTMLElement.prototype.getBoundingClientRect = vi.fn(() => {
         // Individual elements can override by assigning their own getBoundingClientRect
         const defaultRect = {
@@ -899,7 +898,7 @@ describe("step permission guards", () => {
         Tutorial.start("noskip");
         document.querySelector(".tutorial-btn-skip").click();
 
-        // Tutorial stays open because allowSkip=false
+        // Tutorial stays open when allowSkip is false.
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
     });
 });
@@ -1058,9 +1057,8 @@ describe("focus trap (Tab key)", () => {
     it("Tab within popover (not at boundary) passes through without wrapping", () => {
         const popover = document.querySelector(".tutorial-popover");
         const buttons = Array.from(popover.querySelectorAll("button:not([disabled])"));
-        // Navigate to step 2 to have more buttons visible (back, next, skip)
         if (buttons.length > 1) {
-            // Focus the first button (not last) and Tab forward, no wrapping needed
+            // Focus the first popover button and Tab forward without wrapping.
             buttons[0].focus();
             expect(() => fireTab(false)).not.toThrow();
         }
@@ -1857,8 +1855,7 @@ describe("positionMiniTip rendering", () => {
         // Trigger viewport resize to re-run positionMiniTips
         window.dispatchEvent(new Event("resize"));
 
-        // After rAF fires, tip should become hidden (target not visible)
-        // We check that positionMiniTips ran without throwing
+        // Runs the pending timers. Checks that positionMiniTips runs without throwing.
         expect(() => vi.runAllTimers()).not.toThrow();
     });
 });
@@ -2087,9 +2084,7 @@ describe("resolvePlacement auto algorithm", () => {
     });
 
     it("resolves to right when room below and above are insufficient but room right is enough", () => {
-        // Target vertically centred, narrow viewport left side
-        // Room below: 768-350=418 but popover height is ~200px; 418 >= 224 → normally bottom
-        // Force small roomBottom by positioning bottom near viewport bottom
+        // Tall target near the left edge. Only checks that the tutorial opens.
         addTarget("autoplace-target", {
             left: 10,
             top: 300,
@@ -2151,8 +2146,7 @@ describe("resolvePointerVariant with explicit arrowStyle", () => {
     });
 
     it("falls back to hash-based variant when arrowStyle name does not match", () => {
-        // 'simple' may or may not be in ARROW_VARIANTS, either path is fine
-        // What matters is the code runs the lookup branch
+        // 'simple' may or may not be in ARROW_VARIANTS. Both lookup outcomes are accepted.
         addTarget("arrowstyle-target", {
             left: 100,
             top: 100,
@@ -2242,11 +2236,9 @@ describe("resolveElementReference with Element reference", () => {
 
 
 /**
- * Override getComputedStyle without recursion.
- * patchComputedStyle() in beforeEach already installed a spy; calling
- * vi.spyOn again on the same property replaces the implementation.
- * We avoid calling the previous spy (which would recurse) by building
- * a plain object stub for the few properties Tutorial reads.
+ * Build a stand-in computed style with the properties Tutorial reads.
+ * Properties not listed read as an empty string. The stub is a plain Proxy,
+ * so it does not call the getComputedStyle spy from patchComputedStyle().
  */
 function makeStyleStub(overrides = {}) {
     const defaults = { display: "block", visibility: "visible", opacity: "1", position: "static" };
@@ -2349,7 +2341,7 @@ describe("isViewportPinned and ensureTargetInView with fixed element", () => {
         addTarget("step-target-2");
         addTarget("step-target-3");
 
-        // Use the non-recursive makeStyleStub helper
+        // makeStyleStub returns the fixed position for the target and defaults for the rest.
         vi.spyOn(window, "getComputedStyle").mockImplementation((el) => {
             if (el === fixedTarget) {
                 return makeStyleStub({ position: "fixed" });
@@ -2357,7 +2349,7 @@ describe("isViewportPinned and ensureTargetInView with fixed element", () => {
             return makeStyleStub();
         });
 
-        // scrollIntoView should NOT be called because element is fixed
+        // A fixed element is not scrolled into view.
         Tutorial.start("home");
         expect(document.body.classList.contains("tutorial-open")).toBe(true);
         expect(fixedTarget.scrollIntoView).not.toHaveBeenCalled();
@@ -2416,7 +2408,7 @@ describe("positionMiniTip with left, right, and bottom placements", () => {
         Tutorial.onRouteChange("minitipplacements");
         vi.advanceTimersByTime(5000);
 
-        // Should have rendered tips (or attempted to) without throwing
+        // Checks that the left, right, and bottom placements render tips.
         expect(document.querySelectorAll(".tutorial-mini-tip").length).toBeGreaterThan(0);
     });
 });
@@ -2528,7 +2520,7 @@ describe("isLoadingActive DOM overlay checks", () => {
 
         // LoadingOverlay.isActive returns false, but DOM overlay is visible
         buildHomeTargets();
-        // start with auto:true which calls scheduleAutoStart → isLoadingActive
+        // onRouteChange schedules an auto-start, which checks isLoadingActive.
         Tutorial.onRouteChange("home");
         vi.advanceTimersByTime(5000);
 

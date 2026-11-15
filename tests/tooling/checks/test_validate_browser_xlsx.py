@@ -97,7 +97,7 @@ def test_read_workbook_splits_the_header_from_the_data_rows(tmp_path: Path) -> N
 
 
 def test_read_workbook_handles_an_empty_worksheet(tmp_path: Path) -> None:
-    """An empty download yields no header and no data rows rather than an index error."""
+    """An empty worksheet yields no header and no data rows."""
     workbook_path = tmp_path / "empty.xlsx"
     _write_workbook(workbook_path, [])
 
@@ -245,7 +245,7 @@ def test_main_reports_a_missing_workbook(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A download that never landed fails before openpyxl is asked to read it."""
+    """A missing workbook fails before openpyxl reads it."""
     exit_code = validator.main(
         ["--workbook", str(tmp_path / "missing.xlsx"), "--expected", str(tmp_path / "e.json")]
     )

@@ -17,8 +17,8 @@ import { DAY_LABELS } from "./constants.js";
  * @property {string} accent - Accent class name
  */
 
-// Comment-to-post ratio tiers, highest threshold first so `find` matches the
-// strongest tier a value qualifies for.
+// Comment-to-post ratio tiers, highest threshold first. `find` returns the
+// strongest tier a value meets.
 const ENGAGER_TIERS = Object.freeze([
     { min: 25, title: "Engagement Machine", note: "Conversations are clearly your superpower." },
     { min: 10, title: "Community Builder", note: "You invest heavily in other people's posts." },
@@ -286,7 +286,7 @@ export function generateInsights(view) {
         peakDayInsight(peakDayLabel),
     ].filter(isInsight);
 
-    // Pip speaks the tip in the app, so it is written in his voice.
+    // The tip is written in Pip's voice.
     const tip = `You are sharpest on ${peakDayLabel} around ${formatHour(peakHour)}. I would post then.`;
 
     return { insights, tip };

@@ -18,8 +18,7 @@ import {
     totalRowHeight,
 } from "../../../src/features/export/pdf-layout.js";
 
-// Taken from the palette itself rather than copied: a token added there has to
-// reach the stub, or the painter is handed undefined and nothing notices.
+// Built from the palette tokens, so a token added to the palette is covered here too.
 const palette = Object.fromEntries(
     PDF_PALETTE_TOKENS.map((token, index) => [token, { r: index, g: index, b: index }]),
 );
@@ -51,15 +50,12 @@ function createDocStub() {
         addPage: vi.fn(() => {
             calls.addPage += 1;
         }),
-        // The size in force is recorded alongside the line: a stat value that
-        // stepped down to fit its tile is otherwise indistinguishable from one
-        // drawn at the headline size.
+        // Records the font size with each line, so a stat value stepped down to
+        // fit its tile can be told apart from one at the headline size.
         text: vi.fn((value, x, y) => calls.text.push({ value, x, y, size })),
-        // The same metric the wrap stub below wraps by, so a label measured and
-        // then wrapped agrees with itself.
+        // Uses the same metric as the wrap stub below.
         getTextWidth: vi.fn((value) => value.length * size * 0.05),
-        // Roughly half a millimetre per character at 10pt, so wrapping is
-        // predictable without pulling in real font metrics.
+        // Roughly half a millimetre per character at 10pt.
         splitTextToSize: vi.fn((value, width) => {
             const perLine = Math.max(1, Math.floor(width / (size * 0.05)));
             const chunks = [];
@@ -153,7 +149,7 @@ function dashboard(title, overrides = {}) {
  * Build the shape a real activity export takes at the top of its range.
  *
  * Five stat tiles, a year of months, the twelve topics the analytics cap allows,
- * and the heatmap: the dashboard the plot heights used to be tuned against.
+ * and the heatmap.
  * @param {string} [title] - Dashboard heading
  * @returns {object} Dashboard
  */
@@ -198,8 +194,7 @@ describe("page geometry", () => {
     it("describes an A4 page", () => {
         expect(PAGE.width).toBe(210);
         expect(PAGE.height).toBe(297);
-        // Concrete values, not the defining expressions: restating those cannot
-        // fail while the module compiles.
+        // Literal values, so a change to the geometry fails here.
         expect(CONTENT_WIDTH).toBe(178);
         expect(USABLE_HEIGHT).toBe(257);
     });
@@ -228,10 +223,9 @@ describe("formatLongDate", () => {
 });
 
 describe("text contrast", () => {
-    // Read live rather than copied, so a token whose value changes changes the
-    // ratios this certifies instead of silently certifying the old ones. In
-    // jsdom readPdfPalette() resolves to the built-in light fallbacks, which are
-    // the values that end up on paper.
+    // Read from the live palette, so the tested ratios follow any token change.
+    // In jsdom, readPdfPalette() resolves to the built-in light fallbacks, which
+    // are the values drawn on paper.
     const LIGHT = readPdfPalette();
     const ACCENTS = ["blue", "yellow", "red", "green", "purple"];
 
@@ -246,8 +240,8 @@ describe("text contrast", () => {
     });
 
     it("keeps every card title and roundel digit readable on its own accent", () => {
-        // Drawing the title in the accent it sits on a tint of gave 1.54:1 on
-        // yellow, and the white roundel digit on the raw accent gave 1.71:1.
+        // Card titles are readable on their tint, and roundel digits on their
+        // accent, each above 4.5:1.
         for (const name of ACCENTS) {
             const tint = LIGHT[`--accent-${name}-bg`];
             const accent = LIGHT[`--accent-${name}`];
@@ -306,10 +300,8 @@ describe("paginateBlocks", () => {
     });
 
     it("reserves the whole of a follower that cannot be split", () => {
-        // The shape every chart builder emits: a title marked keepWithNext, then
-        // a chart that moves as one unit. Reserving one 6.4mm row of a 66mm list
-        // reserved nothing, because the list could never start in it: the title
-        // stayed at the foot of the page and its ten rows went overleaf.
+        // A keepWithNext title followed by a block that moves as one unit. The
+        // whole follower is reserved, since it cannot start on the page otherwise.
         const heading = { rows: rows(1, 10), keepTogether: true, keepWithNext: true };
         const list = { rows: rows(10, 6.4), keepTogether: true };
         const pages = paginateBlocks(
@@ -322,9 +314,7 @@ describe("paginateBlocks", () => {
     });
 
     it("reserves only the first row of a follower that flows", () => {
-        // A block that can be split needs only the row that will share the page
-        // with the heading. Asking for all of it would push short sections onto
-        // pages of their own to no purpose.
+        // A splittable follower needs only its first row on the heading's page.
         const heading = { rows: rows(1, 10), keepTogether: true, keepWithNext: true };
         const flowing = { rows: rows(4, 20) };
         const pages = paginateBlocks(
@@ -338,8 +328,7 @@ describe("paginateBlocks", () => {
     });
 
     it("looks past a block with no rows for what it has to keep up with", () => {
-        // An empty block is not what follows a heading: a dashboard whose charts
-        // all came back empty still leaves its blocks in the list.
+        // Empty blocks are skipped when looking for the block that follows a heading.
         const heading = { rows: rows(1, 10), keepTogether: true, keepWithNext: true };
         const list = { rows: rows(10, 6.4), keepTogether: true };
         const pages = paginateBlocks(
@@ -409,9 +398,8 @@ describe("paginateBlocks", () => {
     });
 
     it("does not break onto a page that is still empty", () => {
-        // Every dashboard after the first asks for a page of its own, so a run
-        // of sections that turned out to have nothing in them would otherwise
-        // leave a blank sheet behind for each one.
+        // A page-break request is ignored while the page is still empty, so empty
+        // sections do not leave blank sheets.
         const dashboardSection = { rows: rows(1, 10), keepTogether: true, pageBreakBefore: true };
         const pages = paginateBlocks(
             [
@@ -550,8 +538,7 @@ describe("buildBlocks", () => {
         expect(shortCard.keepTogether).toBe(true);
         expect(longCard.rows.length).toBeGreaterThan(shortCard.rows.length);
         expect(totalRowHeight(longCard.rows)).toBeGreaterThan(totalRowHeight(shortCard.rows));
-        // CARD_PADDING in pdf-document.js: a card's final row is its bottom
-        // padding, so a change there fails here intelligibly.
+        // CARD_PADDING in pdf-document.js: the card's final row is its bottom padding.
         expect(totalRowHeight(shortCard.rows)).toBeCloseTo(
             totalRowHeight(shortCard.rows.slice(0, -1)) + 3.6,
             6,
@@ -600,9 +587,9 @@ describe("buildBlocks", () => {
     });
 
     it("fills every row of a dashboard's stat grid", () => {
-        // A fixed three columns drew four stats as 3 + 1, leaving two thirds of
-        // the second row blank. A tile is the only rounded rectangle the grid
-        // draws at radius 2, so counting those in the first row counts columns.
+        // The column count follows the stat count, so no row is left mostly blank.
+        // Tiles are the rounded rectangles with radius 2, so counting them in the
+        // first row gives the column count.
         const expected = { 1: 1, 2: 2, 3: 3, 4: 2, 5: 5, 6: 3, 7: 3 };
 
         for (const [count, columns] of Object.entries(expected)) {
@@ -625,9 +612,8 @@ describe("buildBlocks", () => {
     });
 
     it("steps a stat value down a size rather than running it off the tile", () => {
-        // A dashboard tile carries whatever the data says. "Top company" is a
-        // company name, and at the headline size a long one crossed into its
-        // neighbour.
+        // A tile can carry any text. The value steps down a size when it is too
+        // wide for the tile.
         const value = "x".repeat(60);
         const doc = createDocStub();
         const stats = [
@@ -694,8 +680,7 @@ describe("buildBlocks", () => {
         const drawn = doc.calls.text.map((entry) => entry.value);
 
         expect(drawn).toContain("Activity");
-        // The subtitle says which range the charts below it were built at; a
-        // heading alone would leave the reader guessing.
+        // The subtitle gives the range the charts were built for.
         expect(drawn).toContain("Last 12 months");
         expect(drawn).toContain("Total activity");
         expect(drawn).toContain("Activity timeline");
@@ -721,8 +706,8 @@ describe("buildBlocks", () => {
         });
         const sections = blocks.filter((block) => block.kind === "section");
 
-        // The first follows the title on page one, the way the site opens on a
-        // screen rather than on a cover.
+        // The first dashboard follows the title on page one. Later ones open on a
+        // new page.
         expect(sections.map((block) => block.pageBreakBefore)).toEqual([false, true, true]);
     });
 
@@ -748,9 +733,7 @@ describe("buildBlocks", () => {
     });
 
     it("drops a dashboard that counted everything it has as none of it", () => {
-        // The rule lives here rather than with whoever collected the data, so
-        // every dashboard answers to the same one. The messages dashboard used
-        // to print a page of zeroes.
+        // The rule lives here, so every dashboard is judged by the same check.
         const doc = createDocStub();
         const empty = dashboard("Messages", {
             stats: [
@@ -859,8 +842,7 @@ describe("buildBlocks", () => {
     });
 
     it("drops an empty chart while its siblings survive", () => {
-        // On screen an empty chart invites an upload; on a page the reader has
-        // already exported there is nothing left to invite.
+        // An empty chart is dropped from the page, while its siblings are kept.
         const { doc } = build({
             ...SAMPLE,
             insights: [],
@@ -889,9 +871,8 @@ describe("buildBlocks", () => {
     });
 
     it("lets a full dashboard run onto a second page rather than squeezing it", () => {
-        // The plot heights used to be tuned down until this shape landed on one
-        // page with 2mm to spare. It flows now, like every other section, and
-        // the page it runs onto says whose charts these are.
+        // A full dashboard flows onto a second page like any other section. That
+        // page is headed with the dashboard's name.
         const doc = createDocStub();
         const data = {
             generatedAt: new Date(2026, 6, 31),
@@ -912,8 +893,8 @@ describe("buildBlocks", () => {
     });
 
     it("opens a spilled dashboard's neighbour on fresh paper all the same", () => {
-        // Running over is not the same as running on: the next dashboard is
-        // still the division a reader navigates by on the site.
+        // A dashboard that runs onto a second page is still followed by the next
+        // dashboard, which starts on fresh paper.
         const doc = createDocStub();
         const pages = paginateBlocks(
             buildBlocks(createPainter(doc, palette, fonts), {
@@ -987,8 +968,8 @@ describe("buildBlocks", () => {
     });
 
     it("still draws the chip for a message with an empty body", () => {
-        // LinkedIn exports an attachment-only message with no CONTENT. Without
-        // wrap()'s [""] floor the message would contribute no rows at all.
+        // LinkedIn exports an attachment-only message with no CONTENT. wrap()
+        // floors an empty body to one row, so the message still draws.
         const { doc } = build({
             ...SAMPLE,
             threads: [
@@ -1022,8 +1003,7 @@ describe("buildBlocks", () => {
         expect(drawn).toContain("Received");
         expect(drawn).toContain("Network growth");
         expect(drawn).toContain("3.4×");
-        // Include the message bodies, not only the other text drawn in the PDF. This
-        // is the behaviour the whole opt-in exists for.
+        // Message bodies are drawn too, which is what the message opt-in enables.
         expect(drawn).toContain("Hello");
         expect(drawn).toContain("Hi");
     });
@@ -1201,9 +1181,8 @@ describe("renderPdfDocument", () => {
         // section keeps the heading itself.
         expect(heads).toHaveLength(1);
         expect(doc.calls.text.map((entry) => entry.value)).toContain("Activity");
-        // Drawn into the top margin the way the footer is drawn into the bottom
-        // one, so pagination does not have to reserve room for a block whose
-        // page it cannot know until the placing is done.
+        // Drawn into the top margin, as the footer is drawn into the bottom one,
+        // so pagination does not reserve room for it.
         expect(heads[0].y).toBeLessThan(PAGE.marginTop);
     });
 

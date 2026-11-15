@@ -1,8 +1,8 @@
 /*
- * Compare legacy decoding with decodeBytes and time CSV cleaning.
+ * Compare an incremental TextDecoder with decodeBytes and time CSV cleaning.
  *
- * For files of at least 5 MiB, compare a legacy incremental TextDecoder with
- * concatChunks followed by decodeBytes. The legacy decoder passes each chunk
+ * For files of at least 5 MiB, compare an incremental TextDecoder with
+ * concatChunks followed by decodeBytes. The incremental decoder passes each chunk
  * to decoder.decode(chunk, { stream: true }). For smaller files, compare a
  * single non-fatal UTF-8 decode with decodeBytes. The production decodeBytes
  * function tries strict UTF-8 and falls back to Windows-1252 on a decode error.
@@ -60,7 +60,7 @@ function chunkize(bytes) {
     return out;
 }
 
-// Decode chunks incrementally with the legacy non-fatal UTF-8 decoder.
+// Decode chunks incrementally with a non-fatal UTF-8 TextDecoder.
 function decodeOldStream(chunks) {
     const decoder = new TextDecoder("utf-8");
     let text = "";
@@ -150,7 +150,7 @@ for (const [type, name] of Object.entries(FILES)) {
     const usedFallback = newDecode.last.usedFallback;
     const passed = identical && !usedFallback && clean.last.success;
 
-    // The fatal decode must match the old text, avoid the fallback for valid
+    // decodeBytes must match the TextDecoder output, avoid the fallback for valid
     // UTF-8 exports, and still produce cleanable text.
     if (!passed) {
         anyDiff = true;

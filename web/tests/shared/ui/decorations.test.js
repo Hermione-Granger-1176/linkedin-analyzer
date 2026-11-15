@@ -39,8 +39,8 @@ describe("initDecorations", () => {
     beforeEach(async () => {
         document.body.innerHTML = "";
         frames = [];
-        // The resize redraw waits for a frame, and jsdom never paints one, so
-        // the queue is drained by hand.
+        // The resize redraw waits for an animation frame. jsdom never fires one,
+        // so tests drain the queue with runFrames().
         realRequestAnimationFrame = window.requestAnimationFrame;
         window.requestAnimationFrame = /** @type {typeof window.requestAnimationFrame} */ (
             (callback) => {

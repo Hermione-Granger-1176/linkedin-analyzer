@@ -1,8 +1,8 @@
 /**
  * Vitest unit tests for the engagement-aware mini-tip pacing math.
  *
- * These helpers were extracted from tutorial.js. They are pure functions of the
- * visit count, so the exact constants are asserted directly.
+ * The helpers are pure functions of the visit count. The tests assert the exact
+ * constants.
  */
 
 import { describe, expect, it } from "vitest";

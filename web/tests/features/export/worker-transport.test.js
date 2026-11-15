@@ -50,8 +50,8 @@ const WORKER_CONNECTIONS_PAYLOAD = Object.freeze({
 
 const harness = createWorkerHarness();
 
-// Create two transports to check that workers, timeouts, and request IDs
-// are independent. Tests of one transport cannot detect shared factory state.
+// Each test uses two transports to check that workers, timeouts and request
+// IDs are independent. One transport alone cannot expose shared factory state.
 describe("transports built on the shared worker mechanism", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -81,8 +81,8 @@ describe("transports built on the shared worker mechanism", () => {
 
         terminateMessagesWorker();
 
-        // The terminated one settles, as it must, and takes nothing else with
-        // it: the connections worker is still alive and still listening.
+        // The terminated transport settles to null. The connections worker stays
+        // alive and keeps listening.
         expect(await messages).toBeNull();
         expect(messagesWorker.terminate).toHaveBeenCalled();
         expect(connectionsWorker.terminate).not.toHaveBeenCalled();
@@ -105,9 +105,9 @@ describe("transports built on the shared worker mechanism", () => {
         const [, connectionsWorker] = harness.created;
         const [firstRequest] = connectionsWorker.postMessage.mock.calls[0];
 
-        // Another request on the other transport in between. A counter shared
-        // between the two would skip an id here, and the only reply a request
-        // recognizes as its own is the one carrying the id it posted under.
+        // A request on the other transport runs in between. The second
+        // connections request still gets the next id on its own transport.
+        // Replies are matched by request id.
         loadMessagesState(MESSAGES_CSV, "");
         const connections = loadConnectionsData(CONNECTIONS_CSV);
         const [secondRequest] = connectionsWorker.postMessage.mock.calls[1];

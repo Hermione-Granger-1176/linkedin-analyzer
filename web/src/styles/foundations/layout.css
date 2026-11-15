@@ -231,8 +231,7 @@
     color: var(--accent-blue);
 }
 
-/* Use an opaque dark-mode fill so the primary button remains distinct from the
-   page background. */
+/* Opaque dark-mode fill for the primary button. */
 [data-theme="dark"] .primary-btn {
     background-color: var(--surface-cta);
 }

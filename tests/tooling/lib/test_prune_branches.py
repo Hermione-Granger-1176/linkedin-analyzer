@@ -15,8 +15,7 @@ def make_runner(
 ) -> prune_branches.GitRunner:
     """Return a runner answering from a table and recording every invocation.
 
-    An unlisted command raises rather than defaulting to success, so a test
-    cannot pass while the implementation quietly runs a command nobody declared.
+    An unlisted command raises AssertionError.
     """
 
     def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:

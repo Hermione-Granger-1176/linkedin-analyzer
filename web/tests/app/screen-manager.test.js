@@ -306,7 +306,7 @@ describe("ScreenManager", () => {
             expect(document.getElementById("screen-about").classList.contains("active")).toBe(true);
             expect(ScreenManager.getCurrentRouteName()).toBe("lazy-a");
             expect(LoadingOverlay.show).toHaveBeenCalledWith("route:lazy-a", expect.any(Object));
-            // A route change while the code loads is the one the controller sees.
+            // A second activation while the code loads reuses the same load.
             ScreenManager.activate("lazy-a", { range: "6m" });
             expect(loader.load).toHaveBeenCalledTimes(1);
 
@@ -334,7 +334,7 @@ describe("ScreenManager", () => {
 
             ScreenManager.activate("lazy-b", {});
             ScreenManager.activate("home", {});
-            // Leaving takes the loading overlay with it.
+            // Leaving the route hides its loading overlay.
             expect(LoadingOverlay.hide).toHaveBeenCalledWith("route:lazy-b");
             loader.resolve(controller);
             await loader.load.mock.results[0].value;
@@ -370,7 +370,7 @@ describe("ScreenManager", () => {
             loader.reject(new Error("still missing"));
             await vi.waitFor(() => expect(notice()).not.toBeNull());
 
-            // A retry button left behind does nothing once the user moved on.
+            // A retry button from an earlier failure does nothing after the user has navigated away.
             const staleRetry = notice().querySelector("button");
             ScreenManager.activate("home", {});
             staleRetry.click();

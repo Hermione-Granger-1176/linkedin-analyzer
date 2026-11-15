@@ -56,7 +56,7 @@ def _issue_route(issue: dict[str, Any] | None = None) -> Route:
     return (rest("GET", "repos/o/r/issues/5"), json_response(issue or ISSUE))
 
 
-# --- primary path ---------------------------------------------------------------------------
+# Primary path
 
 
 @pytest.mark.parametrize(
@@ -206,7 +206,7 @@ def _issue_route(issue: dict[str, Any] | None = None) -> Route:
 def test_gh_is_the_primary_path(
     call: Callable[[Recorder], int], expected: list[str], stdin: str | None
 ) -> None:
-    """On a machine with GraphQL, each command runs the same gh invocation as before."""
+    """With GraphQL available, each command runs its gh invocation."""
     recorder = Recorder()
 
     assert call(recorder) == 0
@@ -223,7 +223,7 @@ def test_edit_requires_a_title_or_body() -> None:
         issue_commands.edit_issue(5, run_fn=Recorder())
 
 
-# --- REST fallback --------------------------------------------------------------------------
+# REST fallback
 
 
 def test_list_fallback_filters_out_pull_requests(capsys: pytest.CaptureFixture[str]) -> None:
@@ -270,7 +270,7 @@ def test_list_fallback_resolves_me_and_honors_state_and_limit() -> None:
 
 
 def test_list_fallback_keeps_the_last_assignee_like_gh() -> None:
-    """A repeated assignee filter keeps the last value, as gh's single-value flag does."""
+    """A repeated assignee filter keeps only the last value."""
     runner = _sandbox(
         (rest("GET", "repos/o/r/issues", "assignee=b", "per_page=1"), json_response([])),
     )
@@ -283,7 +283,7 @@ def test_list_fallback_keeps_the_last_assignee_like_gh() -> None:
 def test_develop_fallback_refuses_when_gh_repo_is_not_origin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The base branch would come from origin, so another GH_REPO stops before any git change."""
+    """Refuses when GH_REPO differs from origin, before any git command changes state."""
     monkeypatch.setenv("GH_REPO", "org/project")
     runner = FakeGh(sandbox_routes("alice/project"))
 
@@ -294,7 +294,7 @@ def test_develop_fallback_refuses_when_gh_repo_is_not_origin(
 
 
 def test_develop_fallback_refuses_a_non_github_origin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An origin that is not on GitHub cannot supply the base branch, so nothing is fetched."""
+    """Refuses when origin is not a GitHub remote, before any fetch."""
     monkeypatch.setenv("GH_REPO", "o/r")
     runner = FakeGh(
         [(has("remote"), completed_process(0, "https://gitlab.com/o/r.git\n")), *sandbox_routes()]

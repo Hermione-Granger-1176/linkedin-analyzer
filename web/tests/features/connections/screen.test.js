@@ -127,9 +127,9 @@ describe("ConnectionsPage", () => {
     });
 
     it("shows the storage-error state when the connections text record is missing", async () => {
-        // Metadata is present but the text record is gone (cleared in another
-        // tab or unavailable in degraded persistence). Report a load failure, not
-        // the "not uploaded" empty state.
+        // Metadata is present but the text is missing, for example after another
+        // tab cleared it or persistence degraded. The page reports a storage
+        // error, not the "not uploaded" empty state.
         Storage.getFile.mockResolvedValue({
             type: "connections",
             name: "Connections.csv",
@@ -286,8 +286,7 @@ describe("ConnectionsPage", () => {
         await loading;
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // Posting would hand the read to a terminated worker and arm a
-        // watchdog over the error the screen is already showing.
+        // The dropped load posts nothing to the terminated worker and arms no watchdog.
         expect(deadWorker.postMessage).not.toHaveBeenCalledWith(
             expect.objectContaining({ type: "process" }),
         );

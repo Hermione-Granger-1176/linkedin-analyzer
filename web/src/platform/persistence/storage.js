@@ -35,7 +35,7 @@ const ANALYTICS_SCHEMA_VERSION = 2;
  * @property {string} type - File type key
  * @property {string} name - Uploaded file name
  * @property {unknown} [blob] - Stored Blob, or its bytes where IndexedDB refused the Blob
- * @property {unknown} [text] - Legacy CSV text, from before the DB version 4 blob store
+ * @property {unknown} [text] - CSV text stored inline by DB version 3 and earlier
  * @property {number} [size] - Content size in bytes
  * @property {number} [rowCount] - Processed row count
  * @property {number} [updatedAt] - Last update timestamp (ms)
@@ -67,10 +67,9 @@ const ANALYTICS_SCHEMA_VERSION = 2;
  */
 
 /**
- * Wrap stored CSV contents as a File: text from a record stored before the DB
- * version 4 blob store, or the bytes a browser that refuses Blobs in IndexedDB
- * stored instead. Every reader receives the same shape whichever path wrote the
- * record.
+ * Wrap stored CSV contents as a File. Text comes from a record written by DB
+ * version 3 or earlier. Bytes come from a browser that refuses Blobs in
+ * IndexedDB. Every reader receives the same shape.
  * @param {string|ArrayBuffer} text - Stored CSV text or bytes
  * @param {string} name - Stored file name
  * @returns {Blob}
@@ -80,9 +79,10 @@ function textToBlob(text, name) {
 }
 
 /**
- * Pick the stored file contents: the original Blob, or legacy text wrapped as one.
+ * Pick the stored file contents: the stored Blob, or text from DB version 3 or
+ * earlier wrapped as one.
  * @param {unknown} blob - Stored Blob, if any
- * @param {unknown} text - Legacy stored text, if any
+ * @param {unknown} text - Text stored by DB version 3 or earlier, if any
  * @param {string} name - Stored file name
  * @returns {Blob|null}
  */
@@ -100,7 +100,7 @@ function resolveStoredBlob(blob, text, name) {
 }
 
 /**
- * Keep the records that normalized; a filter predicate that narrows out null.
+ * Type guard that keeps normalized records and drops null.
  * @template T
  * @param {T|null} value - Normalized record, or null
  * @returns {value is T}
@@ -136,7 +136,7 @@ function normalizeStoredFile(record) {
 
 /**
  * Normalize a stored file record to metadata only (no file contents). Used by
- * the metadata reads so large exports are not loaded when listing files.
+ * the metadata reads, so listing files does not load their contents.
  * @param {RawStoredFileRecord|null} record - Raw stored record
  * @returns {StoredFileMetadata|null}
  */
@@ -156,8 +156,8 @@ function normalizeStoredFileMetadata(record) {
 }
 
 /**
- * Unwrap stored analytics or outreach data, accepting records written before
- * the data was wrapped.
+ * Unwrap stored analytics or outreach data. A record without a data field is
+ * returned as-is.
  * @param {AnalyticsRecord|StoredAnalytics|null} record - Raw stored record
  * @returns {StoredAnalytics|null}
  */
@@ -229,8 +229,8 @@ const BLOB_PROBE_TIMEOUT_MS = 2000;
 /**
  * Probe Blob persistence in a temporary IndexedDB database.
  * Some WebKit ephemeral sessions reject Blob writes or leave them pending.
- * Use a separate database and a timeout so the probe cannot block uploads.
- * Store byte arrays for this session if the probe fails.
+ * The probe uses a separate database and a timeout. When it resolves false,
+ * uploads store the bytes instead.
  * @param {{idb?: IDBFactory, timeoutMs?: number}} [options] - Overridable for tests
  * @returns {Promise<boolean>}
  */
@@ -264,7 +264,7 @@ export function probeBlobStorage({ idb = indexedDB, timeoutMs = BLOB_PROBE_TIMEO
             request.onerror = () => finish(false);
             request.onsuccess = () => {
                 if (settled) {
-                    // The probe already gave up; release the late connection.
+                    // Closes a connection that opened after the probe timed out.
                     request.result.close();
                     return;
                 }
@@ -302,8 +302,9 @@ export const Storage = (() => {
     const DB_NAME = "linkedin-analyzer";
     const DB_VERSION = 4;
     const FILE_STORE = "files";
-    // Version 3 stored decoded text here. Version 4 stores the original upload
-    // in FILE_BLOB_STORE and reads this store only for records written before.
+    // DB version 3 stored decoded text here. DB version 4 stores the original
+    // upload in FILE_BLOB_STORE. This store is read only for records written
+    // by DB version 3.
     const FILE_TEXT_STORE = "fileTexts";
     const FILE_BLOB_STORE = "fileBlobs";
     const ANALYTICS_STORE = "analytics";
@@ -371,7 +372,7 @@ export const Storage = (() => {
 
     /**
      * Register a callback fired once when persistence degrades to memory at
-     * runtime. Lets the UI show a "won't persist" hint.
+     * runtime.
      * @param {(error: unknown) => void} listener
      */
     function onPersistenceLost(listener) {
@@ -401,9 +402,9 @@ export const Storage = (() => {
     }
 
     /**
-     * Build an actionable Error for an IndexedDB failure event. Abort and blocked
-     * events frequently carry a null `error`, so always return a descriptive Error
-     * and attach the original (when present) as the cause for telemetry.
+     * Build an actionable Error for an IndexedDB failure event. Always returns a
+     * descriptive Error, with the original (when present) as `cause`. Abort and
+     * blocked events often carry a null error.
      * @param {DOMException|null} error - The native IndexedDB error, if any
      * @param {string} message - Human-readable description of the failure
      * @returns {Error} An Error suitable for rejecting the operation's promise
@@ -413,10 +414,11 @@ export const Storage = (() => {
     }
 
     /**
-     * Move inline CSV text from existing (pre-v3) file records into the dedicated
-     * text store and strip it from the metadata store, so metadata reads no longer
-     * load text. Runs inside the versionchange transaction, so it is atomic with
-     * the rest of the upgrade. An interrupted upgrade rolls back and retries.
+     * Move inline CSV text from file records written before file schema version 3
+     * into the text store, and remove it from the metadata store, so metadata
+     * reads do not load text. Runs inside the versionchange transaction, so it is
+     * atomic with the rest of the upgrade. An interrupted upgrade rolls back and
+     * retries.
      * @param {IDBTransaction} tx - The active versionchange transaction
      */
     function migrateInlineTextToTextStore(tx) {
@@ -527,9 +529,8 @@ export const Storage = (() => {
             const store = tx.objectStore(storeName);
             callback(store);
             const rejectFailure = () => reject(idbFailure(tx.error, "IndexedDB transaction failed"));
-            // Resolve void on completion so the IndexedDB path matches the memory
-            // fallback and the documented Promise<void> contract (rather than
-            // leaking the IDBRequest returned by store.put).
+            // Resolves with void on completion, matching the memory fallback and the
+            // Promise<void> contract.
             tx.oncomplete = () => resolve();
             tx.onerror = rejectFailure;
             tx.onabort = rejectFailure;
@@ -538,15 +539,13 @@ export const Storage = (() => {
 
     /**
      * Save an uploaded file and its metadata.
-     * Prefer Blob persistence so the browser can manage the file's backing storage.
+     * Stores the Blob when the browser accepts it, and the bytes otherwise.
      * @param {string} type - File type key
      * @param {StoredFileInput & {rowCount: number}} data - File data to persist
      * @returns {Promise<void>}
      */
     function saveFile(type, data) {
-        // Writes of one type land in call order. The byte fallback awaits each
-        // file's read before writing, so a later save could otherwise finish
-        // first and be overwritten by an earlier one.
+        // Writes of one type run in call order, one at a time.
         const previous = fileWrites.get(type) || Promise.resolve();
         const write = previous.then(
             () => writeFile(type, data),
@@ -627,8 +626,8 @@ export const Storage = (() => {
                 tx.objectStore(FILE_BLOB_STORE).put({ type: metadata.type, blob: contents });
                 tx.objectStore(FILE_TEXT_STORE).delete(metadata.type);
             } catch (error) {
-                // A put that throws leaves the transaction open; abort it so
-                // the metadata is not committed without its contents.
+                // On a synchronous put error, abort the transaction so metadata
+                // is not committed without its contents.
                 try {
                     tx.abort();
                 } catch {
@@ -662,8 +661,8 @@ export const Storage = (() => {
                             resolve(null);
                             return;
                         }
-                        // Prefer the stored Blob; fall back to a version 3 text
-                        // record, then to inline text on a record older than that.
+                        // Prefer the stored Blob. Fall back to the DB version 3 text
+                        // record, then to inline text on file records older than that.
                         const blobRecord = blobRequest.result || null;
                         const textRecord = textRequest.result || null;
                         const text =
@@ -678,9 +677,8 @@ export const Storage = (() => {
                             }),
                         );
                     };
-                    // tx.error is null on explicit aborts/quota, so wrap it in a
-                    // descriptive Error (matching the other transaction paths) so
-                    // callers and telemetry always get an actionable Error.
+                    // tx.error is null on explicit aborts and quota errors, so it is
+                    // wrapped in a descriptive Error like the other transaction paths.
                     const rejectFailure = () =>
                         reject(idbFailure(tx.error, "IndexedDB transaction failed"));
                     tx.onerror = rejectFailure;
@@ -745,9 +743,9 @@ export const Storage = (() => {
     }
 
     /**
-     * Persist the lifetime outreach-funnel summary so the Insights page can show
-     * it without loading the message export. The payload is a small numeric
-     * object, shares the analytics store, and is keyed separately from "base".
+     * Persist the lifetime outreach-funnel summary. The payload is a small numeric
+     * object stored in the analytics store under the key "outreach", separate
+     * from "base".
      * @param {StoredAnalytics} outreach - Outreach summary from the messages worker
      * @returns {Promise<void>}
      */

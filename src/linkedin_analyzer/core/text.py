@@ -54,9 +54,8 @@ CONNECTION_MONTH_LOOKUP = {
 }
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
-# Control characters XML 1.0 forbids in a worksheet cell. openpyxl raises
-# IllegalCharacterError when it writes one, which would abort the whole export.
-# Tab (0x09), newline (0x0A), and carriage return (0x0D) are legal and excluded.
+# Control characters that XML 1.0 forbids in a worksheet cell. Tab (0x09),
+# newline (0x0A), and carriage return (0x0D) are legal and excluded.
 _ILLEGAL_XML_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
@@ -87,7 +86,7 @@ def is_missing(value: object) -> bool:
             return False
         return trimmed.upper() in MISSING_TEXT_VALUES
     try:
-        # Use cast to Any since pd.isna accepts more types than stubs indicate
+        # pd.isna accepts more types than its stubs declare, so the value is cast to Any.
         return bool(pd.isna(cast("Any", value)))
     except (TypeError, ValueError):
         return False
@@ -285,10 +284,8 @@ def escape_excel_formula(value: object) -> object:
 def remove_illegal_chars(value: object) -> object:
     """Strip control characters that are illegal in XML/xlsx worksheet cells.
 
-    openpyxl raises IllegalCharacterError when a cell contains a control
-    character XML 1.0 forbids (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F), which aborts
-    the whole export. Removing them keeps every exported cell writable while
-    leaving legal whitespace (tab, newline, carriage return) intact.
+    Removes the characters XML 1.0 forbids (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F).
+    Tab, newline, and carriage return are kept.
 
     Args:
         value: Cleaned cell value

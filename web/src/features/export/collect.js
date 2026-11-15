@@ -64,19 +64,16 @@ const WORKER_TIMEOUT_MS = 30000;
  * @property {ExportAnalyticsView|null} view - Filtered analytics view
  */
 
-// How many entries a dashboard list carries. The screens render ten, and a page
-// that showed more would stop being the same view the user is exporting.
+// Entries per dashboard list. Matches the ten the screens render.
 const LIST_LIMIT = 10;
 
-// The connections dashboard covers the whole network rather than the screen's
-// twelve-month default, for the reason set out where it is built.
+// The connections dashboard covers the whole network, not the screen's
+// twelve-month default.
 const CONNECTIONS_RANGE = "all";
 
-// The messages dashboard follows the Messages screen's own default, not the
-// Insights one below: they agree today, and a page that silently tracked the
-// wrong screen if either moved would still be captioned with this one's name.
-// Were this ever to become "all", there would be no range to anchor a window
-// on, and the page would quietly lose its timeline rather than say so.
+// The messages dashboard uses the Messages screen's default range, not the
+// Insights range. If this were ever "all", there would be no range to anchor the
+// timeline window on, and the timeline would be dropped.
 const MESSAGES_RANGE = DEFAULT_TIME_RANGE;
 
 /**
@@ -85,7 +82,7 @@ const MESSAGES_RANGE = DEFAULT_TIME_RANGE;
  */
 let activeAnalyticsRun = null;
 
-// Same shape the Insights screen sends, so the worker produces the same view.
+// Same shape the Insights screen sends.
 const DEFAULT_FILTERS = Object.freeze({
     timeRange: "12m",
     topic: "all",
@@ -121,8 +118,8 @@ export function formatRangeLabel(timeRange) {
 
 /**
  * Label the months a section covers. Return an empty string without a window.
- * Use calendar dates because a saved PDF outlives relative labels such as
- * "Last 12 months". Activity and message windows end at the newest event in the file.
+ * Uses calendar dates rather than relative labels such as "Last 12 months".
+ * Activity and message windows end at the newest event in the file.
  * @param {MonthWindow|null} monthWindow - Months covered
  * @returns {string} Window label such as "Feb 2024 to Jan 2025", or an empty string
  */
@@ -132,7 +129,7 @@ function formatWindow(monthWindow) {
     }
     const start = monthKeyToLabel(monthWindow.startKey);
     const end = monthKeyToLabel(monthWindow.endKey);
-    // A single month reads as itself rather than as a range from it to it.
+    // A single month is shown alone, not as a range.
     return start === end ? start : `${start} to ${end}`;
 }
 
@@ -161,8 +158,7 @@ function viewWindow(view) {
  * @returns {MonthWindow|null} Window, or null when there is nothing in range
  */
 function messageWindow(rangeStart, latestTimestamp) {
-    // Against null rather than falsiness: a local-midnight epoch is a legitimate
-    // range start, and the one that falls on it is 0.
+    // Compares against null, since a range start of 0 is valid.
     if (rangeStart === null) {
         return null;
     }
@@ -181,9 +177,8 @@ function messageWindow(rangeStart, latestTimestamp) {
 function buildAllTimeStats(networkGrowth, outreach) {
     const stats = [];
     if (networkGrowth && typeof networkGrowth.multiplier === "number") {
-        // The same multiplication sign the Insights screen uses. Both embedded
-        // faces carry U+00D7, and it is in WinAnsi, so the Helvetica fallback
-        // renders it too.
+        // Uses the multiplication sign U+00D7, which the Insights screen also uses.
+        // Both embedded faces and the Helvetica fallback draw it.
         stats.push({ label: "Network growth", value: `${networkGrowth.multiplier}×` });
     }
     if (outreach) {
@@ -219,15 +214,14 @@ function analyticsRunFromPayload(payload) {
 /**
  * Run a one-shot analytics worker to produce a view and its insights.
  *
- * The worker computes the timeline, topics, and heatmap with the insight cards.
- * Keep that complete view so the activity dashboard uses data from this run.
+ * The worker computes the timeline, topics, and heatmap along with the insight
+ * cards. The complete view is kept for the activity dashboard.
  * @param {import("../../platform/persistence/storage.js").StoredAnalytics} analyticsBase - Persisted analytics base
  * @param {string} timeRange - Range key to build the view at
  * @returns {Promise<AnalyticsRun>} Worker view
  */
 function runAnalyticsWorker(analyticsBase, timeRange) {
-    // One identity is handed to every caller, so it is frozen: callers only read
-    // these fields, and nothing should be able to edit the shared empty result.
+    // The shared empty result is frozen, so callers cannot change it.
     const empty = Object.freeze({ insights: [], tip: null, networkGrowth: null, view: null });
 
     return new Promise((resolve) => {
@@ -266,14 +260,12 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
 
         /** @param {Event} event - Worker error or messageerror event */
         const handleError = (event) => {
-            // Cancelling the event suppresses the browser's own reporting of it,
-            // as the three transports do. This worker derives topics from the
-            // user's own share commentary and comment text, so an uncancelled
-            // error prints that text to the console along with the failure.
+            // Cancels the event so the browser does not log it. This worker derives
+            // topics from the user's own text, which must not reach the console.
             if (event && typeof event.preventDefault === "function") {
                 event.preventDefault();
             }
-            // event.error is never forwarded, for the same reason.
+            // event.error is never forwarded.
             captureError(new Error("Analytics worker failed during export."), {
                 module: "pdf-export",
                 operation: "analytics-worker-error-event",
@@ -286,8 +278,7 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
          * @param {AnalyticsRun} value - Resolution value
          */
         function finish(value) {
-            // Every completion path removes listeners and clears the watchdog.
-            // This latch prevents duplicate cleanup if finish() runs twice.
+            // Ignores calls after the first, so cleanup runs once.
             /* v8 ignore next 3 */
             if (settled) {
                 return;
@@ -321,8 +312,7 @@ function runAnalyticsWorker(analyticsBase, timeRange) {
             }
         }
 
-        // A handle of its own per run: the export releases the worker as soon
-        // as it has the view, so nothing outlives the run.
+        // Each run has its own handle, released when the run settles.
         const workers = createWorkerHandle({
             create: () =>
                 new Worker(new URL("../analytics/analytics-worker.js", import.meta.url), {
@@ -423,10 +413,8 @@ async function resolveInsightSource(isCancelled) {
     }
 
     const analyticsBase = await readAnalyticsBase();
-    // The storage read above is a macrotask boundary, so the user may have
-    // cancelled while it was in flight. Starting the worker now would hand a
-    // whole analytics base to a run whose answer nobody will ever read, and
-    // leave it churning under its own 30-second watchdog.
+    // The user may have cancelled during the storage read. Returns without
+    // starting the worker in that case.
     if (!analyticsBase || isCancelled()) {
         return source || emptyInsightSource();
     }
@@ -456,10 +444,8 @@ function buildActivityDashboard(view, rangeLabel) {
     if (!view || !view.totals || !view.totals.total) {
         return null;
     }
-    // The view crosses a worker boundary and its payload is passed through
-    // unvalidated, and this runs outside the try the other two dashboards sit
-    // in: reaching into a half-built view unguarded would take down the whole
-    // export rather than this one page.
+    // The view crosses a worker boundary unvalidated. This function runs outside
+    // the try blocks the other two dashboards use.
     const { totals, peakHour, streaks } = view;
     const stats = [
         { label: "Posts", value: String(totals.posts) },
@@ -491,8 +477,7 @@ function buildActivityDashboard(view, rangeLabel) {
 /**
  * Build the connections dashboard through an export-owned worker.
  * Worker processing keeps cancellation responsive during large parses.
- * The PDF covers all time because it has no range control, and the screen's
- * twelve-month default can exclude most of the network.
+ * The PDF covers all time, since it has no range control.
  * @param {Blob|string} connectionsCsv - Stored connections upload, or an empty string
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<Dashboard|null>} Dashboard, or null when there is nothing to show
@@ -503,9 +488,7 @@ async function buildConnectionsDashboard(connectionsCsv, isCancelled) {
     }
     try {
         const data = await loadConnectionsData(connectionsCsv, { isCancelled });
-        // The parse is the longest step on this path, so the run is checked
-        // again on the way out rather than aggregating the whole network for a
-        // page nobody will read.
+        // The run is checked again after the parse, before aggregating.
         if (!data || isCancelled()) {
             return null;
         }
@@ -517,10 +500,9 @@ async function buildConnectionsDashboard(connectionsCsv, isCancelled) {
             subtitle: formatRangeLabel(CONNECTIONS_RANGE),
             stats: [
                 { label: "Total connections", value: String(view.stats.total) },
-                // "In selected range" is on the screen and not here: it counts
-                // the rows the range kept, and an all-time page keeps every one
-                // of them, so the tile could only ever restate the total beside
-                // it under a label naming a control the reader cannot see.
+                // The screen's "In selected range" stat is omitted. The all-time
+                // range keeps every row, so it would only repeat the total, and
+                // its label names a control the PDF does not have.
                 { label: "Top company", value: view.stats.topCompany },
                 { label: "Network age", value: view.stats.networkAge },
             ],
@@ -531,9 +513,8 @@ async function buildConnectionsDashboard(connectionsCsv, isCancelled) {
             ],
         };
     } catch {
-        // A dashboard is worth less than the export it sits in, so a malformed
-        // connections file drops the section. The caught value came from the
-        // user's own file and is discarded rather than reported.
+        // A malformed connections file drops this section, not the export. The
+        // caught value is discarded.
         captureError(new Error("Connections dashboard failed."), {
             module: "pdf-export",
             operation: "build-connections-dashboard",
@@ -544,7 +525,7 @@ async function buildConnectionsDashboard(connectionsCsv, isCancelled) {
 
 /**
  * Title a list with its total when the displayed entries are incomplete.
- * The PDF has no Full list button to indicate that more entries exist.
+ * The PDF has no Full list control, so the title states the total.
  * @param {string} label - Panel name
  * @param {number} total - How many entries there are in all
  * @returns {string} Chart title
@@ -555,8 +536,8 @@ function listTitle(label, total) {
 
 /**
  * Count messages by month within the dashboard window, filling gaps with zeroes.
- * The timeline remains visible when contact names are excluded. Return an empty
- * series when the window contains no messages so the PDF omits empty axes.
+ * The timeline is shown whether or not contact names are included. Returns an
+ * empty series when the window has no messages.
  * @param {Float64Array} rowTimestamps - Timestamp of every message the parse kept
  * @param {MonthWindow} monthWindow - Months the dashboard covers
  * @returns {Array<{key: string, label: string, value: number}>} Points, oldest first
@@ -565,8 +546,7 @@ function buildMessageTimeline(rowTimestamps, monthWindow) {
     const counts = new Map();
     for (const timestamp of rowTimestamps) {
         const key = toMonthKey(new Date(timestamp));
-        // Month keys sort as text, and the window starts on the first of its
-        // own month, so this is the same cut the range start makes.
+        // Month keys compare as text, and the window starts at the first of its month.
         if (key >= monthWindow.startKey) {
             counts.set(key, (counts.get(key) || 0) + 1);
         }
@@ -591,13 +571,9 @@ function buildMessageTimeline(rowTimestamps, monthWindow) {
  * @returns {ListChart[]} Chart configurations
  */
 function buildMessagePeopleCharts(messageState, connectionState, topContacts, fading) {
-    // Panel order, wording and per-row detail are the Messages screen's. A list
-    // that dropped the dates and the units would be the same names carrying less
-    // than the page they were copied from.
-    //
-    // Computed here rather than beside `fading` in the caller: this panel is the
-    // only thing that wants it, and this function only runs when names are opted
-    // in, so a names-off export never walks the whole network for it.
+    // Panel order, wording, and per-row detail match the Messages screen.
+    // Silent connections are computed here, since only this panel uses them, and
+    // only when names are included.
     const silent = connectionState ? getSilentConnections(messageState, connectionState) : [];
 
     return [
@@ -650,9 +626,8 @@ function buildLastMessageList(label, contacts, toValue) {
  * @returns {Promise<{dashboard: Dashboard|null, window: MonthWindow|null}>} Dashboard and the months it covers
  */
 async function collectMessagesDashboard(files, includeNames, isCancelled) {
-    // The window is returned alongside the page because the header may need it:
-    // an export built from a messages file alone has no other dated section to
-    // take its caption from.
+    // The window is returned with the page, since the header may use it when the
+    // messages file is the only dated section.
     const empty = { dashboard: null, window: null };
     if (!files.messagesCsv || isCancelled()) {
         return empty;
@@ -661,19 +636,15 @@ async function collectMessagesDashboard(files, includeNames, isCancelled) {
         const state = await loadMessagesState(files.messagesCsv, files.connectionsCsv, {
             isCancelled,
         });
-        // The parse is the longest step on this path, so the run is checked again
-        // on the way out rather than walking the whole state for a page nobody
-        // will read.
+        // The run is checked again after the parse.
         if (!state || isCancelled()) {
             return empty;
         }
-        // Built inside the catch's reach, not after it: a throw from any of the
-        // aggregates below still costs the section rather than the export.
+        // Built inside the try block, so a throw from any aggregate drops only
+        // this section.
         return buildMessagesDashboard(state, includeNames);
     } catch {
-        // As with the connections dashboard: the section goes, the export stays,
-        // and the caught value, parsed from the user's own messages, is not
-        // reported.
+        // The section is dropped and the caught value is not reported.
         captureError(new Error("Messages dashboard failed."), {
             module: "pdf-export",
             operation: "build-messages-dashboard",
@@ -716,10 +687,8 @@ function buildMessagesDashboard(state, includeNames) {
         window: monthWindow,
         dashboard: {
             title: "Messages",
-            // Two ranges live on this page, so the caption names both rather
-            // than printing one over the top of the other. On screen each
-            // panel carries its own line of copy saying what it counts; the
-            // page keeps only the caption, so the caption has to carry it.
+            // The page has two ranges, so the caption names both. Per-panel copy
+            // from the screen is not included, so the caption carries that information.
             subtitle:
                 `Messages and people: ${rangeLabel}. ` +
                 "Connections, silent and fading: all time.",
@@ -740,10 +709,9 @@ function buildMessagesDashboard(state, includeNames) {
 /**
  * Read the stored exports the dashboards and the thread section are built from.
  *
- * Read each stored upload Blob once and share it with the export builders.
- * Workers read the Blobs off the main thread. The small-export fallback reads
- * text on the page. Treat a record whose `blob` getter throws as absent so it
- * does not abort the export.
+ * Reads each stored upload Blob once and shares it with the builders. Workers
+ * read the Blobs; the small-export fallback reads text on the page. A record
+ * whose `blob` getter throws is treated as absent.
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<{messagesCsv: Blob|string, connectionsCsv: Blob|string}>} Stored uploads, or empty strings
  */
@@ -764,7 +732,7 @@ async function readExportFiles(isCancelled) {
 
 /**
  * Read one stored upload Blob, returning an empty string when unreadable.
- * Read records independently so a failure does not remove another dashboard.
+ * Each record is read independently.
  * @param {import("../../platform/persistence/storage.js").StoredFile|null} file - Stored file record
  * @returns {Blob|string} The stored upload, or an empty string
  */
@@ -772,8 +740,7 @@ function readStoredUpload(file) {
     try {
         return file && file.blob ? file.blob : "";
     } catch {
-        // The caught value came off a stored record holding the user's own
-        // export, so only a fixed error is reported.
+        // Only a fixed error is reported.
         captureError(new Error("Stored export text could not be read."), {
             module: "pdf-export",
             operation: "read-export-files",
@@ -784,8 +751,8 @@ function readStoredUpload(file) {
 
 /**
  * Select recent threads and their message bodies from stored uploads.
- * The worker derives account-owner tiebreak keys from the connections file
- * so this collection step does not parse the file on the main thread.
+ * The worker derives the tiebreak keys from the connections file, so the file is
+ * not parsed on the main thread.
  * @param {{messagesCsv: Blob|string, connectionsCsv: Blob|string}} files - Stored uploads
  * @param {() => boolean} isCancelled - True once the run has been abandoned
  * @returns {Promise<import("./threads.js").SelectedThread[]>} Threads for the document
@@ -798,8 +765,7 @@ async function collectThreads(files, isCancelled) {
         return await loadRecentThreads(files.messagesCsv, files.connectionsCsv, { isCancelled });
     } catch {
         // A thread-selection failure drops the section rather than the export.
-        // The caught value is discarded: it came from parsing the user's own
-        // messages, so only a fixed error is reported.
+        // The caught value is discarded. Only a fixed error is reported.
         captureError(new Error("Thread selection failed."), {
             module: "pdf-export",
             operation: "select-threads",
@@ -825,9 +791,8 @@ export async function collectExportData(options = {}) {
     const outreach = source.outreach || (await readOutreach());
     // Read each stored upload once and pass its Blob to every consumer.
     const files = await readExportFiles(isCancelled);
-    // Refused before any worker starts: message contents from a file this
-    // large cannot be held within the memory budget, and finding out after
-    // the dashboards were built would waste the wait.
+    // Refused before any worker starts. Message contents from a file this large
+    // cannot be held in memory.
     if (options.includeMessages && csvSourceSize(files.messagesCsv) > THREADS_EXPORT_MAX_BYTES) {
         throw new ExportRefusal(MESSAGES_TOO_LARGE_FOR_CONTENTS);
     }
@@ -837,24 +802,17 @@ export async function collectExportData(options = {}) {
         isCancelled,
     );
     const threads = options.includeMessages ? await collectThreads(files, isCancelled) : [];
-    // Awaited in turn rather than raced against the messages dashboard above:
-    // each owns a worker of its own, and starting both would hold two copies of
-    // the connections export in flight at once to save a step neither is
-    // blocking on.
+    // Awaited in turn, not in parallel with the messages dashboard, so only one
+    // copy of the connections export is in flight at a time.
     const connections = await buildConnectionsDashboard(files.connectionsCsv, isCancelled);
 
     const model = {
         generatedAt: options.generatedAt instanceof Date ? options.generatedAt : new Date(),
-        // The header speaks for the whole document rather than for one page of
-        // it, so it states the activity window when there is one and the
-        // messages window when messages are all the document has. Either way it
-        // is not the last relative caption on a file whose pages name their own
-        // dates.
+        // The header covers the whole document. It states the activity window when
+        // there is one, and the messages window otherwise.
         rangeLabel: formatWindow(activityWindow || messages.window) || activityLabel,
-        // One array in document order rather than a field per screen, so a
-        // fourth dashboard is an entry here instead of a change in four files.
-        // The layout engine takes only real dashboards, so the ones that found
-        // nothing to show are dropped rather than passed along as holes.
+        // Dashboards are one array in document order. Dashboards that found nothing
+        // to show are dropped, since the layout engine takes only real dashboards.
         dashboards: /** @type {Dashboard[]} */ (
             [
                 buildActivityDashboard(source.view, activityLabel),
@@ -868,9 +826,7 @@ export async function collectExportData(options = {}) {
         threads,
     };
 
-    // Last, over the finished model: every collector above feeds it, and the
-    // faces the document is drawn with cannot spell every name that reaches
-    // them. See drawable-text.js for what is replaced and why it is replaced
-    // rather than left to disappear.
+    // Applied last, to the finished model. The fonts cannot draw every character
+    // that can appear in a name. See drawable-text.js for what is replaced.
     return sanitizeModel(model, readDrawableCoverage());
 }

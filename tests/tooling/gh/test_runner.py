@@ -171,7 +171,7 @@ def test_run_timeout_message_after_exhaustion() -> None:
 
 
 def test_reply_mutation_does_not_retry() -> None:
-    """A reply is non-idempotent and must not retry on a transient error."""
+    """A reply mutation is not retried on a transient error."""
     runner = SequenceRunner([completed_process(1, "", "(HTTP 502)")])
 
     with pytest.raises(GhError):
@@ -181,7 +181,7 @@ def test_reply_mutation_does_not_retry() -> None:
 
 
 def test_resolve_mutation_retries() -> None:
-    """Resolving is idempotent, so a transient error is retried."""
+    """A resolve mutation is retried on a transient error."""
     runner = SequenceRunner(
         [
             completed_process(1, "", "(HTTP 502)"),
@@ -226,7 +226,7 @@ def test_graphql_reports_other_errors_as_gh_error() -> None:
 
 
 def test_sleep_delegates_to_time_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The backoff indirection really sleeps when it is not stubbed out."""
+    """_sleep delegates to time.sleep."""
     monkeypatch.undo()  # drop the autouse backoff stub for this one test
     recorded: list[float] = []
     monkeypatch.setattr(gh_runner.time, "sleep", recorded.append)
@@ -440,7 +440,7 @@ def test_with_rest_fallback_skips_primary_after_a_remembered_verdict() -> None:
 
 
 def test_with_rest_fallback_surfaces_a_failing_fallback() -> None:
-    """A fallback error propagates; it is not retried against GraphQL."""
+    """A fallback error propagates unchanged."""
 
     def primary() -> str:
         """Fail like a blocked GraphQL call."""
@@ -583,7 +583,7 @@ def test_rest_command_vector_for_a_mutation_is_not_retried() -> None:
 
 
 def test_rest_sends_mutation_fields_as_a_json_body_on_stdin() -> None:
-    """A mutation body travels on stdin, so its size never hits the argument limit."""
+    """A mutation body is sent as JSON on stdin."""
     seen: dict[str, object] = {}
 
     def runner(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -871,7 +871,7 @@ def test_current_pr_number_fallback_names_the_tracked_remotes_owner() -> None:
     ["https://github.com/alice/Hello.git", "git@github.com:alice/Hello.git"],
 )
 def test_current_pr_number_fallback_follows_a_tracking_remote_given_as_a_url(url: str) -> None:
-    """An editable fork tracks its clone URL, which is read directly instead of as a remote name."""
+    """A tracking remote given as a URL is read directly, not looked up as a remote name."""
     runner = FakeGh(
         [
             (has("pr", "view"), graphql_blocked()),
@@ -911,7 +911,7 @@ def test_current_pr_number_fallback_ignores_a_tracking_url_that_is_not_on_github
 def test_current_pr_number_fallback_skips_a_pr_from_a_same_owner_repository(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Two repositories of one owner can share a branch name, so the source repository decides."""
+    """The PR's source repository must match, not only its owner."""
     monkeypatch.setenv("GH_REPO", "org/project")
     runner = FakeGh(
         [
@@ -955,7 +955,7 @@ def test_current_pr_number_fallback_finds_nothing_when_only_another_repository_m
 
 
 def test_current_pr_number_fallback_keeps_a_pr_whose_source_repository_was_deleted() -> None:
-    """GitHub reports no head repository for a deleted fork, and the PR is still the branch's."""
+    """A PR with no head repository is still matched to the branch."""
     runner = _branch_runner([{"number": 42, "head": {"repo": None}}])
 
     assert gh_runner.current_pr_number(run_fn=runner) == 42
@@ -1007,7 +1007,7 @@ def test_current_pr_number_fallback_uses_a_closed_tracked_pr_when_nothing_is_ope
 
 
 def test_current_pr_number_fallback_prefers_a_recorded_pr_over_the_tracked_upstream() -> None:
-    """A PR recorded by a REST checkout wins, so tracking never overrides it."""
+    """A recorded PR number takes precedence over tracking config."""
     runner = FakeGh(
         [
             (has("pr", "view"), graphql_blocked()),
@@ -1092,7 +1092,7 @@ def _recorded_runner(number: str, repo: str | None) -> FakeGh:
 
 
 def test_current_pr_number_fallback_uses_the_pr_a_checkout_recorded() -> None:
-    """A fork PR checked out through REST is found by its recorded number, not a head lookup."""
+    """A recorded PR number is used without a head lookup."""
     runner = _recorded_runner("12", "alice/project")
 
     assert gh_runner.current_pr_number(run_fn=runner) == 12
@@ -1176,7 +1176,7 @@ def test_current_pr_number_fallback_reads_the_head_owner_from_the_recorded_repo(
 
 
 def test_current_pr_number_fallback_keeps_a_closed_recorded_pr_without_another() -> None:
-    """Like gh pr view, a closed recorded PR still counts when nothing newer exists."""
+    """A closed recorded PR is returned when no newer PR exists."""
     runner = _closed_recorded_runner(
         (rest("GET", "repos/alice/project/pulls"), json_response([])),
     )
@@ -1208,7 +1208,7 @@ def test_current_pr_number_fallback_ignores_a_number_recorded_for_another_repo(
 
 
 def test_current_pr_number_fallback_ignores_a_number_recorded_without_a_repo() -> None:
-    """A number with no recorded repository cannot be trusted and is looked up instead."""
+    """A recorded number without a recorded repository is ignored."""
     assert gh_runner.current_pr_number(run_fn=_recorded_runner("12", None)) == 99
 
 
@@ -1264,7 +1264,7 @@ def test_same_repo_ignores_case() -> None:
 
 
 def test_require_checkout_repo_refuses_an_unidentifiable_origin() -> None:
-    """A non-GitHub origin cannot hold the selected repository's PRs and branches."""
+    """Raises GhError when origin is not a GitHub remote."""
     runner = FakeGh([(has("remote"), completed_process(0, "https://gitlab.com/o/r.git\n"))])
 
     with pytest.raises(GhError, match="Cannot check out PR #1: origin is not a GitHub repository"):
@@ -1323,7 +1323,7 @@ def test_resolve_repo_prefers_gh_repo_over_the_gh_default(
     ],
 )
 def test_resolve_repo_refuses_an_unreadable_gh_default(config: str, upstream_url: str) -> None:
-    """A default gh stored but this helper cannot read fails instead of using origin."""
+    """An unreadable gh default raises GhError rather than falling back to origin."""
     with pytest.raises(GhError, match="Could not read gh's default repository from remote"):
         gh_runner.resolve_repo(run_fn=_default_runner(config, upstream_url))
 

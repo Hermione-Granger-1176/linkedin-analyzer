@@ -95,10 +95,8 @@ describe("hasExportableData", () => {
     });
 
     it("is false when the stored export holds no rows", async () => {
-        // A row count rather than mere presence: an upload that stored no rows,
-        // or a record whose text has since gone, is a file the dashboards will
-        // find nothing in, and enabling the button for it promises a document
-        // that comes back empty.
+        // Files count only when they hold rows. A file with rowCount 0 or with
+        // no rowCount does not count.
         for (const file of [{ type: "connections", rowCount: 0 }, { type: "messages" }]) {
             Storage.getAllFiles.mockResolvedValue([file]);
 
@@ -139,8 +137,7 @@ describe("readAnalyticsBase", () => {
     });
 
     it("falls through to storage when the cached base has no months", async () => {
-        // The cache and the collection have to agree: a monthless cached base
-        // used to make the button say yes over a document that came back empty.
+        // A cached base with no months is ignored, and storage is read instead.
         DataCache.set("storage:analyticsBase", {});
         Storage.getAnalytics.mockResolvedValue({ months: { "2026-01": {} } });
 

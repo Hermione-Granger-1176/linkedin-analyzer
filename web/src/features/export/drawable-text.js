@@ -1,21 +1,18 @@
 /**
  * Replace text the PDF fonts cannot draw with a visible placeholder.
  *
- * The embedded handwritten fonts omit unsupported characters. Without a
- * placeholder, a name can lose characters without any indication. The Helvetica
- * fallback also needs this pass because characters outside WinAnsi can corrupt
- * the rest of a line. Each font path supplies its supported code points.
+ * The embedded handwritten fonts omit unsupported characters, and the Helvetica
+ * fallback draws only WinAnsi characters. Each font path supplies its supported
+ * code points.
  */
 
-// Drawn in place of each run of characters the fonts cannot show. A question
-// mark is itself drawable by every face the export can be using, the core font
-// included, and it is already read as "something was here that could not be
-// shown". One per run rather than one per character: a name in Chinese should
-// read as a name that could not be printed, not as a row of marks.
+// Drawn once in place of each run of undrawable characters, not once per
+// character. Every face the export can use draws a question mark, including the
+// core font.
 const PLACEHOLDER = "?";
 
-// Layout rather than glyphs: jsPDF's own line splitting reads these out of a
-// message body, and no cmap carries a newline.
+// Always drawable: jsPDF's line splitting reads these from message bodies, and
+// no font carries a glyph for them.
 const LAYOUT_CHARACTERS = new Set(["\n", "\r", "\t"]);
 
 /**
@@ -36,9 +33,8 @@ function isDrawable(character, coverage) {
 /**
  * Replace every undrawable run in a string with one placeholder.
  *
- * Composed first: a decomposed "é" is an "e" and a combining acute, and both
- * faces carry the precomposed letter, so normalizing keeps an accent that would
- * otherwise have been drawn loose or dropped.
+ * Normalized to NFC first, so a decomposed accented letter is checked in its
+ * precomposed form.
  * @param {string} value - Text bound for the document
  * @param {Set<number>} coverage - Code points the document's fonts can draw
  * @returns {string} Text the fonts can draw
@@ -62,10 +58,8 @@ export function sanitizeText(value, coverage) {
         }
     }
 
-    // Trimmed only where something was replaced, so ordinary text is handed back
-    // exactly as it came: a name that was nothing but undrawable characters
-    // should not print as an indented placeholder, and the space a lost
-    // character used to sit beside must not survive it either.
+    // Trimmed only when a run was replaced. Text with no replacements is returned
+    // unchanged. Trimming removes the spaces left beside a replaced run.
     return replaced ? drawn.trim() : text;
 }
 
@@ -84,16 +78,15 @@ function isPlainObject(value) {
 
 /**
  * Sanitize strings throughout the completed document model.
- * Rebuild plain objects and arrays so every collector receives the same text
- * handling. Preserve numbers, dates, and other non-plain values.
+ * Plain objects and arrays are rebuilt. Numbers, dates, and other non-plain
+ * values are returned as they are.
  * @template T
  * @param {T} value - Document model, or any part of one
  * @param {Set<number>} coverage - Code points the document's fonts can draw
  * @returns {T} The same model with drawable text
  */
 export function sanitizeModel(value, coverage) {
-    // Each rebuilt value keeps the shape it came in with, which is what lets
-    // the casts below hand it back as the type it was given as.
+    // Each rebuilt value keeps the input's shape, so the casts return it as type T.
     if (typeof value === "string") {
         return /** @type {T} */ (sanitizeText(value, coverage));
     }

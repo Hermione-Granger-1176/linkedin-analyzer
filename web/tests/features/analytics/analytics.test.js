@@ -188,10 +188,9 @@ describe("AnalyticsEngine", () => {
     });
 
     it("buildView does not inflate counts when a topic filter is combined with a day filter", () => {
-        // Regression: the day/hour fraction must be taken over the month's full
-        // activity, not the topic-narrowed total. Four posts land on the same
-        // weekday (Mon 2025-01-06) but only one is #ai, so the old code computed
-        // ratio = days[Mon] / topicCount = 4 / 1 and inflated the #ai count to 4.
+        // The day and hour fractions come from the month's full activity, not the
+        // topic-narrowed total. Four posts land on one weekday (Mon 2025-01-06),
+        // and only one of them is #ai.
         const share = (commentary) => ({
             Date: "2025-01-06 08:00:00",
             ShareCommentary: commentary,
@@ -219,17 +218,14 @@ describe("AnalyticsEngine", () => {
         const topicAndDay = AnalyticsEngine.buildView(analytics, { ...base, topic: "ai", day: 0 });
 
         expect(topicOnly.totals.posts).toBe(1);
-        // Adding the (Monday) day filter can only narrow the topic subset; with
-        // the bug it ballooned to 4.
+        // The day filter can only narrow the topic subset.
         expect(topicAndDay.totals.posts).toBe(1);
         expect(topicAndDay.totals.posts).toBeLessThanOrEqual(topicOnly.totals.posts);
         expect(topicAndDay.totals.total).toBeLessThanOrEqual(topicOnly.totals.total);
     });
 
     it("buildView intersects a topic filter with a share-type filter", () => {
-        // Regression: the share-type branch used to overwrite the topic
-        // adjustment, so #ai + media reported every media post regardless of
-        // topic. Here only one of three media posts is #ai.
+        // Topic and share-type filters combine. Only one of the three media posts is #ai.
         const share = (commentary, mediaUrl) => ({
             Date: "2025-01-06 08:00:00",
             ShareCommentary: commentary,
@@ -269,8 +265,8 @@ describe("AnalyticsEngine", () => {
         });
 
         expect(mediaOnly.totals.posts).toBe(3);
-        // The intersection is smaller than media-only (the topic excludes the two
-        // #excel media posts); with the bug it equaled media-only at 3.
+        // The intersection is smaller than media-only, because the topic excludes
+        // the two #excel media posts.
         expect(topicAndMedia.totals.posts).toBeGreaterThan(0);
         expect(topicAndMedia.totals.posts).toBeLessThan(mediaOnly.totals.posts);
         expect(topicAndMedia.totals.posts).toBeLessThanOrEqual(topicOnly.totals.posts);
@@ -788,8 +784,7 @@ describe("AnalyticsEngine network growth", () => {
         const analytics = AnalyticsEngine.compute(shares, comments, connections);
         expect(analytics.networkGrowth).not.toBeNull();
 
-        // It is a lifetime value rendered apart from the filters, so it rides on
-        // every view unchanged rather than being recomputed per filter.
+        // networkGrowth is a lifetime value, so every view carries it unchanged.
         const baseFilters = {
             timeRange: "all",
             topic: "all",
@@ -866,9 +861,8 @@ describe("AnalyticsEngine network growth", () => {
     });
 
     it("returns null when busy months do not outpace quiet ones", () => {
-        // Quiet (low-post) months gain the most connections, so the busiest
-        // posting months bring no more than the quiet ones (and the correlation
-        // is negative), the card would be misleading and must stay dormant.
+        // Quiet months gain the most connections, so busy months add no more than
+        // quiet ones and the correlation is negative. The card stays hidden.
         const specs = monthsRange(14, i =>
             i < 4
                 ? { posts: 1, connections: 20, topic: "x" }
@@ -879,9 +873,9 @@ describe("AnalyticsEngine network growth", () => {
     });
 
     it("returns null when the busiest-vs-quiet lift rounds below 2x", () => {
-        // Connections track posts perfectly (positive correlation) but the
-        // busiest months only edge out the quiet ones, so the multiplier rounds
-        // to 1x, too weak a headline to show.
+        // Connections have a positive correlation with posts, but the busiest
+        // months only edge out the quiet ones. The multiplier rounds to 1x, and
+        // no card is shown.
         const { shares, connections } = buildMonthly(
             monthsRange(14, i => ({ posts: i + 1, connections: 101 + i, topic: "x" }))
         );
@@ -910,9 +904,8 @@ describe("AnalyticsEngine topic shift", () => {
     });
 
     it("omits topic shift under a topic or dimension filter", () => {
-        // The per-month topic mix is unfiltered, so a topic/day/hour/share-type
-        // filter must drop the focus-shift card rather than compare topics the
-        // active view has filtered out.
+        // The per-month topic mix is unfiltered, so any topic, day, hour, or
+        // share-type filter hides the topic-shift card.
         const specs = monthsRange(9, i => ({
             posts: 3,
             topic: i < 3 ? "excel" : i < 6 ? "data" : "ai"
@@ -1071,8 +1064,7 @@ describe("AnalyticsEngine input edge cases", () => {
             { "Connected On": "2025-03-12" },
         ];
         const { shares } = buildMonthly(monthsRange(13, i => ({ posts: i + 1, topic: "x" })));
-        // Only the two well-formed 2025-03 rows count, so growth stays dormant
-        // (one connection month cannot overlap the posting range meaningfully).
+        // Only the two well-formed 2025-03 rows count. One connection month gives no growth.
         expect(AnalyticsEngine.compute(shares, [], connections).networkGrowth).toBeNull();
     });
 

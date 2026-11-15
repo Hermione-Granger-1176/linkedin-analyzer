@@ -1,9 +1,8 @@
 /**
  * Parse messages for the PDF without changing their bodies.
  *
- * Reuse CSV parsing and date, name, and URL normalization. Keep CONTENT exactly
- * as the parser produced it. Spreadsheet cleaning would prefix an apostrophe
- * to ordinary messages such as "+1, that works for me" and trim their whitespace.
+ * Reuses CSV parsing and date, name, and URL normalization. CONTENT is kept
+ * exactly as the parser produced it, with no spreadsheet-cleaning changes.
  */
 
 import { LinkedInCleaner } from "../cleaning/cleaner.js";
@@ -36,10 +35,9 @@ const COLUMNS = Object.freeze(
  */
 
 /**
- * Return the message body exactly as the CSV parser decoded it.
- * parseCsvRows already decodes doubled CSV quotes. CSV_OPTIONS_DEFAULT treats
- * backslashes as ordinary characters, so another unescaping pass would corrupt
- * bodies that contain adjacent quotes or backslashes.
+ * Returns the message body exactly as the CSV parser decoded it.
+ * parseCsvRows already decodes doubled CSV quotes, and CSV_OPTIONS_DEFAULT
+ * treats backslashes as ordinary characters, so no further unescaping is applied.
  * @param {unknown} value - Parsed CONTENT cell
  * @returns {string} Message body, verbatim
  */
@@ -49,12 +47,11 @@ function messageBodyText(value) {
 
 /**
  * Build one export row from a parsed record, or null when the row lacks a
- * required value. The drop rule is the spreadsheet cleaner's, so the export
- * sees the same messages the workbook would have.
+ * required value. The drop rule matches the spreadsheet cleaner's.
  *
  * With `withBody` false the body still decides whether the row is kept, but
- * the row carries an empty `CONTENT`, so a caller can hold many rows without
- * their bodies. A value cache cleans every other repeated value once.
+ * `CONTENT` is set to an empty string. When a value cache is given, it cleans
+ * each repeated value of every column except `CONTENT` once.
  * @param {Record<string, unknown>} raw - Parsed record keyed by CSV column name
  * @param {{withBody?: boolean, cache?: import("../cleaning/string-pool.js").ValueCache|null}} [options] - Body and value handling
  * @returns {MessageRow|null} Export row

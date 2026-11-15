@@ -17,7 +17,7 @@
     border: 2px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--space-lg);
-    /* Keep card text above the reaction without reducing the card width. */
+    /* Bottom padding clears the reaction without narrowing the card. */
     padding-bottom: calc(var(--space-sm) + var(--insight-reaction-size));
     box-shadow: var(--shadow-sm);
     display: flex;
@@ -360,7 +360,7 @@
     height: 24px;
 }
 
-/* Match the avatar footprint so skeleton rows do not shift. */
+/* Same footprint as the message avatar. */
 .skeleton-avatar {
     flex-shrink: 0;
     width: 34px;
@@ -378,7 +378,7 @@
     flex: 1;
 }
 
-/* Skeleton rows do not need the reaction space reserved by real cards. */
+/* Skeleton cards skip the reaction space reserved by real cards. */
 .skeleton-insight {
     min-height: 118px;
     padding-bottom: var(--space-lg);

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockMatchMedia, resetDom, setupDom } from "../../helpers/dom.js";
 
-/* Kept in step with mascot.js, which keeps its timings to itself. */
+/* Mirrors the timings in mascot.js, which does not export them. */
 const SPLAT_LIFETIME_MS = 800;
 const CHEER_MS = 1700;
 const STAPLE_MS = 1700;
@@ -42,10 +42,9 @@ function releaseListeners() {
 }
 
 /**
- * Load a fresh copy of the module, so the one-shot init flag, the moment timers
- * and the cache it subscribes to all start from nothing in every test. The
- * cache comes from the same fresh graph, or a notification sent from this file
- * would reach an instance the module never subscribed to.
+ * Loads a fresh copy of the module and its DataCache. Both come from the same
+ * fresh module graph, so notifications sent from this file reach the instance
+ * the module subscribed to.
  * @returns {Promise<object>} The module's exports, plus the DataCache it reads.
  */
 async function loadMascot() {
@@ -56,8 +55,8 @@ async function loadMascot() {
 }
 
 /**
- * Click an element with pointer coordinates, the way the splat reads them. The
- * detail count is what a pointer click carries and a keyboard one does not.
+ * Dispatches a click with pointer coordinates and detail 1, which is what a
+ * pointer click carries. Keyboard clicks have detail 0.
  * @param {Element} element - Element to click.
  * @param {number} clientX - Pointer x in client space.
  * @param {number} clientY - Pointer y in client space.
@@ -81,8 +80,7 @@ function measure(element, { left = 0, top = 0, width = 100, height = 40 } = {}) 
 
 describe("mascot", () => {
     beforeEach(() => {
-        // jsdom has no matchMedia, and every entry point here asks it whether
-        // the visitor wants motion at all.
+        // Every entry point checks matchMedia for reduced motion. This sets it to "no preference".
         mockMatchMedia(false);
         setupDom(`
             <button class="primary-btn" id="primary">Go</button>
@@ -284,9 +282,8 @@ describe("mascot", () => {
             celebrateStaple();
             vi.advanceTimersByTime(CHEER_MS - 400);
 
-            // The three moments now run for the same length, so the one that
-            // started first is the one that is over: the staple has its own
-            // timer and the rest of its run still to go.
+            // Each moment has its own timer. The cheer, started first, has ended,
+            // and the staple is still running.
             expect(document.getElementById("cleanCheer").hasAttribute("hidden")).toBe(true);
             expect(document.getElementById("pdfStaple").hasAttribute("hidden")).toBe(false);
         });

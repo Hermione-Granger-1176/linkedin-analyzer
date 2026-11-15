@@ -1,7 +1,7 @@
 /**
  * Vitest unit tests for the analytics numeric helpers.
  *
- * pearson and average were extracted from analytics.js and are pure.
+ * pearson and average are pure functions.
  */
 
 import { describe, expect, it } from "vitest";

@@ -9,13 +9,12 @@ import { buildGrowthTimeline, computeStats } from "./view.js";
 /** @typedef {import("./view.js").CleanedConnectionRow} CleanedConnectionRow */
 /** @typedef {import("./view.js").ConnectionsAnalytics} ConnectionsAnalytics */
 
-/* -- Main processing pipeline ------------------------------------------------ */
+/* Main processing pipeline */
 
 /**
  * Parse and aggregate a Connections CSV into analytics ready for the UI.
- * The cleaned rows are included in the response so the UI can apply its own
- * time-range filter and build company and position summaries without another
- * worker round-trip.
+ * The response includes the cleaned rows. The UI uses them for its time-range
+ * filter and its company and position summaries.
  *
  * A stored upload uses the streaming cleaner when it can finish. Otherwise,
  * processCsvSource reads it as one string and uses the whole-text cleaner.
@@ -56,7 +55,7 @@ function postWorkerError(requestId, message) {
     self.postMessage({ type: "error", requestId, payload: { message } });
 }
 
-/* -- Worker message handler -------------------------------------------------- */
+/* Worker message handler */
 
 serveWorker({
     requestType: "process",

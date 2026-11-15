@@ -18,9 +18,8 @@ async function listWorkflowFiles() {
 }
 
 function isAllowedFalsePositive(result) {
-    // actionlint cannot know repository-level GitHub Actions variables at lint time.
-    // Its diagnostic only names the "vars" context and does not include the
-    // property path, so this allowlist cannot be narrowed to specific variables.
+    // Matches every "vars" context diagnostic: actionlint cannot see repository
+    // variables, and its message omits the property name.
     return result.message.includes('undefined variable "vars"');
 }
 

@@ -2,8 +2,8 @@
  * Shared lifecycle code for the export worker transports.
  *
  * Each transport owns a short-lived worker, watchdog, request settlement, and
- * cancellation path. The transport modules keep the worker request and response
- * formats because those differ by export type.
+ * cancellation path. The transport modules define the worker request and
+ * response formats, which differ by export type.
  *
  * Worker errors use fixed messages. They must not include uploaded message text,
  * names, employers, or other export data.
@@ -17,27 +17,24 @@ import { readCsvSourcesOrNull, readOptionalCsvSource } from "../upload/read.js";
 /**
  * Outcome of a request the caller explicitly cancelled.
  *
- * Distinct from the null "the worker could not answer" outcome, because the
- * main-thread fallback must not re-run the very work that was cancelled.
+ * Distinct from null, which means the worker could not answer. A cancelled
+ * request never falls back to the main thread.
  */
 const CANCELLED = Symbol("export-request-cancelled");
 
 /**
  * Outcome of a request the worker answered with a definite failure.
  *
- * Also distinct from null: the worker has already run this exact CSV through
- * this exact code and reported that it cannot parse it, so the main thread would
- * only freeze the page to reach the same answer. The null outcome means the
- * worker mechanism never gave one, through no worker, a failed post or a
- * timeout, and only that is worth falling back for.
+ * Also distinct from null. The worker parsed the file and reported that it cannot
+ * be parsed. Null means the worker mechanism gave no answer (no worker, a failed
+ * post, or a timeout), and only null falls back to the main thread.
  */
 export const FAILED = Symbol("export-request-failed");
 
 /**
  * Verdict from an `interpret` that read a reply and decided to keep waiting.
  *
- * Distinct from every real outcome, null included: null is the answer "the
- * worker could not tell us", and this is the absence of an answer.
+ * Not an outcome. The request keeps waiting for another reply.
  */
 export const PENDING = Symbol("export-request-pending");
 
@@ -68,15 +65,15 @@ export const PENDING = Symbol("export-request-pending");
  * A failed parse uses the request's id, which starts at 1. Contract rejection,
  * a global error, or an unhandled rejection uses id 0.
  *
- * Return FAILED for a parse failure attributed to this request. Return null
- * for id 0 so small exports can use the fallback. A failure outside the request
- * does not establish whether the file can be parsed.
+ * Returns FAILED for a parse failure attributed to this request. Returns null
+ * for id 0, which permits the main-thread fallback. A failure outside the
+ * request does not establish whether the file can be parsed.
  *
- * The worker entry cancels global failure events and sends an id 0 envelope.
- * The fallback depends on interpreting that envelope as null.
+ * The worker entry cancels global failure events and sends an id 0 envelope,
+ * which is read as null.
  *
- * Settle the request immediately after either failure. Only one request is
- * active, so no other request can own the failure.
+ * Settle the request right after either failure. Only one request is active,
+ * so no other request can own the failure.
  * @param {{requestId: import("../../app/worker-contracts.ts").RequestId}} message - Parsed reply reporting a failure
  * @param {ReplyContext} context - The request's id and error reporter
  * @returns {null|typeof FAILED} FAILED when the worker attributed the failure to this request, null otherwise
@@ -92,8 +89,7 @@ export function failureOutcome(message, context) {
  */
 export function createWorkerTransport(config) {
     const { name, createWorker } = config;
-    // One name gives both the operation tags and the error messages, so a tag
-    // and the message beside it can never end up naming different workers.
+    // One name gives both the operation tags and the error messages.
     const label = `${name[0].toUpperCase()}${name.slice(1)}`;
 
     /** @type {Worker|null} */
@@ -104,8 +100,8 @@ export function createWorkerTransport(config) {
     /** @type {number|null} */
     let timeoutId = null;
     /**
-     * Settle hook for the one request that can be in flight, so termination can
-     * end it and drop every reference the request was holding.
+     * Settle hook for the in-flight request. Termination uses it to end the
+     * request and release its references.
      * @type {{cancel: () => void}|null}
      */
     let pendingRequest = null;
@@ -138,8 +134,8 @@ export function createWorkerTransport(config) {
         if (worker) {
             worker.terminate();
         }
-        // Settled before the handle is dropped, so the request still detaches
-        // its listeners from the worker it was listening to.
+        // Settled before the handle is dropped, so the request detaches its
+        // listeners from that worker.
         if (pendingRequest) {
             pendingRequest.cancel();
         }
@@ -174,13 +170,11 @@ export function createWorkerTransport(config) {
         if (!worker) {
             return Promise.resolve(null);
         }
-        // The promise executor below runs synchronously, so this is the same
-        // worker it attaches to and posts through.
+        // Captured so the promise executor uses the same worker it attaches to and
+        // posts through.
         const activeWorker = worker;
-        // Only one request can own the watchdog and the settle hook. A second
-        // arriving while the first is in flight would adopt both, and the first
-        // to be answered would then clear the second's watchdog and null its
-        // settle hook, leaving that promise pending for the life of the page.
+        // Only one request owns the watchdog and settle hook, so an in-flight
+        // request is cancelled before a new one starts.
         if (pendingRequest) {
             pendingRequest.cancel();
         }
@@ -201,8 +195,8 @@ export function createWorkerTransport(config) {
 
             const finishRequest = () => {
                 clearWorkerTimeout();
-                // handleError can fire after terminate() has already nulled the
-                // handle, so check it before detaching listeners.
+                // handleError can run after terminate() has cleared the handle, so
+                // the handle is checked first.
                 /* v8 ignore next 3 */
                 if (!worker) {
                     return;
@@ -247,15 +241,11 @@ export function createWorkerTransport(config) {
 
             /** @param {Event} event - Worker error or messageerror event */
             const handleError = (event) => {
-                // Cancelling the event suppresses the browser's own reporting of
-                // it, which would otherwise print the worker's error, and
-                // anything of the user's caught up in it, to the console.
+                // Cancels the event so the browser does not log it to the console.
                 if (event && typeof event.preventDefault === "function") {
                     event.preventDefault();
                 }
-                // event.error is never forwarded: these workers parse the raw
-                // exports, so a runtime failure inside one can carry message
-                // text, or the name and employer of one of the user's contacts.
+                // event.error is never forwarded, since it can carry export data.
                 reportRequest(
                     `${label} worker failed during export.`,
                     `${name}-worker-error-event`,
@@ -279,8 +269,7 @@ export function createWorkerTransport(config) {
             try {
                 activeWorker.postMessage({ ...envelope, requestId });
             } catch {
-                // A structured-clone failure names the value it could not clone,
-                // and that value is one of the raw exports.
+                // The thrown error is not forwarded, since it can name an uploaded value.
                 reportRequest(
                     `${label} worker request could not be sent.`,
                     `${name}-worker-post-message`,
@@ -307,7 +296,7 @@ export function createWorkerTransport(config) {
  * Run one export load: the worker first, then the UI thread for a small export
  * the worker mechanism could not answer.
  *
- * The three export transports used to carry this sequence each. Every early
+ * Shared by the threads, messages, and connections transports. Every early
  * return lands on `empty`, so the PDF omits the section rather than failing.
  * @template R, E
  * @param {WorkerTransport} transport - The transport owning the worker
@@ -318,21 +307,19 @@ export async function loadWithFallback(transport, options) {
     const { sources, request, mainThread, empty } = options;
     const isCancelled =
         typeof options.isCancelled === "function" ? options.isCancelled : () => false;
-    // The caller reached here through several storage reads, any of which the
-    // user may have cancelled across. Creating the worker now would post the
-    // whole CSV to it on behalf of a run whose answer nobody will read.
+    // Checked before a worker is created, so a cancelled run posts nothing.
     if (!sources[0] || isCancelled()) {
         return empty;
     }
 
     const outcome = await transport.request(request());
     if (outcome === CANCELLED) {
-        // Falling back here would redo on the UI thread precisely the work the
-        // user asked to stop. Whoever cancelled owns the worker: either it is
-        // already terminated, or a newer request is still using it.
+        // A cancelled request does not fall back to the main thread. Whoever
+        // cancelled owns the worker: it is already terminated, or a newer request
+        // is using it.
         return empty;
     }
-    // Every remaining outcome is final, so the worker has nothing left to do.
+    // Any other outcome is final, so the worker is terminated.
     transport.terminate();
     if (outcome === FAILED) {
         return empty;
@@ -341,9 +328,7 @@ export async function loadWithFallback(transport, options) {
         return outcome;
     }
 
-    // Every file counts toward the ceiling, because the fallback parses every
-    // file: a small messages export beside a large connections one is not a
-    // small job.
+    // Every file counts toward the size ceiling, since the fallback parses all of them.
     const size = sources.reduce((total, source) => total + csvSourceSize(source), 0);
     if (size > MAIN_THREAD_FALLBACK_MAX_CHARS || isCancelled()) {
         return empty;

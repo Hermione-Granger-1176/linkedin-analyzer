@@ -143,7 +143,7 @@ export function parseLinkedInDate(value) {
 }
 
 /**
- * Build a "YYYY-MM" key from a Date in local time, so months sort as strings.
+ * Build a "YYYY-MM" key from a Date in local time. Keys sort as strings in date order.
  * @param {Date} date - Date to convert
  * @returns {string} e.g. "2024-01"
  */

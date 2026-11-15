@@ -1,30 +1,27 @@
 """Reject shell fragments accidentally included in commit messages.
 
-A mistyped heredoc terminator can become part of the recorded message. This
-module checks common terminators, quoted heredoc openers, redirects, and pager
-pipes. It limits matches to recognizable shell syntax to reduce false positives.
+Checks for common heredoc terminators, quoted and unquoted heredoc openers,
+redirects, and pager pipes. Matches are limited to recognizable shell syntax.
 """
 
 from __future__ import annotations
 
 import re
 
-# A quoted heredoc opener such as ``<<'EOF'`` or ``<<"MSG"`` is unambiguous
-# shell, so any quote right after ``<<`` is treated as a leak.
+# A quoted heredoc opener such as ``<<'EOF'`` or ``<<"MSG"`` counts as a leak.
 _QUOTED_HEREDOC_OPENER = re.compile(r"<<-?\s*['\"]")
 
-# An unquoted heredoc opener such as ``<<EOF`` or ``<< HEREDOC``. Restricted to
-# the common uppercase delimiters so a legitimate left-shift like ``value << 2``
-# is never mistaken for a heredoc.
+# An unquoted heredoc opener such as ``<<EOF`` or ``<< HEREDOC``. Only the common
+# uppercase delimiters match, so an arithmetic left shift such as ``value << 2``
+# does not.
 _UNQUOTED_HEREDOC_OPENER = re.compile(r"<<-?\s*(?:EOF|EOT|END|HEREDOC|MSG|BODY|PATCH)\b")
 
 # A bare heredoc terminator left in the body, optionally followed by trailing
 # shell (``EOF && make push``). Matches only the common uppercase delimiters as
-# a whole leading token so ordinary prose is not flagged.
+# the whole leading token.
 _HEREDOC_TERMINATOR = re.compile(r"^\s*(?:EOF|EOT|HEREDOC)(?:\s*(?:$|&&|\|\||;|\||&|>|<|\d*>))")
 
-# Shell redirection (``2>&1``) and pipes into a pager (``| tail``/``| head``)
-# are unambiguous shell fragments that do not belong in a commit message.
+# Shell redirection (``2>&1``) and pipes into a pager (``| tail``/``| head``).
 _SHELL_REDIRECT = re.compile(r"\d*>&\d")
 _SHELL_PAGER_PIPE = re.compile(r"\|\s*(?:tail|head)\b")
 

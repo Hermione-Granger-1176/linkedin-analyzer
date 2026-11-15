@@ -6,18 +6,16 @@
 import { MAX_CSV_CHARS } from "../../shared/limits.js";
 
 /**
- * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and only
- * falls back to WHATWG windows-1252 on a genuine decode error, matching the
- * CLI and avoiding false positives on files that legitimately
- * contain U+FFFD. Enforces the character limit after decoding.
+ * Decode raw file bytes to text. Validates UTF-8 strictly (fatal) and falls
+ * back to WHATWG windows-1252 only when UTF-8 decoding fails. Enforces the
+ * character limit after decoding.
  * @param {Uint8Array} bytes - Raw file bytes
  * @param {string} fileName - Original file name, used in error messages
  * @returns {{text: string, usedFallback: boolean}}
  */
 export function decodeBytes(bytes, fileName) {
     if (typeof TextDecoder === "undefined") {
-        // The streaming path already routes around a missing TextDecoder; the
-        // FileReader path lands here, so fail with a clear, user-facing error
+        // The FileReader path reaches this check. Throw a user-facing error
         // instead of a bare ReferenceError from `new TextDecoder(...)`.
         throw new Error(
             `Cannot read "${fileName}": your browser is missing required text-decoding support. Please use a newer browser.`,

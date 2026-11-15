@@ -75,7 +75,7 @@ def test_relative_path_returns_repo_relative(
 def test_relative_path_falls_back_to_original_outside_repo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Keep the original path when it is outside the repository."""
+    """Returns the original path when it is outside the repository."""
     repo_root = tmp_path / "repo"
     requirements_file = tmp_path / "elsewhere" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -198,7 +198,7 @@ def test_run_pip_audit_rejects_invalid_json(
 
 
 def test_subprocess_error_detail_normalizes_and_bounds_output() -> None:
-    """Subprocess diagnostics stay readable without dumping unbounded output."""
+    """Subprocess diagnostics are reduced to one line and truncated to the length limit."""
     oversized_detail = "prefix\n" + ("x" * run_security_audit.MAX_SUBPROCESS_ERROR_DETAIL_LENGTH)
 
     detail = run_security_audit._subprocess_error_detail("", oversized_detail)
@@ -319,7 +319,7 @@ def test_audit_python_dependencies_allows_reviewed_unfixed_vulnerability(
 def test_audit_python_dependencies_matches_ids_case_insensitively(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Configured advisory ids match case-insensitive pip-audit aliases."""
+    """Configured advisory IDs match pip-audit aliases case-insensitively."""
     exception = run_security_audit.VulnerabilityExceptionEntry(
         vulnerability_id="ghsa-5239-wwwm-4pmq",
         package="PyGments",
@@ -494,7 +494,7 @@ def test_audit_python_dependencies_rejects_unreviewed_vulnerability(
 def test_run_pip_audit_splits_the_command_override_and_keeps_strict(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A launcher override is shlex-split and never drops --strict."""
+    """The launcher override is shlex-split, and --strict is kept."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -522,7 +522,7 @@ def test_run_pip_audit_splits_the_command_override_and_keeps_strict(
 
 
 def test_run_pip_audit_rejects_empty_command(tmp_path: Path) -> None:
-    """An empty launcher cannot produce a malformed subprocess command."""
+    """An empty launcher raises ValueError."""
     requirements_file = tmp_path / "requirements.txt"
     write_text(requirements_file, "pkg==1.0\n")
 
@@ -533,7 +533,7 @@ def test_run_pip_audit_rejects_empty_command(tmp_path: Path) -> None:
 def test_run_pip_audit_reports_a_missing_executable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A missing pip-audit names itself instead of raising a bare OSError."""
+    """A missing executable raises RuntimeError that names it."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -569,7 +569,7 @@ def test_run_pip_audit_reports_launcher_start_failures(
 def test_run_pip_audit_reports_skipped_dependencies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A skipped dependency preserves --strict semantics through the JSON report."""
+    """A dependency that pip-audit skipped is returned as a skip message."""
     repo_root = tmp_path / "repo"
     requirements_file = repo_root / ".artifacts" / "requirements-audit.txt"
     write_text(requirements_file, "pkg==1.0\n")
@@ -597,7 +597,7 @@ def test_run_pip_audit_reports_skipped_dependencies(
 
 
 def test_skipped_dependency_ignores_audited_entries() -> None:
-    """Only entries carrying a skip reason produce a strictness error."""
+    """Entries without a skip_reason are not reported."""
     requirements_file = Path(".artifacts/requirements-audit.txt")
 
     assert run_security_audit._skipped_dependency({"name": "pkg"}, requirements_file) is None
@@ -712,6 +712,6 @@ def test_main_reports_errors(
 
 
 def test_parse_dependency_findings_rejects_a_non_object_entry() -> None:
-    """A malformed pip-audit dependency entry fails closed rather than being skipped."""
+    """A non-object pip-audit dependency entry raises ValueError."""
     with pytest.raises(ValueError, match="dependency entries must be objects"):
         run_security_audit._parse_dependency_findings("not-an-object", Path("requirements.txt"))

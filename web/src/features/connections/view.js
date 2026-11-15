@@ -1,10 +1,10 @@
 /**
  * Pure connections analytics shared by the worker, the screen, and the PDF export.
  *
- * Every function here derives its result from its arguments and the clock alone,
- * so the three callers compute one set of numbers instead of each keeping its
- * own copy. The clock is not incidental: a range filter and the network's age
- * are both measured from now, not from the newest connection in the file.
+ * Every function here derives its result from its arguments and the clock. The
+ * worker, the screen, and the PDF export share these computations. Range filters
+ * and network age are measured from now, not from the newest connection in the
+ * file.
  */
 
 import {
@@ -65,7 +65,7 @@ import {
  * @property {ViewStats} stats - Stats bar values
  */
 
-/* -- Constants --------------------------------------------------------------- */
+/* Constants */
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -78,28 +78,26 @@ const RANGE_DAYS = Object.freeze({
 });
 
 /**
- * Supported range keys, including the unbounded range.
- * The screen builds its controls from this list so every offered range
- * has a matching filter definition.
+ * Supported range keys, including the unbounded range. The screen builds its
+ * range controls from this list.
  * @type {readonly string[]}
  */
 export const RANGE_KEYS = Object.freeze([...Object.keys(RANGE_DAYS), "all"]);
 
 const TOP_N = 10;
 
-// Cache parsed timestamps for repeated date values. Clear the cache at the
-// cap to bound memory use for files with many distinct dates.
+// Caches parsed timestamps for repeated date values. The cache is cleared when
+// it reaches DATE_CACHE_LIMIT entries.
 const DATE_CACHE_LIMIT = 100000;
 /** @type {Map<string, number|null>} */
 const connectedOnTimes = new Map();
 
-/* -- Date helpers ------------------------------------------------------------ */
+/* Date helpers */
 
 /**
  * Parse a cleaned "Connected On" value into a Date.
  * The cleaner's cleanConnectionsDate turns "01 Jan 2024" into "2024-01-01",
- * which the shared strict parser turns into a local-midnight Date without the
- * timezone-shifting pitfalls of Date.parse.
+ * which the shared strict parser turns into a local-midnight Date.
  *
  * @param {string} dateStr - ISO-style date string (YYYY-MM-DD)
  * @returns {Date|null} Local-midnight Date, or null if unparseable
@@ -141,12 +139,12 @@ export function parseConnectedOnTimestamp(dateStr) {
     return connectedOnTime(dateStr) ?? 0;
 }
 
-/* -- Growth timeline --------------------------------------------------------- */
+/* Growth timeline */
 
 /**
  * Bucket connections by month and fill gaps so the timeline has no missing
- * months. Gaps look misleading on line/bar charts, so we insert zero-value
- * entries for any month between the earliest and latest connection dates.
+ * months. Inserts zero-value entries for any month between the earliest and
+ * latest connection dates.
  *
  * @param {CleanedConnectionRow[]} rows - Cleaned connection rows
  * @returns {GrowthPoint[]} Sorted chronologically
@@ -177,7 +175,7 @@ export function buildGrowthTimeline(rows) {
     }));
 }
 
-/* -- Summary stats ----------------------------------------------------------- */
+/* Summary stats */
 
 /**
  * Compute the total connection count and network age in whole months.
@@ -203,12 +201,12 @@ export function computeStats(rows) {
     return Object.freeze({ total, networkAgeMonths });
 }
 
-/* -- Row normalization ------------------------------------------------------- */
+/* Row normalization */
 
 /**
  * Normalize title-case cleaned rows into the shape the filtering and
- * aggregation below expect. The screen gets those rows back from the worker and
- * the export cleans them itself, so both arrive here in the cleaner's casing.
+ * aggregation below expect. Rows from the worker and from the PDF export both
+ * arrive here in the cleaner's title-case casing.
  *
  * @param {CleanedConnectionRow[]} rows - Cleaned connection rows with title-case keys
  * @returns {ConnectionRow[]} Normalized rows
@@ -221,7 +219,7 @@ export function normalizeConnectionRows(rows) {
     }));
 }
 
-/* -- Filtering and aggregation ----------------------------------------------- */
+/* Filtering and aggregation */
 
 /**
  * Filter connection rows by the selected time range.
@@ -312,7 +310,7 @@ export function formatNetworkAge(months) {
     return `${(months / 12).toFixed(1)} yr`;
 }
 
-/* -- View assembly ----------------------------------------------------------- */
+/* View assembly */
 
 /**
  * Apply the time-range filter and compute the view the screen renders and the
@@ -338,8 +336,8 @@ export function buildConnectionsView(rows, timeline, workerStats, timeRange) {
     };
 
     return {
-        // Default a missing timeline here so the screen, PDF export, and transport
-        // use the same empty value.
+        // A missing timeline defaults to an empty array here, so every caller
+        // sees the same value.
         timeline: Array.isArray(timeline) ? timeline : [],
         companies,
         positions,

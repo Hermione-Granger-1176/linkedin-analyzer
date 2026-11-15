@@ -34,8 +34,7 @@ import { parseLocalDate, parseLocalDateTime } from "../analytics/dates.js";
 export const MessagesAnalytics = (() => {
     "use strict";
 
-    // Memoize repeated contact strings. Clear the cache at its cap to bound
-    // memory when an export contains many distinct values.
+    // Memoized entries per normalizer. The cache is cleared when it reaches this size.
     const NORMALIZE_CACHE_LIMIT = 100000;
 
     /**
@@ -55,7 +54,7 @@ export const MessagesAnalytics = (() => {
             let result = cache.get(value);
             if (result === undefined) {
                 result = compute(value);
-                // Keep the cache bounded when normalization receives many unique values.
+                // Clears the cache at the cap before adding the new entry.
                 /* v8 ignore next 3 */
                 if (cache.size >= NORMALIZE_CACHE_LIMIT) {
                     cache.clear();
@@ -80,9 +79,9 @@ export const MessagesAnalytics = (() => {
     /**
      * Run `work` between performance marks, then measure the span. The
      * Performance API is part of the supported browser baseline (see
-     * docs/web-app.md), and a measure that cannot find its marks is ignored.
-     * Unlike the page's own helpers this reports nothing to telemetry,
-     * because this module also runs in a worker.
+     * docs/web-app.md). A measure whose marks are missing is ignored. Unlike the
+     * page's own helpers, this reports nothing to telemetry. The module also runs
+     * in a worker.
      * @template T
      * @param {string} name - Measure name; its marks are `${name}:start` and `${name}:end`
      * @param {() => T} work - Work to time
@@ -114,8 +113,8 @@ export const MessagesAnalytics = (() => {
         /** @type {Map<string, MessageContact>} */
         const contacts = new Map();
         // Maps a normalized contact name to the key its entry is currently stored
-        // under, so the same person seen once with a profile URL and once without
-        // folds into one contact instead of splitting across a url: and a name: key.
+        // under. The same person seen with and without a profile URL folds into
+        // one contact.
         /** @type {Map<string, string>} */
         const nameToKey = new Map();
         /** @type {Map<MessageContact, number>} */
@@ -133,10 +132,9 @@ export const MessagesAnalytics = (() => {
          * Find the stored contact a participant belongs to.
          *
          * No direct hit: the same person may already be stored under their name
-         * (no URL yet) or under a URL (seen with one before). Reconcile via the
-         * name index so their message counts merge into one entry. A stored
-         * contact with a different URL is a different person who shares the
-         * name, so it is never merged.
+         * (no URL yet) or under a URL. Reconciles via the name index so counts
+         * merge into one entry. A stored contact with a different URL is a
+         * different person and is never merged.
          * @param {Participant} contact - Participant being recorded
          * @param {string} contactKey - Key built from the participant
          * @param {string} mergeNameKey - Normalized name to merge on, or ""
@@ -153,8 +151,8 @@ export const MessagesAnalytics = (() => {
                 return mapped;
             }
             if (mapped && !mapped.url) {
-                // Promote a name-only entry to the stronger URL key so
-                // later URL-bearing rows find it directly.
+                // Promotes a name-only entry to its URL key, so later URL-bearing
+                // rows find it directly.
                 contacts.delete(mapped.key);
                 mapped.key = contactKey;
                 contacts.set(contactKey, mapped);
@@ -210,8 +208,8 @@ export const MessagesAnalytics = (() => {
          */
         function record(contact, timestamp) {
             // sanitizeParticipant has already dropped blank names and "LinkedIn
-            // Member" placeholders, which belong to different people, so every
-            // participant here has a name key that is safe to merge on.
+            // Member" placeholders. Every participant here has a name key that is
+            // safe to merge on.
             const nameKey = normalizeName(contact.name);
             const contactKey = buildContactKey(contact);
             const found = findStoredContact(contact, contactKey, nameKey);
@@ -246,8 +244,8 @@ export const MessagesAnalytics = (() => {
     }
 
     /**
-     * Create the accumulator for the outreach funnel, filled in the same pass as
-     * the contact aggregates so large exports are not iterated (and re-parsed) twice.
+     * Create the accumulator for the outreach funnel. It is filled in the same
+     * pass as the contact aggregates.
      * @returns {OutreachTracker}
      */
     function createOutreachTracker() {
@@ -259,10 +257,9 @@ export const MessagesAnalytics = (() => {
         let receivedMessages = 0;
 
         /**
-         * Count a message and its conversation by who sent it. Runs before the
-         * participant filter so that self-sent messages whose only recipients
-         * are self/anonymous still count toward sent totals and conversation
-         * initiation.
+         * Count a message and its conversation by sender. Runs before the
+         * participant filter, so self-sent messages whose recipients are all self
+         * or anonymous still count toward sent totals and conversation initiation.
          * @param {MessageRow} row - Message row
          * @param {string} conversationKey - Conversation identifier
          * @param {number} timestamp - Message time
@@ -270,13 +267,11 @@ export const MessagesAnalytics = (() => {
          * @returns {boolean} Whether the sender is the detected self
          */
         function recordSender(row, conversationKey, timestamp, context) {
-            // Pass the raw sender fields straight to the helpers; each normalizes
-            // once internally, so pre-normalizing here would repeat the work.
+            // Pass the raw sender fields to the helpers. Each one normalizes internally.
             const senderIsSelf = isSelfContact(row.FROM, row["SENDER PROFILE URL"], context);
-            // A non-self sender only counts as a real correspondent when it
-            // survives the same filtering as participants (non-blank,
-            // non-anonymous), so "LinkedIn Member" placeholders do not inflate
-            // received totals or count as a reply.
+            // A non-self sender counts as a real correspondent only when it passes
+            // the participant filter (non-blank, non-anonymous). "LinkedIn Member"
+            // placeholders are excluded from received totals and replies.
             const senderContact = senderIsSelf
                 ? null
                 : sanitizeParticipant({ name: row.FROM, url: row["SENDER PROFILE URL"] }, context);
@@ -353,8 +348,8 @@ export const MessagesAnalytics = (() => {
 
             participants.forEach(contact => {
                 book.record(contact, timestamp);
-                // For a self-sent row the sender is self, so the non-self
-                // participants are exactly its recipients, so mark each as outreach.
+                // In a self-sent row the non-self participants are the recipients,
+                // so each is marked as outreach.
                 if (senderIsSelf) {
                     outreach.recordRecipient(contact);
                 }
@@ -381,7 +376,7 @@ export const MessagesAnalytics = (() => {
      * @template {Int32Array<ArrayBuffer>|Float64Array<ArrayBuffer>} T
      * @param {new (length: number) => T} ArrayType - Typed array to store values in
      * @returns {{push: (value: number) => void, toArray: () => T}} toArray copies
-     * the values into an exact-length array, so its buffer can be transferred whole.
+     * the values into an exact-length array whose buffer can be transferred.
      */
     function createGrowableColumn(ArrayType) {
         let values = new ArrayType(1024);
@@ -878,7 +873,7 @@ export const MessagesAnalytics = (() => {
 
     /**
      * Parse recipient names from TO field.
-     * Uses URL count to avoid splitting single names that contain commas.
+     * With at most one recipient URL, the TO field is one name and is not split on commas.
      *
      * @param {unknown} value - Raw TO field
      * @param {number} recipientUrlCount - Parsed recipient URL count
@@ -981,9 +976,9 @@ export const MessagesAnalytics = (() => {
         parseDateOnly,
         parseRecipientNames,
         // Exposed for the PDF export's thread selection, which reuses this
-        // module's participant filtering and key building so a person does not
-        // split across keys. Self-detection there is the export's own: this one
-        // breaks coverage ties by insertion order, which the export must not.
+        // module's participant filtering and key building. The export runs its
+        // own self-detection. This module's detection breaks coverage ties by
+        // insertion order. The export does not.
         isSelfContact,
         extractParticipantsFromRow,
         buildContactKey

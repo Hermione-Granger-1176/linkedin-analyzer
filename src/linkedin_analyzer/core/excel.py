@@ -35,8 +35,7 @@ def format_excel_worksheet(ws: Worksheet | None, config: CleanerConfig) -> None:
     wrap_alignment = Alignment(wrap_text=True, vertical="top")
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         for cell in row:
-            # A save and reload used to normalize empty strings to blank cells.
-            # Preserve that workbook representation without a second file pass.
+            # Empty strings are written as blank cells.
             if cell.value == "":
                 cell.value = None
             if cell.column in wrap_columns:

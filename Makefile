@@ -15,7 +15,7 @@ NPM                 ?= npm
 NPX                 ?= npx
 NODE                ?= node
 DOCKER              ?= docker
-# Keep top-level modules and every owned Python subpackage in the quality gates.
+# Python paths for lint and format: top-level modules and every owned Python subpackage.
 PY_PATHS            := src/ tests/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PY_TYPE_PATHS       := src/ scripts/*.py scripts/checks/ scripts/ci/ scripts/gh/ scripts/lib/ scripts/lint/ scripts/setup/
 PLAYWRIGHT_BROWSERS := chromium firefox webkit
@@ -26,50 +26,44 @@ PLAYWRIGHT_CONTAINER_RUN = $(DOCKER) run --rm --init --ipc=host --user "$$(id -u
 PLAYWRIGHT_ENGINE_ARGS = $(subst -, ,$(strip $(engines)))
 PLAYWRIGHT_INVALID_ENGINES = $(filter-out $(PLAYWRIGHT_BROWSERS),$(PLAYWRIGHT_ENGINE_ARGS))
 
-# Browser targets opt into the private Linux runtime only with local_libs=1.
-# Browsers install into Playwright's shared cache so every project reuses one
-# copy; only the extracted shared libraries and per-run scratch live below the
-# ignored .playwright cache. The wrapper refuses to download packages mid-run.
+# Browser targets use the private Linux runtime only with local_libs=1.
+# Browsers install into Playwright's shared cache. Extracted shared libraries and
+# per-run scratch live below the ignored .playwright cache. The wrapper does not
+# download packages during a run.
 PLAYWRIGHT_LOCAL_RUNTIME := $(VENV_PYTHON) scripts/setup/playwright_local_runtime.py
 PLAYWRIGHT_LOCAL_RUN = $(if $(filter 1,$(local_libs)),$(PLAYWRIGHT_LOCAL_RUNTIME) run --,)
 
-# Put the repository root on the import path for `python -m scripts.*` without
-# discarding a PYTHONPATH the developer set for their own tooling.
+# Puts the repository root on the import path for `python -m scripts.*`, keeping
+# any existing PYTHONPATH.
 PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}
 
 # Run a command with the paths read from stdin, one per line, or with its
 # defaults when stdin brings none. scripts/lib/stdin_paths.py documents it.
 STDIN_PATHS = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.lib.stdin_paths
 
-# Entry point for the GitHub PR/CI helper (scripts/gh). The Makefile targets
-# below are thin wrappers; the testable logic (repo and PR auto-detection,
-# GraphQL, CI triage) lives in Python.
+# Entry point for the GitHub PR/CI helper (scripts/gh). The targets below wrap
+# it. Repo and PR detection, GraphQL, and CI triage are implemented in Python.
 GH = $(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.gh.cli
 # The run the Actions targets act on: run=ID, or else this branch's newest run.
 # The lookup only happens when a recipe that uses it runs without run=.
 RUN_ID = $(if $(run),$(run),$(strip $(shell $(GH) latest-run-id 2>/dev/null)))
 # ─── Free text ────────────────────────────────────────────────────────────────
 #
-# Bodies arrive on standard input:
+# Make expands command-line assignments, so bodies arrive on standard input:
 #
 #     make pr-address thread=PRRT_... <<'EOF'
 #     git log -1 --format=%B | make pr-comment
 #     make issue-comment issue=7 < notes.md
 #
-# Make expands command-line assignments during parsing. Text containing Make
-# expressions can execute before a recipe receives it. Standard input avoids
-# Make expansion, shell interpolation, and argument-length limits.
-#
-# Titles arrive through the environment so standard input remains available
-# for the body:
+# Titles come from the environment, leaving standard input for the body:
 #
 #     TITLE='Fix the retry loop' make issue-create < issue.md
 #
-# Environment values remain literal. A command-line TITLE assignment would
-# expand Make expressions, so the check below rejects that form.
+# Environment values are literal. The check below rejects TITLE passed on the
+# command line.
 #
-# Paths go in on stdin too, one per line, through $(STDIN_PATHS), so a name
-# with spaces or quotes needs no escaping:
+# Paths also come from stdin, one per line, through $(STDIN_PATHS). Names may
+# contain spaces or quotes:
 #
 #     make stage <<'EOF'
 #     My Notes.md
@@ -79,26 +73,22 @@ RUN_ID = $(if $(run),$(run),$(strip $(shell $(GH) latest-run-id 2>/dev/null)))
 # A target that checks the whole repository by default does so when stdin
 # brings no paths or is a terminal.
 #
-# Required bodies may be read from a terminal. Targets with optional bodies
-# use NO_TTY_READ so a title-only edit or generated release does not wait for
-# terminal input.
+# Required bodies may be read from a terminal. Targets with optional bodies use
+# NO_TTY_READ, which skips the read when stdin is a terminal.
 NO_TTY_READ := [ -t 0 ] ||
 FREE_TEXT_VARS := TITLE COMMENT SEARCH
 $(foreach v,$(FREE_TEXT_VARS),$(if $(filter command line,$(origin $(v))),$(error \
 $(v) was passed as a make argument, which make expands; use $(v)='...' make <target>)))
 
-# The arguments these replaced. Make ignores an unused command-line assignment,
-# so without this a stale `body="Fixed"` would be dropped in silence and the
-# target would go on to read an empty body from stdin.
+# Retired text arguments. Make ignores unused command-line assignments, so each
+# one is refused with an error.
 RETIRED_TEXT_ARGS := body title comment notes search detail \
 body_file message_file notes_file detail_file
 $(foreach v,$(RETIRED_TEXT_ARGS),$(if $(filter command line,$(origin $(v))),$(error \
 $(v)= is no longer an argument: a body comes from stdin (make <target> < file) \
 and a title from the environment (TITLE='...' make <target>))))
 
-# The path arguments stdin replaced, refused for the same reason: a stale
-# `files="a.py"` would otherwise be dropped and the target would run on nothing
-# or on the whole repository.
+# Retired path arguments, refused with an error for the same reason.
 RETIRED_PATH_ARGS := files file paths path
 $(foreach v,$(RETIRED_PATH_ARGS),$(if $(filter command line,$(origin $(v))),$(error \
 $(v)= is no longer an argument: pass paths on stdin, one per line \
@@ -167,8 +157,7 @@ help-json: ## Emit groups and commands as JSON
 		} \
 		END { printf "],\"commands\":[%s]}\n", cmds }' $(MAKEFILE_LIST)
 
-# Runs on the system interpreter, not the venv one, because the first thing it
-# has to be able to report is that the venv is missing.
+# Runs on the system interpreter, since the venv may be missing.
 status: ## Show workspace health (git, Python, Node, web build, PR)
 	@$(PY_PATH_PREFIX) $(SYSTEM_PYTHON) -m scripts.lib.workspace_status \
 		--venv-python "$(VENV_PYTHON)" --uv "$(UV)" --npm "$(NPM)"
@@ -362,8 +351,8 @@ ci-platform-checks: ## Run quick and heavy non-browser CI gates in order
 	@$(MAKE) --no-print-directory ci-quick-gates
 	@$(MAKE) --no-print-directory ci-heavy-checks
 
-# A documentation-only change skips every other CI job, so this gate is the only
-# one that sees it. Markdown table alignment belongs here for that reason.
+# Documentation-only changes skip the other CI jobs. Markdown table alignment is
+# checked in this gate.
 ci-quick-gates: ## Run fast formatting, lint, and type checks in parallel
 	$(VENV_PYTHON) scripts/ci/run_parallel_checks.py --timeout 1200 \
 		editorconfig-check lint-doc-commands lint-make-targets \
@@ -410,8 +399,7 @@ branch-delete-remote: ## Delete a branch on origin (make branch-delete-remote na
 	$(if $(filter main heads/main refs/heads/main,$(value name)),$(error Refusing to delete main on origin))
 	git push --delete -- origin "$$BRANCH_NAME"
 
-# Branch names reach the helper through the environment, never interpolated
-# into the recipe, so the target holds no shell logic of its own.
+# Branch names reach the helper through the environment, not through the recipe text.
 branch-prune: export PRUNE_MAIN_BRANCH := main
 branch-prune: export PRUNE_CONFIRM := $(confirm)
 branch-prune: ## Prune local branches whose content is already in main (make branch-prune [confirm=1])
@@ -421,9 +409,8 @@ rebase: ## Rebase the current branch onto its remote base (make rebase base=orig
 	@test -n "$(base)" || (printf 'Usage: make rebase base=origin/main\n' >&2; exit 1)
 	git rebase "$(base)"
 
-# Refs split on whitespace with globbing off. Git's revision walker reads
-# options even after `--`, so Make refuses a word starting with `-` before any
-# shell runs.
+# Refs split on whitespace with globbing off. Make refuses any word starting with
+# `-` before a shell runs.
 cherry-pick: export CHERRY_PICK_REFS := $(value ref)
 cherry-pick: ## Apply commits onto the current branch (make cherry-pick ref="sha ..." [nocommit=1])
 	@test -n "$$CHERRY_PICK_REFS" || (printf 'Usage: make cherry-pick ref="sha ..." [nocommit=1]\n' >&2; exit 1)
@@ -450,17 +437,15 @@ diff: ## Show unstaged changes
 diff-staged: ## Show staged changes
 	git diff --cached
 
-# Paths come from stdin and reach git as separate arguments, never through a
-# shell, so a name containing a space or a shell metacharacter stays inert.
+# Paths come from stdin and reach git as separate arguments, not through a shell.
 stage: ## Stage selected files, one path per line on stdin (make stage <<'EOF')
 	@$(STDIN_PATHS) --require --name "make stage" -- git add --
 
 stage-all: ## Stage all working tree changes
 	git add -A
 
-# Every message is assembled into a temporary file and screened before it
-# reaches git, because a mistyped heredoc terminator silently records shell text
-# (`EOF && make push 2>&1 | tail -3`) as part of the commit.
+# The message is written to a temporary file and checked with check-commit-message
+# before git commit runs.
 commit: ## Commit staged changes, message on stdin (make commit < msg.txt, or a heredoc)
 	@set -e; \
 	if [ -t 0 ]; then \
@@ -487,17 +472,15 @@ pr: ## PR commands (make pr)
 	@$(MAKE) --no-print-directory help-pr
 
 pr-create: ## Open a pull request for the current branch (make pr-create [base=branch]; TITLE='...' make pr-create < body.md for an explicit one)
-	@# TITLE alone selects the mode, so there is no half-specified state left for
-	@# gh to prompt about, which would hang a non-interactive shell. Without it,
-	@# the title and body come from the commits and stdin is not read.
+	@# TITLE selects the explicit mode. Without it, the title and body come from
+	@# the commits and stdin is not read.
 	@if [ -z "$$TITLE" ]; then \
 		$(GH) pr-create $(if $(base),--base "$(base)"); \
 	else \
 		$(GH) pr-create $(if $(base),--base "$(base)") --title="$$TITLE" --body-file -; \
 	fi
 
-# An empty stream leaves the body unchanged. NO_TTY_READ prevents title-only
-# edits from waiting for terminal input.
+# An empty stream leaves the body unchanged. NO_TTY_READ skips the read on a terminal.
 pr-edit: ## Edit the current PR (TITLE='...' make pr-edit; new body on stdin: make pr-edit < body.md) [pr_num=N]
 	@set -e; \
 	body=""; $(NO_TTY_READ) body=$$(cat); \
@@ -530,8 +513,8 @@ pr-checkout: ## Check out a PR's branch locally (make pr-checkout pr_num=N)
 pr-comments: ## Show all comments on a PR (make pr-comments [pr_num=N])
 	@$(GH) pr-comments $(if $(pr_num),--pr "$(pr_num)")
 
-# Pass prose directly from stdin to the helper. Quotes, backticks, and newlines
-# never become shell source text, and the body is not written to disk.
+# Prose goes to the helper on stdin. Quotes, backticks, and newlines are not shell
+# source text, and the body is not written to disk.
 pr-comment: ## Add a comment to the current PR, body on stdin (make pr-comment < notes.md) [pr_num=N]
 	@$(GH) comment $(if $(pr_num),--pr "$(pr_num)") --body-file -
 
@@ -553,8 +536,7 @@ pr-address: ## Reply to and resolve a review thread, body on stdin (make pr-addr
 pr-comments-list: ## List individual review comments with node ids (make pr-comments-list [pr_num=N])
 	@$(GH) list-comments $(if $(pr_num),--pr "$(pr_num)")
 
-# Use comment_id for an opaque identifier. The issue targets reserve comment
-# for prose, which must not be interpolated into shell source text.
+# comment_id is an opaque identifier. comment is reserved for prose.
 pr-comment-delete: ## Delete a review comment by node id or numeric id (make pr-comment-delete comment_id=PRRC_...)
 	@test -n "$(comment_id)" || (printf 'Usage: make pr-comment-delete comment_id=PRRC_...\n' >&2; exit 1)
 	@$(GH) delete-comment --comment "$(comment_id)"
@@ -647,10 +629,8 @@ issue-edit: ## Edit an issue (TITLE='...' make issue-edit issue=N; new body on s
 		$(GH) issue-edit "$$@"; \
 	fi
 
-# The one place stdin cannot serve: gh issue close and reopen take --comment and
-# offer no --comment-file, so there is nothing to point at a stream. A short
-# note travels in the environment; anything longer belongs in its own comment,
-# posted with issue-comment first.
+# issue-close and issue-reopen take a short note in COMMENT. Longer notes go
+# through issue-comment first.
 issue-close: ## Close an issue (make issue-close issue=N [reason=completed|"not planned"]; COMMENT='...' to say why)
 	@test -n "$(issue)" || (printf "Usage: make issue-close issue=123 [reason=completed], COMMENT='...' optional\n" >&2; exit 1)
 	@set -e; \
@@ -698,10 +678,8 @@ issue-develop: ## Create and check out a branch linked to an issue (make issue-d
 ci-runs: ## List recent CI workflow runs
 	gh run list -L 10
 
-# ci-failures reads step logs, which GitHub withholds until a run completes, so
-# it cannot say anything about a run that is hanging. This reports per-job
-# status and elapsed time while the run is still going, which is what tells a
-# stuck job apart from a slow one.
+# ci-failures reads step logs, which GitHub withholds until a run completes.
+# ci-jobs reports per-job status and start time while a run is still going.
 ci-jobs: ## Show per-job status for a run, including one still in progress (make ci-jobs [run=ID], defaults to this branch's latest)
 	@run_id="$(RUN_ID)"; \
 	test -n "$$run_id" || { printf 'Usage: make ci-jobs run=123456 (or run on a branch with a resolvable latest run)\n' >&2; exit 1; }; \
@@ -716,8 +694,7 @@ ci-watch: ## Watch a CI run until done and fail if it fails (make ci-watch [run=
 ci-failures: ## Show failed-step logs for this branch's latest run (make ci-failures [run=ID])
 	@$(GH) ci-failures $(if $(run),--run "$(run)")
 
-# A hung job leaves the whole run in progress, and gh refuses to re-run a run
-# that has not finished, so cancelling first is the only way to retry one.
+# A run must finish before it can be re-run, so cancel a hung run first.
 ci-cancel: ## Cancel a workflow run that is still in progress (make ci-cancel run=ID)
 	@test -n "$(run)" || (printf 'Usage: make ci-cancel run=123456\n' >&2; exit 1)
 	gh run cancel "$(run)"
@@ -750,10 +727,8 @@ ci-cache-delete: ## Delete one Actions cache (make ci-cache-delete cache=ID_or_k
 	@test -n "$(cache)" || (printf 'Usage: make ci-cache-delete cache=1234 [ref=refs/heads/main]\n' >&2; exit 1)
 	gh cache delete "$(cache)" $(if $(ref),--ref "$(ref)")
 
-# Run by hand, not from a workflow. Reading branch protection needs
-# 'administration: read' and listing secrets needs 'secrets: read', and
-# GITHUB_TOKEN can grant neither, so a workflow copy would only ever report
-# that it could not look.
+# Run by hand, not from a workflow. It needs 'administration: read' and
+# 'secrets: read', which GITHUB_TOKEN cannot grant.
 ci-audit-repo-settings: ## Report drift in GitHub repository settings (make ci-audit-repo-settings [repo=owner/name] [branch=main])
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.repo_audit \
 		$(if $(repo),--repo "$(repo)") $(if $(branch),--default-branch "$(branch)")
@@ -788,7 +763,7 @@ web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.art
 # synthetic export and also runs as the CI web benchmark gate. CI runs
 # bench-browser-container as its page-speed check. Any cross-runtime row dumps
 # use a private temporary directory and are always removed.
-# See docs/testing.md (Run local checks and benchmarks).
+# See docs/benchmarks.md.
 
 .PHONY: cleaner-diff xrt-diff bench bench-decode bench-compare bench-browser bench-browser-container audit-memory-python audit-memory-browser audit-state explore gen-large-export
 
@@ -948,10 +923,9 @@ ci-check-results: ## Check CI job results against the areas a change touched (ma
 ci-coverage-summary: ## Print the coverage totals as markdown for a job summary (make ci-coverage-summary)
 	@$(PY_PATH_PREFIX) $(VENV_PYTHON) -m scripts.ci.coverage_summary
 
-# The title and detail are free text written by a failing workflow. The detail
-# is a body like any other and arrives on stdin; an empty stream just means the
-# alert has no detail. The title comes from the step environment, so the
-# workflow never builds a make command line out of its own inputs.
+# The title and detail are free text from a failing workflow. The detail arrives
+# on stdin, and an empty stream means no detail. The title comes from the step
+# environment and is not built into the make command line.
 ci-alert-issue: ## Sync a monitored alert issue, detail on stdin (TITLE='...' make ci-alert-issue label=L run_url=URL state=open|close|setup-failure [repo=owner/name])
 	@test -n "$$TITLE" -a -n "$(label)" -a -n "$(run_url)" -a -n "$(state)" || \
 		(printf "Usage: TITLE='Dependency audit failed' make ci-alert-issue label=dependency-audit run_url=URL state=open|close|setup-failure [repo=owner/name] < detail.md\n" >&2; exit 1)

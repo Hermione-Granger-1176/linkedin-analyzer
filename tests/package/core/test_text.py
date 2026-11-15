@@ -237,8 +237,7 @@ class TestCleanDate:
         assert result == "2024-01-15"
 
     def test_converts_valid_datetime(self) -> None:
-        # Check the output format because conversion uses the host timezone,
-        # but we can verify format is preserved
+        # Conversion uses the host timezone, so only the output format is checked.
         result = clean_date("2024-01-15 14:30:00")
         assert len(result) == 19  # YYYY-MM-DD HH:MM:SS
         assert result[4] == "-"

@@ -1,6 +1,6 @@
 /**
  * LinkedIn CSV Cleaner - JavaScript port of Python cleaning logic
- * Original: src/linkedin_analyzer/core/text.py
+ * Port of: src/linkedin_analyzer/core/text.py
  *
  * Public facade composed from three focused modules:
  * - csv-parser.js: low-level CSV tokenizing/row splitting
@@ -106,9 +106,8 @@ const CLEANING_PLANS = Object.freeze(
                 const clean = (column.cleaner && CLEANERS[column.cleaner]) || cleanValue;
                 return {
                     name: column.name,
-                    // Strip XML-illegal control characters before formula-escaping so a
-                    // cell like "\u0001=SUM(...)" is both export-safe and still detected
-                    // as a formula-injection payload to quote-prefix (mirrors cleaner.py).
+                    // Strips XML-illegal control characters before formula escaping, so a
+                    // formula prefix that follows one is still escaped. Mirrors cleaner.py.
                     /**
                      * @param {unknown} value - Raw cell value
                      * @returns {string} Cleaned, escaped value
@@ -126,11 +125,9 @@ export const LinkedInCleaner = (() => {
     const EMPTY_CSV_ERROR = "CSV file is empty or has no data rows";
 
     // Auto-detection only needs the header row, which sits at the top of the file
-    // (after at most a few skip rows). For large files, parse this prefix to
-    // match a type, then full-parse the matched type once, instead of full-parsing
-    // the whole file up to three times (one per distinct option/skip-row combo).
-    // Files at or below this size skip the pre-pass and use the original full
-    // multi-type detection, so small uploads are unaffected.
+    // (after at most a few skip rows). Files longer than this parse a prefix to
+    // match a type, then full-parse the matched type once. Shorter files use full
+    // multi-type detection.
     const PREFIX_DETECT_CHARS = 64 * 1024;
 
     /**
@@ -228,8 +225,7 @@ export const LinkedInCleaner = (() => {
      * @returns {CsvRecord} Record holding "" for a cell the row lacks
      */
     function buildRecord(row, headers) {
-        // Null-prototype object: CSV headers are user-controlled, so keys
-        // like "__proto__" must not mutate the prototype chain.
+        // Null-prototype object, so header names such as "__proto__" are plain keys.
         /** @type {CsvRecord} */
         const record = Object.create(null);
         for (let c = 0; c < headers.length; c += 1) {
@@ -387,9 +383,8 @@ export const LinkedInCleaner = (() => {
      * of the text. Returns the first supported type (in FILE_TYPES order) whose
      * required columns are present, or null when no prefix match is found.
      *
-     * Only the header row is read, so a truncated tail cannot affect the match
-     * and a positive match is reliable; a null result falls back to full
-     * multi-type detection in the caller, which keeps behavior identical.
+     * Only the header row is read, so a truncated tail cannot affect a match.
+     * A null result falls back to full multi-type detection in the caller.
      * @param {string} csvText - Raw CSV text
      * @returns {FileType|null} Detected file type, or null if unknown from the prefix
      */
@@ -652,10 +647,9 @@ export const LinkedInCleaner = (() => {
         const parseCache = new Map();
 
         if (fileType === "auto") {
-            // Fast path for large files: detect the type from a small prefix, then
-            // full-parse only the matched type once. Falls through to full
-            // multi-type detection on a prefix miss or if the matched type fails
-            // to parse/validate on the whole file, so the result is unchanged.
+            // Large files: detect the type from a prefix, then full-parse only the
+            // matched type. Falls through to full multi-type detection on a prefix
+            // miss or when the matched type fails to parse or validate on the whole file.
             const prefixResult = processPrefixMatch(csvText, parseCache);
             if (prefixResult) {
                 return prefixResult;
@@ -733,8 +727,7 @@ export const LinkedInCleaner = (() => {
      * each row as it completes instead of building the full row and record
      * arrays first. finish() returns the same result process(text, "auto")
      * would for a successful file. On any error or ambiguity it returns null,
-     * and the caller runs process() on the full text, so failures and their
-     * messages stay identical.
+     * and the caller runs process() on the full text to get the failure message.
      *
      * With onRecord, each parsed record goes to it uncleaned, as parseCSV()
      * would have produced it, and the result carries no cleaned rows. A caller
@@ -773,8 +766,7 @@ export const LinkedInCleaner = (() => {
             }
             if (!headers) {
                 const normalized = normalizeHeaders(row);
-                // Prefix detection already parsed and validated this same header
-                // row, so this guard only protects against a future drift.
+                // Prefix detection has already validated this header row. This check is defensive.
                 /* v8 ignore next 8 */
                 if (
                     normalized.every((header) => header === "") ||

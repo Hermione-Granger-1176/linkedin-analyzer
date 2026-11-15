@@ -1,8 +1,6 @@
 """Cover every ``scripts.gh.cli`` subcommand handler and output mode.
 
-The handlers are thin, but they are the only place that decides which helper a
-Makefile target reaches and whether it prints text or JSON. A wrong dispatch
-here is invisible until someone runs the target, so each one is pinned.
+Each handler is checked for which helper it calls and whether it prints text or JSON.
 """
 
 from __future__ import annotations
@@ -240,7 +238,7 @@ def test_check_commit_message_accepts_a_clean_file(tmp_path: Path) -> None:
 
 
 def test_check_commit_message_rejects_a_leaked_file(tmp_path: Path) -> None:
-    """A leaked heredoc terminator is re-raised as a GhError so the target fails."""
+    """A leaked shell line raises GhError, which fails the target."""
     message_file = tmp_path / "COMMIT_EDITMSG"
     message_file.write_text("Subject\n\nEOF && make push 2>&1 | tail -3\n", encoding="utf-8")
 
@@ -249,7 +247,7 @@ def test_check_commit_message_rejects_a_leaked_file(tmp_path: Path) -> None:
 
 
 def test_check_commit_message_reads_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A message file of - is read from stdin, which is how the heredoc form arrives."""
+    """A message file of - is read from stdin."""
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO("Subject\n\n- Detail\n"))
 
     assert cli.main(["check-commit-message", "--message-file", "-"]) == 0
@@ -280,7 +278,7 @@ def test_posting_commands_need_exactly_one_body_form(argv: list[str]) -> None:
 
 
 def test_reply_reads_the_body_from_a_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """--body-file carries text a command line would mangle, newlines included."""
+    """--body-file accepts text with newlines and quotes."""
     calls = _record(monkeypatch, pr_review, "reply_to_thread")
     body_file = tmp_path / "body.md"
     body_file.write_text('needs >=3.12\nand a "quote"\n', encoding="utf-8")
@@ -290,7 +288,7 @@ def test_reply_reads_the_body_from_a_file(monkeypatch: pytest.MonkeyPatch, tmp_p
 
 
 def test_address_reads_the_body_from_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A body file of - is read from stdin, which is how a piped body arrives."""
+    """A body file of - is read from stdin."""
     calls = _record(monkeypatch, pr_review, "address_thread")
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO("piped body\n"))
 
@@ -307,10 +305,9 @@ def test_body_file_reports_an_unreadable_path(tmp_path: Path) -> None:
 
 
 def test_body_text_refuses_an_absent_body() -> None:
-    """An optional-body command must never post the string "None" as a body.
+    """_body_text raises GhError when neither body form is given.
 
-    edit-pr forwards its raw values rather than calling this, so the guard is the
-    backstop for whichever optional-body subcommand comes next.
+    edit-pr forwards its raw values and does not call it.
     """
     with pytest.raises(GhError, match="--body or --body-file"):
         cli._body_text(argparse.Namespace(body=None, body_file=None))
@@ -338,7 +335,7 @@ def test_comment_defaults_to_the_current_pr(monkeypatch: pytest.MonkeyPatch) -> 
 def test_edit_pr_forwards_the_body_file_unread(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    """The path reaches gh itself, so a large body never enters the argument list."""
+    """The body file path is passed through to edit_pr unread."""
     calls = _record(monkeypatch, pr_review, "edit_pr")
     body_file = tmp_path / "body.md"
     body_file.write_text("never read here\n", encoding="utf-8")
@@ -363,11 +360,7 @@ def test_edit_pr_rejects_both_body_forms() -> None:
 
 
 def test_parser_exposes_a_handler_for_every_subcommand() -> None:
-    """The parser and the dispatch table cannot drift apart.
-
-    A subcommand the parser accepts but the table does not know would raise a
-    KeyError at dispatch, after the user's arguments already validated.
-    """
+    """The parser's subcommands match the keys of COMMAND_HANDLERS."""
     subparsers = next(
         action
         for action in cli._build_parser()._actions
@@ -458,7 +451,7 @@ def test_pr_subcommands_dispatch_to_pr_commands(
 
 
 def test_pr_create_rejects_a_body_without_a_title() -> None:
-    """A body only makes sense with a title; otherwise the text is filled from commits."""
+    """A body requires a title."""
     with pytest.raises(GhError, match="needs a --title"):
         cli.main(["pr-create", "--body", "B"])
 
@@ -590,7 +583,7 @@ def test_issue_subcommands_dispatch_to_issue_commands(
 def test_current_pr_subcommand_prints_the_number(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """current-pr prints just the number, for the Makefile's PR_NUM."""
+    """current-pr prints just the number."""
     monkeypatch.setattr(gh_runner, "current_pr_number", lambda: 42)
 
     assert cli.main(["current-pr"]) == 0
@@ -609,7 +602,7 @@ def test_current_pr_subcommand_prints_the_number(
 def test_option_equals_value_keeps_a_leading_dash(
     argv: list[str], attribute: str, value: str
 ) -> None:
-    """The Makefile passes free text as --option=value, so a leading dash survives parsing."""
+    """Free text passed as --option=value keeps a leading dash."""
     args = cli._build_parser().parse_args(argv)
 
     assert getattr(args, attribute) == value
@@ -620,6 +613,6 @@ def test_option_equals_value_keeps_a_leading_dash(
     [["issue-list", "--search", "-label:bug"], ["issue-create", "--title", "-fix", "--body", "b"]],
 )
 def test_separate_value_with_a_leading_dash_is_read_as_an_option(argv: list[str]) -> None:
-    """The separate-word form fails, which is why the Makefile never uses it for free text."""
+    """The parser rejects a separate-word value that starts with a dash."""
     with pytest.raises(SystemExit):
         cli._build_parser().parse_args(argv)

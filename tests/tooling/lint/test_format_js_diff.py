@@ -29,7 +29,7 @@ def formatter(
 def test_prints_a_unified_diff_and_exits_zero_when_files_differ(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A difference is this command's purpose, not a failure."""
+    """A difference is printed as a diff, and the exit code stays 0."""
     path = tmp_path / "app.js"
     path.write_text("const a=1\n", encoding="utf-8")
     commands, run = formatter({str(path): (0, "const a = 1;\n", "")})
@@ -70,7 +70,7 @@ def test_shows_a_diff_for_line_endings_alone(
 def test_a_prettier_failure_stops_the_run_with_its_exit_code(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A syntax error must not look like "no changes"."""
+    """A Prettier failure stops the run and returns its exit code."""
     broken = tmp_path / "broken.js"
     broken.write_text("const =\n", encoding="utf-8")
     later = tmp_path / "later.js"

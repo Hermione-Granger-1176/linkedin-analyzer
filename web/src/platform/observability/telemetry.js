@@ -6,8 +6,8 @@ import { captureError, captureMetric } from "./sentry.js";
 let telemetryInitialized = false;
 
 /**
- * Capture a duration measurement in milliseconds. The value is buffered numerically;
- * the metric name carries enough context, so no string payload is attached.
+ * Capture a duration measurement in milliseconds. The value is sent as a number
+ * with no string payload. The metric name identifies it.
  * @param {string} name
  * @param {number} durationMs
  */

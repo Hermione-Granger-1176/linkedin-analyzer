@@ -229,7 +229,7 @@ def test_extract_source_code_snippets_requires_backticks() -> None:
 
 
 def test_extract_workflow_run_snippets_reads_block_scalars_and_inline_values() -> None:
-    """Workflow shell is read directly, since every make word there is an invocation."""
+    """Reads `run:` blocks and inline values in workflows as shell."""
     references = make_targets.extract_path_make_references(
         Path(".github/workflows/ci.yml"),
         "jobs:\n"
@@ -264,7 +264,7 @@ def test_extract_workflow_run_snippets_stops_at_the_next_key() -> None:
 
 
 def test_extract_workflow_run_snippets_stops_at_sibling_keys_of_a_dash_step() -> None:
-    """A `- run: |` block ends at its own sibling keys, which sit left of the body."""
+    """A `- run: |` block ends at the sibling keys that follow it."""
     snippets = make_targets.extract_workflow_run_snippets(
         "      - run: |\n"
         "          make lint-py\n"
@@ -277,7 +277,7 @@ def test_extract_workflow_run_snippets_stops_at_sibling_keys_of_a_dash_step() ->
 
 
 def test_extract_workflow_run_snippets_allows_a_comment_after_the_indicator() -> None:
-    """A commented block indicator still opens a block, so its shell is not skipped."""
+    """A block indicator followed by a comment still opens a block."""
     snippets = make_targets.extract_workflow_run_snippets(
         "      - run: | # keep this in one step\n          make lint-py\n"
     )
@@ -327,7 +327,7 @@ def test_is_test_path_covers_directory_and_filename_conventions() -> None:
 
 
 def test_snippet_extractor_selects_a_rule_per_file_kind() -> None:
-    """Each scanned kind gets the extractor that avoids its own false positives."""
+    """Each scanned file kind maps to its extractor."""
     assert (
         make_targets.snippet_extractor(Path("README.md"))
         is make_targets.extract_markdown_code_snippets
@@ -340,8 +340,8 @@ def test_snippet_extractor_selects_a_rule_per_file_kind() -> None:
         make_targets.snippet_extractor(Path(".github/actions/ci-setup/action.yml"))
         is make_targets.extract_workflow_run_snippets
     )
-    # Scanned by directory rather than by an enumerated list of workflow paths,
-    # so YAML with no `run:` key is read and returns no snippets.
+    # Every YAML file under .github is scanned, so YAML with no `run:` key yields
+    # no snippets.
     assert (
         make_targets.snippet_extractor(Path(".github/dependabot.yml"))
         is make_targets.extract_workflow_run_snippets
@@ -379,7 +379,7 @@ def test_iter_reference_files_covers_workflows_and_source_but_not_tests(tmp_path
 
 
 def test_run_check_reports_an_unknown_target_in_workflow_shell(tmp_path: Path) -> None:
-    """A renamed target referenced by CI shell fails the lint, not the next CI run."""
+    """A missing target named in workflow shell is reported."""
     write_text(tmp_path / "Makefile", "lint-py:\n\t@true\n")
     workflow = tmp_path / ".github" / "workflows" / "ci.yml"
     write_text(workflow, "steps:\n  - run: |\n      make lint-py\n      make lint-typo\n")
@@ -392,7 +392,7 @@ def test_run_check_reports_an_unknown_target_in_workflow_shell(tmp_path: Path) -
 
 
 def test_run_check_reports_an_unknown_target_in_source_strings(tmp_path: Path) -> None:
-    """A wrong target named in an error message is caught before it misleads anyone."""
+    """A missing target named in source text is reported."""
     write_text(tmp_path / "Makefile", "pr-review-comments:\n\t@true\n")
     module = tmp_path / "scripts" / "gh" / "pr_watch.py"
     write_text(module, 'raise GhError("inspect `make pr-comment-typo` before merging")\n')
@@ -500,9 +500,7 @@ def test_find_shell_control_flow_flags_if_and_for() -> None:
 def test_find_shell_control_flow_ignores_make_if_function() -> None:
     """The Make ``$(if ...)`` function is not shell control flow.
 
-    The stripped recipe line then begins with ``$``, so the keyword pattern
-    cannot match it. This matters because ``$(if $(pr_num),--pr "$(pr_num)")``
-    appears in most of the PR targets.
+    The recipe line begins with ``$``, so the keyword pattern does not match it.
     """
     violations = make_targets.find_shell_control_flow(
         "target-a:\n\t$(if $(src),--from-html $(src)) build\n"
@@ -523,9 +521,7 @@ def test_find_shell_control_flow_ignores_define_blocks() -> None:
 def test_find_shell_control_flow_ignores_quoted_program_bodies() -> None:
     """An if inside a quoted awk program spanning continuations is ignored.
 
-    The help targets embed awk programs whose own control flow is not shell
-    control flow. Quote state is tracked across backslash continuations so the
-    scan can tell the two apart.
+    Quote state is tracked across backslash continuations.
     """
     violations = make_targets.find_shell_control_flow(
         "target-a:\n\t@awk ' \\\n\t\tif (ti == 0) next; \\\n\t' $(FILE)\n"
@@ -559,11 +555,7 @@ def test_repository_makefile_has_no_unallowlisted_shell_control_flow() -> None:
 
 
 def test_control_flow_allowlist_has_no_unused_entries() -> None:
-    """Require every allowlist entry to contain inline shell control flow.
-
-    An unused entry would permit shell control flow to return after a target
-    had moved that logic into a script.
-    """
+    """Every allowlist entry must contain inline shell control flow."""
     content = make_targets.MAKEFILE_PATH.read_text(encoding="utf-8")
     offenders = {
         violation.target
@@ -595,11 +587,7 @@ def test_run_control_flow_check_defaults_to_repository_makefile() -> None:
 def test_main_reports_control_flow_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Raw shell control flow in the Makefile fails the make-targets lint.
-
-    The check runs on the Makefile itself, so it fires even when the requested
-    paths are clean and unrelated.
-    """
+    """Raw shell control flow in the Makefile fails the lint, even for clean paths."""
     write_text(tmp_path / "Makefile", "check-local:\n\t@while true; do :; done\n")
     write_text(tmp_path / "README.md", "Use `make check-local`.\n")
     monkeypatch.setattr(check_make_targets, "REPO_ROOT", tmp_path)

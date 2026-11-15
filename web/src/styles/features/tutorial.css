@@ -69,8 +69,8 @@
     line-height: 1.1;
 }
 
-/* Position Pip in the popover without affecting its measured size. Reserve a
-   title gutter so the heading does not overlap him. */
+/* Positions Pip in the popover without affecting its measured size. The title
+   gets a gutter beside him. */
 .tutorial-mascot {
     position: absolute;
     left: 8px;
@@ -370,7 +370,7 @@
     height: auto;
 }
 
-/* Keep the help mark above the shared .pip-ink stroke color. */
+/* Overrides the shared .pip-ink stroke color for the help mark. */
 .tutorial-help-pip .tutorial-help-mark {
     stroke: var(--accent-blue);
     stroke-width: 3.4;

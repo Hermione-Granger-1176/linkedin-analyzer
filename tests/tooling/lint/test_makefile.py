@@ -61,7 +61,7 @@ def test_selected_playwright_setup_validates_engines_and_dependencies() -> None:
 
 
 def test_containerized_playwright_runs_through_the_pinned_image() -> None:
-    """Keep hosted E2E and the page-speed check outside the image that omits GNU make."""
+    """E2E and page-speed targets run through the pinned container image."""
     run = re.search(r"^PLAYWRIGHT_CONTAINER_RUN = (?P<command>.*)$", MAKEFILE_TEXT, re.MULTILINE)
     assert run is not None
     command = run.group("command")
@@ -129,15 +129,12 @@ def test_sensitive_message_files_use_portable_private_temp_paths(
 
 
 def test_no_recipe_clobbers_the_developers_python_path() -> None:
-    """Recipes extend PYTHONPATH through the shared prefix instead of replacing it.
+    """Recipes extend PYTHONPATH through the shared PY_PATH_PREFIX.
 
-    A bare ``PYTHONPATH=.`` discards a value the developer set for their own
-    tooling. One shared variable is used so a new ``python -m scripts.*`` target
-    cannot reintroduce the clobber by copying an older line.
+    A bare ``PYTHONPATH=.`` would discard the developer's value.
     """
     assert "PY_PATH_PREFIX = PYTHONPATH=.$${PYTHONPATH:+:$${PYTHONPATH}}" in MAKEFILE_TEXT
-    # The definition itself continues with $${...}, so a trailing space only
-    # appears where a recipe assigned the bare value and dropped what was there.
+    # A bare assignment with a trailing space is a recipe that dropped the value.
     assert "PYTHONPATH=. " not in MAKEFILE_TEXT
 
 
@@ -146,19 +143,11 @@ FREE_TEXT_NAMES = ("body", "title", "comment", "detail", "notes", "search")
 
 @pytest.mark.parametrize("name", FREE_TEXT_NAMES)
 def test_free_text_never_becomes_a_make_variable(name: str) -> None:
-    """No target reads free text from make, in any spelling.
+    """No target reads free text from a make variable, in any spelling.
 
-    A body reaches its target on standard input and a title through the
-    environment, so make's parser never sees either. That closes three bugs at
-    once rather than policing them:
-
-    * ``--body "$(body)"`` makes the text shell source, where a newline ends the
-      line mid-quote, a ``"`` closes it, and backticks are evaluated.
-    * ``:= $(body)`` expands make syntax inside the text, so a body mentioning
-      ``$(x)`` silently loses it. ``$(value ...)`` fixed that but not the next one.
-    * make expands a command-line assignment *while parsing it*, so ``$(shell
-      ...)`` in a ``body=`` ran before any target could protect it. Nothing
-      inside the Makefile could prevent that; not accepting the argument can.
+    Text arrives on stdin, and a title through the environment. Make expands
+    `$(...)` in a command-line assignment while parsing it, so such text is never
+    accepted as an argument.
     """
     assert f"$({name})" not in MAKEFILE_TEXT
     assert f"$(value {name})" not in MAKEFILE_TEXT
@@ -166,11 +155,9 @@ def test_free_text_never_becomes_a_make_variable(name: str) -> None:
 
 @pytest.mark.parametrize("name", FREE_TEXT_NAMES)
 def test_retired_free_text_arguments_are_refused_rather_than_ignored(name: str) -> None:
-    """A stale ``body="Fixed"`` fails the run instead of vanishing.
+    """A stale ``body="Fixed"`` fails the run instead of being ignored.
 
-    Make silently ignores a command-line assignment no target reads, so without
-    this the old spelling would drop the text and the target would go on to read
-    an empty body from stdin: a comment posted blank, or a PR body cleared.
+    Make silently ignores command-line assignments that no target reads.
     """
     retired = re.search(r"^RETIRED_TEXT_ARGS :=((?:.|\\\n)*?)\n\$", MAKEFILE_TEXT, re.MULTILINE)
     assert retired is not None
@@ -180,13 +167,10 @@ def test_retired_free_text_arguments_are_refused_rather_than_ignored(name: str) 
 
 @pytest.mark.parametrize("name", ["TITLE", "COMMENT", "SEARCH"])
 def test_environment_text_is_refused_as_a_make_argument(name: str) -> None:
-    """``make x TITLE=...`` is rejected, because make would expand it.
+    """``make x TITLE=...`` is refused.
 
-    Measured on a scratch Makefile: ``TITLE='$(shell touch X)' make demo`` hands
-    the recipe those characters untouched, while ``make demo TITLE='$(shell
-    touch X)'`` runs the command and passes on what is left. Both spellings
-    reach the recipe and they differ only in where the assignment sits, so the
-    unsafe one cannot be left to be noticed in review.
+    Make expands a command-line assignment, while an environment value reaches
+    the recipe unexpanded.
     """
     assert re.search(r"^FREE_TEXT_VARS :=.*\b" + name + r"\b", MAKEFILE_TEXT, re.MULTILINE)
 
@@ -204,11 +188,9 @@ def test_environment_text_is_refused_as_a_make_argument(name: str) -> None:
 def test_posting_targets_take_the_body_from_stdin_and_nowhere_else(
     target: str, command: str
 ) -> None:
-    """One input, so no target branches on how the text arrived.
+    """Posting targets read the body from stdin with ``--body-file -``.
 
-    ``--body-file -`` hands the stream straight to the helper: no length limit,
-    no argv escaping, no temporary file to chmod and trap, and nothing for the
-    caller to quote. These recipes are the single command they look like.
+    They have no branch for other input.
     """
     recipe = _target_recipe(target)
 
@@ -220,13 +202,7 @@ def test_posting_targets_take_the_body_from_stdin_and_nowhere_else(
 
 @pytest.mark.parametrize("target", ["pr-edit", "issue-edit"])
 def test_edit_targets_leave_the_body_alone_when_no_body_arrives(target: str) -> None:
-    """Editing a title must not clear the body as a side effect.
-
-    Changing a title and replacing a body are separate intents, so an empty
-    stream means "no new body" and ``TITLE='...' make pr-edit`` edits the title
-    alone. The branch left here is on what to change, never on how the text
-    arrived.
-    """
+    """An empty stdin means no new body, so the title can change alone."""
     recipe = _target_recipe(target)
 
     assert "body=$$(cat)" in recipe
@@ -244,14 +220,9 @@ def test_edit_targets_leave_the_body_alone_when_no_body_arrives(target: str) -> 
     ],
 )
 def test_targets_with_optional_input_never_read_a_terminal(target: str, read_command: str) -> None:
-    """A target whose input is optional must not sit waiting for a terminal.
+    """Targets with optional input do not read a terminal.
 
-    Reading a terminal is right where the text is required: the target waits for
-    what you are about to type, the way ``cat`` does. Where absence means
-    something instead -- keep the body, generate the notes, no detail -- an
-    unguarded read makes ``TITLE='...' make pr-edit`` hang until EOF on a body
-    nobody meant to supply. Empty-means-no-change still covers the piped case,
-    so the terminal test only removes the wait.
+    Empty stdin still means no change when input is piped.
     """
     assert "NO_TTY_READ := [ -t 0 ] ||" in MAKEFILE_TEXT
     assert f"$(NO_TTY_READ) {read_command}" in _target_recipe(target)
@@ -300,12 +271,9 @@ def test_retired_path_arguments_are_refused_rather_than_ignored(name: str) -> No
 
 
 def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> None:
-    """One variable selects the mode, so gh is never left half-specified.
+    """TITLE selects the mode. Without it, the title and body come from the commits.
 
-    ``gh pr create`` prompts for whatever it was not given, which hangs a
-    non-interactive shell instead of failing. Keying the choice to ``TITLE``
-    removes that state: without it the title and body come from the commits, and
-    with it the body comes from stdin.
+    With TITLE, the body comes from stdin.
     """
     recipe = _target_recipe("pr-create")
 
@@ -319,12 +287,9 @@ def test_pr_create_lets_the_title_choose_between_fill_and_an_explicit_body() -> 
     [("commit", "commit-message"), ("release-create", "release-notes")],
 )
 def test_buffered_targets_read_stdin_once_into_a_private_file(target: str, template: str) -> None:
-    """The two targets that must inspect their input still take only stdin.
+    """``commit`` and ``release-create`` buffer stdin into a private file.
 
-    ``commit`` screens the message before git sees it and ``release-create`` has
-    to know whether notes were supplied at all, so both need the text on disk.
-    They read it from the same single input as everything else, and the file is
-    private and removed on exit.
+    The file is removed on exit.
     """
     recipe = _target_recipe(target)
 
@@ -334,7 +299,7 @@ def test_buffered_targets_read_stdin_once_into_a_private_file(target: str, templ
 
 
 def test_commit_fails_fast_when_stdin_is_a_terminal() -> None:
-    """An interactive commit invocation must not hang waiting for a message."""
+    """Commit without piped input fails instead of waiting for a terminal."""
     recipe = _target_recipe("commit")
 
     assert "if [ -t 0 ]; then" in recipe
@@ -342,7 +307,7 @@ def test_commit_fails_fast_when_stdin_is_a_terminal() -> None:
 
 
 def test_alert_issue_takes_its_detail_from_stdin() -> None:
-    """A failing workflow's output never has to survive a make command line."""
+    """The alert detail is read from stdin."""
     recipe = _target_recipe("ci-alert-issue")
 
     assert "--detail-file -" in recipe
@@ -359,11 +324,9 @@ def test_alert_issue_takes_its_detail_from_stdin() -> None:
     ],
 )
 def test_scalar_arguments_reach_their_command_as_one_word(target: str, interpolation: str) -> None:
-    """Counts and comma-separated lists are quoted so they stay a single argument.
+    """Counts and comma-separated lists are quoted so each stays one argument.
 
-    An unquoted ``$(runs)`` or ``$(users)`` is split on whitespace by the shell,
-    which turns one argument into several. The ``$(if ...)`` wrapper keeps an
-    unset count from becoming an empty argument.
+    The ``$(if ...)`` wrapper omits an unset count.
     """
     assert interpolation in _target_recipe(target)
 
@@ -377,14 +340,14 @@ def test_pr_edit_routes_through_the_tested_helper() -> None:
 
 
 def test_pr_checks_reports_the_helper_exit_status() -> None:
-    """A failing or stuck check fails the target, so `make pr-checks && ...` cannot proceed."""
+    """A failing or pending check fails the target."""
     recipe = _target_recipe("pr-checks")
 
     assert recipe.strip() == '@$(GH) pr-checks $(if $(pr_num),--pr "$(pr_num)")'
 
 
 def test_pr_watch_uses_conservative_helper_and_forwards_controls() -> None:
-    """Keep PR polling in the tested helper rather than a noisy shell loop."""
+    """PR polling runs in the helper, not a shell loop."""
     recipe = _target_recipe("pr-watch")
 
     assert "$(GH) watch" in recipe

@@ -19,8 +19,7 @@ export default defineConfig({
         sourcemap: sentryUploadEnabled ? "hidden" : false,
         rolldownOptions: {
             output: {
-                // Every Svelte screen shares one runtime chunk, so the runtime is
-                // downloaded once and has its own size budget.
+                // Svelte runtime modules are emitted as one shared chunk.
                 codeSplitting: {
                     groups: [{ name: "svelte", test: /node_modules[\\/]svelte[\\/]/ }],
                 },
@@ -43,8 +42,8 @@ export default defineConfig({
                     if (!output) {
                         return;
                     }
-                    // The PWA plugin still sets inlineDynamicImports. Disable code
-                    // splitting with codeSplitting instead.
+                    // Removes inlineDynamicImports, which the PWA plugin sets, and sets
+                    // codeSplitting to false.
                     const outputs = Array.isArray(output) ? output : [output];
                     for (const outputOptions of outputs) {
                         delete outputOptions.inlineDynamicImports;

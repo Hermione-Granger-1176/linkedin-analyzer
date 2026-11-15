@@ -22,7 +22,9 @@ DEFAULT_DOC_PATHS = (
     Path("CLAUDE.md"),
     Path(".github/CONTRIBUTING.md"),
     Path(".github/PULL_REQUEST_TEMPLATE.md"),
+    Path("docs/ci.md"),
     Path("docs/development.md"),
+    Path("docs/github-helpers.md"),
     Path("docs/operations.md"),
 )
 
@@ -176,8 +178,8 @@ COMMAND_RULES = (
     CommandRule(re.compile(r"^\s*git\s+diff\s+--cached\s*$"), "diff-staged", True),
     CommandRule(re.compile(r"^\s*git\s+diff\s*$"), "diff", True),
     CommandRule(re.compile(r"^\s*git\s+log\s*$"), "log", True),
-    # The commit interface is Make-only: `make commit` lints the message for
-    # leaked shell before it reaches git, so docs must not show raw git commit.
+    # `make commit` is the only commit interface. It lints the message for leaked
+    # shell before git sees it.
     CommandRule(re.compile(r"^\s*git\s+commit\b.*$"), "commit", True),
     CommandRule(re.compile(r"^\s*git\s+push\s*$"), "push", True),
     CommandRule(re.compile(r"^\s*git\s+add\b.*$"), "stage", True),
@@ -248,14 +250,12 @@ def find_replacement_targets(snippet: str, known_targets: set[str]) -> list[str]
 
 
 def _mask_inline_code(text: str) -> str:
-    """Blank out inline-code spans so their contents cannot look like prose.
+    """Blank out inline-code spans so their contents are not read as prose.
 
-    Clause splitting and instruction-word detection run over the prose leading
-    up to a snippet. Without masking, punctuation and verbs inside neighbouring
-    code spans leak into that analysis: a `` `.venv/bin/*` `` mention starts a
-    new clause on its dot, and an `` `npm run` `` mention reads as the verb
-    "run". Both would strand the sentence's real negation in an earlier clause.
-    Spans are replaced character-for-character so offsets stay aligned.
+    Punctuation and verbs inside a code span, such as the dot in a
+    `` `.venv/bin/*` `` path or the word "run" in `` `npm run` ``, would otherwise
+    split clauses or match instruction words. Spans are replaced
+    character-for-character, so offsets stay aligned.
     """
     return INLINE_CODE_PATTERN.sub(lambda match: "`" + "_" * len(match.group(1)) + "`", text)
 

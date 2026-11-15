@@ -14,7 +14,7 @@ vi.mock("../../src/app/screen-manager.js", () => ({
 }));
 
 /**
- * Load a fresh copy, so each test starts with nothing requested.
+ * Loads a fresh copy of the module with an empty module cache.
  * @returns {Promise<typeof import("../../src/app/route-preload.js")>}
  */
 function loadModule() {

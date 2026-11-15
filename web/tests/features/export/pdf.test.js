@@ -45,8 +45,8 @@ vi.mock("../../../src/features/export/pdf-document.js", () => ({
     renderPdfDocument: vi.fn(),
 }));
 
-// All three transports, so a cancellation can be checked against every worker
-// an export can have started rather than against one of the four.
+// Mocks the three transports, so a cancellation is checked against every worker
+// an export can start.
 vi.mock("../../../src/features/export/threads-transport.js", () => ({
     terminateThreadsWorker: vi.fn(),
 }));
@@ -82,8 +82,8 @@ const MARKUP = `
     </div>
 `;
 
-// Each test imports the real PDF runtime afresh, which can take longer than
-// waitFor's one-second default when the whole suite runs in parallel.
+// Imports can take longer than waitFor's one-second default when the suite runs
+// in parallel.
 const SETTLE = { timeout: 5000 };
 
 let docStub = null;
@@ -111,8 +111,8 @@ let activeGate = null;
 /**
  * Re-import the export module and every mocked collaborator.
  *
- * The module keeps an init latch, so each test needs a fresh instance; that
- * means re-reading the mocks too, since resetModules recreates them.
+ * The module keeps an init latch, so each call needs a fresh instance. The mocks
+ * are re-read too, since resetModules recreates them.
  * @returns {Promise<void>}
  */
 async function loadModules() {
@@ -223,8 +223,8 @@ const DOCUMENT_MODEL = Object.freeze({
  * @returns {Promise<void>}
  */
 async function setup(configure) {
-    // Registered before the export module is imported, so a chunk that stopped being
-    // fetched on demand would be counted here rather than quietly missed.
+    // Registered before the export module is imported, so any fetch of the runtime
+    // chunk is counted.
     runtimeChunk = interceptRuntimeChunk();
     await loadModules();
     // The mocked modules are shared across resetModules(), so their call
@@ -274,9 +274,8 @@ describe("PdfExport", () => {
     });
 
     it("does nothing when the export markup is absent", async () => {
-        // A fresh module instance: beforeEach already called init(), and a second
-        // call returns at the `initialized` latch without ever resolving the
-        // markup, so the path this test names would go unexercised.
+        // A fresh module instance is needed, because a second init() returns at
+        // the `initialized` latch before it looks for the markup.
         await loadModules();
         vi.clearAllMocks();
         document.body.innerHTML = "";
@@ -287,9 +286,9 @@ describe("PdfExport", () => {
     });
 
     it("stands down on partial markup rather than throwing during boot", async () => {
-        // Every node but the hint is dereferenced unguarded once init() commits,
-        // so any one of them missing has to stop it before that point: this runs
-        // at app boot, and a throw here takes the whole page down with it.
+        // Every node except the hint is used unguarded once init() commits. A
+        // missing node must stop init() before that point, since it runs at app
+        // boot.
         const required = [
             "pdfExportBtn",
             "pdfExportDialogBackdrop",
@@ -407,10 +406,9 @@ describe("PdfExport", () => {
     });
 
     it("pulls Tab back in when focus has fallen out of the dialog", () => {
-        // Clicking the dialog's heading, its text or its padding focuses none
-        // of them and leaves activeElement on <body>. That is neither the first
-        // nor the last control, so native tabbing used to walk focus into the
-        // page behind an aria-modal dialog.
+        // Clicking the heading, text or padding leaves activeElement on <body>,
+        // which is neither the first nor the last control. Tab must still stay
+        // inside the dialog.
         ui().trigger.click();
         document.body.focus();
         ui().namesCheckbox.blur();
@@ -424,10 +422,9 @@ describe("PdfExport", () => {
     });
 
     it("returns focus to the trigger when nothing focusable opened the dialog", () => {
-        // Browsers that do not focus a clicked button leave <body> as the
-        // activeElement open() records. Every element has a .focus, but body's
-        // is a no-op, so testing for one dropped the user at the top of the
-        // page instead of back on the button they came from.
+        // Some browsers do not focus a clicked button, so open() records <body>
+        // as the active element. Focus still returns to the trigger. A check for
+        // a focus method would not catch <body>, whose focus() does nothing.
         ui().trigger.blur();
         ui().trigger.click();
         expect(ui().backdrop.hidden).toBe(false);
@@ -449,9 +446,8 @@ describe("PdfExport", () => {
         ui().trigger.click();
         expect(ui().backdrop.hidden).toBe(false);
 
-        // The keydown listener is on the document, so it outlives its own
-        // markup. A re-render swaps the dialog out from under this instance; it
-        // is no longer the modal the user is in and must not fight the live one.
+        // The keydown listener is on the document and outlives its markup. After
+        // a re-render this instance's dialog is gone, so it must not handle keys.
         document.body.innerHTML = MARKUP;
 
         expect(press("Escape").defaultPrevented).toBe(false);
@@ -461,8 +457,8 @@ describe("PdfExport", () => {
     it("disables the trigger with an accessible reason when there is no data", async () => {
         await setup(() => hasExportableData.mockResolvedValue(false));
 
-        // aria-disabled, not the disabled property: the button has to stay in
-        // the tab order for the reason on it to be reachable at all.
+        // Uses aria-disabled rather than disabled, so the button stays focusable
+        // and its reason is reachable.
         expect(ui().trigger.disabled).toBe(false);
         expect(ui().trigger.getAttribute("aria-disabled")).toBe("true");
         expect(ui().trigger.getAttribute("aria-label")).toBe(
@@ -539,8 +535,7 @@ describe("PdfExport", () => {
             SETTLE,
         );
 
-        // The older read, against storage as it was before the upload, must not
-        // now disable it again for the rest of the session.
+        // A stale check that settles late must not overwrite the newer result.
         settleFirst(false);
         await Promise.resolve();
         await Promise.resolve();
@@ -587,8 +582,8 @@ describe("PdfExport", () => {
             generatedAt: expect.any(Date),
             isCancelled: expect.any(Function),
         });
-        // The collected data itself, not merely something object-shaped: the
-        // contract is that what was gathered is what gets laid out.
+        // Checks the collected data itself, so that what was gathered is what
+        // gets laid out.
         expect(renderPdfDocument).toHaveBeenCalledWith(
             docStub,
             expect.objectContaining({ rangeLabel: "Last 12 months", insights: [], threads: [] }),
@@ -597,8 +592,7 @@ describe("PdfExport", () => {
                 fonts: { body: "PatrickHand", accent: "Caveat" },
             },
         );
-        // "In order" is the test's name, so the order is asserted rather than
-        // left to the reading order of the expectations above.
+        // Asserts the call order, not just that each call happened.
         const order = (mock) => mock.mock.invocationCallOrder[0];
         expect(order(jsPDF)).toBeLessThan(order(readPdfPalette));
         expect(order(readPdfPalette)).toBeLessThan(order(registerPdfFonts));
@@ -617,14 +611,12 @@ describe("PdfExport", () => {
         ui().confirm.click();
 
         await vi.waitFor(() => expect(celebrateStaple).toHaveBeenCalledTimes(1), SETTLE);
-        // After the dialog is down, so the moment plays over the page rather
-        // than behind the modal that started it.
+        // The dialog is closed first, so the moment plays over the page.
         expect(ui().backdrop.hidden).toBe(true);
     });
 
     it("leaves the staple alone when the export failed", async () => {
-        // Once, not for the rest of the file: clearAllMocks() resets call
-        // history but leaves implementations in place.
+        // Applies to one call only, since clearAllMocks() keeps implementations.
         renderPdfDocument.mockImplementationOnce(() => {
             throw new Error("layout failed");
         });
@@ -765,11 +757,9 @@ describe("PdfExport", () => {
     });
 
     it("never reports the exception the layout engine threw", async () => {
-        // The same catch also surrounds rendering, which is the step that holds
-        // the laid-out message bodies rather than merely the data behind them.
+        // The same catch covers rendering, which holds the laid-out message bodies.
         const thrown = piiError("render");
-        // Once, not for the rest of the file: clearAllMocks() resets call
-        // history but leaves implementations in place.
+        // Applies to one call only, since clearAllMocks() keeps implementations.
         renderPdfDocument.mockImplementationOnce(() => {
             throw thrown;
         });
@@ -903,8 +893,8 @@ describe("PdfExport", () => {
         ui().confirm.click();
         await vi.waitFor(() => expect(collectExportData).toHaveBeenCalledTimes(1), SETTLE);
 
-        // Cancel is the one control still enabled while generating, so a dialog
-        // that refused to close would be one a keyboard user could not leave.
+        // Escape closes the dialog during generation, so a keyboard user is never
+        // trapped.
         expect(press("Escape").defaultPrevented).toBe(true);
         expect(ui().backdrop.hidden).toBe(true);
         expect(document.activeElement).toBe(ui().trigger);
@@ -1046,9 +1036,7 @@ describe("PdfExport", () => {
             operation: "generate",
         });
 
-        // A load that failed is not remembered as a verdict: the next attempt
-        // goes back for the chunk rather than failing out of memory for the
-        // rest of the session.
+        // A failed load is not cached. The next attempt fetches the chunk again.
         const retry = interceptRuntimeChunk();
         vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
         ui().confirm.click();

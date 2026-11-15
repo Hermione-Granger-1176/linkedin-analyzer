@@ -81,8 +81,7 @@ export function createRangeFilter(options) {
 
     for (const button of buttons) {
         button.addEventListener("click", () => {
-            // A button without a range is not a range control; ignore it
-            // rather than resetting the screen to the fallback.
+            // A button without a range is not a range control and is ignored.
             const range = button.getAttribute("data-range");
             if (range) {
                 set(range);
@@ -92,8 +91,7 @@ export function createRangeFilter(options) {
     }
     if (select) {
         select.addEventListener("change", () => {
-            // An unknown option is ignored rather than reset, so a stray value
-            // never moves the screen.
+            // An unknown option is ignored.
             const range = parse(select.value, "");
             if (range) {
                 set(range);

@@ -141,18 +141,15 @@ describe("registerPdfFonts", () => {
     });
 
     afterEach(() => {
-        // Teardown, not the last line of a test body: an assertion failing above
-        // that line used to leave fake timers installed, so one failure turned
-        // into a hang in the next test that awaits anything.
+        // Runs in teardown so fake timers are restored even when an assertion
+        // fails. Otherwise a later test that awaits could hang.
         vi.useRealTimers();
         delete globalThis.fetch;
     });
 
     it("registers each face with its own bytes", async () => {
-        // The stub records the file and its data together, but only the names
-        // were ever read back. Registering Caveat with Patrick Hand's outlines,
-        // or with no bytes at all, ships a visibly broken document and would
-        // otherwise pass every assertion in this file.
+        // Checks the bytes each face is registered with. Swapped outlines, or
+        // no bytes at all, would otherwise pass every other assertion here.
         const faces = {
             "/fonts/PatrickHand-Regular.ttf": buildFontFile([
                 { format: 4, segments: [[0x41, 0x42]] },
@@ -249,9 +246,7 @@ describe("registerPdfFonts", () => {
             return fonts;
         });
 
-        // Bounded below as well as above. With only the upper bound, cutting
-        // the budget to a millisecond would still pass here while dropping the
-        // handwritten faces on any connection slower than instant.
+        // Not settled before 10s, and settled by 10.001s. Both bounds are checked.
         await vi.advanceTimersByTimeAsync(9999);
         expect(settled).toBe(false);
 
@@ -266,9 +261,8 @@ describe("registerPdfFonts", () => {
     });
 
     it("reads what the faces it just embedded can actually draw", async () => {
-        // The shipped files themselves, not a guess about them: the document
-        // model is sanitized against this, so a wrong answer here is either a
-        // name mangled that did not need to be or one lost that did.
+        // Uses the shipped font files. The document model is sanitized against
+        // this coverage, so the expected sets must match the real faces.
         const buffers = [
             readShippedFont("PatrickHand-Regular.ttf"),
             readShippedFont("Caveat-Regular.ttf"),
@@ -283,13 +277,13 @@ describe("registerPdfFonts", () => {
 
         expect(coverage.has("é".codePointAt(0))).toBe(true);
         expect(coverage.has("×".codePointAt(0))).toBe(true);
-        // Past WinAnsi and in both faces, so this is the cmap being read rather
-        // than the fallback set standing in for it.
+        // Beyond WinAnsi and present in both faces, so the cmap is being read
+        // rather than the fallback set.
         expect(coverage.has("ı".codePointAt(0))).toBe(true);
         expect(coverage.has("李".codePointAt(0))).toBe(false);
         expect(coverage.has("Ň".codePointAt(0))).toBe(false);
-        // In Caveat and not in Patrick Hand. The collector does not know which
-        // face will draw which string, so only what both carry counts.
+        // In Caveat but not Patrick Hand. Coverage counts only glyphs that both
+        // faces carry.
         expect(coverage.has("µ".codePointAt(0))).toBe(false);
         expect(coverage.size).toBe(219);
     });
@@ -305,8 +299,8 @@ describe("registerPdfFonts", () => {
     });
 
     it("falls back to WinAnsi when the character map is in a format it cannot read", async () => {
-        // A face with glyphs beyond the basic plane would use one. This under-
-        // uses such a face; it never claims a glyph that is not there.
+        // Format 12 is not read, so coverage falls back to WinAnsi. This can
+        // under-report but never claims a glyph that is not there.
         serveFont(buildFontFile([{ format: 12 }]));
 
         expect(readDrawableCoverage().has("ı".codePointAt(0))).toBe(false);
@@ -318,8 +312,7 @@ describe("registerPdfFonts", () => {
     });
 
     it("stops reading a character map whose segments run backwards", async () => {
-        // Segments are ordered and never overlap in a table this can trust, and
-        // walking a corrupt one would go over the same ranges again and again.
+        // Reading stops at a segment that starts before the previous one.
         serveFont(
             buildFontFile([
                 {
@@ -340,8 +333,8 @@ describe("registerPdfFonts", () => {
     });
 
     it("stops reading a character map whose segment ends before it starts", async () => {
-        // A segment whose end precedes its start invalidates the remaining table.
-        // Do not claim coverage from segments after it.
+        // A segment whose end precedes its start ends the read. Segments after it
+        // add no coverage.
         serveFont(
             buildFontFile([
                 {
@@ -358,17 +351,16 @@ describe("registerPdfFonts", () => {
         await registerPdfFonts(createDocStub());
         const coverage = readDrawableCoverage();
 
-        // Keep the A-C range read before the invalid segment. The following
-        // lowercase range must be absent, which distinguishes an early stop
-        // from ignoring the invalid segment.
+        // The A-C range before the invalid segment is read. The following
+        // lowercase range must be absent, which tells a stop apart from skipping
+        // the segment.
         expect(coverage.has("A".codePointAt(0))).toBe(true);
         expect(coverage.has("a".codePointAt(0))).toBe(false);
     });
 
     it("falls back to WinAnsi coverage when the fonts never arrive", async () => {
-        // The core font encodes as WinAnsi and turns a string holding anything
-        // outside it into mojibake, so this path narrows what may be drawn
-        // rather than skipping the question.
+        // Without embedded fonts, the core font encodes WinAnsi, so coverage
+        // narrows to WinAnsi.
         serveFont(buildFontFile([{ format: 4, segments: [[0x41, 0x5a]] }]));
         await registerPdfFonts(createDocStub());
         expect(readDrawableCoverage().has("é".codePointAt(0))).toBe(false);
@@ -383,8 +375,8 @@ describe("registerPdfFonts", () => {
     });
 
     it("falls back to Helvetica when a face is too short to read", async () => {
-        // Read font coverage before registration so invalid bytes select the
-        // Helvetica fallback without partial registration.
+        // Coverage is read before registration, so invalid bytes fall back
+        // without a partial registration.
         serveFont(new Uint8Array([1, 2, 3]).buffer);
         const doc = createDocStub();
 
@@ -401,8 +393,8 @@ describe("registerPdfFonts", () => {
         });
 
         expect(await registerPdfFonts(doc)).toBe(FALLBACK_FONTS);
-        // All-or-nothing, which is the whole point of the surrounding catch: a
-        // document carrying one embedded face and one core face looks broken.
+        // Registration is all or nothing. A document with one embedded face and
+        // one core face would look broken.
         expect(doc.fonts).toEqual([]);
         expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
             module: "pdf-export",

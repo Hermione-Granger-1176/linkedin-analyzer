@@ -1,43 +1,40 @@
 # Troubleshooting
 
-Start with `make status`. It reports Git state, dependency availability, lockfile drift, web build state, and pull request state without requiring the virtual environment.
+Start with `make status`. It reports Git state, dependency availability, lockfile drift, web build state, and pull request state. It runs without the virtual environment.
 
 ## Setup fails because `.venv` is missing
 
-Run:
+The environment was never created, the default Python is not installed, or `uv` is missing or below 0.11.0.
 
-```bash
-make setup
-```
-
-If you need a supported older Python version, remove the existing environment and choose the interpreter explicitly:
+1. Run `make setup`.
+2. If `uv` is missing or below 0.11.0, install or update it, then run `make setup` again. The floor is set in `pyproject.toml`.
+3. To use an older supported Python, such as 3.12, remove the environment and reinstall with that interpreter:
 
 ```bash
 make clean-venv
 make install PYTHON=3.12
 ```
 
-If `uv` is missing or below 0.11.0, install or update it, then run `make setup` again. The repository does not pin an exact `uv` version. It requires the floor recorded in `pyproject.toml`.
-
 ## Node dependencies are missing
 
-Run:
+The Node packages are not installed from the locked `package-lock.json`.
 
-```bash
-make node-install
-```
+1. Run `make node-install`.
+2. If the lockfile changed, review the `package.json` change, run `make lock-node`, then run `make node-install` again.
 
-If the lockfile changed, run `make lock-node` only after you have reviewed the `package.json` change, then run `make node-install` again. Do not delete `package-lock.json` to fix an install.
+Do not delete `package-lock.json` to fix an install.
 
 ## Playwright cannot launch a browser
 
-Install the browsers:
+The Playwright browsers are not installed, or the host lacks the libraries they need.
+
+1. Install the browsers:
 
 ```bash
 make setup-playwright
 ```
 
-If the host lacks browser libraries and you cannot use sudo, prepare the private runtime and pass `local_libs=1`:
+2. If the host lacks browser libraries and you cannot use sudo, prepare the private runtime and run the browser tests through it:
 
 ```bash
 make setup-playwright-local
@@ -45,70 +42,76 @@ make playwright-local-gate
 make test-e2e local_libs=1
 ```
 
-Use `make setup-ci` on a disposable runner that permits system dependency installation. Use `make test-e2e-container` when Docker is available and you want the pinned CI runtime.
+3. On a disposable CI runner that allows system package installs, run `make setup-ci`. With Docker available, run `make test-e2e-container` to use the pinned CI runtime.
 
-Do not set `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE`. The local wrapper detects the native host platform.
+Do not set `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE`. The local wrapper detects the platform.
 
 ## The web app does not start
 
-Run the build and inspect the first error:
+The production build fails, or a stale service worker breaks a build that succeeds.
 
-```bash
-make web-build
-```
-
-If the build succeeds, run:
-
-```bash
-make web-preview
-```
-
-A browser failure after a successful build usually comes from a stale service worker. Use the browser's site storage controls to unregister the worker and clear the site data, then reload the preview.
+1. Run `make web-build` and fix the first error it reports.
+2. If the build succeeds, run `make web-preview`.
+3. If the preview still fails, unregister the service worker and clear the site data with the browser's site storage controls. Then reload the preview.
 
 ## Uploads fail with a worker error
 
-Check the browser's Network panel and your content blocker's filtering log for blocked script requests. Record the blocked URL and matching rule. A blocked local data-processing module can stop uploads even when Edge's built-in tracking protection is disabled.
+A content blocker's filter rule blocks a local script that the upload worker needs. The activity engine lives at `web/src/features/analytics/activity.js` to avoid EasyPrivacy's `/analytics/analytics.js` rule.
 
-The activity engine uses `features/analytics/activity.js` to avoid EasyPrivacy's `/analytics/analytics.js` rule. That rule matched its previous development URL. Reload the page after updating the code. Diagnostics remain optional; do not enable them or disable your blocker globally to make local processing work.
-
-Run the development regression test to check this specific filter collision:
+1. Find the blocked script URL in the browser's Network panel, and the matching rule in the content blocker's filtering log.
+2. Run the development regression test for this filter collision:
 
 ```bash
 make test-e2e-dev ARGS="--project=chromium web/e2e/worker-blocking.e2e.spec.js"
 ```
 
-If the deployed build still fails, capture its blocked URL separately. The development test simulates one URL rule, not every AdGuard, AdBlock, or browser privacy setting.
+3. If the deployed build still fails, capture its blocked URL separately.
+
+The development test simulates one URL rule, not every AdGuard, AdBlock, or browser privacy setting. Do not disable your blocker globally to make processing work.
 
 ## A CSV is rejected
 
-Check the file size and the required header names in [data formats](data-formats.md). The browser rejects files above 128 MiB, decoded text above 128 Mi characters, rows above 1,000,000, columns above 256, and fields above 200,000 characters.
+The file is over a browser or CLI limit, or its header names do not match the required columns.
 
-The CLI rejects files above 128 MiB or rows above 1,000,000 by default. Pass `--max-input-bytes`, `--max-rows`, or their environment variables when you have a reason to change the limits.
+1. Confirm the browser accepts the file. The browser rejects files above 128 MiB, decoded text above 128 Mi characters, rows above 1,000,000, columns above 256, and fields above 200,000 characters.
+2. Compare the header row with the required columns in [data formats](data-formats.md).
+3. The CLI rejects files above 128 MiB or rows above 1,000,000 by default. To change those limits, pass `--max-input-bytes`, `--max-rows`, or their environment variables.
 
-For missing or garbled characters, pass an explicit encoding:
+## Characters are missing or garbled
+
+Without an explicit encoding, the tool tries UTF-8 and then WHATWG Windows-1252, so the file may be read in an encoding other than its own.
+
+1. Pass the encoding the file uses. An explicit encoding turns off the Windows-1252 fallback:
 
 ```bash
 linkedin-analyzer --encoding utf-8 shares
 linkedin-analyzer --encoding iso-8859-1 shares
 ```
 
-The CLI and browser try UTF-8 first and then use WHATWG Windows-1252 when no explicit encoding is set. An explicit encoding disables that fallback.
-
 ## The app says the last processing run did not finish
 
-The notice appears when a previous processing run ended without recording success or an error. The browser may have stopped the tab after running out of memory. A browser crash or a forced quit can leave the same marker.
+A run ended without recording success or an error. The browser usually stopped the tab after running out of memory, or the browser crashed or was force-quit.
 
-Upload fewer files at once, close other tabs, or use the Python CLI on a computer. The CLI has [configurable resource limits](cli.md#set-global-options). If the notice keeps appearing for the same export on a computer, reproduce it with `make bench-browser input_dir=path` and report the result.
+1. Upload fewer files at once.
+2. Close other tabs.
+3. Process the export with the Python CLI on a computer. See [configurable resource limits](cli.md#set-global-options).
+4. If the notice keeps appearing for the same export on a computer, run `make bench-browser input_dir=path` and share the result.
 
 ## A cleaner reports missing columns
 
-Inspect the header row and compare it with the required columns in [data formats](data-formats.md). The cleaner trims header whitespace and removes a leading byte-order mark, but it does not rename arbitrary columns.
+A required column is absent or misnamed, and the cleaner does not rename columns.
 
-For `Connections.csv`, keep the original three-row preamble. The cleaner skips those rows before it reads the header.
+1. Compare the header row with the required columns in [data formats](data-formats.md).
+2. Correct the header name in the file, then run the cleaner again.
+3. For `Connections.csv`, keep the original three-row preamble. The cleaner skips those rows before it reads the header.
+
+The cleaner trims header whitespace and removes a leading byte-order mark.
 
 ## `all` fails on a partial export
 
-Pass `--skip-missing` when a missing file is expected:
+A file that `all` expects is missing.
+
+1. Run the command with `--skip-missing`:
 
 ```bash
 linkedin-analyzer all --skip-missing
@@ -118,62 +121,70 @@ The option skips only files that do not exist. It does not hide malformed CSV, m
 
 ## Stored browser data is missing
 
-The app clears data after 24 hours without activity. IndexedDB can also be unavailable in a private or restricted browser context. When IndexedDB fails, the app switches to memory and cannot restore files after a reload.
+The app clears stored data after 24 hours without activity. A private or restricted browser context can block IndexedDB, which leaves the app in memory only.
 
-Upload the files again and avoid reloading until the work is complete. Use **Clear data** when you want to remove stored files yourself.
+1. Upload the files again.
+2. Finish the work before you reload. Memory-only storage cannot restore files after a reload.
+3. To remove stored files yourself, click **Clear data**.
 
 ## A PDF does not contain names or messages
 
-The two PDF choices are independent and unchecked by default. Select **Name people in the dashboards** for contact names in the message dashboards. Select **Include message contents** for the last five messages from the ten most recently messaged contacts.
+Both PDF options are off by default.
 
-A browser without Web Workers can select message threads on the main thread only when the stored message text is under 5 MiB. Larger message sections are omitted to keep the interface responsive.
+1. To include contact names in the message dashboards, select **Name people in the dashboards**.
+2. To include message contents for the last five messages from the ten most recently messaged contacts, select **Include message contents**.
+3. If the export fails before the dialog finishes loading, try again. A failed load of the export code is not cached.
 
-If the PDF export fails before the dialog finishes loading, try again. The export chunk is loaded on demand, and a failed chunk load is not cached as a permanent failure.
+Browsers without Web Workers select message threads on the main thread only when the stored message text is under 5 MiB. Larger message sections are omitted.
 
 ## Diagnostics are not arriving
 
-Check all of these conditions:
+Diagnostics send only when the build has a DSN, the user has consented, and the deployment serves the relay.
 
-1. The build has `VITE_SENTRY_DSN`.
-2. The user selected the diagnostics consent control.
-3. The deployment serves the `/api/sentry-tunnel` relay, and the relay can read `VITE_SENTRY_DSN` or `SENTRY_DSN` at runtime. The Vite dev server has no `/api` functions, so a local dev build never delivers diagnostics.
-4. The deployment has a valid `VITE_APP_RELEASE` when release grouping matters.
+1. Confirm the build has `VITE_SENTRY_DSN`.
+2. Select the diagnostics consent control in the app.
+3. Confirm the deployment serves `/api/sentry-tunnel`, and that the relay can read `VITE_SENTRY_DSN` or `SENTRY_DSN` at runtime. The Vite dev server has no `/api` functions, so a local dev build never delivers diagnostics.
+4. Set a valid `VITE_APP_RELEASE` when release grouping matters.
+5. To forward CSP reports, set `CSP_REPORT_URI` or `SENTRY_DSN` on the server. The browser always posts to `/api/csp-report`, and the function returns `204` when no forwarding destination exists.
 
-The app intentionally drops file contents, names, URLs, breadcrumbs, and arbitrary error values. An absent event can mean no error, no consent, a filtered browser-noise event, or a reduced event that the collector rejected.
-
-For CSP forwarding, set `CSP_REPORT_URI` or `SENTRY_DSN` on the server. The browser always posts to `/api/csp-report`; the function returns `204` when no forwarding destination exists.
+The app drops file contents, names, URLs, breadcrumbs, and arbitrary error values. A missing event can also mean no error, a filtered browser-noise event, or a reduced event that the collector rejected.
 
 ## A deployed smoke check fails
 
-Run the same check locally:
+The deployment fails the app shell, a security header, or the `/api/csp-report` check.
+
+1. Run the check from your machine:
 
 ```bash
 make web-smoke url=https://your-production-domain.example
 ```
 
-The check covers the app shell, expected security headers, and `/api/csp-report`. If only a header fails, inspect `vercel.json`. If the app shell fails, compare the deployment's `web/dist/` output with a local `make web-build` result. Roll back the deployment when the release cannot serve the shell or when user data could be affected.
+2. If only a header fails, inspect `vercel.json`.
+3. If the app shell fails, compare the deployment's `web/dist/` output with a local `make web-build` result.
+4. Roll back when the release cannot serve the app shell or user data could be affected. See [roll back a release](operations.md#roll-back-a-release).
 
 ## CI is red
 
-Inspect the latest run and failed steps through the Make wrappers:
+A job in the current branch's latest run failed, or a required job skipped unexpectedly.
+
+1. Read the failed-step logs:
 
 ```bash
-make ci-runs
-make ci-jobs
 make ci-failures
 ```
 
-These act on the current branch's latest run. Add `run=ID` from `make ci-runs` to inspect another one. Use `make ci-cancel run=123456` before retrying a run that is still in progress. Re-run only the failed jobs of the latest run with:
+2. Check per-job status with `make ci-jobs`. Add `run=ID` from `make ci-runs` to inspect another run.
+3. Stop a run that is still in progress with `make ci-cancel run=ID` before you retry it.
+4. Re-run only the failed jobs of the latest run with `make ci-rerun failed=1`.
+5. If a required job skipped unexpectedly, run `make ci-changed-areas base=SHA head=SHA` to check which areas the change touched.
 
-```bash
-make ci-rerun failed=1
-```
-
-If a required job skipped unexpectedly, inspect the changed-area decision and the `CI result` output. Run `make ci-changed-areas base=SHA head=SHA` locally when the area classification looks wrong.
+For the workflows, see [CI and repository automation](ci.md). For the `make ci-*` wrappers, see [GitHub helpers](github-helpers.md).
 
 ## A documentation check fails
 
-Run the checks separately to see which rule failed:
+The page names a Make target that does not exist, runs a tool directly instead of through Make, or has misaligned table pipes.
+
+1. Run each check to see which rule failed:
 
 ```bash
 make lint-doc-commands
@@ -181,10 +192,13 @@ make lint-make-targets
 make align-tables-check
 ```
 
-Use real Make target names in code spans and fenced command blocks. Put prose in standard Markdown paragraphs. To inspect the configured formatter result without changing the file, pass its path on stdin:
+2. Name only real Make targets in code spans and command blocks. `make help-json` lists them. Align table columns with `make align-tables`, or by hand.
+3. To see the formatter's changes without editing the file, pass its path on stdin:
 
 ```bash
 make format-js-diff <<'EOF'
 docs/troubleshooting.md
 EOF
 ```
+
+4. Apply the diff by hand.

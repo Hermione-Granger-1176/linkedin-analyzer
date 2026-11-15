@@ -145,7 +145,7 @@ def test_registry_digest_rejects_unsupported_images_and_invalid_responses(
 
 
 def test_replace_one_changes_once_and_detects_noop(tmp_path: Path) -> None:
-    """Require one owned pin while avoiding needless file writes."""
+    """Requires exactly one matching pin and skips the write when the text is unchanged."""
     path = tmp_path / "config"
     path.write_text("pin=old\n", encoding="utf-8")
     pattern = pins.re.compile(r"(?m)^pin=\S+$")
@@ -156,7 +156,7 @@ def test_replace_one_changes_once_and_detects_noop(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("text", ["none\n", "pin=a\npin=b\n"])
 def test_replace_one_rejects_missing_or_duplicate_pins(tmp_path: Path, text: str) -> None:
-    """Fail when a refactor makes pin ownership ambiguous."""
+    """Fails unless exactly one pin matches."""
     path = tmp_path / "config"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match="Expected exactly one"):
@@ -186,8 +186,7 @@ def test_refresh_project_pins_updates_each_owned_file(
         playwright_digest=f"sha256:{'b' * 64}",
     )
 
-    # No pyproject.toml among them: uv's required-version is a hand-raised
-    # floor, so this script has no business rewriting it.
+    # pyproject.toml is not updated. Its uv required-version is set by hand.
     assert changed == [pre_commit, makefile]
     assert "rev: v6.0.0" in pre_commit.read_text(encoding="utf-8")
     assert "v1.62.0-noble@sha256:" in makefile.read_text(encoding="utf-8")
@@ -221,7 +220,7 @@ def test_refresh_project_pins_reports_no_changes(
 
 
 def test_main_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Do not perform partial refreshes without GitHub authentication."""
+    """Exits 1 without GH_TOKEN, before any refresh runs."""
     monkeypatch.delenv("GH_TOKEN", raising=False)
     assert pins.main([]) == 1
 

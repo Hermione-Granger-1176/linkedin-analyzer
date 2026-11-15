@@ -451,9 +451,8 @@ describe("selectRecentThreads", () => {
     });
 
     it("does not merge two people in a group that exports only the owner's URL", () => {
-        // A group row with only the owner's recipient URL must remain a group.
-        // Collapsing TO names can make it look like a one-to-one conversation
-        // and incorrectly associate Carol's messages with Bob's name and URL.
+        // A group row with only the owner's recipient URL stays a group. Its
+        // messages must not be attached to Bob's name and URL.
         const groupRow = (from, url, body, date) =>
             row({
                 FROM: from,
@@ -492,8 +491,8 @@ describe("selectRecentThreads", () => {
     });
 
     it("does not hand self to a contact when the owner never replies", () => {
-        // Sam has only received messages. Requiring both sent and received
-        // messages would exclude the account owner and select Ada.
+        // Sam has only received messages, so no sent message marks Sam as the
+        // owner. Ada must not be picked as self.
         const rows = [
             row({
                 FROM: "Ada",
@@ -523,9 +522,8 @@ describe("selectRecentThreads", () => {
             }),
         ];
 
-        // With no connections file the export cannot know, and says so: every
-        // chip is neutral and both people are listed, rather than Ada's
-        // messages being confidently labelled "sent" by Sam.
+        // Without a connections file the direction is unknown: every chip is
+        // neutral and both people are listed.
         for (const thread of selectRecentThreads(rows)) {
             expect(thread.messages.every((entry) => entry.direction === "unknown")).toBe(true);
         }
@@ -544,9 +542,8 @@ describe("selectRecentThreads", () => {
     });
 
     it("does not eliminate the owner over a connection who shares their name", () => {
-        // contactKeys mixes normalized URLs and names. "You are never in your
-        // own connections" is true of identities, not of display names, and a
-        // name hit used to be enough to hand self to the other person.
+        // contactKeys mixes normalized URLs and names. A display-name match alone
+        // does not exclude the owner.
         const rows = [
             message({
                 name: "ada",
@@ -810,11 +807,8 @@ describe("selectRecentThreads", () => {
     });
 
     it("keeps every anonymized recipient a group row names", () => {
-        // Two recipient URLs against a single "LinkedIn Member" token in TO:
-        // parseRecipientNames collapses the whole field into one name, and
-        // extractParticipantsFromRow drops both as anonymous, so walking the
-        // names here added only the first URL's person and silently deleted the
-        // other from the document.
+        // Two recipient URLs against one "LinkedIn Member" token in TO. Each
+        // recipient URL yields its own participant.
         const threads = selectRecentThreads([
             message({
                 name: "ada",

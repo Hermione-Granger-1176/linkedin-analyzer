@@ -25,13 +25,13 @@ def test_validate_lock_refresh_artifact_accepts_expected_files(tmp_path: Path) -
 
 
 def test_validate_lock_refresh_artifact_rejects_missing_root(tmp_path: Path) -> None:
-    """Reject an artifact root that was never downloaded instead of passing vacuously."""
+    """Reject a missing artifact root."""
     with pytest.raises(ValueError, match="Artifact root does not exist"):
         validate_lock_refresh_artifact(tmp_path / "never-downloaded")
 
 
 def test_artifact_files_ignores_entries_that_are_not_regular_files(tmp_path: Path) -> None:
-    """Collect only regular files, so a dangling symlink cannot be counted as artifact content."""
+    """Only regular files are collected; a dangling symlink is ignored."""
     write_valid_lock_artifact(tmp_path)
     (tmp_path / "dangling").symlink_to(tmp_path / "absent")
 
@@ -60,7 +60,7 @@ def test_validate_lock_refresh_artifact_rejects_symlinked_root(tmp_path: Path) -
 
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="os.mkfifo is unavailable on this platform")
 def test_validate_lock_refresh_artifact_rejects_special_file(tmp_path: Path) -> None:
-    """Reject non-regular files (e.g. FIFOs) that slip past the file/directory checks."""
+    """Reject non-regular files such as FIFOs."""
     write_valid_lock_artifact(tmp_path)
     os.mkfifo(tmp_path / "pipe")
 
@@ -78,7 +78,7 @@ def test_validate_lock_refresh_artifact_rejects_unexpected_files(tmp_path: Path)
 
 
 def test_validate_lock_refresh_artifact_rejects_legacy_metadata_files(tmp_path: Path) -> None:
-    """Reject artifact metadata that could otherwise select the writeback target."""
+    """Reject legacy metadata files in the artifact."""
     write_valid_lock_artifact(tmp_path)
     metadata_dir = tmp_path / ".artifacts"
     metadata_dir.mkdir()
@@ -89,7 +89,7 @@ def test_validate_lock_refresh_artifact_rejects_legacy_metadata_files(tmp_path: 
 
 
 def test_validate_lock_refresh_artifact_rejects_unexpected_directories(tmp_path: Path) -> None:
-    """Reject empty directories so the artifact contains only the lock file."""
+    """Reject any directory in the artifact."""
     write_valid_lock_artifact(tmp_path)
     (tmp_path / ".artifacts").mkdir()
 
@@ -139,7 +139,7 @@ def test_validate_lock_refresh_context_accepts_expected_values(
 def test_validate_lock_refresh_context_rejects_untrusted_values(
     pr_number: str, head_sha: str, head_ref: str, message: str
 ) -> None:
-    """Reject values that cannot select a trusted writeback target."""
+    """Reject values that do not match the expected format."""
     with pytest.raises(ValueError, match=message):
         validate_lock_refresh_context(pr_number, head_sha, head_ref)
 
@@ -152,7 +152,7 @@ def test_main_accepts_a_valid_lock_artifact(tmp_path: Path) -> None:
 
 
 def test_main_surfaces_artifact_validation_failures(tmp_path: Path) -> None:
-    """The artifact subcommand raises so the workflow step fails on a tampered download."""
+    """The artifact subcommand raises ValueError on invalid content."""
     write_valid_lock_artifact(tmp_path)
     (tmp_path / "extra.txt").write_text("unexpected\n", encoding="utf-8")
 
@@ -178,7 +178,7 @@ def test_main_accepts_trusted_lock_context() -> None:
 
 
 def test_main_surfaces_context_validation_failures() -> None:
-    """The context subcommand raises so the workflow step fails on an untrusted head ref."""
+    """The context subcommand raises ValueError on an invalid head ref."""
     with pytest.raises(ValueError, match="head ref"):
         workflow_helpers.main(
             [

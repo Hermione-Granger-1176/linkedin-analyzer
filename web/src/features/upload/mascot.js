@@ -12,8 +12,7 @@ const CATCHER_ID = "uploadCatcher";
 const POSE_ATTRIBUTE = "data-pose";
 const READY_POSE = "ready";
 const CATCH_POSE = "catch";
-/* The hug runs 0.9s and the fade over it ends at 1.05s, which keeps the whole
-   moment clear of the upload feedback it plays in front of. */
+/* The hug runs 0.9s and the fade ends at 1.05s. */
 const CATCH_LIFETIME_MS = 1100;
 
 let catchTimer = 0;
@@ -31,22 +30,21 @@ function getCatcher() {
  * @returns {void}
  */
 export function hideCatcher() {
-    // The timer is module state, so it goes whether or not the screen the catch
-    // was playing on is still the one in front of us.
+    // Clears the module-level timer even if the catch screen is no longer shown.
     window.clearTimeout(catchTimer);
     const catcher = getCatcher();
     if (!catcher) {
         return;
     }
-    // The attribute rather than the property, for the reason playOneShot gives.
+    // Hide via the attribute, not the property.
     catcher.setAttribute("hidden", "");
     catcher.setAttribute(POSE_ATTRIBUTE, READY_POSE);
 }
 
 /**
  * Bring Pip up at the edge of the zone, arms out, while a file is over it.
- * Dragging fires by the frame, so a second call while he is already up leaves
- * him alone rather than restarting his entrance under the pointer.
+ * A call while Pip is already up leaves him in place and does not restart his
+ * entrance.
  * @returns {void}
  */
 export function showCatcher() {
@@ -76,8 +74,7 @@ export function playCatch() {
         return;
     }
 
-    // The drop can navigate away, so the timer removes the pose even when
-    // the drawing is hidden.
+    // The timer resets the pose even when the drawing is hidden.
     catchTimer = playOneShot({
         element: catcher,
         durationMs: CATCH_LIFETIME_MS,

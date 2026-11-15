@@ -7,12 +7,11 @@
  * only when the head is slower than the base by more than the threshold plus
  * that measured noise, so noise alone cannot fail the gate.
  *
- * Each side is judged by its fastest round. These stages are CPU-bound and
- * run after a forced garbage collection, so interference only adds time: the
- * fastest round is the closest to the code's own cost. On a shared machine,
- * identical copies agree to within a few percent on their fastest rounds
- * while their medians drift by ten percent or more. One noisy run can still
- * push a stage over, so the caller times flagged stages again and fails only
+ * Each side is judged by its fastest round. The stages are CPU-bound and run
+ * after a forced garbage collection. Interference only adds time, so the fastest
+ * round is closest to the code's own cost. On a shared machine, identical copies
+ * agree on their fastest rounds to within a few percent, while their medians can
+ * drift by ten percent or more. The caller retimes flagged stages and fails only
  * on a regression that repeats.
  */
 

@@ -209,7 +209,7 @@ describe("shared device profile", () => {
         getContext = vi.fn(() => null);
         vi.stubGlobal("OffscreenCanvas", undefined);
         vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(getContext);
-        // Enough cores that Auto could reach rich, so it probes WebGL.
+        // With 8 cores the auto tier can reach rich, so the WebGL probe runs.
         vi.spyOn(Navigator.prototype, "hardwareConcurrency", "get").mockReturnValue(8);
     });
 

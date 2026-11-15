@@ -99,9 +99,9 @@ describe("clean client", () => {
     });
 
     it.each([
-        // A stand-in reporting the size keeps the test from allocating a Blob.
+        // An object that reports the size, so no Blob is allocated.
         ["a Blob", { size: MAIN_THREAD_MAX_FILE_BYTES + 1 }],
-        // repeat() builds a rope, so this long string stays cheap.
+        // A string one character over the limit.
         ["text", "x".repeat(MAIN_THREAD_MAX_FILE_BYTES + 1)],
     ])("refuses %s above the main-thread limit without running the job", async (_, source) => {
         vi.stubGlobal("Worker", undefined);

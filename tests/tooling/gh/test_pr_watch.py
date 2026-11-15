@@ -21,7 +21,7 @@ from tests.support.gh import (
 _CLEAN_BODY = "Copilot reviewed 8 files and generated no new comments."
 _COMMENT_BODY = "Copilot reviewed 8 files and generated 2 comments."
 _SUBMITTED_AT = "2026-07-26T12:00:00Z"
-# Trimmed from v2 overviews Copilot posted on real pull requests.
+# v2 overview with no findings.
 _V2_CLEAN_BODY = """<!-- ccr-overview-v2 -->
 
 ## Copilot review overview
@@ -61,7 +61,7 @@ The new parity invariant lacks automated enforcement.
 - [Earlier finding](#discussion_r99)
 </details>
 """
-# Trimmed from a later review round: no findings, but a finding Copilot did not open a thread for.
+# v2 overview with no findings and one item that has no open thread.
 _V2_CLOSER_LOOK_BODY = """<!-- ccr-overview-v2 -->
 
 ## Copilot review overview
@@ -222,9 +222,7 @@ def test_review_summary_distinguishes_absent_from_unrequested_reviews() -> None:
 def test_parse_timestamp_compares_as_instant_and_requires_timezone() -> None:
     """Timestamps compare as instants and cannot be timezone-naive.
 
-    The parser preserves each payload's original offset rather than converting
-    to UTC. Aware datetimes already compare and order by instant, which is all
-    the watcher needs to pick the latest review.
+    The parser keeps each payload's offset. Aware datetimes compare by instant.
     """
     parsed = pr_watch._parse_timestamp("2026-07-26T14:00:00+02:00", "review")
 
@@ -261,11 +259,9 @@ def test_copilot_reviews_ignores_other_authors_and_parses_copilot() -> None:
 
 
 def test_copilot_review_requires_exact_clean_wording() -> None:
-    """A numeric zero does not replace the required no-comments wording.
+    """A numeric zero is not clean.
 
-    Both the first-review and re-review phrasings count as clean. Copilot drops
-    "new" on a first pass, and treating that as unclassifiable stalls the watch
-    on exactly the PRs that had nothing wrong with them.
+    Both "no comments" and "no new comments" count as clean.
     """
     first_pass = pr_watch.CopilotReview(
         "first-pass",
@@ -366,7 +362,7 @@ def test_v2_overview_is_clean_only_with_no_findings_and_no_open_section(
 
 
 def test_v2_open_discussions_read_full_thread_urls() -> None:
-    """The current layout links threads by full URL, which still ends in the anchor."""
+    """Full thread URLs are reduced to their discussion anchors."""
     review = pr_watch.CopilotReview(
         "v2",
         datetime(2026, 7, 26, 12, tzinfo=UTC),
@@ -481,19 +477,16 @@ def test_check_status_accepts_a_successful_status_context() -> None:
 
 
 def test_check_identity_prefers_names_then_contexts_then_position() -> None:
-    """Every rollup entry gets a distinct identity so a growing rollup looks unstable."""
+    """Each rollup entry gets an identity; unnamed entries use their index."""
     assert pr_watch._check_identity({"name": "verify"}, 0) == "name:verify"
     assert pr_watch._check_identity({"context": "vercel"}, 0) == "context:vercel"
     assert pr_watch._check_identity({"name": ""}, 3) == "index:3"
 
 
 def test_check_status_identities_track_growth_past_duplicate_names() -> None:
-    """A duplicate name cannot make a growing rollup produce the same identities.
+    """Ordinals come from each entry's index, so a growing rollup gets new identities.
 
-    Ordinals come from the entry's index, not the number of identities collected
-    so far. With the latter, a duplicate stops the set growing, the following
-    unnamed entry reuses an ordinal, and a rollup that gained an entry looks
-    unchanged to the stability check.
+    This holds even when entries share a name.
     """
     ok = {"status": "COMPLETED", "conclusion": "SUCCESS"}
     before = [{"name": "x", **ok}, dict(ok)]
@@ -503,19 +496,13 @@ def test_check_status_identities_track_growth_past_duplicate_names() -> None:
     identities_after = pr_watch._check_status(after, expected_checks=1)[4]
 
     assert identities_before == frozenset({"name:x", "index:1"})
-    # Deriving the ordinal from len(identities) would have given the trailing
-    # entry "index:1" here too, making the grown rollup compare equal.
+    # The trailing unnamed entry is index:2, so the grown rollup differs.
     assert identities_after == frozenset({"name:x", "index:2"})
     assert identities_before != identities_after
 
 
 def test_check_status_settles_on_a_rollup_smaller_than_a_full_ci_run() -> None:
-    """A scoped PR settles on its own check count, not a hardcoded total.
-
-    This is the regression that made ``pr-watch`` unusable: the settle test used
-    to require a fixed number of checks, so any PR whose plan skipped work could
-    never settle no matter how finished it was.
-    """
+    """A rollup settles on the checks it has, not on a fixed total."""
     rollup = [
         {"name": "verify", "status": "COMPLETED", "conclusion": "SUCCESS"},
         {"name": "app-shard", "status": "COMPLETED", "conclusion": "SKIPPED"},
@@ -533,11 +520,10 @@ def test_check_status_settles_on_a_rollup_smaller_than_a_full_ci_run() -> None:
 def test_watch_pr_ignores_stability_observed_while_checks_were_running(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unchanged set seen while running cannot settle the first terminal poll.
+    """An unchanged check set seen while running does not settle the first terminal poll.
 
-    Jobs gated on an earlier one have not registered yet at the moment that
-    earlier one completes, so the rollup is briefly terminal and incomplete at
-    the same time. Only consecutive settled polls count as stable.
+    A terminal rollup can be incomplete while gated jobs register. Only
+    consecutive settled polls count as stable.
     """
     early = frozenset({"name:plan", "name:secret-scan"})
     running = _status(settled=False, review=_parsed_review(), check_ids=early)
@@ -557,8 +543,7 @@ def test_watch_pr_ignores_stability_observed_while_checks_were_running(
         sleep_fn=sleeps.append,
     )
 
-    # Poll 2 must not settle despite matching poll 1's ids, so the run continues
-    # long enough to see the check that had not registered yet.
+    # Poll 2 does not settle, so the run continues to see the late check.
     assert len(sleeps) == 3
     assert sleeps[0] == 7
     assert "merge ready: yes" in report
@@ -610,7 +595,7 @@ def test_an_approval_state_does_not_bypass_unrecognized_wording() -> None:
 
 
 def test_a_non_approving_review_still_needs_recognizable_wording() -> None:
-    """A commented or dismissed review must not inherit the approval shortcut."""
+    """A non-approving review needs recognizable wording."""
     review = _parsed_review(count=None, state="COMMENTED")
 
     assert not review.is_explicitly_clean
@@ -805,9 +790,8 @@ def _watch_stubs(
 ) -> tuple[list[str], list[float]]:
     """Stub watcher dependencies and return request and sleep records.
 
-    The final status repeats forever. Settling now requires the check set to be
-    observed twice, so a fixture describing one steady state supplies it once
-    and the watcher confirms it on the following poll.
+    The final status repeats. The watcher needs two settled polls with the same
+    check set, so the last status is returned on every later poll.
     """
     sequence = chain(statuses, repeat(statuses[-1]))
     threads = iter(thread_batches or [[]])
@@ -842,7 +826,7 @@ def _watch_stubs(
 def test_watch_pr_captures_baseline_before_request_and_reports_clean_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The combined baseline and request flow cannot accept an older review."""
+    """The baseline is captured before the review request, and the report shows the clean state."""
     order: list[str] = []
     monkeypatch.setattr(
         pr_watch,
@@ -938,7 +922,7 @@ def test_watch_pr_reports_actionable_threads_after_commented_review(
 def test_watch_pr_waits_for_threads_to_catch_up_with_comment_overview(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Thread eventual consistency cannot hide newly generated comments."""
+    """Waits for threads to appear after a comment overview."""
     thread = pr_review.ReviewThread(
         "PRRT_1",
         "open",
@@ -1129,7 +1113,7 @@ def test_watch_pr_v2_review_without_approval_is_not_merge_ready(
 def test_watch_pr_rejects_an_unclassified_v2_review_without_waiting_for_its_links(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A link that never gets a thread cannot turn a classification error into a timeout."""
+    """An unclassified review raises GhError without waiting for its links."""
     body = _V2_COMMENT_BODY.replace("- [Update the ADR](#discussion_r102)\n", "")
     review = pr_watch.CopilotReview(
         "new",
@@ -1164,7 +1148,7 @@ def test_watch_pr_clean_review_with_older_open_thread_is_not_merge_ready(
 def test_watch_pr_counts_resolved_fresh_threads_but_reports_only_open_threads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A quickly resolved fresh comment cannot leave the watcher polling."""
+    """A resolved fresh thread is counted but not reported as open."""
     resolved = pr_review.ReviewThread(
         "PRRT_new",
         "resolved",
@@ -1198,7 +1182,7 @@ def test_watch_pr_counts_resolved_fresh_threads_but_reports_only_open_threads(
 def test_watch_pr_fails_immediately_for_settled_failed_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A terminal check failure cannot be reported as a settled success."""
+    """A settled check failure raises GhError."""
     _watch_stubs(
         monkeypatch,
         [_status(settled=True, successful=False, tally="1 failure, 14 success")],
@@ -1211,14 +1195,13 @@ def test_watch_pr_fails_immediately_for_settled_failed_checks(
 def test_watch_pr_rejects_unrecognized_fresh_overview(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unknown Copilot wording blocks merge rather than guessing clean state."""
+    """Unknown Copilot wording raises GhError."""
     _watch_stubs(
         monkeypatch,
         [_status(settled=True, review=_parsed_review(count=None))],
     )
 
-    # The remedy must name the review-thread target, since `make pr-comments`
-    # shows conversation comments and never surfaces review threads.
+    # The message names both `make pr-comments` and `make pr-review-comments`.
     with pytest.raises(
         GhError, match=r"could not be classified.*make pr-comments.*make pr-review-comments"
     ):
@@ -1367,7 +1350,7 @@ def test_watch_cli_forwards_every_option_and_prints_report(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The CLI keeps the Make target thin and forwards watcher controls."""
+    """The CLI forwards every watcher option and prints the report."""
     captured: dict[str, object] = {}
 
     def _watch(pr: int | None, **kwargs: object) -> str:
@@ -1406,7 +1389,7 @@ def test_watch_cli_forwards_every_option_and_prints_report(
 
 
 def test_watch_cli_uses_conservative_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    """CLI defaults retain the check-completeness requirement."""
+    """CLI defaults match the documented watch options."""
     captured: dict[str, object] = {}
 
     def _watch(pr: int | None, **kwargs: object) -> str:

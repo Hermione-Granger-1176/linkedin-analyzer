@@ -44,9 +44,8 @@ export const CleanPage = (() => {
         none: () => "Upload LinkedIn CSV files to start cleaning.",
     });
 
-    // These nodes are part of the static page shell rendered in index.html, so
-    // each lookup is annotated as a non-null element; a missing node is a build
-    // error rather than a runtime state worth guarding on every read.
+    // These nodes come from the static page shell in index.html. Each lookup is
+    // typed as non-null, so a missing node is treated as a build error.
     const elements = {
         cleanEmpty: /** @type {HTMLElement} */ (document.getElementById("cleanEmpty")),
         cleanPanel: /** @type {HTMLElement} */ (document.getElementById("cleanPanel")),
@@ -92,8 +91,7 @@ export const CleanPage = (() => {
     };
 
     let initialized = false;
-    // Counts preview requests, so a reply for a selection the user has moved
-    // past is dropped rather than drawn.
+    // Counts preview requests. A reply for a superseded request is dropped.
     let previewRequest = 0;
 
     /**
@@ -295,10 +293,8 @@ export const CleanPage = (() => {
             // demand. The worker reads and cleans it off the main thread.
             stored = await Storage.getFile(type);
             if (!stored || !stored.blob) {
-                // Metadata says the file exists but its contents are gone
-                // (cleared in another tab or degraded persistence); report a
-                // load failure rather than parsing an empty payload into a
-                // misleading parse error.
+                // The metadata exists but the contents are gone, for example after
+                // clearing in another tab. Reports a load failure, not a parse error.
                 throw new Error("Stored file record is missing.");
             }
         } catch (error) {
@@ -484,8 +480,8 @@ export const CleanPage = (() => {
         if (!stored || !stored.blob) {
             return { success: false, error: "Stored file record is missing.", blob: null };
         }
-        // The user picked another file type while the read ran; starting this
-        // download now would cancel that type's preview.
+        // Returns cancelled when the user picked another type during the read, so
+        // the download does not cancel that type's preview.
         if (getSelectedType() !== type) {
             return { success: false, error: null, blob: null, cancelled: true };
         }
@@ -549,7 +545,7 @@ export const CleanPage = (() => {
     }
 
     /**
-     * Download the cleaned rows as CSV, built in parts so large files fit.
+     * Download the cleaned rows as CSV, built in parts.
      */
     async function handleCsvDownload() {
         const downloadable = getDownloadable();

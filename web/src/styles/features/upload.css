@@ -106,7 +106,7 @@
     transform: scale(1.02);
 }
 
-/* Let drag events reach the drop zone instead of its child text. */
+/* Drag events pass through these children to the drop zone. */
 .drop-zone-content,
 .drop-zone-hover {
     pointer-events: none;
@@ -155,8 +155,8 @@
     color: var(--text-secondary);
 }
 
-/* Place the upload mascot at the lower-left edge of the drop zone so it does not
-   overlap the fixed tutorial button. */
+/* Places the upload mascot at the lower-left edge of the drop zone, clear of the
+   fixed tutorial button. */
 .pip-catcher {
     position: absolute;
     left: clamp(2px, 4%, 28px);
@@ -169,7 +169,7 @@
     display: none;
 }
 
-/* Reduce the upload mascot at phone width so it does not cover the copy. */
+/* Smaller upload mascot at phone widths. */
 @media (max-width: 540px) {
     .pip-catcher {
         left: 2px;
@@ -423,8 +423,8 @@
     position: relative;
 }
 
-/* Show scroll shadows only while content remains beyond an edge. Keep cover
-   gradients on the scroll box and shadows on the table content. */
+/* Scroll shadows show only while content remains past an edge. The cover
+   gradients use local attachment, and the shadows use scroll attachment. */
 .preview-table-scroll {
     overflow: auto;
     max-height: 320px;
@@ -582,8 +582,7 @@
     font-size: var(--font-size-base);
 }
 
-/* Dark-mode fills. Use opaque colors so the drop zone and status states remain
-   distinct from the dark page background. */
+/* Dark-mode fills use opaque colors. */
 [data-theme="dark"] .drop-zone {
     background-color: var(--surface-drop);
 }

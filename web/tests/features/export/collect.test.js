@@ -59,10 +59,9 @@ vi.mock("../../../src/features/export/threads-transport.js", () => ({
     loadRecentThreads: vi.fn(),
 }));
 
-// Both dashboards parse through a transport of the export's own, each owning a
-// worker of its own. Stubbing them, exactly as the threads transport above is
-// stubbed, keeps this suite about what a dashboard makes of a parse rather than
-// about how the parse happened.
+// The two dashboard parses go through transports that own workers. They are
+// stubbed, so this suite tests what each dashboard builds from a parse, not how
+// the parse runs.
 vi.mock("../../../src/features/export/messages-transport.js", () => ({
     loadMessagesState: vi.fn(),
     terminateMessagesWorker: vi.fn(),
@@ -96,10 +95,9 @@ const MONTH_NAMES = [
     "Dec",
 ];
 
-// Read once for the whole file. "In selected range", "network age" and the day
-// counts on the fading list are all measured against the clock, so the fixtures
-// are dated relative to it and the expected strings are derived from the same
-// instant rather than from a second read that has since moved on.
+// Read once for the whole file. The range, network age and fading day counts are
+// measured against the clock, so fixtures are dated relative to this instant and
+// expected strings derive from it.
 const NOW = Date.now();
 const LAST_MESSAGE_MS = NOW - 60 * DAY_MS;
 const GRACE_CONNECTED_MS = NOW - 200 * DAY_MS;
@@ -114,8 +112,8 @@ const ACTIVITY_VIEW = Object.freeze({
     totals: { posts: 12, comments: 30, total: 42 },
     peakHour: { hour: 9 },
     streaks: { current: 3, longest: 11 },
-    // Keyed as the analytics worker keys its points, because the export reads
-    // the window it prints off the first and the last of them.
+    // Keyed as the analytics worker keys its points. The export reads the window
+    // from the first and last points.
     timeline: [
         { key: "2026-01", label: "Jan 2026", value: 3 },
         { key: "2026-02", label: "Feb 2026", value: 6 },
@@ -171,8 +169,8 @@ function connectionsCsv() {
 /**
  * Build a stored connections export whose every row predates the last year.
  *
- * The shape most people's exports have: the screen's twelve-month default would
- * leave this file with nothing in range at all.
+ * Most people's exports have this shape. The twelve-month default would leave
+ * nothing in range.
  * @returns {string} Connections CSV, preamble and all
  */
 function agedConnectionsCsv() {
@@ -469,18 +467,16 @@ describe("collectExportData", () => {
             { label: "Unanswered", value: "37" },
             { label: "Sent : received", value: "1.8 : 1" },
         ]);
-        // This snapshot predates the screen keeping its view, so the base is
-        // still read for the activity dashboard. There is none here, so the
-        // worker never starts and no dashboard finds anything to show.
+        // Without a view in the snapshot, the analytics base is read. There is
+        // none here, so no worker starts and no dashboard is built.
         expect(Storage.getAnalytics).toHaveBeenCalled();
         expect(workerInstance).toBeNull();
         expect(data.dashboards).toEqual([]);
     });
 
     it("plots the snapshot's own view without starting the analytics worker", async () => {
-        // The fast path the snapshot exists to be: exporting from the Insights
-        // screen costs no worker run at all, because that screen has already
-        // been handed the timeline, topics and heatmap this page is drawn from.
+        // A snapshot with a view needs no worker run: the timeline, topics and
+        // heatmap come from the snapshot.
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
             timeRange: "3m",
             insights: [{ title: "Mornings win", body: "…" }],
@@ -496,9 +492,9 @@ describe("collectExportData", () => {
         expect(workerInstance).toBeNull();
         expect(Storage.getAnalytics).not.toHaveBeenCalled();
         const activity = dashboardNamed(data, "Analytics");
-        // The months the view actually covers, not the name of the control it
-        // was selected with: the range is anchored on the newest event in the
-        // file, so "Last 3 months" stops being true the day after the export.
+        // The caption shows the months the view covers, not the selected range
+        // name. The range is anchored on the newest event, so a range name would
+        // go stale.
         expect(activity.subtitle).toBe("Jan 2026 to Feb 2026");
         expect(activity.charts[0].points).toEqual(ACTIVITY_VIEW.timeline);
         expect(activity.charts[1].items).toEqual(ACTIVITY_VIEW.topics);
@@ -506,9 +502,8 @@ describe("collectExportData", () => {
     });
 
     it("keeps the on-screen range when the snapshot has stats but no insight cards", async () => {
-        // A range can produce no cards while the all-time stats below them are
-        // still populated. Testing the cards alone sent that screen down the
-        // cold path, which exports the default range instead of this one.
+        // A range can have no cards but still have all-time stats. The snapshot
+        // is used when either is present, so the on-screen range is kept.
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
             timeRange: "3m",
             insights: [],
@@ -526,9 +521,8 @@ describe("collectExportData", () => {
     });
 
     it("leaves the growth tile out when the snapshot carries no multiple", async () => {
-        // A growth object with no multiplier on it, which is not the same as no
-        // growth object at all. Relaxed to a truthiness check, the guard would
-        // let this through and print a tile reading "undefined×".
+        // A growth object with no multiplier is not the same as no growth object.
+        // The tile is left out, since a truthiness check would print "undefined×".
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
             timeRange: "3m",
             insights: [{ title: "Mornings win", body: "…" }],
@@ -599,9 +593,8 @@ describe("collectExportData", () => {
     });
 
     it("never starts a worker for a run that has already been cancelled", async () => {
-        // Cancellation cannot only be checked on the way back: collection walks
-        // several storage reads before it reaches either worker, and
-        // terminating a worker that does not exist yet does nothing at all.
+        // Cancellation is checked before any storage read or worker start, since
+        // terminating a worker that does not exist yet does nothing.
         Storage.getAnalytics.mockResolvedValue({ months: {} });
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
 
@@ -734,8 +727,7 @@ describe("collectExportData", () => {
     it("does nothing when there is no analytics worker to cancel", () => {
         terminateAnalyticsWorker();
 
-        // Stronger than "did not throw", which would also pass while quietly
-        // cancelling a run left active by an earlier test.
+        // Checks that no worker exists, not only that nothing threw.
         expect(workerInstance).toBeNull();
         expect(captureError).not.toHaveBeenCalled();
     });
@@ -791,9 +783,8 @@ describe("collectExportData", () => {
         const pending = collectExportData();
         await vi.waitFor(() => expect(workerInstance).not.toBeNull());
         workerInstance.reply({ type: "nonsense" });
-        // The stale envelope carries content, so processing it instead of
-        // dropping it is visible in the result rather than indistinguishable
-        // from dropping it.
+        // The stale envelope carries content, so processing it would show in the
+        // result.
         workerInstance.reply({
             type: "view",
             requestId: 99,
@@ -839,9 +830,9 @@ describe("collectExportData", () => {
     });
 
     it("cancels the worker error event so the browser cannot log what it carried", async () => {
-        // This worker derives topics from the user's own share commentary and
-        // comment text, so an uncancelled error event is reported to the console
-        // along with whatever it was reading.
+        // This worker reads the user's share commentary and comment text. An
+        // uncancelled error event would be logged with that content, so it is
+        // cancelled.
         Storage.getAnalytics.mockResolvedValue({ months: {} });
         const preventDefault = vi.fn();
 
@@ -916,8 +907,7 @@ describe("collectExportData", () => {
         const activity = dashboardNamed(await collectWithView(ACTIVITY_VIEW), "Analytics");
 
         expect(activity.subtitle).toBe("Jan 2026 to Feb 2026");
-        // The Analytics screen's own wording: a reader who knows the screen
-        // should recognise the page.
+        // Uses the Analytics screen's wording, so readers recognise the page.
         expect(activity.stats).toEqual([
             { label: "Posts", value: "12" },
             { label: "Comments", value: "30" },
@@ -959,9 +949,8 @@ describe("collectExportData", () => {
     });
 
     it("builds the activity dashboard from a view with no peak hour", async () => {
-        // The view crosses a worker boundary unvalidated and this runs outside
-        // the try the other dashboards sit in, so a half-built one used to take
-        // down the whole export rather than one stat on one page.
+        // The view crosses a worker boundary unvalidated. A missing peak hour
+        // must not fail the whole export, so the dashboard is built without it.
         const data = await collectWithView({ ...ACTIVITY_VIEW, peakHour: null });
 
         expect(dashboardNamed(data, "Analytics").stats).toEqual([
@@ -993,8 +982,7 @@ describe("collectExportData", () => {
     });
 
     it("orders the dashboards the way the site divides", async () => {
-        // One array in document order rather than a field per screen, so a
-        // fourth dashboard is an entry here instead of a change in four files.
+        // Dashboards are one array in document order, so a new dashboard is one entry.
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
         loadConnectionsData.mockResolvedValue(connectionsData(connectionsCsv()));
         loadMessagesState.mockResolvedValue(messagesState(true));
@@ -1014,9 +1002,8 @@ describe("collectExportData", () => {
     });
 
     it("builds the connections dashboard over the whole network", async () => {
-        // "All time", not the screen's twelve-month default: on paper the range
-        // control the default sits beside cannot be moved, and the growth chart
-        // is all-time either way, so one page would otherwise carry two ranges.
+        // Uses "All time" rather than the screen's twelve-month default. The growth
+        // chart is all-time, so one page must not carry two ranges.
         storeFiles({ connections: connectionsCsv() });
         loadConnectionsData.mockResolvedValue(connectionsData(connectionsCsv()));
 
@@ -1026,10 +1013,9 @@ describe("collectExportData", () => {
             isCancelled: expect.any(Function),
         });
         expect(connections.subtitle).toBe("All time");
-        // No "In selected range" tile: it counts the rows the range kept, and
-        // an all-time page keeps every one of them, so it could only ever
-        // restate the total beside it under a label naming a control the reader
-        // cannot see.
+        // No "In selected range" tile. An all-time page keeps every row, so that
+        // tile would only repeat the total under a label naming a control the
+        // reader cannot see.
         expect(connections.stats).toEqual([
             { label: "Total connections", value: "2" },
             { label: "Top company", value: "Analytical Engines" },
@@ -1045,9 +1031,8 @@ describe("collectExportData", () => {
     });
 
     it("still fills the connections charts when every connection predates the year", async () => {
-        // The reason the page is all-time at all: most people's connections are
-        // older than twelve months, and the screen's default would print a page
-        // whose company and position charts are empty.
+        // Most connections are older than twelve months, so a twelve-month range
+        // would leave the company and position charts empty.
         storeFiles({ connections: agedConnectionsCsv() });
         loadConnectionsData.mockResolvedValue(connectionsData(agedConnectionsCsv()));
 
@@ -1084,9 +1069,8 @@ describe("collectExportData", () => {
     });
 
     it("drops the connections dashboard when the run is abandoned during the parse", async () => {
-        // The parse is the longest step on this path, so the run is checked
-        // again on the way out rather than aggregating the whole network for a
-        // page nobody will read.
+        // The run is checked again after the parse, so no dashboard is built for
+        // an abandoned run.
         let cancelled = false;
         storeFiles({ connections: connectionsCsv() });
         loadConnectionsData.mockImplementation(() => {
@@ -1160,10 +1144,8 @@ describe("collectExportData", () => {
             { label: "Total connections", value: "3" },
             { label: "Fading conversations", value: "1" },
         ]);
-        // The aggregate chart first, then the Messages screen's panel order,
-        // and so is the detail on each row: a list that dropped the dates and
-        // the units would be the same names carrying less than the page they
-        // were copied from.
+        // The aggregate chart comes first, then the Messages screen's panel order.
+        // Each row keeps its dates and units.
         expect(messages.charts.map((chart) => chart.title)).toEqual([
             "Messages per month",
             "Top contacts",
@@ -1183,9 +1165,8 @@ describe("collectExportData", () => {
                 secondary: "Rear Admiral @ Navy",
                 value: formatShortDate(GRACE_CONNECTED_MS),
             },
-            // Neither a position nor a company, and no date on the record. The
-            // screen leaves the line blank; a page whose middle column stopped
-            // would read as a rendering fault, so it reports the missing data.
+            // No position, company or date. The screen leaves the line blank, but
+            // the page reports the missing data so the columns do not look broken.
             { primary: "Alan Turing", secondary: "No role info", value: "No date" },
         ]);
         expect(messages.charts[3].items).toEqual([
@@ -1218,10 +1199,8 @@ describe("collectExportData", () => {
     });
 
     it("says so on a list it is only showing the head of", async () => {
-        // The screen puts a "Full list" button beside each panel, so the reader
-        // can see that ten is not all of them. The page has no such cue, and a
-        // list of ten under a stat tile reading 12 would look like a
-        // contradiction.
+        // The page has no "Full list" button, so a truncated list is titled with
+        // its total, for example "top 10 of 12".
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
         loadMessagesState.mockResolvedValue(crowdedMessagesState());
 
@@ -1242,8 +1221,8 @@ describe("collectExportData", () => {
         const messages = dashboardNamed(await collectExportData(), "Messages");
 
         expect(messages.stats).toHaveLength(4);
-        // The default settings, and the only chart on the page that names
-        // nobody. Without it this sheet was four stat tiles and blank paper.
+        // Without the names opt-in, the messages-per-month chart is the only one,
+        // since it names nobody.
         expect(messages.charts.map((chart) => chart.title)).toEqual(["Messages per month"]);
     });
 
@@ -1257,8 +1236,7 @@ describe("collectExportData", () => {
         const [timeline] = messages.charts;
 
         expect(timeline.type).toBe("line");
-        // Twelve months whether or not anything happened in them, so the line
-        // is not drawn as if the quiet months did not exist.
+        // Always twelve months, so quiet months still appear on the line.
         expect(timeline.points).toHaveLength(12);
         expect(timeline.points.map((point) => point.value).reduce((a, b) => a + b, 0)).toBe(2);
         const last = timeline.points[timeline.points.length - 1];
@@ -1276,8 +1254,7 @@ describe("collectExportData", () => {
     });
 
     it("leaves out the messages timeline when nothing was said in the window", async () => {
-        // A year of zeroes drawn as a flat line is the empty axes the layout
-        // engine drops a chart to avoid.
+        // A timeline of zeroes would be an empty chart, so it is left out.
         storeFiles({ messages: MESSAGES_CSV });
         loadMessagesState.mockResolvedValue({
             messageState: hydrateMessageState({
@@ -1319,11 +1296,9 @@ describe("collectExportData", () => {
     });
 
     it("marks the characters the document's fonts cannot draw", async () => {
-        // The embedded faces are Latin and jsPDF omits what they have no glyph
-        // for, so "Ňuňo319 陈" reached the page as "uo319" with nothing to say a
-        // surname had been lost. Sanitizing the finished model catches every
-        // section at once: a name in a list, a topic on a chart, and a message
-        // body all take the same pass.
+        // The embedded faces are Latin, so characters without a glyph are marked
+        // with "?". The finished model is sanitized once, so names, chart labels
+        // and message bodies all get the same treatment.
         storeFiles({ messages: MESSAGES_CSV });
         loadMessagesState.mockResolvedValue({
             messageState: hydrateMessageState({
@@ -1369,9 +1344,8 @@ describe("collectExportData", () => {
     });
 
     it("drops the messages dashboard when the run is abandoned during the parse", async () => {
-        // The parse is the longest step on this path, so the run is checked
-        // again on the way out rather than walking the whole state for a page
-        // nobody will read.
+        // The run is checked again after the parse, so no state is walked for an
+        // abandoned run.
         let cancelled = false;
         storeFiles({ messages: MESSAGES_CSV, connections: connectionsCsv() });
         loadMessagesState.mockImplementation(() => {
@@ -1387,9 +1361,8 @@ describe("collectExportData", () => {
 
         expect(loadMessagesState).toHaveBeenCalled();
         expect(dashboardNamed(data, "Messages")).toBeNull();
-        // And the run stops before the threads worker and the connections
-        // transport too, rather than handing either a whole CSV on behalf of
-        // nobody.
+        // The run stops before the threads worker and the connections transport
+        // start.
         expect(loadRecentThreads).not.toHaveBeenCalled();
         expect(loadConnectionsData).not.toHaveBeenCalled();
         expect(data.threads).toEqual([]);
@@ -1509,9 +1482,8 @@ describe("collectExportData", () => {
     });
 
     it("never reports the exception a rejected connections read carried", async () => {
-        // Distinct from the unreadable-text case above: this one rejects the
-        // read itself, which is reported under a different operation and was
-        // the one leak path on the connections file with no test behind it.
+        // Distinct from the unreadable-text case above: this one rejects the read
+        // itself, and is reported under its own operation.
         const thrown = piiError("connections-storage");
         Storage.getFile.mockImplementation((type) =>
             type === "connections"

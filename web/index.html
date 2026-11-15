@@ -63,7 +63,7 @@
 
         <link rel="stylesheet" href="./src/styles/foundations/variables.css" />
         <!-- Load these stylesheets in order. Later files override earlier rules.
-             Keep responsive.css last in the foundation and feature group. -->
+             responsive.css comes last in the foundation and feature group. -->
         <link rel="stylesheet" href="./src/styles/foundations/base.css" />
         <link rel="stylesheet" href="./src/styles/foundations/layout.css" />
         <link rel="stylesheet" href="./src/styles/features/upload.css" />
@@ -110,10 +110,9 @@
                     />
                 </filter>
 
-                <!-- Shared poses and parts. Use wrapper SVGs for poses so CSS can
-                position them without changing their viewBox. Use groups instead
-                of symbols to avoid nested viewport rasterization differences.
-                Keep pose-specific animation classes on inline content because
+                <!-- Shared poses and parts. Poses are wrapped in SVGs so CSS can
+                position them without changing their viewBox. Parts are groups, not
+                symbols. Pose-specific animation classes stay on inline content, since
                 ancestor selectors cannot cross a <use> shadow tree. -->
 
                 <!-- Pip leaning on the speech bubble. The adjacent text carries the
@@ -164,8 +163,7 @@
                             <ellipse class="pip-aglet" cx="40" cy="91" rx="2" ry="2.8" />
                             <path class="pip-ink" d="M22 98 Q34 104 46 98 L45 106 Q34 110 23 106 Z" />
                         </g>
-                        <!-- Keep one hand in the pocket and rest the other arm against
-                        the speech bubble. -->
+                        <!-- One hand is in the pocket. The other arm rests against the speech bubble. -->
                         <path class="pip-ink" d="M22 80 Q12 92 20 99" />
                         <path class="pip-ink" d="M55 86 Q70 94 81 92" />
                         <path class="pip-ink" d="M81 92 Q84 74 80 62" />
@@ -299,7 +297,7 @@
                     <path class="pip-ink pip-solid" d="M72 145 Q81 146 81 150 L70 150 Z" />
                 </g>
 
-                <!-- Shared open hand. Draw the fingers first and place the palm over
+                <!-- Shared open hand. The fingers are drawn first, with the palm over
                 their join. Each caller supplies the placement transform. -->
                 <g id="pip-hand-open">
                     <path
@@ -321,7 +319,7 @@
                     <circle class="pip-ink pip-paper" cx="110" cy="57" r="8.4" />
                 </g>
 
-                <!-- Shared closed hand. Place other uses with an integer translate
+                <!-- Shared closed hand. Callers use an integer translate
                 so the hand keeps its drawn alignment. -->
                 <g id="pip-hand-closed">
                     <path
@@ -336,8 +334,7 @@
             </defs>
         </svg>
 
-        <!-- Availability is resolved after boot. Start with aria-disabled so the
-        button stays in the tab order and can expose its unavailable reason. -->
+        <!-- Availability is resolved after boot. The button starts with aria-disabled, so it stays in the tab order and can show why it is unavailable. -->
         <button
             class="pdf-export-btn"
             id="pdfExportBtn"
@@ -370,9 +367,7 @@
             >Upload a LinkedIn export to enable saving as PDF.</span
         >
 
-        <!-- Show the staple pose after a PDF download. Keep animated parts inline
-        so .is-stapling can control them; reuse the standing body from the shared
-        definitions. -->
+        <!-- Staple pose, shown after a PDF download. Animated parts are inline so .is-stapling can control them. The standing body comes from the shared definitions. -->
         <svg
             class="pip-staple"
             id="pdfStaple"
@@ -557,8 +552,7 @@
                                             d="M82.5 38 Q78 34.5 73.5 37.5"
                                         />
                                         <g class="pip-blink">
-                                            <!-- Keep the gaze transform separate from
-                                            the blink transform. -->
+                                            <!-- The gaze transform is separate from the blink transform. -->
                                             <g class="pip-gaze">
                                                 <circle
                                                     class="pip-eye"
@@ -622,8 +616,7 @@
                                             cy="111"
                                             r="4"
                                         />
-                                        <!-- Open palm. The wrapper carries the wave
-                                        transform, so the hand remains reusable. -->
+                                        <!-- Open palm. The wrapper carries the wave transform. The hand is shared with other uses. -->
                                         <g class="pip-wave">
                                             <path class="pip-ink" d="M85 84 Q101 79 106 65" />
                                             <use href="#pip-hand-open" />
@@ -815,7 +808,7 @@
                                             d="M58 100 Q70 106 82 100 L81 108 Q70 112 59 108 Z"
                                         />
                                         <!-- Raised arms and open hands for the catch
-                                        pose. Mirror the far hand so both thumbs point
+                                        pose. The far hand is mirrored so both thumbs point
                                         outward. -->
                                         <g class="pip-catch-pose" data-pose="ready">
                                             <ellipse
@@ -836,8 +829,8 @@
                                                 transform="translate(105 52) rotate(20) translate(-110 -57)"
                                             />
                                         </g>
-                                        <!-- Caught pose. Draw the arms before the page
-                                        and the hands after it so the hands appear on
+                                        <!-- Caught pose. The arms are drawn before the page
+                                        and the hands after it, so the hands sit on
                                         the near edge. -->
                                         <g class="pip-catch-pose" data-pose="catch">
                                             <path
@@ -940,9 +933,9 @@
                                 >
                                     Clear data
                                 </button>
-                                <!-- Eraser pose. Keep it inline so .is-erasing can
-                                control the wipe and dust animations. Reuse the
-                                standing body while the arms stay local to this
+                                <!-- Eraser pose. Inline so .is-erasing can
+                                control the wipe and dust animations. Reuses the
+                                standing body; the arms are local to this
                                 drawing. -->
                                 <svg
                                     class="pip-eraser"
@@ -1025,7 +1018,7 @@
                                         </g>
                                         <!-- Arms for the completed erase pose. -->
                                         <g class="pip-dust">
-                                            <!-- Place the far forearm behind the body
+                                            <!-- The far forearm is behind the body,
                                             so it does not cross the jacket. -->
                                             <path class="pip-ink" d="M78 106 Q84 111 89 113" />
                                             <use
@@ -1632,7 +1625,7 @@
                                                     cy="111"
                                                     r="4"
                                                 />
-                                                <!-- Add three knuckle bumps to the
+                                                <!-- Three knuckle bumps on the
                                                 outer edge of the closed fist. -->
                                                 <g class="pip-arm">
                                                     <path
@@ -1695,7 +1688,7 @@
                                 />
                             </svg>
                             <p id="cleanErrorText"></p>
-                            <!-- Decorative error-state drawing. Keep the note still
+                            <!-- Decorative error-state drawing. The note stays still
                             so it remains readable while Pip moves. -->
                             <svg
                                 class="pip-alarm"
@@ -1931,8 +1924,8 @@
                                 <path class="pip-wisp" d="M77 10 q3 -2 5 -0.5" />
                                 <path class="pip-wisp" d="M67 25 q-1.5 3 -0.8 5" />
                                 <path class="pip-ink pip-paper" d="M94 66 q-1 -9 7 -9 q8 0 7 9 Z" />
-                                <!-- Move the glass, grip, forearm, and enlarged eye
-                                together so the eye stays behind the lens. -->
+                                <!-- The glass, grip, forearm, and enlarged eye move
+                                together, so the eye stays behind the lens. -->
                                 <g class="pip-scan">
                                     <path class="pip-ink" d="M54 76 Q51 66 50 59" />
                                     <g class="pip-blink">
@@ -3029,9 +3022,7 @@
                         </span>
                     </span>
                 </label>
-                <!-- Keep both regions rendered and empty rather than hidden. A live
-                    region inserted with text already present may not be announced.
-                -->
+                <!-- Both live regions stay rendered and empty, not hidden. -->
                 <p class="export-dialog-error" id="pdfExportDialogError" role="alert"></p>
                 <p
                     class="export-dialog-status"

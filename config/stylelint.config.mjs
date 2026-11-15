@@ -1,6 +1,5 @@
 export default {
-    // `npm run lint:css` only globs web/**/*.css, so build output is the one
-    // generated tree it can reach. Paths resolve from this config directory.
+    // Ignore paths resolve from this config directory. web/dist is generated output.
     ignoreFiles: ["../web/dist/**"],
     rules: {
         "block-no-empty": true,

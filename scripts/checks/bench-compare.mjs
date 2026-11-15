@@ -217,9 +217,9 @@ function timeStages(stagesBySide, runs, only, clock) {
 }
 
 /**
- * Parse and validate the command-line options. An unusable value throws
- * rather than reaching the gate, where an empty sample set would compare as
- * NaN and pass without timing anything.
+ * Parse and validate the command-line options. An unusable value throws before
+ * the gate runs, because an empty sample set would compare as NaN and pass
+ * without timing anything.
  * @param {string[]} argv - Arguments after the script path
  */
 export function parseOptions(argv) {

@@ -30,8 +30,7 @@ runs:
         python-version: ${{ inputs.python-version }}
 
     # setup-uv reads tool.uv.required-version from pyproject.toml. Its built-in
-    # dependency cache stays off because the conditional cache below is restored
-    # only when a .venv miss means dependency archives may be consumed.
+    # cache is off; the uv download cache below is restored only on a .venv miss.
     - name: Set up uv
       if: inputs.install-python-deps == 'true' && inputs.python-version != ''
       uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -58,9 +57,8 @@ runs:
           uv-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-python.outputs.python-version }}-
           uv-${{ runner.os }}-${{ runner.arch }}-
 
-    # Synchronize even after a .venv hit. The project uses hatch-vcs, so its
-    # editable distribution metadata includes the checked-out revision and must
-    # be refreshed when source commits change even if dependencies do not.
+    # Runs even after a .venv hit. hatch-vcs embeds the checked-out revision in
+    # the editable distribution metadata, so this step refreshes it.
     - name: Synchronize Python dependencies
       if: inputs.install-python-deps == 'true' && inputs.python-version != ''
       shell: bash

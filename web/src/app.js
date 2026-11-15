@@ -29,8 +29,8 @@ import { Theme } from "./shared/ui/theme.js";
 function init() {
     "use strict";
 
-    // Upload is the screen most visits land on, so it ships in the main bundle.
-    // Every other screen's code is imported the first time its route opens.
+    // Upload ships in the main bundle. Every other screen's code is imported the
+    // first time its route opens.
     const ROUTES = Object.freeze([
         {
             name: "home",
@@ -91,13 +91,12 @@ function init() {
         initTelemetry();
     }
     initRuntime();
-    // Before the decoration layer starts, so it reads the tier it will run in.
+    // Applies the effects tier before the decoration layer starts.
     Effects.init();
     initMascot();
     initAlive();
     Theme.init();
-    // After Theme.init() on purpose: the doodles read their palette off the
-    // theme, and painting before it has settled means painting twice.
+    // Runs after Theme.init(), since the doodles read their palette from the theme.
     initDecorations();
     PdfExport.init();
     NavMenu.init();
@@ -219,8 +218,8 @@ function init() {
         const toggleButton = document.getElementById("telemetryToggleBtn");
         const statusLabel = document.getElementById("telemetryStatusLabel");
 
-        // Diagnostics are only meaningful when a Sentry DSN is built in. The test
-        // hook lets e2e exercise the consent flow without baking a DSN into the build.
+        // Diagnostics need a Sentry DSN built in. The test hook lets e2e tests
+        // exercise the consent flow without a DSN in the build.
         const globalWindow =
             /** @type {Window & { __LINKEDIN_ANALYZER_FORCE_TELEMETRY_OFFER__?: boolean }} */ (
                 window
@@ -235,8 +234,8 @@ function init() {
         const enable = () => {
             setTelemetryConsent(true);
             granted = true;
-            // Any explicit choice settles the prompt: the banner must not reappear
-            // later in the session (e.g. after a subsequent revoke).
+            // Any explicit choice dismisses the banner for the rest of the session,
+            // including after a later revoke.
             bannerDismissed = true;
             initSentry();
             initTelemetry();
@@ -259,9 +258,8 @@ function init() {
             if (footer && toggleButton && statusLabel) {
                 const showFooter = offerTelemetry || granted;
                 footer.hidden = !showFooter;
-                // Stored consent only means diagnostics are actually running when the
-                // build can send them (a DSN is present). If consent was carried
-                // forward into a build without one, say so rather than claim "on".
+                // Stored consent only means diagnostics run when the build has a DSN.
+                // Consent carried into a build without one is reported as unavailable.
                 let statusText;
                 if (granted && !offerTelemetry) {
                     statusText = "Diagnostics are on but unavailable in this build.";

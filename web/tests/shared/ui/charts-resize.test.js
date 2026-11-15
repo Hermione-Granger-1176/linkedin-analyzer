@@ -47,7 +47,7 @@ it("redraws resized charts without looping or drawing hidden canvases", async ()
     expect(canvas.width).toBe(480);
     expect(observe).not.toHaveBeenCalled();
 
-    // A scaled entrance animation must not shrink the backing store.
+    // The backing store is sized from clientWidth and clientHeight, not the scaled bounding rect.
     Object.defineProperty(canvas, "clientWidth", { value: 300 });
     Object.defineProperty(canvas, "clientHeight", { value: 320 });
     box.mockReturnValue({ width: 291, height: 310.4 });

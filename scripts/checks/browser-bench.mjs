@@ -16,14 +16,14 @@
  *   - whether the tab crashed.
  *
  * Slow devices are simulated with CDP CPU throttling (Emulation.setCPUThrottlingRate),
- * --disable-gpu, and a mobile viewport with touch. CPU throttling slows only
- * the page's main thread: Chromium rejects it on worker targets, and a
- * measured worker loop ran at the same speed at rates 1 and 4. Throttled runs
- * therefore understate slow-device time for work done in workers. Desktop Chromium never kills
- * a tab at a phone's memory limit, so budget_mb stands in for it: a provisional
- * engineering budget for comparing designs and catching regressions, not a
- * phone safety threshold. It counts only sampled JavaScript heap, not browser,
- * graphics, or native memory, and sampling can miss short peaks.
+ * --disable-gpu, and a mobile viewport with touch. CPU throttling applies only to
+ * the page's main thread, since Chromium rejects it on worker targets. Throttled
+ * runs therefore understate slow-device time for work done in workers. Desktop
+ * Chromium does not kill a tab at a phone's memory limit, so budget_mb stands in
+ * for that limit. It is a provisional engineering budget for comparing designs and
+ * catching regressions, not a phone safety threshold. It counts only sampled
+ * JavaScript heap, not browser, graphics, or native memory, and sampling can miss
+ * short peaks.
  *
  * Usage through Make:
  *   make bench-browser size_mb=100
@@ -279,7 +279,7 @@ async function timeCachedFilterChange(page) {
                     } else if (loading) {
                         observer.disconnect();
                         clearTimeout(timer);
-                        // The grid hides when the draw fails, so do not time an error.
+                        // A hidden grid means the draw failed, so the change is not timed.
                         if (grid.hidden || grid.offsetParent === null) {
                             reject(new Error(`filter change to ${range} ended without the grid`));
                         } else {
@@ -393,9 +393,8 @@ async function measureRun(options, inputDir) {
     let sampler = null;
     let phase = "analysis";
     try {
-        // Reduced motion turns off the optional timeline animation, which
-        // finishes after the grid is back to full opacity and would end the
-        // filter timing early.
+        // Reduced motion turns off the timeline animation, which can outlast the
+        // grid's opacity change.
         const context = await newMeasurementContext(browser, {
             ...(options.mobile ? devices[MOBILE_DEVICE] : {}),
             reducedMotion: "reduce",
@@ -420,7 +419,7 @@ async function measureRun(options, inputDir) {
         await openRoute(page, "messages", STEP_TIMEOUT_MS);
         await ready.messages(page);
         result.messagesMs = performance.now() - dropped;
-        // The filter timing runs after Messages so it cannot add to that time.
+        // The filter timing runs after the Messages measurement.
         await openRoute(page, "analytics", STEP_TIMEOUT_MS);
         await ready.analytics(page);
         result.filterMs = await timeCachedFilterChange(page);
@@ -465,7 +464,7 @@ export function oversizedInputs(inputDir, limit = MEASUREMENT_LIMITS.maxFileByte
 /**
  * List why a set of runs fails its budgets. The time budget applies to the
  * median time from file drop to the Analytics screen showing data, so one slow
- * run cannot fail it alone.
+ * run does not fail it alone.
  * @param {object[]} runs - Run results.
  * @param {ReturnType<typeof parseArgs>} options - Parsed options.
  * @returns {string[]} One reason per failed budget; empty when every budget holds.
@@ -609,9 +608,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     try {
         process.exitCode = await main();
     } catch (error) {
-        // main() tears the preview down in its finally block; this only
-        // guarantees a structured RESULT line on unexpected failures, matching
-        // heap-audit.mjs.
+        // main() tears the preview down in its finally block. This catch prints a
+        // structured RESULT line for unexpected failures.
         console.error(error);
         console.error("RESULT   FAILED reason=unexpected");
         process.exitCode = 1;

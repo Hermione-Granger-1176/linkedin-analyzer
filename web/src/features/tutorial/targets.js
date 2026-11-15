@@ -3,8 +3,8 @@
  *
  * A step points at page elements by selector or reference, with optional
  * fallbacks, and a target only counts when it is actually visible. These
- * helpers query the live document but hold no tutorial state, so both the
- * step flow and the mini-tip callouts share them.
+ * helpers query the live document and hold no tutorial state. The step flow
+ * and the mini-tip callouts both use them.
  */
 
 /** Space kept between a scrolled-to target and the viewport edge. */

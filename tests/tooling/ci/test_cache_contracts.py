@@ -19,10 +19,8 @@ def test_uv_setup_uses_one_pinned_version_without_a_duplicate_cache() -> None:
     """Install uv from the project minimum requirement and use one dependency cache."""
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    # A floor rather than an exact pin, so an install a few patches behind still
-    # runs; setup-uv resolves the newest release that satisfies it. The floor may
-    # be raised, but it may not drop below the version the project has actually
-    # been exercised against, nor take a shape that stops being a floor at all.
+    # The required version is a >=X.Y.Z floor. setup-uv installs the newest
+    # release that satisfies it. The floor must not drop below 0.11.0.
     required_uv = pyproject["tool"]["uv"]["required-version"]
     floor = re.fullmatch(r">=(\d+)\.(\d+)\.(\d+)", required_uv)
     assert floor is not None, f"uv required-version must be a >=X.Y.Z floor, got {required_uv!r}"
@@ -92,7 +90,7 @@ def test_e2e_uses_an_immutable_version_matched_playwright_container() -> None:
 
 
 def test_specialized_workflows_share_setup_or_intentionally_skip_dependency_caches() -> None:
-    """Prevent audit and lock-refresh jobs from drifting into duplicate cache paths."""
+    """Audit and lock-refresh jobs use the shared setup action or skip dependency caches."""
     assert AUDIT_WORKFLOW.count("uses: ./.github/actions/ci-setup") == 2
     assert "cache: npm" not in AUDIT_WORKFLOW
     assert "cache: pip" not in AUDIT_WORKFLOW
@@ -107,7 +105,7 @@ def test_specialized_workflows_share_setup_or_intentionally_skip_dependency_cach
 
 
 def test_release_build_cache_is_registry_backed_and_shared_across_releases() -> None:
-    """Keep trusted release builds on one durable multi-platform cache."""
+    """Release builds use one registry-backed multi-platform cache."""
     cache_ref = "type=registry,ref=${{ steps.image-meta.outputs.image }}:buildcache"
 
     assert PUBLISH_WORKFLOW.count(f"cache-from: {cache_ref}") == 2

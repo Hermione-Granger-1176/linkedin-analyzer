@@ -88,23 +88,20 @@ def _read_csv_with_fallback(
 ) -> pd.DataFrame:
     """Read a CSV, auto-detecting a usable encoding when one is not specified.
 
-    LinkedIn (and user-edited) exports are not always UTF-8. When no explicit
-    encoding is requested, this tries UTF-8 (BOM-aware) first, then falls back to
-    WHATWG Windows-1252 to match browser ``TextDecoder`` behavior.
+    When no explicit encoding is requested, this tries BOM-aware UTF-8 first,
+    then falls back to WHATWG Windows-1252.
 
     Args:
         input_path: Path to the CSV file to read
         csv_kwargs: Additional keyword arguments forwarded to pandas.read_csv;
-            an ``encoding`` entry here is consumed (popped) to avoid passing the
-            argument twice, and is used only when ``encoding`` is None
+            an ``encoding`` entry is popped and used only when ``encoding`` is None
         encoding: Explicit encoding to use; when None, encoding is auto-detected
 
     Returns:
         The parsed DataFrame
     """
-    # Resolve encoding precedence and remove it from csv_kwargs so it is never
-    # passed to pandas.read_csv twice. CleanerConfig.encoding wins; otherwise an
-    # encoding supplied via csv_kwargs is honored.
+    # Pop the encoding from csv_kwargs. An explicit encoding wins; otherwise the
+    # csv_kwargs encoding is used.
     kwargs_encoding = csv_kwargs.pop("encoding", None)
     resolved_encoding = encoding if encoding is not None else kwargs_encoding
     if resolved_encoding is not None:
@@ -169,9 +166,8 @@ def _write_excel_atomic(df: pd.DataFrame, output_path: Path, config: CleanerConf
     """Write and format a DataFrame to an Excel file atomically.
 
     Writes and formats a temporary file in the destination directory, then
-    atomically replaces the target so a crash mid-write cannot leave a truncated
-    or corrupt .xlsx at output_path. The temporary file is removed if any step
-    fails.
+    atomically replaces output_path with it. The temporary file is removed if
+    any step fails.
 
     Args:
         df: DataFrame to export
@@ -344,9 +340,8 @@ def _clean_columns(df: pd.DataFrame, config: CleanerConfig) -> pd.DataFrame:
 def _sanitize_cells(df: pd.DataFrame) -> pd.DataFrame:
     r"""Make every cell safe to write to a worksheet.
 
-    Strips XML-illegal control characters before formula-escaping so a cell
-    like "\x01=SUM(...)" is both made writable by openpyxl and still
-    recognized as a formula-injection payload to quote-prefix.
+    Strips XML-illegal control characters, then quote-prefixes formula-like
+    strings. Stripping runs first, so "\x01=SUM(...)" is written as "'=SUM(...)".
     """
     for column in df.columns:
         df[column] = df[column].map(remove_illegal_chars).map(escape_excel_formula)

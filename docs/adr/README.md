@@ -18,5 +18,6 @@ These records preserve the reasoning behind choices that affect the repository's
 - [ADR-012: Try GraphQL first and fall back to REST for local GitHub tooling](012-graphql-first-rest-fallback.md)
 - [ADR-013: npm override for patched minimatch](013-minimatch-override.md)
 - [ADR-014: Noise-controlled benchmark gate in CI](014-noise-controlled-benchmark-gate.md)
+- [ADR-015: Large-export investigation, October 2026](015-large-export-investigation.md)
 
 When adding a record, use the next number, keep the file name descriptive, and link it from this page. Use the existing sections for context, decision, consequences, and validation when they apply.

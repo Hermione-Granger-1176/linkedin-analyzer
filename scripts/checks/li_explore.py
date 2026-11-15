@@ -6,7 +6,7 @@ message direction) used as audit/insight evidence. Reads your private export
 from data/input (never committed) and skips cleanly when it is absent.
 
 "Me" detection for message direction uses $LIA_ME, falling back to git
-`user.name`, so no personal name is hardcoded.
+`user.name`.
 
 Usage (prefer the Makefile):  make explore
 """

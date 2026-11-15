@@ -87,8 +87,8 @@ async function processPayload(payload) {
             connectionsResult = null;
         }
         if (!connectionsResult) {
-            // Connections is optional: a file that will not read degrades like
-            // one that will not parse, so the messages still load.
+            // Connections is optional. A file that cannot be read is reported like
+            // one that fails to parse, and the messages still load.
             connectionError = CONNECTIONS_READ_ERROR;
         } else if (connectionsResult.success) {
             connectionsData = connectionsResult.cleanedData;
@@ -129,8 +129,8 @@ function serializeMessageState(state) {
 }
 
 /**
- * List the typed-array buffers in a processed payload, so posting it moves
- * them to the page instead of copying them.
+ * List the typed-array buffers in a processed payload for transfer. Posting
+ * with them moves the buffers to the page instead of copying them.
  * @param {{messageState?: SerializedMessageState|null}} payload - Processed payload
  * @returns {ArrayBuffer[]}
  */

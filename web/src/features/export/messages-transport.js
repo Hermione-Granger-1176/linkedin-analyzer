@@ -2,8 +2,7 @@
  * Load the PDF messages dashboard through an export-owned worker.
  *
  * worker-transport.js manages its lifecycle. This module builds messages
- * requests and reads replies. Report fixed errors because thrown values may
- * contain message text.
+ * requests and reads replies. Reports fixed error text only.
  */
 
 import { parseMessagesWorkerMessage } from "../../app/worker-contracts.ts";
@@ -84,10 +83,8 @@ function messagesRequest(messagesCsv, connectionsCsv) {
         envelope: { type: "process", payload: { messagesCsv, connectionsCsv } },
         parse: parseMessagesWorkerMessage,
         interpret: interpretReply,
-        // The Messages screen's own budget for this same worker, which parses
-        // both files: a watchdog scaled to the messages export alone would fire
-        // early on a large connections file and send a parse the worker was
-        // still doing to the UI thread instead.
+        // The Messages screen's budget for this worker. It is scaled to both
+        // files the worker parses, not to the messages file alone.
         timeoutMs: computeWorkerTimeout(messagesCsv, connectionsCsv),
     };
 }
@@ -99,24 +96,18 @@ function messagesRequest(messagesCsv, connectionsCsv) {
  * @returns {MessagesState|null|typeof FAILED|typeof PENDING} Outcome, or PENDING to keep waiting
  */
 function interpretReply(message, context) {
-    // The contract parser accepts the envelope and nulls a payload that is not a
-    // plain object, so an otherwise well-formed reply can still arrive with
-    // nothing on it. Reading through that would throw inside a listener, where
-    // nothing is waiting to catch it, and leave the request to time out.
+    // The contract parser nulls a payload that is not a plain object. Reading
+    // through a null payload would throw inside the listener.
     if (!message.payload) {
         context.report("Messages worker response carried no payload.", "messages-message-parse");
-        // Settled rather than left to the watchdog, for the same reason the
-        // failure envelope below is: only one request is ever in flight, so a
-        // reply this worker cannot answer under is this request failing, and
-        // waiting it out would look like a hang. Null rather than FAILED,
-        // because a malformed envelope says nothing about whether the file can
-        // be parsed.
+        // Settled here rather than left to the watchdog. Returns null rather than
+        // FAILED: a malformed envelope says nothing about whether the file can be
+        // parsed.
         return null;
     }
     if (!message.payload.success) {
-        // Settled whatever id it arrived under, because only one request is ever
-        // in flight and waiting out the watchdog would look like a hang. What it
-        // settles as does turn on the id: see `failureOutcome`.
+        // A failure settles the request in flight whatever id it arrived under.
+        // The outcome depends on the id: see `failureOutcome`.
         context.report("Messages worker reported a failure.", "messages-worker-failure");
         return failureOutcome(message, context);
     }
@@ -134,9 +125,8 @@ function interpretReply(message, context) {
  */
 function hydrateWorkerPayload(payload) {
     if (!payload.messageState) {
-        // FAILED, not null: the worker parsed this exact file with this exact
-        // code and produced no state, so the main thread would only freeze the
-        // page to reach the same answer.
+        // Returns FAILED rather than null, so the main-thread fallback does not
+        // run for a file the worker already parsed without producing state.
         return FAILED;
     }
     return {
@@ -176,8 +166,7 @@ function buildStateOnMainThread(messagesCsv, connectionsCsv) {
 
         return { messageState, connectionState };
     } catch {
-        // The caught value came from parsing the user's own messages, so only a
-        // fixed error crosses into telemetry.
+        // Only a fixed error is reported to telemetry.
         captureError(new Error("Messages could not be parsed for the export."), {
             module: "pdf-export",
             operation: "messages-main-thread-parse",

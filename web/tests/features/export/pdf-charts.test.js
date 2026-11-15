@@ -15,9 +15,8 @@ import { USABLE_HEIGHT } from "../../../src/features/export/pdf-layout.js";
 
 const HOURS_PER_DAY = 24;
 
-// Taken from the palette itself rather than copied, and spaced ten apart: a
-// chart mixes colors towards the paper, and neighbouring token values would
-// round back into each other and hide which ink a cell was painted with.
+// Each token gets its own gray level, ten apart, so that mixed colors can be
+// told from one another.
 const palette = Object.fromEntries(
     PDF_PALETTE_TOKENS.map((token, index) => [
         token,
@@ -29,8 +28,8 @@ const fonts = { body: "PatrickHand", accent: "Caveat" };
 /**
  * Width the stub gives a string, in millimetres.
  *
- * The stub's own metric, restated so a test can predict it: what a column has
- * to hold is the width of the text drawn in it, not the width it was fitted to.
+ * The stub's metric, restated so tests can predict it. A column must hold the
+ * width of the text drawn in it.
  * @param {string} value - Text
  * @param {number} size - Font size in points
  * @returns {number} Width in millimetres
@@ -80,13 +79,11 @@ function createDocStub() {
         text: vi.fn((value, x, y, options) =>
             calls.text.push({ value, x, y, align: options && options.align }),
         ),
-        // Roughly half a millimetre per character at 10pt, so both measuring and
-        // wrapping are predictable without pulling in real font metrics, and a
-        // label measured and then wrapped agrees with itself.
+        // Roughly half a millimetre per character at 10pt. Measuring and wrapping
+        // use the same metric.
         getTextWidth: vi.fn((value) => textWidth(value, size)),
-        // Broken at spaces, the way jsPDF breaks. A stub that chopped every
-        // width-worth of characters instead would have hidden the word-granular
-        // truncation these charts used to do, which is exactly what it did.
+        // Breaks at spaces, as jsPDF does. Chopping at fixed character widths
+        // would hide word-granular truncation.
         splitTextToSize: vi.fn((value, width) => {
             const lines = [];
             for (const word of String(value).split(" ")) {
@@ -137,8 +134,8 @@ function textAligned(doc, align) {
 
 describe("axisScale", () => {
     it("floors a flat series at two", () => {
-        // A series of ones plotted against a maximum of one is a straight line
-        // along the top edge, which stops reading as a chart.
+        // A flat series gets a scale of at least two, so it does not sit on the
+        // top edge.
         expect(axisScale(0)).toEqual([0, 1, 2]);
         expect(axisScale(1)).toEqual([0, 1, 2]);
     });
@@ -151,9 +148,8 @@ describe("axisScale", () => {
     });
 
     it("gives every tick of every scale a round step", () => {
-        // The scale used to be a pleasant maximum cut into fractions of itself,
-        // which printed 0/94/188/282/377 and 0/18/36/54/73: only the two ends of
-        // either one meant anything to a reader.
+        // Every tick is a multiple of one round step, so each label reads on its
+        // own. Ticks such as 0/94/188 are not allowed.
         for (let peak = 0; peak <= 2000; peak += 1) {
             const values = axisScale(peak);
             const step = values[1];
@@ -275,8 +271,7 @@ describe("buildLineChartBlocks", () => {
     });
 
     it("plots in the timeline's blue whatever ink the config asks for", () => {
-        // The colour belongs to the chart type, not to whoever collected the
-        // data: on screen a timeline is blue however the dashboard was built.
+        // The timeline is always blue, whatever accent the config asks for.
         const { doc, painter } = createHarness();
 
         drawAll(
@@ -315,8 +310,7 @@ describe("buildLineChartBlocks", () => {
     });
 
     it("keeps the whole of a label the reader cannot hover", () => {
-        // Growth runs across years and the shorter ranges are weekly, so a
-        // first word alone reads "Jan Jan Feb Feb" or loses the year outright.
+        // Labels are drawn whole, since a first word alone would drop the year.
         const { doc, painter } = createHarness();
 
         drawAll(
@@ -335,9 +329,8 @@ describe("buildLineChartBlocks", () => {
     });
 
     it("never plots a point above its highest gridline", () => {
-        // The step was rounded and the loop stopped at the axis maximum, so at
-        // niceAxisMax(19) = 22 the gridlines ran 0/6/12/18 and the band above 18
-        // held the peak with nothing to read it against.
+        // The gridlines run to the top of the scale, so no point sits above the
+        // highest gridline.
         for (const peak of [1, 3, 4, 5, 7, 9, 13, 19, 20, 50, 120]) {
             const { doc, painter } = createHarness();
 
@@ -374,15 +367,14 @@ describe("buildLineChartBlocks", () => {
             }),
         );
 
-        // Every tick a whole five, the topmost the maximum the plot scales by.
-        // The scale used to read 0/6/12/18/22.
+        // Every tick is a whole five. The topmost tick is the maximum the plot
+        // scales by.
         expect(textAligned(doc, "right")).toEqual(["0", "5", "10", "15", "20", "25"]);
     });
 
     it("keeps the gridlines out of the value labels", () => {
-        // The rules run the full width of the plot, so "21" and "37" had one
-        // straight through the digits. The gridline is broken behind the label
-        // rather than the label moved, which would only crowd the next rule.
+        // Gridlines are broken behind value labels. The label is not moved, since
+        // that would crowd the next rule.
         const { doc, painter } = createHarness();
 
         drawAll(
@@ -418,9 +410,8 @@ describe("buildLineChartBlocks", () => {
     });
 
     it("keeps the last axis label inside the plot it belongs to", () => {
-        // The last point sits half a slice from the right edge, which over ten
-        // years of months is a third of a millimetre: centred on its dot, "Jun
-        // 2026" ran out past the plot and over the margin.
+        // The last label stays inside the plot. Centred on its dot, it would run
+        // past the right edge.
         const { doc, painter } = createHarness();
         const points = Array.from({ length: 124 }, (_, index) => ({
             label: `Mon ${2016 + Math.floor(index / 12)}`,
@@ -473,8 +464,8 @@ describe("buildBarChartBlocks", () => {
     });
 
     it("moves a chart that will not fit onto the next page whole", () => {
-        // Split, the tail arrived overleaf as unlabelled bars with no title and
-        // nothing to say what they counted.
+        // A chart that does not fit moves to the next page whole, so its title
+        // stays with its bars.
         const { painter } = createHarness();
         const items = Array.from({ length: 12 }, (_, index) => ({
             topic: `Topic ${index + 1}`,
@@ -517,9 +508,8 @@ describe("buildBarChartBlocks", () => {
             }),
         );
 
-        // A row draws its tinted track and then the accent cap over its left
-        // edge, so the tracks are the first of each pair. A row is never a
-        // label with blank paper next to it.
+        // Each row draws a track, then the accent cap over its left edge. Tracks
+        // are the first of each pair.
         const tracks = doc.calls.roundedRect.filter((call, index) => index % 2 === 0);
         expect(tracks).toHaveLength(2);
         expect(tracks[1].width).toBe(0.6);
@@ -528,8 +518,8 @@ describe("buildBarChartBlocks", () => {
     });
 
     it("keeps a bar's corner radius inside the bar it rounds", () => {
-        // At the stub width the fixed radius was wider than half the bar, which
-        // jsPDF draws as a lozenge overshooting its own track.
+        // The radius is capped at half the bar width, so corners do not overshoot
+        // the track.
         const { doc, painter } = createHarness();
 
         drawAll(
@@ -684,10 +674,9 @@ describe("buildListBlocks", () => {
     });
 
     it("keeps the primary clear of the secondary drawn back at it", () => {
-        // Both were fitted to the same width and drawn from opposite ends of one
-        // baseline, so an ordinary name and an ordinary headline overprinted by
-        // 36mm. Long enough here that each fills its own column, so what the
-        // columns are is what this measures.
+        // Primary and secondary text are drawn from opposite ends of one baseline.
+        // These strings are long enough to fill both columns, so the test
+        // measures the column split.
         const { doc, painter } = createHarness();
         const [, list] = buildListBlocks(painter, {
             title: "Top contacts",
@@ -720,9 +709,8 @@ describe("buildListBlocks", () => {
         // A longer first token must not discard the rest of a label.
         // Character-based truncation keeps nearby input lengths visually consistent.
         const { doc, painter } = createHarness();
-        // Two tokens, the second far too long for the column, which is the
-        // shape a wrap has nowhere to break: it hands back the first token and
-        // the row loses the name entirely.
+        // Two tokens, the second too long for the column and with no break point.
+        // A word wrap would return only the first token.
         const surname = "Vandenbroucke-Steenhuyse-Papadopoulos-Rajagopalachari-".repeat(5);
         const items = Array.from({ length: 20 }, (_, index) => ({
             primary: `Bartholomewkonstantinos${index} ${surname}`,
@@ -802,10 +790,8 @@ describe("chart builders with unusable numbers", () => {
     }
 
     it("leaves out the points and bars it cannot scale against", () => {
-        // Real jsPDF answers a NaN coordinate with "Invalid arguments passed to
-        // jsPDF.rect", which pdf.js catches as a failed export: the reader gets
-        // no document at all rather than one chart short. Nothing sends one
-        // today, which is the case mixColors() already defends against.
+        // jsPDF rejects a NaN coordinate, which fails the whole export. Builders
+        // therefore leave out unusable points and bars.
         const bad = [Number.NaN, Number.POSITIVE_INFINITY, undefined, null, "12"];
 
         for (const value of bad) {

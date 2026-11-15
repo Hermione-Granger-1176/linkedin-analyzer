@@ -5,9 +5,9 @@
  * Rows without an ID group by correspondents. Merge conversations only when
  * their complete correspondent sets match, keeping group threads separate.
  *
- * Resolve the account owner independently of MessagesAnalytics.detectSelfContext.
- * A coverage tie leaves direction unknown instead of selecting by insertion
- * order. In that case, every participant counts as a correspondent.
+ * Resolves the account owner without MessagesAnalytics.detectSelfContext. A
+ * coverage tie leaves direction unknown, and every participant counts as a
+ * correspondent.
  */
 
 import { MessagesAnalytics } from "../messages/analytics.js";
@@ -113,12 +113,8 @@ function exportParticipants(row, context, keepAnonymous) {
     const recipientUrls = MessagesAnalytics.normalizeUrlList(row["RECIPIENT PROFILE URLS"]);
     const recipientNames = MessagesAnalytics.parseRecipientNames(row.TO, recipientUrls.length);
     if (recipientUrls.length) {
-        // Paired by URL, exactly as extractParticipantsFromRow pairs them, so
-        // the two passes agree on how many people a row names. Walking the names
-        // instead stopped at the first: `parseRecipientNames` collapses the whole
-        // TO field into one name whenever a row carries at most one URL, and a
-        // group of anonymized recipients is one name against several URLs. Every
-        // recipient past the first was then added by neither pass and vanished.
+        // Recipients are paired by URL, as extractParticipantsFromRow pairs them,
+        // so both passes agree on how many people a row names.
         recipientUrls.forEach((url, index) =>
             add(recipientNames[index] || recipientNames[0] || "", url),
         );
@@ -152,9 +148,9 @@ function messageBody(value) {
 }
 
 /**
- * Keep dated rows paired with their parsed dates.
- * Use this same set for owner detection and PDF selection so undated rows
- * cannot change direction labels on the included messages.
+ * Keeps the rows that have parsed dates, paired with those dates. Owner
+ * detection and selection both use this set, so undated rows do not affect
+ * direction labels.
  * @param {MessageRow[]} rows - Parsed message rows
  * @returns {DatedRow[]} Dated rows, in file order
  */
@@ -173,11 +169,10 @@ function withParsedDates(rows) {
 }
 
 /**
- * Map every contact name that is ever seen with a profile URL to that URL.
+ * Map every contact name that is seen with a profile URL to that URL.
  *
- * LinkedIn exports include the profile URL on some rows and not others. Without
- * this pass the same person lands under both a `url:` and a `name:` key and
- * shows up as two threads.
+ * Some rows carry a contact's profile URL and others do not. This map lets the
+ * URL-less rows resolve to the same contact.
  * @param {DatedRow[]} dated - Dated message rows
  * @returns {Map<string, string>} Normalized name to canonical profile URL
  */
@@ -218,8 +213,7 @@ function canonicalContactKey(participant, nameToUrl, scope) {
     const nameKey = MessagesAnalytics.normalizeName(participant.name);
     const knownUrl = nameToUrl.get(nameKey);
     if (knownUrl) {
-        // Built through buildContactKey rather than spelled out, so this module's
-        // keys cannot drift from the ones analytics mints.
+        // Built with buildContactKey, so the key matches the ones analytics produces.
         return MessagesAnalytics.buildContactKey({ name: participant.name, url: knownUrl });
     }
     return MessagesAnalytics.buildContactKey(participant);
@@ -285,7 +279,7 @@ function realNameKey(participant) {
 /**
  * Check raw recipient fields for evidence of a group conversation.
  * Parsed names can hide multiple recipients when URLs are missing. A comma
- * inside a name may overcount, which prevents an unsafe alias merge.
+ * inside a name may overcount, so the check errs toward treating a row as a group.
  * @param {MessageRow} row - Parsed message row
  * @returns {boolean} True when the row names more than one recipient
  */
@@ -295,9 +289,8 @@ function namesSeveralRecipients(row) {
 
 /**
  * Associate URL-less aliases with a one-to-one conversation's profile URL.
- * Use only conversations with a real CONVERSATION ID, one correspondent per
- * row, and one profile URL. Synthesized keys depend on the identities being
- * resolved and cannot establish that aliases refer to one person.
+ * Uses only conversations with a real CONVERSATION ID, one correspondent per
+ * row, and one profile URL.
  * @param {DatedRow[]} dated - Dated message rows
  * @param {SelfContext} context - Resolved self context
  * @returns {Map<string, string>} Normalized name to profile URL
@@ -317,13 +310,9 @@ function buildConversationAliases(dated, context) {
             conversations.set(id, conversation);
         }
 
-        // Checked before the participant list, which cannot see the difference.
-        // `parseRecipientNames` collapses the whole TO field into a single name
-        // whenever a row carries at most one recipient URL - which is exactly
-        // what a group conversation looks like when the export holds only your
-        // own profile URL. That one "name" is then dropped as self, leaving one
-        // participant per row: the shape of a one-to-one. The raw fields still
-        // say otherwise, so they are counted directly.
+        // Checked before the participant list. `parseRecipientNames` collapses the
+        // whole TO field into one name when a row has at most one recipient URL,
+        // so a group can parse as one-to-one. The raw fields are counted directly.
         if (namesSeveralRecipients(row)) {
             conversation.oneToOne = false;
             continue;
@@ -353,9 +342,7 @@ function buildConversationAliases(dated, context) {
 
     const aliases = new Map();
     for (const conversation of conversations.values()) {
-        // A one-to-one conversation lends its URL only when it has exactly one:
-        // none is nothing to lend, and two mean the correspondent is already
-        // resolvable both ways.
+        // A one-to-one conversation lends its URL only when it has exactly one.
         if (!conversation.oneToOne || conversation.urls.size !== 1) {
             continue;
         }
@@ -388,9 +375,8 @@ function buildIdentityIndex(dated, nameToUrl) {
         const conversationKey = conversationKeyForRow(row, index);
         const senderKey = senderContactKey(row, nameToUrl, conversationKey);
 
-        // Anonymous participants are deliberately absent: "LinkedIn Member" is
-        // never the account owner, and each one is scoped to its own
-        // conversation, so they would only add noise to the coverage count.
+        // Anonymous participants are excluded: "LinkedIn Member" is never the
+        // account owner, and each is scoped to one conversation.
         for (const participant of MessagesAnalytics.extractParticipantsFromRow(row, NO_SELF)) {
             const key = canonicalContactKey(participant, nameToUrl, conversationKey);
             let identity = identities.get(key);
@@ -459,12 +445,8 @@ function withoutKnownContacts(candidates, contactKeys) {
         return candidates;
     }
     return candidates.filter((identity) => {
-        // A display name is only evidence when there is no URL to check
-        // instead. "You are never in your own connections" is true of
-        // identities, not of names, and sharing a name with one of your own
-        // connections is common enough that trusting a name hit over a profile
-        // URL hands the account owner's side of the conversation to the other
-        // person, inverting every direction chip in the export.
+        // A display name is evidence only when the identity has no URL to check.
+        // Name matches are not trusted over profile URLs.
         const evidence = identity.urls.size ? identity.urls : identity.names;
         return !matchesAny(evidence, contactKeys);
     });
@@ -494,8 +476,7 @@ function matchesAny(values, keys) {
  */
 function preferStrangers(candidates, contactKeys) {
     const strangers = withoutKnownContacts(candidates, contactKeys);
-    // Only useful when it actually narrowed the field: if every candidate is a
-    // connection, or none is, there is nothing new to go on.
+    // Narrows only when it removes some candidates and keeps at least one.
     return strangers.length && strangers.length < candidates.length ? strangers : candidates;
 }
 
@@ -503,7 +484,7 @@ function preferStrangers(candidates, contactKeys) {
  * Resolve the account owner from known connections and conversation coverage.
  * First exclude known contacts when that narrows the candidates. Then select
  * a unique candidate with the widest coverage. Return null on a tie.
- * Sent and received counts cannot reliably distinguish the owner.
+ * Sent and received counts are not used.
  * @param {Map<string, Identity>} identities - Identity index
  * @param {Set<string>} contactKeys - Normalized names and URLs of known connections
  * @returns {SelfContext|null} Self context, or null when unidentifiable
@@ -526,8 +507,7 @@ function fillMissingIdentity(correspondent, participant) {
     if (!correspondent.url && participant.url) {
         correspondent.url = participant.url;
     }
-    // "Unknown" is sanitizeParticipant's placeholder for a blank name, so a real
-    // name seen on a later row replaces it.
+    // "Unknown" is the placeholder for a blank name. A real name from a later row replaces it.
     if (participant.name && (!correspondent.name || correspondent.name === UNKNOWN_NAME)) {
         correspondent.name = participant.name;
     }
@@ -741,9 +721,9 @@ function takeWithinPeopleBudget(threads, people) {
 /**
  * Pick the most recently messaged people and the tail of each conversation.
  *
- * Rows whose date cannot be parsed are skipped before anything else, exactly as
- * `MessagesAnalytics.buildMessageState` does, so they cannot influence which
- * identity is taken to be the account owner.
+ * Rows whose date cannot be parsed are skipped first, as
+ * `MessagesAnalytics.buildMessageState` does. They do not affect which identity
+ * is the account owner.
  *
  * Nothing here reads `CONTENT`, so the rows may leave it out: each message
  * names the input row it came from, and the caller fetches only those bodies.
@@ -766,8 +746,7 @@ export function selectRecentThreadRows(rows, options = {}) {
     // blank CONVERSATION ID gets the same synthesized key in both passes.
     const self = resolveSelfContext(buildIdentityIndex(dated, nameToUrl), contactKeys);
     const context = self || NO_SELF;
-    // Aliasing needs to know who self is, so it runs once self is settled and
-    // only fills gaps: a name already seen carrying its own URL keeps that URL.
+    // Aliasing runs after self is resolved and only fills gaps. A name already mapped keeps its URL.
     for (const [nameKey, url] of buildConversationAliases(dated, context)) {
         if (!nameToUrl.has(nameKey)) {
             nameToUrl.set(nameKey, url);

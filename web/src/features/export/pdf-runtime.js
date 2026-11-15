@@ -1,7 +1,7 @@
 /**
  * Load the modules needed for one PDF export.
  *
- * `pdf.js` loads this module on demand, so the initial bundle contains only the
+ * `pdf.js` loads this module on demand. The initial bundle holds only the
  * export button, dialog, and availability check. One dynamic import loads the
  * collector, workers, layout code, fonts, and palette for the export run.
  */
@@ -19,9 +19,7 @@ export { collectExportData, readPdfPalette, registerPdfFonts, renderPdfDocument 
 /**
  * Stop every worker an export can start.
  *
- * Keep worker termination here so `pdf.js` can cancel before this chunk loads
- * without importing it solely for cleanup. The worker modules are static imports
- * once this runtime chunk loads.
+ * The worker modules are static imports of this chunk.
  */
 export function terminateExportWorkers() {
     terminateThreadsWorker();

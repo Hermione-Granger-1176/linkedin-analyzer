@@ -12,8 +12,8 @@ async function readFixture(name) {
     return readFile(resolve(fixtureBase, name), "utf8");
 }
 
-// Cleaned dates are converted from UTC to the local timezone, so parity tests
-// assert the format instead of an exact machine-dependent value.
+// Cleaned dates are converted from UTC to local time, so parity tests check the
+// format rather than an exact, machine-dependent value.
 const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
 const CORPUS_TYPES = ["shares", "comments", "messages", "connections"];

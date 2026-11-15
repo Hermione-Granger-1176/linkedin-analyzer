@@ -14,9 +14,9 @@ const LIMITS = Object.freeze({
     maxFileNameChars: 255,
     maxJobIdChars: 128,
     maxMessageChars: 500,
-    // Ceilings for the PDF export's thread selection. They bound the work the
-    // worker will do, and double as the defaults, so they must match
-    // DEFAULT_PEOPLE and DEFAULT_MESSAGES_PER_PERSON in features/export/threads.js.
+    // Ceilings for the PDF export's thread selection. They also serve as the
+    // defaults, so they must match DEFAULT_PEOPLE and DEFAULT_MESSAGES_PER_PERSON
+    // in features/export/threads.js.
     maxThreadPeople: 10,
     maxThreadMessagesPerPerson: 5,
 });
@@ -76,7 +76,7 @@ export interface FileProcessedPayload {
     rowCount: number;
     /** Analytics aggregate base, if computed */
     analyticsBase: PlainObject | null;
-    /** Whether analytics data is now available */
+    /** Whether analytics data is available */
     hasData: boolean;
     /** Whether the Windows-1252 decode fallback was used */
     usedFallback: boolean;
@@ -206,7 +206,7 @@ export interface CachedFileMetadata {
 
 /**
  * A worker request parse result. A rejected request still carries the id it
- * arrived with, so the worker answers under the id the page is waiting on.
+ * arrived with, and the worker replies under that id.
  */
 export type RequestParseResult<T> = ParseResult<T> & { requestId: RequestId };
 
@@ -273,8 +273,8 @@ function readCsvField(
     if (required && !parsed.source) {
         return { source: "", error: `Missing ${field} payload` };
     }
-    // When present it must respect the same size ceiling as every other CSV
-    // payload rather than being silently truncated.
+    // A present field must respect the same size ceiling as other CSV payloads.
+    // It is rejected, not truncated.
     if (parsed.tooLarge) {
         return { source: "", error: `${field} payload exceeds allowed size` };
     }
@@ -386,8 +386,8 @@ function parseCsvSource(value: unknown): { source: CsvSource; tooLarge: boolean 
 }
 
 /**
- * Parse upload worker addFile payload. The page posts the uploaded `file` so
- * the worker reads it, off the main thread.
+ * Parse upload worker addFile payload. The page posts the uploaded `file`, and
+ * the worker reads it off the main thread.
  * @param payload - Raw payload
  */
 function parseAddFilePayload(payload: unknown): ParseResult<AddFilePayload> {
@@ -691,8 +691,7 @@ export function parseThreadsWorkerRequest(
     }
     const payload = isPlainObject(message.payload) ? message.payload : {};
     const messages = readCsvField(payload, "messagesCsv", true);
-    // Reject an oversized optional connections source. Truncation could omit
-    // contacts and change the account-owner tiebreak result.
+    // Rejects an oversized optional connections source. It is never truncated.
     const connections = readCsvField(payload, "connectionsCsv", false);
     const error = messages.error || connections.error;
     if (error) {
@@ -723,7 +722,7 @@ export function parseThreadsWorkerRequest(
 /**
  * Parse threads worker outbound message.
  *
- * The thread payload carries the user's own message bodies verbatim, so it is
+ * The thread payload carries the user's own message bodies verbatim. It is
  * checked for shape only and never truncated or rewritten.
  * @param message - Raw worker message
  */
@@ -756,8 +755,8 @@ function isCleanOutput(value: unknown): value is CleanOutput {
 /**
  * Parse cleaning worker request envelope. The page asks for one output of the
  * selected file: the preview, an Excel workbook, or a cleaned CSV. `key`
- * names the stored upload, so the worker can reuse the rows it cleaned for
- * the preview when the download asks for the same file.
+ * names the stored upload. The worker can reuse the rows it cleaned for the
+ * preview when a download asks for the same file.
  * @param message - Raw request
  */
 export function parseCleaningWorkerRequest(

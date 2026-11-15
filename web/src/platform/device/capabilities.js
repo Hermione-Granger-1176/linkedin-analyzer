@@ -2,9 +2,8 @@
  * What the current device offers, and the effects tier the app picks from it.
  *
  * The tier controls decoration only: motion, filters, and future canvas or
- * WebGL scenes. It never decides how files are processed: nothing in the
- * processing path reads the tier, so Save-Data or reduced motion cannot change
- * how files are handled.
+ * WebGL scenes. Nothing in the processing path reads the tier, so Save-Data and
+ * reduced motion do not change how files are handled.
  *
  * The app picks the tier from device signals. There is no visitor setting.
  *
@@ -43,8 +42,8 @@ function positiveNumber(value) {
 
 /**
  * Request a WebGL context with failIfMajorPerformanceCaveat. A failed probe
- * does not establish that the device has no GPU. Call loseContext() when the
- * WEBGL_lose_context extension is available.
+ * does not mean the device has no GPU. The context is released with
+ * loseContext() when the WEBGL_lose_context extension is available.
  * @param {() => HTMLCanvasElement|OffscreenCanvas|null} createCanvas - Canvas factory
  * @returns {boolean}
  */

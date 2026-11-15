@@ -1,11 +1,10 @@
 /* The pieces of Pip that more than one drawing of him is built from.
 
    Everything here is in the same coordinate space as the hero Pip in
-   index.html, so a part drops into any drawing of him without rescaling. What
-   changes from one drawing to the next is the face, the arms and how much of
-   him is in frame, and that stays with whoever is drawing him. */
+   index.html, so parts need no rescaling. Each drawing supplies its own face,
+   arms and framing. */
 
-/* Hood, head and ears, drawn before the face so the fringe can overlap it. */
+/* Hood, head and ears, drawn before the face and fringe. */
 export const PIP_BUST = `
     <path
         class="pip-ink pip-hood"

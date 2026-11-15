@@ -1,11 +1,10 @@
 """Read-only issue overview built on the ``gh`` JSON API.
 
 Backs ``make issue-summary``: one screen with an issue's state, author, labels,
-assignees, milestone, and its most recent comments, so triaging an issue does
-not need several ``gh issue view`` passes. Each parser validates field types and
-raises a clear ``GhError`` for malformed data instead of an opaque ``TypeError``.
-When GraphQL is blocked, the REST issue and its comments are reshaped into the
-same JSON so the parsing below is shared.
+assignees, milestone, and its most recent comments. Each parser validates field
+types and raises ``GhError`` for malformed data. When GraphQL is blocked, the
+REST issue and its comments are reshaped into the same JSON, so the parsing below
+is shared.
 """
 
 from __future__ import annotations
@@ -15,8 +14,8 @@ from typing import Any
 from . import gh_runner
 from .gh_runner import GhError, RunFunction, require_mapping
 
-# Fields requested from ``gh issue view --json``. Kept in one constant so the
-# request and the parse helpers below stay in sync.
+# Fields requested from ``gh issue view --json``. The parse helpers below read
+# these fields.
 _ISSUE_FIELDS = "number,title,state,url,author,labels,assignees,milestone,comments"
 
 # How many of the most recent comments to echo in the summary.

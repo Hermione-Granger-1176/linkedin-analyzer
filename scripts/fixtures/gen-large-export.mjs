@@ -7,8 +7,7 @@
  * private export. Column layouts match the fixtures under tests/fixtures/ and
  * web/e2e/fixtures/.
  *
- * The data is shaped like a real export, because unrealistic data hides real
- * costs and bugs:
+ * The data is shaped like a real export:
  *   - One self account sends outgoing rows and receives incoming rows, always
  *     with the same profile URL.
  *   - A few thousand contacts, each with one stable profile URL, including pairs
@@ -40,11 +39,10 @@ import { fileURLToPath } from "node:url";
 
 const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const MB = 1024 * 1024;
-// Flush to disk in chunks so a 128 MB export never builds one large string.
+// Output is flushed in chunks of this size, so the full export is never one string.
 const FLUSH_BYTES = 4 * MB;
 
-// Share of the requested bytes each file gets, roughly matching a heavy user's
-// export, where messages dominate.
+// Share of the requested bytes per file. Messages dominate.
 const FILE_SHARES = {
     "messages.csv": 0.8,
     "Connections.csv": 0.08,
@@ -198,7 +196,7 @@ function buildContacts(random) {
  * @returns {{ bytes: number, rows: number }}
  */
 function writeUntil(path, header, targetBytes, nextRow) {
-    // Opening a link would write through it to wherever it points.
+    // Refuses to write through a symbolic link.
     if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) {
         throw new Error(`refusing to overwrite a symbolic link: ${path}`);
     }
@@ -275,7 +273,7 @@ function createSamplers(random, contacts) {
      * @returns {T}
      */
     const pick = (list) => list[Math.floor(random() * list.length)];
-    // A skewed pick, so a few contacts get most of the messages, as in real life.
+    // Skewed pick: a few contacts receive most of the messages.
     const pickContact = () => contacts[Math.floor(random() ** 2.5 * contacts.length)];
     const randomInstant = () =>
         new Date(Date.UTC(FIRST_YEAR, 0, 1) + random() * YEAR_SPAN * 365 * 86400000);
@@ -452,7 +450,7 @@ export function generateLargeExport({ sizeMb, dir }) {
      */
     const target = (file) => Math.round(sizeMb * MB * FILE_SHARES[file]);
 
-    // Each file draws from the one generator in turn, so the order is part of the output.
+    // Files draw from the shared generator in this order, which fixes the output.
     return {
         "messages.csv": writeMessages(
             join(outDir, "messages.csv"),

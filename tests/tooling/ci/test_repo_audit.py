@@ -180,7 +180,7 @@ def _audit(**kwargs: object) -> list[str]:
     return repo_audit.audit_repo_settings(repo=REPO, run_fn=_runner(**kwargs))  # type: ignore[arg-type]
 
 
-# ─── A healthy repository ────────────────────────────────────────────────────
+# A healthy repository
 
 
 def test_the_expected_configuration_produces_no_findings() -> None:
@@ -207,11 +207,11 @@ def test_every_audited_setting_is_read_from_the_api() -> None:
     }
 
 
-# ─── Branch protection ───────────────────────────────────────────────────────
+# Branch protection
 
 
 def test_an_unprotected_branch_is_a_finding_not_a_failure_to_look() -> None:
-    """A 404 here means protection was removed, which is the audit's whole point."""
+    """A 'Branch not protected' 404 is reported as a finding."""
     findings = _audit(protection=GhError("gh api failed: Branch not protected (HTTP 404)"))
     assert findings == ["main has no branch protection at all"]
 
@@ -226,25 +226,23 @@ def test_an_unprotected_branch_is_a_finding_not_a_failure_to_look() -> None:
     ids=["missing-branch", "no-permission", "missing-repository"],
 )
 def test_only_an_unprotected_branch_is_softened_into_a_finding(error: str, match: str) -> None:
-    """A mistyped branch also answers 404, and reporting it as removed protection would lie.
+    """Only the 'Branch not protected' message becomes a finding. Other errors raise GhError.
 
-    GitHub separates "Branch not protected" from "Branch not found" by message
-    alone, both under HTTP 404, so matching the status would turn every wrong
-    branch or repository name into a confident claim that protection is gone.
+    Missing branches, refused requests, and missing repositories are not findings.
     """
     with pytest.raises(GhError, match=match):
         _audit(protection=GhError(error))
 
 
 def test_a_renamed_required_check_is_reported_by_name() -> None:
-    """Renaming a job silently drops it from protection; the finding has to name which."""
+    """A required check missing from protection is named in the finding."""
     kept = sorted(repo_audit.EXPECTED_REQUIRED_CHECKS - {"CodeQL"})
     findings = _audit(protection=_protection(required_status_checks={"contexts": kept}))
     assert findings == ["main branch protection is missing required checks: CodeQL"]
 
 
 def test_checks_pinned_to_an_app_id_count_the_same_as_plain_contexts() -> None:
-    """GitHub reports the list twice; reading only one form would invent drift."""
+    """Checks listed with an app ID count the same as plain contexts."""
     pinned = {"checks": [{"context": name} for name in repo_audit.EXPECTED_REQUIRED_CHECKS]}
     assert _audit(protection=_protection(required_status_checks=pinned)) == []
 
@@ -256,9 +254,8 @@ def test_checks_pinned_to_an_app_id_count_the_same_as_plain_contexts() -> None:
         {"contexts": None, "checks": None},
         {"contexts": ["", 7], "checks": [{"context": ""}, {"context": 7}, "not-a-dict"]},
         "not-an-object",
-        # A mapping keyed by the expected names. Iterating it yields those names
-        # as strings, so reading it without a list check would certify every
-        # required check from a payload that never required any of them.
+        # A mapping keyed by the expected names. It must be rejected, not iterated
+        # as a list.
         {"contexts": dict.fromkeys(EXPECTED_CHECKS, 1)},
         {"checks": dict.fromkeys(EXPECTED_CHECKS, 1)},
         {"contexts": "CodeQL", "checks": "CodeQL"},
@@ -288,13 +285,13 @@ def test_an_unusable_required_checks_payload_reports_every_check_missing(
     ids=["null", "wrong-shape", "empty", "zero"],
 )
 def test_review_requirements_below_one_approval_are_reported(reviews: object) -> None:
-    """Anything short of a stated count of at least one leaves merges unreviewed."""
+    """A review requirement with a count below one is reported."""
     findings = _audit(protection=_protection(required_pull_request_reviews=reviews))
     assert findings == ["main branch protection does not require at least 1 approving review"]
 
 
 def test_a_boolean_approval_count_is_not_mistaken_for_one_approval() -> None:
-    """`True` is an int in Python, so it would otherwise pass as a count of 1."""
+    """A boolean is not accepted as an approval count."""
     reviews = {"required_approving_review_count": True}
     findings = _audit(protection=_protection(required_pull_request_reviews=reviews))
     assert findings == ["main branch protection does not require at least 1 approving review"]
@@ -305,20 +302,20 @@ def test_a_boolean_approval_count_is_not_mistaken_for_one_approval() -> None:
 def test_each_required_protection_block_is_reported_when_it_is_not_enabled(
     block: str, value: object
 ) -> None:
-    """A block that is off and a block that is unreadable both fail to protect anything."""
+    """A required protection block that is disabled or unreadable is reported."""
     findings = _audit(protection=_protection(**{block: value}))
     assert findings == [f"main branch protection {repo_audit.REQUIRED_PROTECTION_BLOCKS[block]}"]
 
 
 @pytest.mark.parametrize("block", sorted(repo_audit.FORBIDDEN_PROTECTION_BLOCKS))
 def test_each_forbidden_protection_block_is_reported_when_it_is_enabled(block: str) -> None:
-    """These two let history be rewritten or removed, which nothing else here compensates for."""
+    """A forbidden protection block that is enabled is reported."""
     findings = _audit(protection=_protection(**{block: {"enabled": True}}))
     assert findings == [f"main branch protection {repo_audit.FORBIDDEN_PROTECTION_BLOCKS[block]}"]
 
 
 def test_a_non_default_branch_is_audited_under_its_own_name() -> None:
-    """The branch argument has to reach both the API path and the findings."""
+    """The branch argument is used in the API paths and in the findings."""
     runner = FakeGh(
         [
             (has(RULESET_DETAIL_PATH), _response(None, HEALTHY_RULESET_DETAIL)),
@@ -336,11 +333,11 @@ def test_a_non_default_branch_is_audited_under_its_own_name() -> None:
     assert repo_audit.audit_repo_settings(repo=REPO, default_branch="release", run_fn=runner) == []
 
 
-# ─── Repository settings ─────────────────────────────────────────────────────
+# Repository settings
 
 
 def test_a_changed_default_branch_is_reported() -> None:
-    """Every protection expectation below is scoped to the default branch."""
+    """A default branch other than main is reported."""
     findings = _audit(repository=_repository(default_branch="master"))
     assert findings == ["default branch is 'master' instead of 'main'"]
 
@@ -350,10 +347,9 @@ def test_a_changed_default_branch_is_reported() -> None:
     ["allow_squash_merge", "allow_merge_commit", "allow_rebase_merge", "delete_branch_on_merge"],
 )
 def test_a_field_only_a_writing_token_can_read_is_not_judged(field: str) -> None:
-    """GitHub returns these only to a token with push access, which the audit App lacks.
+    """Merge and branch-deletion fields are not judged.
 
-    They arrive as ``null`` rather than as their real value, so judging them
-    would alarm every week about settings that are in fact correct.
+    GitHub returns them as ``null`` to the audit token, which lacks push access.
     """
     assert field not in repo_audit.JUDGED_REPOSITORY_FIELDS
     assert _audit(repository=_repository(**{field: None})) == []
@@ -375,17 +371,17 @@ def test_a_disabled_security_feature_is_reported_by_name() -> None:
 def test_security_features_that_cannot_be_read_are_reported_as_missing(
     security_and_analysis: object,
 ) -> None:
-    """The block is absent for a caller without admin access; that is not a pass."""
+    """An absent or unreadable security block reports every feature as missing."""
     findings = _audit(repository=_repository(security_and_analysis=security_and_analysis))
     expected = ", ".join(sorted(repo_audit.EXPECTED_SECURITY_FEATURES))
     assert findings == [f"missing security and analysis features: {expected}"]
 
 
-# ─── New repository policy settings ──────────────────────────────────────────
+# New repository policy settings
 
 
 def test_actions_policy_drift_is_reported() -> None:
-    """Actions enablement, allowlisting, and SHA pinning all remain enforced."""
+    """Drift in Actions enablement, allowed policy, and SHA pinning is reported."""
     findings = _audit(
         actions_permissions={
             "enabled": False,
@@ -426,13 +422,13 @@ def test_selected_actions_drift_is_reported() -> None:
     ids=["not-an-object", "missing-patterns", "non-string-pattern", "empty-pattern"],
 )
 def test_selected_actions_malformed_patterns_fail_closed(payload: object, message: str) -> None:
-    """Selected Actions data cannot certify a policy when its shape is malformed."""
+    """Malformed selected-Actions pattern data raises GhError."""
     with pytest.raises(GhError, match=message):
         repo_audit.extract_allowed_action_patterns(payload)
 
 
 def test_pypi_environment_drift_is_reported() -> None:
-    """The PyPI environment keeps review protection and the intended bypass policy."""
+    """Checks the PyPI environment's reviewers, admin bypass, and self-review settings."""
     findings = _audit(
         pypi_environment={
             "can_admins_bypass": False,
@@ -454,7 +450,7 @@ def test_pypi_environment_drift_is_reported() -> None:
 
 
 def test_pypi_without_required_reviewer_rule_is_reported() -> None:
-    """An environment without a reviewer rule cannot protect package publishing."""
+    """An environment with no required reviewer rule is reported."""
     findings = _audit(
         pypi_environment={
             "can_admins_bypass": True,
@@ -469,13 +465,13 @@ def test_pypi_without_required_reviewer_rule_is_reported() -> None:
 
 
 def test_pypi_environment_open_to_every_ref_is_reported() -> None:
-    """A null policy lets a release from any ref request publishing credentials."""
+    """A null deployment branch policy is reported as access from any ref."""
     findings = _audit(pypi_environment=_pypi_environment(deployment_branch_policy=None))
     assert findings == ["pypi allows deployments from any branch or tag"]
 
 
 def test_pypi_environment_limited_to_protected_branches_is_reported() -> None:
-    """Releases are tagged, and this option admits only branches, so it blocks every release."""
+    """Restricting deployments to protected branches is reported, since releases use tags."""
     findings = _audit(
         pypi_environment=_pypi_environment(
             deployment_branch_policy={"protected_branches": True, "custom_branch_policies": False}
@@ -485,7 +481,7 @@ def test_pypi_environment_limited_to_protected_branches_is_reported() -> None:
 
 
 def test_pypi_deployment_ref_drift_is_reported() -> None:
-    """The tag pattern must be present, and nothing may be added alongside it."""
+    """Deployment refs must be exactly the expected tag pattern."""
     findings = _audit(deployment_policies={"branch_policies": [{"name": "main", "type": "branch"}]})
     assert findings == [
         "missing pypi deployment refs: tag v*",
@@ -494,14 +490,14 @@ def test_pypi_deployment_ref_drift_is_reported() -> None:
 
 
 def test_pypi_deployment_policies_are_only_fetched_when_they_exist() -> None:
-    """An unrestricted environment has no policy list, so the audit must not ask for one."""
+    """An unrestricted environment does not request the deployment policy list."""
     runner = _runner(pypi_environment=_pypi_environment(deployment_branch_policy=None))
     repo_audit.audit_repo_settings(repo=REPO, run_fn=runner)
     assert DEPLOYMENT_POLICIES_PATH not in {call[-1] for call in runner.calls}
 
 
 def test_pypi_deployment_policies_must_be_fetched_before_they_are_audited() -> None:
-    """Auditing selected refs without the policy list would silently pass."""
+    """audit_pypi_environment raises GhError when the policy list was not fetched."""
     with pytest.raises(GhError, match="deployment branch policies were not fetched"):
         repo_audit.audit_pypi_environment(HEALTHY_PYPI_ENVIRONMENT)
 
@@ -520,7 +516,7 @@ def test_pypi_deployment_policies_must_be_fetched_before_they_are_audited() -> N
 def test_pypi_deployment_policies_malformed_entries_fail_closed(
     payload: object, message: str
 ) -> None:
-    """Malformed policy data must not read as a correctly restricted environment."""
+    """Malformed deployment branch policy data raises GhError."""
     with pytest.raises(GhError, match=message):
         repo_audit.extract_deployment_policies(payload)
 
@@ -613,7 +609,7 @@ def test_pypi_deployment_policies_malformed_entries_fail_closed(
     ],
 )
 def test_pypi_environment_malformed_reviewers_fail_closed(payload: object, message: str) -> None:
-    """Malformed environment protection data must not be treated as healthy."""
+    """Malformed environment reviewer data raises GhError."""
     with pytest.raises(GhError, match=message):
         repo_audit.extract_environment_reviewers(payload)
 
@@ -651,13 +647,13 @@ def test_missing_release_tag_ruleset_is_reported() -> None:
 
 
 def test_unrelated_ruleset_is_ignored() -> None:
-    """Other repository rulesets do not change the release tag contract."""
+    """Rulesets with other names are ignored."""
     detail = {**HEALTHY_RULESET_DETAIL, "name": "Unrelated ruleset"}
     assert _audit(ruleset_detail=detail) == ["missing release tag ruleset: Protect version tags"]
 
 
 def test_duplicate_release_tag_rulesets_are_reported() -> None:
-    """Duplicate ruleset names make the release protection ambiguous."""
+    """Duplicate release tag rulesets are reported."""
     findings = repo_audit.audit_release_tag_rulesets(
         [HEALTHY_RULESET_DETAIL, HEALTHY_RULESET_DETAIL]
     )
@@ -698,7 +694,7 @@ def test_duplicate_release_tag_rulesets_are_reported() -> None:
     ],
 )
 def test_release_tag_ref_patterns_malformed_data_fail_closed(payload: object, message: str) -> None:
-    """Malformed ruleset ref conditions cannot certify the protected tag scope."""
+    """Malformed ruleset ref conditions raise GhError."""
     with pytest.raises(GhError, match=message):
         repo_audit.extract_ruleset_ref_patterns(payload)
 
@@ -714,7 +710,7 @@ def test_release_tag_ref_patterns_malformed_data_fail_closed(payload: object, me
     ids=["not-an-object", "missing-rules", "non-object-rule", "missing-rule-type"],
 )
 def test_release_tag_rules_malformed_data_fail_closed(payload: object, message: str) -> None:
-    """Malformed ruleset rules cannot certify release tag protection."""
+    """Malformed ruleset rule data raises GhError."""
     with pytest.raises(GhError, match=message):
         repo_audit.extract_ruleset_rule_types(payload)
 
@@ -763,18 +759,18 @@ def test_new_repository_policy_responses_fail_closed(kwargs: object, message: st
         _audit(**kwargs)  # type: ignore[arg-type]
 
 
-# ─── Actions inventory ───────────────────────────────────────────────────────
+# Actions inventory
 
 
 def test_a_missing_variable_is_reported() -> None:
-    """Without it the writeback workflows degrade into a silent skip."""
+    """A missing repository variable is reported by name."""
     assert _audit(variables={"variables": []}) == [
         "missing repository variables: APP_ID, AUDIT_APP_ID, ESCALATION_APP_ID"
     ]
 
 
 def test_a_missing_secret_is_reported() -> None:
-    """Without it the writeback workflows degrade into a silent skip."""
+    """A missing repository secret is reported by name."""
     assert _audit(secrets={"secrets": []}) == [
         "missing repository secrets: "
         "APP_PRIVATE_KEY, AUDIT_APP_PRIVATE_KEY, ESCALATION_APP_PRIVATE_KEY"
@@ -782,7 +778,7 @@ def test_a_missing_secret_is_reported() -> None:
 
 
 def test_a_missing_escalation_credential_alone_is_reported() -> None:
-    """The primary app being healthy must not hide an absent escalation app."""
+    """A missing escalation variable is reported even when APP_ID is present."""
     assert _audit(variables={"variables": [{"name": "APP_ID"}]}) == [
         "missing repository variables: AUDIT_APP_ID, ESCALATION_APP_ID"
     ]
@@ -799,7 +795,7 @@ def test_a_missing_escalation_credential_alone_is_reported() -> None:
     ids=["non-object", "missing-name", "empty-name", "non-string-name"],
 )
 def test_an_unreadable_inventory_entry_is_a_failure_to_look(entry: object, message: str) -> None:
-    """A malformed entry makes the inventory unreadable even beside the expected item."""
+    """A malformed inventory entry raises GhError, even when the expected item is present."""
     with pytest.raises(GhError, match=message):
         _audit(variables={"variables": [entry, {"name": "APP_ID"}]})
 
@@ -808,7 +804,7 @@ def test_an_unreadable_inventory_entry_is_a_failure_to_look(entry: object, messa
     "payload", [{}, {"variables": "not-a-list"}], ids=["absent", "wrong-shape"]
 )
 def test_an_inventory_response_without_a_list_is_a_failure_to_look(payload: object) -> None:
-    """An empty answer and an unusable one are different; only the first is drift."""
+    """A response without a variables list raises GhError rather than reporting drift."""
     with pytest.raises(GhError, match="must include a variables list"):
         _audit(variables=payload)
 
@@ -824,16 +820,16 @@ def test_an_inventory_response_without_a_list_is_a_failure_to_look(payload: obje
     ids=["repository", "protection", "variables", "secrets"],
 )
 def test_a_response_that_is_not_an_object_fails_the_audit(kwargs: object, message: str) -> None:
-    """Every fetch is shape-checked, so no expectation is skipped over silently."""
+    """Each fetched payload must be a JSON object."""
     with pytest.raises(GhError, match=message):
         _audit(**kwargs)  # type: ignore[arg-type]
 
 
-# ─── Findings can accumulate ─────────────────────────────────────────────────
+# Findings can accumulate
 
 
 def test_every_drifted_setting_is_reported_in_one_pass() -> None:
-    """Report all missing secrets in the same audit result."""
+    """All drift is reported in one audit result."""
     findings = _audit(
         repository=_repository(default_branch="master"),
         protection=_protection(required_signatures={"enabled": False}),
@@ -847,7 +843,7 @@ def test_every_drifted_setting_is_reported_in_one_pass() -> None:
     ]
 
 
-# ─── The command line ────────────────────────────────────────────────────────
+# The command line
 
 
 def _patch_audit(monkeypatch: pytest.MonkeyPatch, result: object) -> None:
@@ -874,7 +870,7 @@ def test_a_clean_audit_exits_healthy(
 def test_drift_exits_with_its_own_code_and_lists_the_findings(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The exit code is the verdict; the list is what makes it actionable."""
+    """Drift exits with EXIT_DRIFT_FOUND and prints each finding."""
     _patch_audit(monkeypatch, ["push protection is off"])
     assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_DRIFT_FOUND
     assert "- push protection is off" in capsys.readouterr().out
@@ -883,7 +879,7 @@ def test_drift_exits_with_its_own_code_and_lists_the_findings(
 def test_a_failure_to_look_exits_differently_from_drift(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A caller must never read an infrastructure failure as a verdict about the settings."""
+    """An audit that cannot read the settings exits with EXIT_CHECK_FAILED, not the drift code."""
     _patch_audit(monkeypatch, GhError("token missing a permission"))
     assert repo_audit.main(["--repo", REPO]) == repo_audit.EXIT_CHECK_FAILED
     error = capsys.readouterr().err
@@ -909,7 +905,7 @@ def test_the_repository_is_resolved_when_none_is_given(
 def test_the_verdict_reaches_the_workflow_as_an_output(
     tmp_path: Path, reached_verdict: bool, expected: str
 ) -> None:
-    """The alert jobs pick their state on this bit, which no exit code can carry."""
+    """The workflow output records whether the audit reached a verdict."""
     output = tmp_path / "github-output"
 
     env = {workflow_helpers.GITHUB_OUTPUT_ENV: str(output)}
@@ -919,7 +915,7 @@ def test_the_verdict_reaches_the_workflow_as_an_output(
 
 
 def test_the_verdict_is_appended_beside_any_other_step_output(tmp_path: Path) -> None:
-    """One file collects every output of the step; truncating it would drop the others."""
+    """The verdict is appended to GITHUB_OUTPUT, keeping existing lines."""
     output = tmp_path / "github-output"
     output.write_text("already=here\n", encoding="utf-8")
 
@@ -932,10 +928,9 @@ def test_the_verdict_is_appended_beside_any_other_step_output(tmp_path: Path) ->
 def test_nothing_is_written_outside_github_actions(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env: dict[str, str]
 ) -> None:
-    """`make ci-audit-repo-settings` at a terminal has no output file to write to.
+    """Writes nothing when GITHUB_OUTPUT is unset or empty.
 
-    A real path is left in the process environment so the assertion has
-    something to catch: writing anywhere at all would create it.
+    GITHUB_OUTPUT is set to a real path, so any write would create that file.
     """
     unwanted = tmp_path / "should-not-be-written"
     monkeypatch.setenv(workflow_helpers.GITHUB_OUTPUT_ENV, str(unwanted))
@@ -948,7 +943,7 @@ def test_nothing_is_written_outside_github_actions(
 def test_a_drift_verdict_is_reported_as_reached(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Drift is a verdict, so it must not be mistaken for the audit failing to look."""
+    """Drift reports checked=true."""
     output = tmp_path / "github-output"
     monkeypatch.setenv(workflow_helpers.GITHUB_OUTPUT_ENV, str(output))
     _patch_audit(monkeypatch, ["allow_merge_commit should be disabled"])
@@ -962,7 +957,7 @@ def test_a_drift_verdict_is_reported_as_reached(
 def test_a_failure_to_look_is_reported_as_unchecked(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Collapsing this into drift would alert on settings the audit never read."""
+    """A failure to read the settings reports checked=false."""
     output = tmp_path / "github-output"
     monkeypatch.setenv(workflow_helpers.GITHUB_OUTPUT_ENV, str(output))
     _patch_audit(monkeypatch, GhError("token missing a permission"))
@@ -978,11 +973,7 @@ def test_a_failure_to_look_is_reported_as_unchecked(
     sorted(repo_audit.JUDGED_REPOSITORY_FIELDS),
 )
 def test_a_field_the_response_omitted_is_a_failure_to_look(omitted: str) -> None:
-    """GitHub returns a reduced repository object to a token without the access a field needs.
-
-    Treating the absence as `false` would raise a drift alert about a setting
-    that is in fact correct, which is the opposite of this audit's contract.
-    """
+    """An omitted judged repository field raises GhError rather than reading as false."""
     payload = {key: value for key, value in _repository().items() if key != omitted}
 
     with pytest.raises(GhError, match=f"omitted {omitted}|omitted .*{omitted}"):
@@ -990,10 +981,9 @@ def test_a_field_the_response_omitted_is_a_failure_to_look(omitted: str) -> None
 
 
 def test_the_unreadable_fields_are_all_named_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One run should name every field the token could not read, including later fields.
+    """Names every unreadable judged field in one error.
 
-    The judged set is one field today, so the set is widened here rather than
-    letting the message-building go untested until a second field is added.
+    The judged set is widened to three fields for this test.
     """
     monkeypatch.setattr(
         repo_audit, "JUDGED_REPOSITORY_FIELDS", frozenset({"default_branch", "homepage", "topics"})

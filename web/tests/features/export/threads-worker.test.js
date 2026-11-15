@@ -12,9 +12,8 @@ const MESSAGES_CSV = [
     'c2,Sam Self,Bob,2025-01-03 10:00:00 UTC,"Hello Bob",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/bob',
 ].join("\n");
 
-// One conversation, both directions: the messages file alone cannot say which
-// of the two is the account owner, so this is the case where the connections
-// list is the only evidence there is.
+// One conversation in both directions. The messages file alone cannot tell
+// which side is the account owner, so the connections list is the only evidence.
 const TIED_CSV = [
     "CONVERSATION ID,FROM,TO,DATE,CONTENT,FOLDER,SENDER PROFILE URL,RECIPIENT PROFILE URLS",
     'c1,Sam Self,Ada,2025-01-01 10:00:00 UTC,"Hello Ada",INBOX,https://linkedin.com/in/sam,https://linkedin.com/in/ada',
@@ -84,9 +83,8 @@ describe("threads worker", () => {
         const unaided = await processPayload({ messagesCsv: TIED_CSV });
         expect(directions(unaided)).toEqual(["unknown", "unknown"]);
 
-        // Ada is a connection, and you are never in your own connections. The
-        // keys are derived here rather than posted in: parsing this file is the
-        // last piece of export work that used to run on the UI thread.
+        // Ada is a connection, and the account owner is never in their own
+        // connections. The worker derives the keys from the raw connections file.
         const aided = await processPayload({
             messagesCsv: TIED_CSV,
             connectionsCsv: adaConnectionsCsv("01 Jan 2024"),
@@ -95,11 +93,9 @@ describe("threads worker", () => {
     });
 
     it("keeps a connection whose export recorded no connection date", async () => {
-        // The spreadsheet cleaner drops a row with no "Connected On", which is
-        // right for the connections dashboard and wrong here: somebody you are
-        // connected to is still not you whether or not the export recorded when
-        // it happened. Deriving these keys from cleaned rows loses Ada, and the
-        // tie goes back to "unknown".
+        // The spreadsheet cleaner drops rows with no "Connected On". Contact keys
+        // still include such a row, since a connection is not the account owner
+        // whether or not its date was recorded.
         const undated = adaConnectionsCsv("");
         expect(LinkedInCleaner.process(undated, "connections").cleanedData).toHaveLength(0);
 
@@ -126,9 +122,8 @@ describe("threads worker", () => {
     });
 
     it("keeps the thread selection when the connections parse throws", async () => {
-        // A tiebreak is a nicety: losing it costs a direction chip, not the
-        // section. Nothing the parse threw may reach the reply either, since it
-        // was reading the user's own connections when it failed.
+        // A failed connections parse drops only the tiebreak. The thrown error
+        // does not reach the reply.
         const parseCSV = LinkedInCleaner.parseCSV;
         vi.spyOn(LinkedInCleaner, "parseCSV").mockImplementation((text, fileType) => {
             if (fileType === "connections") {
@@ -234,8 +229,8 @@ describe("threads worker", () => {
     });
 
     it("keeps formula-prefixed and whitespace-led bodies verbatim", async () => {
-        // The spreadsheet cleaner quote-prefixes every one of these and trims the
-        // rest, which is right for a workbook and wrong for a PDF.
+        // The spreadsheet cleaner prefixes these with a quote and trims whitespace.
+        // The PDF keeps each body as written.
         const bodies = [
             "+1, that works for me",
             "=hello, is this thing on?",
@@ -291,10 +286,8 @@ describe("threads worker", () => {
     });
 
     it("reports a fixed error for an unparseable CSV", async () => {
-        // The only test of the one string this worker is allowed to emit, and
-        // truthiness was all it used to ask for. This worker holds the raw
-        // messages CSV, so returning the head of it as the "error" would have
-        // put message text across the worker boundary and still passed.
+        // Checks the exact fixed error, the only string this worker may emit.
+        // An echoed head of the CSV would fail.
         const result = await processPayload({ messagesCsv: `not,a,valid,csv ${PII_MARKER}` });
 
         expect(result.success).toBe(false);
@@ -339,8 +332,8 @@ describe("threads worker listeners", () => {
     }
 
     /**
-     * Serve a request before testing global failures. They must still use id 0,
-     * which permits the export fallback, rather than reuse the served request id.
+     * Serve a request, so that a later global failure is answered under id 0
+     * rather than under the served request id.
      * @param {number} requestId - Request id to serve
      * @returns {Promise<void>} Resolves once the request is answered
      */
@@ -391,8 +384,7 @@ describe("threads worker listeners", () => {
         dispatch("message", { data: { type: "threads", requestId: 12, payload: {} } });
 
         const [message] = postMessageSpy.mock.calls[0];
-        // Answering under id 0 would leave the main thread waiting out its whole
-        // size-scaled watchdog, which for a large stored CSV looks like a hang.
+        // An invalid request is answered under its own id, not 0.
         expect(message.requestId).toBe(12);
         expect(message.payload.success).toBe(false);
         expect(message.payload.error).toContain("Missing messagesCsv payload");
@@ -403,8 +395,7 @@ describe("threads worker listeners", () => {
         await serveRequest(21);
         const event = dispatch("error", { error: piiError("worker-runtime") });
 
-        // Uncancelled, the browser reports this event itself, and that report
-        // goes to the console carrying whatever the error holds.
+        // The event must be cancelled, or the browser logs the error to the console.
         expect(event.defaultPrevented).toBe(true);
         const [message] = postMessageSpy.mock.calls[1];
         expect(message.requestId).toBe(0);

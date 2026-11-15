@@ -12,12 +12,12 @@ const COMMENTS_CSV = path.join(__dirname, "fixtures", "Comments.csv");
 const CONNECTIONS_CSV = path.join(__dirname, "fixtures", "Connections.csv");
 const MESSAGES_CSV = path.join(__dirname, "fixtures", "Messages.csv");
 const MESSAGE_THREADS_CSV = path.join(__dirname, "fixtures", "MessagesThreads.csv");
-// Twelve companies and twelve positions, spread over seven years, so both bar
-// charts fill and the connections dashboard is taller than a single page.
+// Twelve companies and twelve positions over seven years. Both bar charts fill,
+// and the connections dashboard runs past one page.
 const CONNECTIONS_WIDE_CSV = path.join(__dirname, "fixtures", "ConnectionsWide.csv");
 
-// Every body in MessagesThreads.csv starts with a character the spreadsheet
-// cleaner quote-prefixes, which is right for a workbook and wrong here.
+// Each body in MessagesThreads.csv starts with a character the spreadsheet
+// cleaner quote-prefixes. The PDF keeps the text as written.
 const EXPORTED_BODIES = [
     "+1, that works for me",
     "=totally fine by me",
@@ -28,10 +28,8 @@ const EXPORTED_BODIES = [
 /**
  * Wait for the export trigger to actually be available, then return it.
  *
- * The button is never natively disabled - it stays in the tab order and carries
- * its own reason for being unavailable - so `toBeEnabled()` passes on it
- * immediately and would race the asynchronous availability check, leaving the
- * click to land on a button that refuses it. `aria-disabled` is the real state.
+ * Waits for `aria-disabled` to be "false". The trigger is never natively disabled,
+ * so `toBeEnabled()` cannot tell when it is ready.
  * @param {import('@playwright/test').Page} page - Playwright page instance
  * @returns {Promise<import('@playwright/test').Locator>} The ready trigger
  */
@@ -49,9 +47,7 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-// Contents are the next test's job: it blocks the fonts so the text is readable
-// as literals. This one covers the round trip, the file name, and the dialog and
-// focus behaviour around it.
+// Checks the download, file name, dialog, and focus. The next test checks the document text.
 test("save as PDF downloads a valid PDF and restores focus", async ({ page }, testInfo) => {
     await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV, MESSAGES_CSV]);
     await waitForLoadedStatus(page, "sharesStatus");
@@ -67,7 +63,7 @@ test("save as PDF downloads a valid PDF and restores focus", async ({ page }, te
     const includeMessages = page.locator("#pdfExportIncludeMessages");
     await expect(includeMessages).not.toBeChecked();
 
-    // Axe over the open dialog, matching the scan the other specs run.
+    // Runs axe over the open dialog.
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     const critical = results.violations.filter(
         (violation) => violation.impact === "critical" || violation.impact === "serious",
@@ -88,8 +84,7 @@ test("save as PDF downloads a valid PDF and restores focus", async ({ page }, te
 
     const bytes = fs.readFileSync(outputPath);
     expect(bytes.subarray(0, 4).toString("latin1")).toBe("%PDF");
-    // A floor the embedded font subsets alone would clear, so it says the file
-    // is real rather than that it has content: that is the next test's claim.
+    // Size floor: the file is more than a header. The next test checks the content.
     expect(bytes.byteLength).toBeGreaterThan(5000);
 
     await expect(dialog).toBeHidden();
@@ -97,10 +92,8 @@ test("save as PDF downloads a valid PDF and restores focus", async ({ page }, te
 });
 
 test("the opted-in PDF really contains the message text", async ({ page }, testInfo) => {
-    // The document is drawn with embedded TrueType subsets, whose text is written
-    // as glyph ids. Blocking the font files takes the documented Helvetica
-    // fallback instead, where the text is readable in the content stream, so the
-    // assertions below are about the bodies rather than the byte count.
+    // Embedded TrueType subsets write text as glyph ids. Blocking the font files selects
+    // the Helvetica fallback, where the text is readable in the content stream.
     await page.route("**/fonts/*.ttf", (route) => route.abort());
 
     await uploadFiles(page, [SHARES_CSV, MESSAGE_THREADS_CSV]);
@@ -127,12 +120,11 @@ test("the opted-in PDF really contains the message text", async ({ page }, testI
     for (const body of EXPORTED_BODIES) {
         expect(text).toContain(body);
     }
-    // The spreadsheet path would have written "'+1, that works for me".
+    // Spreadsheet quote prefixes must not appear.
     expect(text).not.toContain("'+1");
     expect(text).not.toContain("'=");
     expect(text).not.toContain("'@");
-    // Two conversations, each with a message in both directions, so the account
-    // owner is unambiguous and the chips say so.
+    // Two conversations, each with messages in both directions. The Sent and Received chips label them.
     expect(text).toContain("Sent");
     expect(text).toContain("Received");
     expect(text).not.toContain("Sam Self");
@@ -154,8 +146,7 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
     await expect(page.locator("#pdfExportDialog")).toBeHidden();
     await expect(trigger).toBeFocused();
 
-    // The document reads its colors off a detached .theme-light probe, so the
-    // warm light palette has to resolve even while the page is dark.
+    // The document reads colors from a detached .theme-light probe, so the light palette resolves while the page is dark.
     const probed = await page.evaluate(() => {
         const probe = document.createElement("div");
         probe.className = "theme-light";
@@ -172,8 +163,7 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
         return values;
     });
 
-    // The build minifies the token values, so these are compared as colors
-    // rather than as the exact text in variables.css.
+    // The build minifies token values, so these compare colors rather than the text in variables.css.
     expect(probed.bgPrimary.toLowerCase()).toMatch(
         /^(#fffdf7|rgba?\(255,\s?253,\s?247(,\s?1)?\))$/,
     );
@@ -181,7 +171,7 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
     expect(probed.accentBlue.toLowerCase()).toMatch(
         /^(#4285f4|rgba?\(66,\s?133,\s?244(,\s?1)?\))$/,
     );
-    // The tinted tokens keep their alpha, in whichever form the minifier picks.
+    // Tinted tokens keep their alpha, in whichever form the minifier emits.
     expect(probed.accentYellowBg.toLowerCase()).toMatch(
         /^(#fbbc0526|rgba\(251,\s?188,\s?5,\s?\.?0?\.?15\))$/,
     );
@@ -198,8 +188,7 @@ test("save as PDF works in dark mode and closes on Escape", async ({ page }) => 
 });
 
 test("the PDF carries a dashboard page per screen", async ({ page }, testInfo) => {
-    // Helvetica again, for the same reason the thread spec blocks the fonts:
-    // the headings have to be readable in the content stream to be asserted on.
+    // Blocks the font files so the headings are readable in the content stream.
     await page.route("**/fonts/*.ttf", (route) => route.abort());
 
     await uploadFiles(page, [SHARES_CSV, COMMENTS_CSV, CONNECTIONS_CSV, MESSAGES_CSV]);
@@ -228,17 +217,15 @@ test("the PDF carries a dashboard page per screen", async ({ page }, testInfo) =
     expect(text).toContain("When you are active");
     expect(text).toContain("Connection growth");
     expect(text).toContain("Network age");
-    // The connections dashboard covers the whole network, not the screen's
-    // twelve-month default. This fixture's connections all predate that window,
-    // so these two charts are exactly what the default would have lost.
+    // The connections dashboard covers all time, not the screen's twelve-month default.
+    // This fixture's connections all predate that window.
     expect(text).toContain("Top companies");
     expect(text).toContain("Top positions");
     expect(text).toContain("Messages in range");
     // Opted in, so the lists that name people are drawn.
     expect(text).toContain("Top contacts");
 
-    // A dashboard opens a page of its own, so the footer counts past the three
-    // of them plus the insights page.
+    // Each dashboard starts its own page, so the footer total is at least four.
     expect(text).toMatch(/Page 1 of ([4-9]|\d{2,})/);
 });
 
@@ -310,12 +297,8 @@ test("message contents name their contacts even with the names box unticked", as
 test("a dashboard that outgrows its page carries a continuation heading", async ({
     page,
 }, testInfo) => {
-    // The wide fixture exists for this: twelve companies and twelve positions
-    // fill both bar charts, which the small Connections.csv cannot do, and a
-    // connections dashboard with full charts is taller than one page. Sized to
-    // fit exactly one page the charts had two millimetres of slack and every
-    // plot was as short as the page demanded, so a dashboard is allowed to run
-    // on instead. The page it runs onto has to say what it is.
+    // ConnectionsWide.csv fills both bar charts, and the connections dashboard runs onto
+    // a second page. That page is labeled as a continuation.
     await page.route("**/fonts/*.ttf", (route) => route.abort());
 
     await uploadFiles(page, [SHARES_CSV, CONNECTIONS_WIDE_CSV]);
@@ -335,18 +318,15 @@ test("a dashboard that outgrows its page carries a continuation heading", async 
     const text = extractPdfText(fs.readFileSync(outputPath));
 
     expect(text).toContain("Connections (continued)");
-    // The heading travels with its chart rather than being left behind on the
-    // page before it, which is what the running head would otherwise be
-    // labelling.
+    // The heading moves with its chart onto the new page.
     expect(text).toContain("Top positions");
 });
 
 test("captions name the months the data covers, not a relative range", async ({
     page,
 }, testInfo) => {
-    // A relative label is true on a screen and false in a stored document: the
-    // window is anchored on the newest thing in the file, so "Last 12 months"
-    // printed beside today's date describes a year that may be long past.
+    // Captions state the covered months as dates. A relative label is anchored on the
+    // newest row in the file, not on the document date, so it is not used.
     await page.route("**/fonts/*.ttf", (route) => route.abort());
 
     await uploadFiles(page, [SHARES_CSV, CONNECTIONS_WIDE_CSV]);
@@ -372,29 +352,24 @@ test("captions name the months the data covers, not a relative range", async ({
 test("a name the fonts cannot draw is marked, and the site still shows it whole", async ({
     page,
 }, testInfo) => {
-    // The export marks characters its font cannot draw instead of dropping them.
-    // The site uses the browser's font fallback and still shows the full data.
+    // The export marks characters its font cannot draw instead of dropping them. The site
+    // shows the full name through the browser's font fallback.
     //
-    // The fonts are blocked as they are in the specs above, so the text is
-    // readable in the content stream. That puts the document on the Helvetica
-    // path, whose drawable set is WinAnsi rather than the faces' own cmap, and
-    // both sets are exercised directly in drawable-text and fonts unit tests.
-    // What matters here is the same either way: Latin-1 survives, everything
-    // outside the set is marked, and neither is true of the site.
+    // Fonts are blocked, so the document uses the Helvetica path, whose drawable set is
+    // WinAnsi. Unit tests cover both sets. This test checks that Latin-1 survives and
+    // characters outside the set are marked.
     await page.route("**/fonts/*.ttf", (route) => route.abort());
 
     await uploadFiles(page, [SHARES_CSV, CONNECTIONS_WIDE_CSV]);
     await waitForLoadedStatus(page, "sharesStatus");
     await waitForLoadedStatus(page, "connectionsStatus");
 
-    // Navigated through the hub card rather than by URL: a fresh load of
-    // `#connections` starts the screen before the upload it is meant to be
-    // showing has been restored, and the stat reads its placeholder.
+    // Navigates through the hub card, not the URL. A fresh load of `#connections`
+    // shows the placeholder stat until the upload is restored.
     await page.locator('#screen-home a.hub-card[data-route="connections"]').click();
     await expect(page).toHaveURL(/#connections/);
-    // All time, which is the range the exported dashboard draws and the only
-    // one this fixture has rows in: the screen opens on its twelve-month
-    // default, which every dated row here predates.
+    // Selects All time, the range the exported dashboard draws. The screen opens on its
+    // twelve-month default, which every dated row in this fixture predates.
     await page.locator('#screen-connections .filter-btn[data-range="all"]').click();
     await expect(page.locator("#connStatTopCompany")).toHaveText("北京科技", {
         timeout: 20000,
@@ -414,8 +389,7 @@ test("a name the fonts cannot draw is marked, and the site still shows it whole"
 
     expect(text).not.toContain("北京科技");
     expect(text).toContain("?");
-    // Latin-1 is inside the faces' coverage, so an accented name is untouched.
-    // Without this the assertion above would also pass for a build that
-    // replaced every non-ASCII character it saw.
+    // Latin-1 characters pass through, so an accented name is untouched. Without this,
+    // the check above would also pass if every non-ASCII character were replaced.
     expect(text).toContain("Café Zürich");
 });

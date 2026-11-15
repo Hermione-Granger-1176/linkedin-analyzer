@@ -9,18 +9,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_makefile_commit_target_screens_the_message_before_git_sees_it() -> None:
-    """The screen runs first, so a leaked message can never reach the object store.
-
-    Order matters more than presence here: validating after ``git commit`` would
-    report the leak only once it is already recorded in history.
-    """
+    """The check runs before ``git commit``, so a leaked message is rejected first."""
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     check_index = makefile.index("check-commit-message --message-file")
     commit_index = makefile.index('git commit -F "$$tmp"')
 
     assert check_index < commit_index
-    # The message is only ever read from a file, never interpolated into the
-    # recipe, so a title carrying shell syntax cannot be evaluated.
+    # The message is read from a file, not interpolated into the recipe.
     assert 'git commit -m "$$COMMIT_TITLE"' not in makefile
 
 
@@ -36,7 +31,7 @@ def test_clean_message_has_no_leaks() -> None:
 
 
 def test_leaked_terminator_with_trailing_shell_is_flagged() -> None:
-    """The commit b68de52 leak shape is rejected."""
+    """A shell line that follows a heredoc terminator is rejected."""
     message = "Redesign scroll-top icon\n\nEOF && make push 2>&1 | tail -3\n"
     problems = commit_message.find_shell_leaks(message)
     assert len(problems) == 1
@@ -83,7 +78,7 @@ def test_shell_redirect_and_pager_pipe_are_flagged() -> None:
     ],
 )
 def test_prose_that_merely_mentions_shell_words_is_not_flagged(message: str) -> None:
-    """Ordinary prose mentioning EOF, shifts, or pager words is not a false positive."""
+    """Prose that mentions shell words is not flagged."""
     assert commit_message.find_shell_leaks(message) == []
     commit_message.validate_commit_message(message)
 

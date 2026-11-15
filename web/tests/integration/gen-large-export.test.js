@@ -54,7 +54,7 @@ describe("gen-large-export", () => {
             byName.set(contact.name, (byName.get(contact.name) || 0) + 1);
         });
         expect([...byName.values()].some((count) => count > 1)).toBe(true);
-        // Japanese kana, so the UTF-8 decoder sees multi-byte text.
+        // Contains Japanese kana, so the file has multi-byte UTF-8 text.
         expect(csv).toMatch(/[\u3040-\u30ff]/);
         expect(csv).toContain('""');
     });

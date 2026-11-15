@@ -2,10 +2,9 @@
  * Build Pip's decorative tutorial drawing with two arm poses.
  *
  * CSS selects the arms through data-pose. Share the hood, jacket, and
- * drawstrings with shared/ui/pip-parts.js. Enlarge the hands to keep them
- * visible at 40 pixels, or 34 pixels on phones. Draw fingers before palms
- * so the palms cover their joins. The SVG is hidden from assistive
- * technology, unfocusable, and ignores pointer events.
+ * drawstrings with shared/ui/pip-parts.js. Hands are enlarged to 40 pixels, or
+ * 34 pixels on phones. Fingers are drawn before palms, so the palms cover their
+ * joins. The SVG is hidden from assistive technology and is unfocusable.
  */
 
 import {
@@ -97,7 +96,7 @@ export function setTutorialMascotPose(mascot, isLastStep) {
 }
 
 /**
- * Turn Pip toward the highlighted target so he gestures the way the arrow does.
+ * Turn Pip toward the highlighted target, matching the arrow direction.
  * @param {SVGSVGElement | null} mascot - Mascot element
  * @param {boolean} facesLeft - Whether the target sits left of the card
  */

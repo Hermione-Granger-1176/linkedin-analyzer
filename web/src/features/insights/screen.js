@@ -106,8 +106,7 @@ export const InsightsPage = (() => {
     const RANGE_KEYS = Object.freeze(["1m", "3m", "6m", "12m", "all"]);
     /** @type {Set<unknown>} */
     const CACHE_EVENTS = new Set(["analyticsChanged", "storageCleared", "filesChanged"]);
-    // Guard against a worker that constructs but never responds (chunk load
-    // failure, silent hang): without this the loading overlay would stay up forever.
+    // Timeout for a worker that never responds, so the loading overlay cannot stay up.
     const WORKER_TIMEOUT_MS = 30000;
     /** @type {{filters: AnalyticsFilters, analyticsReady: boolean, hasData: boolean, currentInsights: InsightsResult|null, currentView: InsightsView|null, currentViewRange: string|null, networkGrowth: NetworkGrowth|null, outreach: OutreachSummary|null, outreachLoaded: boolean}} */
     const state = {
@@ -117,9 +116,9 @@ export const InsightsPage = (() => {
         currentInsights: null,
         currentView: null,
         currentViewRange: null,
-        // Lifetime values for the All-time section: networkGrowth rides on each
-        // view (same value regardless of filters); outreach is loaded once from
-        // storage since it is produced by the separate messages worker.
+        // Lifetime values for the All-time section. networkGrowth comes with each
+        // view and does not depend on filters. outreach is read from storage and
+        // is produced by the messages worker.
         networkGrowth: null,
         outreach: null,
         outreachLoaded: false,
@@ -189,10 +188,9 @@ export const InsightsPage = (() => {
             return;
         }
 
-        // Re-read the outreach summary on each route entry so stats saved after a
-        // later Messages upload appear without a refresh. The latch keeps this to
-        // one read per visit (filter changes re-enter here but find it loaded);
-        // onRouteLeave clears the latch so the next entry reloads.
+        // Re-read the outreach summary on each route entry. The latch limits this
+        // to one read per visit: filter changes re-enter here but find it loaded.
+        // onRouteLeave clears the latch.
         loadOutreach();
 
         const filter = /** @type {import("../../shared/ui/time-range.js").RangeFilter} */ (
@@ -218,11 +216,9 @@ export const InsightsPage = (() => {
     /** Cleanup when leaving route. */
     function onRouteLeave() {
         showInsightsLoading(false);
-        // Drop any in-flight worker watchdog so it cannot fire after navigation
-        // and overwrite a now-hidden screen with a timeout message.
+        // Clears any in-flight worker watchdog.
         workers.unwatch();
-        // Allow the next entry to reload outreach (e.g. after the user uploads
-        // Messages from another screen).
+        // Clears the outreach latch so the next entry reloads outreach.
         state.outreachLoaded = false;
     }
 
@@ -321,8 +317,8 @@ export const InsightsPage = (() => {
             }
 
             const analyticsBase = await loadAnalyticsBase();
-            // The worker may have been replaced or stopped while storage was
-            // read; a newer load owns it now, so this one steps aside.
+            // Returns if the worker was replaced or stopped while storage was read.
+            // A newer load owns the worker then.
             if (workers.current() !== worker) {
                 return;
             }
@@ -375,7 +371,7 @@ export const InsightsPage = (() => {
         }
 
         const message = parsed.value;
-        // The worker responded, so the loadBase watchdog is no longer needed.
+        // Any worker reply clears the watchdog.
         workers.unwatch();
 
         switch (message.type) {
@@ -409,13 +405,11 @@ export const InsightsPage = (() => {
      */
     function applyWorkerInsightsPayload(payload) {
         state.currentInsights = payload.insights || null;
-        // Keep the complete view. The PDF export uses the timeline, topics, and
-        // heatmap, and should not request data the screen already received.
+        // Keeps the complete view. The PDF export reads the timeline, topics, and
+        // heatmap from it.
         state.currentView = payload.view || null;
-        // Recorded with the view, not read off the filters later: the filter is
-        // updated the moment the user picks a range, while the view only arrives
-        // when the worker answers. Publishing one against the other let a chart
-        // of the last twelve months go out captioned "All time".
+        // The range is recorded when the view arrives. The filter can change before
+        // the worker answers, so reading it later would pair a view with the wrong range.
         state.currentViewRange = state.filters.timeRange;
         // networkGrowth is a lifetime value carried identically on every view.
         state.networkGrowth = (payload.view && payload.view.networkGrowth) || null;
@@ -473,9 +467,8 @@ export const InsightsPage = (() => {
      * Publish what is currently on screen for the PDF export.
      *
      * The export button is global and cannot assume this screen has run, so it
-     * has its own cold data path. Publishing here is the fast path: exporting
-     * from the Insights screen then matches exactly what the user is looking at,
-     * including the active time range.
+     * has its own cold data path. Publishing here provides a fast path: the
+     * export matches the screen, including the active time range.
      */
     function publishExportSnapshot() {
         DataCache.set(INSIGHTS_EXPORT_CACHE_KEY, {
@@ -511,17 +504,16 @@ export const InsightsPage = (() => {
     }
 
     /**
-     * Load the persisted outreach summary once. It is produced by the messages
-     * worker (a different page), so the Insights page reads the small stored
-     * summary rather than re-parsing the message export. Best-effort.
+     * Load the persisted outreach summary once. The messages worker produces it
+     * on another page. This reads the stored summary and does not re-parse the
+     * message export. Best-effort.
      * @returns {Promise<void>}
      */
     async function loadOutreach() {
         if (state.outreachLoaded) {
             return;
         }
-        // Latch before the await so concurrent entries don't double-read; a load
-        // failure clears it again so a later entry can retry.
+        // Sets the latch before the await. A load failure clears it so a later entry retries.
         state.outreachLoaded = true;
         try {
             state.outreach = /** @type {typeof state.outreach} */ (await Storage.getOutreach());
@@ -547,9 +539,8 @@ export const InsightsPage = (() => {
                 operation: "worker-error-event",
             },
         );
-        // Tear down the broken worker (clears the watchdog and nulls the
-        // reference) so a later loadBase recreates a fresh worker rather than
-        // posting to a dead one, and the stale watchdog cannot fire afterward.
+        // Terminates the broken worker, which clears the watchdog and nulls the
+        // reference. A later loadBase creates a new worker.
         workers.terminate();
         setEmptyState("Insights worker error", "Refresh the page and try again.");
         showInsightsLoading(false);
@@ -612,9 +603,8 @@ export const InsightsPage = (() => {
         elements.insightsEmpty.hidden = false;
         elements.insightsGrid.hidden = true;
         elements.insightTip.hidden = true;
-        // The All-time section is governed solely by renderAllTime (driven by
-        // data presence), so it can still show lifetime outreach even when
-        // there are no shares/comments for the filtered cards.
+        // renderAllTime alone governs the All-time section, so it can show
+        // lifetime outreach when the filtered cards are empty.
     }
 
     /** Hide empty state and show insights grid. */

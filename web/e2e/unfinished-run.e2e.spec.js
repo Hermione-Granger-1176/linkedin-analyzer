@@ -6,6 +6,7 @@ const { expect, test } = require("@playwright/test");
 
 const MARKER_PREFIX = "linkedin-analyzer:run:";
 const CONSENT_KEY = "linkedin-analyzer:telemetry-consent";
+const RUN_CHANNEL = "linkedin-analyzer:runs";
 // A recent marker with no answering owner is rechecked once it turns stale
 // (three 5-second heartbeats), so the "did not finish" notice can take up to
 // about 15 seconds after a crash.
@@ -122,9 +123,25 @@ test("a second tab does not report a run still going in the first", async ({ con
     await startProcessing(page);
 
     const second = await context.newPage();
+    // Record the first tab's answer to the second tab's ownership question.
+    await second.addInitScript((channelName) => {
+        /** @type {Window & { __RUN_OWNER_REPLIES__?: number }} */
+        const globalWindow = window;
+        let replies = 0;
+        globalWindow.__RUN_OWNER_REPLIES__ = replies;
+        new BroadcastChannel(channelName).addEventListener("message", (event) => {
+            if (event.data && event.data.type === "owns") {
+                replies += 1;
+                globalWindow.__RUN_OWNER_REPLIES__ = replies;
+            }
+        });
+    }, RUN_CHANNEL);
     await second.goto("/#home");
-    // Let the ownership check settle while the first tab is still processing.
-    await second.waitForTimeout(1000);
+    await second.waitForFunction(() => {
+        /** @type {Window & { __RUN_OWNER_REPLIES__?: number }} */
+        const globalWindow = window;
+        return (globalWindow.__RUN_OWNER_REPLIES__ ?? 0) > 0;
+    });
     await expect(second.getByTestId("unfinished-run-banner")).toBeHidden();
 
     await expect(page.locator("#messagesStatus")).not.toHaveText("Not uploaded", {

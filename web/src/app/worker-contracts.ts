@@ -35,9 +35,7 @@ type CleanOutput = "preview" | "xlsx" | "csv";
 
 export interface AddFilePayload {
     /** Uploaded file for the worker to read */
-    file: Blob | null;
-    /** CSV text, when the caller already holds it */
-    csvText: string;
+    file: Blob;
     /** Uploaded file name */
     fileName: string;
     /** Upload job ID */
@@ -389,7 +387,7 @@ function parseCsvSource(value: unknown): { source: CsvSource; tooLarge: boolean 
 
 /**
  * Parse upload worker addFile payload. The page posts the uploaded `file` so
- * the worker reads it; `csvText` remains for callers that already hold text.
+ * the worker reads it, off the main thread.
  * @param payload - Raw payload
  */
 function parseAddFilePayload(payload: unknown): ParseResult<AddFilePayload> {
@@ -397,16 +395,12 @@ function parseAddFilePayload(payload: unknown): ParseResult<AddFilePayload> {
         return invalid("Invalid addFile payload");
     }
 
-    const file = isBlob(payload.file) ? payload.file : null;
-    if (file && file.size > LIMITS.maxFileBytes) {
-        return invalid("File payload exceeds allowed size");
-    }
-    const csvText = file ? "" : normalizeString(payload.csvText, LIMITS.maxCsvChars + 1);
-    if (!file && !csvText) {
+    if (!isBlob(payload.file)) {
         return invalid("Missing file payload");
     }
-    if (csvText.length > LIMITS.maxCsvChars) {
-        return invalid("CSV payload exceeds allowed size");
+    const file = payload.file;
+    if (file.size > LIMITS.maxFileBytes) {
+        return invalid("File payload exceeds allowed size");
     }
 
     const fileName = normalizeString(payload.fileName, LIMITS.maxFileNameChars);
@@ -419,7 +413,6 @@ function parseAddFilePayload(payload: unknown): ParseResult<AddFilePayload> {
 
     return valid({
         file,
-        csvText,
         fileName,
         jobId,
         totalSize,

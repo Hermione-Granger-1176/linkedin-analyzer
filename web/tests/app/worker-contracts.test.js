@@ -39,7 +39,7 @@ describe("worker contracts", () => {
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: {
-                csvText: "Date,ShareLink\n2025-01-01,https://example.com",
+                file: new File(["Date,ShareLink\n2025-01-01,https://example.com"], "Shares.csv"),
                 fileName: "Shares.csv",
                 jobId: "job-1",
                 totalSize: 120,
@@ -55,7 +55,7 @@ describe("worker contracts", () => {
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: {
-                csvText: "Date\n2025-01-01",
+                file: new File(["Date\n2025-01-01"], "Shares.csv"),
                 fileName: "x".repeat(5000),
                 jobId: "job-1",
                 totalSize: 1,
@@ -66,7 +66,7 @@ describe("worker contracts", () => {
         expect(parsed.value.payload.fileName.length).toBeLessThan(5000);
     });
 
-    it("rejects analytics addFile request without a file or csvText", () => {
+    it("rejects analytics addFile request without a file", () => {
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: { fileName: "Shares.csv", file: { size: 3 } },
@@ -80,10 +80,10 @@ describe("worker contracts", () => {
         const file = new File(["col\nval"], "Shares.csv");
         const parsed = parseAnalyticsWorkerRequest({
             type: "addFile",
-            payload: { file, csvText: "ignored", fileName: "Shares.csv", jobId: "job-1" },
+            payload: { file, fileName: "Shares.csv", jobId: "job-1" },
         });
         expect(parsed.valid).toBe(true);
-        expect(parsed.value.payload).toMatchObject({ file, csvText: "", jobId: "job-1" });
+        expect(parsed.value.payload).toMatchObject({ file, jobId: "job-1" });
 
         const oversized = parseAnalyticsWorkerRequest({
             type: "addFile",
@@ -188,19 +188,12 @@ describe("worker contracts", () => {
         });
         const missingFileName = parseAnalyticsWorkerRequest({
             type: "addFile",
-            payload: { csvText: "Date,ShareLink\n2025-01-01,https://example.com" },
-        });
-        const oversizeCsv = parseAnalyticsWorkerRequest({
-            type: "addFile",
-            payload: {
-                csvText: getOversizeCsv(),
-                fileName: "Shares.csv",
-            },
+            payload: { file: new File(["Date,ShareLink\n2025-01-01,https://example.com"], "") },
         });
         const longJobId = parseAnalyticsWorkerRequest({
             type: "addFile",
             payload: {
-                csvText: "Date,ShareLink\n2025-01-01,https://example.com",
+                file: new File(["Date,ShareLink\n2025-01-01,https://example.com"], "Shares.csv"),
                 fileName: "Shares.csv",
                 jobId: "x".repeat(200),
             },
@@ -223,7 +216,6 @@ describe("worker contracts", () => {
         expect(oversizeConnections.error).toContain("exceeds");
         expect(invalidAddFilePayload.valid).toBe(false);
         expect(missingFileName.valid).toBe(false);
-        expect(oversizeCsv.valid).toBe(false);
         expect(longJobId.valid).toBe(true);
         expect(longJobId.value.payload.jobId.length).toBe(128);
     });

@@ -20,7 +20,8 @@ describe("messages worker", () => {
         const result = await processPayload({ messagesCsv: VALID_MESSAGES_CSV });
 
         expect(result.success).toBe(true);
-        expect(result.messagesData.length).toBe(0);
+        expect(result.messageState.contacts.length).toBeGreaterThan(0);
+        expect(result).not.toHaveProperty("messagesData");
         expect(result.connectionError).toBe(null);
     });
 

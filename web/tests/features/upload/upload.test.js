@@ -3422,7 +3422,6 @@ describe("UploadPage", () => {
             (call) => call[0].type === "addFile",
         );
         expect(addFileCall[0].payload.file).toBe(file);
-        expect(addFileCall[0].payload).not.toHaveProperty("csvText");
 
         await workerInstance.listeners.message[0]({
             data: {
@@ -3432,7 +3431,6 @@ describe("UploadPage", () => {
                     fileName: "Messages.csv",
                     rowCount: 1,
                     jobId: null,
-                    csvText: "é",
                     usedFallback: true,
                 },
             },

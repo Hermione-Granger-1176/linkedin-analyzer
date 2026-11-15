@@ -397,7 +397,7 @@ describe("handleAddFile", () => {
         mockCleanerSuccess("shares");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        await handleAddFile({ csvText: "header\nrow1", fileName: "shares.csv" });
+        await handleAddFile({ file: new File(["header\nrow1"], "shares.csv"), fileName: "shares.csv" });
 
         const progressMsgs = messages.filter((m) => m.type === "progress");
         expect(progressMsgs.length).toBeGreaterThanOrEqual(2);
@@ -416,7 +416,7 @@ describe("handleAddFile", () => {
         mockCleanerSuccess("comments");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        await handleAddFile({ csvText: "header\nrow1", fileName: "comments.csv" });
+        await handleAddFile({ file: new File(["header\nrow1"], "comments.csv"), fileName: "comments.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
@@ -430,7 +430,7 @@ describe("handleAddFile", () => {
 
         LinkedInCleaner.process.mockReturnValue({ success: false, error: "Bad format" });
 
-        await handleAddFile({ csvText: "garbage", fileName: "bad.csv" });
+        await handleAddFile({ file: new File(["garbage"], "bad.csv"), fileName: "bad.csv" });
 
         const processed = messages.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
@@ -444,7 +444,7 @@ describe("handleAddFile", () => {
         mockCleanerSuccess("connections");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        await handleAddFile({ csvText: "header\nrow1", fileName: "connections.csv" });
+        await handleAddFile({ file: new File(["header\nrow1"], "connections.csv"), fileName: "connections.csv" });
 
         expect(AnalyticsEngine.compute).toHaveBeenCalled();
         const processed = messages.find((m) => m.type === "fileProcessed");
@@ -463,7 +463,7 @@ describe("handleAddFile", () => {
             rowCount: 0
         });
 
-        await handleAddFile({ csvText: "something", fileName: "messages.csv" });
+        await handleAddFile({ file: new File(["something"], "messages.csv"), fileName: "messages.csv" });
 
         // analyticsBase should be null since fileType is not shares/comments
         const processed = messages.find((m) => m.type === "fileProcessed");
@@ -478,7 +478,7 @@ describe("handleAddFile", () => {
         mockCleanerSuccess("shares");
         AnalyticsEngine.compute.mockReturnValue(makeAnalytics());
 
-        await handleAddFile({ csvText: "data", fileName: "shares.csv", jobId: "job-123" });
+        await handleAddFile({ file: new File(["data"], "shares.csv"), fileName: "shares.csv", jobId: "job-123" });
 
         messages.forEach((m) => {
             if (m.payload && "jobId" in m.payload) {
@@ -858,7 +858,7 @@ describe("message event dispatcher", () => {
         LC.process.mockReturnValue({ success: false, error: "bad" });
         AE.compute.mockReturnValue(makeAnalytics());
 
-        await handlers.message({ data: { type: "addFile", payload: { csvText: "x", fileName: "f.csv" } } });
+        await handlers.message({ data: { type: "addFile", payload: { file: new File(["x"], "f.csv"), fileName: "f.csv" } } });
 
         const processed = posted.find((m) => m.type === "fileProcessed");
         expect(processed).toBeDefined();
@@ -1045,7 +1045,7 @@ describe("message event dispatcher", () => {
 
     /** @param {string} fileName */
     function addFile(fileName) {
-        return { data: { type: "addFile", payload: { csvText: "x", fileName } } };
+        return { data: { type: "addFile", payload: { file: new File(["x"], fileName), fileName } } };
     }
 
     it("computes a batch's analytics once, on its last reply", async () => {
@@ -1172,7 +1172,14 @@ describe("message event dispatcher", () => {
         await import("../../../src/features/analytics/analytics-worker.js");
 
         const { LinkedInCleaner: LC } = await import("../../../src/features/cleaning/cleaner.js");
-        LC.process.mockImplementation(() => {
+        const { AnalyticsEngine: AE } = await import("../../../src/features/analytics/activity.js");
+        LC.process.mockReturnValue({
+            success: true,
+            fileType: "shares",
+            cleanedData: [{ Date: "2025-01-01" }],
+            rowCount: 1,
+        });
+        AE.compute.mockImplementation(() => {
             throw new Error("add-file-failed");
         });
 
@@ -1180,7 +1187,7 @@ describe("message event dispatcher", () => {
             data: {
                 type: "addFile",
                 payload: {
-                    csvText: "Date,ShareLink,ShareCommentary\n2025-01-01,https://example.com,hello",
+                    file: new File(["Date,ShareLink,ShareCommentary\n2025-01-01,https://example.com,hello"], "Shares.csv"),
                     fileName: "Shares.csv"
                 }
             }

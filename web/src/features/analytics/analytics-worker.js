@@ -347,36 +347,28 @@ async function readAndProcessUpload(file, jobId, fileName, epoch) {
  * @returns {Promise<void>}
  */
 async function handleAddFile(payload) {
-    const { file = null, fileName = "", jobId = null } = payload || {};
-    const { csvText = "" } = payload || {};
-    let usedFallback = false;
-    /** @type {ProcessResult} */
-    let processed;
+    const { file, fileName, jobId } = payload;
     const epoch = requestEpoch;
 
     postProgress(jobId, fileName, READ_PROGRESS_START);
 
-    if (file) {
-        let result;
-        try {
-            // The upload page posts the File it was handed; the contract
-            // accepts any Blob, and the name only ever labels an error.
-            result = await readAndProcessUpload(/** @type {File} */ (file), jobId, fileName, epoch);
-        } catch (error) {
-            // Discard a read failure when Clear has already abandoned the request.
-            if (epoch !== requestEpoch) {
-                return;
-            }
-            postFileFailure(jobId, fileName, toErrorMessage(error, RUNTIME_FAILURE));
+    let result;
+    try {
+        // The upload page posts the File it was handed; the contract
+        // accepts any Blob, and the name only ever labels an error.
+        result = await readAndProcessUpload(/** @type {File} */ (file), jobId, fileName, epoch);
+    } catch (error) {
+        // Discard a read failure when Clear has already abandoned the request.
+        if (epoch !== requestEpoch) {
             return;
         }
-        if (!result) {
-            return;
-        }
-        ({ usedFallback, processed } = result);
-    } else {
-        processed = LinkedInCleaner.process(csvText, "auto");
+        postFileFailure(jobId, fileName, toErrorMessage(error, RUNTIME_FAILURE));
+        return;
     }
+    if (!result) {
+        return;
+    }
+    const { usedFallback, processed } = result;
 
     if (!processed.success) {
         postFileFailure(jobId, fileName, processed.error);

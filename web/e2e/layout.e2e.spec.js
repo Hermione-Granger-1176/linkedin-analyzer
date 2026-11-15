@@ -67,7 +67,6 @@ test("dashboard layout stays bounded and charts redraw across viewport changes",
                     ...element.querySelectorAll(".chart-card, .message-panel, .insight-card"),
                 ];
                 return {
-                    height: document.documentElement.scrollHeight,
                     chartOverflow: [...element.querySelectorAll(".chart-canvas-wrap")].map(
                         (wrap) => ({
                             mobileHeatmap:
@@ -93,10 +92,13 @@ test("dashboard layout stays bounded and charts redraw across viewport changes",
             }
             // The page must stop growing. Late content, such as a web font
             // swapping in, can change the height once after the checks above,
-            // so wait for two equal samples rather than comparing against the
-            // first one after a fixed sleep. A redraw loop that keeps resizing
-            // the page never settles, and still fails.
-            let previousHeight = layout.height;
+            // so wait for two equal samples rather than comparing against a
+            // snapshot after a fixed sleep. expect.poll samples immediately,
+            // so the first sample only records a height: a pass needs a second
+            // sample one interval later. A redraw loop that keeps resizing the
+            // page never settles, and still fails.
+            /** @type {number|null} */
+            let previousHeight = null;
             await expect
                 .poll(
                     async () => {

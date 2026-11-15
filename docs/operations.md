@@ -153,7 +153,8 @@ GitHub Actions runs the primary CI workflow on pull requests and pushes to `main
 4. `python-compatibility` tests Python 3.12, 3.13, and 3.14 when the Python area changed.
 5. `node-compatibility` tests Node.js 22 and 24 when the web area changed.
 6. `web-e2e` runs Playwright in the digest-pinned container when the web area changed.
-7. `ci-result` checks that the jobs required by the detected areas ran and succeeded.
+7. `web-benchmark` runs `make bench-compare` against the base commit when the web area changed, and fails when the analysis pipeline slowed down beyond its noise allowance. Its report is in the job summary. [Testing](testing.md#compare-performance-against-main) explains how to read it.
+8. `ci-result` checks that the jobs required by the detected areas ran and succeeded.
 
 The required branch status is `CI result`. Run the same non-browser order locally with:
 

@@ -775,15 +775,16 @@ web-screens: ## Capture all screens at mobile/tablet/desktop viewports (dir=.art
 	SCREENS_DIR="$(or $(dir),.artifacts/screens)" $(PLAYWRIGHT_LOCAL_RUN) $(NPM) run test:e2e -- --project=chromium web/e2e/screenshots.e2e.spec.js
 
 # ─── Benchmarks and local audits @bench ───────────────────────────────────────────
-# Local-only tools. Most run against your private export in data/input (never
+# Local tools. Most run against your private export in data/input (never
 # committed); gen-large-export writes a synthetic one outside the repo instead.
 # They skip cleanly when the export is absent unless strict=1 is set, except
 # bench-browser, which generates a synthetic export with size_mb=N and otherwise
-# fails when its inputs are missing. Any cross-runtime row dumps use a private
-# temporary directory and are always removed.
+# fails when its inputs are missing, and bench-compare, which always uses a
+# synthetic export and also runs as the CI web benchmark gate. Any cross-runtime
+# row dumps use a private temporary directory and are always removed.
 # See docs/testing.md (Run local checks and benchmarks).
 
-.PHONY: cleaner-diff xrt-diff bench bench-decode bench-browser audit-memory-python audit-memory-browser audit-state explore gen-large-export
+.PHONY: cleaner-diff xrt-diff bench bench-decode bench-compare bench-browser audit-memory-python audit-memory-browser audit-state explore gen-large-export
 
 cleaner-diff: ## Compare web cleaner behavior across refs (make cleaner-diff [args="oldRef newRef"] [strict=1] [input_dir=path])
 	$(NODE) scripts/checks/cleaner-diff.mjs $(if $(strict),--strict) $(if $(input_dir),--input-dir "$(input_dir)") $(args)
@@ -801,6 +802,9 @@ bench: ## Benchmark read, clean, and analytics on your export (make bench [runs=
 
 bench-decode: ## Benchmark and verify the upload decode layer (make bench-decode [runs=N])
 	$(NODE) scripts/checks/perf-bench.mjs $(if $(runs),"$(runs)")
+
+bench-compare: ## Fail when the pipeline is slower than a base ref beyond measured noise (make bench-compare [base=origin/main] [merge_base=1] [size_mb=20] [runs=15] [threshold=10])
+	$(NODE) --expose-gc scripts/checks/bench-compare.mjs --base-ref "$(or $(base),origin/main)" $(if $(merge_base),--merge-base) --size-mb "$(or $(size_mb),20)" --runs "$(or $(runs),15)" --threshold "$(or $(threshold),10)"
 
 bench-browser: ## Time upload to Analytics and Messages in Chromium with a heap budget (make bench-browser [size_mb=N | input_dir=path] [runs=3] [cpu=1] [gpu=1] [mobile=0] [export=excel|pdf|pdf-summary] [budget_mb=N] [local_libs=1])
 	NPM="$(NPM)" $(PLAYWRIGHT_LOCAL_RUN) $(NODE) scripts/checks/browser-bench.mjs $(if $(size_mb),--size-mb "$(size_mb)") $(if $(input_dir),--input-dir "$(input_dir)") $(if $(runs),--runs "$(runs)") $(if $(cpu),--cpu "$(cpu)") $(if $(gpu),--gpu "$(gpu)") $(if $(mobile),--mobile "$(mobile)") $(if $(budget_mb),--budget-mb "$(budget_mb)") $(if $(export),--export "$(export)")

@@ -30,8 +30,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Both ends of the diff have to be present, so this is the one job
-          # that cannot use the shallow checkout the rest of the workflow does.
+          # Both ends of the diff have to be present, so this job and the web
+          # benchmark cannot use the shallow checkout the rest of the workflow does.
           fetch-depth: 0
 
       # The classification table and its fail-open rules live in
@@ -206,6 +206,36 @@ jobs:
             playwright-report/
             test-results/
 
+  # Compare the pipeline against the base commit in one process, with an
+  # identical copy of the base as a noise control. scripts/checks/bench-gate.mjs
+  # holds the decision rule; docs/testing.md describes how to read the report.
+  web-benchmark:
+    name: Web benchmark
+    needs: [changes, quick-gates]
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The base commit has to be present to extract its web/src.
+          fetch-depth: 0
+
+      - name: CI setup
+        uses: ./.github/actions/ci-setup
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          python-version: ""
+
+      - name: Compare against the base commit
+        env:
+          BASE_SHA: >-
+            ${{ github.event_name == 'pull_request'
+            && github.event.pull_request.base.sha || github.event.before }}
+          MERGE_BASE: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: make bench-compare base="$BASE_SHA" merge_base="$MERGE_BASE"
+
   ci-result:
     name: CI result
     if: always()
@@ -216,6 +246,7 @@ jobs:
       - python-compatibility
       - node-compatibility
       - web-e2e
+      - web-benchmark
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -237,4 +268,5 @@ jobs:
           PYTHON_COMPATIBILITY_RESULT: ${{ needs.python-compatibility.result }}
           NODE_COMPATIBILITY_RESULT: ${{ needs.node-compatibility.result }}
           WEB_E2E_RESULT: ${{ needs.web-e2e.result }}
+          WEB_BENCHMARK_RESULT: ${{ needs.web-benchmark.result }}
         run: make ci-check-results

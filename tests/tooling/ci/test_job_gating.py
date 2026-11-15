@@ -84,6 +84,7 @@ ENVIRONMENT_FOR_FULL_RUN = {
     "PYTHON_COMPATIBILITY_RESULT": "success",
     "NODE_COMPATIBILITY_RESULT": "success",
     "WEB_E2E_RESULT": "success",
+    "WEB_BENCHMARK_RESULT": "success",
 }
 
 ENVIRONMENT_FOR_DOCS_RUN = {
@@ -95,6 +96,7 @@ ENVIRONMENT_FOR_DOCS_RUN = {
     "PYTHON_COMPATIBILITY_RESULT": "skipped",
     "NODE_COMPATIBILITY_RESULT": "skipped",
     "WEB_E2E_RESULT": "skipped",
+    "WEB_BENCHMARK_RESULT": "skipped",
 }
 
 
@@ -351,6 +353,7 @@ def test_result_problems_accepts_a_documentation_run() -> None:
         ("PYTHON_COMPATIBILITY_RESULT", "Python compatibility"),
         ("NODE_COMPATIBILITY_RESULT", "Node.js compatibility"),
         ("WEB_E2E_RESULT", "Web E2E"),
+        ("WEB_BENCHMARK_RESULT", "Web benchmark"),
     ],
 )
 def test_result_problems_rejects_a_failure_in_any_job(variable: str, label: str) -> None:
@@ -371,6 +374,7 @@ def test_result_problems_rejects_a_failure_in_any_job(variable: str, label: str)
         ("PYTHON_COMPATIBILITY_RESULT", "Python compatibility"),
         ("NODE_COMPATIBILITY_RESULT", "Node.js compatibility"),
         ("WEB_E2E_RESULT", "Web E2E"),
+        ("WEB_BENCHMARK_RESULT", "Web benchmark"),
     ],
 )
 def test_result_problems_rejects_any_job_that_ran_outside_its_areas(
@@ -423,6 +427,7 @@ def test_result_problems_rejects_a_failed_detection_job() -> None:
         "PYTHON_COMPATIBILITY_RESULT": "skipped",
         "NODE_COMPATIBILITY_RESULT": "skipped",
         "WEB_E2E_RESULT": "skipped",
+        "WEB_BENCHMARK_RESULT": "skipped",
     }
 
     assert result_problems(environment) == ["Detect changes was 'failure', expected 'success'."]

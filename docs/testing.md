@@ -172,6 +172,35 @@ CPU throttling slows only the page's main thread. Chromium rejects it on worker 
 
 The [large-export investigation](large-export-investigation.md) records the October 2026 measurements, intermediate designs, and measurement limitations.
 
+## Compare performance against main
+
+`make bench-compare` fails when the analysis pipeline in your checkout is slower than a base commit. CI runs it as the `web-benchmark` job on every change to the web area.
+
+```bash
+make bench-compare
+make bench-compare base=abc1234 runs=21 threshold=10
+```
+
+The command extracts the base commit's `web/src` twice: once as the base and once as an identical control. It then generates a synthetic export, 20 MiB by default. All three copies run in one Node process on the same input. Each stage runs once per copy per round, after a forced garbage collection, and the copies take turns going first. The stages match `make bench`: decode, clean, analytics compute, view, and insights, then decode, clean, and the message and connection state builders.
+
+Each copy is judged by its fastest round. The control's distance from the base is that run's measured noise. A stage fails only when your checkout is slower than the base by more than `threshold` percent plus that noise, so two identical copies cannot fail the gate. A flagged stage is timed again with twice the rounds, and the command fails only when the regression repeats. Stages shorter than 5 ms appear in the report but never fail it.
+
+Read the report from the job summary in CI, or from the terminal locally:
+
+- `same`: within the measured noise.
+- `faster` or `slower`: beyond the noise but within the allowance. Neither fails the run.
+- `regression`: slower than the allowance in both passes. The run fails.
+
+The report also says whether your checkout produced the same output as the base for every stage. A difference is expected only when your change alters results. When the control's output differs from the base's, the harness is broken, and the command exits 2.
+
+Options:
+
+- `base=REF` sets the commit to compare against. The default is `origin/main`.
+- `merge_base=1` compares against the merge base of `REF` and your checkout, which CI uses for pull requests.
+- `size_mb=N`, `runs=N`, and `threshold=N` set the export size, the rounds (rounded up to a multiple of three), and the allowed slowdown percentage.
+
+The comparison covers the pipeline in Node only. Browser upload handling, worker startup and messaging, and rendering are outside it. Use `make bench-browser` for those. [ADR-014](adr/014-noise-controlled-benchmark-gate.md) records why the gate uses a control and the fastest round.
+
 ## Run documentation and repository checks
 
 Run the checks that protect the repository interface:

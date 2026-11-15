@@ -91,10 +91,29 @@ test("dashboard layout stays bounded and charts redraw across viewport changes",
                 }
                 expect(overflow.vertical, `${route} chart at ${width}px`).toBeLessThanOrEqual(1);
             }
-            await page.waitForTimeout(250);
-            expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(
-                layout.height,
-            );
+            // The page must stop growing. Late content, such as a web font
+            // swapping in, can change the height once after the checks above,
+            // so wait for two equal samples rather than comparing against the
+            // first one after a fixed sleep. A redraw loop that keeps resizing
+            // the page never settles, and still fails.
+            let previousHeight = layout.height;
+            await expect
+                .poll(
+                    async () => {
+                        const height = await page.evaluate(
+                            () => document.documentElement.scrollHeight,
+                        );
+                        const settled = height === previousHeight;
+                        previousHeight = height;
+                        return settled;
+                    },
+                    {
+                        message: `${route} at ${width}px keeps changing height`,
+                        intervals: [250],
+                        timeout: 5000,
+                    },
+                )
+                .toBe(true);
         }
     }
 

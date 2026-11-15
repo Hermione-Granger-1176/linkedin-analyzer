@@ -8,8 +8,8 @@
  * The owner is absent from the connections list, which can resolve that tie.
  * A missing or unreadable connections file leaves it unresolved.
  *
- * Keys come from parsed rows, so rows the cleaner drops for lacking connection
- * dates contribute no keys.
+ * Keys come from parsed rows before cleaning, so rows the cleaner drops for
+ * lacking connection dates still contribute keys.
  */
 
 import { toCsvSource } from "../../shared/csv-source.js";

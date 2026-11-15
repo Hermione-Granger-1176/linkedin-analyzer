@@ -18,7 +18,8 @@ jobs:
     timeout-minutes: 10
     env:
       PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
-    # Set to whether the check ran. Alert jobs do nothing when it did not.
+    # Set to whether the check ran. The alert jobs use it to tell a smoke-check
+    # failure from a setup failure.
     outputs:
       checked: ${{ steps.url.outputs.available }}
     steps:
@@ -70,7 +71,7 @@ jobs:
       state: open
       detail: Review the app shell, security headers, and CSP report endpoint from this run.
 
-  # Runs when the check did not run.
+  # Runs when the job failed before the smoke check ran.
   report-setup-failure:
     needs: web-smoke
     if: failure() && needs.web-smoke.outputs.checked != 'true'

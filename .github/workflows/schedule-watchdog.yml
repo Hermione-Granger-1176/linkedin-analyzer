@@ -58,7 +58,7 @@ jobs:
       state: open
       detail: Re-enable the disabled workflow and rerun the watchdog.
 
-  # Runs when the watchdog did not complete its check.
+  # Runs when the job failed before the watchdog finished its check.
   report-setup-failure:
     needs: watchdog
     if: failure() && needs.watchdog.outputs.checked != 'true'

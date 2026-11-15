@@ -78,10 +78,11 @@ export const MessagesAnalytics = (() => {
     );
 
     /**
-     * Run `work` between performance marks, then measure the span. Skip each
-     * step the runtime does not support, so a missing Performance API never
-     * stops the work. Unlike the page's own helpers this reports nothing to
-     * telemetry, because this module also runs in a worker.
+     * Run `work` between performance marks, then measure the span. The
+     * Performance API is part of the supported browser baseline (see
+     * docs/web-app.md), and a measure that cannot find its marks is ignored.
+     * Unlike the page's own helpers this reports nothing to telemetry,
+     * because this module also runs in a worker.
      * @template T
      * @param {string} name - Measure name; its marks are `${name}:start` and `${name}:end`
      * @param {() => T} work - Work to time

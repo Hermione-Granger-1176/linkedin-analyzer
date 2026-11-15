@@ -171,4 +171,4 @@ The production build generates a relative-path PWA manifest from `web/vite.confi
 
 ## Browser support
 
-The Vite build targets ES2022. The automated browser suite runs on Chromium, Firefox, and WebKit. The app needs a browser with `FileReader`, `TextDecoder`, Web Workers, and IndexedDB support for its full persistence and processing behavior. Without IndexedDB, the app keeps working with in-memory state.
+The Vite build targets ES2022. The automated browser suite runs on Chromium, Firefox, and WebKit. The app needs a browser with `FileReader`, `TextDecoder`, the Performance API, Web Workers, and IndexedDB support for its full persistence and processing behavior. Without IndexedDB, the app keeps working with in-memory state.
